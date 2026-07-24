@@ -34,6 +34,7 @@ const DEFAULTS = {
   stateDb: "~/.qntm-md/state.db",
   vaultDir: "~/qntm",
   viewsConfigDir: "/Users/lukeannison/projects/qntm/apps/qntm-md/config/views",
+  configDir: "/Users/lukeannison/projects/qntm/apps/qntm-md/config", // operator config, synced as data
   worker: "", // e.g. https://qntm-signups.<subdomain>.workers.dev — required for a real push
 };
 
@@ -219,6 +220,15 @@ function tarVault(vaultDir) {
   );
 }
 
+// gzip tar of the operator CONFIG contents (views/patterns/rules) — same hygiene as the vault.
+function tarConfig(configDir) {
+  return execFileSync(
+    "tar",
+    ["--exclude=./.git", "-czf", "-", "-C", expand(configDir), "."],
+    { env: { ...process.env, COPYFILE_DISABLE: "1" }, maxBuffer: 256 * 1024 * 1024 }
+  );
+}
+
 function untarInto(buf, targetDir) {
   mkdirSync(expand(targetDir), { recursive: true });
   execFileSync("tar", ["-xzf", "-", "-C", expand(targetDir)], {
@@ -241,6 +251,16 @@ async function serverCycle() {
   const cfg = loadConfig();
   const base = serverUrl(cfg);
   const key = serverAuth();
+
+  // 0. push the operator config (views/patterns/rules) — user admin content, flows as DATA so a
+  //    view/rule change takes effect this cycle without a redeploy. Pushed before the vault so the
+  //    server renders with your current config.
+  const cfgUp = await fetchRetry(`${base}/config`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/gzip" },
+    body: tarConfig(cfg.configDir),
+  });
+  if (!cfgUp.ok) throw new Error(`config push failed: ${cfgUp.status}`);
 
   // 1. push the whole vault up (the delta surface) — silent; the summary below is the signal
   const up = await fetchRetry(`${base}/vault`, {
