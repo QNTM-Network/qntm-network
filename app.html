@@ -121,8 +121,7 @@
 
   <!-- NAV (logged in) -->
   <nav id="nav" class="nav hidden">
-    <button id="navFocus" class="tab active">Focus</button>
-    <button id="navGraph" class="tab">Graph</button>
+    <button id="signOut" class="tab">Sign out</button>
   </nav>
 
   <!-- GRAPH (logged in) — the rendering of the graph, hosted -->
@@ -296,9 +295,20 @@ async function toggleTask(view, lineIndex, box, row) {
   }
 }
 
+// The logged-in home: the graph, not Focus.
+async function enterGraph() {
+  $("entry").classList.add("hidden");
+  $("app").classList.add("hidden");
+  $("nav").classList.remove("hidden");
+  $("graph").classList.remove("hidden");
+  await loadGraph();
+}
+
 async function loadGraph() {
   const data = await api("/app/graph", { method: "GET", auth: true });
   graphData = data;
+  $("who").textContent = data.handle ? "@" + data.handle : "";
+  $("who").classList.remove("hidden");
   const pick = $("viewPick");
   pick.innerHTML = "";
   if (!data.snapshot) {
@@ -327,16 +337,6 @@ async function loadGraph() {
   paintView(def.id);
 }
 
-function tab(which) {
-  $("navFocus").classList.toggle("active", which === "focus");
-  $("navGraph").classList.toggle("active", which === "graph");
-  $("app").classList.toggle("hidden", which !== "focus");
-  $("graph").classList.toggle("hidden", which !== "graph");
-  if (which === "graph" && !graphData) {
-    loadGraph().catch((e) => { $("freshness").textContent = e.message; });
-  }
-}
-
 // --- passkey register / login ---
 async function register() {
   $("entryErr").textContent = "";
@@ -347,7 +347,7 @@ async function register() {
     const response = await startRegistration({ optionsJSON: options });
     const out = await api("/auth/register/verify", { body: { flowId, response } });
     token = out.token; localStorage.setItem(tokenKey, token);
-    await loadState();
+    await enterGraph();
   } catch (e) { $("entryErr").textContent = e.message; }
 }
 async function login() {
@@ -357,13 +357,16 @@ async function login() {
     const response = await startAuthentication({ optionsJSON: options });
     const out = await api("/auth/login/verify", { body: { flowId, response } });
     token = out.token; localStorage.setItem(tokenKey, token);
-    await loadState();
+    await enterGraph();
   } catch (e) { $("entryErr").textContent = e.message; }
 }
 function logout() {
   api("/auth/logout", { auth: true }).catch(() => {});
   localStorage.removeItem(tokenKey); token = null;
-  graphData = null; tab("focus");
+  graphData = null;
+  $("graph").classList.add("hidden");
+  $("nav").classList.add("hidden");
+  $("who").classList.add("hidden");
   show("entry");
 }
 
@@ -373,8 +376,8 @@ $("loginBtn").addEventListener("click", login);
 $("handle").addEventListener("keydown", (e) => { if (e.key === "Enter") register(); });
 $("doneBtn").addEventListener("click", () => done($("doneBtn").dataset.id));
 $("logoutBtn").addEventListener("click", logout);
-$("navFocus").addEventListener("click", () => tab("focus"));
-$("navGraph").addEventListener("click", () => tab("graph"));
+$("signOut").addEventListener("click", logout);
+$("viewPick").addEventListener("change", (e) => paintView(e.target.value));
 $("captureBox").addEventListener("keydown", async (e) => {
   if (e.key !== "Enter") return;
   const v = e.target.value.trim(); if (!v) return;
@@ -384,7 +387,7 @@ $("captureBox").addEventListener("keydown", async (e) => {
 
 // --- boot: try the stored session, else show entry ---
 (async () => {
-  if (token) { try { await loadState(); return; } catch { localStorage.removeItem(tokenKey); token = null; } }
+  if (token) { try { await enterGraph(); return; } catch { localStorage.removeItem(tokenKey); token = null; } }
   show("entry");
 })();
 </script>
