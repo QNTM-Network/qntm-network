@@ -90,6 +90,11 @@
   .viewbody table { border-collapse: collapse; width: 100%; font-size: .9rem; }
   .viewbody th, .viewbody td { border: 1px solid var(--line); padding: .35rem .55rem; text-align: left; }
   .viewbody hr { border: 0; border-top: 1px solid var(--line); margin: 1.2rem 0; }
+  .viewbody .task { display: flex; gap: .55rem; align-items: flex-start; padding: .18rem 0; cursor: pointer; }
+  .viewbody .task input { flex: none; margin-top: .28rem; width: 16px; height: 16px; accent-color: var(--glow); cursor: pointer; }
+  .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
+  .viewbody .task.syncing { opacity: .5; }
+  .viewbody .task span { flex: 1; }
 </style>
 </head>
 <body>
@@ -223,9 +228,72 @@ async function done(id) {
 // --- graph viewer: the rendering of the graph, fetched behind the passkey ---
 let graphData = null;
 
+let currentViewId = null;
+
+// Render a view line-by-line so task lines become real, clickable checkboxes mapped back to their
+// markdown line. Headings render as headings; everything else as inline markdown.
 function paintView(id) {
+  currentViewId = id;
   const v = graphData?.snapshot?.views.find((x) => x.id === id);
-  $("viewBody").innerHTML = v ? md.render(v.markdown) : "";
+  const body = $("viewBody");
+  body.innerHTML = "";
+  if (!v) return;
+  v.markdown.split("\n").forEach((line, i) => {
+    const task = line.match(/^(\s*)- \[( |x|X)\] (.*)$/);
+    if (task) {
+      const done = task[2].toLowerCase() === "x";
+      const row = document.createElement("label");
+      row.className = "task" + (done ? " done" : "");
+      row.style.marginLeft = (task[1].length / 2) * 1.2 + "rem";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = done;
+      box.addEventListener("change", () => toggleTask(v, i, box, row));
+      const span = document.createElement("span");
+      span.innerHTML = md.renderInline(task[3]);
+      row.append(box, span);
+      body.append(row);
+      return;
+    }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const el = document.createElement("h" + Math.min(h[1].length + 1, 6));
+      el.innerHTML = md.renderInline(h[2]);
+      body.append(el);
+      return;
+    }
+    if (line.trim() === "") return;
+    const div = document.createElement("div");
+    div.innerHTML = md.render(line);
+    body.append(div);
+  });
+}
+
+// Tick/untick a task: flip the line, POST the edited view, let the server cycle, then re-render from
+// the fresh projection. Optimistic — the box shows its new state immediately; reverts on failure.
+async function toggleTask(view, lineIndex, box, row) {
+  const lines = view.markdown.split("\n");
+  const m = lines[lineIndex].match(/^(\s*- \[)[ xX](\] .*)$/);
+  if (!m) return;
+  lines[lineIndex] = m[1] + (box.checked ? "x" : " ") + m[2];
+  const next = lines.join("\n");
+  row.classList.toggle("done", box.checked);
+  row.classList.add("syncing");
+  box.disabled = true;
+  $("freshness").textContent = "syncing…";
+  try {
+    const data = await api("/app/edit-file", { body: { path: view.path, markdown: next }, auth: true });
+    graphData = data;
+    paintView(currentViewId);
+    const when = new Date(data.snapshot.generated_at).toLocaleString();
+    $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
+  } catch (e) {
+    box.checked = !box.checked;
+    row.classList.toggle("done", box.checked);
+    row.classList.remove("syncing");
+    box.disabled = false;
+    $("freshness").textContent = "sync failed: " + e.message;
+  }
 }
 
 async function loadGraph() {

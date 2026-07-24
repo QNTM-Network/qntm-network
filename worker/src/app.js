@@ -178,6 +178,56 @@ async function editPost(request, env, origin, session) {
   return json({ ok: true, pending_edits: await pendingCount(env, session.user_id) }, 200, origin);
 }
 
+// POST /app/edit-file (session) — the web write path. The browser sends {path, markdown} for one
+// view; we write it on the hosted model, run a cycle, and return the fresh projection. The operator
+// token stays server-side; the browser only ever holds its passkey session.
+async function editFile(request, env, origin, session) {
+  if (!env.GRAPH_SERVER_URL || !env.SERVER_TOKEN) {
+    return json({ ok: false, error: "server not configured" }, 503, origin);
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ ok: false, error: "bad request" }, 400, origin);
+  }
+  const path = String(body?.path || "");
+  if (!path || body?.markdown == null) {
+    return json({ ok: false, error: "path and markdown required" }, 422, origin);
+  }
+
+  const auth = { Authorization: `Bearer ${env.SERVER_TOKEN}` };
+  // 1. overwrite the single view on the hosted model
+  const w = await fetch(`${env.GRAPH_SERVER_URL}/vault/file`, {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ path, markdown: body.markdown }),
+  });
+  if (!w.ok) return json({ ok: false, error: "write failed" }, 502, origin);
+  // 2. cycle (ingest the edit + re-project) — this is the ~14s step
+  const c = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });
+  const cd = await c.json().catch(() => ({}));
+  if (!c.ok || !cd.ok) return json({ ok: false, error: "cycle failed" }, 502, origin);
+  // 3. hand back the fresh projection, same shape as GET /app/graph
+  return json(
+    {
+      ok: true,
+      handle: session.handle,
+      source: "server",
+      snapshot: {
+        version: null,
+        generated_at: cd.snapshot?.generated_at,
+        views: cd.snapshot?.views || [],
+        graph: cd.snapshot?.graph || {},
+        locations: cd.snapshot?.locations || {},
+      },
+      pending_edits: await pendingCount(env, session.user_id),
+    },
+    200,
+    origin
+  );
+}
+
 // Operator (headless laptop) auth: GRAPH_PUSH_KEY sent as Bearer -> the single operator user_id.
 function operatorUser(request, env) {
   const key = bearer(request);
@@ -303,6 +353,7 @@ export async function handleApp(request, env, url, origin) {
     "POST /app/done": markDone,
     "GET /app/graph": graphGet,
     "POST /app/edit": editPost,
+    "POST /app/edit-file": editFile,
   };
   const fn = sessionRoutes[key];
   if (!fn) return null;

@@ -195,6 +195,21 @@ function serverUrl(cfg) {
   return cfg.server.replace(/\/$/, "");
 }
 
+// Retry on CONNECTION failures only (fetch rejects = never reached the server, e.g. the machine
+// is cold-starting). A connected-but-slow cycle never rejects, so this can't double-run a cycle.
+async function fetchRetry(url, opts, { tries = 4, backoffMs = 1500 } = {}) {
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fetch(url, opts);
+    } catch (e) {
+      lastErr = e;
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 // gzip tar of the vault CONTENTS — no top dir, no .obsidian, no macOS ._ AppleDouble junk.
 function tarVault(vaultDir) {
   return execFileSync(
@@ -214,7 +229,7 @@ function untarInto(buf, targetDir) {
 
 async function serverPull(targetDir, { quiet = false } = {}) {
   const cfg = loadConfig();
-  const res = await fetch(`${serverUrl(cfg)}/vault`, {
+  const res = await fetchRetry(`${serverUrl(cfg)}/vault`, {
     headers: { Authorization: `Bearer ${serverAuth()}` },
   });
   if (!res.ok) throw new Error(`pull failed: ${res.status}`);
@@ -228,7 +243,7 @@ async function serverCycle() {
   const key = serverAuth();
 
   // 1. push the whole vault up (the delta surface) — silent; the summary below is the signal
-  const up = await fetch(`${base}/vault`, {
+  const up = await fetchRetry(`${base}/vault`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/gzip" },
     body: tarVault(cfg.vaultDir),
@@ -239,7 +254,7 @@ async function serverCycle() {
   //    so the rules fit, and print qntm-md's own canonical summary verbatim (it carries the
   //    `qntm-cycle ✓ Ns` headline itself).
   const cols = process.stdout.columns || 100;
-  const cy = await fetch(`${base}/cycle?width=${cols}`, {
+  const cy = await fetchRetry(`${base}/cycle?width=${cols}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}` },
   });
