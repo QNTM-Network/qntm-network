@@ -1,0 +1,63 @@
+# The Worker deploy — the backend half of push-to-publish.
+#
+# GitHub Pages already publishes the static site on push. The Cloudflare Worker (qntm-signups:
+# signup capture, passkey auth, and the /app/* routes the Graph tab reads and writes through)
+# was the last thing still shipped by hand from a laptop — which is the same baked-snapshot trap
+# the engine repo just closed: code committed, silently not live. So it ships the same way now.
+#
+# Two directions, one file, deliberately mirroring the engine repo's test -> deploy shape:
+#   pull_request -> `wrangler deploy --dry-run`   (bundles and validates; changes nothing)
+#   push to main -> `wrangler deploy`             (the real thing)
+# That makes the dry-run a check a branch-protection rule can require, so the dev -> prod
+# promotion flow gets the Worker for free rather than needing its own story later.
+#
+# Cloudflare secrets (EXPORT_KEY, GRAPH_PUSH_KEY, GRAPH_USER_ID) live in Cloudflare and are NOT
+# touched by a deploy — wrangler preserves them across versions. The only thing CI holds is
+# CLOUDFLARE_API_TOKEN (repo secret); account_id is in wrangler.toml, and is not a credential.
+
+name: worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/worker.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/worker.yml'
+  workflow_dispatch:   # manual redeploy, e.g. after rotating a Cloudflare secret
+
+defaults:
+  run:
+    working-directory: worker
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - run: npm ci
+
+      # On a PR: prove it bundles, deploy nothing. This is the gate.
+      - name: validate the bundle (dry run)
+        if: github.event_name == 'pull_request'
+        run: npx wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # On main: ship it. A bundling failure fails the job and leaves the live Worker untouched.
+      - name: deploy
+        if: github.event_name != 'pull_request'
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

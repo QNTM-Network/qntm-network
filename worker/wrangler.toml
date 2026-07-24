@@ -3,6 +3,9 @@
 # database_id is filled in after `wrangler d1 create qntm-signups`.
 name = "qntm-signups"
 main = "src/index.js"
+# Not a credential (it appears in every dashboard URL) — pinned here so CI's API token has no
+# account to guess, and so a laptop with access to two accounts can't deploy to the wrong one.
+account_id = "34036c05a2650292d39c185aba588161"
 compatibility_date = "2026-06-01"
 compatibility_flags = ["nodejs_compat"]  # @simplewebauthn/server (passkey verification)
 
