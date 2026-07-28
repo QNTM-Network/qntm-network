@@ -33,8 +33,8 @@ const HERE = resolve(fileURLToPath(import.meta.url), "..");
 const DEFAULTS = {
   stateDb: "~/.qntm-md/state.db",
   vaultDir: "~/qntm",
-  viewsConfigDir: "/Users/lukeannison/projects/qntm/apps/qntm-md/config/views",
-  configDir: "/Users/lukeannison/projects/qntm/apps/qntm-md/config", // operator config, synced as data
+  viewsConfigDir: "/Users/lukeannison/projects/qntm-network/qntm/apps/qntm-md/config/views",
+  configDir: "/Users/lukeannison/projects/qntm-network/qntm/apps/qntm-md/config", // operator config, synced as data
   worker: "", // e.g. https://qntm-signups.<subdomain>.workers.dev — required for a real push
 };
 

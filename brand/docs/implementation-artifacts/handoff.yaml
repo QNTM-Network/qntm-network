@@ -7,9 +7,9 @@ handoff:
   commit: null
 
   bootstrap:
-    invoke: /Users/lukeannison/projects/qntm/tools/agentic-dev/flow-trace/.venv/bin/flow-trace
+    invoke: uv run --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace
     yaml_dir: docs/implementation-artifacts
-    next_command: /Users/lukeannison/projects/qntm/tools/agentic-dev/flow-trace/.venv/bin/flow-trace map .  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
+    next_command: uv run --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map .  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
 
   queue:  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
   - id: settle-the-icon-mark
