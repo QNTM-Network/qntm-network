@@ -33,6 +33,13 @@ jobs:
       - name: typecheck (tsc --noEmit, strict)
         run: npm run typecheck
 
+      # scripts/graph-sync.mjs is the one thing in this repo that can destroy something the
+      # operator cannot get back, and its two guards are the only reason it cannot. Nothing else
+      # in CI looks at it, so a regression here would ship silently. Runs against a throwaway
+      # vault and throwaway git repos under the runner's temp dir — never a real vault.
+      - name: graph-sync guards
+        run: npm test
+
       - name: build the app bundle
         run: npm run build
 

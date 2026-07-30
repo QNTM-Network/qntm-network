@@ -166,6 +166,31 @@ lands as **node deletions**, not as a failed pull. `worker/src/app.js:184-229` (
 same hazard one layer up, reachable from a checkbox click in the browser. **REASONED** — read end
 to end; deliberately not executed against the live vault.
 
+> **Update 2026-07-30 — closed in `scripts/graph-sync.mjs`, and one link in the chain refuted.**
+> Executed against a throwaway vault (never `~/qntm`). The hazard is real and worse than stated in
+> one respect, weaker in another:
+> - **Worse:** a *complete, valid* archive carrying blank files applied **silently and exited 0** —
+>   three files with content became zero bytes and the script reported `pulled projection ->`.
+>   That is the blank-is-a-deletion hazard with no error to notice. It is also the exact shape a
+>   mismatched engine produces (see §5a-bis below), so the two defects compound.
+> - **Refuted:** *"a truncated archive lands as node deletions."* It does not. macOS `bsdtar`
+>   writes whole entries only; across truncations at 20/30/…/99% of the stream, **zero** blank
+>   files were ever produced. What a truncated archive does is apply its entries up to the cut and
+>   then exit 1 — leaving the vault **half-old, half-new** with no record of how far it got, which
+>   the next cycle then pushes up as the delta. A real defect, a different one.
+>
+> Both are now refused before anything is written: the archive is verified end-to-end, unpacked to
+> a staging dir, and compared against what is on disk; a snapshot is taken before any apply. See
+> `tests/graph-sync-guards.test.mjs`.
+>
+> **§5a-bis — `graph-sync cycle` could ship config to a mismatched engine.** Not in the original
+> survey. `cycle` tars the trunk clone's `apps/qntm-md/config/` and posts it to a server whose
+> engine came from the deploy; when the two are from different commits the vault breaks (three
+> incidents: a retired `chain` shell key, `node_type_render.yaml` moving into `schema.yaml`, and
+> the 2026-07-30 resolution-cascade rewrite). Now guarded against the `deployed` tag, **read from
+> the remote on every run** — a plain `git fetch` does not move an existing tag, so a local read
+> reports safe exactly when it is not.
+
 **b. `signups.csv` is committed to a public repo and is not gitignored.** It currently holds one
 row (the operator's own address, from the 2026-06-27 export test). `git check-ignore` confirms it
 is tracked, so the next `curl /export?key=… > signups.csv` commits the real subscriber list.
