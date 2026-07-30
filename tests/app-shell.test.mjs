@@ -854,7 +854,15 @@ describe("8. a re-read keeps your place", () => {
     });
     page.__setGraphData({ snapshot: { generated_at: "x", views: VIEWS } });
     await page.refresh();
-    assert.match(el("freshness").textContent, /No snapshot yet/);
+    // THE SENTENCE MOVED, AND SO DID WHAT IT SAYS. It used to be "No snapshot yet — run
+    // graph-sync push on the laptop." on `#freshness`, which is an instruction addressed to
+    // exactly one person and was the entire first impression of every account that is not his.
+    // It is now the `#empty` block, which tells an account with no graph apart from a graph with
+    // nothing in it — tests/app-entry.test.mjs section 5 owns what it says. What THIS test has
+    // always been about is unchanged: an empty view list is a sentence rather than a crash, and
+    // the old `views[0]` would have been `undefined` with the next line throwing inside a press.
+    assert.ok(!el("empty").classList.contains("hidden"), "an empty snapshot showed nothing at all");
+    assert.ok(el("emptyHead").textContent, "the empty state has no heading");
     assert.equal(page.__currentViewId(), null);
   });
 });

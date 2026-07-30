@@ -159,9 +159,57 @@
   .row { display: flex; gap: var(--s2); align-items: center; }
   .stack > * + * { margin-top: var(--s3); }
   .muted { color: var(--dim); font-size: var(--t3); }
-  .err { color: #ff9b9b; font-size: var(--t3); min-height: 1.2em; }
+  /* THE ERROR ROW RESERVES THE ROW IT ACTUALLY HOLDS. It was `1.2em`, and the thing it has to
+     hold is one line at the body's `line-height: 1.5` — so at `--t3` it reserved 14.08 × 1.2 =
+     16.896px for a line that measures 14.08 × 1.5 = 21.12px. Measured in a browser at 390×844:
+     the box went 16.8892 → 21.1151 the moment a message appeared, moving the card's bottom edge
+     4.2259px every time this screen said no. That is three times the 1.3637px the reading
+     column's own suite polices and infinitely more than the 0.0000px it asserts on focus, and it
+     happened on the one screen a stranger meets first. `1.5em` is the same number as the line it
+     reserves for, which is why it is the right one rather than a bigger guess. */
+  .err { color: #ff9b9b; font-size: var(--t3); min-height: 1.5em; }
   .card { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--s4); background: rgba(255,255,255,.015); }
   .hidden { display: none !important; }
+
+  /* ══ THE ENTRY SCREEN ══════════════════════════════════════════════════════════════════════
+     TWO PATHS, NOT ONE PATH AND A FOOTNOTE. Measured at 390×844 before this change: the only
+     filled, high-emphasis button on the screen was "Continue with a passkey" — the one a person
+     who has never been here CANNOT use — at 215.89 × 47.99px, and the new person's path was a
+     ghost button under a 14px line reading "New here?". On the screen whose entire purpose is
+     now that somebody other than the operator can sign up, the newcomer's path is the one that
+     has to be legible, so the emphasis is swapped and each path gets a heading of its own.
+
+     THE RULES ARE STATED BEFORE THEY ARE BROKEN. `#handleHint` carries the handle rule as a
+     hint the field points at with `aria-describedby`, rather than as an error the person earns
+     by guessing wrong — and `.hint` under the create button says what a passkey is going to do,
+     because pressing it summons an operating-system dialog a first-time visitor did not ask for
+     and the commonest thing anyone does with an unexpected system dialog is dismiss it. */
+  .path-head {
+    font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase;
+    color: var(--dim); font-weight: 600; margin: 0 0 var(--s2);
+  }
+  .hint { font-size: var(--t3); color: var(--dim); margin: var(--s2) 0 0; }
+  .hint-lead { margin: 0 0 var(--s2); }
+  /* The field the message is about, marked. `aria-invalid` is set on the same element at the
+     same moment — this is the half a screen reader cannot use and that one is the half a sighted
+     reader cannot hear, and neither is a substitute for the other. */
+  input.wrong { border-color: #ff9b9b; }
+  input.wrong:focus { border-color: #ff9b9b; box-shadow: 0 0 24px rgba(255,155,155,.15); }
+
+  /* ══ THE EMPTY ENVIRONMENT ═════════════════════════════════════════════════════════════════
+     WHAT A BRAND-NEW ACCOUNT SEES, and until this change it was one line of the dimmest colour
+     on the page reading "No snapshot yet — run graph-sync push on the laptop." — an instruction
+     addressed to exactly one human being on earth, shown to everybody who is not him. Measured
+     at 1440×900 it was a single 21.12px line in a 900px-tall window with nothing else in it.
+
+     `#emptyNext` IS A NAMED SLOT AND IT IS DELIBERATELY EMPTY. What an empty account should be
+     told to do NEXT depends on where a second user's graph lives, which is not decided — see
+     docs/implementation-artifacts/design-someone-else-can-sign-up.md section 3.1, which lists
+     what each possible answer would put here. A sentence written now would be a guess, and a
+     guess in an empty state is the sentence a person reads first. */
+  .empty-head { font-size: var(--t4); font-weight: 600; color: var(--ink); margin: 0 0 var(--s2); }
+  .empty-body { font-size: var(--t3); color: var(--dim); margin: 0; }
+  .empty-next { font-size: var(--t3); color: var(--dim); margin: var(--s3) 0 0; }
 
   /* THE ONE THING */
   .one-label { letter-spacing: var(--track); text-transform: uppercase; font-size: var(--t1); color: var(--glow); }
@@ -633,24 +681,44 @@
 
 <div class="wrap">
 
-  <!-- ENTRY (logged out) -->
+  <!-- ENTRY (logged out)
+       WHAT THIS SCREEN NOW ANSWERS BEFORE IT ASKS FOR ANYTHING: what qntm is, what a handle is
+       and what its rules are, and what pressing "Create passkey" is about to do. It asked for a
+       durable credential and a permanent identity in one gesture and explained neither, which was
+       survivable while the only person who ever saw it already knew. -->
   <section id="entry" class="hidden">
     <h1>Enter the path.</h1>
-    <p class="tag">One thing at a time. Sign in with a passkey — no password to hold.</p>
-    <div class="card stack">
-      <button id="loginBtn">Continue with a passkey</button>
-      <div class="muted">New here?</div>
+    <p class="tag">qntm keeps what needs doing legible, and the path to it short. Sign in with a passkey — there is no password to hold.</p>
+    <div class="card">
+      <!-- THE NEWCOMER'S PATH IS FIRST AND IT IS THE FILLED BUTTON. -->
+      <h2 class="path-head">First time here</h2>
+      <p id="handleHint" class="hint hint-lead">Pick a handle — 2 to 32 characters, using letters, digits, <code>-</code> and <code>_</code>. It is chosen once.</p>
       <div class="row">
-        <input id="handle" placeholder="claim a handle" autocomplete="username webauthn" autocapitalize="off" spellcheck="false" />
-        <button id="registerBtn" class="ghost" style="white-space:nowrap">Create passkey</button>
+        <input id="handle" placeholder="a handle" autocomplete="username webauthn" autocapitalize="off" spellcheck="false" aria-describedby="handleHint" />
+        <button id="registerBtn" style="white-space:nowrap">Create passkey</button>
       </div>
-      <div id="entryErr" class="err"></div>
+      <p class="hint">Your device will ask you to confirm — face, fingerprint or screen lock. Nothing to remember, nothing to reset.</p>
+      <!-- ONE ERROR ROW, BETWEEN THE TWO PATHS, SO IT IS ADJACENT TO BOTH. `role="alert"` is what
+           makes a failure audible: before this it carried no role and no aria-live, so a screen
+           reader was told nothing at all and the person heard a button that did nothing. -->
+      <div id="entryErr" class="err" role="alert"></div>
+      <h2 class="path-head">Been here before</h2>
+      <button id="loginBtn" class="ghost">Continue with a passkey</button>
     </div>
   </section>
 
   <!-- GRAPH (logged in) — the rendering of the graph, hosted -->
   <section id="graph" class="hidden">
     <p id="freshness" class="muted"></p>
+    <!-- THE EMPTY ENVIRONMENT. Three situations that used to render as one grey line, and they
+         are not the same situation: an account with no graph behind it, a graph with nothing in
+         it, and a graph that could not be read. `#emptyNext` is the slot the data-model answer
+         fills — see the sheet above and section 3.1 of the design note. -->
+    <div id="empty" class="hidden">
+      <p id="emptyHead" class="empty-head"></p>
+      <p id="emptyBody" class="empty-body"></p>
+      <p id="emptyNext" class="empty-next"></p>
+    </div>
     <article id="viewBody" class="viewbody"></article>
   </section>
 
@@ -758,12 +826,21 @@ function showShell(on) {
   $("who").classList.toggle("hidden", !on);
   $("rail").classList.toggle("hidden", !on);
 }
+// THE STATUS TRAVELS WITH THE ERROR, and that is not decoration. Every failure used to arrive as
+// a bare Error, so the boot sequence could not tell "your session has expired" from "the train
+// went into a tunnel" — and it treated both as the first, deleting a token whose server-side life
+// is thirty days (SESSION_TTL, worker/src/auth.js). A dropped connection signed the reader out.
+// See the boot block at the bottom of this script for the one place that reads it.
 async function api(path, { method = "POST", body, auth = false } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (auth && token) headers["Authorization"] = "Bearer " + token;
   const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.ok === false) throw new Error(data.error || ("request failed (" + res.status + ")"));
+  if (!res.ok || data.ok === false) {
+    const error = new Error(data.error || ("request failed (" + res.status + ")"));
+    error.status = res.status;
+    throw error;
+  }
   return data;
 }
 
@@ -1075,6 +1152,57 @@ async function commitLine(view, commit) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE EMPTY ENVIRONMENT — what a brand-new account is shown, and what it is honestly not shown
+//
+// THREE SITUATIONS, NOT ONE. They used to render as the same single grey line, and they mean
+// entirely different things to the person reading them: an account with no graph behind it, a
+// graph with nothing in it yet, and a graph that could not be read this time. The third is not a
+// hypothetical — until this change it did not even reach the screen, because a failed read at boot
+// deleted the session and dropped the reader on the sign-in page with no message at all.
+//
+// WHAT NONE OF THEM SAYS IS WHAT TO DO NEXT, AND THAT IS DELIBERATE. The next step is a function
+// of where a second user's graph lives, which is an open decision belonging to `server/` and
+// `worker/`. `#emptyNext` is the slot it fills; the four candidate answers and what each would put
+// there are in docs/implementation-artifacts/design-someone-else-can-sign-up.md section 3.1. A
+// sentence written before that decision is a guess, and a guess in an empty state is the first
+// sentence this product says to somebody who has just trusted it with a credential.
+//
+// WHAT THEY DO SAY is what a view is, because the drawer, the bar and the whole reading column are
+// organised around a noun this app had never defined — and the definition includes the boundary
+// the last three agents held: the app SHOWS and EDITS files, and never creates, renames, moves or
+// deletes them. That is the product's spine rather than a limitation to hide.
+const EMPTY_STATES = {
+  "no-environment": {
+    head: "Nothing here yet.",
+    body: "There is no graph behind this account. A view is a file in a graph — this app shows views and edits their lines; it never creates them.",
+  },
+  "no-views": {
+    head: "An empty environment.",
+    body: "Your graph has no views in it yet. A view is a file in a graph — this app shows views and edits their lines; it never creates them.",
+  },
+  unreadable: {
+    head: "Could not read your graph.",
+    body: "Your session is still good. This was a failed read, not a sign-out — try again.",
+  },
+};
+
+function showEmpty(kind, detail = "") {
+  const state = EMPTY_STATES[kind] ?? EMPTY_STATES["no-environment"];
+  $("emptyHead").textContent = state.head;
+  $("emptyBody").textContent = state.body;
+  // The slot stays empty until the data model says what belongs in it. It is written to on every
+  // pass so a stale sentence cannot survive a state change.
+  $("emptyNext").textContent = "";
+  // The machine's own account of what happened keeps its own line, in its own register. It is the
+  // detail, not the explanation — the explanation is above it, in words.
+  $("freshness").textContent = detail;
+  $("empty").classList.remove("hidden");
+}
+function hideEmpty() {
+  $("empty").classList.add("hidden");
+}
+
 // The logged-in home: the graph, not Focus.
 async function enterGraph() {
   $("entry").classList.add("hidden");
@@ -1110,16 +1238,18 @@ async function loadGraph(keep = null) {
   // Identity lives in the bar now, and showShell() is what reveals it — so `#who` is never
   // hidden on its own account and nothing here has to un-hide it.
   $("who").textContent = data.handle ? "@" + data.handle : "";
-  // An empty view list is the same situation as no snapshot, and it stopped being hypothetical
-  // when this became re-readable on demand: the old `views[0]` would have been `undefined` and
-  // the next line would have thrown inside a button press.
+  // AN EMPTY LIST AND NO SNAPSHOT ARE NOT THE SAME SITUATION, and collapsing them is how the one
+  // screen a stranger meets ended up saying "run graph-sync push on the laptop" — an instruction
+  // addressed to exactly one person, shown to everybody who is not him. `showEmpty` tells them
+  // apart; neither of them issues an instruction the reader cannot follow.
   if (!data.snapshot || data.snapshot.views.length === 0) {
-    $("freshness").textContent = "No snapshot yet — run graph-sync push on the laptop.";
+    showEmpty(data.snapshot ? "no-views" : "no-environment");
     $("viewBody").innerHTML = "";
     currentViewId = null;
     buildDrawer([]);
     return;
   }
+  hideEmpty();
   const when = new Date(data.snapshot.generated_at).toLocaleString();
   $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
   const def = landOn(data.snapshot.views, keep);
@@ -1138,7 +1268,10 @@ async function loadGraph(keep = null) {
 // racing would paint whichever landed last rather than whichever was asked for last.
 let reading = false;
 async function refresh() {
-  if (reading || !graphData) return;
+  // NOTHING TO RE-READ MEANS NO SESSION *AND* NO GRAPH. It used to mean no graph alone, and that
+  // made the button dead in the one state where it is the only way out: a read that failed at
+  // boot leaves a perfectly good session and no `graphData`, and "try again" was unpressable.
+  if (reading || (!token && !graphData)) return;
   reading = true;
   $("refreshBtn").setAttribute("aria-busy", "true");
   $("freshness").textContent = "reading…";
@@ -1153,33 +1286,131 @@ async function refresh() {
 }
 
 // --- passkey register / login ---
-async function register() {
+
+// THE HANDLE RULE, WRITTEN A SECOND TIME ON PURPOSE.
+//
+// The first copy is `HANDLE_RE` in worker/src/auth.js, and it stays the authority — this one
+// cannot admit a handle the server would refuse, only refuse one earlier. What it buys is that a
+// malformed handle costs no round trip and no message the person has to earn by guessing, because
+// `#handleHint` above states the same rule before anything is typed.
+//
+// A rule in two places is drift waiting to happen, so the two are not held together by this
+// comment: tests/app-entry.test.mjs reads the pattern out of BOTH FILES and asserts they are the
+// same string. Change one and the suite goes red naming the other.
+const HANDLE_RE = /^[a-z0-9][a-z0-9_-]{1,31}$/i;
+
+// EVERY SENTENCE THIS SCREEN CAN SAY, AND ALL OF THEM FIT ONE LINE — which is what makes the
+// error row's reservation above worth anything.
+//
+// The first draft closed a 4.2259px shift and opened a 21.1151px one: measured at 390×844, four
+// of the eight messages wrapped to two lines and pushed the sign-in button down by exactly one
+// row. Reserving two lines instead would be 21px of dead space on every load for a state that is
+// rare, so the messages were shortened until they fit the row instead. Measured after: all eight
+// at 21.1151px, and the sign-in button at +0.0000px.
+//
+// THE BUDGET IS 48 CHARACTERS, and it is a measurement rather than a guess: the error row is
+// 310.5682px wide at `--t3`, a 47-character message fits, and so does a string of 45 capital Ms —
+// the widest glyph in the face, which is the worst case any real sentence can be. The budget is
+// asserted in tests/app-entry.test.mjs section 4 so a longer sentence is a red test rather than a
+// jump nobody measured.
+const HANDLE_RULE = "A handle is 2 to 32 letters, digits, - or _.";
+
+/**
+ * A WebAuthn failure, as a sentence rather than as the library's internal string.
+ *
+ * WHAT WAS THERE BEFORE was `catch (e) { entryErr.textContent = e.message }`, and read out of the
+ * shipped @simplewebauthn/browser@13.3.0 bundle that means: on a `NotAllowedError` the library
+ * re-throws with `code: "ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY"` and the BROWSER's own message,
+ * unchanged. `NotAllowedError` is what Chrome raises when somebody DISMISSES the passkey sheet —
+ * the single most likely thing a first-time visitor does with a system dialog they did not expect
+ * — and the sentence it hands over ends in a link to w3.org/TR/webauthn-2. That was the app's
+ * answer to "I wasn't sure, so I tapped cancel".
+ *
+ * THE ONE THAT CANNOT BE TOLD APART, AND IS NOT PRETENDED OTHERWISE. A cancelled ceremony and
+ * "this device holds no passkey for this site" are the SAME NotAllowedError. The platform refuses
+ * to distinguish them on purpose — the difference is a privacy leak about what credentials a
+ * device is carrying — so the sign-in message covers both without claiming to know which, and
+ * points at the create path, which is now on the same screen.
+ */
+function friendlyAuthError(e, kind) {
+  const code = e?.code ?? "";
+  const name = e?.cause?.name ?? e?.name ?? "";
+  if (code === "ERROR_CEREMONY_ABORTED" || name === "NotAllowedError" || name === "AbortError") {
+    return kind === "register"
+      ? "Cancelled — no passkey was created."
+      : "No passkey used — create one above.";
+  }
+  if (code === "ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED") {
+    return "This device already has that passkey — sign in.";
+  }
+  // A failure with a status came from our own worker and its text is already ours (the handle
+  // rules, "handle taken", "challenge expired"). Anything left is the library's or the network's,
+  // and neither is a sentence, so it is named as what it is rather than pasted onto the screen.
+  if (typeof e?.status === "number") return e.message;
+  return "Could not reach qntm — try again.";
+}
+
+/**
+ * Say what went wrong, mark the field it is about, and put the cursor back on it.
+ *
+ * All three, together, because before this the message appeared and NOTHING else moved: measured
+ * in a browser, `document.activeElement` after every one of the four failures was BODY, `#handle`
+ * carried neither `aria-invalid` nor `aria-describedby`, and `#entryErr` carried no role. A person
+ * on a phone had lost the keyboard and had to find a 152px input again by themselves.
+ */
+// THIS ONLY EVER SETS, AND THAT IS NOT AN OVERSIGHT. It had an `else` that un-marked the field,
+// and a mutation run proved the branch was unreachable: every caller is preceded by
+// `clearEntryError()`, so the field is already clean by the time this runs. An un-marking branch
+// nothing can reach is a second answer to "who clears this" that no test can hold to account, so
+// there is one — `clearEntryError` — and it is the one the suite breaks on.
+function showEntryError(message, aboutHandle) {
+  $("entryErr").textContent = message;
+  if (aboutHandle) {
+    $("handle").classList.add("wrong");
+    $("handle").setAttribute("aria-invalid", "true");
+    $("handle").focus();
+  }
+}
+function clearEntryError() {
   $("entryErr").textContent = "";
+  $("handle").classList.remove("wrong");
+  $("handle").removeAttribute("aria-invalid");
+}
+
+async function register() {
+  clearEntryError();
   const handle = $("handle").value.trim();
-  if (!handle) { $("entryErr").textContent = "pick a handle first"; return; }
+  if (!handle) { showEntryError("Choose a handle first.", true); return; }
+  if (!HANDLE_RE.test(handle)) { showEntryError(HANDLE_RULE, true); return; }
   try {
     const { flowId, options } = await api("/auth/register/options", { body: { handle } });
     const response = await startRegistration({ optionsJSON: options });
     const out = await api("/auth/register/verify", { body: { flowId, response } });
     token = out.token; localStorage.setItem(tokenKey, token);
     await enterGraph();
-  } catch (e) { $("entryErr").textContent = e.message; }
+  } catch (e) {
+    // A 409 is the one server refusal that is ABOUT THE FIELD, so it is the one that takes the
+    // cursor back to it. The rest are about the ceremony or the network.
+    showEntryError(friendlyAuthError(e, "register"), e?.status === 409 || e?.status === 422);
+  }
 }
 async function login() {
-  $("entryErr").textContent = "";
+  clearEntryError();
   try {
     const { flowId, options } = await api("/auth/login/options", { body: {} });
     const response = await startAuthentication({ optionsJSON: options });
     const out = await api("/auth/login/verify", { body: { flowId, response } });
     token = out.token; localStorage.setItem(tokenKey, token);
     await enterGraph();
-  } catch (e) { $("entryErr").textContent = e.message; }
+  } catch (e) { showEntryError(friendlyAuthError(e, "login"), false); }
 }
 function logout() {
   api("/auth/logout", { auth: true }).catch(() => {});
   localStorage.removeItem(tokenKey); token = null;
   graphData = null;
   currentViewId = null;
+  // A message earned by the LAST person to use this browser is not a greeting for the next one.
+  clearEntryError();
   closeDrawer();
   buildDrawer([]);
   $("graph").classList.add("hidden");
@@ -1221,9 +1452,27 @@ $("captureBox").addEventListener("keydown", async (e) => {
 });
 
 // --- boot: try the stored session, else show entry ---
+//
+// ONLY A 401 ENDS A SESSION. This used to be a bare `catch` that deleted the token on ANY throw —
+// a dropped connection, a worker cold start, a 500, a tunnel — and returned the reader to the
+// sign-in screen with no message, needing a fresh passkey ceremony to get back in. The session it
+// threw away has a thirty-day server-side life (SESSION_TTL, worker/src/auth.js). Everything that
+// is not "the server says you are not authenticated" now keeps the session and says what happened,
+// on the graph screen, where the re-read button is.
 (async () => {
-  if (token) { try { await enterGraph(); return; } catch { localStorage.removeItem(tokenKey); token = null; } }
-  show("entry");
+  if (!token) { show("entry"); return; }
+  try {
+    await enterGraph();
+  } catch (e) {
+    if (e?.status === 401) { localStorage.removeItem(tokenKey); token = null; show("entry"); return; }
+    // `enterGraph` has already revealed the shell and the graph section before the read that
+    // failed, so the screen is standing — what it needs is something in it.
+    showShell(true);
+    $("entry").classList.add("hidden");
+    $("graph").classList.remove("hidden");
+    showEmpty("unreadable", e?.message ?? "");
+    buildDrawer([]);
+  }
 })();
 </script>
 </body>
