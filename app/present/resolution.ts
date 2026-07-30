@@ -7,21 +7,30 @@
  * plain text file, one with every key `wired` is a conventional app, and the operator's position
  * and a first-time visitor's position are two values of the same type rather than two products.
  *
- * ── TWO KEYS, NOT FIVE, AND THIS IS THE ONE PLACE THIS MODULE DEPARTS FROM THE SPEC ──
+ * ── FOUR KEYS, NOT FIVE, AND THIS IS THE ONE PLACE THIS MODULE DEPARTS FROM THE SPEC ──
  *
  * design-presentation-cascade.md section 2.3 specifies five keys — checkbox, tags, links,
- * markers, heading. This ships TWO: the two the painter actually reads.
+ * markers, heading. This ships FOUR: the four the painter actually reads.
  *
  * The reason is section 9's own rule, which that document states more forcefully than anything
  * else in it: do not declare a key whose reader does not exist. "A declaration that exists and
  * does not reach" is named there as this system's highest-frequency bug, found four times in one
- * week. `tags`, `links` and `markers` have no wired rendition anywhere in this repo and will not
- * have one until migration stage 8, which ships each rendition WITH its source edit. Declaring
- * them here would produce three keys that load clean, type-check clean, and are read by nothing —
+ * week. `links` and `markers` have no wired rendition anywhere in this repo and will not have one
+ * until the rest of migration stage 8, which ships each rendition WITH its source edit. Declaring
+ * them here would produce two keys that load clean, type-check clean, and are read by nothing —
  * the exact shape the spec exists to prevent, committed in the change whose job is to prevent it.
  *
- * They arrive at stage 8, one key per rendition, and the cost of adding one is one union member
+ * They arrive one at a time, one key per rendition, and the cost of adding one is one union member
  * and one DEFAULT entry, because nothing re-expresses this list.
+ *
+ * ── AND `tags` ARRIVED AT STAGE 8, WITH A READER AND A GRAMMAR ──
+ *
+ * `tags` is the FIRST key whose subject is a TOKEN rather than a LINE, and the first whose `wired`
+ * rendition does not contain the source characters as text a person could read off the page. That
+ * is what makes it the interesting one: every rendition before it kept the characters (a checkbox
+ * IS the glyph, an `<h3>` keeps its words), so nothing could tell a painter that reads the source
+ * from a painter that reads the page. A chip can. `tagSpans` below is the grammar half of it — the
+ * LINE level's content input for tags — and the painter is the other half.
  *
  * ── WHY `heading` IS HERE, WHICH IS A CORRECTION TO THE SPEC, NOT AN ADDITION ──
  *
@@ -50,8 +59,8 @@
 /** The two ends of the dial. `raw` is the characters; `wired` is the app's rendition of them. */
 export type Rendition = "raw" | "wired";
 
-/** The token families this app shows more than one way. See the notes above on why it is three. */
-export type ResolutionKey = "checkbox" | "heading" | "prose";
+/** The token families this app shows more than one way. See the notes above on why it is four. */
+export type ResolutionKey = "checkbox" | "heading" | "prose" | "tags";
 
 /** A complete answer: one rendition per family. */
 export type Resolution = { readonly [K in ResolutionKey]: Rendition };
@@ -64,21 +73,32 @@ export const RESOLUTION_KEYS = [
   "checkbox",
   "heading",
   "prose",
+  "tags",
 ] as const satisfies readonly ResolutionKey[];
 
 /**
  * The floor of the cascade — what a key resolves to when every level is silent.
  *
- * THESE TWO VALUES ARE WHY THE OUTPUT OF THIS CHANGE IS BYTE-IDENTICAL TO THE OUTPUT BEFORE IT.
- * `paintView` built a real `<input type="checkbox">` for a task line and an `<h_>` for a heading,
- * unconditionally. `wired` for both, with every level silent, is that behaviour expressed as a
- * resolution instead of as a hardcoded branch. Flipping either one is migration stage 2's job and
- * requires a declaration to exist first.
+ * THESE VALUES ARE WHY THE PAINTED OUTPUT UNDER A SILENT CONTEXT IS BYTE-IDENTICAL TO THE PAINTER
+ * THIS ONE REPLACED. `paintView` built a real `<input type="checkbox">` for a task line and an
+ * `<h_>` for a heading, unconditionally, and it showed a tag as the characters `#work` because
+ * `md.renderInline` does nothing to them. `wired` for the three line families and `raw` for tags,
+ * with every level silent, is that behaviour expressed as a resolution instead of as a hardcoded
+ * branch.
+ *
+ * SO `tags` IS `raw` HERE AND `wired` IN THE SERVED DECLARATION, AND THE ASYMMETRY IS THE POINT.
+ * DEFAULT is the floor: what the app does when NOTHING has been declared, which is what it did
+ * before this key existed. The chip is not the floor — it is a decision the instance makes, in
+ * `presentation.json`, at GLOBAL. That is what keeps `tests/present-golden.test.mjs` a real
+ * comparison against the original painter (it paints against silence, and silence still means the
+ * characters), and it is what makes the chip a DECLARATION rather than a rewrite: delete the key
+ * from the served file and the chips are gone, with nothing rebuilt.
  */
 export const DEFAULT: Resolution = Object.freeze({
   checkbox: "wired",
   heading: "wired",
   prose: "wired",
+  tags: "raw",
 });
 
 /**
@@ -153,4 +173,83 @@ export function classifyLine(line: string): LineShape {
   }
 
   return { kind: "prose", source: line };
+}
+
+/**
+ * ── WHAT A TAG IS, AND WHERE THAT ANSWER CAME FROM ──
+ *
+ * NOT "a word after a hash". The engine has a tag grammar and this is a MIRROR of it, transcribed
+ * from one place and cited so a reader can check rather than trust:
+ *
+ *   the engine, src/qntm_md/io/parser/parse_tag.py:23
+ *     TAG_RE = re.compile(r"(?<!\S)#([a-zA-Z_][a-zA-Z0-9_-]*)")
+ *
+ * That module's own header names it "the public canonical hashtag-extraction regex… one canonical
+ * implementation per capability — no parallel regex", and the engine's `applier.py:564-572` states
+ * the consequences in the same words this comment would otherwise have to invent: `## Heading`,
+ * `C#` and `foo#bar` never match. The engine's audit
+ * (`docs/implementation-artifacts/research-input-interpretation.md:290`) lists the tag lexical
+ * shape under "Closed (code)" — it is NOT vocabulary config. `config/vocabulary/*.yaml` decides
+ * what a MATCHED tag MEANS (`#work` -> domain=work); it never decides what SHAPE is matched. So
+ * there is exactly one thing to mirror and this is it.
+ *
+ * In prose: `#`, then one `[A-Za-z_]`, then any run of `[A-Za-z0-9_-]`, and the `#` must be at the
+ * start or preceded by whitespace. Nothing terminates it — it ends at the first character outside
+ * the body class.
+ *
+ * ── WHY THE FORM DIFFERS AND THE LANGUAGE DOES NOT ──
+ *
+ * `(^|\s)` rather than `(?<!\S)`. Lookbehind is ES2018 and Safari only shipped it in 16.4, and a
+ * regex literal a browser cannot parse is a SyntaxError at module load — it would not degrade the
+ * tag rendition, it would take the whole presentation bundle down with it. The two forms accept
+ * exactly the same language here, because the alternative only ever consumes the whitespace BEFORE
+ * a `#` and never the whitespace after one, so two tags can never contend for the same separator.
+ * That equivalence is not asserted, it is TESTED: tests/present-tags.test.mjs carries the engine's
+ * verbatim lookbehind regex and compares the two over the named edge cases and a generated sweep.
+ *
+ * ── THE PROPERTY THE PAINTER LEANS ON, STATED HERE BECAUSE IT IS A FACT ABOUT THE GRAMMAR ──
+ *
+ * A tag body is `[A-Za-z0-9_-]` and a tag begins with `#`. NONE of `< > & "` can appear in one.
+ * So a matched tag is safe to place inside an HTML attribute-bearing element without escaping —
+ * not because the painter escapes it, but because the grammar cannot produce a character that
+ * would need escaping. tests/present-tags.test.mjs fuzzes hostile lines against that claim.
+ */
+const TAG = /(^|\s)#([a-zA-Z_][a-zA-Z0-9_-]*)/g;
+
+/**
+ * One tag, located in the text it was found in.
+ *
+ * OFFSETS, NOT JUST TEXT, because the whole design turns on being able to say WHERE in the source
+ * a rendition came from. A rendition that knew only "this line has a tag called #work" could not
+ * express its removal as a substring operation, and an affordance with no substring operation is
+ * not admissible (design-presentation-cascade.md section 5). The offsets are what make the chip's
+ * missing affordance a decision that can be taken later rather than a dead end.
+ */
+export interface TagSpan {
+  /** Index of the `#` in the text this was found in. */
+  readonly start: number;
+  /** Index one past the last character of the tag. */
+  readonly end: number;
+  /** The tag, INCLUDING the `#`, verbatim from the source. */
+  readonly text: string;
+}
+
+/**
+ * Every tag in `text`, in order, with its position.
+ *
+ * `matchAll` rather than a loop over `exec`, because `TAG` carries the global flag and `exec`
+ * would carry `lastIndex` from one call into the next — a module-level regex with mutable state
+ * shared across every line of every view. `matchAll` clones the regex, so this function is
+ * re-entrant and the shared literal stays a constant.
+ */
+export function tagSpans(text: string): readonly TagSpan[] {
+  const spans: TagSpan[] = [];
+  for (const match of text.matchAll(TAG)) {
+    // Group 1 is the leading boundary — empty at the start of the text, one whitespace character
+    // otherwise. It is CONSUMED by the match, so the tag itself starts after it.
+    const start = (match.index ?? 0) + (match[1] ?? "").length;
+    const tag = "#" + (match[2] ?? "");
+    spans.push({ start, end: start + tag.length, text: tag });
+  }
+  return spans;
 }

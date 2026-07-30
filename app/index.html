@@ -113,6 +113,30 @@
   }
   .viewbody input.rawline:focus { box-shadow: none; outline: none; background: rgba(124,199,255,.06); }
   .viewbody .task span { cursor: text; }
+  /* THE TAG CHIP — the `wired` rendition of the presentation cascade's `tags` key, and the ONLY
+     style this stage adds. Scoped to `.viewbody .tagchip` so it cannot reach anything else on the
+     page, and named `tagchip` rather than `tag` because `.tag` is already the hero tagline above.
+     Whether a tag IS a chip is not decided here — that is presentation.json and app/present/. This
+     rule only says what a chip looks like once the cascade has said there should be one.
+     THE GREEN IS THE DECLARED ONE. #3ff07f, brand/BRAND.md section 2 ("Colour system: green
+     #3ff07f · black #0a0b0a · white #e6ebe6") — read from the brand department, not sampled off a
+     screenshot. */
+  .viewbody .tagchip {
+    display: inline-block;
+    padding: 0 .42rem;
+    border-radius: 999px;
+    background: rgba(63,240,127,.10);
+    border: 1px solid rgba(63,240,127,.30);
+    color: #3ff07f;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .82em;
+    line-height: 1.45;
+    white-space: nowrap;
+    vertical-align: baseline;
+  }
+  /* A completed line strikes its text through. The chip is not the text — it is a token beside it,
+     and a struck-through pill reads as a rendering fault rather than as "this is done". */
+  .viewbody .task.done span .tagchip { text-decoration: none; }
 </style>
 </head>
 <body>

@@ -29,6 +29,40 @@
 # Until that is fixed in the tool, DO NOT accept a rollup write as the state of this project's
 # flows: `verify .` is the instrument that can see them.
 #
+# AND `verify .` TRUNCATES ITS OWN CAPTURE HERE, WHICH IS THE TOOL'S AND IS CONTROLLABLE
+# (diagnosed 2026-07-30, stage 8, after two wrong readings — both recorded, because a later reader
+# will otherwise repeat them).
+#
+# THE SYMPTOM. Runs lose the LAST edges a scenario produces — FocusSurface.blur / .isFocused /
+# .contextFor, PresentationContext.with, the second applyEdit. They surface as INFO "declared but
+# not observed", NEVER as FAIL, so `fail_count` stays 0 and `pass_count` silently drops instead.
+# The scenario itself is fine: run standalone under node it completes and asserts everything.
+#
+# WRONG READING 1 — "the branch broke it". Five runs over an unmodified base came back identical
+# and made it look like a regression. Eight more base runs then flaked three times
+# (29 27 29 26 29 29 26 29). It is not any one declaration's fault and it predates this stage.
+# WRONG READING 2 — "it is purely random". Volume matters, and a lot. Driving a SIX-line fixture,
+# this project's present_cascade scenario lost six edges on EVERY run (25 PASS, four times, dead
+# stable). Cutting the fixture to FOUR lines, changing nothing else, took it to 31 on the next five
+# runs. So the budget is real and a scenario can sit the wrong side of it permanently.
+# AND WRONG READING 3, WHICH IS THE ONE THIS NOTE ORIGINALLY COMMITTED — "so shrinking it FIXES
+# the flake". It does not. Six further runs of the four-line version read 28 28 28 31 28 31: the
+# same three focus edges, lost some of the time. Shrinking moved the scenario off a CLIFF, not off
+# the dice. The residual correlates with machine load — the truncated runs cluster immediately
+# after a full `npm run check` — which points at a flush or a timeout in the observer rather than a
+# fixed record cap. Current spread: this project 28-31, the same commit's parent 27-30. Same shape,
+# same three-point range.
+#
+# WHAT A SCENARIO AUTHOR SHOULD DO ABOUT IT. A scenario exists to make each declared edge
+# OBSERVABLE ONCE. Volume beyond that is not thoroughness, it is budget spent buying nothing — and
+# what it costs is the evidence for whatever the run drives LAST. Keep fixtures minimal and prove
+# painted output somewhere that is not a scenario (tests/present-golden.test.mjs does it against a
+# whole view plus a 1,125-case sweep, under `node --test`, where there is no budget).
+#
+# WHAT IT MEANS WHEN YOU READ A RUN: a low `pass_count` with `fail_count: 0` and "declared but not
+# observed" INFOs is a truncated capture, not a broken commitment. Run it again, and do not delete
+# a flow declaration on the strength of one run.
+#
 # Note also that there is no flow-trace gate in this repo's CI (build.yml and worker.yml are
 # node-only), so nothing catches a broken declaration here automatically.
 #

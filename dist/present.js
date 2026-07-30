@@ -16,12 +16,14 @@ function isSilent(contribution) {
 var RESOLUTION_KEYS = [
   "checkbox",
   "heading",
-  "prose"
+  "prose",
+  "tags"
 ];
 var DEFAULT = Object.freeze({
   checkbox: "wired",
   heading: "wired",
-  prose: "wired"
+  prose: "wired",
+  tags: "raw"
 });
 var TASK = /^(\s*)- \[( |x|X)\] (.*)$/;
 var HEADING = /^(#{1,6})\s+(.*)$/;
@@ -49,6 +51,16 @@ function classifyLine(line) {
     return { kind: "blank", source: line };
   }
   return { kind: "prose", source: line };
+}
+var TAG = /(^|\s)#([a-zA-Z_][a-zA-Z0-9_-]*)/g;
+function tagSpans(text) {
+  const spans = [];
+  for (const match of text.matchAll(TAG)) {
+    const start = (match.index ?? 0) + (match[1] ?? "").length;
+    const tag = "#" + (match[2] ?? "");
+    spans.push({ start, end: start + tag.length, text: tag });
+  }
+  return spans;
 }
 
 // app/present/declaration.ts
@@ -226,6 +238,9 @@ function applyEdit(source, edit) {
     lines[edit.lineIndex] = edit.text;
     return lines.join("\n");
   }
+  if (edit.kind !== "set-checkbox") {
+    return null;
+  }
   const match = CHECKBOX_GLYPH.exec(line);
   if (match === null) {
     return null;
@@ -283,6 +298,27 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint) {
   });
   return input;
 }
+var TAG_CHIP_CLASS = "tagchip";
+var CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
+var CHIP_CLOSE = "</span>";
+function renderTags(text, tags, render) {
+  if (tags === "raw") {
+    return render(text);
+  }
+  const spans = tagSpans(text);
+  if (spans.length === 0) {
+    return render(text);
+  }
+  let injected = "";
+  let at = 0;
+  for (const span of spans) {
+    injected += text.slice(at, span.start) + CHIP_OPEN + span.text + CHIP_CLOSE;
+    at = span.end;
+  }
+  injected += text.slice(at);
+  const html = render(injected);
+  return html.split(CHIP_OPEN).length - 1 === spans.length ? html : render(text);
+}
 function paint(body, source, context, deps) {
   const focus = deps.focus;
   const repaint = (nextSource) => {
@@ -339,7 +375,11 @@ function paint(body, source, context, deps) {
         deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, box, row });
       });
       const span = document.createElement("span");
-      span.innerHTML = deps.markdown.renderInline(shape.tail);
+      span.innerHTML = renderTags(
+        shape.tail,
+        cascade.resolve("tags").rendition,
+        (markdown) => deps.markdown.renderInline(markdown)
+      );
       focusable(span, index);
       row.append(box, span);
       body.append(row);
@@ -351,7 +391,11 @@ function paint(body, source, context, deps) {
         return;
       }
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      el.innerHTML = deps.markdown.renderInline(shape.text);
+      el.innerHTML = renderTags(
+        shape.text,
+        cascade.resolve("tags").rendition,
+        (markdown) => deps.markdown.renderInline(markdown)
+      );
       focusable(el, index);
       body.append(el);
       return;
@@ -361,7 +405,11 @@ function paint(body, source, context, deps) {
       return;
     }
     const div = document.createElement("div");
-    div.innerHTML = deps.markdown.render(shape.source);
+    div.innerHTML = renderTags(
+      shape.source,
+      cascade.resolve("tags").rendition,
+      (markdown) => deps.markdown.render(markdown)
+    );
     focusable(div, index);
     body.append(div);
   });
@@ -378,6 +426,7 @@ export {
   isSilent,
   paint,
   presentationFromDeclaration,
-  readDeclaration
+  readDeclaration,
+  tagSpans
 };
 //# sourceMappingURL=present.js.map

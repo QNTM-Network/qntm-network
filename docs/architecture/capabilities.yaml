@@ -314,6 +314,44 @@ capabilities:
     exits 0 with 23 PASS / 0 FAIL and the five stage-1 flows are OBSERVED with counts. Canonical
     routing is still not answered here, for a narrower reason recorded in .flow-trace.yaml: the
     verbs that would answer it install probe anchors that blind the JS observer.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 8 (FIRST RENDITION) SHIPPED. `tags` IS A RESOLUTION KEY
+    WITH A READER, and it is the first key whose subject is a TOKEN rather than a LINE. Four keys
+    now: checkbox, heading, prose, tags. `links` and `markers` still have none and are still not
+    declared, for the reason this roster has given twice already.
+    IT IS THE FIRST KEY WHOSE DEFAULT AND WHOSE DECLARED VALUE DISAGREE, AND THAT ASYMMETRY IS THE
+    ARCHITECTURE. `DEFAULT.tags` is `raw` — the floor of the cascade is what the app did before the
+    key existed, which is what keeps tests/present-golden.test.mjs a real byte-for-byte comparison
+    against the painter this replaced. `presentation.json` declares `wired`. So the chip is not
+    built in; it is a decision this INSTANCE makes, at GLOBAL, in a served file. Flip that one key
+    to `raw`, reload, and the chips are characters WITH NOTHING REBUILT — measured in a real
+    browser against an unchanged bundle (identical md5 before and after), not asserted.
+    WHAT A TAG IS, AND WHERE THE ANSWER CAME FROM. Not "a word after a hash". The engine's
+    canonical grammar is `(?<!\S)#([a-zA-Z_][a-zA-Z0-9_-]*)` (the engine,
+    src/qntm_md/io/parser/parse_tag.py:23), it lives in CODE and not in vocabulary config (the
+    engine's own audit lists it under "Closed (code)", research-input-interpretation.md:290), and
+    app/present/resolution.tagSpans mirrors it. So `#1`, `foo#bar`, `C#`, `# Heading`, `##` and a
+    URL fragment are NOT tags, `#work/admin` is `#work` only, and the app agrees with the engine on
+    every one. The shipped form writes the boundary as `(^|\s)` instead of a lookbehind because
+    Safari only got lookbehind in 16.4 and an unparseable literal takes the whole bundle down; the
+    two forms are PROVEN equal over the engine's own cases plus a 972-case sweep, with the engine's
+    verbatim regex carried in the test as the reference.
+    WHAT IS PROVEN, and by what. tests/present-tags.test.mjs (66) — the grammar against the
+    engine's, the painter asking and obeying, a chip never swallowing a non-tag, the grammar's
+    inability to emit an HTML-special character (fuzzed), the renderer-refuses fallback, and the
+    corrupted-DOM detector under chips. Plus 5 through the app page's own lifted script and 2 more
+    through the page's served declaration. Mutation-proven NINE ways, each red with its own
+    message, each restored: a digit-leading tag body, the boundary dropped, the painter always
+    chipping, the painter never chipping, the fallback removed, applyEdit's discrimination removed,
+    `hidden` admitted as a rendition, the chip given an attribute, and the posted file rebuilt from
+    the DOM. `flow-trace verify .` exits 0 at 30 PASS / 0 FAIL with the new edge OBSERVED
+    (app/present/paint → app/present/resolution.tagSpans, count 5).
+    WHAT WAS REFUTED. `hidden` is NOT a third rendition. The design calls hiding the safest
+    resolution because hidden text is not edited; here it is not safe and it is not even true.
+    `Rendition` is ONE union shared by every key and readDeclaration validates against it with no
+    per-key table, so admitting `hidden` would admit `{"checkbox": "hidden"}` — well-formed, loads
+    clean, read by nothing, painted as a checkbox anyway. And hidden text IS edited in this app:
+    FOCUS takes a line to `raw` on every key, so the cursor landing makes hidden tags reappear.
+    What it would take is renditions that vary per key rather than one union across all of them.
   tier: foundational
   status: undeclared
 - id: the-focused-line-shows-its-source
@@ -394,6 +432,27 @@ capabilities:
     Still unenforced in the ONE sense that matters and is not yet closed: nothing proves no OTHER
     path writes back. That is canonical routing against `source-write-back`, and it needs
     `flow-trace verify`, which exits 2 here.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 8 (FIRST RENDITION) SHIPPED, AND THIS CAPABILITY IS WHY
+    IT SHIPPED SMALL. The first resolution that changes a TOKEN rather than a LINE — `#work` as a
+    chip — ADDS NO SOURCE EDIT AND NO SECOND WRITE PATH. `applyEdit` still knows exactly two
+    operations. The chip is READ-ONLY, and that is this constraint doing its job rather than a
+    corner cut: the deletion is writable ("delete [start,end) of line N", and `TagSpan` already
+    carries the offsets), but the AFFORDANCE is not answerable yet — what the leftover whitespace
+    becomes, what deleting a tag MEANS to an engine for which `#task` selects a node type and
+    `#work` sets a field, and where a destructive click would sit when the chip lives inside the
+    span that is the cursor target. Named in app/present/paint.ts so the residue is legible.
+    IT IS ALSO THE FIRST RENDITION UNDER WHICH THIS PROPERTY COULD REALLY BE TESTED. Until now the
+    page held every source character, so a file rebuilt from the DOM came out right by accident and
+    only a deliberately corrupted DOM exposed the inversion. With chips painted, `#work` is not
+    text on the page at all — the mutation that rebuilds the posted file from the rendered elements
+    now loses the tags outright, and the round trip is asserted through the app page's own script with
+    every chip on the page replaced by something that is not a tag before the affordance is used.
+    AND A REAL DEFECT IN THE WRITE PATH WAS FOUND WHILE PROVING IT, by a test rather than by
+    reading. `applyEdit` fell through to the checkbox branch for anything that was not `set-line`,
+    so an unknown edit kind silently UNTICKED a box and returned a whole file to POST — undefined
+    is falsy. Unreachable from a typed caller today; reachable by the next person to add
+    `delete-span` and forget a branch, which is exactly the affordance this stage deferred. It
+    discriminates explicitly and refuses now, and the guard is mutation-proven.
   tier: foundational
   status: undeclared
 - id: presentation-resolution-is-user-and-mode-aware
