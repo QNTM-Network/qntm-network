@@ -60,98 +60,287 @@ backlog:
   state: passing
 - id: stand-up-the-typescript-app
   title: '[app] [foundation] Stand up qntm.network as a real TypeScript browser application
-    — npm + strict tsconfig + bundler producing dist/, TS sources under app/, and a GitHub
-    Actions workflow building on push so the deploy stays push-to-publish with no human
-    in the loop. Chosen deliberately for where this is going (render -> edit -> structure
-    -> graph -> sync), not inherited from the demo. Requires the amended push-to-deploy-loop
-    pin — the retired "no build step" clause described the old implementation, not the
-    commitment. Deploy target (GitHub Pages + Actions vs moving to Cloudflare Pages beside
-    the Worker) is deliberately DEFERRED: both consume the same dist/, so it does not shape
-    the build and should be decided when the first build ships.'
+    — npm + strict tsconfig + bundler producing dist/, TS sources under app/, and
+    a GitHub Actions workflow building on push so the deploy stays push-to-publish
+    with no human in the loop. Chosen deliberately for where this is going (render
+    -> edit -> structure -> graph -> sync), not inherited from the demo. Requires
+    the amended push-to-deploy-loop pin — the retired "no build step" clause described
+    the old implementation, not the commitment. Deploy target (GitHub Pages + Actions
+    vs moving to Cloudflare Pages beside the Worker) is deliberately DEFERRED: both
+    consume the same dist/, so it does not shape the build and should be decided when
+    the first build ships.'
   driving_capability: app-is-a-typed-browser-application
-  record: >-
-    2026-07-23 — SHIPPED. npm + tsconfig (strict, plus noUncheckedIndexedAccess /
-    exactOptionalPropertyTypes / noImplicitOverride) + esbuild via scripts/build.mjs -> committed
-    demo/app.js + app.css. CI (.github/workflows/build.yml) runs typecheck then build on push to
-    main and FAILS IF demo/ CHANGED — that staleness gate is what makes the amended
-    push-to-deploy-loop true rather than aspirational: the artifact is committed (Pages serves
-    main:/), so forgetting to rebuild is the obvious failure mode, and the machine catches it
-    instead of the operator having to remember. Deploy target deliberately unchanged (GitHub
-    Pages, main:/) so the live site was never at risk during the migration. esbuild bumped
-    0.24 -> 0.28 to clear a moderate advisory; npm audit now reports 0 vulnerabilities.
+  record: '2026-07-23 — SHIPPED. npm + tsconfig (strict, plus noUncheckedIndexedAccess
+    / exactOptionalPropertyTypes / noImplicitOverride) + esbuild via scripts/build.mjs
+    -> committed demo/app.js + app.css. CI (.github/workflows/build.yml) runs typecheck
+    then build on push to main and FAILS IF demo/ CHANGED — that staleness gate is
+    what makes the amended push-to-deploy-loop true rather than aspirational: the
+    artifact is committed (Pages serves main:/), so forgetting to rebuild is the obvious
+    failure mode, and the machine catches it instead of the operator having to remember.
+    Deploy target deliberately unchanged (GitHub Pages, main:/) so the live site was
+    never at risk during the migration. esbuild bumped 0.24 -> 0.28 to clear a moderate
+    advisory; npm audit now reports 0 vulnerabilities.'
   state: passing
 - id: port-the-renderer-to-typescript
-  title: '[app] [render] Port the markdown renderer from build-time Python to the TS app
-    so rendering happens in the browser, and RETIRE qntm_network/render/ entirely — the
-    package, its four declared expected_flows, and the rendered-page-written sink. The
-    retirement is the point, not a tidy-up: browser editing needs a browser renderer, and
-    keeping the Python one would leave two implementations of one contract to diverge
-    silently (architecture.yaml#one-implementation-per-concern). Sequenced AFTER the
-    toolchain and BEFORE editability; the flows and sink retire in the SAME change as the
-    code, so no window exists where declared topology points at nothing.'
+  title: '[app] [render] Port the markdown renderer from build-time Python to the
+    TS app so rendering happens in the browser, and RETIRE qntm_network/render/ entirely
+    — the package, its four declared expected_flows, and the rendered-page-written
+    sink. The retirement is the point, not a tidy-up: browser editing needs a browser
+    renderer, and keeping the Python one would leave two implementations of one contract
+    to diverge silently (architecture.yaml#one-implementation-per-concern). Sequenced
+    AFTER the toolchain and BEFORE editability; the flows and sink retire in the SAME
+    change as the code, so no window exists where declared topology points at nothing.'
   driving_capability: demo-renders-markdown-in-the-browser
-  record: >-
-    2026-07-23 — SHIPPED. app/render/renderer.ts is a faithful port of the Python
-    MarkdownRenderer (same markdown-it library family, same CommonMark preset, same table rule);
-    only the execution site moved, build-time server -> runtime browser. RETIRED in the same
-    change: qntm_network/render/ (build.py, renderer.py, styles.py, __init__.py),
-    tests/flow_scenarios/render_flow.py, the five expected_flows, and the rendered-page-written
-    sink — flows.yaml and sinks.yaml are now empty with the reasoning written into them, and
-    .flow-trace.yaml is back to a never-matching capture filter since no Python application code
-    remains. demo/index.html became a hand-authored shell instead of a generated artifact.
-    reading.css moved to app/styles/ and is now a linked stylesheet rather than inlined.
+  record: '2026-07-23 — SHIPPED. app/render/renderer.ts is a faithful port of the
+    Python MarkdownRenderer (same markdown-it library family, same CommonMark preset,
+    same table rule); only the execution site moved, build-time server -> runtime
+    browser. RETIRED in the same change: qntm_network/render/ (build.py, renderer.py,
+    styles.py, __init__.py), tests/flow_scenarios/render_flow.py, the five expected_flows,
+    and the rendered-page-written sink — flows.yaml and sinks.yaml are now empty with
+    the reasoning written into them, and .flow-trace.yaml is back to a never-matching
+    capture filter since no Python application code remains. demo/index.html became
+    a hand-authored shell instead of a generated artifact. reading.css moved to app/styles/
+    and is now a linked stylesheet rather than inlined.'
   state: passing
 - id: add-view-and-edit-modes
-  title: '[app] [edit] Give the demo page a VIEW mode (rendered, read-only) and an EDIT
-    mode (markdown source, re-rendering as you type) with a toggle between them, session
-    state held in memory. Edits are EPHEMERAL BY DESIGN — no persistence of any kind,
-    everything lost on refresh — and that is declared with its own enforcer
+  title: '[app] [edit] Give the demo page a VIEW mode (rendered, read-only) and an
+    EDIT mode (markdown source, re-rendering as you type) with a toggle between them,
+    session state held in memory. Edits are EPHEMERAL BY DESIGN — no persistence of
+    any kind, everything lost on refresh — and that is declared with its own enforcer
     (state-edits-are-ephemeral) rather than left as an implicit TODO, so accidentally
-    adding persistence later FAILs loudly instead of quietly changing what this is. The
-    operator ask that opened the arc, and the smallest honest version of the qntm editing
-    surface.'
+    adding persistence later FAILs loudly instead of quietly changing what this is.
+    The operator ask that opened the arc, and the smallest honest version of the qntm
+    editing surface.'
   driving_capability: reader-can-toggle-edit-and-view-modes
-  record: >-
-    2026-07-23 — SHIPPED. EditorSession (app/editor/session.ts) owns mode + text and nothing
-    else — no DOM, no rendering — so the mode logic is reasonable about without a browser;
-    app/main.ts is the single module that touches the page. Re-renders on every keystroke
-    deliberately (pure renderer, small documents; debounce when a document actually stutters, not
-    before). VERIFIED IN A REAL BROWSER, not just by predicate: rendered client-side, toggled both
-    ways, typed markdown became a real h2 + strong live, refresh discarded the edits and restored
-    the original, localStorage and sessionStorage both empty throughout, no console errors.
-    content/demo.md rewritten — it still advertised the retired Python capability and the
-    rendered-page-written sink, which the enforcers could not catch because prose is not checked.
-    NOTE the two predicate bugs this arc found and fixed, both the same mistake one file format
-    apart: assert_edits_are_ephemeral FAILed on session.ts's own docstring ("no localStorage...")
-    and assert_markdown_renders_client_side FAILed on flows.yaml's comment explaining the
-    retirement. Absence checks over raw text convict their own documentation. Fixed properly —
-    strip JS comments before scanning, parse the YAML and inspect declared entries rather than
-    grepping. Worth remembering the next time an absence invariant gets written.
+  record: '2026-07-23 — SHIPPED. EditorSession (app/editor/session.ts) owns mode +
+    text and nothing else — no DOM, no rendering — so the mode logic is reasonable
+    about without a browser; app/main.ts is the single module that touches the page.
+    Re-renders on every keystroke deliberately (pure renderer, small documents; debounce
+    when a document actually stutters, not before). VERIFIED IN A REAL BROWSER, not
+    just by predicate: rendered client-side, toggled both ways, typed markdown became
+    a real h2 + strong live, refresh discarded the edits and restored the original,
+    localStorage and sessionStorage both empty throughout, no console errors. content/demo.md
+    rewritten — it still advertised the retired Python capability and the rendered-page-written
+    sink, which the enforcers could not catch because prose is not checked. NOTE the
+    two predicate bugs this arc found and fixed, both the same mistake one file format
+    apart: assert_edits_are_ephemeral FAILed on session.ts''s own docstring ("no localStorage...")
+    and assert_markdown_renders_client_side FAILed on flows.yaml''s comment explaining
+    the retirement. Absence checks over raw text convict their own documentation.
+    Fixed properly — strip JS comments before scanning, parse the YAML and inspect
+    declared entries rather than grepping. Worth remembering the next time an absence
+    invariant gets written.'
   state: passing
 - id: adopt-typescript-flow-capture
-  title: '[instrument] [observed-half] Adopt flow-trace''s TypeScript capture backend now that it
-    exists — declare the app''s real call topology in flows.yaml, the DOM mount in sinks.yaml, and
-    the three concerns in a new classes.yaml, so the app capabilities convert from
-    `rooting: isolated` to genuine class-rooting. Closes the ceiling this project documented in the
-    morning: the observed half (traced flows, depth-to-sink, canonical routing, declared-vs-actual
-    drift) reaches the product code and not only the tooling.'
+  title: '[instrument] [observed-half] Adopt flow-trace''s TypeScript capture backend
+    now that it exists — declare the app''s real call topology in flows.yaml, the
+    DOM mount in sinks.yaml, and the three concerns in a new classes.yaml, so the
+    app capabilities convert from `rooting: isolated` to genuine class-rooting. Closes
+    the ceiling this project documented in the morning: the observed half (traced
+    flows, depth-to-sink, canonical routing, declared-vs-actual drift) reaches the
+    product code and not only the tooling.'
   driving_capability: demo-renders-markdown-in-the-browser
-  record: >-
-    2026-07-23 — SHIPPED, same day the gap was filed. tests/flow_scenarios/render_and_edit.ts drives
-    the real chain (mount -> renderer, toggle both ways, type -> re-render) under the node observer;
-    all 5 declared flows observed with counts matching what the scenario drives (toHtml x2, toggle
-    x2, setSource x1). Two forbidden_flows declare the purity rules structurally: neither the
-    renderer nor the session may call back into the DOM-owning module. classes.yaml gives the three
-    concerns canonical homes; page-presentation governs the document-mounted sink. Capability depth
-    went 1 -> 3 (renders) and 1 -> 5 (edit modes), both now horizontally rooted.
-    FORCED A REAL FIX IN OUR OWN CODE: app/main.ts ended in a bare `void main()`, so importing it
-    ran it — unobservable by anything that is not a browser. Split into main.ts (importable,
-    exports mount/main) and boot.ts (the sole top-level side effect, and the build entry); the CSS
-    imports moved with it since node cannot resolve them. The app is unchanged behaviourally,
-    re-verified in-browser after the split.
-    ALSO FOUND AND FIXED A FLOW-TRACE BUG (separate repo, committed there): fan-out breadth
-    median is fractional for an even unit count, but CapabilityRollupOutput.summary and
-    EntryOutput.summary were typed dict[str, int] — this project was the first with an even
-    distribution, and it took out map/capability-rollup/queue/backlog together. Widened to
-    int | float with a mutation-proven regression test.
+  record: '2026-07-23 — SHIPPED, same day the gap was filed. tests/flow_scenarios/render_and_edit.ts
+    drives the real chain (mount -> renderer, toggle both ways, type -> re-render)
+    under the node observer; all 5 declared flows observed with counts matching what
+    the scenario drives (toHtml x2, toggle x2, setSource x1). Two forbidden_flows
+    declare the purity rules structurally: neither the renderer nor the session may
+    call back into the DOM-owning module. classes.yaml gives the three concerns canonical
+    homes; page-presentation governs the document-mounted sink. Capability depth went
+    1 -> 3 (renders) and 1 -> 5 (edit modes), both now horizontally rooted. FORCED
+    A REAL FIX IN OUR OWN CODE: app/main.ts ended in a bare `void main()`, so importing
+    it ran it — unobservable by anything that is not a browser. Split into main.ts
+    (importable, exports mount/main) and boot.ts (the sole top-level side effect,
+    and the build entry); the CSS imports moved with it since node cannot resolve
+    them. The app is unchanged behaviourally, re-verified in-browser after the split.
+    ALSO FOUND AND FIXED A FLOW-TRACE BUG (separate repo, committed there): fan-out
+    breadth median is fractional for an even unit count, but CapabilityRollupOutput.summary
+    and EntryOutput.summary were typed dict[str, int] — this project was the first
+    with an even distribution, and it took out map/capability-rollup/queue/backlog
+    together. Widened to int | float with a mutation-proven regression test.'
   state: passing
+- id: give-presentation-one-reader-and-one-home
+  title: '[present] [stage 1] [HALF A DAY] Extract paintView''s hardcoded decisions
+    (app.html:234-269 — the task regex, the indent arithmetic, the heading demotion,
+    the blank-line drop, the one-line-per-document fallback) into app/present/ as a
+    PURE resolver plus a painter, with output BYTE-IDENTICAL to today. Six modules,
+    three purity classes (design-presentation-cascade.md section 7): levels/resolution/cascade
+    pure, context pure, paint the only DOM toucher, source the only write-back. Declare
+    the three classes in the SAME change, never before — classes.yaml''s own header
+    says a class whose routing nothing can check is a label rather than governance.
+    LANDS IN app/, NOT app.html, and that is not a preference: .flow-trace.yaml includes
+    `app` as a PATH PREFIX, so a cascade written inside app.html is invisible to canonical
+    routing and flow declarations permanently, by construction. FALSIFIER the stage
+    must add: a node-driven scenario (the shape tests/flow_scenarios/render_and_edit.ts
+    already uses) asserting the painter routes through the cascade, plus a golden test
+    that the painted DOM for a known view is unchanged. BLOCKS every other presentation
+    row.'
+  driving_capability: presentation-is-resolved-not-chosen
+  kind: capability
+  state: diagnose-ready
+- id: declare-the-global-presentation-level
+  title: '[present] [stage 2] [UNDER AN HOUR] Add the GLOBAL level — one declaration
+    of the default Resolution, served with the app and consulted by stage 1''s cascade,
+    defaulting to today''s behaviour so nothing changes until it is flipped. THE STAGE
+    EXISTS TO PROVE THE READER IS WIRED: "a declaration that exists and does not reach"
+    is this system''s highest-frequency bug (an agent this week shipped a config category
+    that loaded clean, exited 0, and was read by nothing), so the first declared key
+    gets its own hour and its own proof rather than riding along inside a bigger change.
+    FALSIFIER: flip one key to `raw` in a fixture and assert the painted DOM changes;
+    if it does not, the declaration is inert and the stage has failed. Needs stage 1.'
+  driving_capability: presentation-is-resolved-not-chosen
+  kind: capability
+  state: diagnose-ready
+- id: the-focused-line-shows-its-source-rule
+  title: '[present] [stage 3] [HALF A DAY] THE OPERATOR''S RULE: cursor on the line
+    and you see `- [ ]`; cursor off and you see a rendered, clickable checkbox. Add
+    the FOCUS level (most specific of the seven, beats every declaration below it)
+    and per-line focus in the graph viewer — the focused line renders its EXACT source
+    text, blur returns the resolved rendition, the source string stays the truth and
+    the whole-file POST is unchanged. HALF A DAY AND NOT AN HOUR, because the surface
+    it reacts to does not exist: app.html builds labels, checkboxes, spans, headings
+    and divs and carries no textarea, no contenteditable and no keyboard path to a
+    line''s characters (app.html:244-267). The rule is minutes; the surface is the
+    half-day. FALSIFIER: focus a line and assert the DOM carries the verbatim source
+    substring; blur and assert the rendition returns; assert the posted markdown differs
+    from the original by exactly that line. Needs stages 1 and 2.'
+  driving_capability: the-focused-line-shows-its-source
+  kind: capability
+  state: diagnose-ready
+- id: add-the-mode-presentation-level
+  title: '[present] [stage 4] [HALF A DAY] Add the MODE level — reading versus authoring
+    as ONE session-scoped contribution that shifts the default rendition for every
+    line, resolved through the same cascade rather than as a branch in the painter.
+    MODE sits sixth, between LINE and FOCUS: a transient fact known at the gesture,
+    deliberately not adjacent to USER, which is a durable fact known at login. Independent
+    of the cursor rule — either can ship without the other. FALSIFIER: resolve one
+    fixture twice with different modes and assert the painted DOM differs. Needs stages
+    1 and 2.'
+  driving_capability: presentation-resolution-is-user-and-mode-aware
+  kind: capability
+  state: diagnose-ready
+- id: add-the-user-presentation-level
+  title: '[present] [stage 5] [HALF A DAY] Add the USER level — the per-person default
+    Resolution, held in the server-side user record behind the passkey session, NOT
+    in localStorage (which would trip state-edits-are-ephemeral, correctly, since that
+    is persistence arriving without a declaration). THE LEVEL MOST AT RISK OF BEING
+    DECLARED AND NEVER READ: with one user a wrong default is indistinguishable from
+    a working one, so it ships ONLY with a way to change it and a test that reads it
+    back through the session. Touches worker/schema-app.sql. Makes visible that the
+    operator''s position near the raw end is a value, not the architecture. FALSIFIER:
+    set a non-default Resolution on the user record, reload, assert the painted DOM
+    reflects it. Needs stages 1 and 2.'
+  driving_capability: presentation-resolution-is-user-and-mode-aware
+  kind: capability
+  state: diagnose-ready
+- id: resolve-from-the-model-not-the-text
+  title: '[present] [stage 6] [HALF A DAY] Give PresentationContext access to snapshot.graph
+    ({version, nodes, edges}, read from state.db at graph-sync.mjs:464) and snapshot.locations,
+    so a resolution may consult a node''s FIELDS rather than re-parsing its markdown.
+    BOTH ARE ALREADY IN THE PAYLOAD AND READ BY NOTHING — grep -c for nodes / edges
+    / locations over app.html returns 0, 0, 0. The app re-parses markdown text it was
+    handed alongside the model that produced it. This is the ONE stage carried on account
+    of the composed-views/agent-brief direction (design-presentation-cascade.md section
+    11): half a day now versus a rewrite later, and nothing else here is shaped by
+    it. FALSIFIER: a resolution computed from a node field ABSENT from the rendered
+    text, plus a test that it changes when the field changes. Needs stage 1.'
+  driving_capability: presentation-is-resolved-not-chosen
+  kind: capability
+  state: diagnose-ready
+- id: carry-presentation-through-the-snapshot-envelope
+  title: '[present] [stage 7] [AN ARC] Add the VIEW and STRUCTURAL_NODE levels by carrying
+    presentation declarations from the engine''s view sheets to the browser. AN ARC
+    BECAUSE IT IS THE FIRST STAGE NEEDING A SCHEMA CHANGE, in three places: readViews
+    carries exactly id/path/title/domain/markdown per view (scripts/graph-sync.mjs:511-517),
+    chosen for a viewer that only needed to display text; the graph_snapshot_views
+    table (worker/schema-app.sql); and pushGraph (worker/src/app.js:238-319). Stages
+    2-6 need no schema change anywhere, which is why this one is last of the buildable
+    set. GATED ON open decision 3 (may a node''s presentation differ between two views
+    that both show it?) — safer here than on ingest, since presentation has no write-back
+    of its own, but it changes what copy/paste means. FALSIFIER: a view sheet declaring
+    a presentation key, asserted end to end from config to painted DOM.'
+  driving_capability: presentation-is-resolved-not-chosen
+  kind: capability
+  state: diagnose-ready
+- id: token-renditions-chips-titles-and-pills
+  title: '[present] [stage 8] [AN ARC] The wired end of the dial: the first resolutions
+    that change a TOKEN rather than a LINE — a chip instead of `#work`, a title instead
+    of `[[qntm:121]]`, a pill instead of the new-node marker and its date, or nothing
+    at all. TODAY THE APP SHOWS ALL OF THESE VERBATIM: md.renderInline (app.html:252)
+    changes nothing on a real qntm line, so the wiki-link, both tags, the marker and
+    the date reach the browser as literal characters. EACH RENDITION SHIPS WITH ITS
+    SOURCE EDIT OR DOES NOT SHIP — if you cannot write down the substring operation,
+    the resolution is not admissible yet. That is the sequencing rule, not an objection.
+    FALSIFIER, per rendition: render, exercise the affordance, assert the posted source
+    differs from the original by exactly the intended substring operation. Needs stages
+    1 and 2.'
+  driving_capability: every-affordance-writes-back-through-the-source
+  kind: capability
+  state: diagnose-ready
+- id: author-in-the-browser-not-in-obsidian
+  title: '[present] [apex] [AN ARC] The thing everything is measured against: a human
+    logs into qntm.network and does their content THERE. Today you can TOGGLE and you
+    cannot AUTHOR — the web write path works end to end (click a checkbox, cycle through
+    the hosted model, re-render from the fresh projection) and there is no way to write
+    a line. This row is the arc the presentation stages serve and it stays open until
+    the surface exists; stage 3 builds the first piece of it. Single user; signups,
+    accounts and isolation are explicitly OUT of scope and their absence is a decision.
+    NO FALSIFIER IS POSSIBLE TODAY and none is claimed — declared so the distance is
+    in the queue instead of in a conversation.'
+  driving_capability: a-human-authors-in-the-browser
+  kind: capability
+  state: diagnose-ready
+- id: declare-the-hosted-application
+  title: '[govern] [AN ARC] Declare the ~1,400 lines of application that no capability,
+    flow, class, sink, state invariant or backlog row describes — passkey auth (worker/src/auth.js),
+    the /app/* routes and the write-through to the hosted model (worker/src/app.js),
+    the vault sync (scripts/graph-sync.mjs), the schema (worker/schema-app.sql), and
+    app.html itself. Surveyed and sized 2026-07-30 (docs/implementation-artifacts/research-site-survey.md
+    section 4); UNSCOPED here on purpose, because scoping it means deciding which capabilities
+    it splits into and that is a design pass, not a row. Recorded so "the queue is empty"
+    stops meaning "the work is done" — the queue read zero because no row was ever written
+    for any of this. The presentation cascade is the first arc that CANNOT be governed
+    without it, since every module it adds lands beside an undeclared surface.'
+  kind: capability
+  state: unscoped
+- id: flag-every-verify-pass-in-capabilities-yaml
+  title: '[asserted] Every verify: PASS in capabilities.yaml is a 2026-07-23 fossil
+    — flow-trace verify . has exited 2 (a crash, no verdict) since, because the tool''s
+    JS observer has no node_modules, and one crashed scenario blanks the verdict for
+    the thirteen static invariants too. The capability whose whole job is to assert
+    the runner produces real PASS/FAIL is green while the runner does not run: survey
+    M7 showed the predicate checks that two FILES EXIST and cannot tell a working
+    runner from a crashing one. Nothing in this repo can fix it — npm ci in the tool''s
+    js/ is the fix — and there is no flow-trace gate in this repo''s CI to notice.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: 'Every verify: PASS in capabilities.yaml is a 2026-07-23 fossil — flow-trace
+    verify . has exited 2 (a crash, no verdict) since, because the tool''s JS observer
+    has no node_modules, and one crashed scenario blanks the verdict for the thirteen
+    static invariants too. The capability whose whole job is to assert the runner
+    produces real PASS/FAIL is green while the runner does not run: survey M7 showed
+    the predicate checks that two FILES EXIST and cannot tell a working runner from
+    a crashing one. Nothing in this repo can fix it — npm ci in the tool''s js/ is
+    the fix — and there is no flow-trace gate in this repo''s CI to notice.'
+  captured: '2026-07-30'
+  state: asserted
+- id: flag-one-markdown-implementation-is-now-three
+  title: '[asserted] One markdown implementation is now three. The row port-the-renderer-to-typescript
+    retired the Python renderer so no second implementation would be carried, and
+    the same day app.html:156 added a CDN markdown-it and app.html:234-268 a hand-rolled
+    line-by-line renderer. Neither is visible to classes.yaml#markdown-rendering,
+    because .flow-trace.yaml includes app as a PATH PREFIX and app.html is at the
+    repo root — so canonical routing could not see it even if it ran. The class declaration
+    and the backlog row are both false in the shipped tree. Collapsing them is also
+    the natural way to close the line-by-line rendering defect, since both are fixed
+    by bundling app.html''s script through the existing build.'
+  driving_capability: demo-renders-markdown-in-the-browser
+  asserted: One markdown implementation is now three. The row port-the-renderer-to-typescript
+    retired the Python renderer so no second implementation would be carried, and
+    the same day app.html:156 added a CDN markdown-it and app.html:234-268 a hand-rolled
+    line-by-line renderer. Neither is visible to classes.yaml#markdown-rendering,
+    because .flow-trace.yaml includes app as a PATH PREFIX and app.html is at the
+    repo root — so canonical routing could not see it even if it ran. The class declaration
+    and the backlog row are both false in the shipped tree. Collapsing them is also
+    the natural way to close the line-by-line rendering defect, since both are fixed
+    by bundling app.html's script through the existing build.
+  captured: '2026-07-30'
+  state: asserted

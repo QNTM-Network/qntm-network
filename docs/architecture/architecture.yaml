@@ -1,9 +1,28 @@
 # qntm.network — architecture.yaml (the authored blueprint).
 #
-# HONEST SCOPE: a static landing site — no traced CODE, so the capture/coverage half
-# (classes / packages / observed flows) is N/A. The state invariants in state.yaml are the
-# candidate runtime (static-evidence), declared now and WIRED later (capabilities-have-runtime-
-# enforcers). Until wired they are unverified — principles cite them, caps stay observed-thin.
+# HONEST SCOPE, CORRECTED 2026-07-30. The line that stood here for a month said "a static
+# landing site — no traced CODE". That is FALSE and has been since 2026-07-17. qntm.network is
+# a landing page, a markdown demo, a PASSKEY-AUTHENTICATED SINGLE-USER APPLICATION, a D1-backed
+# hosted personal graph, and a two-way write path into a live vault. Roughly 1,400 lines of that
+# application — app.html, worker/src/auth.js, worker/src/app.js, worker/src/util.js,
+# worker/schema-app.sql, scripts/graph-sync.mjs — appear in NO capability, flow, class, sink,
+# state invariant or (until today) backlog row. Surveyed and sized in
+# docs/implementation-artifacts/research-site-survey.md section 4; captured as the backlog row
+# `declare-the-hosted-application`, deliberately UNSCOPED because scoping it is a design pass.
+#
+# Read the correction as the general lesson it is: the declared surface was a brochure and the
+# undeclared surface was authentication, the operator's personal graph, and a write path into
+# his live vault — i.e. everything with a blast radius. NAMING THE KIND OF THING A PROJECT IS
+# is not decoration; it is what tells the next reader which absences matter.
+#
+# THE PRODUCT / ENGINE SPLIT, stated once so it stops drifting: `qntm` is the ENGINE.
+# `qntm.network` is the PRODUCT — the website, the app, AND the remote server side. Older names
+# for the engine survive in some paths and in the flow-trace registry; that is drift, not a name
+# to adopt, and nothing authored here uses one.
+#
+# WHAT IS STILL TRUE from the old header: the state invariants ARE the runtime (static-evidence),
+# and they are wired. What is NOT true is the claim that a runner exists to execute them — see
+# the verification note below.
 #
 # SCOPE CHANGE 2026-07-23 — the site is now an APPLICATION. A TypeScript browser app
 # (render -> edit -> structure -> graph -> sync) is declared in capabilities.yaml under "the
@@ -27,6 +46,38 @@
 # half here rests on a scenario with a stubbed DOM: it proves the modules call each other as
 # declared, NOT that the page looks right in a browser. That second claim is what the in-browser
 # check at every close is for. Do not let one stand in for the other.
+#
+# VERIFICATION, AS OF 2026-07-30 — read this before trusting any green in capabilities.yaml.
+# `flow-trace verify .` and `flow-trace capability-rollup .` both exit 2: a CRASH with no verdict,
+# not a verdict. The tool's JS observer has no node_modules, and ONE crashed scenario blanks the
+# run for the thirteen static invariants that have nothing to do with TypeScript. Consequences,
+# stated rather than left for the next agent to rediscover:
+#   * Every `verify: PASS` marker in capabilities.yaml is a 2026-07-23 FOSSIL. They are DERIVED
+#     fields and are deliberately NOT hand-corrected here — hand-writing a verdict is the same
+#     sin green or red — so the correction is carried as an `asserted:` backlog row
+#     (`flag-every-verify-pass-in-capabilities-yaml`), which is the tool's own mechanism for
+#     "a green surface, judged wrong" and never feeds fail_count.
+#   * The fix is one command in the TOOL's checkout (`npm ci` in tools/flow-trace/js/). Nothing
+#     in this repo can resolve it.
+#   * There is NO flow-trace gate in this repo's CI (build.yml and worker.yml are node-only), so
+#     nothing here catches a broken declaration either. Check your own work.
+# The reads that DO work today: `queue`, `backlog`, `map` (the cheap headline), and
+# `verify . --scenario static_evidence`, observed at 13 PASS / 0 FAIL.
+#
+# THE PRESENTATION STRATUM (2026-07-30) — declared, not built. Five capabilities describing how a
+# line the engine emitted is SHOWN: the OUTPUT half of the resolution cascade whose INPUT half
+# shipped in the engine as `qntm_md.resolution`. Specification:
+# docs/implementation-artifacts/design-presentation-cascade.md. ALL FIVE CARRY status: undeclared
+# AND NO ENFORCER, which is not a paperwork gap — it is this tool's honest representation of
+# "declared, not enforced", it derives `diagnose-ready` backlog rows, and it is what puts the
+# work in a queue that read ZERO this morning. NO state invariant was declared for any of them,
+# because a predicate that does not exist is a declaration that loads clean and reaches nothing —
+# the highest-frequency bug in this system, found four separate times in one morning. Each
+# migration stage in the design document names the falsifier its own predicate must assert; the
+# predicate lands with the stage. The two principles below are UN-ANCHORED and UN-HOMED by the
+# same honesty: they name no state invariant because none exists, and no class because the class
+# homes do not exist until stage 1 creates them. Both surface as INFO residue, which is correct —
+# surfacing is the job.
 
 type_catalogue: [capability, principle, state, flow, sink, class]   # class added 2026-07-23 with classes.yaml
 
@@ -95,3 +146,60 @@ principles:
       - classes.yaml#markdown-rendering   # added 2026-07-23: canonical routing makes "one
         # implementation" structural — a second renderer shows up as a path doing rendering
         # work without routing through this class's home, not merely as a file that exists.
+        #
+        # VIOLATED, AND NEITHER ENFORCER CAN SEE IT — 2026-07-30. There are THREE markdown
+        # implementations: app/render/renderer.ts, a CDN markdown-it at app.html:156, and a
+        # hand-rolled line-by-line renderer at app.html:234-268. The state invariant only
+        # checks the retired PYTHON renderer is absent (survey mutation M2: adding a second
+        # TypeScript renderer left 13/13 PASS). The class check cannot run at all, and would
+        # not see app.html regardless — .flow-trace.yaml includes `app` as a PATH PREFIX and
+        # app.html sits at the repo root. So the principle is stated, doubly cited, and
+        # unenforced in both directions. Carried as the asserted backlog row
+        # `flag-one-markdown-implementation-is-now-three`. Both enforcers are left in place:
+        # they are the right enforcers, aimed at the wrong file.
+
+  - id: presentation-is-resolved-not-chosen
+    rule: >
+      HOW A LINE IS SHOWN IS RESOLVED, NEVER CHOSEN AT THE CALL SITE. The engine emits `-`, `#`
+      and the markers; which rendition of them a person sees is decided by the same kind of
+      cascade that decides what they MEAN, with WHO IS USING IT and WHAT THEY ARE DOING as
+      levels. Seven levels, most specific wins, ordered by WHEN EACH FACT BECOMES KNOWN —
+      GLOBAL (the instance is configured), USER (they log in), VIEW (a view is opened),
+      STRUCTURAL_NODE (a section is entered), LINE (the line is read), MODE (they act), FOCUS
+      (the cursor lands). The precedence order is owned in exactly ONE tuple and no caller may
+      re-express it; the engine paid for that rule already, where the order was re-expressed
+      three times and the hand-rolled copy was the one that was wrong.
+      RAW AND APP-LIKE ARE NOT TWO PRODUCTS. They are two values of one type and every mixture
+      between them is legal, which is what makes this a dial rather than a mode switch. It is
+      the OUTPUT half of the cascade whose INPUT half shipped in the engine as
+      `qntm_md.resolution` — the other half of that one, not a new idea beside it.
+      DECLARED, NOT BUILT. Today there is no cascade, no declaration and no reader: `paintView`
+      (app.html:234-269) is 36 lines of hardcoded decisions and the app resolves exactly ONE
+      thing, the checkbox glyph, while every tag, wiki-link and marker reaches the browser as
+      literal characters. This principle is therefore UN-ANCHORED (it names no state invariant,
+      because none exists) and UN-HOMED (it names no class, because the homes do not exist until
+      migration stage 1 creates them). Both absences are deliberate and both surface as INFO
+      residue rather than being papered over with a rooting opt-out that would be false.
+      Specification: docs/implementation-artifacts/design-presentation-cascade.md.
+    enforced_by: []
+
+  - id: every-affordance-writes-back-through-the-source
+    rule: >
+      THE APP NEVER RECONSTRUCTS MARKDOWN FROM THE DOM. The markdown is the truth, the DOM is a
+      projection of it, and edits travel projection -> source -> engine -> new projection. So the
+      app may only offer a resolution it can take back EXACTLY: show a chip instead of `#work`
+      and it must put `#work` back, character for character. This is the engine's `accept ⊇ emit`
+      invariant restated for a client, and it is stronger in the way a client needs — the engine's
+      rule is about vocabularies, this one is about DIRECTION OF AUTHORITY.
+      It forbids exactly one shape: a contenteditable region serialised back to markdown. It
+      permits everything the presentation cascade wants, because every rendition's affordance is
+      a substring operation on the source line. AND IT IS THE SEQUENCING RULE: resolution levels
+      advance exactly as fast as the source edits do. If you cannot write down the substring
+      operation, the resolution is not admissible yet. That is a schedule, not an objection.
+      THIS ONE IS ALREADY TRUE AND NOTHING CHECKS IT — the best property in this repo's
+      application layer and the least defended. `toggleTask` (app.html:273-296) patches one
+      character at one line index of the source string it was handed and posts the WHOLE file;
+      the DOM is write-only. One careless commit ends it. UN-ANCHORED and UN-HOMED for the same
+      honest reason as the principle above: the enforcer and the class home both land with
+      migration stage 1, and until then the absence is surfaced rather than hidden.
+    enforced_by: []

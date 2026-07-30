@@ -18,10 +18,29 @@ classes:
 
   - id: markdown-rendering
     concern: >
-      Turning markdown source into HTML. The whole of it — there is exactly one markdown
-      implementation in this project (architecture.yaml#one-implementation-per-concern), and
-      this class is the structural form of that claim: any second renderer would show up as a
+      Turning markdown source into HTML. This class is the structural form of
+      architecture.yaml#one-implementation-per-concern: a second renderer should show up as a
       path doing rendering work without routing through this home.
+
+      CORRECTED 2026-07-30 — the previous text asserted "there is exactly one markdown
+      implementation in this project" as a fact. IT IS FALSE AND HAS BEEN SINCE 2026-07-23.
+      There are THREE: this home, a CDN markdown-it imported at app.html:156, and a hand-rolled
+      line-by-line renderer at app.html:234-268. The claim is what this class exists to MAKE
+      true; stating it as already true is how it went a week unnoticed.
+
+      AND THIS CLASS CANNOT CATCH IT, for two independent reasons worth knowing before trusting
+      any canonical-routing green here. (1) `flow-trace canonical-routing` cannot run at all in
+      this environment — verify and capability-rollup both exit 2 (see architecture.yaml's
+      verification note). (2) Even when it runs it would not see app.html: `.flow-trace.yaml`
+      declares `modules.include: [app]`, and for a JS/TS target that entry is a PATH PREFIX, not
+      a package root — app.html sits at the repo root and is outside the capture filter by
+      construction. Proven by mutation in the survey (M2: a second TypeScript renderer under
+      app/ left 13/13 PASS). Carried as the asserted backlog row
+      `flag-one-markdown-implementation-is-now-three`.
+
+      The home is still the right home and the class is still the right class. What is wrong is
+      the file it can reach, and the fix is to bundle app.html's script through the existing
+      build rather than to weaken the claim.
     canonical_class: app/render/renderer:MarkdownRenderer
     status: working
 
