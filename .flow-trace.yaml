@@ -53,6 +53,31 @@ ordering: capability-driven
 # `app/boot` is EXCLUDED on purpose. It is the bootstrap: its only job is a top-level side effect,
 # it is the build's entry point, and nothing imports it. Observing it would record a single
 # start-up edge that says nothing about how the app is structured.
+#
+# ── 2026-07-30, MIGRATION STAGE 1: THE FILTER IS UNCHANGED, AND THAT IS THE ANSWER, NOT A SKIP ──
+#
+# Stage 1 moved the presentation decisions OUT of app.html and into app/present/, specifically so
+# they would fall inside this prefix. Six modules and a barrel are now observable that were not.
+#
+# What is still outside app/ is app.html itself, and it CANNOT be brought in by editing the list
+# below. Two independent reasons, both checked rather than assumed:
+#
+#   1. This is a JS/TS target, so capture works by a node module-load hook (flow-trace's
+#      js/src/transform.mjs). It can only instrument what node can import. `app.html` is an HTML
+#      document with an inline `<script type="module">`; node cannot import it, so no entry here
+#      makes it observable.
+#   2. Module identity is the repo-relative path WITHOUT extension. `app.html` therefore reduces
+#      to the identifier `app` — which already collides with the directory prefix on the list.
+#      Adding it would be indistinguishable from what is there and would change nothing.
+#
+# So an `- app.html` line would be a declaration with no reader — the highest-frequency bug in
+# this system, committed in the config file that exists to catch it. It is deliberately not
+# written. WHAT IS ACTUALLY LEFT IN app.html, stated so the residue is legible rather than
+# implied: passkey auth, the fetch/POST wrappers, the view picker, the optimistic sync chrome
+# around a toggle, and the boot sequence. None of it is presentation any more. Bringing it under
+# observation means bundling that script through scripts/build.mjs the way the presentation
+# cascade now is — which is the remaining half of the asserted backlog row
+# `flag-one-markdown-implementation-is-now-three`, and a change of its own.
 modules:
   include:
     - app

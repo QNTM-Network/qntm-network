@@ -175,6 +175,29 @@ backlog:
     that the painted DOM for a known view is unchanged. BLOCKS every other presentation
     row.'
   driving_capability: presentation-is-resolved-not-chosen
+  record: '2026-07-30 — SHIPPED. app/present/ holds six modules (levels, resolution,
+    cascade, context, paint, source) plus an index barrel; app.html imports the committed
+    bundle dist/present.js and no longer decides how a line is shown. The three classes
+    and five expected flows + two forbidden flows landed in the same change, and a
+    second sink (view-painted) with them. THE OUTPUT IS BYTE-IDENTICAL AND THAT IS A
+    COMPARISON, NOT A CLAIM — tests/present-golden.test.mjs runs the OLD paintView,
+    lifted verbatim out of 64c3a87, beside the new painter, against one shared
+    markdown-it instance, over a whole-view fixture plus 25 named edge cases plus a
+    1,125-case generated sweep; 30/30 identical. Mutation-proven (indent arithmetic
+    1.2 -> 1.3 fails 4 tests). tests/present-cascade.test.mjs is the falsifier — 18
+    tests that the painter ASKS the cascade, OBEYS it, resolves in the declared
+    precedence order, and computes every edit from the source string; mutation-proven
+    three ways (inline the decision, ignore the answer, invert the DOM), each red with
+    its own message, each restored. Both suites run under `node --test` in CI, which
+    now builds before it tests so they exercise the artifact the browser loads.
+    TWO DEPARTURES FROM THE DESIGN, both argued in the source. (1) Resolution ships TWO
+    keys, not five — `tags`, `links` and `markers` have no wired rendition until stage
+    8, and three keys read by nothing is the bug the design names by hand. (2) `heading`
+    is a resolved family, correcting section 0.1s "the single resolution the app
+    performs is the checkbox" — true of the inline tail, not of the line.
+    NOT DONE, and not claimable from here — canonical routing, depth-to-sink and the
+    flow observations all need `flow-trace verify`, which exits 2 in this environment
+    because the TOOL has no node_modules. Nothing in this repo can fix that.'
   kind: capability
   state: diagnose-ready
 - id: declare-the-global-presentation-level
@@ -343,4 +366,18 @@ backlog:
     the natural way to close the line-by-line rendering defect, since both are fixed
     by bundling app.html's script through the existing build.
   captured: '2026-07-30'
+  record: '2026-07-30 — PARTIALLY OVERTAKEN by migration stage 1, and the flag stays up
+    because the part that remains is the part it is about. WHAT CHANGED — the hand-rolled
+    line-by-line renderer at app.html:234-268 is gone. It moved to app/present/paint,
+    INSIDE the capture filter, and in moving it stopped being a markdown implementation
+    at all; it classifies lines and builds DOM, and delegates every markdown-to-HTML call
+    to a renderer injected by its caller. It now has a class of its own
+    (presentation-painting) and a sink of its own (view-painted). WHAT DID NOT CHANGE —
+    there are still TWO markdown-it instances from two sources, one from npm in
+    app/render/renderer and one from a CDN at app.html:156, and the second is still
+    outside anything canonical routing can see. Stage 1 deliberately did NOT collapse
+    them; the painter takes its renderer as a dependency precisely so that the
+    byte-identical claim could be proven against ONE markdown-it rather than silently
+    also testing one build of it against another. Collapsing the two is this rows
+    remaining work, and it is a separate change with separate evidence.'
   state: asserted

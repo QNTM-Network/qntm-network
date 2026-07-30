@@ -173,15 +173,26 @@ principles:
       between them is legal, which is what makes this a dial rather than a mode switch. It is
       the OUTPUT half of the cascade whose INPUT half shipped in the engine as
       `qntm_md.resolution` — the other half of that one, not a new idea beside it.
-      DECLARED, NOT BUILT. Today there is no cascade, no declaration and no reader: `paintView`
-      (app.html:234-269) is 36 lines of hardcoded decisions and the app resolves exactly ONE
-      thing, the checkbox glyph, while every tag, wiki-link and marker reaches the browser as
-      literal characters. This principle is therefore UN-ANCHORED (it names no state invariant,
-      because none exists) and UN-HOMED (it names no class, because the homes do not exist until
-      migration stage 1 creates them). Both absences are deliberate and both surface as INFO
-      residue rather than being papered over with a rooting opt-out that would be false.
+      HOMED 2026-07-30 (migration stage 1); the paragraph that follows records what it replaced.
+      It read "DECLARED, NOT BUILT — there is no cascade, no declaration and no reader:
+      `paintView` (app.html:234-269) is 36 lines of hardcoded decisions", and that is no longer
+      true. app/present/ holds the levels, the values, the resolver, the facts, the painter and
+      the write-back; the painter asks and obeys; SPECIFICITY is one tuple nothing re-expresses.
+      The principle is now HOMED against two classes below. It remains UN-ANCHORED — it names no
+      state invariant, because a `predicate:` must be `module:callable` and writing one whose
+      predicate cannot run would be worse than the absence. The falsifiers exist as node tests
+      instead (tests/present-cascade.test.mjs, mutation-proven three ways), which this repo's CI
+      runs and `flow-trace verify` currently cannot.
+      WHAT IS STILL ONLY DECLARED, so the update is not read as more than it is: the app resolves
+      the same TWO families it resolved before (the checkbox glyph and the heading demotion) and
+      shows every tag, wiki-link and marker as literal characters. Seven levels exist and all
+      seven are silent — nothing contributes at any of them yet. GLOBAL arrives at stage 2, MODE
+      at 4, USER at 5, VIEW and STRUCTURAL_NODE at 7. What stage 1 bought is a location, a noun
+      and one reader, not new behaviour.
       Specification: docs/implementation-artifacts/design-presentation-cascade.md.
-    enforced_by: []
+    enforced_by:
+      - classes.yaml#presentation-resolution
+      - classes.yaml#presentation-painting
 
   - id: every-affordance-writes-back-through-the-source
     rule: >
@@ -196,10 +207,20 @@ principles:
       a substring operation on the source line. AND IT IS THE SEQUENCING RULE: resolution levels
       advance exactly as fast as the source edits do. If you cannot write down the substring
       operation, the resolution is not admissible yet. That is a schedule, not an objection.
-      THIS ONE IS ALREADY TRUE AND NOTHING CHECKS IT — the best property in this repo's
-      application layer and the least defended. `toggleTask` (app.html:273-296) patches one
-      character at one line index of the source string it was handed and posts the WHOLE file;
-      the DOM is write-only. One careless commit ends it. UN-ANCHORED and UN-HOMED for the same
-      honest reason as the principle above: the enforcer and the class home both land with
-      migration stage 1, and until then the absence is surfaced rather than hidden.
-    enforced_by: []
+      IT WAS ALREADY TRUE AND NOTHING CHECKED IT — the best property in this repo's application
+      layer and, until 2026-07-30, the least defended. It is now HOMED against `source-write-back`
+      (app/present/source:applyEdit), the single place an edit is computed, and DEFENDED by two
+      runtime falsifiers rather than by this paragraph.
+      The first corrupts every rendered element and then uses the affordance, asserting the posted
+      markdown is unaffected. The second lifts app.html's own module script, swaps only its three
+      import lines, drives a real toggle through it and asserts the POSTed file is the source with
+      exactly one character different — every other line byte for byte, including every
+      wiki-link, tag and marker. Both mutation-proven the day they landed, and the mutation that
+      matters is worth recording: a painter rebuilding the posted markdown from the rendered DOM
+      passed the byte-identical golden and every other assertion, and failed only the corruption
+      test. A naive DOM inversion looks correct exactly until the DOM stops matching the source.
+      STILL UN-ANCHORED (no state invariant, same honest reason as the principle above) and still
+      unclosed in one specific way: nothing proves no OTHER path writes back. That is canonical
+      routing against the class, and it needs `flow-trace verify`, which exits 2 here.
+    enforced_by:
+      - classes.yaml#source-write-back

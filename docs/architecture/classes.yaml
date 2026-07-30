@@ -41,6 +41,24 @@ classes:
       The home is still the right home and the class is still the right class. What is wrong is
       the file it can reach, and the fix is to bundle app.html's script through the existing
       build rather than to weaken the claim.
+
+      UPDATED 2026-07-30 (migration stage 1) — THE COUNT IS NOW TWO, and one of the three left
+      by being reclassified rather than deleted, which is worth stating precisely because it
+      would be easy to read as a bigger win than it is. The hand-rolled line-by-line renderer at
+      app.html:234-268 moved to app/present/paint, inside the capture filter. In moving it
+      stopped being a markdown implementation: it classifies lines and builds DOM, and delegates
+      every markdown-to-HTML call to a renderer its caller injects. That work now has its own
+      class (presentation-painting) and its own home, which is the correct place for it — it was
+      never really this concern.
+
+      WHAT REMAINS IS THE HONEST TWO. app/render/renderer (npm markdown-it, the demo page) and
+      app.html:156 (a CDN markdown-it, the app page, injected into the painter). Stage 1
+      deliberately did NOT collapse them, and the reason is methodological rather than lazy: the
+      painter takes its renderer as a dependency so that "the painted output is byte-identical"
+      could be proven with ONE markdown-it on both sides of the comparison. Bundling the CDN copy
+      away in the same change would have made the headline claim of that change unprovable.
+      Carried, still, as the asserted backlog row. Still unreachable by canonical routing for the
+      same two reasons as above — verify exits 2, and app.html is outside the filter.
     canonical_class: app/render/renderer:MarkdownRenderer
     status: working
 
@@ -51,6 +69,82 @@ classes:
       (flows.yaml#session-never-touches-the-dom), which is what keeps the mode machine reasonable
       about, and testable, without a browser.
     canonical_class: app/editor/session:EditorSession
+    status: working
+
+  # ── THE PRESENTATION CASCADE (added 2026-07-30, migration stage 1) ────────────────────────
+  #
+  # These three land WITH their homes, in the same change, and not one commit earlier. The
+  # design that specifies them (docs/implementation-artifacts/design-presentation-cascade.md
+  # section 7) deliberately did NOT declare them on its own branch, citing this file's header
+  # back at itself: a class whose routing nothing can check is a label, not governance. The
+  # modules now exist under app/present/, inside the capture filter, so the labels become
+  # governance here.
+  #
+  # WHAT CAN AND CANNOT BE CHECKED TODAY, stated per class below rather than assumed. Canonical
+  # routing needs `flow-trace verify`, which exits 2 in this environment — the TOOL's JS observer
+  # has no node_modules, and the fix is a command in the tool's own checkout. The same three
+  # properties ARE checked today by tests/present-cascade.test.mjs under `node --test`, which
+  # this repo's CI runs. That is a weaker instrument in one specific way and it is worth being
+  # precise about which: a node test proves the paths it drives route correctly; canonical
+  # routing proves that NO path bypasses. Until verify runs, "compliant-but-bypassing" is
+  # unmeasured here.
+
+  - id: presentation-resolution
+    concern: >
+      Deciding which RENDITION a token family gets — `raw` (the characters, verbatim) or `wired`
+      (the app's rendition of them). Seven levels, most specific wins, ordered by when each fact
+      becomes known, with the precedence order owned in exactly ONE tuple (app/present/levels
+      SPECIFICITY) that no caller may re-express.
+
+      ANY PATH THAT DECIDES A RENDITION WITHOUT ROUTING HERE IS THE FAILURE. That is not
+      hypothetical drift — it is the state this repo was in until 2026-07-30, when 36 lines
+      inside app.html decided everything and nothing consulted a declaration because there was
+      nothing to consult. The class exists so that returning to that state is a reportable event
+      rather than a diff nobody reads.
+
+      Exercised today by tests/present-cascade.test.mjs, which spies on
+      PresentationCascade.resolve and asserts the painter both ASKS and OBEYS. Mutation-proven in
+      both directions on 2026-07-30 — inlining the decision fails the first, ignoring the answer
+      fails the second.
+    canonical_class: app/present/cascade:PresentationCascade
+    status: working
+
+  - id: presentation-painting
+    concern: >
+      Turning a resolved line into DOM. THE ONLY CONCERN IN app/present/ PERMITTED TO TOUCH THE
+      DOCUMENT, which is what lets levels, resolution, cascade, context and source stay pure and
+      therefore testable under node without a browser. The same split app/main already uses and
+      the same one flows.yaml already enforces for the renderer and the session; adopting it
+      rather than inventing a fourth arrangement is deliberate.
+
+      It may build DOM and it may not decide. A rendition branch appearing in the painter is the
+      violation, and it is the violation `presentation-resolution` above is written to catch.
+    canonical_class: app/present/paint:paint
+    governs_sinks:
+      - view-painted
+    status: working
+
+  - id: source-write-back
+    concern: >
+      Every edit, as an operation on the SOURCE STRING. The structural form of the governing
+      constraint of the presentation cascade — a resolution is admissible only when every
+      affordance it offers can be expressed as an edit to the source, and the app never
+      reconstructs markdown from the DOM.
+
+      THE PROPERTY WAS ALREADY TRUE AND NOTHING CHECKED IT. app.html patched one character at one
+      line index of the source string it was handed and posted the whole file; the DOM was never
+      inverted. What this class adds is findability and an enforcer: "does this affordance have a
+      source edit?" is answerable by reading one file, and an affordance that cannot be written
+      down as an operation there is not admissible yet. The app posts the WHOLE FILE, so a bad
+      inversion does not corrupt one title — it rewrites a view.
+
+      Exercised today by tests/present-cascade.test.mjs, which corrupts the rendered DOM and then
+      uses the affordance, asserting the posted markdown is unaffected. Mutation-proven
+      2026-07-30 — a painter that built the posted markdown from the rendered elements passed the
+      byte-identical golden and every other assertion, and failed only that one. Which is the
+      point of it: a naive DOM inversion looks correct exactly until the DOM stops matching the
+      source.
+    canonical_class: app/present/source:applyEdit
     status: working
 
   - id: page-presentation
