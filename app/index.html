@@ -49,6 +49,21 @@
        is a number in nine places, one of them is 40px and nobody can see which. */
     --touch: 2.75rem;
     --bar-h: 3.25rem;
+    /* THE ACTION RAIL. 56px is not a fresh guess: docs/implementation-artifacts/research-polish-
+       direction.md §4d measured the reach problem and named the number — "on ≤640px it belongs in
+       a bottom bar, 56px tall, sitting above env(safe-area-inset-bottom)". It is 4px taller than
+       `--bar-h` because the top bar sets one line of text beside another and this one sets a
+       20px icon beside a label, with a 44px target around it.
+       `--rail-w` is what the SAME row needs when it is stacked into a column: the icon, the gap,
+       and the longest label ("Sign out"), plus the rail's own padding. */
+    --rail-h: 3.5rem;
+    --rail-w: 8rem;
+    /* WHAT THE RAIL RESERVES, and the ONLY two values that differ between the two anchorings.
+       The frame's padding is written once, in these; the breakpoint swaps which of them is zero.
+       They exist so the rail cannot end up FLOATING over the last line of a view in one anchoring
+       and reserving its space in the other — there is one arithmetic and both edges pay it. */
+    --rail-bottom: 0px;
+    --rail-side: var(--rail-w);
     --drawer-w: min(21rem, 86vw);
     --col-w: 35rem;         /* the reading column's width — 560px, unchanged */
     --radius-sm: 6px; --radius: 10px; --radius-lg: 16px; --pill: 999px;
@@ -66,8 +81,31 @@
     --slide: .22s cubic-bezier(.2, .8, .25, 1);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  /* THE SCROLLBAR'S ROOM IS ALWAYS RESERVED, WHETHER OR NOT THERE IS ONE.
+     research-polish-direction.md §3b states the frame's one constraint — "opening the drawer must
+     not move the reading column horizontally" — and the drawer broke it, by a route that has
+     nothing to do with the drawer's own width: `.noscroll` sets `overflow: hidden` on the body,
+     the classic scrollbar goes away, and a column that is CENTRED in the frame slides by half the
+     width it just gained. Measured at 1440 wide: 485.2px before the drawer opened, 492.0px while
+     it was open, back to 485.2px after — 6.8px of horizontal travel on every open and every
+     close, five times the 1.3637px this file's suite otherwise polices. Holding the gutter open
+     permanently costs a strip of background nobody looks at and makes the arithmetic constant.
+     On a phone it is inert: overlay scrollbars take no space to begin with, so there is none to
+     reclaim and nothing to move. */
+  html { margin: 0; height: 100%; scrollbar-gutter: stable; }
   body {
+    margin: 0;
+    /* `min-height`, NOT `height`. This was `height: 100%` and that quietly threw the bottom
+       padding away: a box with a FIXED height does not grow for content that overflows it, and
+       overflowing content runs straight past the padding edge instead of stopping short of it.
+       Measured at 390×844 before the change — scrolled to the end, the last row's bottom sat at
+       1922.28 against a scrollHeight of 1922, so the declared 32px of bottom padding was worth
+       0px of actual room. Nothing depended on it while the only thing below the fold was empty
+       space; the rail is the first thing that OCCUPIES that space, and with `height` it covered
+       the last row of every view by its full 56px. `min-height` keeps the full-viewport floor
+       the entry screen wants and lets the page grow past it, which is what puts the padding back
+       into the scroll extent. */
+    min-height: 100%;
     background: radial-gradient(1200px 800px at 50% -10%, #0e1420 0%, var(--bg) 60%);
     color: var(--ink);
     font: var(--t4)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
@@ -75,12 +113,16 @@
     display: flex; align-items: flex-start; justify-content: center;
     /* The menu bar is FIXED, so the column starts below it — the one place that arithmetic is
        written, and it is written in tokens. Left/right pay the safe-area insets so a landscape
-       phone does not put the first character of a line under the camera housing. */
+       phone does not put the first character of a line under the camera housing.
+       THE RAIL IS FIXED TOO, AND IT RESERVES RATHER THAN FLOATS. Its two tokens are added here,
+       and exactly one of them is non-zero at a time: `--rail-bottom` on a phone, `--rail-side` on
+       a desktop. A bar that floats over the reading column takes the last line of every view with
+       it, which is the one thing a reading surface may not do. */
     padding:
       calc(var(--bar-h) + var(--safe-t) + var(--s5))
       max(var(--s4), var(--safe-r))
-      calc(var(--s6) + var(--safe-b))
-      max(var(--s4), var(--safe-l));
+      calc(var(--rail-bottom) + var(--s6) + var(--safe-b))
+      max(calc(var(--rail-side) + var(--s4)), var(--safe-l));
   }
   .wrap { width: 100%; max-width: var(--col-w); }
   h1 { font-weight: 600; font-size: clamp(1.6rem, 5vw, 2.2rem); margin: var(--s2) 0 var(--s1); }
@@ -134,9 +176,15 @@
      WHAT IT HOLDS, LEFT TO RIGHT: the mark (dot + wordmark — brand/BRAND.md's `● qntm`
      combination mark, and the dot is the named brand device); WHERE YOU ARE (the current view's
      folder and title, the one thing the retired <select> said only while you were looking at
-     it); then the identity, the way out, and the way to another view. The three controls sit
-     together on the right because that is the edge the drawer comes from and the side a thumb
-     reaches.
+     it); and WHO YOU ARE. Nothing else.
+
+     THE CONTROLS LEFT, AND THAT IS THE POINT. They used to sit here, clustered in the top-right
+     corner, on the argument that it "is the side a thumb reaches". Measured on a real 390×844
+     viewport, it is not: the button that OPENS the drawer sat at y≈25 and the button that CLOSES
+     it — moved to the bottom by this same shell, for this same reason — sat at y≈814. The same
+     panel was opened from the top of the screen and dismissed from the bottom, 789px apart on an
+     844px screen. The controls now live in `.rail` below, on the edge a hand is already on, and
+     there is exactly one of each. This bar is now what it says it is: where you are, and who.
 
      IT IS FIXED, NOT STICKY. A sticky bar leaves the scroll position deciding whether the way
      to another view exists; on a phone, in a long view, that means scrolling to the top to
@@ -161,9 +209,10 @@
   .bar-where { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s2); overflow: hidden; }
   .bar-folder { flex: none; font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); white-space: nowrap; }
   .bar-view { font-size: var(--t3); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar-acts { display: flex; align-items: center; gap: var(--s2); flex: none; }
-  .bar-who { font-size: var(--t2); color: var(--dim); font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
-  /* Every control in the bar is at least --touch tall AND --touch wide. */
+  .bar-who { flex: none; font-size: var(--t2); color: var(--dim); font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  /* Every control in the bar is at least --touch tall AND --touch wide. `.barbtn` is now worn by
+     the drawer's own close button alone; the rail's controls wear `.railbtn`, which takes the
+     same minimum from the same token. */
   .barbtn {
     display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
     min-height: var(--touch); min-width: var(--touch); padding: 0 var(--s3);
@@ -172,10 +221,72 @@
     font-size: var(--t2); font-weight: 500;
   }
   .barbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
-  .barbtn.key { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
   .kbd {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     font-size: var(--t1); opacity: .55;
+  }
+
+  /* ══ THE ACTION RAIL ══════════════════════════════════════════════════════════════════════
+     THIS IS NOT A TAB BAR, BECAUSE THERE IS NOTHING TO TAB BETWEEN. The app has one section a
+     reader can be in (`#graph`); `#entry` is the gate, not a place, and `#app` is unreachable —
+     `loadState()` is defined and never called, verified again for this change. What it HAS is 76
+     views in ten nested folders, and 76 nested destinations is a tree, which is what `.drawer`
+     already is. A tab bar over one section would be chrome with nothing behind it.
+
+     SO IT HOLDS ACTIONS, and that is also the shape the operator already reads: `~/qntm/
+     .obsidian/app.json` declares `mobileToolbarCommands` — the bar along the bottom of his phone —
+     and all 23 entries are commands (undo, indent, toggle-checklist, go-start, command-palette).
+     Not one of them is a destination.
+
+     IT IS ONE ELEMENT AT BOTH WIDTHS. The sibling who built the top bar rejected a desktop rail
+     because it would mean "two layouts to keep in step". The answer is that there are not two:
+     there is one `<nav>`, with one set of children, and the breakpoint changes which EDGE it is
+     anchored to and which way its flex runs. No control exists at one width and not the other, no
+     control is duplicated between the bar and the rail, and tests/app-shell.test.mjs asserts both
+     — so the two cannot drift apart without a red test rather than without someone noticing.
+
+     THE DESKTOP ANCHORING IS THE LEFT EDGE. A mouse has no reach problem, so the desktop rail is
+     not for reach — it is for PERSISTENCE, which is the shape of the 200px left panel his own
+     Obsidian keeps permanently open (`workspace.json`). Measured at 1440 wide, the reading column
+     is 560px with ~440px of empty gutter each side: the rail is spent out of that gutter and the
+     column keeps every pixel it had. */
+  .rail {
+    position: fixed; z-index: 20;
+    /* `stretch`, so a column of controls is one column and not three widths — the cross axis of
+       a column IS the width. The phone flips this to `center`, where the cross axis is the
+       height and centring is what a row wants. One property, one flip, same as the rest. */
+    display: flex; align-items: stretch;
+    background: rgba(7, 8, 10, .82);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    /* DESKTOP: the left edge, below the bar, running down. */
+    inset: calc(var(--bar-h) + var(--safe-t)) auto 0 0;
+    flex-direction: column; justify-content: flex-start; gap: var(--s1);
+    width: calc(var(--rail-w) + var(--safe-l));
+    padding: var(--s4) var(--s2) calc(var(--s4) + var(--safe-b)) max(var(--s2), var(--safe-l));
+    border-right: 1px solid var(--line);
+  }
+  /* Icon BESIDE label, never instead of it — the same arrangement in the row and in the column,
+     so the control is one shape that turns rather than two that resemble each other. */
+  .railbtn {
+    display: flex; align-items: center; gap: var(--s2);
+    min-height: var(--touch); min-width: var(--touch); padding: 0 var(--s3);
+    background: transparent; color: var(--dim);
+    border: 1px solid transparent; border-radius: var(--radius); box-shadow: none;
+    font-size: var(--t2); font-weight: 500; white-space: nowrap;
+  }
+  .railbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
+  /* The drawer's own state, said on the control that owns it — `aria-expanded` is already kept
+     in step by openDrawer/closeDrawer, so this marks the rail from the fact rather than from a
+     second flag that could disagree with it. */
+  .railbtn[aria-expanded="true"] { color: var(--green); border-color: var(--green-hairline); }
+  /* ONE GRID AND ONE WEIGHT, STATED ONCE. Every glyph is a 24-unit box drawn in strokes at 1.5,
+     round-capped — so a new icon cannot arrive half a pixel heavier than its neighbours, and the
+     markup below carries geometry and nothing else. Inline, because a font or a CDN is a
+     dependency that can fail to arrive and leave three unlabelled buttons behind. */
+  .ico {
+    flex: none; width: 1.25rem; height: 1.25rem;
+    fill: none; stroke: currentColor; stroke-width: 1.5;
+    stroke-linecap: round; stroke-linejoin: round;
   }
 
   /* ══ THE VIEW DRAWER ══════════════════════════════════════════════════════════════════════
@@ -268,9 +379,29 @@
      under it. (DOM order is unchanged, so tab order still starts at the close button; a phone
      has no Tab key and the visual/keyboard order only diverges where there is no keyboard.) */
   @media (max-width: 40rem) {
+    /* The rail moves from the left edge to the bottom one, and the frame's reserved space moves
+       with it — one swap, both halves, so a rail can never be drawn somewhere the padding did
+       not make room for. */
+    :root { --rail-bottom: var(--rail-h); --rail-side: 0px; }
     .bar-word { display: none; }
     .bar-folder { display: none; }
     .kbd { display: none; }
+    /* `row-reverse` rather than a second DOM order. Source order is Views, Refresh, Sign out —
+       which is the right order top-to-bottom in a column (the most-used first) and the WRONG one
+       left-to-right on a phone, where it would put the most-used control in the bottom-LEFT, the
+       hardest corner for a right thumb, and "sign out" under the easiest. Reversed, Views lands
+       at the bottom-right — the edge the drawer itself comes from — and sign-out lands furthest
+       from the thumb's rest, which is where a control nobody wants to hit by accident belongs.
+       This is the same trade the drawer's head already makes four lines below: the visual and
+       keyboard orders diverge only at a width where there is no Tab key. */
+    .rail {
+      inset: auto 0 0 0;
+      align-items: center;
+      flex-direction: row-reverse; justify-content: space-around; gap: var(--s1);
+      width: auto; height: calc(var(--rail-h) + var(--safe-b));
+      padding: 0 max(var(--s2), var(--safe-r)) var(--safe-b) max(var(--s2), var(--safe-l));
+      border-right: 0; border-top: 1px solid var(--line);
+    }
     .drawer-head { order: 3; border-bottom: 0; border-top: 1px solid var(--line); }
     .tree { order: 1; }
     .drawer-note { order: 2; }
@@ -410,22 +541,59 @@
 <body>
 
 <!-- ══ THE MENU BAR ═══════════════════════════════════════════════════════════════════════════
-     Always present. `#barWhere` and `#barActs` are what appear once there is a session — the
-     mark alone is the signed-out state, so the page is never chrome-less. -->
+     Always present. `#barWhere` and `#who` are what appear once there is a session — the mark
+     alone is the signed-out state, so the page is never chrome-less. -->
 <header id="bar" class="bar">
   <div class="bar-mark"><span class="bar-dot"></span><span class="bar-word">qntm</span></div>
   <div id="barWhere" class="bar-where hidden">
     <span id="barFolder" class="bar-folder"></span>
     <span id="barView" class="bar-view"></span>
   </div>
-  <div id="barActs" class="bar-acts hidden">
-    <span id="who" class="bar-who"></span>
-    <button id="signOut" class="barbtn">Sign out</button>
-    <button id="viewsBtn" class="barbtn key" aria-haspopup="dialog" aria-expanded="false" aria-controls="drawer">
-      Views<span class="kbd">\</span>
-    </button>
-  </div>
+  <span id="who" class="bar-who hidden"></span>
 </header>
+
+<!-- ══ THE ACTION RAIL ════════════════════════════════════════════════════════════════════════
+     Three controls, and every one of them is an operation the app ALREADY HAD — the drawer, a
+     re-read, and the way out. Nothing here creates, renames, moves or deletes anything: those are
+     edits to the vault's SHAPE, the app has no operation for them, and a menu that offered them
+     would be inventing a second write path beside the one in `commitLine`. The single write path
+     stays where it is — the cursor, on a line, in the view.
+
+     LABELS, ALWAYS, AT BOTH WIDTHS. An icon on its own is a rebus, and two of these three have no
+     settled glyph to be a rebus OF: there is no conventional picture of "the views of a vault, as
+     folders". Rejected: tooltips (a tooltip needs hover, and the width this bar exists FOR has no
+     hover); labels on desktop only (that leaves the phone — the surface it is for — the
+     unlabelled one); labels on long-press (long-press is already the OS's, it is undiscoverable,
+     and it makes "what does this do" cost a second of holding). The evidence against going
+     iconic is his own config: `core-plugins.json` has `slash-command` and `random-note` turned
+     OFF. Every feature that asks to be discovered is disabled. `aria-label` is carried as well,
+     never instead — it labels the control for a screen reader and leaves it a rebus for everyone
+     else.
+
+     The glyphs: a panel opening off the right edge (which is literally what the drawer is, and is
+     the icon Obsidian uses for the same gesture); a circling arrow; a door with an arrow leaving
+     it. Geometry only — the grid, weight, cap and colour are all `.ico` in the sheet above. -->
+<nav id="rail" class="rail hidden" aria-label="Actions">
+  <button id="viewsBtn" class="railbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="drawer">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" />
+    </svg>
+    <span>Views</span><span class="kbd">\</span>
+  </button>
+  <button id="refreshBtn" class="railbtn" aria-label="Read the graph again">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4.2V9h-4.8" />
+    </svg>
+    <span>Refresh</span>
+  </button>
+  <button id="signOut" class="railbtn" aria-label="Sign out">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M14.5 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8.5" />
+      <path d="M17 15.5 20.5 12 17 8.5" /><path d="M20.5 12H10" />
+    </svg>
+    <span>Sign out</span>
+  </button>
+</nav>
 
 <!-- ══ THE VIEW DRAWER ════════════════════════════════════════════════════════════════════════
      Off the right edge until asked for. The scrim is a sibling rather than a parent so the
@@ -557,12 +725,16 @@ function show(view) {
   if (!loggedIn) $("graph").classList.add("hidden");
 }
 
-// The menu bar is always drawn; what a SESSION adds to it is where-you-are and the three
-// controls. One function, called from every place that changes whether there is a session, so
-// "signed out but the sign-out button is still there" cannot happen in one branch and not another.
+// The menu bar is always drawn; what a SESSION adds is where-you-are, who-you-are, and the rail
+// of things you can do. One function, called from every place that changes whether there is a
+// session, so "signed out but the sign-out button is still there" cannot happen in one branch and
+// not another — and the rail is in the SAME list as the bar's own pieces rather than hidden by
+// its own code, which is what stops the two halves of the chrome disagreeing about whether
+// anybody is signed in.
 function showShell(on) {
   $("barWhere").classList.toggle("hidden", !on);
-  $("barActs").classList.toggle("hidden", !on);
+  $("who").classList.toggle("hidden", !on);
+  $("rail").classList.toggle("hidden", !on);
 }
 async function api(path, { method = "POST", body, auth = false } = {}) {
   const headers = { "Content-Type": "application/json" };
@@ -894,13 +1066,32 @@ async function enterGraph() {
   await loadGraph();
 }
 
-async function loadGraph() {
+/**
+ * Where a fresh read of the graph lands you: the view you were already in if the snapshot still
+ * has it, else the default.
+ *
+ * THIS IS WHAT MAKES A REFRESH CONTROL POSSIBLE AT ALL. `loadGraph` has always landed on
+ * `this-week`, which is the right answer at sign-in and the wrong one every other time — a button
+ * wired straight to it would have thrown the reader out of the view they were reading in order to
+ * tell them it was up to date. The fall-through is deliberate rather than an assertion: a view
+ * really can leave between two reads, because the file behind it was renamed on the laptop.
+ */
+function landOn(views, keep) {
+  return views.find((v) => v.id === keep)
+      ?? views.find((v) => v.id === "this-week")
+      ?? views[0];
+}
+
+async function loadGraph(keep = null) {
   const data = await api("/app/graph", { method: "GET", auth: true });
   graphData = data;
-  // Identity lives in the bar now, and the bar's action cluster is what showShell() reveals —
-  // so `#who` is never hidden on its own account and nothing here has to un-hide it.
+  // Identity lives in the bar now, and showShell() is what reveals it — so `#who` is never
+  // hidden on its own account and nothing here has to un-hide it.
   $("who").textContent = data.handle ? "@" + data.handle : "";
-  if (!data.snapshot) {
+  // An empty view list is the same situation as no snapshot, and it stopped being hypothetical
+  // when this became re-readable on demand: the old `views[0]` would have been `undefined` and
+  // the next line would have thrown inside a button press.
+  if (!data.snapshot || data.snapshot.views.length === 0) {
     $("freshness").textContent = "No snapshot yet — run graph-sync push on the laptop.";
     $("viewBody").innerHTML = "";
     currentViewId = null;
@@ -909,11 +1100,34 @@ async function loadGraph() {
   }
   const when = new Date(data.snapshot.generated_at).toLocaleString();
   $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
-  const def = data.snapshot.views.find((v) => v.id === "this-week") || data.snapshot.views[0];
+  const def = landOn(data.snapshot.views, keep);
   // Before the tree, so the folders holding the view we are about to paint land OPEN.
   currentViewId = def.id;
   buildDrawer(data.snapshot.views);
   paintView(def.id);
+}
+
+// READ THE GRAPH AGAIN, AND STAY WHERE YOU ARE.
+//
+// The freshness line has always said "as of <when> · N queued" and there has never been a way to
+// ask again — the only refresh was reloading the page, which also costs the session boot and the
+// declaration fetch. This is a GET; it writes nothing, which is why it is allowed to be in the
+// chrome at all. `reading` guards a second press while the first is in flight, because two reads
+// racing would paint whichever landed last rather than whichever was asked for last.
+let reading = false;
+async function refresh() {
+  if (reading || !graphData) return;
+  reading = true;
+  $("refreshBtn").setAttribute("aria-busy", "true");
+  $("freshness").textContent = "reading…";
+  try {
+    await loadGraph(currentViewId);
+  } catch (e) {
+    $("freshness").textContent = "could not read: " + e.message;
+  } finally {
+    reading = false;
+    $("refreshBtn").removeAttribute("aria-busy");
+  }
 }
 
 // --- passkey register / login ---
@@ -959,6 +1173,7 @@ $("logoutBtn").addEventListener("click", logout);
 $("signOut").addEventListener("click", logout);
 
 // --- the shell ---
+$("refreshBtn").addEventListener("click", refresh);
 $("viewsBtn").addEventListener("click", () => (drawerIsOpen ? closeDrawer() : openDrawer()));
 $("drawerClose").addEventListener("click", closeDrawer);
 $("scrim").addEventListener("click", closeDrawer);

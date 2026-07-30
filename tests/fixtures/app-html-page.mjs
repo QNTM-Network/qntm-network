@@ -76,6 +76,8 @@ export function extractPageScript(workDir) {
   source += `
 export { paintView, toggleTask, loadPresentation };
 export { buildDrawer, openDrawer, closeDrawer, folderOf, foldersOf, drawerStops, viewButtons };
+export { landOn, loadGraph, refresh, showShell };
+export const __currentViewId = () => currentViewId;
 export function __setGraphData(next) { graphData = next; }
 export function __setCurrentViewId(next) { currentViewId = next; }
 export const __drawerIsOpen = () => drawerIsOpen;
@@ -184,6 +186,13 @@ export function installBrowser() {
     },
     getAttribute(name) {
       return this.attributes.has(name) ? this.attributes.get(name) : null;
+    },
+    // The rail's re-read raises `aria-busy` while it is in flight and DROPS it when it lands.
+    // Recording the set and ignoring the removal would make "it stopped being busy" untestable —
+    // the attribute would read `"true"` forever and the assertion would pass whether the button
+    // recovered or stayed stuck.
+    removeAttribute(name) {
+      this.attributes.delete(name);
     },
     focus() {
       this.focused = true;
