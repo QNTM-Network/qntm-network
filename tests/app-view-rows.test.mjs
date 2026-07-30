@@ -51,24 +51,85 @@ import { fileURLToPath } from "node:url";
 const REPO = resolve(fileURLToPath(import.meta.url), "..", "..");
 const PAGE = readFileSync(resolve(REPO, "app", "index.html"), "utf8");
 
+/**
+ * Split an at-rule's blocks out of a stylesheet, leaving the top-level rules behind.
+ *
+ * AT-RULES ARE FLATTENED, NOT SKIPPED, and the difference is the whole point. This reader used
+ * to REFUSE any `@` at all ("teach it before using one"), which was right while the sheet had
+ * none. The shell brought two — a phone breakpoint and `prefers-reduced-motion` — and the lazy
+ * repair would have been to drop everything inside them on the floor. That would leave a media
+ * query as the one place in this file where a heading could quietly be handed a margin back,
+ * which is exactly the defect the suite below exists to catch. So the rules inside a media block
+ * come out and are checked like every other rule; the CONDITION is carried along only so a
+ * failure can name where it came from.
+ *
+ * Only conditional group rules are understood. `@font-face` and `@keyframes` have a different
+ * inner shape (descriptors and percentage selectors, neither of which is a selector this reader
+ * can match), so they are refused by name rather than mis-parsed into nonsense.
+ */
+function splitAtRules(css) {
+  let flat = "";
+  const groups = [];
+  let from = 0;
+  for (;;) {
+    const at = css.indexOf("@", from);
+    if (at === -1) {
+      flat += css.slice(from);
+      return { flat, groups };
+    }
+    flat += css.slice(from, at);
+    const head = /^@([a-z-]+)[^{]*\{/.exec(css.slice(at));
+    assert.ok(head, `unreadable at-rule: ${JSON.stringify(css.slice(at, at + 48))}`);
+    assert.equal(
+      head[1], "media",
+      "this reader understands @media and nothing else; teach it before using another at-rule",
+    );
+    const open = at + head[0].length - 1;
+    let depth = 0;
+    let close = open;
+    for (; close < css.length; close += 1) {
+      if (css[close] === "{") depth += 1;
+      else if (css[close] === "}") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    assert.equal(depth, 0, "unbalanced braces in an at-rule");
+    groups.push({
+      condition: css.slice(at, open).trim().replace(/\s+/g, " "),
+      body: css.slice(open + 1, close),
+    });
+    from = close + 1;
+  }
+}
+
 /** The page's one stylesheet, as rules. Comments first, because they contain prose, not CSS. */
 function readRules() {
   const block = /<style>([\s\S]*?)<\/style>/.exec(PAGE);
   assert.ok(block, "app/index.html no longer has a <style> block");
   const css = block[1].replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.ok(!css.includes("@"), "this reader does not understand at-rules; teach it before using one");
+  const { flat, groups } = splitAtRules(css);
 
   const rules = [];
-  for (const [, head, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const declarations = new Map();
-    for (const piece of body.split(";")) {
-      const at = piece.indexOf(":");
-      if (at === -1) continue;
-      declarations.set(piece.slice(0, at).trim(), piece.slice(at + 1).trim());
+  const readInto = (text, condition) => {
+    for (const [, head, body] of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const declarations = new Map();
+      for (const piece of body.split(";")) {
+        const at = piece.indexOf(":");
+        if (at === -1) continue;
+        declarations.set(piece.slice(0, at).trim(), piece.slice(at + 1).trim());
+      }
+      rules.push({ selector: head.trim().replace(/\s+/g, " "), declarations, condition });
     }
-    rules.push({ selector: head.trim().replace(/\s+/g, " "), declarations });
-  }
+  };
+  readInto(flat, null);
+  for (const group of groups) readInto(group.body, group.condition);
+
   assert.ok(rules.length > 30, "the stylesheet parsed to suspiciously few rules");
+  assert.ok(
+    rules.some((rule) => rule.condition !== null),
+    "no rule came out of a media query — either the sheet lost its breakpoints or the split broke",
+  );
   return rules;
 }
 

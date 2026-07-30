@@ -244,3 +244,45 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [the-app-has-an-address-and-a-way-in]
+
+  # ── THE SHELL (2026-07-30) ───────────────────────────────────────────────────────────────────
+  #
+  # The app rendered a view and offered no way to be IN it: no bar, no identity, no name for
+  # where you were, and one bare <select> for choosing. This is the invariant over what replaced
+  # that — and specifically over the two ways it could quietly rot back: a second chooser left
+  # beside the first, and the folder tree re-derived from the `domain` label the <select> used.
+
+  - id: state-the-view-chooser-is-one-folder-drawer
+    name: one chooser, grouping views by the vault folder they actually live in
+    description: |
+      The app has exactly ONE way to choose a view — a drawer off the right edge grouping the
+      views into the vault's own folders — and it derives that folder from each view's `path`,
+      which is the address the write path posts to and therefore cannot drift from where the
+      file is.
+
+      IT IS NOT `domain`, AND THAT IS THE POINT OF THE INVARIANT. A view also carries `domain`,
+      a label hand-written in its config, and that is what the retired <select> grouped by.
+      Measured across the operator's 76 view configs the two disagree three ways: `domain` is
+      coarser (fourteen views in four project folders under `dev/` are one `dev` bucket), it
+      renames (`character-development/` is `character`, `spirit/program/` is `program`), and it
+      can be flatly wrong (`dev/test-scratchpad.md` declares `domain: personal`). A future
+      "simplification" back to the label would look tidier and would be a regression; this is
+      what refuses it.
+
+      The clauses about 44px targets, the safe-area insets and prefers-reduced-motion are here
+      rather than in a style guide because the operator uses this on a phone and asked for it to
+      be usable one-handed. A minimum stated once in a token is checkable; a minimum stated nine
+      times is not.
+
+      WHAT THIS CANNOT SEE is behaviour — whether the drawer opens, whether Escape closes it,
+      whether focus comes back. That is tests/app-shell.test.mjs, which lifts the page's own
+      module script and drives it, the same way the write path is tested.
+    check: "app/index.html has no <select>/viewPick/optgroup and does have #drawer + #viewTree;
+      the folder is derived from a view's path, never from `domain`; --touch >= 44px and the bar
+      and tree controls take it; viewport-fit=cover with the safe-area insets paid; a
+      prefers-reduced-motion block exists"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_the_view_chooser_is_one_folder_drawer
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [the-app-has-a-shell-and-views-are-chosen-by-folder]
