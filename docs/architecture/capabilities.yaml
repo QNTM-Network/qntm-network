@@ -481,3 +481,48 @@ capabilities:
     whose levels nothing populates would describe a path no code takes. It roots at stages 4
     and 5, each of which ships a contributor and a test that reads it back.
   status: undeclared
+- id: the-app-has-a-shell-and-views-are-chosen-by-folder
+  intent: >-
+    The app is a PLACE you are IN, not a view rendered on a blank page. A fixed menu bar carries
+    the mark, WHERE YOU ARE (the current view's folder and title), who you are, the way out, and
+    the way to somewhere else; a drawer off the right edge holds every view as the folder tree
+    the operator already reads in Obsidian.
+    THE FOLDER IS THE VAULT'S, TAKEN FROM `path`. This is the whole of the capability's content
+    and the reason it is not "a nicer picker". Every view in the snapshot carries `path` — the
+    rendered file's place in the vault, which is also the address /app/edit-file writes back to,
+    so it cannot drift from where the file is. Its directory IS the folder, with no convention
+    invented on top and nothing hardcoded. The vault's loose root files sit at the tree's root,
+    the way a loose file does in Obsidian.
+    IT IS NOT `domain`, WHICH IS WHAT THE RETIRED <select> USED. `domain` is a label written by
+    hand in each view's config, and across the operator's 76 configs it is coarser than the tree
+    (fourteen `dev` views in four project folders, one bucket), it renames
+    (`character-development/` -> `character`, `spirit/program/` -> `program`), and it is
+    sometimes wrong (`dev/test-scratchpad.md` declares `domain: personal`). Nothing here
+    re-derives it or corrects it: `domain` is the ENGINE's label, read by the engine, and a
+    second answer to it computed in the browser would be exactly the kind of drift this project
+    exists to refuse.
+    THE PHONE IS NOT A SECOND DESIGN. One shell, two adaptations, both about a hand rather than
+    about width: the bar sheds WORDS and never controls (the wordmark reduces to the brand
+    device's dot, which is the responsive-logo pair brand/BRAND.md already names), and the
+    drawer's head — title and close together, one element — moves to the BOTTOM of the panel, so
+    the one control that dismisses it is in the thumb's arc rather than in the top-right corner
+    a one-handed grip cannot reach. Every target is at least 44px, stated once as `--touch`.
+    WHAT IT DELIBERATELY DOES NOT DO IS WRITE. Every affordance the app offers has to be
+    expressible as an edit to the SOURCE STRING (see source-is-the-only-truth below), and
+    navigation is not an edit. The drawer chooses; it does not rename, move, create or delete a
+    view, and it never reads the DOM to produce anything. `applyEdit` still knows exactly two
+    operations after this capability landed, which is the check that it stayed navigation.
+  tier: functional
+  rooting: >-
+    isolated — the shell is chrome around the reading column and shares no class with it. The one
+    thing it consumes is the snapshot's `path` field, which already existed and already had a
+    reader (the write path posts to it); the folder derivation is four lines in the page and has
+    no other caller. Rooting it through a class would be inventing a module so that a declaration
+    had somewhere to point.
+  status: working
+  enforced_by:
+  - declared_state: state-the-view-chooser-is-one-folder-drawer
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin

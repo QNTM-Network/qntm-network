@@ -75,7 +75,10 @@ export function extractPageScript(workDir) {
   // additive — they read and write what is already there and change no behaviour.
   source += `
 export { paintView, toggleTask, loadPresentation };
+export { buildDrawer, openDrawer, closeDrawer, folderOf, foldersOf, drawerStops, viewButtons };
 export function __setGraphData(next) { graphData = next; }
+export function __setCurrentViewId(next) { currentViewId = next; }
+export const __drawerIsOpen = () => drawerIsOpen;
 `;
 
   const file = join(workDir, "page.mjs");
@@ -90,10 +93,56 @@ export function makeWorkDir(label) {
   return dir;
 }
 
+/**
+ * A `classList` with the real semantics, backed by the element's own `className`.
+ *
+ * IT USED TO BE FOUR NO-OPS, and that was honest while the page's only use of a class was to
+ * hide a section nothing asserted on. The shell changed that: `open`, `shut` and `current` are
+ * the drawer's whole state, and a `toggle()` that does nothing makes every assertion about that
+ * state vacuously true — a green nothing could turn red. Reading and writing `className` (rather
+ * than keeping a private set) is what keeps it consistent with the painter, which sets
+ * `className` directly and never goes through here.
+ */
+const makeClassList = (element) => ({
+  _read() {
+    return new Set(String(element.className || "").split(/\s+/).filter(Boolean));
+  },
+  _write(set) {
+    element.className = [...set].join(" ");
+  },
+  add(...names) {
+    const set = this._read();
+    for (const name of names) set.add(name);
+    this._write(set);
+  },
+  remove(...names) {
+    const set = this._read();
+    for (const name of names) set.delete(name);
+    this._write(set);
+  },
+  toggle(name, force) {
+    const set = this._read();
+    const on = force === undefined ? !set.has(name) : Boolean(force);
+    if (on) set.add(name);
+    else set.delete(name);
+    this._write(set);
+    return on;
+  },
+  contains(name) {
+    return this._read().has(name);
+  },
+});
+
 /** The smallest browser the page touches at import time and while it is driven. */
 export function installBrowser() {
   const elements = new Map();
-  const make = (tagName) => ({
+  const focused = { value: null };
+  const make = (tagName) => {
+    const element = makeElement(tagName);
+    element.classList = makeClassList(element);
+    return element;
+  };
+  const makeElement = (tagName) => ({
     tagName,
     className: "",
     // innerHTML and textContent both REPLACE an element's content, so assigning either drops any
@@ -126,14 +175,19 @@ export function installBrowser() {
     dataset: {},
     children: [],
     listeners: new Map(),
-    classList: {
-      add() {},
-      remove() {},
-      toggle() {},
-      contains: () => false,
+    // Attributes are RECORDED rather than ignored, because the shell's state is announced
+    // through them (`aria-expanded`, `aria-hidden`) and an announcement nothing can read back is
+    // an announcement nobody can test.
+    attributes: new Map(),
+    setAttribute(name, value) {
+      this.attributes.set(name, String(value));
+    },
+    getAttribute(name) {
+      return this.attributes.has(name) ? this.attributes.get(name) : null;
     },
     focus() {
       this.focused = true;
+      focused.value = this;
     },
     append(...nodes) {
       this.children.push(...nodes);
@@ -151,6 +205,9 @@ export function installBrowser() {
     },
   });
 
+  // The document itself takes listeners now: the shell binds ONE global `keydown` (Escape from
+  // anywhere, `\` to open), which is a reach the page did not have before the shell existed.
+  const documentListeners = new Map();
   globalThis.document = {
     createElement: make,
     getElementById: (id) => {
@@ -158,6 +215,19 @@ export function installBrowser() {
         elements.set(id, make("div"));
       }
       return elements.get(id);
+    },
+    body: make("body"),
+    addEventListener(type, listener) {
+      const existing = documentListeners.get(type) ?? [];
+      existing.push(listener);
+      documentListeners.set(type, existing);
+    },
+    /** Fire a document-level handler — how a test presses a key with nothing focused. */
+    dispatch(type, event = makeEvent()) {
+      for (const listener of documentListeners.get(type) ?? []) {
+        listener(event);
+      }
+      return event;
     },
   };
   globalThis.location = { hostname: "qntm.network" };
@@ -167,7 +237,9 @@ export function installBrowser() {
     setItem: (k, v) => store.set(k, v),
     removeItem: (k) => store.delete(k),
   };
-  return { elements };
+  // Where the cursor is. `focus()` records it, so a test can assert the drawer took the cursor
+  // and gave it back — which is the whole of "focus behaves" and is otherwise unobservable.
+  return { elements, focused, document: globalThis.document };
 }
 
 /** An event object carrying only what the page's handlers touch. */

@@ -22,24 +22,72 @@
        here. What IS here is that the two things already drawn in the identity's green — the tag
        chip and the cursor — name it once between them rather than twice. */
     --green: #3ff07f; --green-hairline: rgba(63, 240, 127, .32);
+
+    /* ── THE SPACING SCALE ──────────────────────────────────────────────────────────────────
+       Six steps and nothing between them. Every gap, pad and inset on this page is one of
+       these or a `max()` of one against a safe-area inset — so "a bit more room here" is a
+       step up the ladder rather than a new number, and two things that look aligned are
+       aligned because they were given the same token rather than the same guess.
+       The old page had .4/.5/.6/.7/.9/1.1/1.15/1.2/1.25/1.4/1.6/2rem, which is not a scale. */
+    --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
+
+    /* ── THE TYPE SCALE ────────────────────────────────────────────────────────────────────
+       Four sizes for the CHROME. The reading column's heading ladder is deliberately NOT on
+       this scale and is deliberately still written in literal rem: tests/app-view-rows.test.mjs
+       reads those five font-sizes as NUMBERS and asserts they strictly decrease, and a
+       `var()` is not a number to a test that has no browser. They are also five distinct
+       values used once each, which is a ladder rather than a magic number written twice. */
+    --t1: .68rem;  /* the letterspaced label — the smallest thing that is still a word */
+    --t2: .78rem;  /* controls */
+    --t3: .88rem;  /* secondary prose, drawer rows */
+    --t4: 1rem;    /* body */
+    --track: .28em;   /* the letter-spacing that makes a label a label */
+
+    /* ── THE SHELL'S GEOMETRY ──────────────────────────────────────────────────────────────
+       `--touch` is 44px at the root font size, which is the minimum target this page will
+       offer a thumb. It is a token rather than a number in nine places because the moment it
+       is a number in nine places, one of them is 40px and nobody can see which. */
+    --touch: 2.75rem;
+    --bar-h: 3.25rem;
+    --drawer-w: min(21rem, 86vw);
+    --col-w: 35rem;         /* the reading column's width — 560px, unchanged */
+    --radius-sm: 6px; --radius: 10px; --radius-lg: 16px; --pill: 999px;
+
+    /* ── THE EDGES OF THE SCREEN ───────────────────────────────────────────────────────────
+       The viewport meta carries `viewport-fit=cover`, so on a notched phone the page really
+       does run under the notch and the home indicator. Named once here; every fixed edge of
+       the shell pays them with `max(step, inset)` so the inset can only ever ADD room. */
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+
+    /* One motion, named once, so `prefers-reduced-motion` has exactly one thing to turn off. */
+    --slide: .22s cubic-bezier(.2, .8, .25, 1);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
     background: radial-gradient(1200px 800px at 50% -10%, #0e1420 0%, var(--bg) 60%);
     color: var(--ink);
-    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    font: var(--t4)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     display: flex; align-items: flex-start; justify-content: center;
-    padding: max(6vh, 2rem) 1.25rem 4rem;
+    /* The menu bar is FIXED, so the column starts below it — the one place that arithmetic is
+       written, and it is written in tokens. Left/right pay the safe-area insets so a landscape
+       phone does not put the first character of a line under the camera housing. */
+    padding:
+      calc(var(--bar-h) + var(--safe-t) + var(--s5))
+      max(var(--s4), var(--safe-r))
+      calc(var(--s6) + var(--safe-b))
+      max(var(--s4), var(--safe-l));
   }
-  .wrap { width: 100%; max-width: 560px; }
-  .brand { letter-spacing: .32em; text-transform: uppercase; font-size: .72rem; color: var(--dim); }
-  h1 { font-weight: 600; font-size: clamp(1.6rem, 5vw, 2.2rem); margin: .4rem 0 .2rem; }
-  .tag { color: var(--dim); margin: 0 0 2rem; }
+  .wrap { width: 100%; max-width: var(--col-w); }
+  h1 { font-weight: 600; font-size: clamp(1.6rem, 5vw, 2.2rem); margin: var(--s2) 0 var(--s1); }
+  .tag { color: var(--dim); margin: 0 0 var(--s6); }
   button {
     font: inherit; color: var(--bg); background: var(--accent);
-    border: 0; border-radius: 10px; padding: .7rem 1.1rem; cursor: pointer;
+    border: 0; border-radius: var(--radius); padding: var(--s3) var(--s4); cursor: pointer;
     font-weight: 600; transition: transform .08s ease, box-shadow .2s ease;
     box-shadow: 0 0 0 rgba(124,199,255,0);
   }
@@ -47,51 +95,193 @@
   button:active { transform: translateY(1px); }
   button.ghost { background: transparent; color: var(--accent); box-shadow: none; border: 1px solid var(--line); }
   button.ghost:hover { border-color: var(--glow); box-shadow: 0 0 20px rgba(124,199,255,.12); }
+  /* One focus ring for the whole page, in the identity's green, on the only thing that can be
+     focused without a pointer. It is `:focus-visible` so a mouse click does not draw it. */
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
   input {
     font: inherit; color: var(--ink); background: #0c0f14; border: 1px solid var(--line);
-    border-radius: 10px; padding: .75rem .9rem; width: 100%; outline: none;
+    border-radius: var(--radius); padding: var(--s3) var(--s3); width: 100%; outline: none;
   }
   input:focus { border-color: var(--glow); box-shadow: 0 0 24px rgba(124,199,255,.15); }
-  .row { display: flex; gap: .6rem; align-items: center; }
-  .stack > * + * { margin-top: .9rem; }
-  .muted { color: var(--dim); font-size: .88rem; }
-  .err { color: #ff9b9b; font-size: .88rem; min-height: 1.2em; }
-  .card { border: 1px solid var(--line); border-radius: 16px; padding: 1.1rem 1.15rem; background: rgba(255,255,255,.015); }
+  .row { display: flex; gap: var(--s2); align-items: center; }
+  .stack > * + * { margin-top: var(--s3); }
+  .muted { color: var(--dim); font-size: var(--t3); }
+  .err { color: #ff9b9b; font-size: var(--t3); min-height: 1.2em; }
+  .card { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--s4); background: rgba(255,255,255,.015); }
   .hidden { display: none !important; }
 
   /* THE ONE THING */
-  .one-label { letter-spacing: .28em; text-transform: uppercase; font-size: .64rem; color: var(--glow); }
+  .one-label { letter-spacing: var(--track); text-transform: uppercase; font-size: var(--t1); color: var(--glow); }
   .one-thing {
     font-size: clamp(1.3rem, 4.5vw, 1.9rem); font-weight: 600; line-height: 1.25;
-    margin: .35rem 0 1rem; text-wrap: balance;
+    margin: var(--s1) 0 var(--s4); text-wrap: balance;
   }
   .one-empty { color: var(--dim); font-weight: 400; }
-  .rest { margin-top: 1.6rem; }
-  .rest h3 { font-size: .7rem; letter-spacing: .22em; text-transform: uppercase; color: var(--dim); margin: 0 0 .5rem; }
-  .item { display: flex; align-items: flex-start; gap: .6rem; padding: .5rem 0; border-top: 1px solid var(--line); }
+  .rest { margin-top: var(--s5); }
+  .rest h3 { font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); margin: 0 0 var(--s2); }
+  .item { display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s2) 0; border-top: 1px solid var(--line); }
   .item:first-child { border-top: 0; }
-  .tick { flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line); background: transparent; padding: 0; }
+  .tick { flex: none; width: 20px; height: 20px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: transparent; padding: 0; }
   .tick:hover { border-color: var(--glow); box-shadow: 0 0 14px rgba(124,199,255,.25); }
-  .topbar { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.4rem; }
   a { color: var(--accent); }
 
-  /* NAV (tabs, logged in) */
-  .nav { display: flex; gap: .4rem; margin-bottom: 1.4rem; }
-  .tab {
-    background: transparent; color: var(--dim); border: 1px solid var(--line);
-    border-radius: 999px; padding: .4rem .95rem; font-size: .82rem; box-shadow: none;
-  }
-  .tab:hover { border-color: var(--glow); box-shadow: 0 0 16px rgba(124,199,255,.12); }
-  .tab.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  /* ══ THE MENU BAR ═════════════════════════════════════════════════════════════════════════
+     The app's one permanent piece of chrome, and the answer to "where am I, who am I, and how
+     do I get somewhere else". It is present on the entry screen too — carrying the mark alone —
+     because the alternative is a signed-out page with no identity on it at all, which is what
+     the retired `.topbar` was for.
 
-  /* GRAPH viewer */
-  .gbar { display: flex; align-items: center; gap: .6rem; margin-bottom: .5rem; }
-  select {
-    font: inherit; color: var(--ink); background: #0c0f14; border: 1px solid var(--line);
-    border-radius: 10px; padding: .55rem .8rem; width: 100%; outline: none;
+     WHAT IT HOLDS, LEFT TO RIGHT: the mark (dot + wordmark — brand/BRAND.md's `● qntm`
+     combination mark, and the dot is the named brand device); WHERE YOU ARE (the current view's
+     folder and title, the one thing the retired <select> said only while you were looking at
+     it); then the identity, the way out, and the way to another view. The three controls sit
+     together on the right because that is the edge the drawer comes from and the side a thumb
+     reaches.
+
+     IT IS FIXED, NOT STICKY. A sticky bar leaves the scroll position deciding whether the way
+     to another view exists; on a phone, in a long view, that means scrolling to the top to
+     change views. */
+  .bar {
+    position: fixed; inset: 0 0 auto 0; z-index: 20;
+    display: flex; align-items: center; gap: var(--s3);
+    height: calc(var(--bar-h) + var(--safe-t));
+    padding: var(--safe-t) max(var(--s4), var(--safe-r)) 0 max(var(--s4), var(--safe-l));
+    background: rgba(7, 8, 10, .82);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
   }
-  select:focus { border-color: var(--glow); box-shadow: 0 0 24px rgba(124,199,255,.15); }
-  #freshness { margin: 0 0 1.1rem; }
+  .bar-mark { display: flex; align-items: center; gap: var(--s2); flex: none; }
+  /* The brand device. brand/BRAND.md section 2: "the glowing green dot (our signature
+     element)". It is the only thing on this page drawn at full strength in the declared green,
+     and it is 8px of it. */
+  .bar-dot { width: .5rem; height: .5rem; border-radius: var(--pill); background: var(--green); box-shadow: 0 0 12px var(--green-hairline); }
+  .bar-word { letter-spacing: var(--track); font-size: var(--t2); color: var(--ink); }
+  /* WHERE YOU ARE. Takes the slack, and gives it back first: `min-width: 0` is what lets the
+     view's title ellipse instead of shoving the controls off a 320px screen. */
+  .bar-where { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s2); overflow: hidden; }
+  .bar-folder { flex: none; font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+  .bar-view { font-size: var(--t3); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-acts { display: flex; align-items: center; gap: var(--s2); flex: none; }
+  .bar-who { font-size: var(--t2); color: var(--dim); font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  /* Every control in the bar is at least --touch tall AND --touch wide. */
+  .barbtn {
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+    min-height: var(--touch); min-width: var(--touch); padding: 0 var(--s3);
+    background: transparent; color: var(--dim); border: 1px solid var(--line);
+    border-radius: var(--pill); box-shadow: none;
+    font-size: var(--t2); font-weight: 500;
+  }
+  .barbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
+  .barbtn.key { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .kbd {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: var(--t1); opacity: .55;
+  }
+
+  /* ══ THE VIEW DRAWER ══════════════════════════════════════════════════════════════════════
+     The shape the operator already reads in Obsidian: a panel off the right edge holding the
+     views as a FOLDER TREE. The folders are the vault's own folders — see `folderOf` in the
+     script for where that comes from and why it is `path` and not `domain`.
+
+     IT IS A SLIDE, AND THE SLIDE IS ONE TOKEN. `--slide` is stated once and turned off once, in
+     the `prefers-reduced-motion` block at the bottom of this sheet. A drawer that still moves
+     for someone who asked it not to is a drawer with the transition written in four places. */
+  .scrim {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(4, 5, 7, .62);
+    opacity: 0; visibility: hidden;
+    transition: opacity var(--slide), visibility var(--slide);
+  }
+  .scrim.open { opacity: 1; visibility: visible; }
+  .drawer {
+    position: fixed; inset: 0 0 0 auto; z-index: 40;
+    width: var(--drawer-w);
+    display: flex; flex-direction: column;
+    background: #0b0d12; border-left: 1px solid var(--line);
+    padding: var(--safe-t) max(var(--s2), var(--safe-r)) var(--safe-b) 0;
+    /* CLOSED IS `visibility: hidden`, NOT `display: none`. A translated-away panel that is still
+       `visible` keeps its buttons in the tab order, so a keyboard would walk into a drawer
+       nobody opened; `display: none` would stop it sliding at all. Visibility does both, and
+       transitions as a step so the panel is still drawn while it slides OUT. */
+    transform: translateX(100%); visibility: hidden;
+    transition: transform var(--slide), visibility var(--slide);
+  }
+  .drawer.open { transform: translateX(0); visibility: visible; }
+  .drawer-head {
+    order: 1; flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+    padding: var(--s2) var(--s2) var(--s2) var(--s4);
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer-title { font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); }
+  .tree {
+    order: 2; flex: 1; min-height: 0;
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: var(--s2) var(--s2) var(--s4);
+  }
+  .drawer-note {
+    order: 3; flex: none; margin: 0;
+    padding: var(--s2) var(--s4) var(--s2);
+    border-top: 1px solid var(--line);
+    font-size: var(--t1); color: var(--dim);
+  }
+  /* A row is a row whether it opens a folder or a view — same height, same padding, same
+     rhythm — because the tree is one list and only the leaves are destinations. */
+  .foldbtn, .viewbtn {
+    display: flex; align-items: center; gap: var(--s2);
+    width: 100%; min-height: var(--touch); padding: 0 var(--s2);
+    background: transparent; border: 0; border-radius: var(--radius); box-shadow: none;
+    font-size: var(--t3); text-align: left;
+  }
+  .foldbtn { color: var(--dim); font-weight: 600; }
+  .viewbtn { color: var(--ink); font-weight: 400; }
+  .foldbtn:hover, .viewbtn:hover { background: rgba(255,255,255,.05); color: var(--ink); box-shadow: none; }
+  .viewbtn.current { color: var(--green); background: rgba(63,240,127,.09); }
+  /* `›` points RIGHT at rest, which is "there is more inside this"; a quarter turn down is
+     "and here it is". The glyph is one character rather than an SVG because the drawer already
+     has 72 rows and 72 inline SVGs is a payload for a chevron. */
+  .chev { flex: none; width: 1rem; text-align: center; color: var(--dim); transform: rotate(90deg); transition: transform var(--slide); }
+  .fold.shut > .foldbtn > .chev { transform: rotate(0deg); }
+  .fold.shut > .foldkids { display: none; }
+  /* The indent is one step, and it comes with a hairline — the line IS the "this is inside
+     that" the indent alone only implies once you are three deep in dev/. */
+  .foldkids { padding-left: var(--s3); margin-left: var(--s3); border-left: 1px solid var(--line); }
+  .rowname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .count { flex: none; font-size: var(--t1); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .treenote { padding: var(--s3) var(--s2); font-size: var(--t3); color: var(--dim); }
+  .noscroll { overflow: hidden; }
+
+  #freshness { margin: 0 0 var(--s4); }
+
+  /* ══ THE PHONE ════════════════════════════════════════════════════════════════════════════
+     Two adaptations, both about a hand rather than about width for its own sake.
+
+     THE BAR SHEDS WORDS, NOT CONTROLS. The wordmark goes (the dot alone is the reduced mark —
+     brand/BRAND.md names the responsive full-qntm↔reduced pair as the system) and the folder
+     crumb goes, because at 320px the honest choice is to keep the view's TITLE legible rather
+     than truncate two things. Every control stays and every control keeps its 44px.
+
+     THE DRAWER'S HEAD MOVES TO THE BOTTOM. On a 6" phone held one-handed the top-right corner
+     is the one place a thumb cannot reach, and that is exactly where a drawer's close button
+     conventionally sits. `order` moves the whole head — title and close together, one element,
+     no second control — into the thumb's arc. The list keeps the rest of the panel and scrolls
+     under it. (DOM order is unchanged, so tab order still starts at the close button; a phone
+     has no Tab key and the visual/keyboard order only diverges where there is no keyboard.) */
+  @media (max-width: 40rem) {
+    .bar-word { display: none; }
+    .bar-folder { display: none; }
+    .kbd { display: none; }
+    .drawer-head { order: 3; border-bottom: 0; border-top: 1px solid var(--line); }
+    .tree { order: 1; }
+    .drawer-note { order: 2; }
+  }
+
+  /* ══ ASKED NOT TO MOVE ════════════════════════════════════════════════════════════════════
+     One block, because the motion is one token. The drawer still opens, closes, and traps
+     focus; it simply arrives rather than travels. */
+  @media (prefers-reduced-motion: reduce) {
+    .scrim, .drawer, .chev, button { transition: none; }
+  }
   /* ── THE READING COLUMN: ONE ROW GEOMETRY, TWO RENDITIONS ──────────────────────────────────
      Every line of a view is one ROW, and a row is `--row` tall whichever way the line is being
      shown — the app's rendition of it, or its verbatim source in an <input> once the cursor
@@ -218,11 +408,40 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="topbar">
-    <div><span class="brand">qntm</span></div>
-    <div id="who" class="muted hidden"></div>
+
+<!-- ══ THE MENU BAR ═══════════════════════════════════════════════════════════════════════════
+     Always present. `#barWhere` and `#barActs` are what appear once there is a session — the
+     mark alone is the signed-out state, so the page is never chrome-less. -->
+<header id="bar" class="bar">
+  <div class="bar-mark"><span class="bar-dot"></span><span class="bar-word">qntm</span></div>
+  <div id="barWhere" class="bar-where hidden">
+    <span id="barFolder" class="bar-folder"></span>
+    <span id="barView" class="bar-view"></span>
   </div>
+  <div id="barActs" class="bar-acts hidden">
+    <span id="who" class="bar-who"></span>
+    <button id="signOut" class="barbtn">Sign out</button>
+    <button id="viewsBtn" class="barbtn key" aria-haspopup="dialog" aria-expanded="false" aria-controls="drawer">
+      Views<span class="kbd">\</span>
+    </button>
+  </div>
+</header>
+
+<!-- ══ THE VIEW DRAWER ════════════════════════════════════════════════════════════════════════
+     Off the right edge until asked for. The scrim is a sibling rather than a parent so the
+     drawer can slide over it, and it is clickable: a tap anywhere on the page outside the
+     drawer closes it, which on a phone is a target the size of the screen. -->
+<div id="scrim" class="scrim"></div>
+<aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Views" aria-hidden="true">
+  <div class="drawer-head">
+    <span class="drawer-title">Views</span>
+    <button id="drawerClose" class="barbtn" aria-label="Close views">Close</button>
+  </div>
+  <nav id="viewTree" class="tree" aria-label="Views by folder"></nav>
+  <p id="drawerNote" class="drawer-note"></p>
+</aside>
+
+<div class="wrap">
 
   <!-- ENTRY (logged out) -->
   <section id="entry" class="hidden">
@@ -239,14 +458,8 @@
     </div>
   </section>
 
-  <!-- NAV (logged in) -->
-  <nav id="nav" class="nav hidden">
-    <button id="signOut" class="tab">Sign out</button>
-  </nav>
-
   <!-- GRAPH (logged in) — the rendering of the graph, hosted -->
   <section id="graph" class="hidden">
-    <div class="gbar"><select id="viewPick" aria-label="Choose a view"></select></div>
     <p id="freshness" class="muted"></p>
     <article id="viewBody" class="viewbody"></article>
   </section>
@@ -340,8 +553,16 @@ function show(view) {
   const loggedIn = view === "app";
   $("entry").classList.toggle("hidden", view !== "entry");
   $("app").classList.toggle("hidden", view !== "app");
-  $("nav").classList.toggle("hidden", !loggedIn);
+  showShell(loggedIn);
   if (!loggedIn) $("graph").classList.add("hidden");
+}
+
+// The menu bar is always drawn; what a SESSION adds to it is where-you-are and the three
+// controls. One function, called from every place that changes whether there is a session, so
+// "signed out but the sign-out button is still there" cannot happen in one branch and not another.
+function showShell(on) {
+  $("barWhere").classList.toggle("hidden", !on);
+  $("barActs").classList.toggle("hidden", !on);
 }
 async function api(path, { method = "POST", body, auth = false } = {}) {
   const headers = { "Content-Type": "application/json" };
@@ -355,7 +576,6 @@ async function api(path, { method = "POST", body, auth = false } = {}) {
 // --- render the app ---
 function render(state) {
   $("who").textContent = state.handle ? "@" + state.handle : "";
-  $("who").classList.remove("hidden");
   const one = state.oneThing;
   if (one) {
     $("oneThing").textContent = one.text;
@@ -409,8 +629,191 @@ let currentViewId = null;
 // is, never declared in a file, because a fact about the moment written down outlives the moment.
 const focus = new FocusSurface();
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE VIEW DRAWER — the views as the folders they live in
+//
+// WHERE THE FOLDER COMES FROM, AND WHY IT IS NOT `domain`. Every view in the snapshot carries
+// `path`, which is its rendered file's path INSIDE THE VAULT — `work/all.md`, `dev/qntm/queue.md`,
+// `this_week.md`. It is not decoration: it is the address /app/edit-file writes back to, so it is
+// the one field that cannot drift from where the file actually is. Its directory therefore IS the
+// folder, in the same sense Obsidian means it, with no convention invented on top.
+//
+// A view also carries `domain`, which is what the retired <select> grouped by, and it is a
+// DIFFERENT thing — a label hand-written in each view's config. Measured across the operator's
+// 76 view configs, the two disagree in three ways that all cost the reader something:
+//   * it is COARSER — 14 views under `dev/` are one `dev` bucket, though they are four separate
+//     projects in four separate folders (dev/qntm, dev/flow-trace, dev/qntm-network,
+//     dev/trace-orchestration);
+//   * it RENAMES — `character-development/ego-ideal.md` is domain `character`, and the five views
+//     in `spirit/program/` are domain `program`, which is not a folder at the top level at all;
+//   * and it can be FLATLY WRONG — `dev/test-scratchpad.md` is declared domain `personal`.
+// The vault's root files (`this_week.md`, `inbox.md`, `habits.md`, `metrics.md`, `routines.md`)
+// carry domain `all`, which is not a folder either; here they simply sit at the tree's root, the
+// way a loose file does in Obsidian.
+//
+// So: FOLDERS COME FROM `path`. `domain` is left alone — it is the engine's label, it is read by
+// the engine, and re-deriving it here would be this app inventing a second answer to a question
+// the vault already answers.
+const folderOf = (path) => {
+  const at = String(path ?? "").lastIndexOf("/");
+  return at === -1 ? "" : String(path).slice(0, at);
+};
+
+/** The views as a tree of folders, built from their paths. Nested, because the vault is. */
+function foldersOf(views) {
+  const root = { name: "", folders: new Map(), views: [] };
+  for (const v of views) {
+    const segments = String(v.path ?? "").split("/");
+    let node = root;
+    for (const segment of segments.slice(0, -1)) {
+      if (!node.folders.has(segment)) node.folders.set(segment, { name: segment, folders: new Map(), views: [] });
+      node = node.folders.get(segment);
+    }
+    node.views.push(v);
+  }
+  return root;
+}
+
+const viewsUnder = (node) =>
+  node.views.length + [...node.folders.values()].reduce((n, f) => n + viewsUnder(f), 0);
+const holdsView = (node, id) =>
+  node.views.some((v) => v.id === id) || [...node.folders.values()].some((f) => holdsView(f, id));
+
+// Every button in the drawer, in tab order, and every view button by id. Both are rebuilt with
+// the tree — a stale element here would be a focus trap that jumps to a button nobody can see.
+const drawerStops = [];
+const viewButtons = new Map();
+let drawerIsOpen = false;
+
+/** A row: chevron (folders only), name, count. The same shape for a folder and for a view. */
+function treeRow(className, glyph, name, count) {
+  const button = document.createElement("button");
+  button.className = className;
+  button.type = "button";
+  if (glyph !== null) {
+    const chev = document.createElement("span");
+    chev.className = "chev";
+    chev.textContent = glyph;
+    button.append(chev);
+  }
+  const label = document.createElement("span");
+  label.className = "rowname";
+  label.textContent = name;
+  button.append(label);
+  if (count !== null) {
+    const tally = document.createElement("span");
+    tally.className = "count";
+    tally.textContent = String(count);
+    button.append(tally);
+  }
+  return button;
+}
+
+/** Folders first and alphabetical, then this folder's own views by title — Obsidian's order. */
+function paintFolder(node, into) {
+  for (const folder of [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    const box = document.createElement("div");
+    // OPEN IF IT HOLDS WHERE YOU ARE, shut otherwise. 76 views in ten folders is a scroll if
+    // everything is open, and a drawer that lands showing the view you are in is the one that
+    // answers "where am I" without being read.
+    const open = holdsView(folder, currentViewId);
+    box.className = open ? "fold" : "fold shut";
+    const head = treeRow("foldbtn", "›", folder.name, viewsUnder(folder));
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+    head.addEventListener("click", () => {
+      const shut = box.classList.toggle("shut");
+      head.setAttribute("aria-expanded", shut ? "false" : "true");
+    });
+    const kids = document.createElement("div");
+    kids.className = "foldkids";
+    box.append(head, kids);
+    into.append(box);
+    drawerStops.push(head);
+    paintFolder(folder, kids);
+  }
+  for (const v of [...node.views].sort((a, b) => a.title.localeCompare(b.title))) {
+    const button = treeRow("viewbtn", null, v.title, null);
+    button.addEventListener("click", () => {
+      paintView(v.id);
+      closeDrawer();
+    });
+    into.append(button);
+    drawerStops.push(button);
+    viewButtons.set(v.id, button);
+  }
+}
+
+function buildDrawer(views) {
+  drawerStops.length = 0;
+  viewButtons.clear();
+  drawerStops.push($("drawerClose"));
+  const tree = $("viewTree");
+  tree.innerHTML = "";
+  if (!views || views.length === 0) {
+    const note = document.createElement("p");
+    note.className = "treenote";
+    note.textContent = "No views yet.";
+    tree.append(note);
+    $("drawerNote").textContent = "";
+  } else {
+    const root = foldersOf(views);
+    paintFolder(root, tree);
+    const folders = root.folders.size;
+    $("drawerNote").textContent =
+      `${views.length} views · ${folders} folder${folders === 1 ? "" : "s"} · \\ opens, Esc closes`;
+  }
+  // Escape and the Tab wrap are bound PER STOP rather than read off document.activeElement,
+  // because a handler that asks the document where the cursor is only works in a browser — this
+  // way the trap is the page's own code and a test can drive it.
+  drawerStops.forEach((stop, index) => stop.addEventListener("keydown", (e) => drawerKey(e, index)));
+  markWhereWeAre();
+}
+
+function drawerKey(e, index) {
+  if (e.key === "Escape") { e.preventDefault(); closeDrawer(); return; }
+  if (e.key !== "Tab" || drawerStops.length === 0) return;
+  const last = drawerStops.length - 1;
+  if (e.shiftKey && index === 0) { e.preventDefault(); drawerStops[last].focus(); }
+  else if (!e.shiftKey && index === last) { e.preventDefault(); drawerStops[0].focus(); }
+}
+
+function openDrawer() {
+  if (!graphData) return; // nothing to choose between, and no session to choose it for
+  drawerIsOpen = true;
+  $("drawer").classList.add("open");
+  $("scrim").classList.add("open");
+  $("drawer").setAttribute("aria-hidden", "false");
+  $("viewsBtn").setAttribute("aria-expanded", "true");
+  document.body.classList.add("noscroll");
+  // The current view if it is on screen, else the close button. Landing the cursor on where you
+  // already are means the first arrow key moves from here rather than from the top of a list.
+  (viewButtons.get(currentViewId) ?? drawerStops[0] ?? $("drawer")).focus();
+}
+
+function closeDrawer() {
+  const wasOpen = drawerIsOpen;
+  drawerIsOpen = false;
+  $("drawer").classList.remove("open");
+  $("scrim").classList.remove("open");
+  $("drawer").setAttribute("aria-hidden", "true");
+  $("viewsBtn").setAttribute("aria-expanded", "false");
+  document.body.classList.remove("noscroll");
+  // Focus goes back to what opened it — but only if it WAS open, so closing an already-closed
+  // drawer (boot, sign-out) does not steal the cursor from whatever has it.
+  if (wasOpen) $("viewsBtn").focus();
+}
+
+/** The bar says where you are, and the drawer marks it. Both from the same one fact. */
+function markWhereWeAre() {
+  const v = graphData?.snapshot?.views.find((x) => x.id === currentViewId);
+  $("barFolder").textContent = v ? folderOf(v.path) : "";
+  $("barView").textContent = v ? v.title : "";
+  for (const [id, button] of viewButtons) button.classList.toggle("current", id === currentViewId);
+}
+
 function paintView(id) {
   currentViewId = id;
+  markWhereWeAre();
   const v = graphData?.snapshot?.views.find((x) => x.id === id);
   const body = $("viewBody");
   body.innerHTML = "";
@@ -482,7 +885,7 @@ async function commitLine(view, commit) {
 async function enterGraph() {
   $("entry").classList.add("hidden");
   $("app").classList.add("hidden");
-  $("nav").classList.remove("hidden");
+  showShell(true);
   $("graph").classList.remove("hidden");
   // The declaration before the paint, so the first view a person sees is already resolved
   // against it. Sequential rather than parallel on purpose: two round trips at sign-in is
@@ -494,33 +897,22 @@ async function enterGraph() {
 async function loadGraph() {
   const data = await api("/app/graph", { method: "GET", auth: true });
   graphData = data;
+  // Identity lives in the bar now, and the bar's action cluster is what showShell() reveals —
+  // so `#who` is never hidden on its own account and nothing here has to un-hide it.
   $("who").textContent = data.handle ? "@" + data.handle : "";
-  $("who").classList.remove("hidden");
-  const pick = $("viewPick");
-  pick.innerHTML = "";
   if (!data.snapshot) {
     $("freshness").textContent = "No snapshot yet — run graph-sync push on the laptop.";
     $("viewBody").innerHTML = "";
+    currentViewId = null;
+    buildDrawer([]);
     return;
-  }
-  // Group the views by domain into <optgroup>s, alphabetised.
-  const byDomain = {};
-  for (const v of data.snapshot.views) (byDomain[v.domain || "—"] ||= []).push(v);
-  for (const dom of Object.keys(byDomain).sort()) {
-    const og = document.createElement("optgroup");
-    og.label = dom;
-    for (const v of byDomain[dom].sort((a, b) => a.title.localeCompare(b.title))) {
-      const o = document.createElement("option");
-      o.value = v.id;
-      o.textContent = v.title;
-      og.append(o);
-    }
-    pick.append(og);
   }
   const when = new Date(data.snapshot.generated_at).toLocaleString();
   $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
   const def = data.snapshot.views.find((v) => v.id === "this-week") || data.snapshot.views[0];
-  pick.value = def.id;
+  // Before the tree, so the folders holding the view we are about to paint land OPEN.
+  currentViewId = def.id;
+  buildDrawer(data.snapshot.views);
   paintView(def.id);
 }
 
@@ -551,9 +943,10 @@ function logout() {
   api("/auth/logout", { auth: true }).catch(() => {});
   localStorage.removeItem(tokenKey); token = null;
   graphData = null;
+  currentViewId = null;
+  closeDrawer();
+  buildDrawer([]);
   $("graph").classList.add("hidden");
-  $("nav").classList.add("hidden");
-  $("who").classList.add("hidden");
   show("entry");
 }
 
@@ -564,7 +957,25 @@ $("handle").addEventListener("keydown", (e) => { if (e.key === "Enter") register
 $("doneBtn").addEventListener("click", () => done($("doneBtn").dataset.id));
 $("logoutBtn").addEventListener("click", logout);
 $("signOut").addEventListener("click", logout);
-$("viewPick").addEventListener("change", (e) => paintView(e.target.value));
+
+// --- the shell ---
+$("viewsBtn").addEventListener("click", () => (drawerIsOpen ? closeDrawer() : openDrawer()));
+$("drawerClose").addEventListener("click", closeDrawer);
+$("scrim").addEventListener("click", closeDrawer);
+
+// TWO KEYS, AND ONLY TWO. Escape closes from anywhere, including from a line the cursor is in —
+// the drawer is modal, and a modal that only listens while it has focus is a modal you can get
+// stuck behind. `\` opens it, and is REFUSED while the cursor is in a text field, because every
+// line of a view becomes an <input> the moment it is clicked and a global letter key that eats a
+// character out of the operator's own source would be this shell breaking the app it wraps.
+const typingIn = (target) => {
+  const tag = String(target?.tagName ?? "").toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
+};
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && drawerIsOpen) { e.preventDefault(); closeDrawer(); return; }
+  if (e.key === "\\" && !drawerIsOpen && !typingIn(e.target)) { e.preventDefault(); openDrawer(); }
+});
 $("captureBox").addEventListener("keydown", async (e) => {
   if (e.key !== "Enter") return;
   const v = e.target.value.trim(); if (!v) return;

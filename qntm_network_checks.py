@@ -481,3 +481,94 @@ def assert_app_is_reachable_from_the_front_door(state: ScenarioState) -> Predica
         message="the app lives at /app/, the landing page links to it in one click, and /app.html redirects there",
         observed_ref="index.html",
     )
+
+
+def assert_the_view_chooser_is_one_folder_drawer(state: ScenarioState) -> PredicateResult:
+    """There is ONE way to choose a view, it groups by the vault's folders, and a thumb can use it.
+
+    Four assertions of one claim. The first is the one that rots.
+
+      1. ONE CHOOSER, NOT TWO. The app chose views through a bare `<select>` grouped by a
+         hand-written `domain` label. The drawer replaced it. A half-retirement — the drawer
+         landed, the `<select>` left in place "for now" — is the failure this clause refuses,
+         and it is the cheapest kind of rot to commit: nothing breaks, the page just grows two
+         answers to one question.
+      2. THE FOLDER COMES FROM `path`. A view carries both `path` (the rendered file's place in
+         the vault, which is also the address the write path posts to) and `domain` (a label
+         written by hand in a view config). Measured across the operator's 76 view configs they
+         disagree: `dev/test-scratchpad.md` is declared `domain: personal`, fourteen views in
+         four project folders under `dev/` are one flat `dev` bucket, and the five vault-root
+         views carry `domain: all`, which is not a folder anywhere. So the drawer derives the
+         folder from `path` and this asserts it still does — a future edit that "simplifies" it
+         back to `domain` would be a regression nothing else would catch.
+      3. A THUMB CAN USE IT. One `--touch` token, at least 44px, and the bar's and the drawer's
+         controls take it rather than sizing themselves. A minimum written in nine places is a
+         minimum that is 40px in one of them.
+      4. THE SCREEN'S EDGES AND A READER'S PREFERENCE ARE HONOURED. The viewport meta carries
+         `viewport-fit=cover`, which is what makes the safe-area insets load-bearing rather than
+         decorative; and a drawer that slides does not slide for someone who asked it not to.
+
+    Deterministic over app/index.html, like state-app-is-reachable-from-the-front-door and for
+    the same reason: the page is hand-authored HTML outside tsconfig, outside the bundle, and
+    outside flow-trace's JS capture (a node module-load hook cannot import an HTML document), so
+    an artifact check is the only enforcement that reaches it from here. What it CANNOT see is
+    behaviour — that is tests/app-shell.test.mjs, which lifts the page's script and drives it.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    page = _read(root / "app" / "index.html")
+    if not page:
+        return PredicateResult(status="FAIL", message="no app/index.html", observed_ref="app/index.html")
+
+    # Comments are stripped first: the page EXPLAINS what it retired and why, and a check that
+    # searched the raw text would make writing that explanation a failure.
+    code = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
+    code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
+
+    problems = []
+
+    for corpse in ("<select", "viewPick", "optgroup"):
+        if corpse in code:
+            problems.append(f"the retired view chooser survives ({corpse}) — there are two ways to pick a view")
+    if 'id="drawer"' not in code or 'id="viewTree"' not in code:
+        problems.append("no view drawer — the app has no way to choose a view")
+
+    if "folderOf" not in code or "lastIndexOf" not in code:
+        problems.append("nothing derives a folder from a view's path")
+    if re.search(r"\bv\.domain\b|\bdomain\s*\|\|", code):
+        problems.append("the drawer groups by `domain`, which is a label and disagrees with the vault")
+
+    touch = re.search(r"--touch:\s*([\d.]+)rem", code)
+    if not touch:
+        problems.append("no --touch token — the minimum target size is not stated once")
+    elif float(touch.group(1)) * 16 < 44:
+        problems.append(f"--touch is {touch.group(1)}rem, under the 44px minimum")
+    else:
+        for control in (".barbtn", ".foldbtn", ".viewbtn"):
+            rule = re.search(re.escape(control) + r"[^{}]*\{([^{}]*)\}", code)
+            if not rule or "min-height: var(--touch)" not in rule.group(1):
+                problems.append(f"{control} sizes itself rather than taking --touch")
+
+    if "viewport-fit=cover" not in page:
+        problems.append("the viewport meta no longer covers the display, so the insets below are decorative")
+    if "env(safe-area-inset-top" not in code or "env(safe-area-inset-bottom" not in code:
+        problems.append("the shell does not pay the safe-area insets")
+    if "prefers-reduced-motion" not in code:
+        problems.append("the drawer slides for a reader who asked it not to")
+
+    if problems:
+        return PredicateResult(
+            status="FAIL",
+            message=f"the view chooser is not one folder drawer: {problems}",
+            observed_ref="app/index.html",
+        )
+    return PredicateResult(
+        status="PASS",
+        message=(
+            "one chooser: a drawer grouping views by their vault folder (from `path`, not `domain`), "
+            "with 44px targets, the safe-area insets paid, and the slide honouring prefers-reduced-motion"
+        ),
+        observed_ref="app/index.html",
+    )
