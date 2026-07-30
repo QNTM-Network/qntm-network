@@ -69,15 +69,27 @@ expected_flows:
   # Added 2026-07-30 with migration stage 1, in the same change as the modules and the classes.
   # Observed by tests/flow_scenarios/present_cascade.ts under the node observer.
   #
-  # READ THE NEXT SENTENCE BEFORE READING A VERDICT INTO ANY OF THESE FIVE. They are DECLARED and
-  # they are NOT OBSERVED YET, because `flow-trace verify .` exits 2 in this environment — the
-  # TOOL's JS observer has no node_modules, and the fix is `npm ci` in tools/flow-trace/js/, in
-  # the tool's own checkout, which this branch must not touch. The scenario that would observe
-  # them is written and committed and runs correctly when transpiled by hand; what cannot run is
-  # the observer around it. The same five call paths ARE exercised today under `node --test` by
-  # tests/present-cascade.test.mjs, which this repo's CI runs, and each was mutation-proven on
-  # 2026-07-30. Declaring them now rather than waiting is the deliberate choice: a scenario with
-  # no declarations to measure would be the mirror of the bug this project keeps finding.
+  # ── THEY ARE OBSERVED NOW. CORRECTED 2026-07-30, MIGRATION STAGE 2 ────────────────────────
+  # This block used to open "they are DECLARED and they are NOT OBSERVED YET, because
+  # `flow-trace verify .` exits 2". That was true when it was written and it is FALSE NOW, and
+  # leaving it would be exactly the fossil this project keeps finding. With the tool's own JS
+  # observer installed (`npm ci` in flow-trace's js/ — the fix is in the tool, not here),
+  # `flow-trace verify .` exits 0 with 23 PASS / 0 FAIL and every expected flow below is
+  # OBSERVED, with counts:
+  #     paint -> cascade.PresentationCascade.resolve   count 8
+  #     cascade -> context.PresentationContext.at      count 56
+  #     cascade -> levels.isSilent                     count 56
+  #     paint -> resolution.classifyLine               count 12
+  #     paint -> source.applyEdit                      count 1
+  # ONE CAVEAT, AND IT IS THE TOOL'S RATHER THAN THIS REPO'S: `capability-rollup` and
+  # `map --full` install canonical-routing probe anchors during the same capture, and with those
+  # anchors installed the JS observer records NO cross-module calls, so every flow here reads
+  # UNVERIFIABLE and the capabilities derive `partial`. Measured both ways on 2026-07-30 (the
+  # identical verify run, probe_anchors=() vs the two routing anchors), so it is a property of
+  # the anchors and not of these declarations. The derived block in capabilities.yaml is
+  # therefore NOT refreshed from a rollup that under-reports — a derived verdict is not
+  # hand-written in either direction, and it is not machine-written from a capture known to be
+  # blind either.
 
   # THE RESOLUTION. The painter asks; it does not decide. This is the edge that makes
   # `presentation-is-resolved-not-chosen` falsifiable at all — a painter with the decision back
@@ -87,6 +99,20 @@ expected_flows:
     to:   app/present/cascade
     callee: PresentationCascade.resolve
     event: app.resolves-a-rendition
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
+  # THE DECLARATION REACHES (added 2026-07-30, migration stage 2). The GLOBAL level is a document
+  # served with the app, and this edge is what makes "the reader is wired" an OBSERVED fact rather
+  # than a claim. It is declared as its own flow, and the stage was done as its own hour, because
+  # "a declaration that exists and does not reach" is this system's highest-frequency bug: the
+  # edge that would disappear if the page went back to reading the document itself is exactly the
+  # edge worth watching. app.html fetches; app/present/context reads.
+  - id: context-reads-the-global-declaration
+    from: app/present/context
+    to:   app/present/declaration
+    callee: readDeclaration
+    event: app.reads-the-global-declaration
     class: presentation-resolution
     gates_capabilities: [presentation-is-resolved-not-chosen]
 

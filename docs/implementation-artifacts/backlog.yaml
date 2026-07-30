@@ -211,6 +211,24 @@ backlog:
     FALSIFIER: flip one key to `raw` in a fixture and assert the painted DOM changes;
     if it does not, the declaration is inert and the stage has failed. Needs stage 1.'
   driving_capability: presentation-is-resolved-not-chosen
+  record: '2026-07-30 — SHIPPED. The GLOBAL level is presentation.json, served with the
+    app from the site root. app.html FETCHES it; app/present/context.presentationFromDeclaration
+    READS it, through app/present/declaration.readDeclaration, into a GLOBAL contribution —
+    the read is a function in app/ and not four lines in the page precisely so the edge is
+    observable (.flow-trace.yaml captures the path prefix `app`), and it is declared as
+    context-reads-the-global-declaration. Committed value = today''s behaviour (both keys
+    wired), and that promise is a COMPARISON: the painted DOM under the served declaration is
+    serialised beside the painted DOM with no declaration at all. THE FALSIFIER IS ASSERTED AT
+    TWO DISTANCES — flip one key to raw through the modules, and again through app.html''s own
+    lifted script answering a flipped fetch. The second is the one that catches the failure
+    this stage exists for: a perfect reader the page never calls. Mutation-proven three ways
+    (the reader applies nothing -> 2 suites red; the page reads and never installs -> the page
+    suite red with "THE READER IS NOT WIRED"; an unknown key silently ignored -> the typo test
+    red), each restored. A misspelled key is a reported PROBLEM, never a silent no-op, because
+    silently ignoring one would rebuild the bug inside the module written to disprove it. A
+    404, a malformed document or a bad value falls back to SILENCE, which is the behaviour the
+    app had before this level existed. 13 new assertions; the tests/fixtures/app-html-page.mjs
+    extractor is now shared by the two suites that lift the page rather than copied.'
   kind: capability
   state: diagnose-ready
 - id: the-focused-line-shows-its-source-rule

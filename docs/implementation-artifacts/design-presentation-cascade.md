@@ -528,6 +528,27 @@ the reader is wired, and it is an hour.
 does not, the declaration is inert and the stage has failed — which is the point of doing it
 separately.
 
+> **SHIPPED 2026-07-30**, branch `feat/present-global-and-focus`. The declaration is
+> `presentation.json`, served from the site root; `app.html` fetches it and
+> `presentationFromDeclaration` (`app/present/context`) reads it through `readDeclaration`
+> (`app/present/declaration`) into a GLOBAL contribution. The read lives in `app/` rather than in
+> the page **because that is the only place the edge is observable** — declared as
+> `context-reads-the-global-declaration`. Committed value is today's behaviour, and that is a
+> comparison: the painted DOM under the served declaration is serialised beside the painted DOM
+> with no declaration at all. **The falsifier is asserted at two distances** — through the modules,
+> and through `app.html`'s own lifted script answering a flipped fetch, which is the half that
+> catches a perfect reader the page never calls. Mutation-proven three ways. A misspelled key is a
+> reported **problem**, never a silent no-op; a 404 or a malformed document falls back to
+> **silence**, which is what the app did before this level existed.
+>
+> **And §0.6 is now false, which this stage measured rather than assumed.** With the tool's own JS
+> observer installed, `flow-trace verify .` exits **0** with **23 PASS / 0 FAIL** over three
+> scenarios, and all ten expected flows are OBSERVED with counts. `capability-rollup .` and
+> `map . --full` still under-report — they install canonical-routing probe anchors in the same
+> capture and the JS observer then records no cross-module calls at all (measured both ways on one
+> verify run). That is a defect in the tool, not in these declarations, and it is why the derived
+> block in `capabilities.yaml` was not refreshed from a rollup known to be blind.
+
 ### Stage 3 — the FOCUS level: the operator's cursor rule · **½ day**
 **This is the operator's rule: cursor on the line → `- [ ]`; cursor off → a clickable checkbox.**
 Add per-line focus to the graph viewer: the focused line renders as an `<input>` holding its

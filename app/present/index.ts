@@ -20,7 +20,11 @@ export type { PresentationLevel } from "./levels.js";
 export { DEFAULT, RESOLUTION_KEYS, classifyLine } from "./resolution.js";
 export type { Contribution, LineShape, Rendition, Resolution, ResolutionKey } from "./resolution.js";
 
-export { PresentationContext } from "./context.js";
+export { readDeclaration } from "./declaration.js";
+export type { DeclarationReading } from "./declaration.js";
+
+export { PresentationContext, presentationFromDeclaration } from "./context.js";
+export type { DeclaredPresentation } from "./context.js";
 
 export { PresentationCascade } from "./cascade.js";
 export type { Resolved } from "./cascade.js";

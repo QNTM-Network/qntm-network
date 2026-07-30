@@ -46,6 +46,48 @@ function classifyLine(line) {
   return { kind: "prose", source: line };
 }
 
+// app/present/declaration.ts
+var NOTE = "note";
+var RENDITIONS = ["raw", "wired"];
+function isRendition(value) {
+  return typeof value === "string" && RENDITIONS.includes(value);
+}
+function readDeclaration(document2) {
+  const problems = [];
+  if (typeof document2 !== "object" || document2 === null || Array.isArray(document2)) {
+    return {
+      contribution: {},
+      problems: [
+        `the declaration is ${Array.isArray(document2) ? "an array" : typeof document2}, not an object \u2014 every key stays silent and every line falls through to the default`
+      ]
+    };
+  }
+  const entries = Object.entries(document2);
+  const contribution = {};
+  for (const [key, value] of entries) {
+    if (key === NOTE) {
+      if (typeof value !== "string") {
+        problems.push(`'${NOTE}' is ${typeof value}, not a string \u2014 it is prose, not a key`);
+      }
+      continue;
+    }
+    if (!RESOLUTION_KEYS.includes(key)) {
+      problems.push(
+        `'${key}' is not a resolution key and was NOT applied \u2014 the keys are ${RESOLUTION_KEYS.join(", ")}`
+      );
+      continue;
+    }
+    if (!isRendition(value)) {
+      problems.push(
+        `'${key}' is ${JSON.stringify(value)}, which is not a rendition \u2014 it stays silent, so the key falls through to the default. The renditions are ${RENDITIONS.join(", ")}`
+      );
+      continue;
+    }
+    contribution[key] = value;
+  }
+  return { contribution, problems };
+}
+
 // app/present/context.ts
 var PresentationContext = class {
   #contributions;
@@ -67,6 +109,13 @@ var PresentationContext = class {
     return this.#contributions.get(level);
   }
 };
+function presentationFromDeclaration(document2) {
+  const reading = readDeclaration(document2);
+  return {
+    context: new PresentationContext({ GLOBAL: reading.contribution }),
+    problems: reading.problems
+  };
+}
 
 // app/present/cascade.ts
 var PresentationCascade = class {
@@ -176,6 +225,8 @@ export {
   applyEdit,
   classifyLine,
   isSilent,
-  paint
+  paint,
+  presentationFromDeclaration,
+  readDeclaration
 };
 //# sourceMappingURL=present.js.map

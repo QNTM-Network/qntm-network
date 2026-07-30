@@ -161,17 +161,41 @@ import MarkdownIt from "https://esm.sh/markdown-it@14";
 // cascade.md section 7 for why the code has to live under app/ and not here: `.flow-trace.yaml`
 // includes `app` as a PATH PREFIX, so anything written in this file is outside canonical routing
 // and flow declarations permanently, by construction.
-import { paint, PresentationContext } from "./dist/present.js";
+import { paint, PresentationContext, presentationFromDeclaration } from "./dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
 
-// EVERY LEVEL IS SILENT TODAY, so every key falls through to DEFAULT and the page paints exactly
-// what it painted before. This is the slot the levels arrive in, one migration stage at a time:
-// GLOBAL at stage 2, MODE at stage 4, USER at stage 5 (from the user record behind the session,
-// never from browser storage), VIEW and STRUCTURAL_NODE at stage 7 once the snapshot envelope
-// carries them. None of those stages changes this page beyond what it puts in here.
-const presentation = new PresentationContext();
+// THE GLOBAL LEVEL (migration stage 2). Until the declaration is fetched every level is silent
+// and every key falls through to DEFAULT, which is exactly what this page painted before there
+// was a cascade — so a slow, missing or broken presentation.json costs nothing but a warning.
+// The other levels arrive one stage at a time: MODE at stage 4, USER at stage 5 (from the user
+// record behind the session, never from browser storage), VIEW and STRUCTURAL_NODE at stage 7
+// once the snapshot envelope carries them.
+let presentation = new PresentationContext();
+
+// THE PAGE FETCHES; IT DOES NOT READ. Turning the document into levels is
+// presentationFromDeclaration's job, in app/, where flow-trace can see the edge — a declaration
+// read inside this file is a declaration whose reader nothing can observe (.flow-trace.yaml's
+// capture filter is the path prefix `app`). What is left here is the fetch, which is what this
+// page is for.
+async function loadPresentation() {
+  try {
+    const res = await fetch("./presentation.json", { cache: "no-cache" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const declared = presentationFromDeclaration(await res.json());
+    for (const problem of declared.problems) {
+      console.warn("presentation.json: " + problem);
+    }
+    presentation = declared.context;
+  } catch (e) {
+    // A declaration that cannot be read is reported, never guessed at. Silence is the honest
+    // fallback: it is the same behaviour as declaring nothing, which is the behaviour the app
+    // had before this level existed.
+    console.warn("presentation.json not read (" + e.message + ") — every level stays silent");
+    presentation = new PresentationContext();
+  }
+}
 
 const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
   ? "http://localhost:8787"
@@ -295,6 +319,10 @@ async function enterGraph() {
   $("app").classList.add("hidden");
   $("nav").classList.remove("hidden");
   $("graph").classList.remove("hidden");
+  // The declaration before the paint, so the first view a person sees is already resolved
+  // against it. Sequential rather than parallel on purpose: two round trips at sign-in is
+  // cheaper than a first paint that changes under the reader a moment later.
+  await loadPresentation();
   await loadGraph();
 }
 

@@ -257,6 +257,21 @@ capabilities:
     cascade and obeys it (tests/present-cascade.test.mjs, mutation-proven both ways). WHAT IS NOT
     proven: that NO path bypasses. That is canonical routing, and it needs `flow-trace verify`,
     which exits 2 here for a reason outside this repo.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 2 SHIPPED. THE CASCADE NOW HAS A LEVEL THAT SPEAKS. The
+    GLOBAL level is `presentation.json`, served with the app from the site root; app.html fetches
+    it and `presentationFromDeclaration` (app/present/context) reads it through
+    `readDeclaration` (app/present/declaration) into a GLOBAL contribution. Its committed value
+    is today's behaviour — both keys `wired` — so nothing moved when it landed, and that is
+    asserted as a comparison rather than promised. THE FALSIFIER IS THE POINT OF THE STAGE and it
+    is asserted at two distances: flipping one key to `raw` changes the painted DOM through the
+    modules, AND through app.html's own lifted script answering a flipped fetch. The second is the
+    one that catches this stage's real failure mode — a perfect reader the page never calls.
+    Mutation-proven three ways on 2026-07-30 (the reader applies nothing; the page reads and never
+    installs; an unknown key is silently ignored), each red with its own message, each restored.
+    AND THE SENTENCE ABOVE ABOUT `verify` IS NOW FALSE — with the tool's JS observer installed it
+    exits 0 with 23 PASS / 0 FAIL and the five stage-1 flows are OBSERVED with counts. Canonical
+    routing is still not answered here, for a narrower reason recorded in .flow-trace.yaml: the
+    verbs that would answer it install probe anchors that blind the JS observer.
   tier: foundational
   status: undeclared
 - id: the-focused-line-shows-its-source

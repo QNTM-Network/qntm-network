@@ -8,6 +8,7 @@
  * and the Python scenarios use.
  *
  * WHAT IT DRIVES — the whole chain, in the order the app produces it:
+ *   contextFor a served declaration -> readDeclaration  (what does the INSTANCE declare)
  *   paint(...)            -> classifyLine            (what IS this line)
  *   paint(...)            -> PresentationCascade.resolve  (how is it SHOWN)
  *   resolve(...)          -> PresentationContext.at  (what does this level say)
@@ -40,7 +41,7 @@
  */
 
 import { paint } from "../../app/present/paint.js";
-import { PresentationContext } from "../../app/present/context.js";
+import { PresentationContext, presentationFromDeclaration } from "../../app/present/context.js";
 import type { InlineMarkdown } from "../../app/present/paint.js";
 
 const SOURCE = [
@@ -140,16 +141,21 @@ export function run(): void {
     throw new Error("the edit did not return the whole file");
   }
 
-  // 3. The other end of the dial — a GLOBAL contribution the painter must obey.
+  // 3. The other end of the dial, ARRIVING AS A SERVED DECLARATION rather than as a context
+  //    built by hand (migration stage 2). This is the edge that makes "the declaration reaches"
+  //    an observed fact: context -> declaration.readDeclaration, then the same painter obeying
+  //    the same cascade. A hand-built context would exercise the painter and prove nothing about
+  //    the reader.
+  const declared = presentationFromDeclaration({
+    note: "the shape presentation.json has, flipped to the raw end",
+    checkbox: "raw",
+    heading: "raw",
+  });
+  if (declared.problems.length !== 0) {
+    throw new Error(`the declaration did not read cleanly: ${declared.problems.join("; ")}`);
+  }
   const raw = new StubElement("article");
-  paint(
-    raw as unknown as HTMLElement,
-    SOURCE,
-    new PresentationContext({ GLOBAL: { checkbox: "raw", heading: "raw" } }),
-    {
-      markdown,
-    },
-  );
+  paint(raw as unknown as HTMLElement, SOURCE, declared.context, { markdown });
   if (raw.descendants().some((el) => el.type === "checkbox")) {
     throw new Error("a raw resolution still produced a checkbox — the painter is not obeying");
   }

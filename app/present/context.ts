@@ -6,18 +6,19 @@
  * browser, which is the whole reason the cursor rule (migration stage 3) can be specified before
  * the surface it reacts to exists.
  *
- * IT IS EMPTY IN THE SHIPPED APP TODAY, DELIBERATELY. `app.html` constructs one with no
- * contributions, so every level is silent and every key falls through to DEFAULT. That is not a
- * stub — it is the honest state: no level has a declaration home yet. GLOBAL gets one at stage 2,
- * MODE at stage 4, USER at stage 5, VIEW and STRUCTURAL_NODE at stage 7 (which needs the snapshot
- * envelope widened first). Each of those stages fills a slot this class already has, and none of
- * them changes this file.
+ * ONE LEVEL SPEAKS IN THE SHIPPED APP AS OF MIGRATION STAGE 2. `app.html` fetches the served
+ * declaration (`presentation.json`) and builds its context through `presentationFromDeclaration`
+ * below; every other level is still silent and falls through to DEFAULT. The remaining slots fill
+ * one stage at a time: MODE at stage 4, USER at stage 5, VIEW and STRUCTURAL_NODE at stage 7
+ * (which needs the snapshot envelope widened first), and FOCUS at stage 3 — which is DERIVED from
+ * where the cursor is rather than declared in a file, so it arrives per line rather than here.
  *
  * The constructor takes a plain record rather than a Map so a caller can write the fact it knows
  * and stay silent on the rest without spelling silence a second way.
  */
 
 import type { PresentationLevel } from "./levels.js";
+import { readDeclaration } from "./declaration.js";
 import type { Contribution } from "./resolution.js";
 
 export class PresentationContext {
@@ -43,4 +44,33 @@ export class PresentationContext {
   at(level: PresentationLevel): Contribution | undefined {
     return this.#contributions.get(level);
   }
+}
+
+/** A context built from a served declaration, and everything that was wrong with the document. */
+export interface DeclaredPresentation {
+  readonly context: PresentationContext;
+  readonly problems: readonly string[];
+}
+
+/**
+ * Assemble a context from the instance's served presentation declaration — the GLOBAL level.
+ *
+ * THIS FUNCTION IS THE WIRE, and it is a function in `app/` rather than four lines in `app.html`
+ * for one reason that is not style: `.flow-trace.yaml`'s capture filter is the path prefix `app`,
+ * so a call made from the page is a call nothing can observe. The edge
+ * `app/present/context -> app/present/declaration` is declared in flows.yaml as
+ * `context-reads-the-global-declaration`, and it is the observable form of "the declaration
+ * reaches". Written in the page instead, "is the reader wired?" would be answerable only by
+ * reading a file — which is the condition migration stage 1 existed to end.
+ *
+ * A document that could not be read at all yields an empty contribution, which `isSilent` treats
+ * as silence, which falls through to DEFAULT. So the worst case of a broken declaration is
+ * TODAY'S BEHAVIOUR PLUS A PROBLEM MESSAGE, never a blank page.
+ */
+export function presentationFromDeclaration(document: unknown): DeclaredPresentation {
+  const reading = readDeclaration(document);
+  return {
+    context: new PresentationContext({ GLOBAL: reading.contribution }),
+    problems: reading.problems,
+  };
 }
