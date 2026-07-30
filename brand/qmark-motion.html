@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>qntm — Q-mark · the electron settles</title>
+<!-- THE COMPONENT, AS THE COMPONENT. This page links the shipped stylesheet and pastes the
+     shipped line of markup — it does not re-draw the mark, and tests/qmark-mark.test.mjs fails
+     if it ever starts to. What you see here is what a host gets.
+
+     IT REACHES OUT OF brand/, AND THAT IS THE POINT. BRAND.md calls this folder "portable by
+     design"; this one page is not, because the alternative is a lab that shows a COPY of the mark
+     and therefore stops being evidence the day the copy drifts. The department's job is to judge
+     the thing that ships, so the lab links the thing that ships. -->
+<link rel="stylesheet" href="../app/mark/qmark.css" />
+<style>
+  /* No font is fetched. A lab page that cannot be read on a plane is a lab page that lies about
+     what the mark looks like. Everything here is a system stack. */
+  :root{
+    --page:#060706;--panel:#0e110e;--line:#1c211c;--line-lit:#2a322a;
+    --ink:#e6ebe6;--ink-dim:#8a948a;--ink-faint:#555c55;--acc:#3ff07f;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--page);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:1rem;
+    padding:.85rem clamp(1rem,4vw,2.2rem);background:rgba(6,7,6,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .brand{font-family:var(--mono);font-weight:600;display:flex;align-items:center;gap:.55rem;letter-spacing:.02em}
+  .navlinks{display:flex;gap:.4rem}
+  .back{font-family:var(--mono);font-size:.74rem;color:var(--ink-dim);text-decoration:none;border:1px solid var(--line-lit);padding:.34rem .7rem;border-radius:6px}
+  .back:hover{color:var(--acc);border-color:var(--acc)}
+  main{max-width:1000px;margin:0 auto;padding:0 clamp(1rem,4vw,2.2rem) 6rem}
+  .title{padding:2.4rem 0 1.4rem}
+  .title h1{font-size:clamp(1.5rem,3.4vw,2.1rem);font-weight:600;letter-spacing:-.02em}
+  .title p{color:var(--ink-dim);font-weight:300;margin-top:.6rem;max-width:70ch}
+  .title .conf{font-family:var(--mono);font-size:.72rem;color:var(--acc);letter-spacing:.12em;text-transform:uppercase;margin-bottom:.7rem}
+  section{padding:2.2rem 0 0;border-top:1px solid var(--line);margin-top:2rem}
+  .sh{font-family:var(--mono);font-size:.72rem;color:var(--acc);letter-spacing:.16em;text-transform:uppercase}
+  h2{font-size:1.25rem;font-weight:600;margin:.2rem 0 .3rem}
+  .sd{color:var(--ink-dim);font-weight:300;max-width:70ch;margin-bottom:1.4rem;font-size:.94rem}
+  .sd b{color:var(--ink);font-weight:500}
+
+  /* the ladder — every size the brand book asks the mark to survive, on one baseline */
+  .ladder{display:flex;align-items:flex-end;gap:clamp(1rem,3vw,2.4rem);flex-wrap:wrap;
+    background:#0a0b0a;border:1px solid var(--line);border-radius:14px;padding:2rem 1.6rem 1.2rem}
+  .rung{display:flex;flex-direction:column;align-items:center;gap:.7rem}
+  .rung .cap{font-family:var(--mono);font-size:.68rem;color:var(--ink-faint);letter-spacing:.06em}
+  .rung .cell{display:flex;align-items:center;justify-content:center;min-height:1rem}
+
+  /* the app icon, in the chrome the brand book puts it in */
+  .icons{display:flex;align-items:flex-end;gap:1.1rem;flex-wrap:wrap;
+    background:#0a0b0a;border:1px solid var(--line);border-radius:14px;padding:1.6rem}
+  .appicon{background:#0a0b0a;border:1px solid var(--line-lit);border-radius:24%;display:flex;align-items:center;justify-content:center}
+
+  /* 16px in the two places 16px actually happens */
+  .inline-cases{display:flex;flex-direction:column;gap:.9rem;background:#0a0b0a;border:1px solid var(--line);border-radius:14px;padding:1.4rem 1.6rem}
+  .tabstrip{display:inline-flex;align-items:center;gap:.5rem;background:#15181b;border:1px solid var(--line-lit);
+    border-radius:9px 9px 0 0;padding:.45rem .8rem;font-size:.8rem;color:var(--ink-dim);font-family:var(--sans)}
+  .menubar{display:flex;align-items:center;gap:.5rem;background:rgba(7,8,10,.9);border:1px solid var(--line);
+    border-radius:10px;padding:.6rem .9rem}
+  .menubar .word{font-family:var(--mono);font-size:.78rem;letter-spacing:.28em;color:var(--ink)}
+
+  /* THE APP'S BAR, REBUILT FROM ITS OWN TOKENS (app/index.html: --bar-h 3.25rem, --s2/--s3/--s4,
+     --t1/--t2/--t3, --track .28em, --touch 2.75rem, --line #1b1f26, --ink #eef1f4, --dim #8b93a1).
+     A mock, because that file is being changed by someone else and is not mine to touch. */
+  .barmock{display:flex;align-items:center;gap:.75rem;height:3.25rem;padding:0 1rem;
+    background:rgba(7,8,10,.82);border:1px solid #1b1f26;border-radius:10px;color:#eef1f4}
+  .barmock .bar-mark{display:flex;align-items:center;gap:.5rem;flex:none}
+  .barmock .bar-dot{width:.5rem;height:.5rem;border-radius:999px;background:var(--acc);box-shadow:0 0 12px rgba(63,240,127,.32)}
+  .barmock .bar-word{letter-spacing:.28em;font-size:.78rem;color:#eef1f4}
+  .barmock .bar-where{flex:1;min-width:0;display:flex;align-items:baseline;gap:.5rem;overflow:hidden}
+  .barmock .bar-folder{font-size:.68rem;letter-spacing:.28em;text-transform:uppercase;color:#8b93a1}
+  .barmock .bar-view{font-size:.88rem;color:#eef1f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .barmock .barbtn{display:inline-flex;align-items:center;min-height:2.75rem;padding:0 .75rem;border:1px solid #1b1f26;
+    border-radius:999px;font-size:.78rem;color:#8b93a1;flex:none}
+  pre{font-family:var(--mono);font-size:.72rem;color:var(--ink);background:#0a0b0a;border:1px solid var(--line-lit);
+    border-radius:8px;padding:.8rem;margin:.7rem 0;overflow-x:auto;line-height:1.6}
+
+  .actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}
+  .actions button{font-family:var(--mono);font-size:.78rem;cursor:pointer;border-radius:8px;padding:.5rem .85rem;
+    border:1px solid var(--line-lit);background:var(--panel);color:var(--ink)}
+  .actions button.primary{background:var(--acc);color:#04120a;border-color:var(--acc);font-weight:600}
+
+  .note{background:var(--panel);border:1px solid var(--line-lit);border-radius:12px;padding:1rem 1.2rem;margin-top:1.2rem;
+    color:var(--ink-dim);font-size:.92rem;font-weight:300}
+  .note b{color:var(--ink);font-weight:500}
+  .note code{font-family:var(--mono);font-size:.85em;color:var(--acc)}
+  ul{margin:.4rem 0 0 1.1rem}
+  li{margin:.25rem 0}
+  footer{color:var(--ink-faint);font-family:var(--mono);font-size:.72rem;padding:3rem 0 0}
+
+  /* THE SETTLED ROW. Exactly what `prefers-reduced-motion: reduce` and the sub-20px gate both
+     produce — the same one declaration — so the settled mark can be held next to the moving one
+     and compared rather than described. */
+  .settled .qmark-orbit{animation:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand" style="--qmark-size:1.1rem"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span>qntm · the mark, moving</div>
+  <div class="navlinks">
+    <a class="back" href="./index.html">← gallery</a>
+    <a class="back" href="./qmark-lab.html">the dials →</a>
+  </div>
+</header>
+
+<main>
+  <div class="title">
+    <div class="conf">direction confirmed 2026-06-27 · this is that mark, in time</div>
+    <h1>The electron travels the ring, and settles at the tail.</h1>
+    <p>One and a half revolutions, clockwise, in <b>700ms</b> on the sheet's declared default curve, arriving
+       at (71,71) — the tail position that makes this a <b>Q</b> and not an <b>O</b>. The mark is
+       <code>app/mark/qmark.html</code> and <code>app/mark/qmark.css</code>; this page links the stylesheet
+       and pastes the markup, so what is below is the component and not a drawing of it.</p>
+  </div>
+
+  <!-- THE SIZE LADDER -->
+  <section>
+    <div class="sh">01 · the ladder</div>
+    <h2>Every size the mark has to survive</h2>
+    <p class="sd">brand/BRAND.md §3 gives the icon mark its job: <b>legible at 16–180px</b>. Hit replay and
+       watch the same component at each of them. The electron renders at 16% of the mark — 3.84px at 24,
+       3.2px at 20, 2.56px at 16 — and watching it at each: at <b>24</b> it is a distinct point travelling a
+       ring; at <b>20</b> that is marginal; at <b>16</b> it is not an orbit at all, it is the mark wobbling.
+       So at and below 20px the orbit does not run and those rungs show the settled Q from the first frame.
+       Nothing else about the mark changes.</p>
+    <div class="ladder" id="ladder">
+      <div class="rung"><div class="cell" style="--qmark-size:16px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">16</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:20px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">20</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:24px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">24</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:32px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">32</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:64px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">64</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:120px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">120</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:240px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">240</div></div>
+    </div>
+    <div class="actions"><button class="primary" id="replay">↻ replay the reveal</button></div>
+  </section>
+
+  <!-- SIXTEEN PIXELS, WHERE IT ACTUALLY HAPPENS -->
+  <section>
+    <div class="sh">02 · sixteen pixels</div>
+    <h2>The two places 16px is real</h2>
+    <p class="sd">A favicon in a tab strip and a reduced mark in a menu bar. Both are settled from the first
+       frame, by the same one declaration that serves <b>prefers-reduced-motion</b>. This is the honest half of
+       the answer: <b>the orbit is for the sizes where an orbit can be seen</b>, and the mark is the mark at
+       every size either way.</p>
+    <div class="inline-cases">
+      <div><span class="tabstrip" style="--qmark-size:16px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span>qntm — the app</span></div>
+      <div class="menubar" style="--qmark-size:16px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span><span class="word">qntm</span></div>
+    </div>
+  </section>
+
+  <!-- THE APP ICON -->
+  <section>
+    <div class="sh">03 · app icon</div>
+    <h2>In the rounded square</h2>
+    <p class="sd">brand/index.html §05 puts the reduced mark in a rounded square at 120 · 64 · 32 · 16px.
+       Same component, same one line of markup, sized by the tile it sits in.</p>
+    <div class="icons">
+      <div class="appicon" style="width:120px;height:120px;--qmark-size:74px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div>
+      <div class="appicon" style="width:64px;height:64px;--qmark-size:40px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div>
+      <div class="appicon" style="width:32px;height:32px;--qmark-size:21px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div>
+      <div class="appicon" style="width:16px;height:16px;--qmark-size:11px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div>
+    </div>
+  </section>
+
+  <!-- SETTLED -->
+  <section>
+    <div class="sh">04 · asked not to move</div>
+    <h2>The settled mark</h2>
+    <p class="sd">What someone who has asked for stillness sees, and what every rung under 20px above shows
+       from the first frame: the mark, arrived. Not a faster orbit — <b>no orbit</b>. It is the same markup
+       with the animation switched off, which is possible only because the reveal's last frame is the
+       identity transform: there is no position to restore, because the electron never left the DOM's.</p>
+    <div class="ladder settled">
+      <div class="rung"><div class="cell" style="--qmark-size:16px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">16</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:32px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">32</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:120px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">120</div></div>
+      <div class="rung"><div class="cell" style="--qmark-size:240px"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span></div><div class="cap">240</div></div>
+    </div>
+    <div class="note">
+      <b>To see the real path, not this stand-in:</b> turn on <i>Reduce motion</i> (macOS System Settings →
+      Accessibility → Display) and reload. Every mark on this page, including the ladder above, should be
+      settled at (71,71) from the first frame and never move.
+      <ul>
+        <li><b>What is still open, and is not mine:</b> ring thickness, mono luminance and wordmark kerning —
+          brand/BRAND.md §5. They are <code>--qmark-ring-width</code> and <code>--qmark-ink</code>, carrying the
+          lab's current positions. The motion depends on neither: it depends on the ring's radius and the
+          electron's centre, and those were settled on 2026-06-27.</li>
+        <li><b>What the motion costs:</b> one <code>transform</code> on one <code>&lt;g&gt;</code>, inside an
+          <code>&lt;svg&gt;</code> whose box is fixed. No length, margin, font-size or colour animates, so it
+          cannot move anything on the page it lands in — including a reading row.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- WHERE IT GOES -->
+  <section>
+    <div class="sh">05 · where it goes</div>
+    <h2>The app's menu bar, before and after</h2>
+    <p class="sd">The app's bar carries <b>the brand device</b> — 8px of the declared green — beside the
+       wordmark. The icon mark is what BRAND.md §2 calls "the main gap", and this is the swap: the dot
+       becomes the Q, at the component's default <b>1.5rem</b>, which is also the smallest size at which the
+       reveal is worth running. <b>Not applied</b> — app/index.html is being changed by someone else — so what
+       is below is the bar rebuilt from its own tokens, and the wiring is named rather than done.</p>
+    <div class="inline-cases">
+      <div class="barmock"><span class="bar-mark"><span class="bar-dot"></span><span class="bar-word">qntm</span></span><span class="bar-where"><span class="bar-folder">dev</span><span class="bar-view">flow-trace</span></span><span class="barbtn">Views</span></div>
+      <div class="barmock" style="--qmark-size:1.5rem"><span class="bar-mark"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span><span class="bar-word">qntm</span></span><span class="bar-where"><span class="bar-folder">dev</span><span class="bar-view">flow-trace</span></span><span class="barbtn">Views</span></div>
+    </div>
+    <div class="note">
+      <b>The wiring, exactly.</b> Two lines in <code>app/index.html</code>, and nothing else — no change to
+      that page's <code>&lt;style&gt;</code> block, so the row geometry it spent a day proving is untouched:
+      <pre>in &lt;head&gt;, beside the favicon links:
+  &lt;link rel="stylesheet" href="/app/mark/qmark.css" /&gt;
+
+in .bar-mark, replacing &lt;span class="bar-dot"&gt;&lt;/span&gt;:
+  the one line of app/mark/qmark.html, verbatim</pre>
+      The stylesheet is <b>linked, not pasted</b>: the mark's rules stay out of the page's one
+      <code>&lt;style&gt;</code> block, which is the block <code>tests/app-view-rows.test.mjs</code> reads. The
+      mark's <code>@container</code> query therefore never meets that suite's CSS reader, which understands
+      <code>@media</code> and refuses anything else by name.
+    </div>
+  </section>
+
+  <footer>qntm · design dept — the Q-mark in motion · the mark itself is app/mark/, the dials are qmark-lab.html</footer>
+</main>
+
+<script>
+  /* REPLAY. The reveal fires when the element is inserted, which happens once per document load —
+     so a lab page that wants to watch it twice has to re-insert the animation, which is what
+     clearing and restoring `animation` does (the forced reflow between the two is what stops the
+     browser coalescing them into no change at all). This is the ONLY script on the page, and it is
+     the lab's, not the mark's: the component itself runs no JavaScript at all. */
+  document.getElementById('replay').addEventListener('click', () => {
+    document.querySelectorAll('.ladder:not(.settled) .qmark-orbit').forEach((orbit) => {
+      orbit.style.animation = 'none';
+      void orbit.getBoundingClientRect();
+      orbit.style.animation = '';
+    });
+  });
+</script>
+</body>
+</html>

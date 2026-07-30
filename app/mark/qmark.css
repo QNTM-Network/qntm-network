@@ -1,0 +1,177 @@
+/* ══ THE Q-MARK ═════════════════════════════════════════════════════════════════════════════
+   The icon mark, and its one piece of motion: the electron travels the ring on load and settles
+   at the tail.
+
+   MOUNTING IT is two lines and no build step:
+
+     <link rel="stylesheet" href="/app/mark/qmark.css" />        in <head>
+     …the one line of app/mark/qmark.html…                       where the mark goes
+
+   Inline SVG, one stylesheet, no font, no CDN, no library, no JavaScript. A logo that needs a
+   script is a logo that is absent for a frame, and a logo that needs a fetch is a logo that can
+   404; this one is in the document at first paint and animates itself.
+
+   SIZE AND INK ARE THE HOST'S. `--qmark-size` is the only thing a host must set. `--qmark-ink`
+   and `--qmark-ring-width` carry brand/qmark-lab.html's CURRENT dial positions (`--mc: #e9eee9`,
+   `--thick: 4`, and the electron's `--er: 8` as the `r` attribute in the markup) because
+   brand/BRAND.md §5 still has thickness and mono luminance OPEN — they are the operator's and
+   his advisor's to settle, and when they are, they are three values in one file, not a redesign.
+   The motion depends on NEITHER of them: it depends on the ring's RADIUS and the electron's
+   CENTRE, and both of those were settled on 2026-06-27.
+
+   ── THE MOTION ────────────────────────────────────────────────────────────────────────────────
+
+   One and a half revolutions, clockwise, in `--motion-reveal` on `--ease`, arriving at the tail.
+   Both tokens are docs/implementation-artifacts/research-polish-direction.md §6 ("the tokens"):
+   700ms, and `ease`, the sheet's declared default curve. Nothing here is a fresh number except
+   the 540°, and the 540° is geometry.
+
+   540° AND NOT 360°, 720° OR 405°. A whole number of turns would have to START at the tail,
+   which is the one place the electron must not start if the motion is to say anything; 540°
+   starts it at the ANTIPODE of the tail — (29,29), the far corner, the furthest a point on this
+   ring can be from where it is going — and gives it a full lap plus the half that carries it
+   home. 405° (a lap and an eighth) starts it at 3 o'clock, which is a nudge, not an orbit.
+
+   ── WHY NOT `--ease-reveal`, WHICH IS WHAT THIS WAS FIRST WRITTEN WITH ────────────────────────
+
+   The obvious choice was the OTHER declared curve, `--ease-reveal: cubic-bezier(0.2, 0.7, 0.2, 1)`
+   — it is what the landing's creed reveal runs on and this is a reveal. Measured in the browser,
+   at 60Hz, it is wrong for THIS motion, and the measurement is worth keeping because it is not a
+   matter of taste:
+
+     THE RULER. Divide how far the electron travels in one frame by its own DIAMETER. Above 1.0
+     the successive positions do not touch and the eye sees a ring of separate dots strobing;
+     around 0.7 they overlap into one continuous arc. The ratio is SCALE-INVARIANT — it is
+     (Δangle × 29.698) / 16 in user units — so one number settles it for 16px and 240px at once.
+
+       540° / 700ms / --ease-reveal   peak 1.52 diameters/frame   71% of the sweep in the first ¼
+       540° / 1400ms / --ease-reveal  peak 0.76                   73% in the first ¼
+       540° / 700ms / --ease          peak 0.95                   38% in the first ¼, 4% in the last
+       540° / 700ms / ease-out        peak 0.70                   36% in the first ¼
+
+     `--ease-reveal` opens at ~3.5× its average speed. Over the 18px translate it was written for
+     that is a snap; over 540° it puts SEVENTY-ONE PERCENT of the journey inside the first 175ms,
+     which is not an orbit you watch, it is a flicker followed by a crawl — and doubling the
+     duration does not fix it, because the shape is what is wrong, not the speed (73% either way).
+
+   `--ease` at 700ms holds the peak at 0.95 diameters per frame: successive positions touch, so
+   the sweep is a continuous chain and never a row of gaps, and on the 120Hz display the operator
+   actually uses it halves to 0.48. It leaves 4% of the sweep for the last quarter of the time,
+   which is the part you can watch the electron place itself. `ease-out` measures better still
+   (0.70) and was rejected anyway: it is not one of the declared tokens, and buying 0.25 of a
+   diameter with a curve nobody else on the site uses is how a sheet ends up with six easings.
+
+   IT SETTLES. No idle orbit, no idle pulse. Rejected, in order: a permanent slow orbit — a mark
+   that never stops moving is a spinner, and a spinner means "loading", so the logo would be
+   lying about the app's state forever; the brand device's 2.6s pulse on the electron — that is
+   the DOT's declared behaviour (BRAND.md §2, research-polish-direction §6), borrowing it here
+   would quietly decide the mono-luminance dial that is not mine to decide, and at 16px a pulsing
+   electron is a flicker in a browser tab.
+
+   THE RING IS SIMPLY THERE. Rejected: drawing it in on a `stroke-dashoffset`. It would leave the
+   mark BROKEN for the whole of the reveal — an incomplete circle in a tab strip is not a logo
+   arriving, it is a logo failing to load — and the ring is the orbit's PATH: take it away and
+   the electron is not orbiting anything, it is just a dot going round.
+
+   WHEN IT FIRES, AND WHEN IT DOES NOT. It is a CSS animation on an element, so it fires when the
+   element is inserted, which in the app means once per document load. It does NOT fire on a view
+   change, a drawer open, a repaint, a focus change or a re-render, because none of those replace
+   the bar — the app is one document and the mark outlives every one of them. It does not fire
+   under `prefers-reduced-motion`. It does not fire below 20px, where it is a flicker rather than
+   an orbit (see the block at the bottom, and the note in brand/qmark-motion.html).
+
+   IT CANNOT COST LAYOUT. The only animated property is `transform`, on a <g> INSIDE an <svg>
+   whose box is fixed by `--qmark-size` — so the animation cannot change the size of the element
+   the page laid out, let alone anything below it. Nothing here transitions or animates a length,
+   a margin, a font-size or a colour. tests/qmark-mark.test.mjs holds that as a property of this
+   file rather than as a promise in this comment. */
+
+/* THE DEFAULTS ARE FALLBACKS AT THE POINT OF USE, NOT DECLARATIONS ON `.qmark`, and the
+   difference is the whole of whether a host can set them. A custom property declared on `.qmark`
+   would out-rank the same property inherited from the element the mark sits in, so
+   `<div style="--qmark-size: 16px">` would do nothing and every host would be reduced to setting
+   the token on the mark itself — inside the one line of markup that is supposed to be the same
+   line everywhere. As `var(--x, default)` the token inherits, so a host sizes the mark by sizing
+   whatever it puts it in, and the markup never changes.
+
+   `--qmark-size` is the only thing a host must set. `--qmark-ink` and `--qmark-ring-width` carry
+   brand/qmark-lab.html's current dials and are open questions, held as tokens, not decided here. */
+.qmark {
+  display: inline-block;
+  vertical-align: middle;
+  inline-size: var(--qmark-size, 1.5rem);
+  block-size: var(--qmark-size, 1.5rem);
+  flex: none;
+}
+
+.qmark-svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+/* MONO. brand/BRAND.md 2026-06-27: "Treatment is MONO (ring and electron one colour)." One
+   token, named once, worn by both — which is what makes it structurally impossible for the ring
+   and the electron to drift into two colours. */
+.qmark-ring {
+  fill: none;
+  stroke: var(--qmark-ink, #e9eee9);
+  stroke-width: var(--qmark-ring-width, 4);
+}
+.qmark-electron { fill: var(--qmark-ink, #e9eee9); }
+
+/* THE ORBIT. A rotation of the electron's group about the ring's centre — `transform-box:
+   view-box` makes `50% 50%` the centre of the 100-unit box, which is (50,50), which is the
+   ring's own centre, so the electron travels the ring exactly and no other path. */
+.qmark-orbit {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  /* NO `fill`. A forwards fill would leave `transform: rotate(0deg)` on the group for the rest of
+     the document's life — an identity transform, but a transform, and the claim this component
+     makes is that the settled mark is the MARKUP with nothing applied to it. Ending the animation
+     has to be the same thing as never having run one, or `prefers-reduced-motion` below is not the
+     same mark as the one everyone else ends up looking at. There is no delay, so there is nothing
+     a backwards fill would have covered either. */
+  animation: qmark-orbit var(--motion-reveal, 700ms) var(--ease, ease);
+}
+
+@keyframes qmark-orbit {
+  /* -540° from the tail is the tail's antipode: (29,29). Clockwise from there — a lap, then the
+     half that arrives. */
+  from { transform: rotate(-540deg); }
+  /* The identity transform, which is the markup, which is (71,71). There is nothing for the
+     animation to land ON: it lands by ending. */
+  to   { transform: rotate(0deg); }
+}
+
+/* ══ ASKED NOT TO MOVE ═══════════════════════════════════════════════════════════════════════
+   The settled mark, immediately — not a faster orbit. This is one declaration and not a
+   restoration of any position, because the animation's end state is the markup's own. */
+@media (prefers-reduced-motion: reduce) {
+  .qmark-orbit { animation: none; }
+}
+
+/* ══ TOO SMALL TO ORBIT ══════════════════════════════════════════════════════════════════════
+   AT AND BELOW 20px THE ORBIT DOES NOT RUN, AND THAT IS AN OBSERVATION RATHER THAN A POLICY.
+
+   The electron is 16 of the box's 100 units across, so it renders at 16% of the mark: 3.84px at
+   24px, 3.2px at 20px, 2.56px at 16px. Watched in Chrome at each of them, on a 2× display, at
+   24px the electron is a distinct point moving round a ring; at 20px that is marginal; at 16px
+   it is not an orbit at all — the dot is barely separable from the stroke it is travelling on,
+   and what you see for 700ms is the MARK WOBBLING. A logo that wobbles in a browser tab has
+   failed at the job brand/BRAND.md §3 gives it.
+
+   So the orbit is shipped for the sizes where an orbit can be seen, and at favicon size the
+   settled Q is simply there from the first frame. Note what this costs the mark: nothing. Same
+   markup, same geometry, same ink, same one line — only the motion is gated. (A menu bar wanting
+   the reveal therefore has to give the mark at least 24px, which is also about the size at which
+   a Q reads next to a 12.5px wordmark. The component's default, 1.5rem, is 24px.)
+
+   This is a CONTAINER query and not a media query on purpose: the thing that decides is how big
+   THE MARK is, which has nothing to do with how big the viewport is. A 16px mark in the corner of
+   a 27" display is still a 16px mark. */
+.qmark { container-type: size; container-name: qmark; }
+@container qmark (max-width: 20px) {
+  .qmark-orbit { animation: none; }
+}

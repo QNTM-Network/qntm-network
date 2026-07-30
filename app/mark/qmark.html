@@ -1,0 +1,24 @@
+<!-- THE Q-MARK, AS ONE LINE OF MARKUP.
+
+     This file is the mark's markup and the ONLY copy of it. Every page that shows the mark
+     contains this exact <span>, and tests/qmark-mark.test.mjs fails if any of them drifts from
+     it — the same shape as the committed-bundle staleness check in .github/workflows/build.yml,
+     for the same reason: a thing copied into two places is a thing that becomes two things.
+
+     THE GEOMETRY IS READ OFF THE LAB, NOT CHOSEN HERE. brand/qmark-lab.html:134 is
+     `<circle class="ring" cx="50" cy="50" r="30"/><circle class="electron" cx="71" cy="71"/>`,
+     and brand/BRAND.md's 2026-06-27 DIRECTION CONFIRMED settles the mark as ring + electron,
+     mono. (71,71) is the tail — 21√2 = 29.698 from the centre, essentially on the r=30 ring, at
+     45° down-right — and it is the tail position that makes this read as a Q rather than an O.
+     The three dials still open in BRAND.md §5 (ring thickness, mono luminance, wordmark kerning)
+     are NOT settled here: thickness and luminance are custom properties in qmark.css carrying the
+     lab's current positions, and the kerning belongs to the wordmark, which this is not.
+
+     WHY THE ELECTRON SITS INSIDE A <g>. The orbit is a rotation of that group about the ring's
+     centre, and it ends at `rotate(0deg)` — no transform at all. So the settled mark IS this
+     markup, unanimated: the animation cannot leave the electron anywhere but (71,71), because
+     (71,71) is where the DOM puts it and the animation's last frame is the identity transform.
+     That is also why `prefers-reduced-motion` needs nothing but `animation: none`.
+
+     Needs app/mark/qmark.css. See its header for the motion and for how to mount this. -->
+<span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span>

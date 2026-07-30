@@ -87,6 +87,17 @@ filter) is the signature — strongest on black.
   **thickness** (bold↔hairline), (2) **mono luminance** grey → white → glow-white (radiance), (3)
   naturalised **kerning** on the mono wordmark (mono normally doesn't kern; we borrow the feel via
   letter-spacing). Next: read off the chosen values from the lab and log them here, then it's THE mark.
+- 2026-07-30 — **The mark moves.** The confirmed Q now exists as a component — `app/mark/qmark.html`
+  (one line of inline SVG) + `app/mark/qmark.css` (its own sheet; no script, no fetch, no library) —
+  with the electron travelling the ring on load and settling at the tail: 1.5 revolutions clockwise,
+  700ms, on the site's declared `--ease`, starting from the tail's antipode. That is **orbit**, which
+  §2 already declares as ours; no new motion was invented. **None of the three open dials was
+  touched** — ring thickness and mono luminance are custom properties carrying the lab's current
+  values, and the motion depends on neither of them (only on the ring's radius and the electron's
+  centre, both settled above). Watch it at every size in **`qmark-motion.html`**. At and below 20px
+  the reveal does not run: the electron is 2.56px at favicon size, and what you see there is the mark
+  wobbling rather than an orbit, so small sizes render the settled Q — same markup, same geometry.
+  Still NOT wired into the app; the wiring is two lines, named at the foot of that page.
 
 ## 5. Open questions
 
