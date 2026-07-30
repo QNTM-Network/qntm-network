@@ -15,6 +15,13 @@
   :root {
     --bg: #07080a; --ink: #eef1f4; --dim: #8b93a1; --line: #1b1f26;
     --glow: #7cc7ff; --accent: #cfe8ff;
+    /* THE DECLARED GREEN. brand/BRAND.md section 2: "Colour system: green #3ff07f · black #0a0b0a
+       · white #e6ebe6", with the glowing green point named as the brand device. This page is the
+       half of the product that does not follow that palette yet — its blue is the "two styles, one
+       unintended" the operator saw, and unifying them is its own wave, deliberately NOT attempted
+       here. What IS here is that the two things already drawn in the identity's green — the tag
+       chip and the cursor — name it once between them rather than twice. */
+    --green: #3ff07f; --green-hairline: rgba(63, 240, 127, .32);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -85,34 +92,87 @@
   }
   select:focus { border-color: var(--glow); box-shadow: 0 0 24px rgba(124,199,255,.15); }
   #freshness { margin: 0 0 1.1rem; }
-  .viewbody { overflow-x: auto; }
-  .viewbody h1, .viewbody h2, .viewbody h3 { font-weight: 600; line-height: 1.25; }
-  .viewbody h2 { font-size: 1.05rem; margin: 1.4rem 0 .5rem; color: var(--accent); }
-  .viewbody h3 { font-size: .92rem; margin: 1.1rem 0 .4rem; color: var(--dim); }
-  .viewbody ul { padding-left: 1.2rem; margin: .3rem 0; }
-  .viewbody li { margin: .18rem 0; }
+  /* ── THE READING COLUMN: ONE ROW GEOMETRY, TWO RENDITIONS ──────────────────────────────────
+     Every line of a view is one ROW, and a row is `--row` tall whichever way the line is being
+     shown — the app's rendition of it, or its verbatim source in an <input> once the cursor
+     arrives. That equality is the whole fix for "if I click to edit it jumps around": the painter
+     repaints the WHOLE view on every focus change (app/present/paint.ts), deliberately and
+     correctly, so the only place the jump can be stopped is here, by making the two renditions
+     occupy the same box.
+
+     WHY THE GEOMETRY IS STATED ONCE AND NEVER PER KIND. The <input> the painter appends carries
+     one class, `rawline`, and nothing that says which kind of line it replaced — and its text is
+     set as a PROPERTY, so there is no `value` attribute for a selector to read either. A box that
+     differs per kind is therefore a box the raw rendition cannot match. So the row height, the
+     line box and the vertical rhythm are written once, for every child of .viewbody, and headings
+     rank by SIZE and COLOUR rather than by the whitespace around them.
+
+     WHAT THIS DOES NOT REACH: a line whose rendition WRAPS. A wrapped paragraph is two rows, an
+     <input> cannot hold a second one, and no rule here can make it. That case needs the painter. */
+  .viewbody {
+    --row: 1.5rem;       /* one line of a view, in either rendition — the body's own line box */
+    --row-gap: .5rem;    /* the space BETWEEN lines — the column's, never any one line's */
+    --box-gap: .5rem;    /* checkbox to words, sized so the words barely move when the source shows */
+    overflow-x: auto;
+    line-height: var(--row);
+  }
+  /* No line owns its own vertical space. A margin on a heading is a margin the <input> that
+     replaces it does not have, and that difference IS the jump. */
+  .viewbody > * { margin: 0; min-height: var(--row); }
+  .viewbody > * + * { margin-top: var(--row-gap); }
+  /* A prose line is painted as its own one-line markdown document, so markdown-it's block margins
+     land INSIDE the row. Zeroed, with the row's own box holding the space; `flow-root` stops those
+     inner margins collapsing out through the line and becoming rhythm the column never asked for. */
+  .viewbody > div { display: flow-root; }
+  .viewbody p, .viewbody ul, .viewbody ol, .viewbody li, .viewbody blockquote, .viewbody pre { margin: 0; }
+  /* The bullet sits where the source's `-` sits, so a list line does not slide sideways when its
+     source appears. */
+  .viewbody ul, .viewbody ol { padding-left: 0; list-style-position: inside; }
+
+  /* THE HEADING LADDER. A view's `#` is the page's <h2> — the page owns the <h1> — so `##` becomes
+     an <h3> and `###` an <h4>. That demotion is the painter's and it is right. What was missing was
+     any rule below <h3>: `####` fell through to the browser default, which is BOLDER and LARGER
+     than the <h3> above it, so `## Today` ranked BELOW `### Later`. The whole demoted range is
+     stated here, strictly decreasing, and tests/app-view-rows.test.mjs keeps it that way.
+     There is no `.viewbody h1` rule because there can be no <h1>: the painter clamps to 2..6. */
+  .viewbody h2, .viewbody h3, .viewbody h4, .viewbody h5, .viewbody h6 {
+    font-weight: 600; line-height: var(--row);
+  }
+  .viewbody h2 { font-size: 1.05rem; color: var(--accent); }
+  .viewbody h3 { font-size: .95rem; color: var(--dim); }
+  .viewbody h4 { font-size: .86rem; color: var(--dim); }
+  .viewbody h5 { font-size: .78rem; color: var(--dim); }
+  .viewbody h6 { font-size: .72rem; color: var(--dim); }
+
   .viewbody a { color: var(--glow); }
   .viewbody code { background: #0c0f14; border: 1px solid var(--line); border-radius: 6px; padding: .05rem .35rem; font-size: .85em; }
   .viewbody table { border-collapse: collapse; width: 100%; font-size: .9rem; }
   .viewbody th, .viewbody td { border: 1px solid var(--line); padding: .35rem .55rem; text-align: left; }
-  .viewbody hr { border: 0; border-top: 1px solid var(--line); margin: 1.2rem 0; }
-  .viewbody .task { display: flex; gap: .55rem; align-items: flex-start; padding: .18rem 0; cursor: pointer; }
-  .viewbody .task input { flex: none; margin-top: .28rem; width: 16px; height: 16px; accent-color: var(--glow); cursor: pointer; }
+  /* Centred in its row, so a rule is one line like every other line. */
+  .viewbody hr { border: 0; border-top: 1px solid var(--line); margin: calc((var(--row) - 1px) / 2) 0; }
+
+  .viewbody .task { display: flex; gap: var(--box-gap); align-items: flex-start; padding: 0; cursor: pointer; }
+  .viewbody .task input { flex: none; width: 1rem; height: 1rem; margin-top: calc((var(--row) - 1rem) / 2); accent-color: var(--glow); cursor: pointer; }
   .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task.syncing { opacity: .5; }
-  .viewbody .task span { flex: 1; }
-  /* THE FOCUSED LINE. It is a real <input> holding the line's verbatim source, so it is styled to
-     read as the line it replaced rather than as a form control — the cursor arrives, the
-     characters appear, and nothing jumps. */
+  .viewbody .task span { flex: 1; cursor: text; }
+
+  /* THE FOCUSED LINE — the same row, now holding its own source.
+     It is a real <input> because every affordance has to be expressible as an edit to the SOURCE
+     STRING (app/present/paint.ts says why), so it is styled to BE the row rather than to look like
+     a form control: the font of the line it replaced, the height of the row it sits in, no border
+     and no slab of background. What marks it instead is the caret — the identity's electric green,
+     the "glowing point" brand/BRAND.md names as the brand device — and a hairline under the row.
+     Neither costs a pixel of layout, which is the point. No `margin` is set here: the row rhythm
+     above already owns it, and re-stating it would out-specify the gap and reintroduce the jump. */
   .viewbody input.rawline {
-    display: block; width: 100%; padding: .18rem 0; margin: 0;
+    display: block; width: 100%; height: var(--row); padding: 0;
     background: transparent; border: 0; border-radius: 0;
-    font: inherit; color: var(--ink);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    font-size: .92em;
+    font: inherit; line-height: var(--row); color: var(--ink);
+    caret-color: var(--green);
   }
-  .viewbody input.rawline:focus { box-shadow: none; outline: none; background: rgba(124,199,255,.06); }
-  .viewbody .task span { cursor: text; }
+  .viewbody input.rawline:focus { outline: none; box-shadow: inset 0 -1px 0 var(--green-hairline); }
+
   /* THE TAG CHIP — the `wired` rendition of the presentation cascade's `tags` key, and the ONLY
      style this stage adds. Scoped to `.viewbody .tagchip` so it cannot reach anything else on the
      page, and named `tagchip` rather than `tag` because `.tag` is already the hero tagline above.
@@ -120,17 +180,35 @@
      rule only says what a chip looks like once the cascade has said there should be one.
      THE GREEN IS THE DECLARED ONE. #3ff07f, brand/BRAND.md section 2 ("Colour system: green
      #3ff07f · black #0a0b0a · white #e6ebe6") — read from the brand department, not sampled off a
-     screenshot. */
+     screenshot. It is the same green the caret above is, so both name it once.
+
+     `inline-block` AND `line-height: 1` ARE TWO CONSTRAINTS MEETING, and neither may be dropped.
+
+     `inline-block` is the STRIKE-THROUGH's. A `line-through` on `.task.done span` PROPAGATES to
+     every descendant and a descendant cannot refuse it — `text-decoration: none` below simply does
+     not work. What is exempt is an ATOMIC inline, which is what `inline-block` makes the chip. Try
+     `display: inline` and the rule below stops having any effect: the line is drawn straight
+     across the pill, which is the rendering fault that rule exists to prevent. Verified in a
+     browser at 3x, both ways, rather than reasoned about.
+
+     `line-height: 1` is THE ROW's. An atomic inline has to fit in the line box whole, so at the
+     `1.45` this shipped with, a chipped line measured 24.0199px against 23.9986px for the same
+     line without a chip. Tiny, and it is still the jump: a line whose WIRED rendition is taller
+     than its raw form moves everything below it the moment the cursor lands, and it accumulates
+     down a view full of tags. At `1` the chip's own box is its text's content area, which the row
+     already contains by construction, and the pill's shape comes from padding and border — which
+     an inline-block does have to count, so they are kept small deliberately. Measured after: a
+     line with three chips is 23.9986px, the same as a line with none, to four decimal places. */
   .viewbody .tagchip {
     display: inline-block;
-    padding: 0 .42rem;
+    padding: .1em .42rem;
     border-radius: 999px;
     background: rgba(63,240,127,.10);
     border: 1px solid rgba(63,240,127,.30);
-    color: #3ff07f;
+    color: var(--green);
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     font-size: .82em;
-    line-height: 1.45;
+    line-height: 1;
     white-space: nowrap;
     vertical-align: baseline;
   }
