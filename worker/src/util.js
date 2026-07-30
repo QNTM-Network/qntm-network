@@ -27,7 +27,30 @@ export function json(obj, status, origin) {
 }
 
 // WebAuthn relying-party config, derived from the calling origin. The RP ID is the domain
-// the ceremony runs on (where app.html is served) — NOT the Worker's own host.
+// the ceremony runs on (qntm.network, where the app is served from /app/) — NOT the Worker's
+// own host.
+//
+// THE RP ID IS WHY THE APP CAN MOVE AND THE OPERATOR'S PASSKEY CANNOT BE LOST BY MOVING IT.
+// A credential is bound to the RP ID, not to a URL, and WebAuthn L2 section 5.1.3 accepts a
+// ceremony from any origin whose effective domain the RP ID is a "registrable domain suffix of,
+// or is equal to". So:
+//
+//   * /app.html -> /app/ (2026-07-30) is a PATH change on the same origin. Nothing here is
+//     affected, not one line, and the session token in localStorage carries over because
+//     localStorage is scoped to the origin and not to the path.
+//   * app.qntm.network, if the zone ever moves to Cloudflare, WOULD ALSO KEEP THE CREDENTIAL —
+//     `qntm.network` is a registrable domain suffix of `app.qntm.network`, so the existing
+//     passkey authenticates there with no re-enrolment. What it needs is TWO WIDENINGS IN THIS
+//     FILE and nothing else: `app.qntm.network` added to ALLOWED_ORIGINS above, and the
+//     hardcoded `origin` below made a LIST (@simplewebauthn's expectedOrigin accepts an array)
+//     so a ceremony from the subdomain verifies. Do NOT widen rpID to match — narrowing or
+//     widening the RP ID is what actually orphans credentials.
+//
+// That was checked before the move, because the reverse assumption — "a new origin costs him his
+// only passkey" — is what would have made the subdomain a bad trade. It is not what costs it.
+// The subdomain was rejected for a DNS reason (this zone's nameservers are Google Cloud DNS, and
+// GitHub Pages serves one custom domain per site), recorded in
+// docs/architecture/capabilities.yaml#the-app-has-an-address-and-a-way-in.
 export function rpConfig(origin) {
   if (origin && origin.startsWith("http://localhost")) {
     return { rpID: "localhost", origin, rpName: "qntm" };

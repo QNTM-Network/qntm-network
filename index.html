@@ -21,6 +21,15 @@
 <meta name="twitter:description" content="A personal operating system. Building in the open." />
 <meta name="twitter:image" content="https://qntm.network/og.png" />
 
+<!-- The icon set. SVG first (every modern browser prefers it and it stays crisp at any size),
+     .ico as the fallback that also answers the bare /favicon.ico request browsers make on their
+     own, apple-touch-icon for an iOS home-screen bookmark. All three are the glowing green dot —
+     brand/BRAND.md section 2's settled "brand device" — NOT the Q icon mark, which is still open
+     as `settle-the-icon-mark` in the brand member. See favicon.svg for that decision in full. -->
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="/favicon.ico" sizes="32x32" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -105,6 +114,9 @@
     letter-spacing: 0.04em; border: 1px solid var(--line-lit); padding: 0.45rem 0.9rem; border-radius: 6px; transition: all 0.2s;
   }
   .navlink:hover { color: var(--acc); border-color: var(--acc-dim); }
+  /* The top-right cluster. `nav` is space-between with two children, so wrapping the links keeps
+     the brand hard left and the links hard right exactly as when there was one of them. */
+  .navlinks { display: flex; align-items: center; gap: 0.5rem; }
 
   /* hero */
   .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 6rem clamp(1.5rem, 6vw, 7rem) 0; }
@@ -244,6 +256,9 @@
   }
   @media (max-width: 460px) {
     nav .navlink { padding: 0.4rem 0.7rem; font-size: 0.72rem; }
+    /* Two links plus the brand is tight at 360px, so the cluster closes up rather than wrapping
+       onto a second line and pushing the hero down. */
+    .navlinks { gap: 0.35rem; }
     .hero h1 { letter-spacing: -0.02em; }
   }
 </style>
@@ -252,9 +267,22 @@
 <canvas id="graph"></canvas>
 <div class="vignette"></div>
 
+<!--
+  THE WAY IN. Until 2026-07-30 the entire link set on this page was #access, #top and two font
+  URLs — the app and the demo existed and no visitor could reach either.
+
+  Two links, not one, and the ORDER IS THE DECISION: `qntm.network →` stays rightmost because it
+  is the conversion this page is for, and moving it would change the landing page in a change
+  whose claim is that the landing page did not change. `app →` sits immediately beside it, same
+  .navlink treatment, no new styles — the top-right cluster gains a member rather than a new
+  visual language.
+-->
 <nav>
   <div class="brand"><span class="dot"></span>qntm</div>
-  <a class="navlink" href="#access">qntm.network →</a>
+  <div class="navlinks">
+    <a class="navlink" href="/app/">app →</a>
+    <a class="navlink" href="#access">qntm.network →</a>
+  </div>
 </nav>
 
 <div class="wrap">

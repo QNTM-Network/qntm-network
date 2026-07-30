@@ -213,3 +213,34 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [reader-can-toggle-edit-and-view-modes]
+
+  # ── THE APP'S ADDRESS AND THE WAY IN (2026-07-30) ────────────────────────────────────────────
+  #
+  # Every invariant above this line asserts that something RENDERS. None asserted that anything
+  # was REACHABLE, and that gap had a cost: /demo/ and /app.html were live, correct, and linked
+  # from nowhere for the whole life of the site, which a human found by reading the HTML a month
+  # later (research-site-survey.md section 5d). "The page renders" and "a visitor can get to the
+  # page" are different properties. This is the second one.
+
+  - id: state-app-is-reachable-from-the-front-door
+    name: the app has one address, the landing page links to it, and the old address redirects
+    description: |
+      The app is served at qntm.network/app/ (app/index.html), the landing page carries an anchor
+      to /app/ so a visitor reaches it in one click, and the previous address /app.html is a
+      redirect stub rather than a 404.
+
+      THE THIRD CLAUSE IS NOT COURTESY. GitHub Pages serves this repo verbatim from main root with
+      no rewrite rules and no server-side redirect, so a URL keeps working only while a file
+      answers at it. The operator has /app.html bookmarked and uses it. "Tidy up the dead file"
+      is therefore a breaking change, and it is one this predicate refuses rather than one a
+      future session discovers.
+
+      Deterministic over repo artifacts, not a live fetch — see the predicate's docstring for why
+      that trade is made deliberately here and the opposite way in state-served-over-valid-https.
+    check: "app/index.html exists and carries the module script; index.html contains an
+      anchor with href=/app/; app.html exists and points at /app/"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_app_is_reachable_from_the_front_door
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [the-app-has-an-address-and-a-way-in]

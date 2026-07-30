@@ -1,12 +1,16 @@
 /**
- * app.html's own module script, lifted and made importable — the fixture two suites share.
+ * The app page's own module script, lifted and made importable — the fixture two suites share.
  *
- * WHY THIS EXISTS RATHER THAN A COPY OF THE PAGE'S WIRING. app.html is a hand-authored page
- * outside every enforcer this repo has: outside the capture filter, outside tsconfig, outside the
- * bundle. A test that reimplemented its wiring in a fixture would pass forever while the page
- * rotted. So this extracts the page's real `<script type="module">`, swaps ONLY its three import
- * lines (two CDN URLs node cannot fetch, and one relative path that has to become absolute),
- * appends an export block, and runs it. Every line of logic under test is the line that ships.
+ * THE PAGE IS `app/index.html`, served at https://qntm.network/app/. It was `app.html` at the
+ * repo root until 2026-07-30; the old URL is now a redirect stub and is NOT what this reads.
+ *
+ * WHY THIS EXISTS RATHER THAN A COPY OF THE PAGE'S WIRING. The page is hand-authored HTML,
+ * outside every enforcer this repo has: outside the capture filter (node cannot import an HTML
+ * document, so being under `app/` changes nothing), outside tsconfig, outside the bundle. A test
+ * that reimplemented its wiring in a fixture would pass forever while the page rotted. So this
+ * extracts the page's real `<script type="module">`, swaps ONLY its three import lines (two CDN
+ * URLs node cannot fetch, and one site-absolute path that has to become a file URL), appends an
+ * export block, and runs it. Every line of logic under test is the line that ships.
  *
  * IT LIVES HERE, IN ONE FILE, BECAUSE THERE ARE NOW TWO SUITES THAT NEED IT — the write path
  * (tests/app-html-write-path.test.mjs) and the served GLOBAL declaration
@@ -28,14 +32,14 @@ export const REPO = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
  * Returns the path. The caller owns the directory and removes it.
  */
 export function extractPageScript(workDir) {
-  const html = readFileSync(join(REPO, "app.html"), "utf8");
+  const html = readFileSync(join(REPO, "app", "index.html"), "utf8");
   const match = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
-  assert.ok(match, "app.html no longer contains a module script");
+  assert.ok(match, "app/index.html no longer contains a module script");
   let source = match[1];
 
   const swapped = [];
   const swap = (pattern, replacement, label) => {
-    assert.ok(pattern.test(source), `app.html no longer imports ${label}`);
+    assert.ok(pattern.test(source), `app/index.html no longer imports ${label}`);
     source = source.replace(pattern, replacement);
     swapped.push(label);
   };
@@ -54,13 +58,15 @@ export function extractPageScript(workDir) {
     `import MarkdownIt from ${JSON.stringify(import.meta.resolve("markdown-it"))};`,
     "markdown-it",
   );
-  // 3. The presentation bundle — a repo-relative path that has to become absolute once the
-  //    script is written somewhere else. THE BUNDLE ITSELF IS NOT SUBSTITUTED: this is the same
-  //    dist/present.js the browser loads.
+  // 3. The presentation bundle — a SITE-root-absolute path ("/dist/present.js", because the page
+  //    is served at /app/) that has to become a FILE url once the script is written to a temp
+  //    dir. THE BUNDLE ITSELF IS NOT SUBSTITUTED: this is the same dist/present.js the browser
+  //    loads. The leading `/` is asserted, not tolerated — a page that went back to a relative
+  //    "./dist/present.js" would 404 at /app/ in a browser and this swap fails instead.
   swap(
-    /"\.\/dist\/present\.js"/,
+    /"\/dist\/present\.js"/,
     JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href),
-    "./dist/present.js",
+    "/dist/present.js",
   );
 
   assert.equal(swapped.length, 3, "unexpected number of import swaps");

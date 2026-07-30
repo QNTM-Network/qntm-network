@@ -2,7 +2,7 @@
  * The app build — TWO committed bundles, one per page.
  *
  *   app/boot.ts    -> demo/app.js   (+ demo/app.css)   the demo page
- *   app/present/   -> dist/present.js                  the presentation cascade, for app.html
+ *   app/present/   -> dist/present.js                  the presentation cascade, for app/index.html
  *
  * Output is COMMITTED, because GitHub Pages serves this repo from main:/ with no build of its
  * own. The obvious hazard of a committed build artifact is that it drifts from source when
@@ -29,7 +29,9 @@ await build({
 });
 
 /**
- * The presentation bundle. `app.html` imports this instead of hand-rolling a painter.
+ * The presentation bundle. `app/index.html` (served at /app/) imports this instead of hand-rolling
+ * a painter — as `/dist/present.js`, site-root-absolute, because a relative path would resolve
+ * under /app/ and 404.
  *
  * NOT MINIFIED, and that is a decision rather than an oversight. This bundle is the artifact the
  * node tests import — the golden comparison and the routing falsifier both run against the file
@@ -38,7 +40,7 @@ await build({
  * is ~4kB of a page that already pulls two libraries off a CDN. Legibility is worth more here
  * than the bytes.
  *
- * There is no CSS entry: the presentation cascade paints into classes app.html already styles
+ * There is no CSS entry: the presentation cascade paints into classes app/index.html already styles
  * (`.task`, `.viewbody h2`…), and inventing a second stylesheet would be a change to how the app
  * LOOKS in a change whose whole claim is that nothing about how it looks changed.
  */

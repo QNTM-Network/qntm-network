@@ -422,3 +422,62 @@ def assert_edits_are_ephemeral(state: ScenarioState) -> PredicateResult:
         message=f"no persistence API in {len(sources)} app source(s) — edits are memory-only, lost on refresh as declared",
         observed_ref="app/",
     )
+
+
+def assert_app_is_reachable_from_the_front_door(state: ScenarioState) -> PredicateResult:
+    """The app has ONE address, a visitor can reach it in one click, and the old URL still answers.
+
+    Three assertions of one claim, and none of the three is sufficient alone:
+
+      1. THE APP IS AT /app/ — app/index.html exists and carries the module script that IS the
+         app. Without this the link points at a 404.
+      2. THE LANDING PAGE LINKS TO IT — index.html contains an anchor whose href is /app/. This
+         is the one that rots: it was absent for the whole life of the site until 2026-07-30, and
+         nothing noticed, because "the page renders" and "the page is a way in" are different
+         properties and only the first was ever asserted. The survey found it by reading the HTML
+         a month later; this predicate finds it on the next push.
+      3. THE OLD URL STILL ANSWERS — app.html at the repo root redirects to /app/. GitHub Pages
+         serves this repo verbatim with no rewrite rules, so an address keeps working only while
+         a file sits at it. The operator has /app.html bookmarked. Deleting the stub is a 404 for
+         him, and that must be a red test rather than a discovery.
+
+    Scoped to what is IN THE REPO, deliberately. A live fetch would be the stronger check and it
+    is also the one that returns nothing useful from a train — state-served-over-valid-https
+    already carries that trade-off and degrades to INFO offline. This one is fully deterministic,
+    so it can gate.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    problems = []
+
+    page = root / "app" / "index.html"
+    page_html = _read(page)
+    if not page_html:
+        problems.append("no app/index.html — the app has no address at /app/")
+    elif '<script type="module">' not in page_html:
+        problems.append("app/index.html carries no module script — it is not the app")
+
+    landing = _read(root / "index.html")
+    if not landing:
+        problems.append("no index.html")
+    elif not re.search(r'<a\b[^>]*href="/app/"', landing):
+        problems.append('index.html has no <a href="/app/"> — the app is unreachable from the front door')
+
+    stub = _read(root / "app.html")
+    if not stub:
+        problems.append("no app.html — the previous address 404s (GitHub Pages has no redirect rules)")
+    elif "/app/" not in stub:
+        problems.append("app.html no longer points at /app/ — the previous address is a dead end")
+
+    if problems:
+        return PredicateResult(
+            status="FAIL",
+            message=f"the app is not reachable as declared: {problems}",
+            observed_ref="index.html",
+        )
+    return PredicateResult(
+        status="PASS",
+        message="the app lives at /app/, the landing page links to it in one click, and /app.html redirects there",
+        observed_ref="index.html",
+    )
