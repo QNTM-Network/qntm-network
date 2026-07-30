@@ -155,8 +155,23 @@
 import { startRegistration, startAuthentication } from "https://esm.sh/@simplewebauthn/browser@13";
 import MarkdownIt from "https://esm.sh/markdown-it@14";
 
+// THE PRESENTATION CASCADE. Built from app/present/ by scripts/build.mjs and committed, because
+// Pages serves this repo from main:/ with no build step. This page used to decide how a line was
+// shown, in 36 lines below; it now asks. See docs/implementation-artifacts/design-presentation-
+// cascade.md section 7 for why the code has to live under app/ and not here: `.flow-trace.yaml`
+// includes `app` as a PATH PREFIX, so anything written in this file is outside canonical routing
+// and flow declarations permanently, by construction.
+import { paint, PresentationContext } from "./dist/present.js";
+
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
+
+// EVERY LEVEL IS SILENT TODAY, so every key falls through to DEFAULT and the page paints exactly
+// what it painted before. This is the slot the levels arrive in, one migration stage at a time:
+// GLOBAL at stage 2, MODE at stage 4, USER at stage 5 (from the user record behind the session,
+// never from browser storage), VIEW and STRUCTURAL_NODE at stage 7 once the snapshot envelope
+// carries them. None of those stages changes this page beyond what it puts in here.
+const presentation = new PresentationContext();
 
 const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
   ? "http://localhost:8787"
@@ -229,53 +244,32 @@ let graphData = null;
 
 let currentViewId = null;
 
-// Render a view line-by-line so task lines become real, clickable checkboxes mapped back to their
-// markdown line. Headings render as headings; everything else as inline markdown.
+// Pick the view and hand its source to the painter. THIS PAGE NO LONGER DECIDES ANYTHING ABOUT
+// HOW A LINE IS SHOWN — the task regex, the indent arithmetic, the heading demotion, the
+// blank-line drop and the one-line-per-document fallback all moved to app/present/, unchanged.
+// What is left here is what this page is actually for: finding the view, and posting the file.
 function paintView(id) {
   currentViewId = id;
   const v = graphData?.snapshot?.views.find((x) => x.id === id);
   const body = $("viewBody");
   body.innerHTML = "";
   if (!v) return;
-  v.markdown.split("\n").forEach((line, i) => {
-    const task = line.match(/^(\s*)- \[( |x|X)\] (.*)$/);
-    if (task) {
-      const done = task[2].toLowerCase() === "x";
-      const row = document.createElement("label");
-      row.className = "task" + (done ? " done" : "");
-      row.style.marginLeft = (task[1].length / 2) * 1.2 + "rem";
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = done;
-      box.addEventListener("change", () => toggleTask(v, i, box, row));
-      const span = document.createElement("span");
-      span.innerHTML = md.renderInline(task[3]);
-      row.append(box, span);
-      body.append(row);
-      return;
-    }
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) {
-      const el = document.createElement("h" + Math.min(h[1].length + 1, 6));
-      el.innerHTML = md.renderInline(h[2]);
-      body.append(el);
-      return;
-    }
-    if (line.trim() === "") return;
-    const div = document.createElement("div");
-    div.innerHTML = md.render(line);
-    body.append(div);
+  paint(body, v.markdown, presentation, {
+    markdown: md,
+    onCheckboxToggle: (toggle) => toggleTask(v, toggle),
   });
 }
 
-// Tick/untick a task: flip the line, POST the edited view, let the server cycle, then re-render from
-// the fresh projection. Optimistic — the box shows its new state immediately; reverts on failure.
-async function toggleTask(view, lineIndex, box, row) {
-  const lines = view.markdown.split("\n");
-  const m = lines[lineIndex].match(/^(\s*- \[)[ xX](\] .*)$/);
-  if (!m) return;
-  lines[lineIndex] = m[1] + (box.checked ? "x" : " ") + m[2];
-  const next = lines.join("\n");
+// Tick/untick a task: POST the edited view, let the server cycle, then re-render from the fresh
+// projection. Optimistic — the box shows its new state immediately; reverts on failure.
+//
+// THE EDIT ITSELF IS NOT MADE HERE. `toggle.markdown` is the whole view source with exactly one
+// glyph changed, computed by app/present/source.js#applyEdit, and `null` means the edit did not
+// apply — the same refusal the old inline regex expressed by returning early, with the same
+// consequence: no optimistic UI change and no POST. The DOM is never read to produce it.
+async function toggleTask(view, toggle) {
+  const { box, row, markdown: next } = toggle;
+  if (next === null) return;
   row.classList.toggle("done", box.checked);
   row.classList.add("syncing");
   box.disabled = true;

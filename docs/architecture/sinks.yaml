@@ -12,6 +12,27 @@
 # "hops to the page landing on disk" meant before.
 
 sinks:
+  - id: view-painted
+    sink: app/present/paint:paint
+    description: >
+      the graph view on screen — a view's markdown resolved through the presentation cascade and
+      painted into app.html's #viewBody. ADDED 2026-07-30 with migration stage 1.
+
+      IT IS A SECOND SINK, NOT A REPLACEMENT, and the two are genuinely different terminal
+      effects on two different pages: `document-mounted` is the demo page's editor coming alive,
+      this is the hosted graph becoming legible behind the passkey. Depth to THIS sink reads
+      "how many hops from entry to a view being on screen".
+
+      It could not be declared before today for the reason that governs this whole stage: the
+      painting happened inside app.html, at the repo root, and `.flow-trace.yaml`'s capture
+      filter is a path prefix (`include: [app]`). A sink outside the filter is a sink nothing can
+      measure depth to. Moving the painter under app/ is what made this declarable, and the
+      declaration is here to make that gain visible rather than implied.
+
+      NOT MEASURED YET, and saying so is the point of the sentence: depth-to-sink runs under
+      `flow-trace verify`, which exits 2 in this environment for a reason outside this repo. The
+      sink is declared so the measurement exists the moment the tool does.
+
   - id: document-mounted
     sink: app/main:mount
     description: >

@@ -243,14 +243,21 @@ capabilities:
     EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. It becomes falsifiable at migration
     stage 1, when a painter that decides without routing through the cascade is a detectable
     violation. Not before. See design-presentation-cascade.md sections 2, 3 and 7.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 1 SHIPPED. The paragraph above describes what this
+    repo was, and the sentence it ends on has come true. `paintView` is gone; app/present/ holds
+    six modules; the painter asks `PresentationCascade.resolve` and obeys the answer; the
+    precedence order is owned in one tuple that nothing re-expresses. THE ROSTER IS STILL ONE
+    THING — the checkbox, plus the heading demotion that section 0.1 undercounted — because the
+    stage was an extraction and adding resolutions while moving them would have made
+    "byte-identical" unprovable. Two keys ship, not five: `tags`, `links` and `markers` have no
+    wired rendition until stage 8 and declaring them would be three keys read by nothing.
+    WHAT IS PROVEN, and by what: the painted DOM is byte-identical to the painter it replaced
+    (tests/present-golden.test.mjs runs both, out of the git history, against one markdown-it
+    instance, over a whole-view fixture and a 1,125-case sweep); the painter routes through the
+    cascade and obeys it (tests/present-cascade.test.mjs, mutation-proven both ways). WHAT IS NOT
+    proven: that NO path bypasses. That is canonical routing, and it needs `flow-trace verify`,
+    which exits 2 here for a reason outside this repo.
   tier: foundational
-  rooting: >-
-    isolated FOR NOW, and deliberately temporary. The three classes this capability implies —
-    presentation-resolution, presentation-painting, source-write-back — are SPECIFIED in
-    design-presentation-cascade.md section 7 and are NOT declared in classes.yaml, because
-    their homes do not exist yet and that file's own header says a class whose routing nothing
-    can check is a label rather than governance. They land in the same change as the modules
-    (stage 1), at which point this line is replaced by real class-rooting.
   status: undeclared
 - id: the-focused-line-shows-its-source
   intent: >-
@@ -271,9 +278,13 @@ capabilities:
     the original by exactly that line.
   tier: functional
   rooting: >-
-    isolated FOR NOW — same reason as presentation-is-resolved-not-chosen. This capability
-    roots against presentation-painting and presentation-resolution once stage 1 declares
-    them.
+    isolated STILL, and the reason has changed, which is worth one line. The classes it will
+    root against — presentation-painting, presentation-resolution — EXIST as of 2026-07-30
+    (stage 1). What does not exist is a flow of this capability's own to carry the class
+    binding, because the FOCUS level has no contributor and the app still has no surface for a
+    cursor to land on. Rooting it now would be a class binding on a capability with no code
+    doing its work — a label, which is the thing this file's neighbour warns about. It roots at
+    stage 3, with the focus surface, and that is when the binding will mean something.
   status: undeclared
 - id: every-affordance-writes-back-through-the-source
   intent: >-
@@ -295,11 +306,20 @@ capabilities:
     falsifier lands with migration stage 1. The engine's own `accept ⊇ emit` gates cover the
     checkbox glyph pair, the symmetric-by-construction tags and markers, and the three render
     shapes — but those are the ENGINE's enforcers in the engine's repo. qntm.network has none.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 1 SHIPPED. It is still true and it is no longer
+    unchecked. `applyEdit` (app/present/source) is now the single place an edit is computed, the
+    painter reaches it, and app.html posts what it is handed rather than building a string of its
+    own. The enforcer is `is immune to a corrupted DOM` in tests/present-cascade.test.mjs, which
+    wrecks every rendered element and then uses the affordance, asserting the posted markdown is
+    unaffected. MUTATION-PROVEN, and the mutation is worth recording because of what it revealed:
+    a painter that built the posted markdown out of the rendered DOM passed the byte-identical
+    golden and every other assertion in the suite, and failed only that one. A naive DOM
+    inversion looks correct exactly until the DOM stops matching the source — which is why the
+    test corrupts it deliberately rather than trusting a happy path.
+    Still unenforced in the ONE sense that matters and is not yet closed: nothing proves no OTHER
+    path writes back. That is canonical routing against `source-write-back`, and it needs
+    `flow-trace verify`, which exits 2 here.
   tier: foundational
-  rooting: >-
-    isolated FOR NOW — roots against source-write-back once stage 1 declares it. That class is
-    the structural form of this capability, so the rooting and the enforcer arrive together or
-    neither is worth much.
   status: undeclared
 - id: presentation-resolution-is-user-and-mode-aware
   intent: >-
@@ -320,5 +340,10 @@ capabilities:
     5, each by resolving one fixture twice and asserting the painted DOM differs.
   tier: functional
   rooting: >-
-    isolated FOR NOW — roots against presentation-resolution once stage 1 declares it.
+    isolated STILL. `presentation-resolution` exists as of 2026-07-30 (stage 1) and USER and
+    MODE are real members of the level enum it walks — a test can already resolve twice with
+    different contributions and get different answers. What does not exist is anything that
+    CONTRIBUTES at either level: no user record field, no session mode. Rooting a capability
+    whose levels nothing populates would describe a path no code takes. It roots at stages 4
+    and 5, each of which ships a contributor and a test that reads it back.
   status: undeclared

@@ -33,19 +33,27 @@ jobs:
       - name: typecheck (tsc --noEmit, strict)
         run: npm run typecheck
 
-      # scripts/graph-sync.mjs is the one thing in this repo that can destroy something the
-      # operator cannot get back, and its two guards are the only reason it cannot. Nothing else
-      # in CI looks at it, so a regression here would ship silently. Runs against a throwaway
-      # vault and throwaway git repos under the runner's temp dir — never a real vault.
-      - name: graph-sync guards
-        run: npm test
-
-      - name: build the app bundle
+      # BUILD BEFORE TEST, deliberately. The presentation tests import dist/present.js — the
+      # committed artifact, not the sources — because the artifact is what the browser loads and
+      # a green against sources the browser never sees is a green about the wrong thing. Building
+      # first means they run against THIS commit's bundle rather than the last one committed.
+      - name: build the app bundles
         run: npm run build
 
-      - name: fail if the committed bundle is stale
+      # Two suites, both node --test, both hermetic:
+      #   graph-sync guards      — scripts/graph-sync.mjs is the one thing in this repo that can
+      #                            destroy something the operator cannot get back, and its two
+      #                            guards are the only reason it cannot. Runs against a throwaway
+      #                            vault and throwaway git repos under the runner's temp dir.
+      #   presentation           — the painted DOM is byte-identical to the hand-rolled painter
+      #                            this replaced, the painter routes through the cascade, and
+      #                            every affordance is a source-string edit (never a DOM read).
+      - name: tests (graph-sync guards + presentation)
+        run: npm test
+
+      - name: fail if a committed bundle is stale
         run: |
-          if ! git diff --exit-code -- demo/; then
-            echo "::error::demo/ is out of date with app/ — run 'npm run build' and commit the result."
+          if ! git diff --exit-code -- demo/ dist/; then
+            echo "::error::demo/ or dist/ is out of date with app/ — run 'npm run build' and commit the result."
             exit 1
           fi

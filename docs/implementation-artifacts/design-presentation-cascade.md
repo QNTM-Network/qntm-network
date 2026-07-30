@@ -502,6 +502,22 @@ uses) asserting the painter routes through the cascade — plus a golden test th
 for a known view is unchanged from today.
 **Blocks:** every later stage. **Nothing else may ship first.**
 
+> **SHIPPED 2026-07-30**, branch `feat/present-one-reader-one-home`. `app/present/` holds
+> `levels`, `resolution`, `cascade`, `context`, `paint`, `source` and an `index` barrel;
+> `app.html` imports `dist/present.js`; the three classes, five expected flows, two forbidden
+> flows and one new sink (`view-painted`) landed in the same change. Byte-identity is a
+> comparison, not a claim — `tests/present-golden.test.mjs` runs the old `paintView`, lifted
+> verbatim out of `64c3a87`, beside the new painter against one shared markdown-it, over a
+> whole-view fixture, 25 named edge cases and a 1,125-case sweep. The falsifiers are
+> `tests/present-cascade.test.mjs` and `tests/app-html-write-path.test.mjs`, mutation-proven six
+> ways. **Two departures, both argued in the source:** `Resolution` ships TWO keys, not §2.3's
+> five (`tags`/`links`/`markers` have no reader until stage 8, and §9's own rule forbids
+> declaring a key nothing reads); and `heading` is a resolved family, correcting §0.1 — "the
+> single resolution the app performs is the checkbox" is true of the inline tail, not of the
+> line, since `## Work` became an `<h3>`. **Not done and not claimable:** canonical routing,
+> depth-to-sink and the flow observations still need `flow-trace verify`, which exits 2 here for
+> the reason §0.6 gives. Stage R is still stage R.
+
 ### Stage 2 — the GLOBAL level, with a reader that provably reads it · **≤1h**
 One declaration — the default `Resolution` — served with the app and consulted by stage 1's
 cascade. Default value = today's behaviour, so nothing changes until it is flipped.

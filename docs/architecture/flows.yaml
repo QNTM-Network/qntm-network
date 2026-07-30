@@ -65,6 +65,75 @@ expected_flows:
     class: editing-session-state
     gates_capabilities: [reader-can-toggle-edit-and-view-modes]
 
+  # ── THE PRESENTATION CASCADE ─────────────────────────────────────────────────────────────
+  # Added 2026-07-30 with migration stage 1, in the same change as the modules and the classes.
+  # Observed by tests/flow_scenarios/present_cascade.ts under the node observer.
+  #
+  # READ THE NEXT SENTENCE BEFORE READING A VERDICT INTO ANY OF THESE FIVE. They are DECLARED and
+  # they are NOT OBSERVED YET, because `flow-trace verify .` exits 2 in this environment — the
+  # TOOL's JS observer has no node_modules, and the fix is `npm ci` in tools/flow-trace/js/, in
+  # the tool's own checkout, which this branch must not touch. The scenario that would observe
+  # them is written and committed and runs correctly when transpiled by hand; what cannot run is
+  # the observer around it. The same five call paths ARE exercised today under `node --test` by
+  # tests/present-cascade.test.mjs, which this repo's CI runs, and each was mutation-proven on
+  # 2026-07-30. Declaring them now rather than waiting is the deliberate choice: a scenario with
+  # no declarations to measure would be the mirror of the bug this project keeps finding.
+
+  # THE RESOLUTION. The painter asks; it does not decide. This is the edge that makes
+  # `presentation-is-resolved-not-chosen` falsifiable at all — a painter with the decision back
+  # at the call site stops producing it.
+  - id: paint-resolves-through-the-cascade
+    from: app/present/paint
+    to:   app/present/cascade
+    callee: PresentationCascade.resolve
+    event: app.resolves-a-rendition
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
+  # THE FACTS. The cascade reads each level through the context rather than reaching for a
+  # session, a store or a global — which is what lets a test resolve "as if the cursor were here"
+  # without a browser, and what stage 3 depends on.
+  - id: cascade-reads-the-levels-it-was-given
+    from: app/present/cascade
+    to:   app/present/context
+    callee: PresentationContext.at
+    event: app.reads-a-level-contribution
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
+  # SILENCE HAS ONE SPELLING, and the predicate that says so lives with the levels. A second
+  # spelling at a call site is how a cascade acquires a hole nobody can see, so the edge is
+  # declared rather than left as an implementation detail.
+  - id: cascade-asks-the-levels-what-silence-is
+    from: app/present/cascade
+    to:   app/present/levels
+    callee: isSilent
+    event: app.tests-level-silence
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
+  # THE LINE'S OWN CONTENT — the LINE level's input, read in one place instead of by three
+  # regexes at three call sites.
+  - id: paint-classifies-the-line
+    from: app/present/paint
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.classifies-a-source-line
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
+  # THE AFFORDANCE, AS A SOURCE EDIT. The single most important edge in this file. Every write
+  # the app offers is computed here, from the source string, and handed out as a whole file. An
+  # affordance that appeared WITHOUT this edge would be an affordance with no source edit — which
+  # is precisely what is not admissible.
+  - id: paint-writes-back-through-the-source
+    from: app/present/paint
+    to:   app/present/source
+    callee: applyEdit
+    event: app.computes-a-source-edit
+    class: source-write-back
+    gates_capabilities: [every-affordance-writes-back-through-the-source]
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
@@ -84,3 +153,39 @@ forbidden_flows:
     reason: >
       The session is state, not presentation. A call back into main.ts would make the mode
       machine depend on the page it drives, which is the coupling that makes editors untestable.
+
+  # ── THE PRESENTATION CASCADE'S PURITY, AND THE ONE SHAPE THE DESIGN FORBIDS ───────────────
+  # Added 2026-07-30 with migration stage 1. Same reasoning as the two above, one concern over:
+  # the resolver and the write-back are pure, and the painter is the only module here that
+  # touches the document. Stated as rules the tool enforces rather than conventions a later
+  # change could quietly break.
+
+  - id: cascade-never-touches-the-dom
+    from: app/present/cascade
+    to:   app/present/paint
+    reason: >
+      The cascade is a pure decision. If it ever calls into the painter it can see the page it is
+      deciding about, and "which level won" stops being answerable without running the app —
+      which is the exact property the presentation cascade exists to create. It would also make
+      the resolver unrunnable under node, taking every test in tests/present-cascade.test.mjs
+      with it.
+
+  - id: source-never-touches-the-dom
+    from: app/present/source
+    to:   app/present/paint
+    reason: >
+      THIS IS THE STRUCTURAL FORM OF THE GOVERNING CONSTRAINT. The markdown is the truth and the
+      DOM is a projection of it; edits travel projection to source to engine to new projection,
+      never backwards. A call from the write-back module into the painter is what DOM inversion
+      looks like on its first day — the module that owns source edits reaching for the rendered
+      document to compute one.
+
+      The consequence is not a cosmetic bug. The app posts the WHOLE FILE for one view and the
+      server overwrites it, so a lossy inversion does not corrupt one title, it rewrites a view.
+      The engine has already paid this bill one repo away in the milder form: delete one row from
+      its accept vocabulary and the renderer keeps emitting the glyph, the unmatched glyph is
+      absorbed into the node's title and the tick is silently dropped, exit 0, no diagnostic.
+
+      Paired with a runtime falsifier rather than left as a static rule: the `is immune to a
+      corrupted DOM` test corrupts every rendered element and then uses the affordance, asserting
+      the posted markdown is unaffected. Mutation-proven 2026-07-30.
