@@ -178,7 +178,12 @@ describe("4. the page itself reads it — the half that catches an unwired reade
   before(async () => {
     ({ elements } = installBrowser());
     globalThis.fetch = async (url) => {
-      assert.equal(url, "./presentation.json", `the page fetched ${url}`);
+      // SITE-ROOT-ABSOLUTE, and asserted as such. The page is served at /app/, so a relative
+      // "./presentation.json" would resolve to /app/presentation.json and 404 in the browser —
+      // the declaration would go unread and every level would fall silent, which is exactly the
+      // failure this suite exists to catch. Pinning the leading `/` makes that a red test rather
+      // than a quiet regression to pre-cascade behaviour.
+      assert.equal(url, "/presentation.json", `the page fetched ${url}`);
       return { ok: true, json: async () => served };
     };
     page = await importPage(WORK);

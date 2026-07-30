@@ -87,6 +87,33 @@ ordering: capability-driven
 # observation means bundling that script through scripts/build.mjs the way the presentation
 # cascade now is — which is the remaining half of the asserted backlog row
 # `flag-one-markdown-implementation-is-now-three`, and a change of its own.
+#
+# ── 2026-07-30, THE PAGE MOVED IN, AND THE FILTER IS STILL UNCHANGED ──
+#
+# The page is no longer `/app.html`. It is `/app/index.html`, served at https://qntm.network/app/,
+# so the app has an address instead of being a file at the root of a marketing site. THAT MOVE
+# PUT IT INSIDE THIS PREFIX, and the prefix still does not observe it. Read that carefully,
+# because it is the trap this block exists to disarm:
+#
+#   * REASON 2 ABOVE IS NOW RETIRED. The identity is `app/index`, which no longer collides with
+#     anything, so the old "it would be indistinguishable" argument has expired.
+#   * REASON 1 IS UNCHANGED AND WAS ALWAYS THE BINDING ONE. Capture is a node module-load hook.
+#     Node cannot import an HTML document. The file's location was never what made it invisible;
+#     its FORMAT is. Moving it changed the URL and changed nothing about observability.
+#
+# So the honest reading of `include: [app]` is now "every TS module under app/, plus one HTML
+# document that this filter names and cannot see". A reader who assumes the prefix covers the
+# whole directory would be wrong about exactly one file, which is why it is written down here
+# rather than left to be rediscovered.
+#
+# The other extension-scoped reader worth knowing about, for the same reason: the Python
+# predicates in qntm_network_checks.py go through `_app_sources`, which globs {.ts,.tsx,.js,.mjs}
+# under app/ and therefore also skips the page. That matters for ONE invariant in particular —
+# `assert_edits_are_ephemeral` bans localStorage under app/, and the app page legitimately keeps
+# its session token in localStorage. It passes today because .html is not in that glob. If a
+# future stage bundles the page's script to a .js under app/ (the remaining half of
+# `flag-one-markdown-implementation-is-now-three`), that invariant goes red on a use that is
+# correct and declared, and the fix is to scope the ban to the EDITOR rather than to delete it.
 modules:
   include:
     - app

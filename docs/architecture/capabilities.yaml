@@ -202,6 +202,48 @@ capabilities:
   horizontal_completeness:
     rooted: true
     policy: advisory
+- id: the-app-has-an-address-and-a-way-in
+  intent: >-
+    The app is a PLACE — https://qntm.network/app/ — and a visitor gets there in one click from
+    the top right of the landing page. Until 2026-07-30 it was `app.html` at the root of a
+    marketing site with no link to it from anywhere; the whole link set on the front page was
+    `#access`, `#top` and two font URLs (research-site-survey.md section 5d). Both halves are the
+    capability: an address without a way in is what the site already had, and a link to a page
+    that moved is a 404.
+    THE PREVIOUS ADDRESS KEEPS WORKING, and that is part of the commitment rather than a
+    transitional kindness. GitHub Pages serves this repo verbatim with no rewrite rules, so
+    `/app.html` answers only while a file sits there; it is now a redirect stub, and the enforcer
+    below refuses its removal.
+    WHY A PATH AND NOT `app.qntm.network`. The subdomain is what was asked for and it was
+    rejected on evidence, not on taste. This zone's nameservers are Google Cloud DNS
+    (`ns-cloud-d*.googledomains.com`), not Cloudflare, so there is no Cloudflare zone to attach a
+    Worker route to; and GitHub Pages serves exactly ONE custom domain per site — a request with
+    `Host: app.qntm.network` against the Pages edge returns 404 today, measured. Reaching the
+    subdomain means either migrating the whole zone's nameservers to Cloudflare or standing up a
+    second Pages site, both of which are changes to the live site's DNS made for a nicer URL.
+    THE PASSKEY IS NOT THE OBSTACLE, and that is worth recording because it was assumed to be.
+    The credential is bound to the RP ID `qntm.network` (worker/src/util.js `rpConfig`), and
+    WebAuthn L2 section 5.1.3 admits any origin whose effective domain the RP ID is a registrable
+    domain suffix of — so the existing passkey would work unchanged from `app.qntm.network`. Two
+    Worker lines would need widening (the `ALLOWED_ORIGINS` set and the hardcoded expected
+    origin) and nothing would need re-enrolling. The subdomain stays available at the cost of a
+    DNS decision, not at the cost of the operator's only credential.
+    NOTE ON PATHS ELSEWHERE IN THIS FILE. Capabilities below still cite `app.html:NNN`. Those
+    mean `app/index.html` now. They were not rewritten here: their line numbers are already stale
+    from the presentation migration, they belong to an arc in flight, and a mass path edit across
+    another capability's prose is a merge conflict for no gain in truth.
+  tier: functional
+  rooting: >-
+    isolated — this is a property of the DEPLOY LAYOUT (which file answers at which URL, and
+    which page links to it), the same shape as push-to-deploy-loop. There is no class it could
+    route through: the anchor is one line of HTML and the address is a file path.
+  status: working
+  enforced_by:
+  - declared_state: state-app-is-reachable-from-the-front-door
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin
 - id: a-human-authors-in-the-browser
   intent: >-
     A human logs into qntm.network and DOES THEIR CONTENT THERE — not in Obsidian, not

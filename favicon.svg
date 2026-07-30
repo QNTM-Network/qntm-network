@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="qntm">
+  <!--
+    THE FAVICON IS THE BRAND DEVICE, NOT THE ICON MARK, AND THAT IS THE WHOLE DESIGN DECISION.
+
+    brand/BRAND.md section 2 scores the identity honestly: colour system, typography, motion and
+    "the brand device — the glowing green dot (our signature element)" are all marked DONE; the
+    "icon mark (small-space / favicon / app icon)" is marked "the main gap -> the Q-mark's job",
+    and the brand member still carries `settle-the-icon-mark` open with the ring thickness, the
+    mono luminance and the kerning all listed as unresolved in section 5.
+
+    So this ships the settled thing and does not pre-empt the unsettled one. The dot is the same
+    element the landing page pulses in its nav (index.html `.brand .dot`) and in its hero, in the
+    same declared colours: green #3ff07f on black #0a0b0a. When the Q-mark lands, this file is
+    what it replaces — one file, three <link> tags, no other change.
+
+    Values are read off index.html:29-38, not chosen here.
+  -->
+  <defs>
+    <radialGradient id="glow">
+      <stop offset="0%" stop-color="#3ff07f" stop-opacity="0.55" />
+      <stop offset="55%" stop-color="#3ff07f" stop-opacity="0.13" />
+      <stop offset="100%" stop-color="#3ff07f" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0a0b0a" />
+  <circle cx="16" cy="16" r="13" fill="url(#glow)" />
+  <circle cx="16" cy="16" r="5.5" fill="#3ff07f" />
+</svg>
