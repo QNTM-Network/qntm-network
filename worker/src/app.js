@@ -67,6 +67,46 @@ async function state(request, env, origin, session) {
 
 const EDIT_KINDS = new Set(["done", "reopen", "capture", "reprioritise"]);
 
+// ── the tenancy boundary ─────────────────────────────────────────────────────────────────────
+//
+// THE HOSTED MODEL HAS EXACTLY ONE TENANT AND IT IS NOT WHOEVER IS LOGGED IN.
+//
+// `qntm-graph.fly.dev` holds ONE `/data/state.db`, ONE `/data/vault` and ONE `/data/config`, and
+// its bearer (`SERVER_TOKEN`) is a SERVER credential, not a user credential — it says "the Worker
+// is calling", never "and this is who for". `server/app.py` in the sibling engine repo takes no
+// user on any route: `/graph` reads THE db, `/vault/file` writes THE vault, `/cycle` cycles THE
+// model. Every one of those is the operator's.
+//
+// So a session bearer proves WHO you are and the server bearer proves the call is legitimate, and
+// nothing in between ever asked whether this person is entitled to THAT graph. Before this gate,
+// `graphGet` handed the hosted envelope — all 77 rendered views and the whole graph blob — to any
+// caller holding any valid session, and `editFile` let any such caller overwrite any path inside
+// the operator's live vault and run a cycle over it. Registration is open (`auth.js#registerOptions`
+// checks a handle regex and uniqueness, nothing else), so "any valid session" meant "anyone who
+// chose an unused handle". That was not a future risk; `GRAPH_SERVER_URL` and `SERVER_TOKEN` are
+// both set in production, so the hosted branch is the live branch.
+//
+// Until the server can name a tenant, the only honest boundary is: THE SHARED MODEL IS THE
+// OPERATOR'S, AND ONLY THE OPERATOR'S SESSION REACHES IT. `GRAPH_USER_ID` already means exactly
+// "the operator's `users.id`" — `operatorUser()` below has always mapped `GRAPH_PUSH_KEY` onto it,
+// and every `graph_snapshots` row in D1 carries it. This gate reuses that fact rather than
+// inventing a second notion of who the operator is.
+//
+// FAIL CLOSED, in the posture `server/app.py#_require_auth` already sets for `SERVER_TOKEN`: with
+// `GRAPH_USER_ID` UNSET there is no way to establish that ANY session is the operator's, so the
+// answer is nobody — not everybody. `!env.GRAPH_USER_ID` returning false here is what makes an
+// unconfigured Worker serve the shared model to the world, so it must return false the other way.
+//
+// This is a GATE, not a tenancy model. It does not give a second person a graph; it stops a second
+// person being given the FIRST person's. What replaces it — a per-user db and vault on the volume,
+// with the path DERIVED from the session and never accepted from the request — is stage 3 of
+// docs/implementation-artifacts/design-a-user-owns-their-graph.md.
+function isOperatorSession(env, session) {
+  const operatorId = env.GRAPH_USER_ID;
+  if (!operatorId) return false; // unconfigured -> nobody, never everybody
+  return session?.user_id === operatorId;
+}
+
 async function pendingCount(env, userId) {
   const row = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM graph_edits WHERE user_id = ? AND status = 'pending'"
@@ -79,8 +119,13 @@ async function pendingCount(env, userId) {
 // GET /app/graph (session) — serve the projection. The hosted model (Fly) is the source of
 // truth; the D1 snapshot is a fallback for when the server is unreachable.
 async function graphGet(request, env, origin, session) {
-  // Prefer the hosted model. A failure here (cold start timeout, outage) falls through to D1.
-  if (env.GRAPH_SERVER_URL && env.SERVER_TOKEN) {
+  // Prefer the hosted model — FOR THE ONE PERSON IT BELONGS TO. A non-operator session falls
+  // through to the D1 path below, which is already keyed by `user_id`, so a second person sees
+  // their OWN snapshot (today: none, `snapshot: null`) rather than a 403. That is deliberate:
+  // "you have no graph yet" is the truth for a new account, and it is a shape the app already
+  // renders. A refusal here would read as breakage; an empty graph reads as a new beginning.
+  // The WRITE path is not so forgiving — see `editFile`.
+  if (env.GRAPH_SERVER_URL && env.SERVER_TOKEN && isOperatorSession(env, session)) {
     try {
       const r = await fetch(`${env.GRAPH_SERVER_URL}/graph`, {
         headers: { Authorization: `Bearer ${env.SERVER_TOKEN}` },
@@ -182,6 +227,14 @@ async function editPost(request, env, origin, session) {
 // view; we write it on the hosted model, run a cycle, and return the fresh projection. The operator
 // token stays server-side; the browser only ever holds its passkey session.
 async function editFile(request, env, origin, session) {
+  // The write half of the tenancy boundary, and the one that must REFUSE rather than degrade.
+  // `POST /vault/file` on the hosted model writes into the operator's live vault at a path this
+  // request body chooses, and `POST /cycle` then ingests it as authored content. There is no
+  // per-user destination to fall through to, so a non-operator session is told no. 403, not 401:
+  // the caller authenticated fine, they are simply not entitled to this model.
+  if (!isOperatorSession(env, session)) {
+    return json({ ok: false, error: "not your graph" }, 403, origin);
+  }
   if (!env.GRAPH_SERVER_URL || !env.SERVER_TOKEN) {
     return json({ ok: false, error: "server not configured" }, 503, origin);
   }
