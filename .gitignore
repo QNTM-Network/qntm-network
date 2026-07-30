@@ -10,3 +10,23 @@ brand/docs/architecture/derived-flows.yaml
 scripts/graph-sync.config.json
 scripts/.graph-push-key
 scripts/.server-token
+
+# uv byproducts. *.egg-info/ above is already one of these — these two complete the set, so a
+# `uv run` in this tree can never leave an untracked file behind (see the invoke in
+# docs/implementation-artifacts/handoff.yaml, which additionally passes --no-project so the
+# byproducts are not produced at all).
+#
+# uv.lock is IGNORED, not committed, on purpose. Nothing here consumes it: CI is node-only
+# (build.yml / worker.yml install npm, never pip or uv), Pages serves this repo from main:/
+# with no Python step, and the only Python that ever runs is flow-trace's own static-evidence
+# scenario, which imports flow_trace + yaml + stdlib and nothing from qntm_network. The lock's
+# entire content is markdown-it-py + mdurl — residue of the Python render app that retired into
+# TypeScript on 2026-07-23. A lockfile is normally an asset; this one locks a dependency set no
+# build installs, so committing it would freeze dead weight and invite drift nobody reads.
+# If the Python surface here ever becomes load-bearing again, delete this line first.
+uv.lock
+# .venv/ was never listed here and appeared to be ignored anyway — it is not. uv writes a
+# .venv/.gitignore containing `*`, so a uv-made venv hides ITSELF and this repo never had to say
+# anything. A venv made any other way (`python -m venv .venv`) shows up as untracked. Stating it
+# here stops that depending on which tool happened to create the directory.
+.venv/

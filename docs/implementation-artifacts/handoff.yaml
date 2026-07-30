@@ -17,11 +17,44 @@ handoff:
   commit: f6d689a                       # self-ref SHA (TS-capture adoption close, 2026-07-23)
 
   bootstrap:                              # the runnable onboarding block
-    # flow-trace is invoked via its venv binary (not on PATH). The declared-side derivers
-    # (capability-rollup / backlog / queue) read the yamls directly — no project runtime needed.
-    invoke: uv run --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace
+    # flow-trace is not on PATH; it is run out of the monorepo checkout through uv. Two flags in
+    # this line are LOAD-BEARING and were each verified by running the thing (2026-07-30):
+    #
+    #   --no-project  flow-trace does not need THIS project's Python environment. The only Python
+    #                 it loads here is tests/flow_scenarios/static_evidence.py + qntm_network_checks.py,
+    #                 which import flow_trace, yaml and stdlib — nothing from qntm_network, and not
+    #                 markdown-it-py (that dependency is residue from the retired Python render app;
+    #                 zero .py files in this repo import it). Without the flag uv treats cwd as a
+    #                 project on every invocation and BUILDS it: it writes .venv/, qntm_network.egg-info/
+    #                 and uv.lock into the worktree purely as a side effect, so running a read-only
+    #                 tool leaves an untracked file behind for the next agent to puzzle over.
+    #                 If a future Python scenario here ever needs a project dependency, it will fail
+    #                 loudly on import — add `--with <dep>` rather than dropping this flag.
+    #   --python 3.12 flow-trace declares requires-python >=3.12; this repo declares >=3.11, and in
+    #                 project mode uv honours THIS repo's floor, picks 3.11 and the resolution fails
+    #                 outright (exit 1, no verdict). Pinned to flow-trace's floor rather than a
+    #                 floating '>=3.12' so the interpreter is deterministic — a floating request
+    #                 resolves onto whatever is newest on the machine (3.14 today). When flow-trace
+    #                 raises its floor this line breaks with a legible uv resolution error; that is
+    #                 the intended failure mode.
+    #
+    # The declared-side derivers (queue / backlog / map headline) read the yamls directly and are
+    # cheap. verify / capability-rollup RUN the scenarios and additionally need `npm ci` here AND
+    # node deps installed in flow-trace's own js/ observer — see the tooling thread below.
+    invoke: uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace
     yaml_dir: docs/implementation-artifacts
-    next_command: uv run --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map .  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
+    # RESET to null 2026-07-30, and that IS the derived answer, not a hand-authored one.
+    # derive_next_command returns None when the queue is EMPTY (prioritization.py — `if not queue:
+    # return None`), so on this member — all 10 backlog rows passing, queue_length 0 — the deriver
+    # NEVER splices this line. It therefore froze at whatever was last typed into it, and what was
+    # last typed (91066b7, by hand) is now provably wrong twice over: it carries the pre-fix invoke
+    # prefix, so copy-pasting it fails with the Python>=3.12 resolution error; and the deriver's
+    # actual output for a non-actionable head is `map . --full`, not `map .` (verified by running
+    # `queue brand`, whose queue is non-empty — it re-derived that line correctly from the new
+    # invoke in the same pass). A stale runnable one-liner is worse than an honest absence, which is
+    # the tool's own stated position. When a row here stops passing, the deriver splices the real
+    # command back in, overwriting this line and these comments — as it should.
+    next_command: null  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
 
   queue: []  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
   instance_queue: []  # DERIVED by flow_trace.prioritization.derive_queue(layer='config') — the CONFIG (admin/instance) stratum, partitioned OUT of `queue:` (code); the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
@@ -96,3 +129,65 @@ handoff:
       the same output, so it can be decided whenever without reshaping the build.
       (4) BUNDLE SIZE — demo/app.js is 146kb, nearly all markdown-it. Fine now; if it matters
       later the fork is a smaller parser versus code-splitting, not a rewrite.
+  - thread: the-invoke-runs-and-leaves-no-trace-2026-07-30
+    note: >
+      What it takes to run flow-trace in THIS repo, established by running it rather than by
+      reading the previous line and trusting it. The invoke is now
+      "uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace"
+      and both new flags were earned. WITHOUT --python 3.12 uv honours THIS repo's
+      requires-python floor (>=3.11), selects 3.11.13, and flow-trace (>=3.12) fails to resolve —
+      exit 1, no verdict. WITHOUT --no-project uv treats cwd as a Python project on every
+      invocation and BUILDS it, writing .venv/, qntm_network.egg-info/ and uv.lock into the tree;
+      the first two were invisible only by accident (uv writes a .venv/.gitignore containing "*",
+      and *.egg-info/ was already ignored), so uv.lock was the one artefact that surfaced, and
+      every agent who ran the tool left it behind. RAISING THIS REPO'S FLOOR to >=3.12 was
+      considered and REJECTED — it would make this project's declared Python floor a function of
+      an external tool's floor, and it would not have fixed the byproducts at all. --no-project
+      fixes both at once and is safe here because the only Python flow-trace loads is
+      tests/flow_scenarios/static_evidence.py + qntm_network_checks.py, which import flow_trace,
+      yaml and stdlib — nothing from qntm_network. Proven, not assumed:
+      `verify . --scenario static_evidence` under --no-project returns 13 PASS / 0 FAIL, exit 0.
+  - thread: what-does-and-does-not-catch-a-broken-invoke
+    note: >
+      Established by MUTATION, because "a declaration that exists and does not reach" is the bug
+      class this whole layer exists to prevent, and it deserved a test rather than an assurance.
+      TWO different breakages, two different outcomes. (1) A NON-CONFORMING invoke — one with a
+      verb appended, "... flow-trace map ." — IS caught: `queue` emits a loud FAIL naming the
+      principle invoke-is-a-bare-prefix-not-a-verb-template, and `queue --check` exits 1. (2) A
+      CONFORMING but entirely BROKEN invoke — "... --with-editable /nonexistent/flow-trace
+      flow-trace" — is caught by NOTHING. `queue` exits 0 with findings [] and drift 0;
+      `queue --check` exits 0. flow-trace validates the invoke's SHAPE and never that it RUNS,
+      and this repo has no flow-trace CI to catch it either (build.yml and worker.yml are
+      node-only). So the invoke line is checked for grammar, not for truth. That is worth knowing
+      before trusting any future edit to it. The positive half was proven too: changing `invoke`
+      and running `queue brand` re-derived brand's next_command with the new prefix in the same
+      pass, so the value genuinely reaches the deriver.
+  - thread: verify-and-capability-rollup-are-currently-broken-here
+    note: >
+      NOT caused by this change, and NOT fixed by it — recorded because the crash is silent about
+      its own cause and the next agent will otherwise burn a session on it. `flow-trace verify .`
+      and `flow-trace capability-rollup .` both exit 2 (a CRASH, no verdict) on this project. The
+      scenario fan reaches tests/flow_scenarios/render_and_edit.ts, dispatches to flow-trace's own
+      node observer, and that observer fails ERR_MODULE_NOT_FOUND on "typescript" imported from
+      the TOOL's js/src/transform.mjs. flow-trace's js/package.json declares typescript as a
+      dependency and there is no node_modules under tools/flow-trace/js — the tool's JS backend is
+      simply not installed in this environment. Two consequences. FIRST, the fix belongs in the
+      flow-trace checkout, not here; nothing in this repo can resolve it. SECOND, .flow-trace.yaml
+      at the root tells the reader to run `flow-trace capability-rollup .` as one of the cheap
+      reads, and that instruction currently crashes. The reads that DO work today are `queue`,
+      `backlog`, `map` (the cheap headline — 12 capabilities, all working) and
+      `verify . --scenario static_evidence`, which scopes the fan to the Python scenario and
+      returns a real 13 PASS / 0 FAIL. Note also that ANY scenario run needs `npm ci` in the
+      worktree first — node_modules/ is gitignored, so a fresh worktree does not have it.
+  - thread: the-python-dependency-here-is-dead-weight
+    note: >
+      Surfaced, deliberately NOT acted on — it is a separate change and this session's remit was
+      the invoke and the clean tree. pyproject.toml declares "markdown-it-py>=3.0" and ZERO .py
+      files in this repo import markdown_it. It is residue from the Python render app that retired
+      into TypeScript on 2026-07-23 (see the-app-becomes-typescript-2026-07-23); the browser now
+      uses the npm markdown-it instead. That dead dependency is the entire content of the uv.lock
+      that kept appearing, which is why the lock is gitignored rather than committed — a lockfile
+      is normally an asset, but this one locks a dependency set no build installs, and no CI here
+      touches Python at all. The honest follow-up is to drop the dependency (and possibly the
+      whole [project] block, since qntm_network/__init__.py is a docstring and nothing else),
+      after which the lock question disappears rather than being managed.

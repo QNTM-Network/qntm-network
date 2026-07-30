@@ -7,15 +7,22 @@ handoff:
   commit: null
 
   bootstrap:
-    invoke: uv run --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace
+    # --no-project and --python 3.12 are both load-bearing; the reasoning is written out once, in
+    # the parent member's handoff (../../../docs/implementation-artifacts/handoff.yaml). Short
+    # version: uv must not treat cwd as a Python project (it writes .venv/, *.egg-info/ and uv.lock
+    # into the worktree as a side effect), and flow-trace needs >=3.12 which the parent repo's
+    # >=3.11 floor otherwise vetoes. Note this member has NO pyproject.toml of its own — it is
+    # nested inside qntm.network, so cwd-as-project resolves to the PARENT's pyproject either way.
+    invoke: uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace
     yaml_dir: docs/implementation-artifacts
-    next_command: uv run --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map .  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
+    next_command: uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map . --full  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
 
   queue:  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
   - id: settle-the-icon-mark
   - id: finalise-the-lockup-suite
   - id: ship-favicon-and-app-icon
   - id: document-the-brand-system
+  instance_queue: []  # DERIVED by flow_trace.prioritization.derive_queue(layer='config') — the CONFIG (admin/instance) stratum, partitioned OUT of `queue:` (code); the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
 
   qualitative:
   - thread: department-instrumented-2026-06-27
