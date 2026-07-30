@@ -1,23 +1,37 @@
 # qntm.network — .flow-trace.yaml (self-application config).
 #
-# A STATIC landing site: no traced code, no Python runtime. Instrumented DECLARATION-ONLY for
-# now — capabilities / architecture / state / backlog declared in the canonical flow-trace layout
-# so the global registry (~/.flow-trace/registry.yaml) and the /trace workflow can read it and
-# derive a board. Evidence tier TODAY = DECLARED/OBSERVED (a human watched the site render, curled
-# the cert) — NOT runtime-verified. That is honest, not fake-green: the built capabilities carry
-# `confidence: thin` and no passing enforcer.
+# HEADER CORRECTED 2026-07-30. It read "A STATIC landing site: no traced code, no Python runtime"
+# and then recommended a command that crashes. Both claims were false; the `modules:` block below
+# is untouched.
 #
-# INDUSTRIALIZATION PATH (the forward-thinking half): add a static-evidence runner — a project-local
-# scenario + deterministic predicates (curl https://qntm.network → 200 + valid cert; assert index.html
-# carries the viewport meta + the signature interactions; assert the deploy is push-to-publish) that
-# `flow-trace verify .` / `map .` RUN to produce real PASS/FAIL. Driven by the capability
-# `capabilities-have-runtime-enforcers`. Mirrors how trace-orchestration earned its static greens.
+# WHAT THIS PROJECT IS. A landing page, a markdown demo, a PASSKEY-AUTHENTICATED SINGLE-USER
+# APPLICATION, a D1-backed hosted personal graph, and a two-way write path into a live vault.
+# There IS traced code (app/, under flow-trace's node observer) and there IS a Python runtime
+# (tests/flow_scenarios/static_evidence.py + qntm_network_checks.py, 13 deterministic predicates).
+# See docs/architecture/architecture.yaml for the full correction and
+# docs/implementation-artifacts/research-site-survey.md section 4 for what is still undeclared.
 #
-# Read it like anywhere (cheap reads work without a runtime):
-#   flow-trace capability-rollup .   # caps -> working / partial / undeclared, H-rooted, drift
+# THE INDUSTRIALIZATION PATH IS DONE AND THEN BROKEN, which is a different state from not-started.
+# The static-evidence runner landed 2026-06-27 and its predicates pass. But `flow-trace verify .`
+# and `flow-trace capability-rollup .` currently exit 2 — a CRASH with no verdict, not a verdict —
+# because the TOOL's JS observer has no node_modules, and one crashed scenario blanks the run for
+# the thirteen static invariants too. The fix is `npm ci` in tools/flow-trace/js/, in the tool's
+# own checkout; nothing in this repo can resolve it. Note also that there is no flow-trace gate in
+# this repo's CI (build.yml and worker.yml are node-only), so nothing catches a broken declaration
+# here either.
+#
+# Read it like anywhere — but only these actually work today:
 #   flow-trace queue .               # the derived work queue (actionable / diagnose-ready / pool)
 #   flow-trace backlog .             # the rows x driving_capability
+#   flow-trace map .                 # the cheap committed-status headline
+#   flow-trace verify . --scenario static_evidence   # scopes the fan to Python: 13 PASS / 0 FAIL
 #   flow-trace map-registry          # this project as one member of the cross-project board
+# CRASHES today (exit 2, no verdict), listed so nobody burns a session on it:
+#   flow-trace verify .              # the unscoped fan reaches the TypeScript scenario
+#   flow-trace capability-rollup .   # same fan
+#
+# Any scenario run also needs `npm ci` in THIS worktree first — node_modules/ is gitignored, so a
+# fresh worktree does not have it.
 
 ordering: capability-driven
 

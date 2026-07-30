@@ -54,12 +54,58 @@ handoff:
     # invoke in the same pass). A stale runnable one-liner is worse than an honest absence, which is
     # the tool's own stated position. When a row here stops passing, the deriver splices the real
     # command back in, overwriting this line and these comments — as it should.
-    next_command: null  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
+    next_command: uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map . --full  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
 
-  queue: []  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
+  queue:  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
+  - id: give-presentation-one-reader-and-one-home
+  - id: declare-the-global-presentation-level
+  - id: resolve-from-the-model-not-the-text
+  - id: carry-presentation-through-the-snapshot-envelope
+  - id: token-renditions-chips-titles-and-pills
+  - id: author-in-the-browser-not-in-obsidian
+  - id: the-focused-line-shows-its-source-rule
+  - id: add-the-mode-presentation-level
+  - id: add-the-user-presentation-level
+  - id: flag-one-markdown-implementation-is-now-three
+  - id: flag-every-verify-pass-in-capabilities-yaml
+  - id: declare-the-hosted-application
   instance_queue: []  # DERIVED by flow_trace.prioritization.derive_queue(layer='config') — the CONFIG (admin/instance) stratum, partitioned OUT of `queue:` (code); the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
 
   qualitative:
+  - thread: the-presentation-cascade-declared-2026-07-30
+    note: >
+      THE QUEUE READ ZERO THIS MORNING AND IT NOW READS TWELVE, and nothing was built. That is the
+      whole shape of this session: the work was not missing, the ROWS were. `queue_length: 0` was
+      an artefact of a backlog that stopped being written after 2026-07-23, not a statement that
+      the product was finished.
+      WHAT LANDED — declaration and documentation only, no application source touched. Five
+      capabilities for the presentation cascade (the OUTPUT half of the resolution cascade whose
+      INPUT half shipped in the engine as `qntm_md.resolution`), the spec at
+      docs/implementation-artifacts/design-presentation-cascade.md, nine sized backlog rows,
+      two `asserted:` rows, and corrections to four false declarations.
+      THE SHAPE OF THE DESIGN in one line: presentation is RESOLVED, not chosen — seven levels
+      ordered by WHEN EACH FACT BECOMES KNOWN (GLOBAL, USER, VIEW, STRUCTURAL_NODE, LINE, MODE,
+      FOCUS), most specific wins, one tuple owning the order. Raw and app-like are two values of
+      one type, not two products. The operator's first rule — cursor on the line shows `- [ ]`,
+      cursor off shows a checkbox — is stage 3, and it is half a day rather than an hour because
+      app.html has NO text-editing surface for a cursor to land on.
+      THE HONESTY THAT MATTERS MOST, because it is the trap this repo keeps springing: ALL FIVE
+      CAPABILITIES ARE `undeclared` WITH NO ENFORCER, and NO state invariant was declared for any
+      of them. A predicate that does not exist is a declaration that loads clean and reaches
+      nothing. Each migration stage names the falsifier its own predicate must assert, and the
+      predicate lands with the stage. Four of the five declarations describe plans; ONE
+      (`every-affordance-writes-back-through-the-source`) describes something already TRUE and
+      unenforced, and that is the one worth an enforcer first.
+      THE FINDING THAT MADE THE DESIGN CHEAP: the model is already in the browser and the browser
+      ignores it. The snapshot envelope carries `graph` ({version, nodes, edges}) and `locations`;
+      `grep -c` over app.html for nodes / edges / locations returns 0, 0, 0. The app re-parses
+      markdown text it was handed alongside the model that produced it.
+      ONE DERIVED LINE IS NOW UNRUNNABLE, left alone deliberately: with a non-actionable head the
+      deriver splices `next_command: … map . --full`, and `map . --full` exits 2 here for the same
+      reason `verify` does (observed this session, ERR_MODULE_NOT_FOUND on typescript). It is
+      DERIVED and pinned do-not-hand-edit, so it stays; it is a second instance of the
+      what-does-and-does-not-catch-a-broken-invoke thread below — the shape is validated, the
+      running never is.
   - thread: the-app-becomes-typescript-2026-07-23
     note: >
       The editability arc. Asked for "an edit mode and a viewer mode, all lost on refresh", which

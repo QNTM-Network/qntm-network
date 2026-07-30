@@ -202,3 +202,123 @@ capabilities:
   horizontal_completeness:
     rooted: true
     policy: advisory
+- id: a-human-authors-in-the-browser
+  intent: >-
+    A human logs into qntm.network and DOES THEIR CONTENT THERE — not in Obsidian, not
+    through a CLI. This is the apex the presentation stratum below it serves, and the thing
+    every other capability in that stratum is measured against. Single user for now; signups,
+    accounts and isolation are explicitly OUT of scope and their absence is a decision, not a
+    gap. WHAT EXISTS TODAY, stated so the distance is legible rather than implied: passkey
+    auth through a Cloudflare Worker, a hosted graph, and a working web write path — you can
+    click a checkbox in the browser and it cycles through the hosted model. You can TOGGLE.
+    You cannot AUTHOR. WHAT IS MISSING is a line-level authoring surface — `app.html` builds
+    labels, checkboxes, spans, headings and divs and carries no textarea, no contenteditable
+    and no keyboard path to a line's characters (`app.html:244-267`).
+    EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. There is no enforcer and nothing here
+    can be falsified until an authoring surface exists. It is declared so the distance is in
+    the queue instead of in a conversation. See
+    docs/implementation-artifacts/design-presentation-cascade.md.
+  tier: foundational
+  rooting: >-
+    isolated — this capability is an APEX statement about the product, not a call path. It
+    has no home class of its own; the classes belong to the four capabilities below it, which
+    is where rooting will be earned. Declared rather than left silent because a silent absence
+    is the debt this roster already carries on eight pre-existing rows.
+  status: undeclared
+- id: presentation-is-resolved-not-chosen
+  intent: >-
+    How a line is SHOWN is RESOLVED through a declared cascade, not decided at the call site.
+    The engine emits `-`, `#` and the markers; which rendition of them a person sees is
+    decided by the same kind of cascade that decides what they MEAN, with WHO IS USING IT and
+    WHAT THEY ARE DOING as levels. Seven levels, most specific wins, ordered by when each
+    fact becomes known — GLOBAL, USER, VIEW, STRUCTURAL_NODE, LINE, MODE, FOCUS — with the
+    precedence order owned in exactly ONE tuple and no caller permitted to re-express it.
+    RAW AND APP-LIKE ARE NOT TWO PRODUCTS. They are two values of one type, and every mixture
+    between them is legal and reachable by declaration. This is the OUTPUT half of the cascade
+    whose INPUT half shipped in the engine (`qntm_md.resolution`); it is the other half of
+    that one, not a new idea beside it.
+    TODAY there is no cascade, no declaration and no reader — `paintView` (`app.html:234-269`)
+    is 36 lines of hardcoded decisions, and the app resolves exactly ONE thing (the checkbox
+    glyph) while showing every tag, wiki-link and marker as literal characters.
+    EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. It becomes falsifiable at migration
+    stage 1, when a painter that decides without routing through the cascade is a detectable
+    violation. Not before. See design-presentation-cascade.md sections 2, 3 and 7.
+  tier: foundational
+  rooting: >-
+    isolated FOR NOW, and deliberately temporary. The three classes this capability implies —
+    presentation-resolution, presentation-painting, source-write-back — are SPECIFIED in
+    design-presentation-cascade.md section 7 and are NOT declared in classes.yaml, because
+    their homes do not exist yet and that file's own header says a class whose routing nothing
+    can check is a label rather than governance. They land in the same change as the modules
+    (stage 1), at which point this line is replaced by real class-rooting.
+  status: undeclared
+- id: the-focused-line-shows-its-source
+  intent: >-
+    Cursor on the line and you see `- [ ]`. Cursor off it and you see a rendered, clickable
+    checkbox. ONE RULE AT ONE LEVEL, demonstrating the whole cascade — the FOCUS level is the
+    most specific of the seven and beats every declaration below it, which is what stops a
+    line that declares itself a chip from becoming uneditable. The focused line renders its
+    EXACT source text; the source string stays the truth and the whole-file write path is
+    unchanged.
+    THE SURFACE THIS REACTS TO DOES NOT EXIST. `app.html` has no text-editing surface at all,
+    so there is nowhere for a cursor to land (`app.html:244-267`). The only textarea in the
+    repo holds a whole document on a different page (`app/main.ts:41`) which the site does not
+    link to. The rule is minutes of work; the surface is the half-day, and saying so is more
+    use than sizing the rule alone.
+    EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. Falsifiable from migration stage 3 by
+    the test that stage names — focus a line and assert the DOM carries the verbatim source
+    substring; blur and assert the rendition returns; assert the posted markdown differs from
+    the original by exactly that line.
+  tier: functional
+  rooting: >-
+    isolated FOR NOW — same reason as presentation-is-resolved-not-chosen. This capability
+    roots against presentation-painting and presentation-resolution once stage 1 declares
+    them.
+  status: undeclared
+- id: every-affordance-writes-back-through-the-source
+  intent: >-
+    The app may only offer a resolution it can take back EXACTLY. If it shows a chip instead
+    of `#work` it must put `#work` back, character for character. This is the governing
+    constraint of the presentation cascade and the sequencing rule for it — resolution levels
+    advance exactly as fast as the source edits do, which is a schedule and not an objection.
+    Stated structurally rather than as a vocabulary rule, because the client version is
+    stronger than the engine version and needs to be — THE APP NEVER RECONSTRUCTS MARKDOWN
+    FROM THE DOM. The markdown is the truth, the DOM is a projection, and edits travel
+    projection to source to engine to new projection. That forbids exactly one shape: a
+    contenteditable region serialised back to markdown.
+    THIS ONE IS ALREADY TRUE AND NOTHING CHECKS IT. `toggleTask` (`app.html:273-296`) patches
+    one character at one line index of the source string it was handed and posts the WHOLE
+    file; the DOM is write-only. That is why the round trip is exact today, and it is one
+    careless commit from ending.
+    EVIDENCE TIER — STRUCTURAL, UNENFORCED. This is the ONE declaration here describing
+    something real rather than planned, and it is the one most worth an enforcer. Its
+    falsifier lands with migration stage 1. The engine's own `accept ⊇ emit` gates cover the
+    checkbox glyph pair, the symmetric-by-construction tags and markers, and the three render
+    shapes — but those are the ENGINE's enforcers in the engine's repo. qntm.network has none.
+  tier: foundational
+  rooting: >-
+    isolated FOR NOW — roots against source-write-back once stage 1 declares it. That class is
+    the structural form of this capability, so the rooting and the enforcer arrive together or
+    neither is worth much.
+  status: undeclared
+- id: presentation-resolution-is-user-and-mode-aware
+  intent: >-
+    Who is using it and what they are doing are LEVELS of the presentation cascade, not
+    branches in a painter. USER sits second, immediately below GLOBAL — a durable fact known
+    at login. MODE sits sixth, between LINE and FOCUS — a transient fact known at the gesture.
+    They are deliberately NOT adjacent, because collapsing "who you are" and "what you are
+    doing" onto one rung forces one of them to lie. The operator sits near the raw end and
+    most people would sit near the wired end and never see a bracket; both are values of one
+    type, which is what makes them a dial rather than two products.
+    THE USER LEVEL IS THE ONE MOST AT RISK OF BEING DECLARED AND NEVER READ, because with one
+    user a wrong default is indistinguishable from a working one. It therefore ships only with
+    a way to change it and a test that reads it back through the session. Its home is the
+    server-side user record behind the passkey session — NOT localStorage, which would trip
+    `state-edits-are-ephemeral` correctly, since that would be persistence arriving without a
+    declaration.
+    EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. Falsifiable from migration stages 4 and
+    5, each by resolving one fixture twice and asserting the painted DOM differs.
+  tier: functional
+  rooting: >-
+    isolated FOR NOW — roots against presentation-resolution once stage 1 declares it.
+  status: undeclared
