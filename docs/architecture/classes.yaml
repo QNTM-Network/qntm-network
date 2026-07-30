@@ -115,6 +115,16 @@ classes:
       routing through the cascade. Giving a contributor its own canonical home would split one
       concern across three homes and make "who decides?" a three-file question again — which is
       the condition app/present/ exists to end. Their flows are declared and carry THIS class.
+
+      THE CONCERN GREW A FINER GRAIN 2026-07-30 (stage 8) AND DID NOT GROW A HOME FOR IT. `tags`
+      is the first key whose subject is a TOKEN rather than a LINE, so "which rendition" is now
+      asked about a substring as well as about a whole line. The grammar that finds those
+      substrings — app/present/resolution.tagSpans — is a MIRROR of the engine's canonical one
+      (parse_tag.py:23), not a thing this repo gets to choose, and it lives beside classifyLine
+      because it is the same act one grain finer: reading what a line CONTAINS, which is a
+      different act from deciding how it is SHOWN. A tag grammar re-expressed at a call site is
+      the same failure as a precedence order re-expressed at one, so it is one function with one
+      declared flow (paint-finds-the-tags-in-the-line) and no second class.
     status: working
 
   - id: presentation-painting
@@ -135,6 +145,24 @@ classes:
       painter chose is the EMBODIMENT (inert text with no focus surface, an editable line with
       one), which is this concern's job. An `if (focused)` deciding raw-versus-wired would be the
       violation, and there is none.
+
+      IT GREW A TOKEN RENDITION 2026-07-30 (stage 8) AND THE SPLIT HELD AGAIN. A tag resolved
+      `wired` becomes a chip, and everything about the chip that is a JUDGEMENT belongs here: that
+      it is placed into the markdown before the single render call rather than swapped into the
+      built DOM afterwards (the painter must not read the page it is building), that it carries one
+      class and no attribute that could hold a gesture, and that if the renderer will not carry the
+      markup through — an indented line is a code block, and the engine indents by four spaces —
+      the line falls back to the characters rather than putting escaped markup on screen. WHETHER
+      there is a chip is still not decided here: that is `tags` in the served declaration, and
+      flipping it changes the DOM with nothing rebuilt.
+
+      AND THE CHIP OFFERS NOTHING, WHICH IS THIS CLASS DECLARING ITS OWN CEILING. A removable chip
+      would be an affordance, an affordance needs a source edit, and `applyEdit` gained no case at
+      this stage — see app/present/paint.ts for the three questions a removable chip has to answer
+      first. It is the first rendition under which the DOM and the source genuinely disagree
+      (`#work` is not text on the page any more), which is what finally makes source-write-back's
+      corrupted-DOM detector able to catch an inversion on its own rather than only after the page
+      is wrecked.
     canonical_class: app/present/paint:paint
     governs_sinks:
       - view-painted
@@ -160,6 +188,22 @@ classes:
       byte-identical golden and every other assertion, and failed only that one. Which is the
       point of it: a naive DOM inversion looks correct exactly until the DOM stops matching the
       source.
+
+      STAGE 8 ADDED NO CASE HERE, AND THAT IS THE STAGE'S MAIN STRUCTURAL CLAIM. The first token
+      rendition — a tag as a chip — is READ-ONLY, so the first change that alters what a token
+      looks like adds no second write path and could not corrupt a file even if every other claim
+      in it were wrong. What it DID add is the first situation in which this class's detector can
+      catch an inversion unaided: before the chip, the page still held every source character, so
+      a file rebuilt from the DOM came out right by accident and only a deliberately corrupted DOM
+      exposed it. With chips painted, `#work` is not text on the page at all.
+
+      AND ONE REAL DEFECT WAS FOUND AND CLOSED WHILE PROVING THAT. `applyEdit` used to fall through
+      to the checkbox branch for any edit that was not `set-line`, so an unknown edit kind silently
+      UNTICKED a box and returned a whole file to POST. No typed caller could reach it —
+      `SourceEdit` is a closed union — but the next person to add `delete-span` and forget a branch
+      would have, and the failure shape is the one the engine already paid for one repo away. It
+      now discriminates explicitly and refuses. Mutation-proven 2026-07-30: removing the guard
+      turns `the edit that would remove a tag does not exist` red and nothing else.
     canonical_class: app/present/source:applyEdit
     status: working
 

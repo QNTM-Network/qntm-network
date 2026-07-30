@@ -642,6 +642,65 @@ source edit (§5) or does not ship.
 **Falsifier:** per rendition, a round-trip test — render, exercise the affordance, assert the posted
 source differs from the original by exactly the intended substring operation.
 
+> **FIRST RENDITION SHIPPED 2026-07-30**, branch `feat/tags-are-a-resolution`. `tags` is the
+> fourth resolution key and the first whose subject is a TOKEN. **`links` and `markers` are not in
+> it** and were deliberately not added on the way past — §9's rule holds.
+>
+> **The asymmetry is the architecture.** `DEFAULT.tags` is `raw` — the floor of the cascade is
+> what the app did before the key existed, which is what keeps `tests/present-golden.test.mjs` a
+> real byte-for-byte comparison against the painter it replaced — and `presentation.json` declares
+> `wired`. So the chip is a decision the INSTANCE makes at GLOBAL. **Flip that one key to `raw`,
+> reload, the chips are characters, nothing rebuilt** — observed in a browser against a bundle
+> whose md5 was identical before and after, which is stage 2's proof applied to a token.
+>
+> **What a tag is, and it is not "a word after a hash".** The engine's canonical grammar is
+> `(?<!\S)#([a-zA-Z_][a-zA-Z0-9_-]*)` (`src/qntm_md/io/parser/parse_tag.py:23`), it lives in CODE
+> and not in vocabulary config — the engine's own audit lists the tag lexical shape under
+> "Closed (code)" (`research-input-interpretation.md:290`), and `config/vocabulary/*.yaml` decides
+> only what a MATCHED tag MEANS. `app/present/resolution.tagSpans` mirrors it, so `#1`, `foo#bar`,
+> `C#`, `# Heading`, `##` and a URL fragment are not tags and `#work/admin` is `#work` only. The
+> boundary is written `(^|\s)` rather than a lookbehind, because Safari only shipped lookbehind in
+> 16.4 and an unparseable literal is a SyntaxError that takes the whole bundle down rather than
+> degrading one rendition; the two forms are **proven** equal, with the engine's verbatim regex
+> carried in the test as the reference.
+>
+> **§5 held, and it is why this shipped small: the chip is READ-ONLY.** No source edit was added
+> and `applyEdit` still knows exactly two operations, so the first token rendition adds no second
+> write path. The deletion is *writable* — `TagSpan` carries the offsets — but the AFFORDANCE is
+> not answerable yet: what the leftover whitespace becomes, what deleting a tag MEANS to an engine
+> where `#task` selects a node type and `#work` sets a field, and where a destructive click sits
+> when the chip lives inside the span that is the cursor target. **This section's own rule says
+> ship the rendition without it**, and it is named in `app/present/paint.ts` rather than implied.
+>
+> **It is the first rendition under which the DOM and the source genuinely disagree**, and that
+> matters more than the chip does. Until now the page still held every source character, so a file
+> rebuilt from the DOM came out right by accident and only a deliberately corrupted DOM exposed
+> the inversion §5 forbids. With chips painted, `#work` is not text on the page at all. The
+> detector is extended to it and asserted through the app page's own script with every chip replaced
+> by something that is not a tag.
+>
+> **`hidden` is refuted, not deferred.** This section calls hiding "the safest resolution of all,
+> because hidden text is not edited". Here it is neither. `Rendition` is ONE union shared by every
+> key and `readDeclaration` validates against it with no per-key table, so admitting `hidden`
+> admits `{"checkbox": "hidden"}` — well-formed, loads clean, read by nothing, painted as a
+> checkbox anyway: §9's bug installed in the type system. And hidden text IS edited in this app,
+> because FOCUS takes a line to `raw` on EVERY key, so the cursor landing makes hidden tags
+> reappear. What it would take is renditions that vary per key rather than one union across all of
+> them — which is a change to §2.3, not to this stage.
+>
+> **The cursor rule needed nothing.** §8 stage 3 derived the FOCUS contribution from
+> `RESOLUTION_KEYS`, so `tags` joined it with no edit to `focus.ts`. The mechanism is subtler than
+> it looks and worth stating: a focused line resolves `checkbox`/`heading`/`prose` raw FIRST and
+> returns before `tags` is ever asked, so tags are visible on a focused line because the LINE is
+> raw, not because the tag key is. Both routes are asserted.
+>
+> **198 tests / 0 fail** (was 124). `flow-trace verify .` exits **0**, **30 PASS / 0 FAIL**, with
+> `app/present/paint → app/present/resolution.tagSpans` OBSERVED at count 5. Mutation-proven nine
+> ways — one of which caught a **vacuous assertion in this change's own suite** and it was
+> rewritten. **One real defect found and closed:** `applyEdit` fell through to the checkbox branch
+> for any edit that was not `set-line`, so an unknown edit kind silently unticked a box and
+> returned a whole file to POST.
+
 ### Stage 9 — composed views and agent instructions · **arc** · gated on §10 decision 3
 Named in §11. **Not designed here**, and stage 6 is the only thing this document does on its
 account.

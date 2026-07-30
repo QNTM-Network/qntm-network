@@ -106,6 +106,22 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
     return lines.join("\n");
   }
 
+  // AN EDIT THIS FUNCTION DOES NOT KNOW IS REFUSED, EXPLICITLY.
+  //
+  // Found by a stage-8 test, not by reading: this used to be a bare fall-through, so ANY edit that
+  // was not `set-line` was treated as a checkbox toggle. `SourceEdit` is a closed union and no
+  // typed caller can reach that, but the shape of the bug is the one this repo has already paid
+  // for one repo away — the engine's renderer kept emitting a glyph its accept vocabulary no
+  // longer had, the unmatched glyph was absorbed into a node's title, exit 0, no diagnostic.
+  //
+  // The concrete version here: the next affordance to arrive — a removable tag chip is the
+  // obvious candidate, `{kind: "delete-span", ...}` — would, if someone added the type and forgot
+  // the branch, silently UNTICK a checkbox and POST the whole file, because `edit.checked` would
+  // be undefined and undefined is falsy. Discriminating explicitly makes that a refusal instead.
+  if (edit.kind !== "set-checkbox") {
+    return null;
+  }
+
   const match = CHECKBOX_GLYPH.exec(line);
   if (match === null) {
     return null;

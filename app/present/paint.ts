@@ -20,6 +20,35 @@
  * it is why the edit is computed inside governed code rather than inside app.html — a string
  * built at the call site is a string nothing can check.
  *
+ * ── THE TAG CHIP IS READ-ONLY, AND THAT IS A DECISION WITH A REASON ──
+ *
+ * The `wired` rendition of a tag is a chip and the chip offers NOTHING. It has no listener, and
+ * `applyEdit` gained no case for it: the first token rendition adds no second write path, which is
+ * why this change could not corrupt a file even if every claim in it were wrong.
+ *
+ * Not because the source edit is unwritable — it is writable, and `TagSpan` in resolution.ts
+ * carries the offsets it would need. "Delete `[start,end)` of line N" is one sentence. Three
+ * things are unanswered, and the constraint is that the AFFORDANCE must be expressible, not merely
+ * the deletion:
+ *
+ *   1. WHAT THE WHITESPACE BECOMES. The engine strips a tag with `TAG_RE.sub("")`
+ *      (parse_tag.py:72) and leaves the gap, because it goes on to rebuild the line from cells.
+ *      The app does not rebuild the line — it patches it — so deleting `#work` from
+ *      `- [ ] a #task #work` leaves a trailing space, and deleting `#task` leaves a double one.
+ *      Neither is wrong; neither is decided.
+ *   2. WHAT DELETING A TAG MEANS. A tag is not decoration to the engine. `#task` selects the node
+ *      TYPE and `#work` sets a FIELD (config/vocabulary/domain_tags.yaml). Removing one is a
+ *      structural edit posted as a whole file, and the engine's own record of what happens when a
+ *      tag stops being recognised is that its content is absorbed into the node's title, exit 0,
+ *      no diagnostic. That is a bigger gesture than a click with no undo should carry.
+ *   3. WHERE THE CLICK WOULD GO. A chip sits inside the `<span>` that is the cursor target, so a
+ *      click on a chip is currently "put my cursor on this line". A click that DELETED instead
+ *      would put a destructive gesture exactly where a person expects a harmless one.
+ *
+ * So the rendition ships without it. What a removable chip needs is those three answered, an undo,
+ * and `applyEdit` gaining one `delete-span` case — at which point it is a small change, because
+ * the offsets are already here and the write path is already one function.
+ *
  * ── THE MARKDOWN RENDERER IS INJECTED, ON PURPOSE ──
  *
  * `deps.markdown` is supplied by the caller rather than imported. Two reasons, and the first is
@@ -40,7 +69,8 @@
 import { PresentationCascade } from "./cascade.js";
 import type { PresentationContext } from "./context.js";
 import type { FocusSurface } from "./focus.js";
-import { classifyLine } from "./resolution.js";
+import { classifyLine, tagSpans } from "./resolution.js";
+import type { Rendition } from "./resolution.js";
 import { applyEdit } from "./source.js";
 
 /** The markdown surface the painter needs. Structural, so any conforming renderer will do. */
@@ -198,6 +228,75 @@ function rawInput(
 }
 
 /**
+ * THE `wired` RENDITION OF A TAG — the class the chip carries, and the only style hook it has.
+ *
+ * `tagchip`, not `tag`: the app page already styles `.tag` (the hero tagline under the sign-in
+ * heading), and reusing a live class name for a different thing is how a stylesheet acquires a
+ * rule nobody dares delete. It is deliberately ONE class on ONE element, scoped in app/index.html to
+ * `.viewbody .tagchip`, so a later pass over the app's visual identity has one thing to move.
+ */
+const TAG_CHIP_CLASS = "tagchip";
+const CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
+const CHIP_CLOSE = "</span>";
+
+/**
+ * Render `text` with its tags as chips — or with them as characters, if the chip would not survive.
+ *
+ * ── WHY THE CHIP IS PUT INTO THE MARKDOWN AND NOT INTO THE DOM ──
+ *
+ * The alternative was to render the line, then walk the built elements and swap tag text for chip
+ * elements. That is the painter READING THE PAGE to decide what the page should be, and this whole
+ * module exists on the other side of that line. Here the chip is decided from the SOURCE, by the
+ * grammar in resolution.ts, and emitted into the ONE markdown call the line was already going to
+ * make. Nothing is read back.
+ *
+ * It also keeps the markdown intact, which segmenting would not. Splitting the text at the tags
+ * and rendering each piece separately would break any construct that spans a tag — `**bold #work
+ * bold**` would lose its emphasis, and a prose line's list item would close before its own chip.
+ * One call in, one string out, tags inside whatever structure markdown-it built.
+ *
+ * THE INJECTION IS SAFE BY THE GRAMMAR, NOT BY ESCAPING. A tag body is `[A-Za-z0-9_-]`, so a tag
+ * cannot contain `<`, `>`, `&` or `"` — there is no character in a matched tag that could close
+ * this span or open another element. That is a property of the regex in resolution.ts, cited to
+ * the engine, and it is fuzzed in tests/present-tags.test.mjs rather than assumed.
+ *
+ * ── AND IF THE RENDERER WOULD NOT PASS IT THROUGH, THE CHARACTERS WIN ──
+ *
+ * markdown-it does not always emit raw HTML verbatim. An indented line is a code block and its
+ * content is escaped — and the engine indents nested lines by four spaces, so this is a shape real
+ * views contain, not a hypothetical. A renderer configured `html: false` would escape it too.
+ * Either way the person would see `&lt;span class="tagchip"&gt;#work` on their screen, which is
+ * worse than the `#work` they had before.
+ *
+ * So the chip is rendered and then CHECKED: every span that went in has to come out. If they do
+ * not, the text is rendered again without them, and the line falls back to exactly what the app
+ * showed before this key existed. The fallback is all-or-nothing on purpose — a line with one
+ * chip and one escaped chip would be the worst of both. This check is also what stops the chip
+ * from depending on `html: true`: it does not assert the renderer's configuration, it observes
+ * what the renderer did with this line.
+ */
+function renderTags(text: string, tags: Rendition, render: (markdown: string) => string): string {
+  if (tags === "raw") {
+    return render(text);
+  }
+  const spans = tagSpans(text);
+  if (spans.length === 0) {
+    return render(text);
+  }
+
+  let injected = "";
+  let at = 0;
+  for (const span of spans) {
+    injected += text.slice(at, span.start) + CHIP_OPEN + span.text + CHIP_CLOSE;
+    at = span.end;
+  }
+  injected += text.slice(at);
+
+  const html = render(injected);
+  return html.split(CHIP_OPEN).length - 1 === spans.length ? html : render(text);
+}
+
+/**
  * Paint a view's markdown into `body`.
  *
  * The DOM this produces for a silent context is byte-identical to what `paintView`
@@ -312,7 +411,13 @@ export function paint(
         deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, box, row });
       });
       const span = document.createElement("span");
-      span.innerHTML = deps.markdown.renderInline(shape.tail);
+      // THE TAG RENDITION IS RESOLVED PER LINE, LIKE EVERY OTHER ONE. Asked before it is used and
+      // asked on every line the painter reaches, so a declaration that never changes the DOM is
+      // still a declaration that was READ — the difference between a key with a reader and a key
+      // that happens to agree with the default.
+      span.innerHTML = renderTags(shape.tail, cascade.resolve("tags").rendition, (markdown) =>
+        deps.markdown.renderInline(markdown),
+      );
       // THE TEXT IS THE CURSOR TARGET AND THE BOX IS THE TOGGLE. Two affordances on one line,
       // kept apart by which element carries which listener: click the words to read the source,
       // click the box to tick it.
@@ -330,7 +435,12 @@ export function paint(
       // `#` demotes one level and clamps at 6: the view's own `#` is the page's `<h2>`, because
       // the page already owns an `<h1>`. app.html:259, unchanged.
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      el.innerHTML = deps.markdown.renderInline(shape.text);
+      // The heading's OWN `#`es are not tags and cannot be: `classifyLine` has already taken them
+      // off, and the grammar would refuse them anyway (`#` then a space is not a tag body). What
+      // is left is the heading's text, which may carry tags like any other line.
+      el.innerHTML = renderTags(shape.text, cascade.resolve("tags").rendition, (markdown) =>
+        deps.markdown.renderInline(markdown),
+      );
       focusable(el, index);
       body.append(el);
       return;
@@ -343,7 +453,14 @@ export function paint(
     // Everything else is its own one-line markdown document. Block render, not inline — that is
     // what makes a `- item` line a list and a `| a | b |` line a table row. app.html:266.
     const div = document.createElement("div");
-    div.innerHTML = deps.markdown.render(shape.source);
+    // BLOCK RENDER, AND THE CHIP GOES IN BEFORE IT. This is the branch that carries most of the
+    // real tags in a real view: the engine emits a non-checkbox line as `- title #tag`, which is
+    // not a task and lands here. It is also the branch where the renderer sometimes refuses the
+    // chip — four spaces of indent is an indented code block to markdown-it — which is what
+    // renderTags's all-or-nothing fallback is for.
+    div.innerHTML = renderTags(shape.source, cascade.resolve("tags").rendition, (markdown) =>
+      deps.markdown.render(markdown),
+    );
     focusable(div, index);
     body.append(div);
   });

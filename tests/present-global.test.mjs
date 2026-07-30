@@ -33,6 +33,7 @@ import {
   REPO,
   importPage,
   installBrowser,
+  makeEvent,
   makeWorkDir,
   walk as walkPage,
 } from "./fixtures/app-html-page.mjs";
@@ -40,6 +41,7 @@ import {
   paint,
   readDeclaration,
   presentationFromDeclaration,
+  DEFAULT,
   PresentationCascade,
   PresentationContext,
   RESOLUTION_KEYS,
@@ -56,7 +58,7 @@ function painted(markdown, context) {
 
 const SERVED = JSON.parse(readFileSync(join(REPO, "presentation.json"), "utf8"));
 
-describe("1. the committed declaration changes nothing", () => {
+describe("1. the committed declaration moves exactly one key and no other", () => {
   test("presentation.json is readable and declares no problems", () => {
     const { problems } = readDeclaration(SERVED);
     assert.deepEqual(problems, [], "the shipped declaration does not read cleanly");
@@ -71,13 +73,37 @@ describe("1. the committed declaration changes nothing", () => {
     }
   });
 
-  test("the painted DOM under it is identical to the painted DOM with no declaration at all", () => {
-    // THE "NOTHING CHANGES UNTIL IT IS FLIPPED" PROMISE, as a comparison rather than a claim.
-    const declared = presentationFromDeclaration(SERVED).context;
+  test("with `tags` taken back to the default, the served file paints today's DOM exactly", () => {
+    // ── THIS ASSERTION CHANGED AT STAGE 8, AND THE CHANGE IS THE POINT OF THAT STAGE ──
+    //
+    // It used to read "the painted DOM under it is identical to the painted DOM with no
+    // declaration at all", because stage 2's promise was that a served file whose values were all
+    // the built-in defaults could not move anything. That promise was about a file that DECLARED
+    // NOTHING NEW. presentation.json now declares `tags: wired` against a built-in default of
+    // `raw`, so it MUST move the output — a served declaration that changed nothing would be the
+    // stage-8 failure, not the stage-2 guarantee.
+    //
+    // What is worth keeping is the guarantee UNDERNEATH it: the served file moves ONE key, and
+    // every other decision the app makes is still the decision it made before any of this existed.
+    // So it is asserted as a difference of exactly one key rather than abandoned: take `tags` back
+    // to its default and the two paints must be byte for byte the same tree.
+    const declared = presentationFromDeclaration({ ...SERVED, tags: DEFAULT.tags }).context;
     assert.equal(
       serialize(painted(VIEW_MARKDOWN, declared)),
       serialize(painted(VIEW_MARKDOWN, new PresentationContext())),
-      "the shipped declaration moved the painted output — stage 2 promised it would not",
+      "the shipped declaration moves something OTHER than `tags` — every key but that one is " +
+        "supposed to be today's behaviour restated as a declaration",
+    );
+  });
+
+  test("and as shipped it does move the DOM, because `tags` is doing something", () => {
+    // The other half, and the one that would catch an inert declaration: a key declared against
+    // its non-default value has to show up on the page.
+    assert.notEqual(
+      serialize(painted(VIEW_MARKDOWN, presentationFromDeclaration(SERVED).context)),
+      serialize(painted(VIEW_MARKDOWN, new PresentationContext())),
+      "the shipped declaration paints the same DOM as no declaration at all — `tags: wired` is " +
+        "inert, which is the single failure the GLOBAL level exists to detect",
     );
   });
 });
@@ -216,6 +242,52 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     // go is an editable line. Without a focus surface (every module-level test above) raw is
     // still inert text. Both are the same rendition; only the embodiment differs.
     assert.ok(raw.some((el) => el.value === "- [ ] Draft [[qntm:121]] #task"));
+  });
+
+  test("flipping `tags` in the served file turns chips into characters, in the page", async () => {
+    // ── THE STAGE-8 HEADLINE, ASSERTED WHERE IT COUNTS ──
+    //
+    // Not "the module can make a chip" — THE SERVED FILE DECIDES WHETHER THERE IS ONE. The page
+    // fetches presentation.json, hands it to the reader, and paints; nothing in this test touches
+    // a context, a cascade or a painter directly. Flip the one key in the document the server
+    // answers with and the DOM changes, with nothing rebuilt. That is the difference between this
+    // being architecture and being a stylesheet.
+    const wired = await pagePaints({ checkbox: "wired", tags: "wired" });
+    const chipped = wired.filter((el) => String(el.innerHTML).includes('class="tagchip"'));
+    assert.equal(chipped.length, 1, "the page painted no tag chip against a declaration of wired");
+    assert.match(chipped[0].innerHTML, /<span class="tagchip">#task<\/span>/);
+
+    const raw = await pagePaints({ checkbox: "wired", tags: "raw" });
+    assert.equal(
+      raw.filter((el) => String(el.innerHTML).includes("tagchip")).length,
+      0,
+      "the page painted a chip against a declaration that said raw — the `tags` key is NOT " +
+        "wired, and the chip is a stylesheet rather than a resolution",
+    );
+    assert.ok(
+      raw.some((el) => String(el.innerHTML).includes("#task")),
+      "raw did not leave the tag as its own characters",
+    );
+  });
+
+  test("a tag chip is not a cursor target, and the line under it still is", async () => {
+    // The chip offers NOTHING, so the gesture that reaches a line's source has to be unchanged by
+    // its presence. This is the assertion that would catch a chip that quietly swallowed the click
+    // the focus surface depends on.
+    await pagePaints({ checkbox: "wired", tags: "wired" });
+    const body = elements.get("viewBody");
+    walkPage(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    const editable = walkPage(body).filter((el) => el.type === "text");
+    assert.equal(editable.length, 1, "clicking a chipped line did not reach its source");
+    assert.equal(editable[0].value, VIEW.markdown.split("\n")[1]);
+    assert.ok(editable[0].value.includes("#task"), "the source the cursor reached lost its tag");
+
+    // Put the cursor back where it was. The page holds ONE focus surface for its whole lifetime
+    // (app.html, `const focus = new FocusSurface()`), so a test that leaves a line focused leaves
+    // it focused for every test after it — which is a real property of the page and worth being
+    // reminded of by having to write this line.
+    editable[0].dispatch("blur");
+    assert.equal(walkPage(body).filter((el) => el.type === "text").length, 0);
   });
 
   test("a declaration the page cannot fetch leaves it exactly where it was", async () => {

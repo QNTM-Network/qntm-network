@@ -10,6 +10,7 @@
  * WHAT IT DRIVES — the whole chain, in the order the app produces it:
  *   contextFor a served declaration -> readDeclaration  (what does the INSTANCE declare)
  *   paint(...)            -> classifyLine            (what IS this line)
+ *   paint(...)            -> tagSpans                (WHERE ARE ITS TAGS — the token-level grammar)
  *   paint(...)            -> PresentationCascade.resolve  (how is it SHOWN)
  *   resolve(...)          -> PresentationContext.at  (what does this level say)
  *   resolve(...)          -> isSilent                (does it say anything)
@@ -35,12 +36,22 @@
  * other this way", not "the page looks right". Do not read one as the other — the painted output
  * is proven separately, and by comparison, in tests/present-golden.test.mjs.
  *
- * THIS SCENARIO CANNOT BE RUN IN THIS ENVIRONMENT TODAY. `flow-trace verify .` exits 2 before
- * reaching it, because the TOOL's JS observer has no node_modules (the fix is `npm ci` in
- * tools/flow-trace/js/, in the tool's own checkout, which this branch must not touch). It is
- * written and committed anyway so the declarations it observes are not declarations without a
- * reader the moment the tool works again. The same properties ARE exercised today, by
- * tests/present-cascade.test.mjs under `node --test`, which runs in this repo's CI.
+ * ── IT RUNS. CORRECTED 2026-07-30 (stage 8), BECAUSE THE PARAGRAPH THAT WAS HERE WAS A FOSSIL ──
+ *
+ * This header used to open "THIS SCENARIO CANNOT BE RUN IN THIS ENVIRONMENT TODAY", because
+ * `flow-trace verify .` exited 2 when it was written. That was fixed in the TOOL's own checkout on
+ * the afternoon of the same day and .flow-trace.yaml has said so since; this file was the last
+ * place still claiming the opposite. `verify .` runs this scenario and reports its edges.
+ *
+ * WHAT IS TRUE INSTEAD, AND IT SHAPES THIS FILE: the observer TRUNCATES its own capture. Runs drop
+ * the last records a scenario produces — the focus edges, the second applyEdit — which surface as
+ * INFO "declared but not observed" and never as FAIL. Pre-existing and the tool's; .flow-trace.yaml
+ * carries the measurements and the two wrong diagnoses that preceded the right one.
+ *
+ * THE CONSEQUENCE FOR A SCENARIO AUTHOR IS CONCRETE, and it is why SOURCE below is four lines: a
+ * SIX-line fixture put this scenario permanently the wrong side of the budget, losing six edges on
+ * every single run; four lines does not. It does not remove the residual flake and nothing here
+ * can — but it is the difference between "sometimes" and "always".
  */
 
 import { paint } from "../../app/present/paint.js";
@@ -48,14 +59,26 @@ import { PresentationContext, presentationFromDeclaration } from "../../app/pres
 import { FocusSurface } from "../../app/present/focus.js";
 import type { InlineMarkdown } from "../../app/present/paint.js";
 
+/**
+ * THE SMALLEST VIEW THAT REACHES EVERY BRANCH THE PAINTER HAS — a heading, a blank line, a task
+ * with tags, and a prose line. Four lines, and the size is DELIBERATE rather than lazy.
+ *
+ * A scenario exists to make each declared edge OBSERVABLE ONCE; every line beyond that is pure
+ * capture volume, and capture volume is not free here — six lines cost this scenario six edges on
+ * every run, four lines does not (the header above, and .flow-trace.yaml, carry the numbers). What
+ * the PAINTED OUTPUT looks like is proven somewhere else entirely and against much bigger fixtures
+ * (tests/present-golden.test.mjs, a whole view plus a 1,125-case sweep). Do not grow this one to
+ * make it look thorough.
+ */
 const SOURCE = [
-  "# This Week",
-  "",
   "## Overdue",
+  "",
   "- [ ] Draft the launch note [[qntm:121]] #task #work 🆕 2026-07-29",
-  "  - [x] sub-step done [[qntm:122]] #task",
   "prose that is its own one-line document",
 ].join("\n");
+
+/** The line the cursor lands on in section 4 — named once so the index is not typed three times. */
+const FOCUSED_LINE_INDEX = 2;
 
 type Listener = () => void;
 
@@ -174,6 +197,59 @@ export function run(): void {
     throw new Error("a raw resolution did not carry the source characters");
   }
 
+  // 3b. THE FIRST TOKEN RENDITION (migration stage 8). `tags: wired` is the one declaration in
+  //     the served file whose value is NOT the built-in default, so this is the run in which a
+  //     declaration genuinely changes the page. It is also the edge that makes the tag GRAMMAR
+  //     observable: paint -> resolution.tagSpans, which fires only on the wired path, because
+  //     asking where the tags are when nothing will be done with them is work nobody asked for.
+  const chipped = presentationFromDeclaration({
+    note: "the shape presentation.json actually has, as served",
+    checkbox: "wired",
+    heading: "wired",
+    prose: "wired",
+    tags: "wired",
+  });
+  if (chipped.problems.length !== 0) {
+    throw new Error(`the served declaration did not read cleanly: ${chipped.problems.join("; ")}`);
+  }
+  //     ONE LINE, NOT THE WHOLE FIXTURE. A scenario exists to make an edge OBSERVABLE, and one
+  //     chipped line does that as well as forty.
+  //
+  //     WHILE ESTABLISHING THAT, A TOOL-SIDE FLAKE WAS MEASURED, AND THE FIRST DIAGNOSIS OF IT WAS
+  //     WRONG — recorded here because the wrong version is the one a later reader would otherwise
+  //     repeat. `flow-trace verify .` is INTERMITTENT on this project: most runs report every
+  //     declared flow, and some lose the LAST edges a run produces (FocusSurface.blur,
+  //     FocusSurface.isFocused, the second applyEdit), which surface as INFO "declared but not
+  //     observed" and never as FAIL. The first five runs over the unmodified base commit came back
+  //     identical, which made it look as though this change had introduced it — so this section
+  //     was cut down. Eight more base runs then flaked three times (29 29 29 29 29 / 29 27 29 26
+  //     29 29 26 29), and the branch flaked at a comparable rate (20 of 24). IT IS PRE-EXISTING
+  //     AND IT IS THE TOOL'S, not this scenario's and not this repo's. The section stays small
+  //     anyway: it is the right size for what it proves.
+  const CHIPPED_LINE = "- [ ] Ship the chip [[qntm:9]] #task #work";
+  const withChips = new StubElement("article");
+  paint(withChips as unknown as HTMLElement, CHIPPED_LINE, chipped.context, { markdown });
+  const chipCount = withChips
+    .descendants()
+    .map((el) => el.innerHTML.split('<span class="tagchip">').length - 1)
+    .reduce((total, count) => total + count, 0);
+  if (chipCount !== 2) {
+    throw new Error(`a declaration of tags: wired produced ${chipCount} chips, not 2`);
+  }
+  // And the same painter, the same line, one key flipped: no chip at all. A run that only ever
+  // drove the wired end would record the same edge while proving nothing about whether the
+  // declaration is what decided.
+  const unchipped = new StubElement("article");
+  paint(
+    unchipped as unknown as HTMLElement,
+    CHIPPED_LINE,
+    presentationFromDeclaration({ tags: "raw" }).context,
+    { markdown },
+  );
+  if (unchipped.descendants().some((el) => el.innerHTML.includes("tagchip"))) {
+    throw new Error("a declaration of tags: raw still produced a chip — the key is inert");
+  }
+
   // 4. THE CURSOR RULE (migration stage 3). A focus surface is supplied, one line is focused, and
   //    the painter is driven end to end: paint -> FocusSurface.contextFor -> PresentationContext
   //    .with, then the settled line -> source.applyEdit. This is the run that makes the FOCUS
@@ -202,10 +278,10 @@ export function run(): void {
   if (line === undefined) {
     throw new Error("clicking a line's text produced no editable line");
   }
-  if (line.value !== SOURCE.split("\n")[3]) {
+  if (line.value !== SOURCE.split("\n")[FOCUSED_LINE_INDEX]) {
     throw new Error("the focused line did not carry its verbatim source");
   }
-  line.value = "  - [x] sub-step done [[qntm:122]] #task #edited";
+  line.value = "- [x] Draft the launch note [[qntm:121]] #task #work ✅ 2026-07-30";
   line.dispatch("blur");
   if (committed === null) {
     throw new Error("the settled line produced no source edit");
@@ -213,7 +289,7 @@ export function run(): void {
   const before = SOURCE.split("\n");
   const after = (committed as string).split("\n");
   const changed = before.map((_, index) => index).filter((index) => before[index] !== after[index]);
-  if (changed.length !== 1 || changed[0] !== 3) {
+  if (changed.length !== 1 || changed[0] !== FOCUSED_LINE_INDEX) {
     throw new Error(`the edit changed lines ${changed.join(", ")} — it must change exactly one`);
   }
 }

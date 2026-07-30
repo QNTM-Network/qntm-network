@@ -348,6 +348,54 @@ backlog:
     differs from the original by exactly the intended substring operation. Needs stages
     1 and 2.'
   driving_capability: every-affordance-writes-back-through-the-source
+  record: '2026-07-30 — FIRST RENDITION SHIPPED; THE ARC STAYS OPEN. `tags` is a resolution
+    key with a reader and a chip. `links` and `markers` are NOT in this change and were
+    deliberately not added on the way past — two keys read by nothing is the bug this whole
+    design names by hand, and each rendition ships with its source edit or does not ship.
+    THE ASYMMETRY THAT MAKES IT ARCHITECTURE: DEFAULT.tags is `raw` (the floor of the cascade
+    is what the app did before the key existed, which keeps present-golden a real byte-for-byte
+    comparison against the painter it replaced) and presentation.json declares `wired`. So the
+    chip is a decision the INSTANCE makes, at GLOBAL, in a served file. Flip that one key to raw,
+    reload, chips become characters, NOTHING REBUILT — measured in a real browser against a
+    bundle whose md5 was identical before and after.
+    WHAT A TAG IS: the engine''s canonical grammar, `(?<!\S)#([a-zA-Z_][a-zA-Z0-9_-]*)`
+    (parse_tag.py:23), mirrored — it is CODE, not vocabulary config (the engine''s own audit puts
+    it under "Closed (code)"). So `#1`, `foo#bar`, `C#`, `# Heading`, `##` and a URL fragment are
+    not tags and `#work/admin` is `#work` only. The boundary is written `(^|\s)` rather than a
+    lookbehind because Safari only got lookbehind in 16.4 and an unparseable literal takes the
+    whole bundle down; the two forms are proven equal over the engine''s own cases plus a
+    972-case sweep, with the engine''s regex carried in the test as the reference.
+    THE CHIP IS READ-ONLY AND THAT IS THE CONSTRAINT WORKING. No source edit was added and
+    applyEdit still knows two operations, so the first token rendition could not corrupt a file
+    even if every other claim in it were wrong. The deletion is writable (TagSpan carries the
+    offsets); the AFFORDANCE is not answerable yet — the leftover whitespace, what deleting a
+    structural tag MEANS, and where a destructive click sits when the chip is inside the cursor
+    target. Named in app/present/paint.ts.
+    HOW IT IS PAINTED, because the alternative was the forbidden shape: the chip goes into the
+    markdown BEFORE the single render call, never swapped into the built DOM afterwards — the
+    painter must not read the page it is building. Injection is safe BY THE GRAMMAR (a tag body
+    cannot hold < > & "), fuzzed rather than assumed. Where the renderer would not carry the
+    markup — an indented line is a code block and the engine indents by four spaces — the line
+    falls back all-or-nothing to the characters, which also removes any dependence on html:true.
+    PROVEN: tests/present-tags.test.mjs (66) + 5 through the app page''s own lifted script + 2 more
+    through the page''s served declaration; 198 tests / 0 fail overall, up from 124. flow-trace
+    verify . exits 0 at 30 PASS / 0 FAIL with paint -> resolution.tagSpans OBSERVED (count 5).
+    MUTATION-PROVEN NINE WAYS, each red with its own message, each restored — digit-leading tag
+    body, boundary dropped, always chip, never chip, fallback removed, applyEdit discrimination
+    removed, `hidden` admitted, the chip given an attribute, and the posted file rebuilt from the
+    DOM. One of those mutations caught a VACUOUS assertion in this change''s own suite (a chip
+    listener check that walked elements when the chip is built as HTML) and it was rewritten.
+    REFUTED: `hidden` is not a third rendition. Rendition is ONE union shared by every key and
+    readDeclaration has no per-key table, so admitting it would admit {"checkbox": "hidden"} —
+    loads clean, read by nothing, painted as a checkbox anyway. And hidden text IS edited here:
+    FOCUS takes a line raw on every key, so the cursor makes hidden tags reappear. It needs
+    per-key rendition types first.
+    ONE REAL DEFECT FOUND AND CLOSED: applyEdit fell through to the checkbox branch for any edit
+    that was not `set-line`, so an unknown kind silently UNTICKED a box and returned a whole file
+    to POST. Unreachable from a typed caller; reachable by the next person to add `delete-span`
+    and forget a branch — which is exactly the affordance this stage deferred.
+    STILL OPEN ON THIS ROW: links (a title instead of [[qntm:121]]), markers (a pill instead of
+    🆕 2026-07-29), and a REMOVABLE chip.'
   kind: capability
   state: diagnose-ready
 - id: author-in-the-browser-not-in-obsidian

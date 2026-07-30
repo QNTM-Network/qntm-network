@@ -148,6 +148,25 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [presentation-is-resolved-not-chosen]
 
+  # THE TOKEN'S OWN CONTENT (added 2026-07-30, migration stage 8). The LINE level's content input
+  # one layer finer: not "what kind of line is this" but "where in it are the tags". Declared as
+  # its own edge beside paint-classifies-the-line, and for the same reason — a tag grammar
+  # re-expressed at a call site is the same failure as a precedence order re-expressed at one, and
+  # this grammar is a MIRROR of the engine's (parse_tag.py:23) rather than something this repo gets
+  # to choose. One place to look, one place to correct if the engine ever moves.
+  #
+  # IT FIRES ONLY ON THE WIRED PATH. Asking where a line's tags are when the answer will not be
+  # used is work nobody asked for, so the edge appears exactly when a declaration says `tags:
+  # wired`. That makes the observation itself meaningful: this edge being present in a capture is
+  # evidence that a declaration reached the painter and was obeyed.
+  - id: paint-finds-the-tags-in-the-line
+    from: app/present/paint
+    to:   app/present/resolution
+    callee: tagSpans
+    event: app.finds-the-tags-in-a-line
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
   # ── THE CURSOR (added 2026-07-30, migration stage 3) ──────────────────────────────────────
   # WHERE THE CURSOR IS, AS A LEVEL RATHER THAN AS A BRANCH. FOCUS is the most specific of the
   # seven, so the cursor beats every declaration below it — which is what stops a line that
