@@ -257,6 +257,21 @@ capabilities:
     cascade and obeys it (tests/present-cascade.test.mjs, mutation-proven both ways). WHAT IS NOT
     proven: that NO path bypasses. That is canonical routing, and it needs `flow-trace verify`,
     which exits 2 here for a reason outside this repo.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 2 SHIPPED. THE CASCADE NOW HAS A LEVEL THAT SPEAKS. The
+    GLOBAL level is `presentation.json`, served with the app from the site root; app.html fetches
+    it and `presentationFromDeclaration` (app/present/context) reads it through
+    `readDeclaration` (app/present/declaration) into a GLOBAL contribution. Its committed value
+    is today's behaviour — both keys `wired` — so nothing moved when it landed, and that is
+    asserted as a comparison rather than promised. THE FALSIFIER IS THE POINT OF THE STAGE and it
+    is asserted at two distances: flipping one key to `raw` changes the painted DOM through the
+    modules, AND through app.html's own lifted script answering a flipped fetch. The second is the
+    one that catches this stage's real failure mode — a perfect reader the page never calls.
+    Mutation-proven three ways on 2026-07-30 (the reader applies nothing; the page reads and never
+    installs; an unknown key is silently ignored), each red with its own message, each restored.
+    AND THE SENTENCE ABOVE ABOUT `verify` IS NOW FALSE — with the tool's JS observer installed it
+    exits 0 with 23 PASS / 0 FAIL and the five stage-1 flows are OBSERVED with counts. Canonical
+    routing is still not answered here, for a narrower reason recorded in .flow-trace.yaml: the
+    verbs that would answer it install probe anchors that blind the JS observer.
   tier: foundational
   status: undeclared
 - id: the-focused-line-shows-its-source
@@ -276,15 +291,33 @@ capabilities:
     the test that stage names — focus a line and assert the DOM carries the verbatim source
     substring; blur and assert the rendition returns; assert the posted markdown differs from
     the original by exactly that line.
+    ── UPDATE 2026-07-30, MIGRATION STAGE 3 SHIPPED. THE SURFACE EXISTS AND THE RULE RUNS ON IT.
+    Clicking a line's text puts the cursor on it; the line renders as an `<input>` holding its
+    verbatim source; blur or Enter returns the resolved rendition and Escape drops what was typed.
+    The rule is a LEVEL, not a branch: `FocusSurface` (app/present/focus) contributes `raw` at
+    FOCUS for the line under the cursor and the painter obeys what the cascade then resolves — so
+    "the cursor always wins" is a property of the ORDER, owned in one tuple, and a GLOBAL
+    declaration of `wired` cannot make a line uneditable.
+    WHAT IS PROVEN, and by what. tests/present-focus.test.mjs asserts the three the design names
+    plus the one it does not: the posted file is IMMUNE TO A CORRUPTED DOM — every other rendered
+    element is wrecked before the affordance is used, and the other lines still come out of the
+    source string byte for byte. That is the test that catches the trap stage 1 found, where a
+    naive inversion passes a byte-identical golden and every ordinary assertion. Asserted again
+    through app.html's own lifted script. Mutation-proven five ways (raw is inert text; blur never
+    repaints; the file is rebuilt from the DOM; a multi-line text is split in instead of refused;
+    FOCUS is demoted out of first place), each red with its own message, each restored. AND IN A
+    REAL BROWSER, not only under node: clicked, typed, blurred, and the committed file differed by
+    exactly the edited line.
+    THE AFFORDANCE HAS A SOURCE EDIT AND USES THE ONE THAT EXISTED. `set-line` joins
+    `set-checkbox` inside app/present/source — an `<input>` holding verbatim source text has a
+    substring operation ("line N becomes this string"); a contenteditable region holding a
+    rendition would not, which is exactly why one is admissible and the other is forbidden. An
+    `<input>` cannot hold a newline, so "exactly one line replaced" is a property of the element as
+    well as of the code, and applyEdit refuses a multi-line text anyway.
+    STILL MISSING, said plainly: there is no keyboard path INTO the surface — a line is reached by
+    clicking it, and arrow-key navigation between lines is not built. A blank line is still not a
+    cursor target, because it has no rendition at either end.
   tier: functional
-  rooting: >-
-    isolated STILL, and the reason has changed, which is worth one line. The classes it will
-    root against — presentation-painting, presentation-resolution — EXIST as of 2026-07-30
-    (stage 1). What does not exist is a flow of this capability's own to carry the class
-    binding, because the FOCUS level has no contributor and the app still has no surface for a
-    cursor to land on. Rooting it now would be a class binding on a capability with no code
-    doing its work — a label, which is the thing this file's neighbour warns about. It roots at
-    stage 3, with the focus surface, and that is when the binding will mean something.
   status: undeclared
 - id: every-affordance-writes-back-through-the-source
   intent: >-

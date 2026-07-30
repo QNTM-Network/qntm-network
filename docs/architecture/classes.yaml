@@ -106,7 +106,15 @@ classes:
       PresentationCascade.resolve and asserts the painter both ASKS and OBEYS. Mutation-proven in
       both directions on 2026-07-30 — inlining the decision fails the first, ignoring the answer
       fails the second.
-    canonical_class: app/present/cascade:PresentationCascade
+
+      TWO CONTRIBUTORS JOINED THIS CONCERN 2026-07-30 AND NEITHER GOT A CLASS OF ITS OWN, which is
+      a decision rather than an omission. app/present/declaration reads the served GLOBAL document
+      (stage 2) and app/present/focus derives the FOCUS level from where the cursor is (stage 3).
+      Both produce a CONTRIBUTION; neither decides a rendition. The failure worth catching is
+      unchanged and this class already catches it: a path that decides how a line is shown without
+      routing through the cascade. Giving a contributor its own canonical home would split one
+      concern across three homes and make "who decides?" a three-file question again — which is
+      the condition app/present/ exists to end. Their flows are declared and carry THIS class.
     status: working
 
   - id: presentation-painting
@@ -119,6 +127,14 @@ classes:
 
       It may build DOM and it may not decide. A rendition branch appearing in the painter is the
       violation, and it is the violation `presentation-resolution` above is written to catch.
+
+      IT GREW A SURFACE 2026-07-30 (stage 3) AND STILL MAY NOT DECIDE. The painter now wires the
+      cursor affordance — a click listener that moves the cursor, and the `<input>` a raw line
+      becomes when there is somewhere for a cursor to go — but the rendition is still the
+      cascade's answer, resolved per line against a context the focus surface derived. What the
+      painter chose is the EMBODIMENT (inert text with no focus surface, an editable line with
+      one), which is this concern's job. An `if (focused)` deciding raw-versus-wired would be the
+      violation, and there is none.
     canonical_class: app/present/paint:paint
     governs_sinks:
       - view-painted

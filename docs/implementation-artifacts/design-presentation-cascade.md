@@ -322,6 +322,12 @@ to say so than to size it at an hour and be wrong.** The rule itself — swap on
 renditions on focus — is small. The surface it needs does not exist. §8 stage 3 sizes the surface,
 not the rule.
 
+> **CLOSED 2026-07-30 (stage 3), and the sizing held.** `app.html` now has a text-editing surface:
+> a click on a line's text puts the cursor on it and the line becomes an `<input>` holding its
+> verbatim source. The rule itself was minutes; the surface was the half-day, exactly as this
+> section predicted. What is still absent, and is the honest residue of this paragraph: a keyboard
+> path INTO the surface. A line is reached by clicking it.
+
 ### 4.3 The envelope is the boundary the design cannot cross alone
 
 VIEW and STRUCTURAL_NODE are levels of the **engine's** declarations. For the app to resolve
@@ -528,6 +534,27 @@ the reader is wired, and it is an hour.
 does not, the declaration is inert and the stage has failed — which is the point of doing it
 separately.
 
+> **SHIPPED 2026-07-30**, branch `feat/present-global-and-focus`. The declaration is
+> `presentation.json`, served from the site root; `app.html` fetches it and
+> `presentationFromDeclaration` (`app/present/context`) reads it through `readDeclaration`
+> (`app/present/declaration`) into a GLOBAL contribution. The read lives in `app/` rather than in
+> the page **because that is the only place the edge is observable** — declared as
+> `context-reads-the-global-declaration`. Committed value is today's behaviour, and that is a
+> comparison: the painted DOM under the served declaration is serialised beside the painted DOM
+> with no declaration at all. **The falsifier is asserted at two distances** — through the modules,
+> and through `app.html`'s own lifted script answering a flipped fetch, which is the half that
+> catches a perfect reader the page never calls. Mutation-proven three ways. A misspelled key is a
+> reported **problem**, never a silent no-op; a 404 or a malformed document falls back to
+> **silence**, which is what the app did before this level existed.
+>
+> **And §0.6 is now false, which this stage measured rather than assumed.** With the tool's own JS
+> observer installed, `flow-trace verify .` exits **0** with **23 PASS / 0 FAIL** over three
+> scenarios, and all ten expected flows are OBSERVED with counts. `capability-rollup .` and
+> `map . --full` still under-report — they install canonical-routing probe anchors in the same
+> capture and the JS observer then records no cross-module calls at all (measured both ways on one
+> verify run). That is a defect in the tool, not in these declarations, and it is why the derived
+> block in `capabilities.yaml` was not refreshed from a rollup known to be blind.
+
 ### Stage 3 — the FOCUS level: the operator's cursor rule · **½ day**
 **This is the operator's rule: cursor on the line → `- [ ]`; cursor off → a clickable checkbox.**
 Add per-line focus to the graph viewer: the focused line renders as an `<input>` holding its
@@ -540,6 +567,37 @@ switched by a fact about the moment rather than by a mode switch.
 **Falsifier:** focus a line, assert the DOM carries the verbatim source substring; blur, assert the
 checkbox returns; assert the posted markdown after an edit-then-blur equals the source with exactly
 that line replaced.
+
+> **SHIPPED 2026-07-30**, same branch. `app/present/focus.ts` holds `FocusSurface` — one number,
+> which line the cursor is on — and turns it into a contribution at FOCUS. **The rule is a level,
+> not a branch:** the painter has no `if (focused)` chain; it asks the cascade per line and obeys,
+> and "the cursor always wins" is a property of `SPECIFICITY` rather than of anything in `paint`.
+> The contribution is derived from `RESOLUTION_KEYS`, so stage 8's tags/links/markers cannot leave
+> a focused line half-visible.
+>
+> **The half-day was the surface, as sized.** Clicking a line's text moves the cursor — the
+> listener is on the `<span>` and calls `preventDefault`, because a `<label>` otherwise forwards
+> the click and reading a line would also tick it. The focused line is an `<input>` holding its
+> verbatim source; blur and Enter commit, Escape drops; one settlement per input, because blur can
+> arrive twice. **`prose` became the third resolution key** — a prose line was already resolved and
+> had no key only because nothing could select the other end, and a focus surface that skipped
+> prose would be a half surface. A blank line is still not a target: it has no rendition at either
+> end.
+>
+> **Write-back added no second path.** `set-line` joins `set-checkbox` inside `app/present/source`.
+> An `<input>` cannot hold a newline, so "exactly one line replaced" is a property of the element
+> as well as of the code; `applyEdit` refuses a multi-line text anyway, and refuses a no-op so that
+> leaving a line untouched cannot POST a whole view.
+>
+> **Proven** by `tests/present-focus.test.mjs` (26) and four more through `app.html`'s own lifted
+> script — the three assertions above, plus the one this section does not name and should:
+> **the posted file is immune to a corrupted DOM.** Every other rendered element is wrecked before
+> the affordance is used and the other lines still come out of the source byte for byte. That is
+> the only test that catches the inversion trap, and this surface needed its own copy of it because
+> it is the first one that reads an element back. Mutation-proven five ways. **And in a real
+> browser:** clicked, typed, blurred; the committed file differed by exactly the edited line.
+>
+> **Not done:** there is no keyboard path INTO the surface — a line is reached by clicking it.
 
 ### Stage 4 — the MODE level · **½ day** · needs 1 + 2, not 3
 Reading vs authoring as one session-scoped contribution that shifts the default for every line.

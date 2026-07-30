@@ -31,13 +31,27 @@
  * true of the line as a whole: `paintView` turned `## Work` into an `<h3>` element, which is a
  * `heading` rendered `wired` in section 2.3's own vocabulary. So the app resolved TWO families,
  * not one, and both are extracted here. Nothing new is resolved by this change.
+ *
+ * ── AND `prose` ARRIVED AT STAGE 3, FOR A REASON THAT IS THE STAGE'S WHOLE POINT ──
+ *
+ * A prose line was already resolved: `paintView` handed it to markdown-it as its own one-line
+ * document, so `- a bare item` became a list and `**bold**` became a `<b>`. That is a `wired`
+ * rendition of a family whose `raw` end nobody had named, and the family had no key only because
+ * nothing could ever select the other end.
+ *
+ * The cursor rule is what made it selectable, and a focus surface that skipped prose would be a
+ * half surface: click a task and see its source, click the sentence under it and nothing happens.
+ * So the key lands WITH its reader and WITH the affordance that needs it — the same rule that
+ * kept `tags`, `links` and `markers` out of stage 1 admits `prose` here. What still has no key is
+ * a BLANK line, and that absence is honest: a blank line has no wired rendition at all (it
+ * vanishes), so there is nothing for a cursor to land on and nothing to resolve between.
  */
 
 /** The two ends of the dial. `raw` is the characters; `wired` is the app's rendition of them. */
 export type Rendition = "raw" | "wired";
 
-/** The token families this app shows more than one way. See the note above on why it is two. */
-export type ResolutionKey = "checkbox" | "heading";
+/** The token families this app shows more than one way. See the notes above on why it is three. */
+export type ResolutionKey = "checkbox" | "heading" | "prose";
 
 /** A complete answer: one rendition per family. */
 export type Resolution = { readonly [K in ResolutionKey]: Rendition };
@@ -46,7 +60,11 @@ export type Resolution = { readonly [K in ResolutionKey]: Rendition };
 export type Contribution = Partial<Resolution>;
 
 /** Every key, for callers that need to iterate the families without re-expressing the list. */
-export const RESOLUTION_KEYS = ["checkbox", "heading"] as const satisfies readonly ResolutionKey[];
+export const RESOLUTION_KEYS = [
+  "checkbox",
+  "heading",
+  "prose",
+] as const satisfies readonly ResolutionKey[];
 
 /**
  * The floor of the cascade — what a key resolves to when every level is silent.
@@ -60,6 +78,7 @@ export const RESOLUTION_KEYS = ["checkbox", "heading"] as const satisfies readon
 export const DEFAULT: Resolution = Object.freeze({
   checkbox: "wired",
   heading: "wired",
+  prose: "wired",
 });
 
 /**

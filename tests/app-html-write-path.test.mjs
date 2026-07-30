@@ -10,9 +10,9 @@
  * WHY IT GOES TO THIS TROUBLE. app.html is a hand-authored page outside every enforcer this repo
  * has — outside the capture filter, outside tsconfig, outside the bundle. A test that copied its
  * wiring into a fixture and then tested the fixture would pass forever while the page rotted. So
- * this extracts the page's real `<script type="module">`, swaps ONLY its three import lines (two
- * CDN URLs that node cannot fetch, and a relative path that has to become absolute), appends an
- * export block, and runs it. Every line of logic under test is the line that ships.
+ * tests/fixtures/app-html-page.mjs lifts the page's real `<script type="module">` and runs it;
+ * every line of logic under test is the line that ships. The lifting moved into that fixture at
+ * migration stage 2, when a second suite needed the same page — one extractor, not two.
  *
  * THE PROPERTY. The app posts the WHOLE FILE for one view and the server overwrites it. So the
  * question is never "did the checkbox change" — it is "what did the other 40 lines of the file
@@ -23,128 +23,10 @@
 
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve, dirname } from "node:path";
-import { pathToFileURL, fileURLToPath } from "node:url";
 
-const REPO = resolve(fileURLToPath(import.meta.url), "..", "..");
-const WORK = mkdtempSync(join(tmpdir(), "app-html-write-path-"));
+import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
 
-/** Lift app.html's module script and make it importable by node, changing nothing else. */
-function extractPageScript() {
-  const html = readFileSync(join(REPO, "app.html"), "utf8");
-  const match = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
-  assert.ok(match, "app.html no longer contains a module script");
-  let source = match[1];
-
-  const swapped = [];
-  const swap = (pattern, replacement, label) => {
-    assert.ok(pattern.test(source), `app.html no longer imports ${label}`);
-    source = source.replace(pattern, replacement);
-    swapped.push(label);
-  };
-
-  // 1. The passkey library — a CDN URL node cannot fetch, and nothing this test drives calls it.
-  swap(
-    /^import \{ startRegistration, startAuthentication \} from "https:\/\/esm\.sh\/@simplewebauthn\/browser@13";$/m,
-    "const startRegistration = () => {}; const startAuthentication = () => {};",
-    "@simplewebauthn/browser",
-  );
-  // 2. markdown-it — same library, same major, resolved from this repo's node_modules instead of
-  //    a CDN. Resolved to an absolute URL because the rewritten script runs from a temp dir,
-  //    where a bare specifier has no node_modules to find.
-  swap(
-    /^import MarkdownIt from "https:\/\/esm\.sh\/markdown-it@14";$/m,
-    `import MarkdownIt from ${JSON.stringify(import.meta.resolve("markdown-it"))};`,
-    "markdown-it",
-  );
-  // 3. The presentation bundle — a repo-relative path that has to become absolute once the
-  //    script is written somewhere else. THE BUNDLE ITSELF IS NOT SUBSTITUTED: this is the same
-  //    dist/present.js the browser loads.
-  swap(
-    /"\.\/dist\/present\.js"/,
-    JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href),
-    "./dist/present.js",
-  );
-
-  assert.equal(swapped.length, 3, "unexpected number of import swaps");
-
-  // The page keeps its state in module-scoped `let`s and exports nothing. These two lines are
-  // additive — they read and write what is already there and change no behaviour.
-  source += `
-export { paintView, toggleTask };
-export function __setGraphData(next) { graphData = next; }
-`;
-
-  const file = join(WORK, "page.mjs");
-  writeFileSync(file, source);
-  return file;
-}
-
-/** The smallest browser the page touches at import time and during a toggle. */
-function installBrowser() {
-  const elements = new Map();
-  const make = (tagName) => ({
-    tagName,
-    className: "",
-    innerHTML: "",
-    textContent: "",
-    value: "",
-    type: "",
-    checked: false,
-    disabled: false,
-    style: {},
-    dataset: {},
-    children: [],
-    listeners: new Map(),
-    classList: {
-      add() {},
-      remove() {},
-      toggle() {},
-      contains: () => false,
-    },
-    append(...nodes) {
-      this.children.push(...nodes);
-    },
-    addEventListener(type, listener) {
-      const existing = this.listeners.get(type) ?? [];
-      existing.push(listener);
-      this.listeners.set(type, existing);
-    },
-    dispatch(type) {
-      for (const listener of this.listeners.get(type) ?? []) {
-        listener();
-      }
-    },
-  });
-
-  globalThis.document = {
-    createElement: make,
-    getElementById: (id) => {
-      if (!elements.has(id)) {
-        elements.set(id, make("div"));
-      }
-      return elements.get(id);
-    },
-  };
-  globalThis.location = { hostname: "qntm.network" };
-  const store = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => store.get(k) ?? null,
-    setItem: (k, v) => store.set(k, v),
-    removeItem: (k) => store.delete(k),
-  };
-  return { elements };
-}
-
-function walk(element, out = []) {
-  for (const child of element.children ?? []) {
-    out.push(child);
-    walk(child, out);
-  }
-  return out;
-}
+const WORK = makeWorkDir("app-html-write-path");
 
 // A view with the shape the real ones have: headings, nested tasks, prose, a table, and lines
 // carrying wiki-links, tags and markers — the characters that must survive a round trip.
@@ -195,7 +77,7 @@ before(async () => {
       }),
     };
   };
-  page = await import(pathToFileURL(extractPageScript()).href);
+  page = await importPage(WORK);
   page.__setGraphData({ snapshot: { generated_at: "2026-07-30T12:00:00Z", views: [VIEW] } });
 });
 
@@ -284,4 +166,85 @@ describe("app.html's own write path", () => {
   });
 });
 
-process.on("exit", () => rmSync(WORK, { recursive: true, force: true }));
+describe("the cursor rule, through the page (migration stage 3)", () => {
+  const line = (index) => VIEW.markdown.split("\n")[index];
+
+  test("clicking a line's text shows its verbatim source, in an input, in the page", () => {
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+
+    const editable = walk(body).filter((el) => el.type === "text");
+    assert.equal(editable.length, 1, "the page has no focus surface — clicking a line did nothing");
+    assert.equal(editable[0].value, line(3));
+    assert.equal(
+      walk(body).filter((el) => el.type === "checkbox").length,
+      3,
+      "focusing one line disturbed the other three",
+    );
+  });
+
+  test("blur returns the checkbox and posts nothing when nothing was typed", async () => {
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    posted = null;
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    walk(body).find((el) => el.type === "text").dispatch("blur");
+    await new Promise((r) => setImmediate(r));
+
+    assert.equal(walk(body).filter((el) => el.type === "checkbox").length, 4);
+    assert.equal(walk(body).filter((el) => el.type === "text").length, 0);
+    assert.equal(posted, null, "leaving a line untouched posted the whole view");
+  });
+
+  test("edit then blur posts the file with exactly that line replaced", async () => {
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    posted = null;
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    const editable = walk(body).find((el) => el.type === "text");
+    editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04";
+    editable.dispatch("blur");
+    await new Promise((r) => setImmediate(r));
+
+    assert.ok(posted, "no request was made");
+    assert.ok(posted.url.endsWith("/app/edit-file"), `posted to ${posted.url}`);
+    assert.equal(posted.body.path, "work/outcomes.md");
+
+    const before = VIEW.markdown.split("\n");
+    const after = posted.body.markdown.split("\n");
+    assert.equal(after.length, before.length, "the file gained or lost lines");
+    const changed = before.map((_, i) => i).filter((i) => before[i] !== after[i]);
+    assert.deepEqual(changed, [3], "more than one line changed");
+    assert.equal(after[3], "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04");
+    for (let i = 0; i < before.length; i += 1) {
+      if (i === 3) continue;
+      assert.equal(after[i], before[i], `line ${i} moved and nobody edited it`);
+    }
+  });
+
+  test("the page's posted file is immune to a corrupted DOM", async () => {
+    // The same detector as the checkbox has, aimed at the surface that reads an element back.
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    posted = null;
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    for (const el of walk(body)) {
+      if (el.tagName === "span") el.innerHTML = "<b>WRECKED</b>";
+      if (el.tagName === "h2" || el.tagName === "div") el.innerHTML = "WRECKED";
+    }
+    const editable = walk(body).find((el) => el.type === "text");
+    editable.value = "- [x] Draft the launch note [[qntm:121]] #task #work ✅ 2026-08-04";
+    editable.dispatch("blur");
+    await new Promise((r) => setImmediate(r));
+
+    assert.ok(!posted.body.markdown.includes("WRECKED"), "the page rebuilt the file from the page");
+    const before = VIEW.markdown.split("\n");
+    const after = posted.body.markdown.split("\n");
+    assert.deepEqual(before.map((_, i) => i).filter((i) => before[i] !== after[i]), [3]);
+  });
+});

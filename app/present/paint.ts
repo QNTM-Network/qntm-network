@@ -39,6 +39,7 @@
 
 import { PresentationCascade } from "./cascade.js";
 import type { PresentationContext } from "./context.js";
+import type { FocusSurface } from "./focus.js";
 import { classifyLine } from "./resolution.js";
 import { applyEdit } from "./source.js";
 
@@ -62,28 +63,138 @@ export interface CheckboxToggle {
   readonly row: HTMLElement;
 }
 
+/**
+ * What the caller is handed when the cursor leaves a line it changed.
+ *
+ * `text` is the verbatim characters the input held; `markdown` is the WHOLE view source with
+ * exactly that one line replaced, or `null` if the edit was refused — an unchanged line (the
+ * commonest thing a cursor does), or text that is not one line. `null` means DO NOT POST, and it
+ * is distinguishable from a successful no-op for the same reason it is for the checkbox: the app
+ * posts the whole file and the server overwrites what it is sent.
+ */
+export interface LineCommit {
+  readonly lineIndex: number;
+  readonly text: string;
+  readonly markdown: string | null;
+}
+
 export interface PaintDeps {
   readonly markdown: InlineMarkdown;
   readonly onCheckboxToggle?: (toggle: CheckboxToggle) => void;
+  /**
+   * WHERE THE CURSOR IS — optional, and its absence is a real configuration rather than a
+   * half-built one. Without it, a painted view has no focus affordance at all: no click handler
+   * on a line, and the `raw` rendition is inert text. That is exactly what stage 1 painted, which
+   * is why the golden master (tests/present-golden.test.mjs) still compares byte for byte against
+   * the painter this replaced — it paints without a focus surface, and there is nothing extra to
+   * be identical to. app.html supplies one; a test that wants the old surface omits it.
+   */
+  readonly focus?: FocusSurface;
+  readonly onLineCommit?: (commit: LineCommit) => void;
 }
 
 /**
- * The `raw` rendition: the characters, verbatim.
+ * The `raw` rendition, with no cursor in the world: the characters, verbatim, and inert.
  *
- * NOT REACHABLE FROM THE SHIPPED APP TODAY — DEFAULT is `wired` for both keys and no level
- * contributes, so nothing selects this. It exists because a cascade whose keys have one
- * admissible value is decoration: without a second rendition, `resolve` cannot be proven to be
- * obeyed, migration stage 2's falsifier ("flip one key to raw and assert the painted DOM
- * changes") cannot be written, and stage 3's rule has no rendition to switch to.
- *
- * `textContent`, never `innerHTML` — raw means the source characters as characters, which also
- * makes this the one rendition that offers no affordance at all and therefore needs no source
- * edit. It is the safest point on the dial, which is why it is the one that ships first.
+ * `textContent`, never `innerHTML` — raw means the source characters AS CHARACTERS. This is the
+ * one rendition that offers no affordance at all and therefore needs no source edit, which is
+ * what made it the safe half of the dial to ship first.
  */
-function rawLine(source: string): HTMLElement {
+function rawText(source: string): HTMLElement {
   const div = document.createElement("div");
   div.textContent = source;
   return div;
+}
+
+/**
+ * The `raw` rendition when there IS somewhere for a cursor to go: an `<input>` holding the
+ * verbatim source, and the whole of migration stage 3's surface.
+ *
+ * ── WHY AN `<input>` AND NOT A `contenteditable` ──
+ *
+ * The governing constraint: a resolution is admissible only when every affordance it offers can
+ * be expressed as an edit to the SOURCE STRING, and the app never reconstructs markdown from the
+ * DOM. An input holding source text satisfies it exactly — what comes back out is the characters
+ * a person typed, and the edit is "line N becomes this string", one sentence, no inversion. A
+ * contenteditable region holding a RENDITION satisfies nothing: getting markdown back out of it
+ * means un-rendering HTML, which is the one shape the design forbids, and the app posts the WHOLE
+ * FILE, so a lossy inversion does not corrupt one line — it rewrites a view.
+ *
+ * `<input>` rather than `<textarea>` is also load-bearing rather than aesthetic: an input cannot
+ * contain a newline, so "exactly one line replaced and every other line byte for byte" is a
+ * property of the ELEMENT and not merely of the code around it. `applyEdit` refuses a multi-line
+ * text as well, and the two guards are deliberately not one.
+ *
+ * ── WHY THIS EMBODIMENT DEPENDS ON `deps.focus` RATHER THAN ON THE CASCADE ──
+ *
+ * Raw is raw either way; what differs is whether the characters can be REACHED. An input in an
+ * app with no focus surface would be a control nobody can leave and nothing repaints — worse than
+ * the inert text it replaced. So the rendition is the cascade's decision and its embodiment is
+ * the painter's, which is the split the presentation-painting class already draws: paint may
+ * build DOM, and may not decide.
+ */
+function rawInput(
+  lineSource: string,
+  lineIndex: number,
+  fileSource: string,
+  focus: FocusSurface,
+  deps: PaintDeps,
+  repaint: (nextSource: string) => void,
+): HTMLElement {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "rawline";
+  input.value = lineSource;
+
+  // ONE SETTLEMENT PER INPUT. Blur can arrive twice (a keypress that commits, then the element
+  // losing focus as the repaint removes it), and a second settlement would compute a second edit
+  // against a source that has already moved — the first shape a double POST takes.
+  let settled = false;
+  const settle = (commit: boolean): void => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    const wasFocused = focus.isFocused(lineIndex);
+    if (wasFocused) {
+      focus.blur();
+    }
+    if (!commit) {
+      // Escape: the cursor leaves and the characters it was holding are dropped. Nothing is
+      // computed, nothing is posted, and the line returns to whatever the cascade resolves.
+      if (wasFocused) {
+        repaint(fileSource);
+      }
+      return;
+    }
+    const text = input.value;
+    // THE EDIT IS COMPUTED FROM THE SOURCE STRING THIS PAINT WAS GIVEN, plus the characters the
+    // person typed. Nothing about the other lines is read back off the page; they come out of
+    // `source` exactly as they went in. tests/present-focus.test.mjs proves that by wrecking
+    // every other rendered element first and then checking the posted file.
+    const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
+    deps.onLineCommit?.({ lineIndex, text, markdown });
+    if (markdown !== null) {
+      // Optimistic, and the same posture the checkbox already had: show the edit immediately,
+      // let the caller replace it with the server's copy when the cycle comes back.
+      repaint(markdown);
+    } else if (wasFocused) {
+      repaint(fileSource);
+    }
+  };
+
+  input.addEventListener("blur", () => settle(true));
+  input.addEventListener("keydown", (event) => {
+    const key = (event as KeyboardEvent | undefined)?.key;
+    if (key === "Enter") {
+      event?.preventDefault?.();
+      settle(true);
+    } else if (key === "Escape") {
+      event?.preventDefault?.();
+      settle(false);
+    }
+  });
+  return input;
 }
 
 /**
@@ -101,15 +212,82 @@ export function paint(
   context: PresentationContext,
   deps: PaintDeps,
 ): void {
-  const cascade = new PresentationCascade(context);
+  const focus = deps.focus;
+
+  /**
+   * Paint the whole view again, from a source string.
+   *
+   * The focus surface reacts by REPAINTING rather than by mutating one element in place, and that
+   * is the cheap way to keep the cascade the only decider: after a focus change every line is
+   * resolved again, from scratch, against the context it should have. A patch-one-element
+   * implementation would have to know which lines a focus change could possibly affect — which is
+   * a second copy of the precedence order, in the painter, which is the thing the design forbids.
+   */
+  const repaint = (nextSource: string): void => {
+    paint(body, nextSource, context, deps);
+  };
+
+  /**
+   * Give a wired rendition somewhere for the cursor to land — the missing surface, in five lines.
+   *
+   * `preventDefault` is not decoration. A task line is a `<label>` wrapping the checkbox, and a
+   * click anywhere inside a label activates its control, so without it clicking the TEXT of a
+   * task to read its source would also tick the box. `stopPropagation` keeps a click on a nested
+   * element from also being read as a click on its parent line.
+   */
+  const focusable = (element: HTMLElement, lineIndex: number): void => {
+    if (focus === undefined) {
+      return;
+    }
+    element.addEventListener("click", (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      focus.focus(lineIndex);
+      repaint(source);
+    });
+  };
+
+  /** The raw rendition, embodied for the surface this paint actually has. */
+  const raw = (lineSource: string, lineIndex: number): void => {
+    if (focus === undefined) {
+      body.append(rawText(lineSource));
+      return;
+    }
+    // THE LINE AND THE FILE ARE TWO ARGUMENTS AND THEY ARE NAMED APART. The input shows ONE
+    // line; every edit it computes is against the WHOLE file, because the whole file is the
+    // write unit and the server overwrites what it is sent. Collapsing them into one `source`
+    // parameter is not a tidy-up — it was the first version of this function, and it produced a
+    // "file" one line long: tests/present-focus.test.mjs caught it in section 2.
+    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint);
+    // APPEND BEFORE FOCUS. `focus()` on an element that is not in the document does nothing, so
+    // the order here is what puts the cursor in the line a person just clicked.
+    body.append(input);
+    if (focus.isFocused(lineIndex)) {
+      (input as HTMLInputElement).focus?.();
+    }
+  };
+
   body.innerHTML = "";
 
   source.split("\n").forEach((line, index) => {
     const shape = classifyLine(line);
 
+    if (shape.kind === "blank") {
+      // A blank line has no rendition at either end — it vanished in the old painter and it
+      // vanishes here — so there is nothing to resolve and nowhere for a cursor to land.
+      return;
+    }
+
+    // ONE CASCADE PER LINE, because FOCUS is a fact about ONE line. The other six levels say the
+    // same thing all the way down the view; this is the rung that does not, and building the
+    // context per line is what lets the painter stay ignorant of which rung that is.
+    const cascade = new PresentationCascade(
+      focus === undefined ? context : focus.contextFor(index, context),
+    );
+
     if (shape.kind === "checkbox") {
       if (cascade.resolve("checkbox").rendition === "raw") {
-        body.append(rawLine(shape.source));
+        raw(shape.source, index);
         return;
       }
       const row = document.createElement("label");
@@ -135,6 +313,10 @@ export function paint(
       });
       const span = document.createElement("span");
       span.innerHTML = deps.markdown.renderInline(shape.tail);
+      // THE TEXT IS THE CURSOR TARGET AND THE BOX IS THE TOGGLE. Two affordances on one line,
+      // kept apart by which element carries which listener: click the words to read the source,
+      // click the box to tick it.
+      focusable(span, index);
       row.append(box, span);
       body.append(row);
       return;
@@ -142,25 +324,27 @@ export function paint(
 
     if (shape.kind === "heading") {
       if (cascade.resolve("heading").rendition === "raw") {
-        body.append(rawLine(shape.source));
+        raw(shape.source, index);
         return;
       }
       // `#` demotes one level and clamps at 6: the view's own `#` is the page's `<h2>`, because
       // the page already owns an `<h1>`. app.html:259, unchanged.
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
       el.innerHTML = deps.markdown.renderInline(shape.text);
+      focusable(el, index);
       body.append(el);
       return;
     }
 
-    if (shape.kind === "blank") {
+    if (cascade.resolve("prose").rendition === "raw") {
+      raw(shape.source, index);
       return;
     }
-
     // Everything else is its own one-line markdown document. Block render, not inline — that is
     // what makes a `- item` line a list and a `| a | b |` line a table row. app.html:266.
     const div = document.createElement("div");
     div.innerHTML = deps.markdown.render(shape.source);
+    focusable(div, index);
     body.append(div);
   });
 }
