@@ -11,6 +11,17 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="alternate icon" href="/favicon.ico" sizes="32x32" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<!-- THE ICON MARK. Site-root-absolute for the same reason as the three links above. It is LINKED
+     rather than pasted into the sheet below, on purpose: the mark is a component with its own
+     stylesheet, and a component that has to be spliced into its host's is not one. The page's own
+     sheet is also the one thing tests/app-view-rows.test.mjs reads, and its reader understands
+     @media and refuses every other at-rule by name — so the mark's @container query belongs to
+     the mark's file and could not live here even if it wanted to.
+
+     (Do not write the opening style tag in prose anywhere above that sheet. That reader finds it
+     with a regex over the whole document and does not skip comments, so a mention of it in one
+     becomes the start of the stylesheet as far as CI is concerned. Learned the hard way.) -->
+<link rel="stylesheet" href="/app/mark/qmark.css" />
 <style>
   :root {
     --bg: #07080a; --ink: #eef1f4; --dim: #8b93a1; --line: #1b1f26;
@@ -199,10 +210,21 @@
     border-bottom: 1px solid var(--line);
   }
   .bar-mark { display: flex; align-items: center; gap: var(--s2); flex: none; }
-  /* The brand device. brand/BRAND.md section 2: "the glowing green dot (our signature
-     element)". It is the only thing on this page drawn at full strength in the declared green,
-     and it is 8px of it. */
-  .bar-dot { width: .5rem; height: .5rem; border-radius: var(--pill); background: var(--green); box-shadow: 0 0 12px var(--green-hairline); }
+  /* THE MARK ITSELF IS NOT STYLED HERE, and that is the whole of its wiring. It came from
+     /app/mark/qmark.css, linked in the head, and the only thing this page says about it is how
+     big it is. brand/BRAND.md section 2 called the icon mark "the main gap"; the 8px green dot
+     that used to sit here was the brand DEVICE standing in for it, and the responsive pair
+     BRAND.md names is full `qntm` ↔ reduced Q, not ↔ dot.
+
+     TWO THINGS THIS DELIBERATELY DOES NOT SAY. It does not set `--qmark-ink`: the mark's colour
+     is the mono-luminance dial, which BRAND.md section 5 still has OPEN, so it comes from the
+     mark's own token carrying the lab's current value rather than from this page's `--ink`.
+     Binding it to `--ink` would settle a brand decision by accident, from a stylesheet. And it
+     does not set `--qmark-size` either. The component's default is 1.5rem, which is what this bar
+     wants; restating it here would be a second place for one number to live, and the day the two
+     disagree the bar would be the one nobody thought to look in. Below 20px the mark's own sheet
+     settles the electron rather than orbiting it, so a bar that ever wants a smaller mark gets a
+     still one, which is the right trade and is the component's decision, not this page's. */
   .bar-word { letter-spacing: var(--track); font-size: var(--t2); color: var(--ink); }
   /* WHERE YOU ARE. Takes the slack, and gives it back first: `min-width: 0` is what lets the
      view's title ellipse instead of shoving the controls off a 320px screen. */
@@ -544,7 +566,7 @@
      Always present. `#barWhere` and `#who` are what appear once there is a session — the mark
      alone is the signed-out state, so the page is never chrome-less. -->
 <header id="bar" class="bar">
-  <div class="bar-mark"><span class="bar-dot"></span><span class="bar-word">qntm</span></div>
+  <div class="bar-mark"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span><span class="bar-word">qntm</span></div>
   <div id="barWhere" class="bar-where hidden">
     <span id="barFolder" class="bar-folder"></span>
     <span id="barView" class="bar-view"></span>

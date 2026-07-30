@@ -97,7 +97,11 @@ filter) is the signature — strongest on black.
   centre, both settled above). Watch it at every size in **`qmark-motion.html`**. At and below 20px
   the reveal does not run: the electron is 2.56px at favicon size, and what you see there is the mark
   wobbling rather than an orbit, so small sizes render the settled Q — same markup, same geometry.
-  Still NOT wired into the app; the wiring is two lines, named at the foot of that page.
+  **Wired into the app's menu bar**, where it replaces the 8px green dot that was standing in for
+  the missing icon mark — two lines, no change to that page's own stylesheet. Note the consequence
+  and say so if it is wrong: the bar is now MONO, per the 2026-06-27 treatment, so the app's one
+  full-strength green is gone from it. That is one line to put back. The favicon is untouched and
+  still the device — `ship-favicon-and-app-icon` is a separate open row and depends on the dials.
 
 ## 5. Open questions
 

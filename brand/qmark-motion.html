@@ -203,8 +203,10 @@
     <p class="sd">The app's bar carries <b>the brand device</b> — 8px of the declared green — beside the
        wordmark. The icon mark is what BRAND.md §2 calls "the main gap", and this is the swap: the dot
        becomes the Q, at the component's default <b>1.5rem</b>, which is also the smallest size at which the
-       reveal is worth running. <b>Not applied</b> — app/index.html is being changed by someone else — so what
-       is below is the bar rebuilt from its own tokens, and the wiring is named rather than done.</p>
+       reveal is worth running. <b>Applied</b> — the two lines below are in <code>app/index.html</code>, and a
+       test holds the markup identical to the component's. What is drawn here is the bar rebuilt from its own
+       tokens, so the before and the after can sit next to each other. Note what the swap costs: the bar is
+       MONO now, which is the confirmed treatment, so the app's one full-strength green has left it.</p>
     <div class="inline-cases">
       <div class="barmock"><span class="bar-mark"><span class="bar-dot"></span><span class="bar-word">qntm</span></span><span class="bar-where"><span class="bar-folder">dev</span><span class="bar-view">flow-trace</span></span><span class="barbtn">Views</span></div>
       <div class="barmock" style="--qmark-size:1.5rem"><span class="bar-mark"><span class="qmark" role="img" aria-label="qntm"><svg class="qmark-svg" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="qmark-ring" cx="50" cy="50" r="30"/><g class="qmark-orbit"><circle class="qmark-electron" cx="71" cy="71" r="8"/></g></svg></span><span class="bar-word">qntm</span></span><span class="bar-where"><span class="bar-folder">dev</span><span class="bar-view">flow-trace</span></span><span class="barbtn">Views</span></div>

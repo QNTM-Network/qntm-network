@@ -47,6 +47,7 @@ const MARKUP = read("app", "mark", "qmark.html");
 const SHEET = read("app", "mark", "qmark.css");
 const LAB = read("brand", "qmark-lab.html");
 const HARNESS = read("brand", "qmark-motion.html");
+const APP = read("app", "index.html");
 const TOKENS = read("docs", "implementation-artifacts", "research-polish-direction.md");
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -411,5 +412,26 @@ describe("the mark is written once", () => {
     for (const selector of [".qmark-ring", ".qmark-electron", "@keyframes"]) {
       assert.ok(!own.includes(selector), `the harness restates ${selector}, so it is no longer showing the component`);
     }
+  });
+
+  test("the app's bar carries that same one line, and the page styles none of it", () => {
+    // THE WIRING, HELD. Two lines in app/index.html and nothing else, which is the claim this
+    // test turns into a fact: the markup is the component's, verbatim, and the stylesheet is
+    // linked rather than spliced into the page's own <style> block.
+    assert.equal(APP.replace(/\s+/g, " ").split(FRAGMENT).length - 1, 1, "the app's mark is not the component's line");
+    assert.match(APP, /<link rel="stylesheet" href="\/app\/mark\/qmark\.css" \/>/);
+    assert.ok(!/class="bar-dot"/.test(APP), "the dot the mark replaced is still in the bar");
+
+    const block = /<style>([\s\S]*?)<\/style>/.exec(APP)?.[1] ?? "";
+    const withoutComments = block.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const fragment of [".qmark", "@container", "@keyframes"]) {
+      assert.ok(
+        !withoutComments.includes(fragment),
+        `app/index.html styles ${fragment} itself — the component's sheet is the only place that may, ` +
+          "and tests/app-view-rows.test.mjs's reader refuses any at-rule but @media",
+      );
+    }
+    // The bar's own rule for the dot is gone with the dot; a rule nothing can match is dead.
+    assert.ok(!withoutComments.includes(".bar-dot"), "a rule for an element that no longer exists");
   });
 });
