@@ -245,6 +245,39 @@ backlog:
     substring; blur and assert the rendition returns; assert the posted markdown differs
     from the original by exactly that line. Needs stages 1 and 2.'
   driving_capability: the-focused-line-shows-its-source
+  record: '2026-07-30 — SHIPPED, and the half-day was the surface exactly as sized.
+    THE RULE IS ONE LEVEL: app/present/focus.FocusSurface holds one number — which line
+    the cursor is on — and contributes `raw` at FOCUS for that line. FOCUS is the most
+    specific of the seven, so the cursor beats a GLOBAL declaration of wired; the painter
+    carries no `if (focused)` chain, it asks the cascade and obeys. The contribution is
+    built FROM RESOLUTION_KEYS rather than listed, so stage 8''s tags/links/markers cannot
+    leave a focused line half-visible.
+    THE SURFACE, which did not exist: clicking a line''s text puts the cursor on it (the
+    listener is on the SPAN and calls preventDefault, because a <label> otherwise forwards
+    the click and reading a line would also tick it); the focused line renders as an
+    <input> holding its verbatim source; blur and Enter commit, Escape drops. One
+    settlement per input, because blur can arrive twice and a second edit would be computed
+    against a source that has already moved.
+    A THIRD RESOLUTION KEY, `prose`, lands with it: a prose line was already resolved
+    (markdown-it, as its own one-line document) and had no key only because nothing could
+    select the other end. A focus surface that skipped prose would be a half surface. A
+    BLANK line is still not a target and that is honest — it has no rendition at either end.
+    WRITE-BACK: `set-line` joins `set-checkbox` inside app/present/source, so the second
+    affordance added NO second write path. An <input> cannot hold a newline, so "exactly one
+    line replaced" is a property of the element as well as the code; applyEdit refuses a
+    multi-line text and refuses a no-op (leaving a line untouched must not POST a whole view).
+    PROVEN: tests/present-focus.test.mjs (26) plus 4 through app.html''s own lifted script —
+    the design''s three assertions, and the one it does not name: the posted file is IMMUNE TO
+    A CORRUPTED DOM. Every other rendered element is wrecked before the affordance is used and
+    the other lines still come out of the source byte for byte, which is the only test that
+    catches the inversion trap stage 1 found. Mutation-proven five ways, each restored. AND IN
+    A REAL BROWSER: clicked, typed, blurred; the committed file differed by exactly the edited
+    line and every other line was identical.
+    STAGE 1 STILL HOLDS: 124 tests green, including the 30-comparison byte-identical golden
+    (the painter without a focus surface is unchanged, which is why the golden needed no edit)
+    and the DOM-inversion detector. `flow-trace verify .` exits 0, 29 PASS / 0 FAIL, and all 16
+    expected flows are OBSERVED — nothing declared here is unmeasured.
+    NOT DONE: there is no keyboard path INTO the surface (a line is reached by clicking it).'
   kind: capability
   state: diagnose-ready
 - id: add-the-mode-presentation-level

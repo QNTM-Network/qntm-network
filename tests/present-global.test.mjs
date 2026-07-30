@@ -206,7 +206,11 @@ describe("4. the page itself reads it — the half that catches an unwired reade
         "WIRED, which is the single failure migration stage 2 exists to detect",
     );
     assert.ok(!raw.some((el) => el.tagName === "h3"), "the page painted a heading against raw");
-    assert.ok(raw.some((el) => el.textContent === "- [ ] Draft [[qntm:121]] #task"));
+    // THE CHARACTERS, VERBATIM — held in an <input> rather than in a <div> because the page
+    // supplies a focus surface as of migration stage 3, and raw with somewhere for a cursor to
+    // go is an editable line. Without a focus surface (every module-level test above) raw is
+    // still inert text. Both are the same rendition; only the embodiment differs.
+    assert.ok(raw.some((el) => el.value === "- [ ] Draft [[qntm:121]] #task"));
   });
 
   test("a declaration the page cannot fetch leaves it exactly where it was", async () => {

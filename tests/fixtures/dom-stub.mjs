@@ -70,12 +70,40 @@ class StubElement {
     this.listeners.set(type, existing);
   }
 
-  /** Fire the handlers a painter registered — what makes an affordance test a real run. */
-  dispatch(type) {
+  /**
+   * Fire the handlers a painter registered — what makes an affordance test a real run.
+   *
+   * The event is passed through because the focus surface's handlers use it: a click on the text
+   * of a task line calls preventDefault so the surrounding <label> does not also tick the box,
+   * and a keydown reads `key`. A dispatch that supplied nothing would silently exercise a
+   * different code path from the browser's.
+   */
+  dispatch(type, event = makeEvent()) {
     for (const listener of this.listeners.get(type) ?? []) {
-      listener();
+      listener(event);
     }
+    return event;
   }
+
+  /** The cursor arriving. Recorded rather than simulated — the painter calls it, tests read it. */
+  focus() {
+    this.focused = true;
+  }
+}
+
+/** An event carrying only what the painter's handlers touch. */
+export function makeEvent(fields = {}) {
+  return {
+    defaultPrevented: false,
+    propagationStopped: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      this.propagationStopped = true;
+    },
+    ...fields,
+  };
 }
 
 /** A document with only `createElement`. Install it globally before running a painter. */
@@ -109,6 +137,7 @@ export function serialize(element, depth = 0) {
     `class=${JSON.stringify(element.className ?? "")}`,
     `marginLeft=${JSON.stringify(element.style?.marginLeft ?? "")}`,
     `type=${JSON.stringify(element.type ?? "")}`,
+    `value=${JSON.stringify(element.value ?? "")}`,
     `checked=${JSON.stringify(element.checked ?? "")}`,
     `disabled=${JSON.stringify(element.disabled ?? "")}`,
     `innerHTML=${JSON.stringify(element.innerHTML ?? "")}`,

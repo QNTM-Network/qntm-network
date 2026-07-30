@@ -42,7 +42,29 @@ export interface SetCheckbox {
   readonly checked: boolean;
 }
 
-export type SourceEdit = SetCheckbox;
+/**
+ * Replace one line with the characters a person typed into it (migration stage 3).
+ *
+ * THE SECOND AFFORDANCE, AND THE ONE THE GOVERNING CONSTRAINT WAS WRITTEN FOR. The focused line
+ * renders as an `<input>` holding its verbatim source, so what comes back is SOURCE TEXT — the
+ * characters themselves, not a rendition of them that something has to un-render. That is why an
+ * `<input>` is admissible where a `contenteditable` region is not: the substring operation is
+ * "line N becomes this string", writable in one sentence, and there is no inversion anywhere in
+ * it. An editable rendered region would have no such sentence, which is precisely the test.
+ *
+ * `text` is ONE LINE. `applyEdit` refuses a `text` carrying a newline rather than splitting it,
+ * and the refusal is structural rather than defensive: an `<input>` cannot contain one, so a
+ * newline arriving here means the caller is not the surface this was written for and the file is
+ * about to gain a line nobody counted. "Exactly one line replaced, every other line byte for
+ * byte" stops being provable the moment that is allowed through.
+ */
+export interface SetLine {
+  readonly kind: "set-line";
+  readonly lineIndex: number;
+  readonly text: string;
+}
+
+export type SourceEdit = SetCheckbox | SetLine;
 
 // VERBATIM from app.html:275 as it stood at 64c3a87. The capture groups are what make this an
 // edit and not a rewrite: group 1 is everything up to the glyph, group 2 is everything after it,
@@ -68,6 +90,20 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
   const line = lines[edit.lineIndex];
   if (line === undefined) {
     return null;
+  }
+
+  if (edit.kind === "set-line") {
+    // A no-op is a REFUSAL, not a successful edit. Leaving a line and changing nothing is the
+    // commonest thing a cursor does; returning the file unchanged would make the caller POST a
+    // whole view to say nothing, and the server overwrites what it is sent.
+    if (edit.text === line) {
+      return null;
+    }
+    if (edit.text.includes("\n") || edit.text.includes("\r")) {
+      return null;
+    }
+    lines[edit.lineIndex] = edit.text;
+    return lines.join("\n");
   }
 
   const match = CHECKBOX_GLYPH.exec(line);

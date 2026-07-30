@@ -26,11 +26,13 @@ export type { DeclarationReading } from "./declaration.js";
 export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
 
+export { FocusSurface } from "./focus.js";
+
 export { PresentationCascade } from "./cascade.js";
 export type { Resolved } from "./cascade.js";
 
 export { applyEdit } from "./source.js";
-export type { SetCheckbox, SourceEdit } from "./source.js";
+export type { SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
 export { paint } from "./paint.js";
-export type { CheckboxToggle, InlineMarkdown, PaintDeps } from "./paint.js";
+export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";

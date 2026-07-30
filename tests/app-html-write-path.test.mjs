@@ -24,7 +24,7 @@
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
 
-import { importPage, installBrowser, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
 
 const WORK = makeWorkDir("app-html-write-path");
 
@@ -163,5 +163,88 @@ describe("app.html's own write path", () => {
 
     const after = posted.body.markdown.split("\n");
     assert.equal(after[5], "- [ ] Already done [[qntm:123]] #task ✅ 2026-07-27");
+  });
+});
+
+describe("the cursor rule, through the page (migration stage 3)", () => {
+  const line = (index) => VIEW.markdown.split("\n")[index];
+
+  test("clicking a line's text shows its verbatim source, in an input, in the page", () => {
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+
+    const editable = walk(body).filter((el) => el.type === "text");
+    assert.equal(editable.length, 1, "the page has no focus surface — clicking a line did nothing");
+    assert.equal(editable[0].value, line(3));
+    assert.equal(
+      walk(body).filter((el) => el.type === "checkbox").length,
+      3,
+      "focusing one line disturbed the other three",
+    );
+  });
+
+  test("blur returns the checkbox and posts nothing when nothing was typed", async () => {
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    posted = null;
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    walk(body).find((el) => el.type === "text").dispatch("blur");
+    await new Promise((r) => setImmediate(r));
+
+    assert.equal(walk(body).filter((el) => el.type === "checkbox").length, 4);
+    assert.equal(walk(body).filter((el) => el.type === "text").length, 0);
+    assert.equal(posted, null, "leaving a line untouched posted the whole view");
+  });
+
+  test("edit then blur posts the file with exactly that line replaced", async () => {
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    posted = null;
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    const editable = walk(body).find((el) => el.type === "text");
+    editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04";
+    editable.dispatch("blur");
+    await new Promise((r) => setImmediate(r));
+
+    assert.ok(posted, "no request was made");
+    assert.ok(posted.url.endsWith("/app/edit-file"), `posted to ${posted.url}`);
+    assert.equal(posted.body.path, "work/outcomes.md");
+
+    const before = VIEW.markdown.split("\n");
+    const after = posted.body.markdown.split("\n");
+    assert.equal(after.length, before.length, "the file gained or lost lines");
+    const changed = before.map((_, i) => i).filter((i) => before[i] !== after[i]);
+    assert.deepEqual(changed, [3], "more than one line changed");
+    assert.equal(after[3], "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04");
+    for (let i = 0; i < before.length; i += 1) {
+      if (i === 3) continue;
+      assert.equal(after[i], before[i], `line ${i} moved and nobody edited it`);
+    }
+  });
+
+  test("the page's posted file is immune to a corrupted DOM", async () => {
+    // The same detector as the checkbox has, aimed at the surface that reads an element back.
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    page.paintView("this-week");
+    const body = elements.get("viewBody");
+    posted = null;
+    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    for (const el of walk(body)) {
+      if (el.tagName === "span") el.innerHTML = "<b>WRECKED</b>";
+      if (el.tagName === "h2" || el.tagName === "div") el.innerHTML = "WRECKED";
+    }
+    const editable = walk(body).find((el) => el.type === "text");
+    editable.value = "- [x] Draft the launch note [[qntm:121]] #task #work ✅ 2026-08-04";
+    editable.dispatch("blur");
+    await new Promise((r) => setImmediate(r));
+
+    assert.ok(!posted.body.markdown.includes("WRECKED"), "the page rebuilt the file from the page");
+    const before = VIEW.markdown.split("\n");
+    const after = posted.body.markdown.split("\n");
+    assert.deepEqual(before.map((_, i) => i).filter((i) => before[i] !== after[i]), [3]);
   });
 });

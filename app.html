@@ -95,6 +95,18 @@
   .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task.syncing { opacity: .5; }
   .viewbody .task span { flex: 1; }
+  /* THE FOCUSED LINE. It is a real <input> holding the line's verbatim source, so it is styled to
+     read as the line it replaced rather than as a form control — the cursor arrives, the
+     characters appear, and nothing jumps. */
+  .viewbody input.rawline {
+    display: block; width: 100%; padding: .18rem 0; margin: 0;
+    background: transparent; border: 0; border-radius: 0;
+    font: inherit; color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .92em;
+  }
+  .viewbody input.rawline:focus { box-shadow: none; outline: none; background: rgba(124,199,255,.06); }
+  .viewbody .task span { cursor: text; }
 </style>
 </head>
 <body>
@@ -161,7 +173,7 @@ import MarkdownIt from "https://esm.sh/markdown-it@14";
 // cascade.md section 7 for why the code has to live under app/ and not here: `.flow-trace.yaml`
 // includes `app` as a PATH PREFIX, so anything written in this file is outside canonical routing
 // and flow declarations permanently, by construction.
-import { paint, PresentationContext, presentationFromDeclaration } from "./dist/present.js";
+import { paint, FocusSurface, PresentationContext, presentationFromDeclaration } from "./dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -272,6 +284,12 @@ let currentViewId = null;
 // HOW A LINE IS SHOWN — the task regex, the indent arithmetic, the heading demotion, the
 // blank-line drop and the one-line-per-document fallback all moved to app/present/, unchanged.
 // What is left here is what this page is actually for: finding the view, and posting the file.
+// WHERE THE CURSOR IS (migration stage 3). One surface for the page, not one per paint: it has to
+// survive the repaint it causes, or the line it just focused would be repainted with the cursor
+// nowhere. It holds one number and nothing else — the FOCUS level is DERIVED from where the cursor
+// is, never declared in a file, because a fact about the moment written down outlives the moment.
+const focus = new FocusSurface();
+
 function paintView(id) {
   currentViewId = id;
   const v = graphData?.snapshot?.views.find((x) => x.id === id);
@@ -280,7 +298,9 @@ function paintView(id) {
   if (!v) return;
   paint(body, v.markdown, presentation, {
     markdown: md,
+    focus,
     onCheckboxToggle: (toggle) => toggleTask(v, toggle),
+    onLineCommit: (commit) => commitLine(v, commit),
   });
 }
 
@@ -309,6 +329,32 @@ async function toggleTask(view, toggle) {
     row.classList.toggle("done", box.checked);
     row.classList.remove("syncing");
     box.disabled = false;
+    $("freshness").textContent = "sync failed: " + e.message;
+  }
+}
+
+// The cursor leaves a line it changed: POST the edited view, let the server cycle, re-render from
+// the fresh projection. Same write path as the checkbox, and deliberately so — one endpoint, one
+// whole-file write unit, one place where a view is replaced.
+//
+// AGAIN, THE EDIT IS NOT MADE HERE. `commit.markdown` is the whole view source with exactly that
+// one line replaced, computed by app/present/source.js#applyEdit from the source string the
+// painter was given plus the characters the input held. `null` means the edit was refused — the
+// line was left unchanged, or the text was not one line — and a refusal is not a POST.
+async function commitLine(view, commit) {
+  if (commit.markdown === null) return;
+  $("freshness").textContent = "syncing…";
+  try {
+    const data = await api("/app/edit-file", { body: { path: view.path, markdown: commit.markdown }, auth: true });
+    graphData = data;
+    paintView(currentViewId);
+    const when = new Date(data.snapshot.generated_at).toLocaleString();
+    $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
+  } catch (e) {
+    // The painter has already repainted this view from the edited source, so the page is showing
+    // the edit; what failed is the write. Repaint from the LAST KNOWN SERVER STATE so the screen
+    // stops claiming something the vault does not have.
+    paintView(currentViewId);
     $("freshness").textContent = "sync failed: " + e.message;
   }
 }

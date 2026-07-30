@@ -13,7 +13,10 @@
  *   paint(...)            -> PresentationCascade.resolve  (how is it SHOWN)
  *   resolve(...)          -> PresentationContext.at  (what does this level say)
  *   resolve(...)          -> isSilent                (does it say anything)
+ *   paint(...)            -> FocusSurface.contextFor (WHERE IS THE CURSOR — the derived level)
+ *   contextFor(...)       -> PresentationContext.with (that level, layered onto the declared ones)
  *   the checkbox's change -> applyEdit               (the affordance, as a source-string edit)
+ *   the focused line's blur -> applyEdit             (the second affordance, the same one module)
  *
  * The last edge is the one worth naming. It is the structural form of the governing constraint:
  * the only thing that computes an edit is source.ts, and the painter reaches it. An affordance
@@ -42,6 +45,7 @@
 
 import { paint } from "../../app/present/paint.js";
 import { PresentationContext, presentationFromDeclaration } from "../../app/present/context.js";
+import { FocusSurface } from "../../app/present/focus.js";
 import type { InlineMarkdown } from "../../app/present/paint.js";
 
 const SOURCE = [
@@ -60,6 +64,8 @@ class StubElement {
   tagName: string;
   className = "";
   type = "";
+  value = "";
+  focused = false;
   checked = false;
   innerHTML = "";
   textContent = "";
@@ -86,6 +92,11 @@ class StubElement {
     for (const listener of this.#listeners.get(type) ?? []) {
       listener();
     }
+  }
+
+  /** The cursor arriving. Recorded, not simulated — the painter calls it. */
+  focus(): void {
+    this.focused = true;
   }
 
   descendants(out: StubElement[] = []): StubElement[] {
@@ -161,5 +172,48 @@ export function run(): void {
   }
   if (!raw.descendants().some((el) => el.textContent === "## Overdue")) {
     throw new Error("a raw resolution did not carry the source characters");
+  }
+
+  // 4. THE CURSOR RULE (migration stage 3). A focus surface is supplied, one line is focused, and
+  //    the painter is driven end to end: paint -> FocusSurface.contextFor -> PresentationContext
+  //    .with, then the settled line -> source.applyEdit. This is the run that makes the FOCUS
+  //    level an OBSERVED level rather than a declared one, and it is deliberately driven through
+  //    the painter rather than by calling the surface directly — a cursor nothing paints against
+  //    proves nothing about the rule.
+  const focus = new FocusSurface();
+  const focused = new StubElement("article");
+  let committed: string | null = null;
+  paint(focused as unknown as HTMLElement, SOURCE, new PresentationContext(), {
+    markdown,
+    focus,
+    onLineCommit: (commit) => {
+      committed = commit.markdown;
+    },
+  });
+  // THE GESTURE ITSELF, not a pre-set cursor: the click on a task line's text is what calls
+  // FocusSurface.focus and repaints. Setting the cursor by hand before the paint would record a
+  // different set of edges from the one the app actually produces.
+  const target = focused.descendants().find((el) => el.tagName === "span");
+  if (target === undefined) {
+    throw new Error("no task line text to put the cursor on");
+  }
+  target.dispatch("click");
+  const line = focused.descendants().find((el) => el.type === "text");
+  if (line === undefined) {
+    throw new Error("clicking a line's text produced no editable line");
+  }
+  if (line.value !== SOURCE.split("\n")[3]) {
+    throw new Error("the focused line did not carry its verbatim source");
+  }
+  line.value = "  - [x] sub-step done [[qntm:122]] #task #edited";
+  line.dispatch("blur");
+  if (committed === null) {
+    throw new Error("the settled line produced no source edit");
+  }
+  const before = SOURCE.split("\n");
+  const after = (committed as string).split("\n");
+  const changed = before.map((_, index) => index).filter((index) => before[index] !== after[index]);
+  if (changed.length !== 1 || changed[0] !== 3) {
+    throw new Error(`the edit changed lines ${changed.join(", ")} — it must change exactly one`);
   }
 }

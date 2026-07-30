@@ -148,10 +148,75 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [presentation-is-resolved-not-chosen]
 
+  # ── THE CURSOR (added 2026-07-30, migration stage 3) ──────────────────────────────────────
+  # WHERE THE CURSOR IS, AS A LEVEL RATHER THAN AS A BRANCH. FOCUS is the most specific of the
+  # seven, so the cursor beats every declaration below it — which is what stops a line that
+  # declares itself a chip, or an instance that declares `wired`, from becoming uneditable. The
+  # rule is expressed as a contribution at the top of the cascade and NOT as an `if (focused)` in
+  # the painter, and these two edges are the observable form of that: the painter asks the focus
+  # surface for a context and obeys what the cascade then resolves.
+  - id: paint-derives-the-focus-level
+    from: app/present/paint
+    to:   app/present/focus
+    callee: FocusSurface.contextFor
+    event: app.derives-the-focus-level
+    class: presentation-resolution
+    gates_capabilities: [the-focused-line-shows-its-source]
+
+  # THE GESTURE. Clicking a line's text is what moves the cursor, and the painter is where the
+  # click lands, so this edge is the cursor rule's entry point. Declared alongside the two quiet
+  # reads below it for the reason this file already gives for the session's getters: they are
+  # real observed edges, and leaving them undeclared would report as drift while being exactly
+  # what we intend. An accurate map includes the quiet edges.
+  - id: paint-moves-the-cursor
+    from: app/present/paint
+    to:   app/present/focus
+    callee: FocusSurface.focus
+    event: app.puts-the-cursor-on-a-line
+    class: presentation-resolution
+    gates_capabilities: [the-focused-line-shows-its-source]
+
+  - id: paint-takes-the-cursor-off
+    from: app/present/paint
+    to:   app/present/focus
+    callee: FocusSurface.blur
+    event: app.takes-the-cursor-off-a-line
+    class: presentation-resolution
+    gates_capabilities: [the-focused-line-shows-its-source]
+
+  # The one read that is NOT about deciding a rendition: whether to put the caret in the element
+  # that was just painted. The rendition came from the cascade; this is the painter asking
+  # whether the line it is building is the one a person is looking at.
+  - id: paint-asks-where-the-cursor-is
+    from: app/present/paint
+    to:   app/present/focus
+    callee: FocusSurface.isFocused
+    event: app.reads-the-cursor-position
+    class: presentation-painting
+    gates_capabilities: [the-focused-line-shows-its-source]
+
+  # The derived level is LAYERED onto the declared ones rather than replacing them: GLOBAL still
+  # says what it said, and FOCUS wins because of where it sits in SPECIFICITY, not because
+  # anything overwrote anything. A context is immutable, so what comes back is a new one.
+  - id: focus-layers-its-level-onto-the-context
+    from: app/present/focus
+    to:   app/present/context
+    callee: PresentationContext.with
+    event: app.layers-a-derived-level
+    class: presentation-resolution
+    gates_capabilities: [the-focused-line-shows-its-source]
+
   # THE AFFORDANCE, AS A SOURCE EDIT. The single most important edge in this file. Every write
   # the app offers is computed here, from the source string, and handed out as a whole file. An
   # affordance that appeared WITHOUT this edge would be an affordance with no source edit — which
   # is precisely what is not admissible.
+  #
+  # STAGE 3 ADDED A SECOND AFFORDANCE AND NO SECOND EDGE, which is the point of the edge. The
+  # focused line settles through this same call — `set-line` beside `set-checkbox` — so "does
+  # this affordance have a source edit?" is still answered by reading one file. An `<input>`
+  # holding verbatim source text has such an edit ("line N becomes this string"); a
+  # contenteditable region holding a rendition would not, which is why one is admissible and the
+  # other is the shape the design forbids.
   - id: paint-writes-back-through-the-source
     from: app/present/paint
     to:   app/present/source
@@ -195,6 +260,20 @@ forbidden_flows:
       which is the exact property the presentation cascade exists to create. It would also make
       the resolver unrunnable under node, taking every test in tests/present-cascade.test.mjs
       with it.
+
+  # Added 2026-07-30 with migration stage 3, for the same reason as the two above and with one
+  # more of its own: the focus surface is the module most likely to be "helped" into touching the
+  # page, because what it describes IS a thing on the page. It must not.
+  - id: focus-never-touches-the-dom
+    from: app/present/focus
+    to:   app/present/paint
+    reason: >
+      The focus surface holds ONE NUMBER — which line the cursor is on — and turns it into a
+      level. It is pure so that a test can resolve "as if the cursor were here" without a
+      browser, which is what let the cursor rule be specified before the surface it reacts to
+      existed. A call from here into the painter would make the level depend on the page it is
+      deciding about, and the FOCUS contribution would stop being derivable without running the
+      app — which is exactly the condition the presentation cascade was built to end.
 
   - id: source-never-touches-the-dom
     from: app/present/source

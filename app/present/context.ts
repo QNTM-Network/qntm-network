@@ -44,6 +44,32 @@ export class PresentationContext {
   at(level: PresentationLevel): Contribution | undefined {
     return this.#contributions.get(level);
   }
+
+  /**
+   * The same facts with one level replaced — a NEW context; this one never changes.
+   *
+   * DERIVED LEVELS NEED THIS AND DECLARED LEVELS DO NOT, which is the whole reason it exists.
+   * GLOBAL, USER, VIEW and STRUCTURAL_NODE are read once from somewhere and hold still for the
+   * whole paint, so the constructor is enough for them. FOCUS is a fact about ONE LINE AT ONE
+   * INSTANT: it is true of the line under the cursor and false of the forty lines around it, and
+   * a paint therefore needs forty-one slightly different contexts.
+   *
+   * Immutable on purpose. A mutable context would let the painter set FOCUS, paint, and forget to
+   * unset it — and a resolver whose answer depends on what was asked before it is not a cascade,
+   * it is a state machine wearing one. Every context handed to a cascade here is complete.
+   */
+  with(level: PresentationLevel, contribution: Contribution | undefined): PresentationContext {
+    const next: Partial<Record<PresentationLevel, Contribution>> = {};
+    for (const [existing, said] of this.#contributions) {
+      next[existing] = said;
+    }
+    if (contribution === undefined) {
+      delete next[level];
+    } else {
+      next[level] = contribution;
+    }
+    return new PresentationContext(next);
+  }
 }
 
 /** A context built from a served declaration, and everything that was wrong with the document. */
