@@ -35,6 +35,9 @@ export type { DeclaredPresentation } from "./context.js";
 
 export { FocusSurface } from "./focus.js";
 
+export { ModeSurface, clampLine } from "./motions.js";
+export type { Mode, NormalEffect, NormalKeyOutcome } from "./motions.js";
+
 export { DraftSurface } from "./draft.js";
 export type { Draft } from "./draft.js";
 

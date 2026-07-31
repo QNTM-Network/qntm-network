@@ -434,6 +434,33 @@
 
   #freshness { margin: 0 0 var(--s4); }
 
+  /* THE VIM MODE BADGE — the one small indicator brief §"Visible state" asks for, so the operator
+     can tell NORMAL from INSERT without guessing. Same letterspaced-uppercase-label language as
+     `.path-head`/`.one-label`/`.bar-folder` rather than a new one: this is the same KIND of fact
+     (a state, named) those already carry. NORMAL reads DIM — it is the app's resting state, not an
+     alarm; INSERT reads the identity green, because it is the state in which a keystroke can
+     change the file, the same fact the caret's own green already marks on the line itself. */
+  .vim-badge {
+    margin: 0 0 var(--s2);
+    font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; font-weight: 600;
+  }
+  .vim-badge-normal { color: var(--dim); }
+  .vim-badge-insert { color: var(--green); }
+
+  /* THE VIM SELECTION MARK — NORMAL mode's selected line, and deliberately not the caret's own
+     device. `.viewbody input.rawline` already marks INSERT with `caret-color` and a bottom
+     hairline in the identity green; the brief is explicit that NORMAL's mark must "be clearly not
+     a text caret", so this reaches for a DIFFERENT part of the row — a left edge bar, the shape a
+     selected line in Obsidian's own vim-mode gutter reads as — plus a faint fill so the row is
+     still findable at a glance rather than only at its edge. Zero-cost against the row invariant:
+     an inset box-shadow paints inside the row's own box and a 3px inset radius change costs no
+     layout, so a line gaining or losing the mark cannot be the jump `.viewbody`'s own comment
+     block already refuses. */
+  .viewbody .vim-selected {
+    background: rgba(63,240,127,.06);
+    box-shadow: inset 3px 0 0 var(--green);
+  }
+
   /* ══ THE PHONE ════════════════════════════════════════════════════════════════════════════
      Two adaptations, both about a hand rather than about width for its own sake.
 
@@ -727,6 +754,11 @@
 
   <!-- GRAPH (logged in) — the rendering of the graph, hosted -->
   <section id="graph" class="hidden">
+    <!-- THE MODE BADGE. One small indicator, per brief — NORMAL or INSERT, and nothing else. A
+         SIBLING of `#freshness`, deliberately: that line's own textContent is overwritten wholesale
+         by `toggleTask`/`commitLine`/`refresh` ("syncing…", "sync failed: …"), and a badge nested
+         inside it would be destroyed by the next one of those and never come back. -->
+    <p id="vimBadge" class="vim-badge"></p>
     <p id="freshness" class="muted"></p>
     <!-- THE EMPTY ENVIRONMENT. Three situations that used to render as one grey line, and they
          are not the same situation: an account with no graph behind it, a graph with nothing in
@@ -778,7 +810,15 @@ import MarkdownIt from "https://esm.sh/markdown-it@14";
 //
 // The path is SITE-ROOT-ABSOLUTE: this page is served at /app/, so "./dist/present.js" would
 // resolve to /app/dist/present.js and 404.
-import { paint, DraftSurface, FocusSurface, PresentationContext, presentationFromDeclaration } from "/dist/present.js";
+import {
+  paint,
+  DraftSurface,
+  FocusSurface,
+  ModeSurface,
+  clampLine,
+  PresentationContext,
+  presentationFromDeclaration,
+} from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -925,6 +965,13 @@ const focus = new FocusSurface();
 // server sent with exactly one line inserted. See app/present/draft.ts for what the alternative
 // arrangement would have cost, measured against the engine.
 const draftLine = new DraftSurface();
+
+// VIM'S NORMAL/INSERT DISTINCTION (app/present/motions.ts). One surface for the page, same reason
+// as `focus` and `draftLine`: it has to survive the repaint it causes. NORMAL is the app's default
+// the moment a view is wired to it — no line is an `<input>` until the operator clicks one or
+// selects one with `j`/`k` and presses `i`/Enter. Read motions.ts's own header before assuming
+// this is "the MODE level, stage 4" (reading vs authoring) — it is a deliberately different rung.
+const mode = new ModeSurface();
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
@@ -1119,13 +1166,40 @@ function paintView(id) {
   // is a row leaking across a view change, which is the one way this affordance could write into a
   // file nobody was looking at.
   draftLine.drop();
-  const v = graphData?.snapshot?.views.find((x) => x.id === id);
+  // AND A SELECTION BELONGS TO THE VIEW IT WAS MADE IN, FOR THE SAME REASON. `mode.enterNormal()`
+  // does not touch `focus.lineIndex` (see motions.ts) — `repaintCurrentView` below is what clamps
+  // it into the new view's line count — but INSERT specifically must not survive a view change: an
+  // `<input>` left open on a line that belongs to a file nobody is looking at is exactly the "row
+  // leaking across a view change" the draft comment above already refuses.
+  mode.enterNormal();
+  repaintCurrentView();
+}
+
+/**
+ * Paint the CURRENT view again, without resetting anything — the counterpart `paintView` calls
+ * after it resets, and the one the vim keydown handler calls directly.
+ *
+ * WHY THE SPLIT. A `j`/`k`/`gg`/`G`/`i` keystroke needs to repaint (the selection or the mode
+ * changed) but must NOT drop the draft or force NORMAL — `mode.handleKey` already decided the
+ * mode for this keystroke, and calling `paintView` from the keydown handler would immediately
+ * undo an `i` by resetting straight back to NORMAL before the `<input>` it just opened ever drew.
+ */
+function repaintCurrentView() {
+  const v = graphData?.snapshot?.views.find((x) => x.id === currentViewId);
   const body = $("viewBody");
   body.innerHTML = "";
+  updateVimBadge();
   if (!v) return;
+  // THE SELECTION IS CLAMPED TO THIS VIEW'S OWN LINE COUNT, every time — a view switch, a
+  // projection arriving after an edit, all of it. `focus.lineIndex` starts `null` (no vim
+  // wiring has ever set it) and lands on line 0 the first time a view with vim wired paints;
+  // after that it is whatever `j`/`k`/`gg`/`G` left it at, clamped so a shorter view cannot leave
+  // it pointing past the last line.
+  focus.focus(clampLine(focus.lineIndex ?? 0, Math.max(0, v.markdown.split("\n").length - 1)));
   paint(body, v.markdown, presentation, {
     markdown: md,
     focus,
+    mode,
     draft: draftLine,
     onCheckboxToggle: (toggle) => toggleTask(v, toggle),
     // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
@@ -1144,6 +1218,14 @@ function paintView(id) {
         "no line here yet — this view has nothing in it to say what a new line should be";
     },
   });
+}
+
+/** The one small indicator brief §"Visible state" asks for — NORMAL or INSERT, nothing else. */
+function updateVimBadge() {
+  const badge = $("vimBadge");
+  badge.textContent = mode.mode === "NORMAL" ? "NORMAL" : "INSERT";
+  badge.classList.toggle("vim-badge-normal", mode.mode === "NORMAL");
+  badge.classList.toggle("vim-badge-insert", mode.mode === "INSERT");
 }
 
 // Tick/untick a task: POST the edited view, let the server cycle, then re-render from the fresh
@@ -1458,7 +1540,9 @@ function logout() {
   localStorage.removeItem(tokenKey); token = null;
   graphData = null;
   currentViewId = null;
-  // A message earned by the LAST person to use this browser is not a greeting for the next one.
+  // A message earned by the LAST person to use this browser is not a greeting for the next one,
+  // and neither is an open <input>: the same leak the comment above already refuses.
+  mode.enterNormal();
   clearEntryError();
   closeDrawer();
   buildDrawer([]);
@@ -1480,18 +1564,41 @@ $("viewsBtn").addEventListener("click", () => (drawerIsOpen ? closeDrawer() : op
 $("drawerClose").addEventListener("click", closeDrawer);
 $("scrim").addEventListener("click", closeDrawer);
 
-// TWO KEYS, AND ONLY TWO. Escape closes from anywhere, including from a line the cursor is in —
-// the drawer is modal, and a modal that only listens while it has focus is a modal you can get
-// stuck behind. `\` opens it, and is REFUSED while the cursor is in a text field, because every
-// line of a view becomes an <input> the moment it is clicked and a global letter key that eats a
-// character out of the operator's own source would be this shell breaking the app it wraps.
+// TWO KEYS, AND ONLY TWO — THEN VIM'S, WHICH ARE THE SAME GUARD APPLIED AGAIN. Escape closes from
+// anywhere, including from a line the cursor is in — the drawer is modal, and a modal that only
+// listens while it has focus is a modal you can get stuck behind. `\` opens it, and is REFUSED
+// while the cursor is in a text field, because every line of a view becomes an <input> the moment
+// it is clicked and a global letter key that eats a character out of the operator's own source
+// would be this shell breaking the app it wraps.
 const typingIn = (target) => {
   const tag = String(target?.tagName ?? "").toLowerCase();
   return tag === "input" || tag === "textarea" || tag === "select";
 };
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && drawerIsOpen) { e.preventDefault(); closeDrawer(); return; }
-  if (e.key === "\\" && !drawerIsOpen && !typingIn(e.target)) { e.preventDefault(); openDrawer(); }
+  if (e.key === "\\" && !drawerIsOpen && !typingIn(e.target)) { e.preventDefault(); openDrawer(); return; }
+  // VIM NORMAL MODE. `typingIn(e.target)` is the SAME refusal `\` already earns: while an <input>
+  // owns the keystroke (INSERT's own line, the handle field, the capture box, the search a drawer
+  // row might grow one day) a global letter key must not eat a character out of it. Also refused
+  // while the drawer is modal (its own Tab trap owns the keyboard) and while there is no view to
+  // move a selection through at all.
+  if (mode.mode === "NORMAL" && !drawerIsOpen && !typingIn(e.target) && currentViewId !== null) {
+    const v = graphData?.snapshot?.views.find((x) => x.id === currentViewId);
+    if (v === undefined) return;
+    const lastIndex = Math.max(0, v.markdown.split("\n").length - 1);
+    const current = focus.lineIndex ?? 0;
+    const outcome = mode.handleKey(e.key, current, lastIndex);
+    if (!outcome.handled) return;
+    e.preventDefault();
+    // THE PAINTER STILL DOES NOT DECIDE. `mode.handleKey` is the one place a keystroke becomes a
+    // line index or a mode change (app/present/motions.ts); this is the thin DOM wiring the brief
+    // asks for — apply the outcome, repaint. `repaintCurrentView`, not `paintView`: the latter
+    // forces NORMAL on the way in, which would undo an `i` before its <input> ever drew.
+    if (outcome.effect.kind === "move") {
+      focus.focus(outcome.effect.lineIndex);
+    }
+    repaintCurrentView();
+  }
 });
 $("captureBox").addEventListener("keydown", async (e) => {
   if (e.key !== "Enter") return;
