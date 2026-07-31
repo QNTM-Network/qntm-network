@@ -803,7 +803,20 @@ backlog:
     produces real PASS/FAIL is green while the runner does not run: survey M7 showed
     the predicate checks that two FILES EXIST and cannot tell a working runner from
     a crashing one. Nothing in this repo can fix it — npm ci in the tool''s js/ is
-    the fix — and there is no flow-trace gate in this repo''s CI to notice.'
+    the fix — and there is no flow-trace gate in this repo''s CI to notice.
+
+    CORRECTED 2026-07-31, TWO OF THE THREE PREMISES ABOVE HAVE MOVED, THE ROW HAS NOT
+    CLOSED. (1) The tool-side crash is fixed (.flow-trace.yaml''s own header, corrected
+    2026-07-30) and re-measured directly in this worktree: `flow-trace verify .` exits
+    0, 38 PASS / 0 FAIL, no crash. (2) There is now a flow-trace gate in this repo''s
+    CI (.github/workflows/flow-trace.yml, see flow-trace-gate-added-advisory below) —
+    the clause above saying otherwise is stale. NEITHER CLOSES THIS ROW: the gate is
+    ADVISORY (continue-on-error) and SKIPPED until FLOW_TRACE_CHECKOUT_TOKEN exists, so
+    it has zero real runs behind it and cannot yet be the thing that would have caught
+    a fossil PASS going stale; and a clean local `verify .` says nothing about whether
+    any individual `verify: PASS` field was re-derived from a real run versus typed by
+    hand on 2026-07-23 — that question is still open, and is still this row''s subject,
+    not the gate''s.'
   captured: '2026-07-30'
   state: asserted
 - id: flag-one-markdown-implementation-is-now-three
@@ -1293,3 +1306,95 @@ backlog:
   driving_capability: every-affordance-writes-back-through-the-source
   kind: capability
   state: diagnose-ready
+- id: flow-trace-gate-added-advisory
+  title: '[asserted] `.github/workflows/flow-trace.yml` now runs `flow-trace verify .`
+    on every PR and push to main, ADVISORY (continue-on-error) rather than blocking.
+    It is clean today (exit 0, 0 FAIL) both before and after
+    tests/flow_scenarios/vim_gestures.ts was added, measured directly rather than assumed
+    — the fossil verify:PASS worry this row''s sibling names (flag-every-verify-pass-in-
+    capabilities-yaml) did not reproduce. It stays advisory because it has zero real CI
+    runs behind it and .flow-trace.yaml documents a tool-side capture-truncation flake in
+    verify''s own JS observer. Needs a repo secret, FLOW_TRACE_CHECKOUT_TOKEN (a
+    fine-grained PAT, read-only contents on QNTM-Network/qntm), which does not exist yet
+    — without it the gate fails loudly at its second checkout step rather than silently
+    skipping. A cross-repo Actions access grant (Settings -> Actions -> Access on the
+    private qntm repo, letting qntm-network''s default token read it directly, no PAT)
+    is the PREFERRED route and also needs an operator settings change — recorded here so
+    the operator has both options rather than only the one this PR could build alone.
+    Flip continue-on-error to false on both the verify and fail-loudly steps once a
+    handful of real PR runs come back clean and this row''s siblings are folded in
+    (DONE, this change).'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: 'The gate exists and runs `verify`, not `map`/`map --full` — map --full is
+    measured blind on this TS target (16 FAIL / 15 PASS / 6 partial vs verify''s 0 FAIL
+    / 38 PASS on the identical tree, and it writes to capabilities.yaml/backlog.yaml/
+    handoff.yaml, files the gate-adding change did not own) — but it is advisory-only
+    until CI itself has been observed to run cleanly a handful of times, and until
+    FLOW_TRACE_CHECKOUT_TOKEN exists or the cross-repo Actions access grant is made.
+    RE-VERIFIED 2026-07-31 IN THIS WORKTREE, AFTER BOTH SIBLING PRs LANDED: `flow-trace
+    verify .` (uv run --python 3.12 --with-editable <flow-trace checkout> flow-trace
+    verify .) exits 0, 38 PASS / 0 FAIL / 23 INFO, 4 scenarios BEFORE this row''s own
+    flows.yaml additions, matching the numbers this row already claimed rather than
+    assumed to still hold; 41 PASS / 0 FAIL / 20 INFO AFTER, once boundary-classifies-
+    the-line / indent-classifies-the-line / word-finds-the-title-words moved three
+    findings from "observed but not declared" INFO to PASS.'
+  captured: '2026-07-31'
+  state: asserted
+- id: scenario-the-vim-gesture-layer
+  title: '[asserted] tests/flow_scenarios/vim_gestures.ts now drives ModeSurface,
+    boundaryLine, indentedLine and wordCaret directly, falsifying two structural claims
+    that were previously protected only by comments: motions.ts imports nothing (read
+    off disk), and the gesture layer never touches PresentationContext/
+    PresentationCascade (a counting spy on the real methods). Both were proven to
+    catch a real violation against a scratch copy — not the real app/present/, which
+    this row''s author did not own and did not edit. It covers four of the six modules
+    named in the operator''s original gap; anchor.ts (deleted by feat/instance-identity,
+    #27) and instance.ts (that PR''s own new module, now shipped and load-bearing —
+    FocusSurface.reanchor''s production caller) are the honest remainder. instance.ts''s
+    gap is now its own row, scenario-instance-ts-coverage-gap, rather than a footnote
+    here — anchor.ts needs no row, since the module is deleted and there is nothing
+    left to scenario.'
+  driving_capability: vim-normal-mode-is-a-gesture-not-a-resolution
+  asserted: 'vim_gestures.ts exists, passes against the real tree (flow-trace verify .
+    exit 0), and was proven to fail against two independent scratch-copy violations
+    (an import added to motions.ts; a cascade touch added to boundary.ts). RE-VERIFIED
+    2026-07-31 AFTER feat/instance-identity (#27) MERGED: `flow-trace verify .` still
+    exits 0, 38 PASS / 0 FAIL / 4 scenarios, and the three new cross-module calls this
+    scenario drives (boundary/indent/word -> resolution) are now declared in flows.yaml
+    (boundary-classifies-the-line, indent-classifies-the-line, word-finds-the-title-words),
+    moving verify . to 41 PASS / 0 FAIL, rather than left as "observed but not declared"
+    INFO. This scenario does not import or drive instance.ts, focus.ts or anchor.ts at
+    all — confirmed by reading its import list — so it makes no claim about either.'
+  captured: '2026-07-31'
+  state: asserted
+- id: scenario-instance-ts-coverage-gap
+  title: '[asserted] `app/present/instance.ts` — the module `feat/instance-identity`
+    (#27) shipped to replace the deleted `anchor.ts` — has NO scenario making a
+    deliberate claim about it, and it is now the newest and most load-bearing module in
+    the repo: `FocusSurface.reanchor` calls `resolveInstanceAnchor` directly in
+    production, and `paint.ts` reads it for `data-instance`. vim_gestures.ts, added the
+    same week, explicitly does not cover it (its own header says so, and its import list
+    confirms it: motions/boundary/indent/word/context/cascade only). This is a REAL gap,
+    stated rather than left implied, and it is a step BEHIND the four gesture modules,
+    which now have a deliberate falsifier each.'
+  driving_capability: presentation-instance-identity
+  asserted: 'MEASURED, NOT ASSUMED, 2026-07-31: instance.ts is not scenario-free the way
+    a totally unreached module would be — `flow-trace verify .` reports it INCIDENTALLY
+    observed, three "observed but not declared" INFO findings (app/present/focus ->
+    app/present/instance.instanceAnchorFor, observed 1x; app/present/instance ->
+    app/present/resolution.classifyLine, observed 4x; app/present/instance ->
+    app/present/resolution.qntmIdSpans, observed 3x) — because tests/flow_scenarios/
+    present_cascade.ts calls the real `FocusSurface.focus(...)`, and `focus()` calls into
+    instance.ts internally regardless of caller intent (focus.ts:192, `view = ""`
+    default). NONE of this is a deliberate claim: present_cascade.ts never sets `view`,
+    so `instancesOf`''s actual identity string (`${view}/${section}/${token}`, the whole
+    point of the capability) is never exercised with a real view id, and nothing asserts
+    what instance.ts should do — it is observed the way a bystander is, not tested. The
+    honest next step is a scenario that sets `view` and drives `resolveInstanceAnchor`''s
+    two-tier walk (instance match, then node match — design doc §3.3''s refutation 1,
+    already proven at the node-test layer in tests/present-anchor.test.mjs), plus
+    flows.yaml entries for the edges once that scenario makes them deliberate. Not
+    written here: doing so would be writing app/tests changes this bookkeeping change
+    does not own.'
+  captured: '2026-07-31'
+  state: asserted

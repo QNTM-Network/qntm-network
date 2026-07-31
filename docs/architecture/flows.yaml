@@ -344,6 +344,38 @@ expected_flows:
     class: presentation-painting
     gates_capabilities: [a-new-line-is-resolved-not-guessed]
 
+  # ── THE GESTURE LAYER'S BOUNDARY/INDENT/WORD MODULES READ THE SAME GRAMMAR THE PAINTER DOES ──
+  # Added 2026-07-31, observed by tests/flow_scenarios/vim_gestures.ts (see the backlog row
+  # scenario-the-vim-gesture-layer). `motions.ts` itself still imports nothing — these three edges
+  # are the modules the gesture layer DELEGATES to for "which line" / "may this line be indented" /
+  # "where does the title start", each of which needs classifyLine's or titleSpans's answer rather
+  # than deciding it locally. Previously "observed but not declared" INFO; declared here now that a
+  # scenario deliberately drives them rather than merely reaching them by accident.
+
+  - id: boundary-classifies-the-line
+    from: app/present/boundary
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.finds-a-structural-boundary
+    class: presentation-resolution
+    gates_capabilities: [vim-normal-mode-is-a-gesture-not-a-resolution]
+
+  - id: indent-classifies-the-line
+    from: app/present/indent
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.decides-whether-a-line-may-be-indented
+    class: presentation-resolution
+    gates_capabilities: [vim-normal-mode-is-a-gesture-not-a-resolution]
+
+  - id: word-finds-the-title-words
+    from: app/present/word
+    to:   app/present/resolution
+    callee: titleSpans
+    event: app.finds-the-title-words-for-a-word-jump
+    class: presentation-resolution
+    gates_capabilities: [vim-normal-mode-is-a-gesture-not-a-resolution]
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
