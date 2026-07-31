@@ -276,74 +276,90 @@ function presentationFromDeclaration(document2) {
   };
 }
 
-// app/present/anchor.ts
-var ANCHOR_TRUST = ["STAMP", "STAMP_IN_SECTION", "TEXT", "TEXT_IN_SECTION"];
-function stampOf(line) {
+// app/present/instance.ts
+var HEADING_TOKEN = "\xA7heading";
+function nodeStampOf(line) {
   const [first] = qntmIdSpans(line);
-  return first === void 0 ? null : line.slice(first.start, first.end);
+  if (first === void 0) {
+    return null;
+  }
+  return line.slice(first.start + 2, first.end - 2);
 }
-function sectionOf(lines, lineIndex) {
-  for (let at = lineIndex - 1; at >= 0; at -= 1) {
-    const line = lines[at] ?? "";
-    if (classifyLine(line).kind === "heading") {
-      return line;
+function instancesOf(source, view) {
+  const lines = source.split("\n");
+  let section = null;
+  const raw = lines.map((line) => {
+    const shape = classifyLine(line);
+    if (shape.kind === "blank") {
+      return null;
     }
+    if (shape.kind === "heading") {
+      section = section === null ? 0 : section + 1;
+      const node2 = nodeStampOf(line);
+      return { section, node: node2, token: node2 ?? HEADING_TOKEN };
+    }
+    const node = nodeStampOf(line);
+    return { section, node, token: node ?? line };
+  });
+  const key = (r) => `${r.section ?? "none"}\0${r.token}`;
+  const groupSize = /* @__PURE__ */ new Map();
+  for (const r of raw) {
+    if (r === null) {
+      continue;
+    }
+    const k = key(r);
+    groupSize.set(k, (groupSize.get(k) ?? 0) + 1);
   }
-  return null;
+  const seen = /* @__PURE__ */ new Map();
+  return raw.map((r) => {
+    if (r === null) {
+      return null;
+    }
+    const k = key(r);
+    const occurrence = (seen.get(k) ?? 0) + 1;
+    seen.set(k, occurrence);
+    const size = groupSize.get(k) ?? 1;
+    const suffix = size > 1 ? `#${occurrence}` : "";
+    const sectionToken = r.section === null ? "-" : String(r.section);
+    return {
+      instance: `${view}/${sectionToken}/${r.token}${suffix}`,
+      node: r.node,
+      section: r.section
+    };
+  });
 }
-function anchorFor(source, lineIndex) {
-  const lines = source.split("\n");
-  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) {
+function instanceOf(source, lineIndex, view) {
+  if (!Number.isInteger(lineIndex) || lineIndex < 0) {
     return null;
   }
-  const text = lines[lineIndex] ?? "";
-  if (classifyLine(text).kind === "blank") {
+  return instancesOf(source, view)[lineIndex] ?? null;
+}
+function instanceAnchorFor(source, lineIndex, view) {
+  const info = instanceOf(source, lineIndex, view);
+  if (info === null) {
     return null;
   }
-  return {
-    stamp: stampOf(text),
-    text,
-    section: sectionOf(lines, lineIndex),
-    takenAt: lineIndex
-  };
+  return { instance: info.instance, node: info.node, takenAt: lineIndex };
 }
-function decide(candidates, lines, anchor, tier, narrowedTier) {
-  if (candidates.length === 0) {
-    return null;
+function resolveInstanceAnchor(anchor, source, view) {
+  const list = instancesOf(source, view);
+  const byInstance = list.findIndex((info) => info?.instance === anchor.instance);
+  if (byInstance !== -1) {
+    return { outcome: "found", lineIndex: byInstance, via: "instance" };
   }
-  if (candidates.length === 1) {
-    return { outcome: "found", tier, lineIndex: candidates[0] };
-  }
-  const inSection = candidates.filter((at) => sectionOf(lines, at) === anchor.section);
-  if (inSection.length === 1) {
-    return { outcome: "found", tier: narrowedTier, lineIndex: inSection[0] };
-  }
-  return { outcome: "ambiguous", tier, candidates: inSection.length > 1 ? inSection : candidates };
-}
-function resolveAnchor(anchor, source) {
-  const lines = source.split("\n");
-  if (anchor.stamp !== null) {
-    const wanted = anchor.stamp.toLowerCase();
-    const byStamp = [];
-    lines.forEach((line, at) => {
-      if (stampOf(line)?.toLowerCase() === wanted) {
-        byStamp.push(at);
+  if (anchor.node !== null) {
+    const candidates = [];
+    list.forEach((info, at) => {
+      if (info?.node === anchor.node) {
+        candidates.push(at);
       }
     });
-    const reading2 = decide(byStamp, lines, anchor, "STAMP", "STAMP_IN_SECTION");
-    if (reading2 !== null) {
-      return reading2;
+    if (candidates.length === 1) {
+      return { outcome: "found", lineIndex: candidates[0], via: "node" };
     }
-  }
-  const byText = [];
-  lines.forEach((line, at) => {
-    if (line === anchor.text) {
-      byText.push(at);
+    if (candidates.length > 1) {
+      return { outcome: "ambiguous", candidates };
     }
-  });
-  const reading = decide(byText, lines, anchor, "TEXT", "TEXT_IN_SECTION");
-  if (reading !== null) {
-    return reading;
   }
   return { outcome: "absent" };
 }
@@ -592,10 +608,17 @@ var FocusSurface = class {
    * one) that nothing in this change needs, so it is not built. What IS needed is that `w`/`b`/`e`
    * repeat, and they do not move between lines. The one caller that passes a column is `reanchor`
    * below, which is preserving one rather than choosing one.
+   *
+   * `view` DEFAULTS TO `""`, THE SAME OPTIONAL-DEPENDENCY POSTURE AS `source`. It is what namespaces
+   * the anchor's instance string (`instance.ts`, `${view}/${section}/${token}`) so a future cursor
+   * remembered ACROSS views cannot collide two views' section-0 into one key — not a live feature,
+   * so most tests never pass it and get `""` consistently, which is harmless as long as `reanchor`
+   * is given the SAME view an anchor was taken with. Every real call site is (`app/index.html`,
+   * `paint.ts`), because a view's own id is already in hand wherever a line is focused.
    */
-  focus(lineIndex, source, column = 0) {
+  focus(lineIndex, source, column = 0, view = "") {
     this.#lineIndex = lineIndex;
-    this.#anchor = source === void 0 ? null : anchorFor(source, lineIndex);
+    this.#anchor = source === void 0 ? null : instanceAnchorFor(source, lineIndex, view);
     this.#column = clampColumn(column, lineTextOf(source, lineIndex));
   }
   /**
@@ -615,12 +638,20 @@ var FocusSurface = class {
     this.#column = clampColumn(column, lineText);
   }
   /**
-   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and which rung said so?
+   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and how did the walk find it?
+   *
+   * `view` MUST BE THE SAME VIEW THE ANCHOR WAS TAKEN AGAINST — every real caller has it in hand
+   * already (`app/index.html`'s `paintView` only ever calls this when `sameView`, i.e. `id` here is
+   * the same id the anchor's own `focus()` call used). IT DEFAULTS TO `""`, THE SAME AS `focus()`'s
+   * OWN DEFAULT, so a caller that never passes one (every test written before either parameter
+   * existed) stays consistent with itself — the anchor was taken with `""` and is resolved with
+   * `""` — rather than mismatching against `focus()`'s default and reporting `absent` for a line
+   * that is still there.
    *
    * On `found` the cursor MOVES to the line it found and the anchor is taken again against the new
-   * projection — a cycle that stamped the line, or rewrote its tail, has changed the text tier 2
-   * would look for next time, and an anchor that went on describing the previous projection would
-   * be the same defect one repaint later.
+   * projection — a cycle that stamped the line, or rewrote its tail, has changed the token an
+   * unstamped line's instance depends on, and an anchor that went on describing the previous
+   * projection would be the same defect one repaint later.
    *
    * ON `ambiguous` AND `absent` NOTHING MOVES AND NOTHING IS CLEARED, which is deliberate rather
    * than unfinished. Blurring a cursor whose line has vanished would destroy the one thing row 4
@@ -638,7 +669,7 @@ var FocusSurface = class {
    * The warning left here by the row that made the cursor an identity was that a column added as a
    * third field would be SILENTLY RESET on every arrival, because this method moves the cursor by
    * calling `focus()` and `focus()` owns the index and the anchor and nothing else. It does not
-   * happen, because the column is passed back through: `focus(lineIndex, source, this.#column)`.
+   * happen, because the column is passed back through: `focus(lineIndex, source, this.#column, view)`.
    *
    * AND IT IS CLAMPED RATHER THAN CARRIED, which is the fact the warning said was already in hand.
    * `focus` re-takes the anchor against the ARRIVING projection, so it also has that projection's
@@ -651,14 +682,14 @@ var FocusSurface = class {
    * ON `ambiguous` AND `absent` THE COLUMN IS UNTOUCHED, for the same reason the index and the
    * anchor are: nothing about the cursor moves when the world could not tell us where its line went.
    */
-  reanchor(source) {
+  reanchor(source, view = "") {
     const anchor = this.#anchor;
     if (anchor === null) {
       return { outcome: "unanchored" };
     }
-    const reading = resolveAnchor(anchor, source);
+    const reading = resolveInstanceAnchor(anchor, source, view);
     if (reading.outcome === "found") {
-      this.focus(reading.lineIndex, source, this.#column);
+      this.focus(reading.lineIndex, source, this.#column, view);
     }
     return reading;
   }
@@ -978,7 +1009,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     deps.mode.enterNormal();
     if (deps.focus !== void 0) {
       const last = Math.max(0, source.split("\n").length - 1);
-      deps.focus.focus(Math.min(lineIndex, last), source);
+      deps.focus.focus(Math.min(lineIndex, last), source, 0, deps.view);
     }
   };
   const abandon = () => {
@@ -1044,6 +1075,13 @@ function paint(body, source, context, deps) {
   const focus = deps.focus;
   const draft = deps.draft;
   const mode = deps.mode;
+  const instances = deps.view === void 0 ? void 0 : instancesOf(source, deps.view);
+  const stampInstance = (element, lineIndex) => {
+    const info = instances?.[lineIndex];
+    if (info !== void 0 && info !== null) {
+      element.dataset.instance = info.instance;
+    }
+  };
   const repaint = (nextSource) => {
     paint(body, nextSource, context, deps);
   };
@@ -1054,7 +1092,7 @@ function paint(body, source, context, deps) {
     element.addEventListener("click", (event) => {
       event?.preventDefault?.();
       event?.stopPropagation?.();
-      focus.focus(lineIndex, source);
+      focus.focus(lineIndex, source, 0, deps.view);
       mode?.enterInsert();
       repaint(source);
     });
@@ -1067,16 +1105,20 @@ function paint(body, source, context, deps) {
   };
   const raw = (lineSource, lineIndex) => {
     if (focus === void 0) {
-      body.append(rawText(lineSource));
+      const text = rawText(lineSource);
+      stampInstance(text, lineIndex);
+      body.append(text);
       return;
     }
     if (mode !== void 0 && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
       const line = normalLine(lineSource, focus.column);
       focusable(line, lineIndex);
+      stampInstance(line, lineIndex);
       body.append(line);
       return;
     }
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
+    stampInstance(input, lineIndex);
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
@@ -1142,6 +1184,7 @@ function paint(body, source, context, deps) {
         (markdown) => deps.markdown.renderInline(markdown)
       );
       focusable(span, index);
+      stampInstance(row, index);
       row.append(box, span);
       body.append(row);
       return;
@@ -1158,6 +1201,7 @@ function paint(body, source, context, deps) {
         (markdown) => deps.markdown.renderInline(markdown)
       );
       focusable(el, index);
+      stampInstance(el, index);
       body.append(el);
       return;
     }
@@ -1172,6 +1216,7 @@ function paint(body, source, context, deps) {
       (markdown) => deps.markdown.render(markdown)
     );
     focusable(div, index);
+    stampInstance(div, index);
     body.append(div);
   });
   paintDraft();
@@ -1187,7 +1232,6 @@ function paint(body, source, context, deps) {
   }
 }
 export {
-  ANCHOR_TRUST,
   DEFAULT,
   DraftSurface,
   FocusSurface,
@@ -1197,7 +1241,6 @@ export {
   PresentationContext,
   RESOLUTION_KEYS,
   SPECIFICITY,
-  anchorFor,
   applyEdit,
   boundaryLine,
   carriesContent,
@@ -1206,6 +1249,9 @@ export {
   clampLine,
   classifyLine,
   indentedLine,
+  instanceAnchorFor,
+  instanceOf,
+  instancesOf,
   isSilent,
   markerSpans,
   openLine,
@@ -1213,7 +1259,7 @@ export {
   presentationFromDeclaration,
   qntmIdSpans,
   readDeclaration,
-  resolveAnchor,
+  resolveInstanceAnchor,
   seedFor,
   tagSpans,
   titleSpans,

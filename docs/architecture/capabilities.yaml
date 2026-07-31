@@ -1038,6 +1038,60 @@ capabilities:
     optional-dependency posture `PaintDeps` already draws for `focus`/`mode`/`draft`), so every
     caller that predates anchoring goes on painting what it always painted.
   status: undeclared
+- id: presentation-instance-identity
+  intent: >-
+    A PRINTED LINE IS A THING, ADDRESSABLE BY AN ID, NOT ONLY FINDABLE BY WALKING RUNGS. The
+    operator's own proposal: "surely if it's an app and we render we can tie presentation instances
+    (not unique node ness but rendering structure) to ids and navigate a grid like that."
+    `docs/implementation-artifacts/design-presentation-instance-identity.md` measured that the
+    engine ALREADY computes this fact every cycle — `RenderedLineRecord` carries `(sheet_id,
+    section_id, node_id)`, 1:1-assumed by `markdown_writer.py:188` — and throws it away before
+    `line_cache` persists (six columns, none of them section or node). It is RE-DERIVABLE in the
+    browser without the engine, because a view's declared `sections:` are an ORDERED list and the
+    renderer walks them in that order: the Nth heading in a rendered file is the Nth declared
+    section (measured across all five live views, 24-for-24, exact positional match).
+    R1 (below) DERIVES THE ID CLIENT-SIDE from the markdown alone — `${view}/${section}/${token}`,
+    `section` a 0-based heading ORDINAL rather than a config-read string. R2 (not built) would carry
+    the same fact server-side, from the view config; for the two to produce the IDENTICAL string,
+    R2 must key its own `section` field on that same ordinal, not the config's own `id:` string —
+    a decision for R2, not settled here (see `derive-the-instance-id-in-the-browser`'s record).
+    THIS FIXES A REAL BUG, NOT JUST A CONVENIENCE. `~/qntm/metrics.md` renders every heading as
+    `## <name> <emoji> <ratio>`, and the ratio moves every cycle while the ORDER of the sections
+    does not. The shipped anchor (`the-cursor-anchors-to-a-node-not-a-line-number`) keys an
+    unstamped line's identity on its exact TEXT, so a heading whose ratio moved answered `absent` —
+    THE ROW WAS STILL ON SCREEN AND THE APP SAID IT WAS GONE. An id keyed on a heading's ORDINAL,
+    never its characters, cannot make that mistake, because it never read the ratio in the first
+    place.
+    IT REPLACES THE ANCHOR'S RUNGS IN PRODUCTION — AMENDED 2026-07-31, THE SAME DAY, AFTER THE
+    FIRST CUT OF THIS RECORD SAID IT DID NOT. `FocusSurface.reanchor` now calls
+    `instance.ts`'s `resolveInstanceAnchor` directly; `anchor.ts` and its four rungs (STAMP,
+    STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION) are DELETED, not kept beside their replacement — proved
+    dead by removing the file and rebuilding (`npm run typecheck` and `npm run build` both stayed
+    clean with nothing importing it; the only test that broke was the one importing its symbols
+    directly, `tests/present-anchor.test.mjs`, since rewritten). THE TENSION THE FIRST CUT NAMED WAS
+    REAL AND WAS IN THE BRIEF, NOT IN THE DESIGN: "every existing anchor test still passes" was
+    written to mean "do not regress the behaviour", read as "do not touch that test file", and a
+    module that exists and does not reach production is this project's own named highest-frequency
+    bug. The correction: rung labels were never a behaviour the operator has — they were this
+    surface's internal bookkeeping about which lookup answered — so `tests/present-anchor.test.mjs`
+    is rewritten to assert what the cursor DOES (holds, follows, refuses, is not silently guessed)
+    rather than which internal tier produced the answer, and the ONE property worth keeping
+    unmissable is proven twice: a stamped node that MOVES SECTION still keeps the cursor, once
+    driving `FocusSurface` directly and once through `app/index.html`'s own lifted script end to
+    end (refutation 1, design doc §3.3 — see `derive-the-instance-id-in-the-browser`'s record for
+    the tier-by-tier account of what survived).
+  tier: functional
+  rooting: >-
+    isolated FOR NOW IN ONE SENSE, ROOTED IN ANOTHER. `app/present/instance.ts` is a new pure module
+    in the same family `boundary.ts`/`indent.ts`/`word.ts` still are (`anchor.ts`, the fourth member
+    of that family, is retired) — but unlike those three it is no longer import-adjacent only:
+    `focus.ts` imports it directly and `FocusSurface.reanchor` is its production caller, which is
+    what makes this capability's cursor-holding claims claims about the SHIPPED cursor rather than
+    about a tested-but-unwired module. `paint.ts` imports it too, for `data-instance`. `PaintDeps`
+    and `FocusSurface.focus`/`.reanchor` each gained OPTIONAL/threaded parameters (`view`), the same
+    posture `focus`/`mode`/`draft` already have on `PaintDeps`, so every caller that predates it
+    paints and resolves exactly what it always did when it omits one.
+  status: working
 - id: the-world-moves-around-you
   intent: >-
     THE SYSTEM COMPUTES BEHAVIOUR, SO THE PROJECTION SHOULD LIVE RATHER THAN WAIT TO BE FETCHED. A

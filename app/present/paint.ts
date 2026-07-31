@@ -70,6 +70,7 @@ import { PresentationCascade } from "./cascade.js";
 import type { PresentationContext } from "./context.js";
 import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
+import { instancesOf } from "./instance.js";
 import type { ModeSurface } from "./motions.js";
 import { openLine } from "./newline.js";
 import { classifyLine, tagSpans } from "./resolution.js";
@@ -125,6 +126,21 @@ export interface LineCommit {
 
 export interface PaintDeps {
   readonly markdown: InlineMarkdown;
+  /**
+   * THE VIEW'S OWN ID — `view.id` off the wire payload (`app/index.html`'s `{id, path, title,
+   * markdown}`) — optional, and its absence is a real configuration exactly as `focus`'s is.
+   *
+   * IT IS WHAT MAKES A `data-instance` ROW-KEY POSSIBLE AND NOTHING ELSE. Without it every row
+   * still paints exactly as it always has — no `dataset.instance`, byte-identical to every test
+   * written before `instance.ts` existed, which is why the golden master needed no edit. With it,
+   * every non-blank row this paint draws carries `data-instance`, computed once per paint
+   * (`instance.ts`'s `instancesOf`, one pass, not one call per line) rather than reconstructed by a
+   * caller reading the DOM back — the same "compute once, attribute, never re-derive from the page"
+   * rule `renderTags` already follows for chips. Two views sharing a section ordinal and a node
+   * (impossible today, but the id is opaque and must not assume it stays impossible) would collide
+   * without it, which is why it is the FIRST component of the string and not an afterthought.
+   */
+  readonly view?: string;
   readonly onCheckboxToggle?: (toggle: CheckboxToggle) => void;
   /**
    * WHERE THE CURSOR IS — optional, and its absence is a real configuration rather than a
@@ -458,7 +474,7 @@ function draftInput(
       // string (`markdown ?? fileSource`, the argument this closure was handed) and not the string
       // the draft opened against. Anchoring against the pre-insert source would describe a line at
       // an index that has just moved.
-      deps.focus.focus(Math.min(lineIndex, last), source);
+      deps.focus.focus(Math.min(lineIndex, last), source, 0, deps.view);
     }
   };
 
@@ -604,6 +620,17 @@ function renderTags(text: string, tags: Rendition, render: (markdown: string) =>
  * that exact function out of the git history against the same fixtures and the same renderer.
  * The element order, the class strings, the indent arithmetic, the heading demotion and the
  * blank-line drop below are transcriptions, not rewrites.
+ *
+ * ── `data-instance`, ONLY WHEN `deps.view` IS SUPPLIED ──
+ *
+ * Every element this function appends for a non-blank line — whichever of the three `raw()`
+ * embodiments fires, the checkbox `<label>`, the heading, the prose `<div>` — carries
+ * `dataset.instance`, computed once per paint by `instance.ts`'s `instancesOf` (§ R1 of
+ * `design-presentation-instance-identity.md`; see `PaintDeps.view`'s own header for the string's
+ * shape). Nothing reads it yet — it is the seam a later change keys a repaint memoiser, a click
+ * handler or a drag target off, rather than the closure-per-row `focusable()` builds today. It is
+ * absent whenever `deps.view` is, which is every test written before it existed, so the golden
+ * master needed no edit for it.
  */
 export function paint(
   body: HTMLElement,
@@ -614,6 +641,19 @@ export function paint(
   const focus = deps.focus;
   const draft = deps.draft;
   const mode = deps.mode;
+  // EVERY PRINTED LINE'S INSTANCE, ONE PASS, ONLY WHEN A CALLER SUPPLIED A VIEW ID. `undefined`
+  // rather than a computed-with-empty-string fallback is deliberate: it is what keeps every test
+  // written before `instance.ts` existed — and the golden master's byte-identical comparison in
+  // particular — painting exactly what it always painted, with no `data-instance` anywhere. See
+  // `PaintDeps.view`'s own header for why the id needs the view at all.
+  const instances = deps.view === undefined ? undefined : instancesOf(source, deps.view);
+  /** `data-instance` on `element`, when this paint has an id for `lineIndex` — a no-op otherwise. */
+  const stampInstance = (element: HTMLElement, lineIndex: number): void => {
+    const info = instances?.[lineIndex];
+    if (info !== undefined && info !== null) {
+      element.dataset.instance = info.instance;
+    }
+  };
 
   /**
    * Paint the whole view again, from a source string.
@@ -644,10 +684,11 @@ export function paint(
       event?.preventDefault?.();
       event?.stopPropagation?.();
       // THE SOURCE GOES WITH THE INDEX. A cursor that landed without one is a cursor that cannot
-      // be found again after a projection arrives — see focus.ts's `focus`, and anchor.ts for what
-      // that used to cost. `source` is the string this paint was handed, which is the string the
-      // line the person just clicked came out of.
-      focus.focus(lineIndex, source);
+      // be found again after a projection arrives — see focus.ts's `focus`, and instance.ts for
+      // what that used to cost. `source` is the string this paint was handed, which is the string
+      // the line the person just clicked came out of; `deps.view` is the same id `data-instance`
+      // above is computed from, so the anchor and the row's own key agree.
+      focus.focus(lineIndex, source, 0, deps.view);
       // A CLICK HAS ALWAYS MEANT "EDIT THIS LINE", and vim does not take that away — it only adds
       // a keyboard path that does not need one. `mode` absent: no-op, exactly as before this
       // field existed.
@@ -690,7 +731,9 @@ export function paint(
    */
   const raw = (lineSource: string, lineIndex: number): void => {
     if (focus === undefined) {
-      body.append(rawText(lineSource));
+      const text = rawText(lineSource);
+      stampInstance(text, lineIndex);
+      body.append(text);
       return;
     }
     if (mode !== undefined && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
@@ -699,6 +742,7 @@ export function paint(
       // the selected line must not be the one row on screen that stops answering the mouse just
       // because the keyboard has reached it.
       focusable(line, lineIndex);
+      stampInstance(line, lineIndex);
       body.append(line);
       return;
     }
@@ -708,6 +752,7 @@ export function paint(
     // parameter is not a tidy-up — it was the first version of this function, and it produced a
     // "file" one line long: tests/present-focus.test.mjs caught it in section 2.
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
+    stampInstance(input, lineIndex);
     // APPEND BEFORE FOCUS. `focus()` on an element that is not in the document does nothing, so
     // the order here is what puts the cursor in the line a person just clicked.
     body.append(input);
@@ -858,6 +903,7 @@ export function paint(
       // kept apart by which element carries which listener: click the words to read the source,
       // click the box to tick it.
       focusable(span, index);
+      stampInstance(row, index);
       row.append(box, span);
       body.append(row);
       return;
@@ -878,6 +924,7 @@ export function paint(
         deps.markdown.renderInline(markdown),
       );
       focusable(el, index);
+      stampInstance(el, index);
       body.append(el);
       return;
     }
@@ -898,6 +945,7 @@ export function paint(
       deps.markdown.render(markdown),
     );
     focusable(div, index);
+    stampInstance(div, index);
     body.append(div);
   });
 

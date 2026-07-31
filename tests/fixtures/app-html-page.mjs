@@ -100,10 +100,12 @@ export const __vimMode = () => mode.mode;
 export const __focusIndex = () => focus.lineIndex;
 export const __focusColumn = () => focus.column;
 // THE ANCHOR. \`__setFocus\` is how a suite puts the cursor somewhere WITH the source it belongs to
-// — the same two arguments the page's own keydown handler and paint.ts already pass — and
-// \`__sayAsOf\` is the page's real freshness writer, exported so a test can prove a refusal survives
-// the line every write path overwrites it with.
-export function __setFocus(lineIndex, source) { focus.focus(lineIndex, source); }
+// AND the view it belongs to — \`currentViewId\`, the same id \`paintView\`'s own \`focus.focus\`/
+// \`focus.reanchor\` calls already namespace the anchor by, so a test that calls this after
+// \`paintView\` lands the anchor in the SAME instance-id space \`paintView\`'s own reanchoring will
+// resolve it against — and \`__sayAsOf\` is the page's real freshness writer, exported so a test can
+// prove a refusal survives the line every write path overwrites it with.
+export function __setFocus(lineIndex, source) { focus.focus(lineIndex, source, 0, currentViewId); }
 export const __focusAnchor = () => focus.anchor;
 export { sayAsOf as __sayAsOf };
 `;

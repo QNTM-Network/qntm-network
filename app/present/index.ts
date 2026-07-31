@@ -46,9 +46,15 @@ export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
 
 export { FocusSurface } from "./focus.js";
+export type { ReanchorReading } from "./focus.js";
 
-export { ANCHOR_TRUST, anchorFor, resolveAnchor } from "./anchor.js";
-export type { Anchor, AnchorReading, AnchorTier } from "./anchor.js";
+export {
+  instanceAnchorFor,
+  instanceOf,
+  instancesOf,
+  resolveInstanceAnchor,
+} from "./instance.js";
+export type { InstanceAnchor, InstanceReading, LineInstance } from "./instance.js";
 
 export { ModeSurface, clampColumn, clampLine } from "./motions.js";
 export type { Mode, NormalEffect, NormalKeyOutcome } from "./motions.js";

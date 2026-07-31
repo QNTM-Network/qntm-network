@@ -35,7 +35,7 @@
  * paint, and thrown away.
  *
  * THE ANCHOR THIS SURFACE GAINED IN 2026-07-31'S HAVEN ROW IS THE SAME KIND OF FACT, AND THE CLAIM
- * WAS CHECKED RATHER THAN ASSUMED. An `Anchor` is derived from a source string and a line index at
+ * WAS CHECKED RATHER THAN ASSUMED. An anchor is derived from a source string and a line index at
  * the instant the cursor lands, held for as long as the cursor is on that line, and dropped with
  * it. Nothing serves it, nothing stores it, and no file records it — so the rule above survives
  * intact. It is also not a second CONCERN, which is the test `draft.ts` applies to the same
@@ -43,6 +43,26 @@
  * neither more nor less than it always did — WHICH LINE the cursor is on. The anchor is that same
  * one fact, correctly typed. `design-the-edit-is-a-safe-haven.md` §5.2 says so in as many words:
  * ANCHOR "exists but is the wrong type. It is an index; the world moving changes indices."
+ *
+ * ── THE ANCHOR IS NOW AN INSTANCE, NOT A WALK OF FOUR RUNGS (2026-07-31, SAME DAY) ──
+ *
+ * `anchor.ts`'s four-rung walk (STAMP, STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION) was the FIRST
+ * correct type for this fact, and it is now RETIRED, not merely superseded — see instance.ts's own
+ * header for why it is deleted rather than left beside its replacement. What this surface holds is
+ * an `InstanceAnchor` (`instance.ts`): the row's own `${view}/${section}/${token}` id, plus the
+ * node it names, if any. `resolveInstanceAnchor` is a TWO-TIER walk, not four: instance match first
+ * (the same printing — cursor holds), node match second, over the whole projection, ONLY when the
+ * instance did not match (the printing moved section — cursor follows, and the caller learns that
+ * from `reading.via === "node"`). Ambiguous and absent are unchanged in spirit: a node matching more
+ * than once is refused, not guessed, and nothing answering is reported rather than silent.
+ *
+ * THIS IS A BEHAVIOUR-PRESERVING SWAP, NOT A NARROWER ONE — the one property worth stating plainly
+ * because it is the one regression risk in the whole change: A STAMPED NODE THAT MOVES SECTION
+ * STILL KEEPS THE CURSOR. The four-rung STAMP tier searched the whole file by stamp alone, ignoring
+ * section, so a node moving section was still found; a NAIVE pure instance lookup (matching only
+ * `instance`, which encodes section) would have lost that — design doc §3.3's refutation 1. It does
+ * not, here, because `resolveInstanceAnchor`'s SECOND tier is exactly that whole-file stamp search,
+ * carried over unchanged in spirit and proven in tests/present-anchor.test.mjs.
  *
  * NO NEW CONTRIBUTION AND NO NEW LEVEL. `contextFor` is untouched, `FOCUSED` is untouched, and the
  * cascade cannot tell that this class changed. The anchor decides WHERE the cursor is; it never
@@ -71,9 +91,9 @@
  * remembering to come back here.
  */
 
-import { anchorFor, resolveAnchor } from "./anchor.js";
-import type { Anchor, AnchorReading } from "./anchor.js";
 import { PresentationContext } from "./context.js";
+import { instanceAnchorFor, resolveInstanceAnchor } from "./instance.js";
+import type { InstanceAnchor, InstanceReading } from "./instance.js";
 import { clampColumn } from "./motions.js";
 import { RESOLUTION_KEYS } from "./resolution.js";
 import type { Contribution, Rendition } from "./resolution.js";
@@ -96,9 +116,19 @@ const FOCUSED: Contribution = Object.freeze(
   Object.fromEntries(RESOLUTION_KEYS.map((key) => [key, "raw" as Rendition])),
 ) as Contribution;
 
+/**
+ * What `reanchor` reports. `InstanceReading` (instance.ts) covers everything the WORLD can answer —
+ * `found`, `ambiguous`, `absent` — and `unanchored` is added here rather than there because it is
+ * not a fact about a resolution; it is a fact about this surface: no anchor was ever taken (nothing
+ * was open, or it was on a blank line, which has no identity — see instance.ts). Keeping it out of
+ * `InstanceReading` is what lets `resolveInstanceAnchor` stay a pure function of an anchor that
+ * definitely exists, rather than one more caller having to handle "there wasn't one".
+ */
+export type ReanchorReading = InstanceReading | { readonly outcome: "unanchored" };
+
 export class FocusSurface {
   #lineIndex: number | null = null;
-  #anchor: Anchor | null = null;
+  #anchor: InstanceAnchor | null = null;
   #column = 0;
 
   /** The line the cursor is on, or `null` when it is nowhere. */
@@ -123,7 +153,7 @@ export class FocusSurface {
    * WHICH line the cursor is on, expressed as identity rather than as a position — or `null` when
    * nothing was anchored. See `focus` below for the two ways that happens.
    */
-  get anchor(): Anchor | null {
+  get anchor(): InstanceAnchor | null {
     return this.#anchor;
   }
 
@@ -151,10 +181,17 @@ export class FocusSurface {
    * one) that nothing in this change needs, so it is not built. What IS needed is that `w`/`b`/`e`
    * repeat, and they do not move between lines. The one caller that passes a column is `reanchor`
    * below, which is preserving one rather than choosing one.
+   *
+   * `view` DEFAULTS TO `""`, THE SAME OPTIONAL-DEPENDENCY POSTURE AS `source`. It is what namespaces
+   * the anchor's instance string (`instance.ts`, `${view}/${section}/${token}`) so a future cursor
+   * remembered ACROSS views cannot collide two views' section-0 into one key — not a live feature,
+   * so most tests never pass it and get `""` consistently, which is harmless as long as `reanchor`
+   * is given the SAME view an anchor was taken with. Every real call site is (`app/index.html`,
+   * `paint.ts`), because a view's own id is already in hand wherever a line is focused.
    */
-  focus(lineIndex: number, source?: string, column = 0): void {
+  focus(lineIndex: number, source?: string, column = 0, view = ""): void {
     this.#lineIndex = lineIndex;
-    this.#anchor = source === undefined ? null : anchorFor(source, lineIndex);
+    this.#anchor = source === undefined ? null : instanceAnchorFor(source, lineIndex, view);
     this.#column = clampColumn(column, lineTextOf(source, lineIndex));
   }
 
@@ -176,12 +213,20 @@ export class FocusSurface {
   }
 
   /**
-   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and which rung said so?
+   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and how did the walk find it?
+   *
+   * `view` MUST BE THE SAME VIEW THE ANCHOR WAS TAKEN AGAINST — every real caller has it in hand
+   * already (`app/index.html`'s `paintView` only ever calls this when `sameView`, i.e. `id` here is
+   * the same id the anchor's own `focus()` call used). IT DEFAULTS TO `""`, THE SAME AS `focus()`'s
+   * OWN DEFAULT, so a caller that never passes one (every test written before either parameter
+   * existed) stays consistent with itself — the anchor was taken with `""` and is resolved with
+   * `""` — rather than mismatching against `focus()`'s default and reporting `absent` for a line
+   * that is still there.
    *
    * On `found` the cursor MOVES to the line it found and the anchor is taken again against the new
-   * projection — a cycle that stamped the line, or rewrote its tail, has changed the text tier 2
-   * would look for next time, and an anchor that went on describing the previous projection would
-   * be the same defect one repaint later.
+   * projection — a cycle that stamped the line, or rewrote its tail, has changed the token an
+   * unstamped line's instance depends on, and an anchor that went on describing the previous
+   * projection would be the same defect one repaint later.
    *
    * ON `ambiguous` AND `absent` NOTHING MOVES AND NOTHING IS CLEARED, which is deliberate rather
    * than unfinished. Blurring a cursor whose line has vanished would destroy the one thing row 4
@@ -199,7 +244,7 @@ export class FocusSurface {
    * The warning left here by the row that made the cursor an identity was that a column added as a
    * third field would be SILENTLY RESET on every arrival, because this method moves the cursor by
    * calling `focus()` and `focus()` owns the index and the anchor and nothing else. It does not
-   * happen, because the column is passed back through: `focus(lineIndex, source, this.#column)`.
+   * happen, because the column is passed back through: `focus(lineIndex, source, this.#column, view)`.
    *
    * AND IT IS CLAMPED RATHER THAN CARRIED, which is the fact the warning said was already in hand.
    * `focus` re-takes the anchor against the ARRIVING projection, so it also has that projection's
@@ -212,14 +257,14 @@ export class FocusSurface {
    * ON `ambiguous` AND `absent` THE COLUMN IS UNTOUCHED, for the same reason the index and the
    * anchor are: nothing about the cursor moves when the world could not tell us where its line went.
    */
-  reanchor(source: string): AnchorReading {
+  reanchor(source: string, view = ""): ReanchorReading {
     const anchor = this.#anchor;
     if (anchor === null) {
       return { outcome: "unanchored" };
     }
-    const reading = resolveAnchor(anchor, source);
+    const reading = resolveInstanceAnchor(anchor, source, view);
     if (reading.outcome === "found") {
-      this.focus(reading.lineIndex, source, this.#column);
+      this.focus(reading.lineIndex, source, this.#column, view);
     }
     return reading;
   }
