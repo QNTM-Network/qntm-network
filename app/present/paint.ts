@@ -892,6 +892,17 @@ export function paint(
       // Two spaces of source indent is one nesting level, and one nesting level is 1.2rem.
       // Carried across unchanged from app.html:246 — the arithmetic is a presentation decision
       // and it now lives in the painter rather than in a page.
+      //
+      // THIS STILL DISAGREES WITH `indentUnit` (declaration.ts, indent.ts) — it treats TWO spaces
+      // as one level; the engine, and this app's own source-edit arithmetic, treat FOUR as one
+      // level (design-the-structural-language.md §3). Fixing it — dividing by the declared unit
+      // instead of the constant 2 — was tried and reverted: it changes `marginLeft` for every
+      // indented checkbox line, and `tests/present-golden.test.mjs` compares those exact values
+      // byte-for-byte against the historical `app.html:234-269` reference (odd/tab/sweep cases all
+      // fail). That comparison is a separate, already-validated claim; this change does not
+      // weaken it to make room for this one. So this stays a KNOWN, cosmetic, unfixed disagreement
+      // — monotonic in the source indent, so misleading rather than wrong — and the source-edit
+      // arithmetic in `indent.ts` (which this margin never feeds) is the one that was corrected.
       row.style.marginLeft = (shape.indent.length / 2) * 1.2 + "rem";
       const box = document.createElement("input");
       box.type = "checkbox";

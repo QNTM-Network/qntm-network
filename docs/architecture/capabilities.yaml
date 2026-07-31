@@ -1207,6 +1207,82 @@ capabilities:
     posture `focus`/`mode`/`draft` already have on `PaintDeps`, so every caller that predates it
     paints and resolves exactly what it always did when it omits one.
   status: working
+- id: structural-language-is-published-not-guessed
+  intent: >-
+    THE BROWSER READS WHAT A GESTURE MEANS; IT DOES NOT HOLD A COPY OR GUESS. Item 1 of
+    `docs/implementation-artifacts/design-the-structural-language.md`, which refuted the brief that
+    commissioned it: an indent's meaning (which edge type it creates, which direction) is not
+    hardcoded in the engine — it is DECLARED, in `structural_tokens.yaml`, validated at bundle load,
+    proved by mutation (change the declaration, the resolver's answer changes; remove the key, the
+    applier creates no edge at all). Detection (which line is whose parent) is hardcoded and
+    UNIT-FREE; meaning (what a parent relation IS) is declared, and only the second half belongs to
+    this instance. THIS CAPABILITY IS THE WIRE, NOT A SECOND INTERPRETER: `StructuralTokenResolver`
+    already resolves the language server-side; a pre-flight service computing what an edit would
+    mean in the browser would be a second interpreter of one language, which the design document
+    names as the exact MVC violation this project keeps finding and removing. So the browser is
+    given a LOOKUP TABLE, generated from the monorepo's own config
+    (`scripts/generate-structural-declaration.mjs`, never hand-written — the `INDENT_UNIT` mistake,
+    §3 of the design document, is what a hand-copied number costs), and it is the browser's to READ,
+    not to decide with.
+    PUBLISHED, OVER THE EXISTING CHANNEL, NOT A NEW ONE. `presentation.json` already carries the
+    GLOBAL rendition level and already reports an unrecognised key as a problem rather than
+    ignoring it (`presentation-is-resolved-not-chosen`'s own record). This capability widens that
+    same document's grammar with two more known keys: `structural` (the ingest axis — indent
+    binding, edge cardinality, per-section overrides for every view that declares one) and
+    `indentUnit` (the output axis — see below). Both are read by `presentationFromDeclaration`
+    (`app/present/context.ts`), the same one wire function that already read the rendition axis, so
+    the page fetches once and every axis of the one document is validated the same way: an
+    unrecognised key anywhere is REPORTED, never guessed at, and a malformed sub-fact falls back to
+    "unknown" without blinding the reader to the rest of a good document.
+    THE MINIMUM, STATED AS A DECISION: the whole of `structural_tokens.yaml`'s vocabulary is NOT
+    published (wiki-link bindings, field bindings, chain buckets) — only the indent binding, the
+    cardinality of every edge type that binding or a section override actually names, and the
+    per-section overrides themselves, because that is exactly what item 3 (narration, NOT built
+    here) needs to answer "what will `>` do on this line" and nothing else has a reader yet.
+    `edgeCardinality` matters because it is the fact that decides MOVE VERSUS ADD
+    (`applier.py:2953-2961`, `schema.yaml`'s `cardinality:`) — the same keystroke relocates a node
+    under `PART_OF` (`many_to_one`) and accumulates a waiter under `WAITING_FOR` (`many_to_many`) in
+    the operator's own six live views, and an app that named the edge without the cardinality could
+    still get the verb wrong.
+    THE INDENT UNIT IS THE OUTPUT AXIS, NOT THE STRUCTURAL ONE — the design document's own
+    refutation of a filing IT made first, in the design brief that commissioned it. Detection
+    (`content_diff.py:721-722`) is unit-free: any column increase nests, so the number of spaces per
+    level changes no edge, only whether a re-rendered line visibly jumps. `presentation.json`'s
+    `indentUnit` therefore rides beside the rendition axis (`declaration.ts`, not `structural.ts`)
+    and `app/present/indent.ts`'s `indentedLine` now takes it as a parameter, defaulting to the same
+    `INDENT_UNIT` constant it always used — `declaration.ts`'s own fallback IS that constant,
+    imported rather than re-declared, so the built-in floor is one number, not two. THIS DOES NOT
+    (YET) CLOSE THE GAP `vim-normal-mode-slice-3` RECORDED: `paint.ts`'s checkbox-margin arithmetic
+    still divides by two, disagreeing with the four this axis now declares, because fixing it was
+    tried — dividing by the declared unit instead of the constant 2 — and reverted when
+    `tests/present-golden.test.mjs`'s byte-identical comparison against the historical
+    `app.html:234-269` reference failed for indents of 1, 2 and 4 raw spaces. That golden is a
+    separate, already-validated claim and was not weakened to make room. The disagreement is now a
+    tested, cited fact (`tests/present-structural.test.mjs`, section 4) rather than only a prose
+    finding, so a future fix cannot silently regress it back to "fixed" without the test and the
+    golden both being looked at together.
+    THE COUPLING TO THE MONOREPO IS KEPT HONEST, NOT ASSUMED. `tests/present-structural.test.mjs`
+    section 3 does not compare against a fixture — it imports
+    `scripts/generate-structural-declaration.mjs` and regenerates the structural declaration FROM
+    the monorepo's `structural_tokens.yaml`, `schema.yaml` and `config/views/*.yaml` directly,
+    asserting the regenerated value equals what is checked into `presentation.json`. It is SKIPPED,
+    with a stated reason, when the sibling monorepo checkout is not present — this repo's CI does
+    not clone it — so it runs locally, where the checkout this worktree's own flow-trace invocation
+    already assumes is present, and lights up there; the same posture `tests/flow_scenarios/
+    vim_gestures.ts` already documents for its own CI gate.
+  tier: functional
+  rooting: >-
+    isolated for now, same family as `presentation-is-resolved-not-chosen` was at migration stage 2:
+    `app/present/structural.ts` is read by `app/present/context.ts`'s `presentationFromDeclaration`
+    (the observable edge `context-reads-the-structural-declaration`, flows.yaml) and by nothing
+    else in production yet — `app/index.html` holds the result in a page-level variable
+    (`structural`) that nothing downstream consumes, which is the honest state of "published, not
+    yet narrated". Item 3 of the design document (narration — "tell the operator what `>` will do
+    before they press it") is the consumer that would root this further; it is explicitly not built
+    here. `app/present/indent.ts` IS wired into production (`indentedLine`'s new `unit` parameter,
+    threaded from `app/index.html`'s `loadPresentation`), so the indent-unit half of this
+    capability's claims are claims about the shipped `>`/`<` gesture, not about an unwired module.
+  status: working
 - id: the-world-moves-around-you
   intent: >-
     THE SYSTEM COMPUTES BEHAVIOUR, SO THE PROJECTION SHOULD LIVE RATHER THAN WAIT TO BE FETCHED. A

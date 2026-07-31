@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "test": "node --test \"tests/**/*.test.mjs\"",
-    "check": "npm run typecheck && npm run build && npm test"
+    "check": "npm run typecheck && npm run build && npm test",
+    "generate:structural": "node scripts/generate-structural-declaration.mjs",
+    "generate:structural:check": "node scripts/generate-structural-declaration.mjs --check"
   },
   "dependencies": {
     "markdown-it": "^14.1.0"

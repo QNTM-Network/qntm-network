@@ -28,13 +28,49 @@
  * The one exception is `note`, and it is deliberate: the served document should be able to
  * explain itself to whoever opens it, and JSON has no comments. It is declared here, in the
  * reader, so that it is a known key rather than a tolerated one.
+ *
+ * ── TWO MORE KNOWN KEYS, ONE READ HERE AND ONE NOT ──
+ *
+ * `design-the-structural-language.md` §7 draws an axis line this file now has to respect: a
+ * `Rendition` is an OUTPUT fact (how a token is shown) and `RESOLUTION_KEYS` is closed to exactly
+ * that kind of fact. Two more top-level keys arrived alongside it and neither is a `Rendition`:
+ *
+ *   `indentUnit` — an output fact too (§3 of that design: "the unit governs how a level is
+ *   WRITTEN, which is output"), but a number of spaces, not a `raw`/`wired` dial, so it cannot
+ *   join `RESOLUTION_KEYS` without widening `Rendition` itself into something it structurally
+ *   is not. It is read HERE, beside the axis it belongs to, into its own field on
+ *   `DeclarationReading` — silence (the key absent) falls through to the same built-in default
+ *   `indent.ts` always had; a present-but-malformed value is reported, never guessed.
+ *
+ *   `structural` — the INGEST axis (what a gesture MEANS), not this file's axis at all. It is
+ *   SKIPPED here, silently and on purpose, so this reader does not misreport a key it does not
+ *   own as unrecognised. `structural.ts`'s own `readStructuralDeclaration` is the one strict
+ *   reader for it, called on the same document, and it is exactly as strict as this file is about
+ *   its own keys — nothing about widening the grammar loosens either half of it.
  */
 
 import { RESOLUTION_KEYS } from "./resolution.js";
 import type { Contribution, Rendition } from "./resolution.js";
+import { STRUCTURAL_KEY } from "./structural.js";
+import { INDENT_UNIT } from "./indent.js";
 
 /** The one key of the served document that is prose for a human rather than a declaration. */
 const NOTE = "note";
+
+/**
+ * The instance's indent unit, in spaces — how many leading spaces make one nesting level. Read
+ * here (see the header) because it is a RENDITION fact, not a structural one: changing it changes
+ * no edge (`content_diff.py`'s depth detection is unit-free), only whether a re-rendered line
+ * visibly jumps. `apps/qntm_md/src/qntm_md/render/renderer.py:947-950` is where the engine's own
+ * `4` lives today, unconditionally — there is no config key on the engine side yet for this
+ * value to be generated FROM, so `presentation.json`'s `indentUnit` is a citation of that literal,
+ * not a generated fact, until the engine side of this is built (design doc §3, ranked item #2).
+ */
+const INDENT_UNIT_KEY = "indentUnit";
+/** The built-in floor for `indentUnit`: `indent.ts`'s own `INDENT_UNIT`, imported rather than
+ * re-declared, so a missing or malformed declaration falls back to the SAME literal
+ * `indentedLine` already used before this key existed — one number, not a second copy of it. */
+export const DEFAULT_INDENT_UNIT = INDENT_UNIT;
 
 const RENDITIONS: readonly Rendition[] = ["raw", "wired"];
 
@@ -47,6 +83,9 @@ const RENDITIONS: readonly Rendition[] = ["raw", "wired"];
  */
 export interface DeclarationReading {
   readonly contribution: Contribution;
+  /** The instance's indent unit, in spaces. Always present — falls back to
+   * `DEFAULT_INDENT_UNIT` when the key is absent or malformed, same as every other silent key. */
+  readonly indentUnit: number;
   readonly problems: readonly string[];
 }
 
@@ -67,6 +106,7 @@ export function readDeclaration(document: unknown): DeclarationReading {
   if (typeof document !== "object" || document === null || Array.isArray(document)) {
     return {
       contribution: {},
+      indentUnit: DEFAULT_INDENT_UNIT,
       problems: [
         `the declaration is ${Array.isArray(document) ? "an array" : typeof document}, not an ` +
           "object — every key stays silent and every line falls through to the default",
@@ -76,11 +116,27 @@ export function readDeclaration(document: unknown): DeclarationReading {
 
   const entries = Object.entries(document as Record<string, unknown>);
   const contribution: Record<string, Rendition> = {};
+  let indentUnit = DEFAULT_INDENT_UNIT;
 
   for (const [key, value] of entries) {
     if (key === NOTE) {
       if (typeof value !== "string") {
         problems.push(`'${NOTE}' is ${typeof value}, not a string — it is prose, not a key`);
+      }
+      continue;
+    }
+    if (key === STRUCTURAL_KEY) {
+      // Not this reader's axis — see the header. `structural.ts` reads and validates it.
+      continue;
+    }
+    if (key === INDENT_UNIT_KEY) {
+      if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+        problems.push(
+          `'${INDENT_UNIT_KEY}' is ${JSON.stringify(value)}, which is not a positive whole ` +
+            `number of spaces — the built-in default (${DEFAULT_INDENT_UNIT}) is used instead`,
+        );
+      } else {
+        indentUnit = value;
       }
       continue;
     }
@@ -101,5 +157,5 @@ export function readDeclaration(document: unknown): DeclarationReading {
     contribution[key] = value;
   }
 
-  return { contribution: contribution as Contribution, problems };
+  return { contribution: contribution as Contribution, indentUnit, problems };
 }

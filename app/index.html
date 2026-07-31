@@ -856,6 +856,7 @@ import {
   clampLine,
   PresentationContext,
   presentationFromDeclaration,
+  DEFAULT_INDENT_UNIT,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -869,6 +870,22 @@ const md = new MarkdownIt("commonmark").enable("table");
 // once the snapshot envelope carries them.
 let presentation = new PresentationContext();
 
+// THE INSTANCE'S INDENT UNIT — how many leading spaces `>`/`<` add or remove per level. Read from
+// the SAME document as `presentation` above; falls back to the engine's own current literal
+// (design-the-structural-language.md §3) until a declaration says otherwise. Threaded into
+// `indentedLine` below so the source-edit arithmetic never carries its own copy of this number.
+let indentUnit = DEFAULT_INDENT_UNIT;
+
+// THE STRUCTURAL LANGUAGE (design-the-structural-language.md, item 1 of that design) — what a
+// gesture like `>`/`<` MEANS: which edge type an indent creates, that edge's cardinality (which
+// decides move-vs-add), and any section's own override. A LOOKUP TABLE, not a resolver — nothing
+// in this page or in app/present/ interprets it yet. It is read and validated here, alongside
+// `presentation`, so a future narration surface (item 3 of the same design — "tell the operator
+// what `>` will do before they press it") has one already-fetched, already-validated source to
+// read rather than a second fetch or a second parser. Until that surface exists, this variable is
+// read by nothing, which is the honest state of "published, not yet consumed".
+let structural = undefined;
+
 // THE PAGE FETCHES; IT DOES NOT READ. Turning the document into levels is
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
 // declaration read inside this file is a declaration whose reader nothing can observe, because
@@ -881,17 +898,26 @@ async function loadPresentation() {
   try {
     const res = await fetch("/presentation.json", { cache: "no-cache" });
     if (!res.ok) throw new Error("HTTP " + res.status);
+    // ONE FETCH, ONE READ. `presentationFromDeclaration` reads the rendition axis, the indent
+    // unit and the structural (ingest) axis off the SAME document — two grammars over one
+    // channel, never two (design-the-structural-language.md §0.8, §11). Each half is strict about
+    // only the keys it owns; an unrecognised key anywhere in the document is a reported problem,
+    // never a silent guess.
     const declared = presentationFromDeclaration(await res.json());
     for (const problem of declared.problems) {
       console.warn("presentation.json: " + problem);
     }
     presentation = declared.context;
+    indentUnit = declared.indentUnit;
+    structural = declared.structural;
   } catch (e) {
     // A declaration that cannot be read is reported, never guessed at. Silence is the honest
     // fallback: it is the same behaviour as declaring nothing, which is the behaviour the app
     // had before this level existed.
     console.warn("presentation.json not read (" + e.message + ") — every level stays silent");
     presentation = new PresentationContext();
+    indentUnit = DEFAULT_INDENT_UNIT;
+    structural = undefined;
   }
 }
 
@@ -1944,13 +1970,15 @@ document.addEventListener("keydown", (e) => {
       }
     } else if (effect.kind === "indent") {
       // `>`/`<` — `indentedLine` (app/present/indent.ts) decides the new leading whitespace, in
-      // whole units of the engine's own four-space depth (renderer.py:947-950), never the two-
-      // space margin arithmetic paint.ts uses for CSS. It returns the line UNCHANGED when there is
-      // nothing to do (a blank/heading line, or outdenting a line already at zero), and
-      // `applyEdit`'s own "unchanged text is a refusal" rule (source.ts) is what turns that into
-      // "post nothing" — no second no-op check is needed here, same posture as `x` above.
+      // whole units of `indentUnit` (read from presentation.json, falling back to the engine's
+      // own four-space depth, renderer.py:947-950) — never the two-space margin arithmetic
+      // paint.ts still uses for CSS (the golden master blocks fixing that copy; see paint.ts). It
+      // returns the line UNCHANGED when there is nothing to do (a blank/heading line, or
+      // outdenting a line already at zero), and `applyEdit`'s own "unchanged text is a refusal"
+      // rule (source.ts) is what turns that into "post nothing" — no second no-op check is needed
+      // here, same posture as `x` above.
       const line = v.markdown.split("\n")[current] ?? "";
-      const text = indentedLine(line, effect.direction, effect.count);
+      const text = indentedLine(line, effect.direction, effect.count, indentUnit);
       const markdown = applyEdit(v.markdown, { kind: "set-line", lineIndex: current, text });
       if (markdown !== null) {
         commitLine(v, { lineIndex: current, text, markdown });

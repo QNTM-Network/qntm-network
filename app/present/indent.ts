@@ -13,28 +13,30 @@
  * unchanged), and this module — imported by the caller, never by motions.ts — turns that into the
  * line's new text.
  *
- * ── THE UNIT IS FOUR SPACES, TAKEN FROM THE ENGINE, NOT TWO TAKEN FROM A STYLESHEET ──
+ * ── THE UNIT IS DECLARED, NOT HARDCODED — BUT IT WASN'T ALWAYS, AND THIS IS WHY THAT CHANGED ──
  *
  * `apps/qntm_md/src/qntm_md/render/renderer.py:947-950` emits `'    ' * depth` — four spaces per
- * nesting level. Confirmed independently against the operator's own rendered content,
- * `~/qntm/this_week.md` (read-only): a depth-1 line carries 4 leading spaces, a depth-2 line
- * carries 8. `app/present/paint.ts`'s ONLY existing indent arithmetic — `(shape.indent.length / 2)
- * * 1.2 + "rem"`, a CSS margin transcribed from `app.html:246` — treats two spaces as one level.
- * That arithmetic is NOT reused here. Reusing it would insert two spaces per keystroke; two spaces
- * still reparents (see below — the engine's differ pops on ANY increase), so the gesture would
- * appear to work, and the next cycle would re-render the line at four spaces and double the indent
- * under the operator's hands. `INDENT_UNIT` below is the one place this app's indent arithmetic is
- * allowed to disagree with the engine, and it doesn't.
+ * nesting level, "because Obsidian writes four" (a rendition convention, not a structural fact:
+ * `design-the-structural-language.md` §3 proves detection is unit-free, so this number changes no
+ * edge, only whether a re-rendered line visibly jumps). `INDENT_UNIT` below used to be this app's
+ * OWN hardcoded transcription of that literal. It is now the FALLBACK — the value used when
+ * `presentation.json` declares no `indentUnit` of its own (`declaration.ts` reads that key; a
+ * missing or malformed one already falls back to `DEFAULT_INDENT_UNIT`, which is the same `4`).
+ * `indentedLine`'s new `unit` parameter is how the declared value reaches this module: the caller
+ * (`app/index.html`) reads `presentation.json` once, and both the source-edit arithmetic here and
+ * — where the golden master allows it — the on-screen margin in `paint.ts` derive from that one
+ * read, rather than each carrying its own copy of the number.
  *
- * `app/present/paint.ts:697`'s margin CSS is a SEPARATE, pre-existing display bug — it scales a
- * nested line's on-screen margin by 2x what a 4-space-per-level convention would produce, since it
- * still divides by two. It is not corrected here: fixing it is a change to a file this module's
- * sibling owns (paint.ts), and it would break `tests/present-golden.test.mjs`'s byte-identical
- * comparison against the historical `app.html:234-269` reference, which is a separate, already-
- * validated claim this change has no business invalidating. It is a cosmetic finding, not a
- * correctness one: the CSS margin is still monotonic in the source indent (more indent, more
- * margin), so it is misleading, not misleading in a way that produces a WRONG source edit — the
- * source edit is computed here, from the raw character count, never from that CSS constant.
+ * `app/present/paint.ts`'s checkbox-margin arithmetic — `(shape.indent.length / 2) * 1.2 + "rem"`,
+ * a CSS margin transcribed from `app.html:246` — still treats TWO spaces as one level, and still
+ * disagrees with the four this module now sources from config. `paint.ts`'s own header records
+ * why: `tests/present-golden.test.mjs` compares the painted DOM byte-for-byte against the historical
+ * `app.html:234-269` reference for indents of 1, 2 and 4 raw spaces, and changing the divisor
+ * changes the `marginLeft` those cases assert — tried, confirmed to fail the golden, and reverted
+ * rather than weakening that comparison to make room. It is a cosmetic finding, not a correctness
+ * one: the CSS margin is still monotonic in the source indent (more indent, more margin), so it is
+ * misleading, not misleading in a way that produces a WRONG source edit — the source edit is
+ * computed here, from the raw character count and the declared unit, never from that CSS constant.
  *
  * ── WHY ANY INCREASE MATTERS, EVEN BY ONE SPACE ──
  *
@@ -98,8 +100,10 @@
 import { classifyLine } from "./resolution.js";
 
 /**
- * Four spaces. See the module header for the citation and for why this is not derived from
- * `paint.ts`'s margin arithmetic.
+ * Four spaces — the BUILT-IN FALLBACK, used only when `presentation.json` declares no
+ * `indentUnit` of its own (or declares one `declaration.ts` could not read). See the module
+ * header: this used to be the only value in the app; it is now the floor a declared value
+ * overrides, matching every other silent-falls-through-to-default key in the cascade.
  */
 export const INDENT_UNIT = 4;
 
@@ -107,7 +111,11 @@ const LEADING_WHITESPACE = /^\s*/;
 
 /**
  * The new text for `line` after indenting (`"in"`) or outdenting (`"out"`) it by `count` units of
- * `INDENT_UNIT` spaces.
+ * `unit` spaces.
+ *
+ * `unit` defaults to `INDENT_UNIT` so every existing caller — and every test written before
+ * `presentation.json` carried `indentUnit` — is unchanged. `app/index.html` is the one caller that
+ * passes a declared value explicitly, once it has read one (see the module header).
  *
  * Returns `line` UNCHANGED — not `null` — when the gesture has nothing to do: outdenting a line
  * already at zero, or a line this app refuses to touch at all (blank or heading; see the module
@@ -116,7 +124,12 @@ const LEADING_WHITESPACE = /^\s*/;
  * equals the line already there is a refusal, not a successful no-op edit (`source.ts`) — is what
  * turns "nothing to do" into "post nothing", with no second no-op check needed here.
  */
-export function indentedLine(line: string, direction: "in" | "out", count: number): string {
+export function indentedLine(
+  line: string,
+  direction: "in" | "out",
+  count: number,
+  unit: number = INDENT_UNIT,
+): string {
   const shape = classifyLine(line);
   if (shape.kind === "blank" || shape.kind === "heading") {
     return line;
@@ -128,8 +141,8 @@ export function indentedLine(line: string, direction: "in" | "out", count: numbe
 
   const units =
     direction === "in"
-      ? Math.floor(currentLength / INDENT_UNIT) + count
-      : Math.max(0, Math.ceil(currentLength / INDENT_UNIT) - count);
+      ? Math.floor(currentLength / unit) + count
+      : Math.max(0, Math.ceil(currentLength / unit) - count);
 
-  return " ".repeat(units * INDENT_UNIT) + rest;
+  return " ".repeat(units * unit) + rest;
 }
