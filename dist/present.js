@@ -348,102 +348,21 @@ function resolveAnchor(anchor, source) {
   return { outcome: "absent" };
 }
 
-// app/present/focus.ts
-var FOCUSED = Object.freeze(
-  Object.fromEntries(RESOLUTION_KEYS.map((key) => [key, "raw"]))
-);
-var FocusSurface = class {
-  #lineIndex = null;
-  #anchor = null;
-  /** The line the cursor is on, or `null` when it is nowhere. */
-  get lineIndex() {
-    return this.#lineIndex;
-  }
-  /**
-   * WHICH line the cursor is on, expressed as identity rather than as a position — or `null` when
-   * nothing was anchored. See `focus` below for the two ways that happens.
-   */
-  get anchor() {
-    return this.#anchor;
-  }
-  isFocused(lineIndex) {
-    return this.#lineIndex === lineIndex;
-  }
-  /**
-   * Put the cursor on a line. One line at a time — there is one cursor.
-   *
-   * `source` IS OPTIONAL AND ITS ABSENCE IS A REAL CONFIGURATION, the same shape `PaintDeps`
-   * already draws for `focus`, `mode` and `draft`: without it the cursor is a bare index exactly as
-   * it was before this parameter existed, and `reanchor` below reports `unanchored` rather than
-   * pretending. Every caller in the shipped app supplies it (`app/index.html`, `paint.ts`); the
-   * tests written before anchoring existed do not, and go on painting what they always painted.
-   *
-   * THE INDEX AND THE ANCHOR ARE SET IN ONE CALL, on purpose. Two setters would be two facts that
-   * can disagree about where one cursor is, and "there is one cursor" is the property every motion
-   * in this bundle is arithmetic on.
-   */
-  focus(lineIndex, source) {
-    this.#lineIndex = lineIndex;
-    this.#anchor = source === void 0 ? null : anchorFor(source, lineIndex);
-  }
-  /**
-   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and which rung said so?
-   *
-   * On `found` the cursor MOVES to the line it found and the anchor is taken again against the new
-   * projection — a cycle that stamped the line, or rewrote its tail, has changed the text tier 2
-   * would look for next time, and an anchor that went on describing the previous projection would
-   * be the same defect one repaint later.
-   *
-   * ON `ambiguous` AND `absent` NOTHING MOVES AND NOTHING IS CLEARED, which is deliberate rather
-   * than unfinished. Blurring a cursor whose line has vanished would destroy the one thing row 4
-   * (`the-vanished-line-is-parked-not-dropped`) needs in order to park the operator's characters
-   * where he can recover them. This row's whole obligation is that the outcome REACHES THE CALLER
-   * instead of being silence, and the caller decides.
-   *
-   * IT IS THE CALLER'S CALL, NOT THE PAINTER'S. `paint` cannot tell a projection arriving from its
-   * own optimistic repaint of a source it has already seen, so re-anchoring lives with the code
-   * that knows a snapshot landed — the same split `boundaryLine` and `openLine` already have
-   * between a pure answer and the wiring that asks for it.
-   *
-   * IF THIS SURFACE EVER GAINS A COLUMN — and it is likely to, because `w`/`b`/`e` repeating in
-   * NORMAL makes the cursor a line AND a column — THIS METHOD MUST DECIDE WHAT HAPPENS TO IT
-   * EXPLICITLY. It goes through `focus()` above, which owns the index and the anchor and nothing
-   * else, so a column added as a third field would be silently reset here on every arrival. The
-   * fact it needs is already in hand: `anchor.text` is re-taken against the new projection one line
-   * below, so a column can be clamped into the line's CURRENT characters rather than guessed.
-   */
-  reanchor(source) {
-    const anchor = this.#anchor;
-    if (anchor === null) {
-      return { outcome: "unanchored" };
-    }
-    const reading = resolveAnchor(anchor, source);
-    if (reading.outcome === "found") {
-      this.focus(reading.lineIndex, source);
-    }
-    return reading;
-  }
-  /** Take the cursor off whatever it was on. */
-  blur() {
-    this.#lineIndex = null;
-    this.#anchor = null;
-  }
-  /**
-   * The context to resolve ONE line against: the caller's facts, plus FOCUS if this is the line.
-   *
-   * The level name lives here rather than at the call site so the painter never has to know which
-   * rung the cursor sits on — it hands over a line number and a context and gets a context back.
-   */
-  contextFor(lineIndex, base) {
-    return base.with("FOCUS", this.isFocused(lineIndex) ? FOCUSED : void 0);
-  }
-};
-
 // app/present/motions.ts
 function clampLine(index, lastIndex) {
   const floor = 0;
   const ceiling = lastIndex < 0 ? 0 : lastIndex;
   return Math.max(floor, Math.min(index, ceiling));
+}
+function clampColumn(column, text) {
+  if (!Number.isFinite(column) || column < 0) {
+    return 0;
+  }
+  const at = Math.floor(column);
+  if (text === null) {
+    return at;
+  }
+  return Math.min(at, Math.max(0, text.length - 1));
 }
 var DIGIT = /^[0-9]$/;
 var ModeSurface = class {
@@ -459,12 +378,15 @@ var ModeSurface = class {
    * `handleKey` for `i`/`Enter`/`a`, and by the DOM wiring for a mouse click, which has meant "edit
    * this line" since before this module existed and goes on meaning it.
    *
-   * `caret` IS THE PARAMETER `a` NEEDED, NOT A SECOND METHOD. `i`/Enter/a mouse click all pass
-   * nothing (unspecified — the `<input>` gets whatever position it always got, undisturbed) and
-   * `a` passes `"end"`. `w`/`b`/`e` (slice 4) pass a NUMBER — the offset `word.ts`'s `wordCaret`
-   * computed — which is why this parameter is `"end" | number` rather than the narrower `"end"`
-   * slice 1 shipped: a caret seed is a column, and `"end"` was always shorthand for "the column
-   * one past the last character", not a fact any type poorer than a number should have to name.
+   * `caret` IS A COLUMN AND NOTHING ELSE. `i` passes the cursor's own column and `a` passes
+   * `column + 1`; a mouse click passes nothing, because a click puts the caret where the person
+   * clicked and the painter must not overrule that.
+   *
+   * IT USED TO ACCEPT `"end"` AS WELL, AND THAT UNION IS GONE ON PURPOSE. `"end"` was shorthand for
+   * "the column one past the last character" from a time when NORMAL had no column to be one past
+   * — the string was standing in for arithmetic nothing could do yet. Now the cursor HAS a column,
+   * `a` is `column + 1`, and a second way of naming a position on the same axis would be exactly
+   * the second coordinate system this change is under instruction not to introduce.
    * See `takeCaretHint` for how the painter reads it back.
    */
   enterInsert(caret) {
@@ -508,16 +430,22 @@ var ModeSurface = class {
    * the DOM wiring is responsible for giving it a starting value) and the last valid line index
    * for the view being shown.
    *
+   * `column` IS THE CURSOR'S OTHER AXIS AND IT IS AN INPUT, NOT A DECISION MADE HERE. It arrives
+   * from `FocusSurface.column` exactly as `current` arrives from `FocusSurface.lineIndex`, and this
+   * module reads it for `i`/`a` (which open INSERT relative to it) and for nothing else. It
+   * defaults to `0` so every caller written before the column existed goes on compiling and goes on
+   * meaning what it meant: `i` at column zero is the start of the line.
+   *
    * COUNT PREFIX: digits accumulate; `1`-`9` may start one, `0` may only CONTINUE one already
-   * started (a bare `0` is left unbound rather than guessed at as "column zero", per the brief).
-   * Any non-digit key — bound or not — consumes and clears the pending digits, which is why the
-   * count is reset before the switch below runs rather than only inside the branches that use it.
+   * started. A BARE `0` IS NOW COLUMN ZERO, which is a change: it was left unbound while the cursor
+   * had no column to send to zero, and "left unbound until there is something for it to mean" is
+   * what that note in the brief was recording. There is now.
    *
    * `gg`: the one two-key binding. A `g` that is not followed by a second `g` is silently
    * abandoned and the key that broke the pair is processed as an ordinary keystroke — so `g` then
    * `j` moves down by one rather than doing nothing at all.
    */
-  handleKey(key, current, lastIndex) {
+  handleKey(key, current, lastIndex, column = 0) {
     if (this.#mode !== "NORMAL") {
       return { handled: false, effect: { kind: "none" } };
     }
@@ -534,7 +462,7 @@ var ModeSurface = class {
     }
     if (DIGIT.test(key)) {
       if (key === "0" && this.#count === "") {
-        return { handled: false, effect: { kind: "none" } };
+        return { handled: true, effect: { kind: "column", to: "start" } };
       }
       this.#count += key;
       return { handled: true, effect: { kind: "none" } };
@@ -562,11 +490,13 @@ var ModeSurface = class {
         };
       case "i":
       case "Enter":
-        this.enterInsert();
-        return { handled: true, effect: { kind: "enter-insert" } };
+        this.enterInsert(column);
+        return { handled: true, effect: { kind: "enter-insert", caret: column } };
       case "a":
-        this.enterInsert("end");
-        return { handled: true, effect: { kind: "enter-insert", caret: "end" } };
+        this.enterInsert(column + 1);
+        return { handled: true, effect: { kind: "enter-insert", caret: column + 1 } };
+      case "$":
+        return { handled: true, effect: { kind: "column", to: "end" } };
       case "o":
         if (pending !== null) {
           return { handled: true, effect: { kind: "none" } };
@@ -599,6 +529,153 @@ var ModeSurface = class {
       default:
         return { handled: false, effect: { kind: "none" } };
     }
+  }
+};
+
+// app/present/focus.ts
+function lineTextOf(source, lineIndex) {
+  if (source === void 0) {
+    return null;
+  }
+  return source.split("\n")[lineIndex] ?? null;
+}
+var FOCUSED = Object.freeze(
+  Object.fromEntries(RESOLUTION_KEYS.map((key) => [key, "raw"]))
+);
+var FocusSurface = class {
+  #lineIndex = null;
+  #anchor = null;
+  #column = 0;
+  /** The line the cursor is on, or `null` when it is nowhere. */
+  get lineIndex() {
+    return this.#lineIndex;
+  }
+  /**
+   * WHICH CHARACTER of that line the cursor is on — an offset into the line's own source string,
+   * clamped to a character that exists. `0` when the cursor is nowhere.
+   *
+   * IT IS AN OFFSET INTO THE LINE THE INDEX ALREADY NAMES, NOT A SECOND COORDINATE SYSTEM. The
+   * anchor decides WHICH line; this decides WHERE IN IT. Every column that enters this surface is
+   * clamped against that line's characters on the way in, which is what makes "clamped to a
+   * character that exists" a property of the surface rather than of each of its callers.
+   */
+  get column() {
+    return this.#column;
+  }
+  /**
+   * WHICH line the cursor is on, expressed as identity rather than as a position — or `null` when
+   * nothing was anchored. See `focus` below for the two ways that happens.
+   */
+  get anchor() {
+    return this.#anchor;
+  }
+  isFocused(lineIndex) {
+    return this.#lineIndex === lineIndex;
+  }
+  /**
+   * Put the cursor on a line. One line at a time — there is one cursor.
+   *
+   * `source` IS OPTIONAL AND ITS ABSENCE IS A REAL CONFIGURATION, the same shape `PaintDeps`
+   * already draws for `focus`, `mode` and `draft`: without it the cursor is a bare index exactly as
+   * it was before this parameter existed, and `reanchor` below reports `unanchored` rather than
+   * pretending. Every caller in the shipped app supplies it (`app/index.html`, `paint.ts`); the
+   * tests written before anchoring existed do not, and go on painting what they always painted.
+   *
+   * THE INDEX AND THE ANCHOR ARE SET IN ONE CALL, on purpose. Two setters would be two facts that
+   * can disagree about where one cursor is, and "there is one cursor" is the property every motion
+   * in this bundle is arithmetic on.
+   *
+   * `column` DEFAULTS TO ZERO, WHICH IS A DECISION AND NOT AN OMISSION. Landing on a line puts the
+   * cursor at its start: `j`, `k`, `gg`, `G`, `{`, `}` and a mouse click all take this default, so a
+   * line move resets the column. Vim's own `j`/`k` instead remember a DESIRED column and restore it
+   * on a line long enough to hold it — a third piece of state (the desired column is not the actual
+   * one) that nothing in this change needs, so it is not built. What IS needed is that `w`/`b`/`e`
+   * repeat, and they do not move between lines. The one caller that passes a column is `reanchor`
+   * below, which is preserving one rather than choosing one.
+   */
+  focus(lineIndex, source, column = 0) {
+    this.#lineIndex = lineIndex;
+    this.#anchor = source === void 0 ? null : anchorFor(source, lineIndex);
+    this.#column = clampColumn(column, lineTextOf(source, lineIndex));
+  }
+  /**
+   * Move the cursor along the line it is already on — `w`/`b`/`e`/`0`/`$`, and nothing else.
+   *
+   * IT TAKES THE LINE'S TEXT RATHER THAN LOOKING IT UP, for the same reason `focus` takes a source:
+   * this surface holds no copy of the view and must not start holding one. The caller has the string
+   * the column was computed against (app/index.html reads it out of the same `v.markdown` it hands
+   * `wordCaret`), so passing it is passing the fact, not fetching it twice.
+   *
+   * IT IS A SEPARATE CALL FROM `focus` AND THAT IS NOT THE "TWO SETTERS" THE NOTE ABOVE REFUSES.
+   * That refusal is about two setters for ONE fact — an index and an anchor that could disagree
+   * about which line the cursor is on. A column is a different axis: it cannot disagree with the
+   * index, only be clamped by it, which is exactly what happens here.
+   */
+  moveColumn(column, lineText) {
+    this.#column = clampColumn(column, lineText);
+  }
+  /**
+   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and which rung said so?
+   *
+   * On `found` the cursor MOVES to the line it found and the anchor is taken again against the new
+   * projection — a cycle that stamped the line, or rewrote its tail, has changed the text tier 2
+   * would look for next time, and an anchor that went on describing the previous projection would
+   * be the same defect one repaint later.
+   *
+   * ON `ambiguous` AND `absent` NOTHING MOVES AND NOTHING IS CLEARED, which is deliberate rather
+   * than unfinished. Blurring a cursor whose line has vanished would destroy the one thing row 4
+   * (`the-vanished-line-is-parked-not-dropped`) needs in order to park the operator's characters
+   * where he can recover them. This row's whole obligation is that the outcome REACHES THE CALLER
+   * instead of being silence, and the caller decides.
+   *
+   * IT IS THE CALLER'S CALL, NOT THE PAINTER'S. `paint` cannot tell a projection arriving from its
+   * own optimistic repaint of a source it has already seen, so re-anchoring lives with the code
+   * that knows a snapshot landed — the same split `boundaryLine` and `openLine` already have
+   * between a pure answer and the wiring that asks for it.
+   *
+   * THE COLUMN THIS METHOD WAS WARNED ABOUT NOW EXISTS, AND THIS IS THE EXPLICIT DECISION.
+   *
+   * The warning left here by the row that made the cursor an identity was that a column added as a
+   * third field would be SILENTLY RESET on every arrival, because this method moves the cursor by
+   * calling `focus()` and `focus()` owns the index and the anchor and nothing else. It does not
+   * happen, because the column is passed back through: `focus(lineIndex, source, this.#column)`.
+   *
+   * AND IT IS CLAMPED RATHER THAN CARRIED, which is the fact the warning said was already in hand.
+   * `focus` re-takes the anchor against the ARRIVING projection, so it also has that projection's
+   * text for the line the cursor landed on, and `clampColumn` (motions.ts) cuts the column down to a
+   * character that is really there. A cycle that shortened the line — stripped a marker cell,
+   * rewrote a tail — leaves the cursor on that line's LAST character rather than past its end, and a
+   * cycle that lengthened it leaves the column exactly where the operator put it. Neither outcome is
+   * a guess: both are the same one clamp, applied to whatever arrived.
+   *
+   * ON `ambiguous` AND `absent` THE COLUMN IS UNTOUCHED, for the same reason the index and the
+   * anchor are: nothing about the cursor moves when the world could not tell us where its line went.
+   */
+  reanchor(source) {
+    const anchor = this.#anchor;
+    if (anchor === null) {
+      return { outcome: "unanchored" };
+    }
+    const reading = resolveAnchor(anchor, source);
+    if (reading.outcome === "found") {
+      this.focus(reading.lineIndex, source, this.#column);
+    }
+    return reading;
+  }
+  /** Take the cursor off whatever it was on. */
+  blur() {
+    this.#lineIndex = null;
+    this.#anchor = null;
+    this.#column = 0;
+  }
+  /**
+   * The context to resolve ONE line against: the caller's facts, plus FOCUS if this is the line.
+   *
+   * The level name lives here rather than at the call site so the painter never has to know which
+   * rung the cursor sits on — it hands over a line number and a context and gets a context back.
+   */
+  contextFor(lineIndex, base) {
+    return base.with("FOCUS", this.isFocused(lineIndex) ? FOCUSED : void 0);
   }
 };
 
@@ -647,22 +724,26 @@ function indentedLine(line, direction, count) {
 }
 
 // app/present/word.ts
-function wordCaret(line, motion, count) {
+function wordCaret(line, motion, count, from) {
   const words = titleSpans(line);
   if (words.length === 0) {
     return null;
   }
   const n = Math.max(1, count);
+  const last = words[words.length - 1];
+  const first = words[0];
   if (motion === "b") {
-    const index2 = Math.max(0, words.length - n);
-    return words[index2]?.start ?? null;
+    const before = words.map((word) => word.start).filter((at) => at < from);
+    if (before.length === 0) {
+      return first.start;
+    }
+    return before[Math.max(0, before.length - n)];
   }
-  const index = Math.min(n - 1, words.length - 1);
-  const word = words[index];
-  if (word === void 0) {
-    return null;
+  const after = motion === "e" ? words.map((word) => word.end - 1).filter((at) => at > from) : words.map((word) => word.start).filter((at) => at > from);
+  if (after.length === 0) {
+    return motion === "e" ? last.end - 1 : last.start;
   }
-  return motion === "e" ? word.end : word.start;
+  return after[Math.min(n - 1, after.length - 1)];
 }
 
 // app/present/draft.ts
@@ -811,6 +892,21 @@ function applyEdit(source, edit) {
 function rawText(source) {
   const div = document.createElement("div");
   div.textContent = source;
+  return div;
+}
+var VIM_BLOCK_CLASS = "vim-block";
+var EMPTY_CELL = "\xA0";
+function normalLine(lineSource, column) {
+  const div = document.createElement("div");
+  div.className = "rawline " + VIM_SELECTED_CLASS;
+  const head = document.createElement("span");
+  head.textContent = lineSource.slice(0, column);
+  const cell = document.createElement("span");
+  cell.className = VIM_BLOCK_CLASS;
+  cell.textContent = lineSource.slice(column, column + 1) || EMPTY_CELL;
+  const tail = document.createElement("span");
+  tail.textContent = lineSource.slice(column + 1);
+  div.append(head, cell, tail);
   return div;
 }
 function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openLineAt) {
@@ -974,13 +1070,19 @@ function paint(body, source, context, deps) {
       body.append(rawText(lineSource));
       return;
     }
+    if (mode !== void 0 && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
+      const line = normalLine(lineSource, focus.column);
+      focusable(line, lineIndex);
+      body.append(line);
+      return;
+    }
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
       const caret = mode?.takeCaretHint();
       if (caret !== void 0) {
-        const at = caret === "end" ? lineSource.length : Math.max(0, Math.min(caret, lineSource.length));
+        const at = Math.max(0, Math.min(caret, lineSource.length));
         input.setSelectionRange?.(at, at);
       }
     }
@@ -1012,16 +1114,15 @@ function paint(body, source, context, deps) {
       return;
     }
     lastPaintedIndex = index;
-    const focusLive = focus !== void 0 && (mode === void 0 || mode.mode === "INSERT");
+    const focusLive = focus !== void 0;
     const cascade = new PresentationCascade(focusLive ? focus.contextFor(index, context) : context);
-    const selected = mode !== void 0 && mode.mode === "NORMAL" && focus !== void 0 && focus.isFocused(index);
     if (shape.kind === "checkbox") {
       if (cascade.resolve("checkbox").rendition === "raw") {
         raw(shape.source, index);
         return;
       }
       const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "") + (selected ? " " + VIM_SELECTED_CLASS : "");
+      row.className = "task" + (shape.done ? " done" : "");
       row.style.marginLeft = shape.indent.length / 2 * 1.2 + "rem";
       const box = document.createElement("input");
       box.type = "checkbox";
@@ -1051,9 +1152,6 @@ function paint(body, source, context, deps) {
         return;
       }
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      if (selected) {
-        el.className = VIM_SELECTED_CLASS;
-      }
       el.innerHTML = renderTags(
         shape.text,
         cascade.resolve("tags").rendition,
@@ -1068,9 +1166,6 @@ function paint(body, source, context, deps) {
       return;
     }
     const div = document.createElement("div");
-    if (selected) {
-      div.className = VIM_SELECTED_CLASS;
-    }
     div.innerHTML = renderTags(
       shape.source,
       cascade.resolve("tags").rendition,
@@ -1107,6 +1202,7 @@ export {
   boundaryLine,
   carriesContent,
   chromeOf,
+  clampColumn,
   clampLine,
   classifyLine,
   indentedLine,

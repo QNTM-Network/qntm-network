@@ -27,19 +27,29 @@
  * TRIED AND REJECTED: making NORMAL contribute `{checkbox: wired, heading: wired, prose: wired,
  * tags: wired}` at the MODE rung (a no-op against DEFAULT) and INSERT contribute nothing, leaving
  * `FocusSurface`'s existing FOCUS contribution to do the rest exactly as it does today. This looks
- * elegant and is wrong: `FocusSurface.contextFor` contributes raw-on-every-key unconditionally
- * whenever a line is focused, with no mode concept at all, because until this module existed
- * "focused" and "editing" were the same fact. Vim's whole point is that they are not — NORMAL
- * mode's selected line is FocusSurface's `lineIndex` too (the brief is explicit that motions are
- * arithmetic on that one number, and there must be exactly one cursor, not two competing ideas of
- * where it is), yet that line must NOT become an `<input>`. So the raw-on-focus contribution has
- * to be GATED by mode — see `paint.ts`, which only calls `focus.contextFor` while `mode.mode` is
- * `"INSERT"` (or no `ModeSurface` is wired at all, which preserves every caller that predates this
- * change: click-to-edit, with no vim concept in the picture, keeps working exactly as it did).
- * That gate lives in the PAINTER, as an embodiment choice in the same family as `focus === undefined
- * ? rawText(...) : rawInput(...)` — never as a second `Contribution`. Confirms the module boundary
- * drawn above: MODE (the cascade rung) stays silent, exactly as `levels.ts` still says of every
- * rung today, and this module is the reason it gets to go on saying that truthfully.
+ * elegant and is wrong: it would make the mode a `Rendition` shift, which is the one thing
+ * NORMAL/INSERT is not. MODE (the cascade rung) stays silent, exactly as `levels.ts` still says of
+ * every rung today, and this module is the reason it gets to go on saying that truthfully.
+ *
+ * ── AND THE GATE THAT USED TO BE WRITTEN HERE WAS THE REAL DEFECT, NOT THE ALTERNATIVE ──
+ *
+ * This header used to argue the opposite of what is above it: that because NORMAL's selected line
+ * "must NOT become an `<input>`", the raw-on-focus contribution "has to be GATED by mode", and
+ * `paint.ts` therefore called `focus.contextFor` only while `mode.mode === "INSERT"`. THAT GATE WAS
+ * WRONG AND IT SHIPPED. It contradicted the operator's founding rule for the surface, recorded in
+ * `docs/implementation-artifacts/design-presentation-cascade.md` and in focus.ts's own header —
+ * "cursor on the line → the line renders as its exact source text" — and in NORMAL the cursor IS on
+ * the line. It also made `w`/`b`/`e` unrepeatable by construction: with the selected line rendered
+ * as a widget there are no characters on screen for a column to move through, so the mode had
+ * nowhere to put a cursor.
+ *
+ * TWO QUESTIONS WERE BEING ANSWERED WITH ONE BOOLEAN. "Does this line show its characters?" is the
+ * cascade's, and FOCUS has always answered it the same way regardless of mode. "Is this line OPEN
+ * FOR TYPING?" is this module's, and it is an EMBODIMENT question — an `<input>` in INSERT, a span
+ * carrying a block cursor in NORMAL. `paint.ts` now splits them: `focusLive` is `focus !== undefined`
+ * (what it was before this module existed) and the mode decides only which element the SAME raw
+ * rendition is built out of. That split is the same family as `focus === undefined ? rawText(...) :
+ * rawInput(...)` already was, and it is still never a second `Contribution`.
  *
  * ── SLICE 2 (2026-07-31): `a`, `o`/`O`, `x`, `{`/`}` — SAME RULE, MORE GESTURES ──
  *
@@ -84,15 +94,37 @@
  * SAME SHAPE AS `{`/`}`/`>`/`<`, ONE STEP FURTHER. Where the count-th TITLE word starts or ends
  * needs `titleSpans`, which needs `classifyLine` — `resolution.ts` again — so this module reports
  * only a motion letter (`"w"`/`"b"`/`"e"`) and a composed count; `word.ts`'s `wordCaret` turns that
- * into a caret offset, or `null` on a line with no title. The one way this differs from `{`/`}` and
- * `>`/`<`: those effects leave `Mode` untouched (a line move, an edit) and this one MUST end in
- * INSERT, which is `enterInsert(caret)`'s job — but this module still cannot call it, because it
- * does not have the offset. So `handleKey` does NOT flip `#mode` for `w`/`b`/`e`; the caller
- * computes the offset from the reported motion and count, then calls `mode.enterInsert(offset)`
- * itself if one was found, exactly the way `{`/`}`'s caller calls `focus.focus(boundaryLine(...))`
- * rather than this module calling it. See word.ts for the full argument, including why a count
- * with no established caret column is anchored to a fixed end of the title rather than to a
- * remembered position.
+ * into a column, or `null` on a line with no title. The caller computes the column from the reported
+ * motion and count and applies it, exactly the way `{`/`}`'s caller calls
+ * `focus.focus(boundaryLine(...))` rather than this module calling it.
+ *
+ * ── SLICE 5 (2026-07-31): `w`/`b`/`e` STAY IN NORMAL, AND THE CURSOR GAINS A COLUMN ──
+ *
+ * THE OPERATOR FALSIFIED SLICE 4 BY USING IT: "right now word jump also does insert. so i can't
+ * jump through it just does first jump then wwww typed". Slice 4 ended `w` in `enterInsert(offset)`
+ * on the reasoning — `design-the-vim-cursor.md` §2.2, labelled [REA] — that `w`/`b`/`e` need not be
+ * repeatable NORMAL-mode motions because the platform's own `Option+←/→` would do the repeating
+ * once the caret was in the line. He is a vim user. In vim `w` repeats, so the second `w` was a
+ * literal `w` typed into the box.
+ *
+ * SO `w`/`b`/`e` ARE ORDINARY MOTIONS NOW: they move the COLUMN and leave `#mode` at `"NORMAL"`,
+ * exactly as `j`/`k` move the line and leave it there. `handleKey` still does not flip `#mode` for
+ * them — but where that used to mean "the caller finishes the job by entering INSERT", it now means
+ * what it says. Nothing enters INSERT except `i`, `a`, `Enter`, `o`/`O` and a mouse click.
+ *
+ * THE COLUMN LIVES ON `FocusSurface`, NOT HERE, AND THE REASON IS THE ONE ALREADY WRITTEN DOWN.
+ * focus.ts's `reanchor` carries a note left by the row that made the cursor an identity: if this
+ * surface ever gains a column, `reanchor` must decide explicitly what happens to it, because
+ * `anchor.text` is re-taken against the arriving projection and a column can therefore be CLAMPED
+ * into the line's current characters rather than guessed. A column held here would have had no such
+ * clamp available and no such arrival to hook. `design-the-vim-cursor.md` §1.4 argued the opposite
+ * — that a column's lifetime is "one paint" and it "must not survive a repaint" — and that argument
+ * held only while `w` ended in INSERT. A motion that repeats is a position that persists.
+ *
+ * THIS MODULE STILL IMPORTS NOTHING. It reads the column as an ARGUMENT (`handleKey`'s fourth
+ * parameter) and reports columns as NUMBERS, the same way it has always read and reported line
+ * indices. No `Contribution`, no `PresentationContext`, no `Rendition` — the boundary this header
+ * opens with is exactly where it was.
  *
  * ── SLICE 3 (2026-07-31): `>` and `<` — indent and outdent the selected line ──
  *
@@ -123,11 +155,13 @@
  *
  * ── WHAT THIS MODULE ACTUALLY OWNS ──
  *
- *   1. `Mode` — `"NORMAL"` (no `<input>` is open; the selected line is a LINE SELECTION, not a
- *      text caret) or `"INSERT"` (an `<input>` holds the selected line's exact source characters —
- *      what the app already did before this module existed, and unchanged by it).
- *   2. `clampLine` — the arithmetic every motion shares: no wrap, clamp into `[0, lastIndex]`,
- *      exactly as vim's own `j`/`k` refuse to leave the buffer.
+ *   1. `Mode` — `"NORMAL"` (no `<input>` is open; the selected line shows its exact source
+ *      characters with a BLOCK cursor on one of them) or `"INSERT"` (an `<input>` holds those same
+ *      characters and a text caret sits between two of them). BOTH RENDITIONS ARE RAW. What changes
+ *      between them is which element carries the characters and whether a keystroke can alter them.
+ *   2. `clampLine` and `clampColumn` — the arithmetic every motion shares, one per axis: no wrap,
+ *      clamp into the range that exists, exactly as vim's own `j`/`k` refuse to leave the buffer
+ *      and its own `l` refuses to leave the line.
  *   3. `ModeSurface.handleKey` — one NORMAL-mode keystroke in, one outcome out: whether it was
  *      recognised (so the caller knows whether to `preventDefault`), and what happened (move the
  *      selection, start editing, ask for a new line, ask for a checkbox toggle, or ask for a
@@ -136,7 +170,10 @@
  *      never re-deciding anything this module already decided.
  */
 
-/** NORMAL: a line selection, no `<input>` open. INSERT: an `<input>` holds the line's characters. */
+/**
+ * NORMAL: the selected line's own characters, with a block cursor on one of them and no `<input>`
+ * open. INSERT: an `<input>` holds those same characters and a keystroke can change them.
+ */
 export type Mode = "NORMAL" | "INSERT";
 
 /**
@@ -152,15 +189,62 @@ export function clampLine(index: number, lastIndex: number): number {
   return Math.max(floor, Math.min(index, ceiling));
 }
 
+/**
+ * Clamp `column` into the characters of `text` — the SAME no-wrap rule `clampLine` applies to a
+ * line index, applied to the other axis, and kept beside it so there is one place to read both.
+ *
+ * THE CEILING IS `text.length - 1`, NOT `text.length`, and that is vim's own rule rather than an
+ * off-by-one: in NORMAL the cursor sits ON a character, so the last position it can occupy is the
+ * last character. An empty string has no character to sit on, so the ceiling floors at `0` and the
+ * cursor rests on the empty cell. `a` is what reaches `text.length` (one past the last character),
+ * and it reaches it by asking for `column + 1` and being clamped by the painter against the line it
+ * is about to open — not by this function widening.
+ *
+ * `text === null` MEANS "NO TEXT TO CLAMP AGAINST", which is a real configuration rather than a
+ * missing one: `FocusSurface.focus` takes its source string optionally (see focus.ts), and a caller
+ * that did not supply one has given this function nothing to measure. The column is floored at zero
+ * and otherwise left alone, which is the same posture `focus` already takes for the anchor.
+ */
+export function clampColumn(column: number, text: string | null): number {
+  if (!Number.isFinite(column) || column < 0) {
+    return 0;
+  }
+  const at = Math.floor(column);
+  if (text === null) {
+    return at;
+  }
+  return Math.min(at, Math.max(0, text.length - 1));
+}
+
 /** What a NORMAL-mode keystroke does, once it is fully decided. */
 export type NormalEffect =
   | { readonly kind: "none" }
   | { readonly kind: "move"; readonly lineIndex: number }
   /**
-   * `caret` is a PARAMETER of entering INSERT, not a second effect kind — `i`/Enter omit it
-   * (unspecified caret, exactly what they did before this field existed) and `a` sets `"end"`.
+   * `caret` is a PARAMETER of entering INSERT, not a second effect kind. It is now ALWAYS supplied
+   * and it is always a COLUMN: `i` opens at the cursor's own column and `a` at `column + 1`, both
+   * measured in the same offsets-into-the-source-line the NORMAL cursor itself uses. There is one
+   * coordinate system on this axis and this field speaks it.
+   *
+   * IT USED TO BE `"end"` FOR `a` AND ABSENT FOR `i`, WHICH WAS THE ABSENCE OF A COLUMN SPEAKING.
+   * With no column in NORMAL, `a` had nowhere to be "after" and the only well-defined place left
+   * was the end of the line; `i` had nowhere to open and took whatever the browser did. Both are
+   * now decided, so neither guess is left. `a` still lands at the end of the line when the cursor is
+   * on its last character — that is `column + 1` arriving there, not a special case.
    */
-  | { readonly kind: "enter-insert"; readonly caret?: "end" }
+  | { readonly kind: "enter-insert"; readonly caret: number }
+  /**
+   * `0`/`$` asked for the START or the END of the selected line. UNLIKE `w`/`b`/`e` these need no
+   * grammar at all — column zero and "the last character" are facts about the STRING, not about its
+   * title — so no module has to answer a second question and the caller applies them directly from
+   * the line it already has. That is why they cost nothing to ship beside the word motions.
+   *
+   * THEY ARE THE SOURCE LINE'S OWN ENDS, NOT THE TITLE'S, and the two really do differ: `0` on
+   * `        - [ ] Pay aug [[qntm:1234]] #task` is the first space of the indent, not the `P` of
+   * `Pay`. That is vim's `0`, which is what the operator is asking for by pressing it — `^` is the
+   * key that means "the first thing that is not whitespace" and it is not bound here.
+   */
+  | { readonly kind: "column"; readonly to: "start" | "end" }
   /**
    * `o`/`O` asked for a new line. This module does not know what a new line IS — that is
    * `seedFor`/`DraftSurface` (newline.ts), which stays unimported here — so it reports only WHERE:
@@ -214,7 +298,7 @@ export class ModeSurface {
   #mode: Mode = "NORMAL";
   #count = "";
   #pendingG = false;
-  #caretHint: "end" | number | undefined = undefined;
+  #caretHint: number | undefined = undefined;
 
   get mode(): Mode {
     return this.#mode;
@@ -225,15 +309,18 @@ export class ModeSurface {
    * `handleKey` for `i`/`Enter`/`a`, and by the DOM wiring for a mouse click, which has meant "edit
    * this line" since before this module existed and goes on meaning it.
    *
-   * `caret` IS THE PARAMETER `a` NEEDED, NOT A SECOND METHOD. `i`/Enter/a mouse click all pass
-   * nothing (unspecified — the `<input>` gets whatever position it always got, undisturbed) and
-   * `a` passes `"end"`. `w`/`b`/`e` (slice 4) pass a NUMBER — the offset `word.ts`'s `wordCaret`
-   * computed — which is why this parameter is `"end" | number` rather than the narrower `"end"`
-   * slice 1 shipped: a caret seed is a column, and `"end"` was always shorthand for "the column
-   * one past the last character", not a fact any type poorer than a number should have to name.
+   * `caret` IS A COLUMN AND NOTHING ELSE. `i` passes the cursor's own column and `a` passes
+   * `column + 1`; a mouse click passes nothing, because a click puts the caret where the person
+   * clicked and the painter must not overrule that.
+   *
+   * IT USED TO ACCEPT `"end"` AS WELL, AND THAT UNION IS GONE ON PURPOSE. `"end"` was shorthand for
+   * "the column one past the last character" from a time when NORMAL had no column to be one past
+   * — the string was standing in for arithmetic nothing could do yet. Now the cursor HAS a column,
+   * `a` is `column + 1`, and a second way of naming a position on the same axis would be exactly
+   * the second coordinate system this change is under instruction not to introduce.
    * See `takeCaretHint` for how the painter reads it back.
    */
-  enterInsert(caret?: "end" | number): void {
+  enterInsert(caret?: number): void {
     this.#mode = "INSERT";
     this.#caretHint = caret;
     this.#count = "";
@@ -249,7 +336,7 @@ export class ModeSurface {
    * operator has since moved the caret by hand) cannot reapply it. The painter calls this exactly
    * once, at the moment it builds the `<input>` the hint was for.
    */
-  takeCaretHint(): "end" | number | undefined {
+  takeCaretHint(): number | undefined {
     const hint = this.#caretHint;
     this.#caretHint = undefined;
     return hint;
@@ -277,16 +364,22 @@ export class ModeSurface {
    * the DOM wiring is responsible for giving it a starting value) and the last valid line index
    * for the view being shown.
    *
+   * `column` IS THE CURSOR'S OTHER AXIS AND IT IS AN INPUT, NOT A DECISION MADE HERE. It arrives
+   * from `FocusSurface.column` exactly as `current` arrives from `FocusSurface.lineIndex`, and this
+   * module reads it for `i`/`a` (which open INSERT relative to it) and for nothing else. It
+   * defaults to `0` so every caller written before the column existed goes on compiling and goes on
+   * meaning what it meant: `i` at column zero is the start of the line.
+   *
    * COUNT PREFIX: digits accumulate; `1`-`9` may start one, `0` may only CONTINUE one already
-   * started (a bare `0` is left unbound rather than guessed at as "column zero", per the brief).
-   * Any non-digit key — bound or not — consumes and clears the pending digits, which is why the
-   * count is reset before the switch below runs rather than only inside the branches that use it.
+   * started. A BARE `0` IS NOW COLUMN ZERO, which is a change: it was left unbound while the cursor
+   * had no column to send to zero, and "left unbound until there is something for it to mean" is
+   * what that note in the brief was recording. There is now.
    *
    * `gg`: the one two-key binding. A `g` that is not followed by a second `g` is silently
    * abandoned and the key that broke the pair is processed as an ordinary keystroke — so `g` then
    * `j` moves down by one rather than doing nothing at all.
    */
-  handleKey(key: string, current: number, lastIndex: number): NormalKeyOutcome {
+  handleKey(key: string, current: number, lastIndex: number, column = 0): NormalKeyOutcome {
     if (this.#mode !== "NORMAL") {
       return { handled: false, effect: { kind: "none" } };
     }
@@ -307,7 +400,11 @@ export class ModeSurface {
 
     if (DIGIT.test(key)) {
       if (key === "0" && this.#count === "") {
-        return { handled: false, effect: { kind: "none" } };
+        // A BARE `0` IS THE MOTION, A `0` AFTER A DIGIT IS PART OF THE COUNT. Both are vim's own
+        // rule and the order here is what keeps them apart: `10j` is ten lines down, `0` on its own
+        // is the start of the line, and neither can be mistaken for the other because the pending
+        // count is what decides which one this keystroke is.
+        return { handled: true, effect: { kind: "column", to: "start" } };
       }
       this.#count += key;
       return { handled: true, effect: { kind: "none" } };
@@ -339,15 +436,29 @@ export class ModeSurface {
         };
       case "i":
       case "Enter":
-        this.enterInsert();
-        return { handled: true, effect: { kind: "enter-insert" } };
+        // AT THE CURSOR'S OWN COLUMN, which is what `i` has always meant in vim and what this app
+        // could not offer until NORMAL had a column to be at. Before this, `i` opened the `<input>`
+        // and took whatever caret position the browser chose after `value =` then `focus()`.
+        this.enterInsert(column);
+        return { handled: true, effect: { kind: "enter-insert", caret: column } };
       case "a":
+        // ONE PAST THE CURSOR — vim's own `a`, "append AFTER the character under the cursor". On the
+        // line's LAST character that is the end of the line, which is what `a` did before this
+        // change, so the old behaviour is the new arithmetic's boundary case rather than a rule that
+        // had to be kept. The painter clamps it against the line it is about to open, so `column + 1`
+        // can never point past the characters that exist (paint.ts, the caret seed).
+        //
         // A PENDING COUNT IS DISCARDED, NOT REFUSED. See the header: `i`/Enter/`a` enter INSERT
         // once regardless of a count, because the count's only vim meaning (repeat the typed text
         // on Escape) is not implemented, so there is no counted behaviour a bare `a` could be
         // mistaken for skipping.
-        this.enterInsert("end");
-        return { handled: true, effect: { kind: "enter-insert", caret: "end" } };
+        this.enterInsert(column + 1);
+        return { handled: true, effect: { kind: "enter-insert", caret: column + 1 } };
+      case "$":
+        // THE OTHER HALF OF `0`, AND THE SAME NON-COST. "The last character of the line" needs the
+        // line's LENGTH and nothing else, so like `0` it asks no module a second question — the
+        // caller applies it from the string it already has.
+        return { handled: true, effect: { kind: "column", to: "end" } };
       case "o":
         if (pending !== null) {
           // A COUNT IS REFUSED, NOT DISCARDED. Unlike `a` above, `3o` has an obvious counted

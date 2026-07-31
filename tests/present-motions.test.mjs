@@ -25,6 +25,7 @@ import {
   applyEdit,
   boundaryLine,
   classifyLine,
+  clampColumn,
   clampLine,
   indentedLine,
   INDENT_UNIT,
@@ -138,11 +139,23 @@ describe("3. a count prefix applies once and then clears", () => {
     assert.deepEqual(moved.effect, { kind: "move", lineIndex: 5 }, "the stale count of 9 survived an unbound key");
   });
 
-  test("bare 0 with no pending count is left unbound, not guessed at as a motion", () => {
+  test("bare 0 with no pending count is the column motion, not a count digit", () => {
+    // IT USED TO BE LEFT UNBOUND, and that was honest while the cursor had no column for it to send
+    // to zero. It has one now, so `0` means what vim means by it. The ORDER is what keeps this and
+    // the test below apart: a pending count claims the digit first.
     const mode = new ModeSurface();
     const outcome = mode.handleKey("0", 7, 100);
-    assert.equal(outcome.handled, false);
-    assert.deepEqual(outcome.effect, { kind: "none" });
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "column", to: "start" });
+    assert.equal(mode.mode, "NORMAL", "a column motion changed the mode");
+  });
+
+  test("$ is the other end of the same motion, and needs no count", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("$", 7, 100);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "column", to: "end" });
+    assert.equal(mode.mode, "NORMAL");
   });
 
   test("0 continues a count that is already pending — '10j' is ten, not one then zero", () => {
@@ -194,56 +207,68 @@ describe("4. gg and G", () => {
 });
 
 describe("5. i and Enter start INSERT; Escape's job belongs to the input, not to this module", () => {
-  test("i enters INSERT", () => {
+  test("i enters INSERT at the cursor's own column", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("i", 4, 100, 11);
+    assert.equal(outcome.handled, true);
+    // AT THE CURSOR'S OWN COLUMN — the fourth argument, which is `FocusSurface.column`. It used to
+    // be `{ kind: "enter-insert" }` with no caret at all, and the browser decided where the caret
+    // landed after `value =` then `focus()`; nothing decided it, so nothing could be asserted.
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 11 });
+    assert.equal(mode.mode, "INSERT");
+    assert.equal(mode.takeCaretHint(), 11);
+  });
+
+  test("i with no column argument opens at column 0 — every pre-column caller still compiles", () => {
     const mode = new ModeSurface();
     const outcome = mode.handleKey("i", 4, 100);
-    assert.equal(outcome.handled, true);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert" });
-    assert.equal(mode.mode, "INSERT");
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 0 });
   });
 
   test("Enter enters INSERT the same way i does", () => {
     const mode = new ModeSurface();
-    const outcome = mode.handleKey("Enter", 4, 100);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert" });
+    const outcome = mode.handleKey("Enter", 4, 100, 11);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 11 });
     assert.equal(mode.mode, "INSERT");
   });
 
-  test("a enters INSERT with the caret hint 'end' — i and Enter leave it unset", () => {
+  test("a enters INSERT one past the cursor — i opens AT the column, a opens after it", () => {
     const mode = new ModeSurface();
-    const outcome = mode.handleKey("a", 4, 100);
+    const outcome = mode.handleKey("a", 4, 100, 11);
     assert.equal(outcome.handled, true);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "end" });
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 12 });
     assert.equal(mode.mode, "INSERT");
-    assert.equal(mode.takeCaretHint(), "end");
+    assert.equal(mode.takeCaretHint(), 12);
   });
 
-  test("takeCaretHint is undefined for i/Enter, and for a click-equivalent enterInsert()", () => {
+  test("takeCaretHint is a NUMBER for i/Enter/a, and undefined for a click-equivalent enterInsert()", () => {
     const mode = new ModeSurface();
-    mode.handleKey("i", 4, 100);
-    assert.equal(mode.takeCaretHint(), undefined);
+    mode.handleKey("i", 4, 100, 3);
+    assert.equal(mode.takeCaretHint(), 3);
 
     const mode2 = new ModeSurface();
-    mode2.handleKey("Enter", 4, 100);
-    assert.equal(mode2.takeCaretHint(), undefined);
+    mode2.handleKey("Enter", 4, 100, 3);
+    assert.equal(mode2.takeCaretHint(), 3);
 
+    // THE MOUSE CLICK IS THE ONE PATH THAT STILL LEAVES IT UNSET, and it has to: a click puts the
+    // caret where the person clicked, and a hint would overrule that.
     const mode3 = new ModeSurface();
-    mode3.enterInsert(); // the DOM wiring's mouse-click path — no caret argument
+    mode3.enterInsert();
     assert.equal(mode3.takeCaretHint(), undefined);
   });
 
-  test("takeCaretHint is consumed once — a second read after the first does not see 'end' again", () => {
+  test("takeCaretHint is consumed once — a second read after the first does not see it again", () => {
     const mode = new ModeSurface();
-    mode.handleKey("a", 4, 100);
-    assert.equal(mode.takeCaretHint(), "end");
+    mode.handleKey("a", 4, 100, 11);
+    assert.equal(mode.takeCaretHint(), 12);
     assert.equal(mode.takeCaretHint(), undefined, "the hint should have been cleared by the first read");
   });
 
   test("a discards a pending count rather than refusing — entering INSERT is the same act either way", () => {
     const mode = new ModeSurface();
     mode.handleKey("5", 0, 100);
-    const outcome = mode.handleKey("a", 4, 100);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "end" });
+    const outcome = mode.handleKey("a", 4, 100, 11);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 12 });
     assert.equal(mode.mode, "INSERT");
   });
 
@@ -573,7 +598,7 @@ function view(source = SOURCE) {
 function press(v, key) {
   const lastIndex = v.source.split("\n").length - 1;
   const current = v.focus.lineIndex ?? 0;
-  const outcome = v.mode.handleKey(key, current, lastIndex);
+  const outcome = v.mode.handleKey(key, current, lastIndex, v.focus.column);
   if (!outcome.handled) {
     return outcome;
   }
@@ -613,15 +638,20 @@ function press(v, key) {
       v.commits.push({ lineIndex: current, text, markdown });
     }
   } else if (effect.kind === "word") {
-    // `w`/`b`/`e` — the same shape as app/index.html's own branch: `wordCaret` decides the offset
-    // (or refuses with `null`), and only then does `mode.enterInsert(offset)` fire — `handleKey`
-    // itself left `#mode` at NORMAL for this effect kind, see motions.ts's slice 4 note.
+    // `w`/`b`/`e` — the same shape as app/index.html's own branch: `wordCaret` decides the column
+    // from the cursor's CURRENT one (or refuses with `null`), and the cursor moves along the line
+    // it is already on. Nothing enters INSERT; that was the defect.
     const line = v.source.split("\n")[current] ?? "";
-    const offset = wordCaret(line, effect.motion, effect.count);
-    if (offset !== null) {
-      v.mode.enterInsert(offset);
+    const at = wordCaret(line, effect.motion, effect.count, v.focus.column);
+    if (at !== null) {
+      v.focus.moveColumn(at, line);
       v.repaint();
     }
+  } else if (effect.kind === "column") {
+    // `0`/`$` — the line's own ends, clamped by `moveColumn` onto a character that exists.
+    const line = v.source.split("\n")[current] ?? "";
+    v.focus.moveColumn(effect.to === "start" ? 0 : line.length, line);
+    v.repaint();
   } else {
     v.repaint();
   }
@@ -780,10 +810,10 @@ describe("12. without a ModeSurface, focus behaves exactly as it did before vim 
   });
 });
 
-describe("13. a opens INSERT with the caret at the end of the line", () => {
-  test("the caret lands at the length of the line's source, not at 0", () => {
+describe("13. a opens INSERT one past the cursor; i opens AT it", () => {
+  test("a at column 0 lands the caret at column 1 — 'after the character under the cursor'", () => {
     const v = view();
-    v.focus.focus(1); // "- [ ] first task [[qntm:1]] #task"
+    v.focus.focus(1, v.source); // "- [ ] first task [[qntm:1]] #task", column 0
     v.repaint();
     press(v, "a");
     assert.equal(v.mode.mode, "INSERT");
@@ -791,29 +821,39 @@ describe("13. a opens INSERT with the caret at the end of the line", () => {
     assert.ok(line, "a did not open an editable line");
     const text = SOURCE.split("\n")[1];
     assert.equal(line.value, text, "a changed the line's characters");
-    assert.equal(line.selectionStart, text.length, "the caret was not at the end");
-    assert.equal(line.selectionEnd, text.length, "the caret was not collapsed at the end");
+    assert.equal(line.selectionStart, 1, "a did not land one past the cursor's column");
+    assert.equal(line.selectionEnd, 1, "the caret was not collapsed");
   });
 
-  test("i does NOT reposition the caret — the hint is unset, so setSelectionRange is never called", () => {
+  test("a on the line's LAST character lands at its END — the old behaviour, as a boundary case", () => {
+    // `a` used to mean "the end of the line" unconditionally, because there was no column for it to
+    // be one past. That reading is not KEPT here; it FALLS OUT of `column + 1` clamped by the
+    // painter against the line it is opening, which is the only arithmetic there now is.
     const v = view();
-    v.focus.focus(1);
+    v.focus.focus(1, v.source);
+    v.repaint();
+    press(v, "$");
+    press(v, "a");
+    const text = SOURCE.split("\n")[1];
+    assert.equal(inputs(v.body)[0].selectionStart, text.length);
+  });
+
+  test("i opens AT the cursor's column, which is zero on a line just landed on", () => {
+    const v = view();
+    v.focus.focus(1, v.source);
     v.repaint();
     press(v, "i");
-    const line = inputs(v.body)[0];
-    assert.equal(line.selectionStart, undefined, "i moved the caret, which only a set for it");
+    assert.equal(inputs(v.body)[0].selectionStart, 0, "i did not open at the cursor's own column");
   });
 
-  test("a discards a pending count and still lands at the end", () => {
+  test("a discards a pending count and is still one past the cursor", () => {
     const v = view();
-    v.focus.focus(0);
+    v.focus.focus(0, v.source);
     v.repaint();
     press(v, "9");
     press(v, "a");
     assert.equal(v.mode.mode, "INSERT");
-    const line = inputs(v.body)[0];
-    const text = SOURCE.split("\n")[0]; // "# This Week"
-    assert.equal(line.selectionStart, text.length);
+    assert.equal(inputs(v.body)[0].selectionStart, 1);
   });
 });
 
@@ -1133,43 +1173,60 @@ describe("19. w / b / e — motion letter and count only; word.ts decides the ca
 describe("19a. wordCaret (app/present/word.ts) — pure, no DOM, the arithmetic w/b/e need", () => {
   const LINE = "- [ ] first task [[qntm:1]] #task";
   // Chrome is "- [ ] " (6 chars); the title tail is "first task [[qntm:1]] #task", so the two
-  // title words are "first" (tail 0-5) and "task" (tail 6-10) — the stamp and the tag are atoms.
+  // title words are "first" (6-11) and "task" (12-16) — the stamp and the tag are atoms.
+  const FIRST = LINE.indexOf("first");
+  const TASK = LINE.indexOf("task");
 
-  test("w with count 1 lands at the start of the first title word", () => {
-    const at = wordCaret(LINE, "w", 1);
-    assert.equal(LINE.slice(at, at + 5), "first");
+  test("w from column 0 lands at the start of the first title word", () => {
+    assert.equal(wordCaret(LINE, "w", 1, 0), FIRST);
   });
 
-  test("w with count 2 lands at the start of the second title word", () => {
-    const at = wordCaret(LINE, "w", 2);
-    assert.equal(LINE.slice(at, at + 4), "task");
+  test("w REPEATS — from the first word it goes to the second, which is the whole defect", () => {
+    // Before this, every count was measured from a FIXED end of the title, so `w` from the first
+    // word returned the first word again and a second `w` could not go anywhere new.
+    assert.equal(wordCaret(LINE, "w", 1, FIRST), TASK);
+  });
+
+  test("w is STRICT — it never returns the column it was given", () => {
+    for (let from = 0; from < LINE.length; from += 1) {
+      const at = wordCaret(LINE, "w", 1, from);
+      assert.ok(at === null || at !== from || at === TASK, `w returned its own column ${from}`);
+    }
+  });
+
+  test("2w from column 0 skips a word, exactly as 1w twice does", () => {
+    assert.equal(wordCaret(LINE, "w", 2, 0), TASK);
+    assert.equal(wordCaret(LINE, "w", 1, wordCaret(LINE, "w", 1, 0)), TASK);
   });
 
   test("a count past the last word clamps to the last word — no wrap", () => {
-    const atOverrun = wordCaret(LINE, "w", 99);
-    const atLast = wordCaret(LINE, "w", 2);
-    assert.equal(atOverrun, atLast);
+    assert.equal(wordCaret(LINE, "w", 99, 0), TASK);
+    assert.equal(wordCaret(LINE, "w", 1, TASK), TASK, "w at the last word clamped somewhere else");
   });
 
-  test("e lands at the END of the count-th word", () => {
-    const at = wordCaret(LINE, "e", 1);
-    assert.equal(LINE.slice(at - 5, at), "first");
+  test("e lands on a word's LAST CHARACTER, not one past it — a block cursor sits ON a character", () => {
+    const at = wordCaret(LINE, "e", 1, 0);
+    assert.equal(at, FIRST + "first".length - 1);
+    assert.equal(LINE[at], "t");
   });
 
-  test("b, with no established caret, is anchored from the END of the title — count 1 is the LAST word", () => {
-    const at = wordCaret(LINE, "b", 1);
-    assert.equal(LINE.slice(at, at + 4), "task", "b(1) did not land on the last title word");
+  test("e repeats too — from the end of the first word it reaches the end of the second", () => {
+    const firstEnd = wordCaret(LINE, "e", 1, 0);
+    assert.equal(wordCaret(LINE, "e", 1, firstEnd), TASK + "task".length - 1);
   });
 
-  test("b(2) is the second-from-last word, and an overrun clamps to the FIRST word rather than wrapping", () => {
-    const atSecondLast = wordCaret(LINE, "b", 2);
-    assert.equal(LINE.slice(atSecondLast, atSecondLast + 5), "first");
-    const atOverrun = wordCaret(LINE, "b", 99);
-    assert.equal(atOverrun, atSecondLast, "b did not clamp to the first word on overrun");
+  test("b moves BACKWARD from the cursor, and clamps at the first word rather than wrapping", () => {
+    assert.equal(wordCaret(LINE, "b", 1, TASK), FIRST);
+    assert.equal(wordCaret(LINE, "b", 1, FIRST), FIRST, "b at the first word wrapped or fell into chrome");
+    assert.equal(wordCaret(LINE, "b", 99, LINE.length), FIRST);
+  });
+
+  test("b(2) from the end of the line is the second-from-last word", () => {
+    assert.equal(wordCaret(LINE, "b", 2, LINE.length), FIRST);
   });
 
   test("a count of 0 behaves as count 1 — the same floor every other motion applies", () => {
-    assert.equal(wordCaret(LINE, "w", 0), wordCaret(LINE, "w", 1));
+    assert.equal(wordCaret(LINE, "w", 0, 0), wordCaret(LINE, "w", 1, 0));
   });
 
   test("a line with no title returns null — a bare heading marker, chrome only, blank", () => {
@@ -1177,121 +1234,216 @@ describe("19a. wordCaret (app/present/word.ts) — pure, no DOM, the arithmetic 
     // the whitespace after the hashes (HEADING's own `\s+`), so "##" with NO trailing space is not
     // a heading at all; it falls through to `prose` and IS one "word", which is a real quirk of
     // classifyLine and not this module's to correct.
-    assert.equal(wordCaret("## ", "w", 1), null);
-    assert.equal(wordCaret("- [ ] ", "w", 1), null);
-    assert.equal(wordCaret("", "w", 1), null);
-    assert.equal(wordCaret("   ", "w", 1), null);
+    assert.equal(wordCaret("## ", "w", 1, 0), null);
+    assert.equal(wordCaret("- [ ] ", "w", 1, 0), null);
+    assert.equal(wordCaret("", "w", 1, 0), null);
+    assert.equal(wordCaret("   ", "w", 1, 0), null);
+  });
+
+  test("no motion, from any column, ever lands inside the identity stamp or the tag", () => {
+    // THE TEST THAT MATTERS MOST, and it is now stronger than it was: the old version could only
+    // start from a fixed anchor, so it swept counts. This sweeps counts AND every starting column,
+    // which is the space a repeatable motion actually reaches.
+    for (const line of SOURCE.split("\n")) {
+      for (const motion of ["w", "b", "e"]) {
+        for (let count = 1; count <= 6; count += 1) {
+          for (let from = 0; from <= line.length; from += 1) {
+            const at = wordCaret(line, motion, count, from);
+            if (at === null) continue;
+            const stamp = line.indexOf("[[");
+            assert.ok(
+              stamp === -1 || at <= stamp || at >= line.indexOf("]]") + 2,
+              `${motion}(${count}) from ${from} on ${JSON.stringify(line)} landed inside the stamp`,
+            );
+            const tagAt = line.indexOf("#task");
+            assert.ok(
+              tagAt === -1 || at <= tagAt || at >= tagAt + "#task".length,
+              `${motion}(${count}) from ${from} on ${JSON.stringify(line)} landed inside the tag`,
+            );
+          }
+        }
+      }
+    }
   });
 });
 
-describe("20. w / b / e through the painter — wordCaret drives enterInsert(offset), same shape x's toggle does", () => {
-  test("w opens INSERT with the caret at the start of the first title word", () => {
+describe("20. clampColumn — the other axis's arithmetic, beside clampLine's", () => {
+  test("the ceiling is the LAST CHARACTER, not one past it — vim's cursor sits ON a character", () => {
+    assert.equal(clampColumn(5, "abcdef"), 5);
+    assert.equal(clampColumn(6, "abcdef"), 5);
+    assert.equal(clampColumn(99, "abcdef"), 5);
+  });
+
+  test("an empty line has no character to sit on, so the column floors at zero", () => {
+    assert.equal(clampColumn(0, ""), 0);
+    assert.equal(clampColumn(7, ""), 0);
+  });
+
+  test("a negative or non-finite column is zero, never a negative index", () => {
+    assert.equal(clampColumn(-1, "abcdef"), 0);
+    assert.equal(clampColumn(Number.NaN, "abcdef"), 0);
+  });
+
+  test("null text means there is nothing to measure, so the column passes through", () => {
+    assert.equal(clampColumn(42, null), 42);
+    assert.equal(clampColumn(-1, null), 0);
+  });
+});
+
+describe("21. FocusSurface holds the column, and a projection arriving does not take it away", () => {
+  const BEFORE = [
+    "# This Week",
+    "- [ ] a fairly long first task [[qntm:1]] #task",
+    "- [ ] second task [[qntm:2]] #task",
+  ].join("\n");
+
+  test("landing on a line starts the cursor at its head, and moveColumn moves it along", () => {
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    assert.equal(focus.column, 0);
+    focus.moveColumn(12, BEFORE.split("\n")[1]);
+    assert.equal(focus.column, 12);
+  });
+
+  test("moveColumn clamps into the line it is given rather than trusting the caller", () => {
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    focus.moveColumn(9999, BEFORE.split("\n")[1]);
+    assert.equal(focus.column, BEFORE.split("\n")[1].length - 1);
+  });
+
+  test("a LINE MOVE resets the column — landing on a line puts the cursor at its head", () => {
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    focus.moveColumn(12, BEFORE.split("\n")[1]);
+    focus.focus(2, BEFORE);
+    assert.equal(focus.column, 0);
+  });
+
+  test("reanchor carries the column across a line INSERTED above the cursor", () => {
+    // The exact trap focus.ts's own note warns about: `reanchor` moves the cursor through `focus()`,
+    // which resets the column unless one is passed through. It is.
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    focus.moveColumn(12, BEFORE.split("\n")[1]);
+
+    const after = BEFORE.split("\n").flatMap((l, i) => (i === 1 ? ["## Overdue", l] : [l])).join("\n");
+    const reading = focus.reanchor(after);
+    assert.equal(reading.outcome, "found");
+    assert.equal(focus.lineIndex, 2, "the anchor did not follow the line");
+    assert.equal(focus.column, 12, "the column was reset by a projection arriving");
+  });
+
+  test("reanchor CLAMPS the column when the cycle shortened the line", () => {
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    const long = BEFORE.split("\n")[1];
+    focus.moveColumn(long.length - 1, long);
+
+    const short = "- [ ] a [[qntm:1]] #task";
+    const after = BEFORE.split("\n").map((l, i) => (i === 1 ? short : l)).join("\n");
+    assert.equal(focus.reanchor(after).outcome, "found");
+    assert.equal(focus.column, short.length - 1, "the column was left past the end of its line");
+    assert.notEqual(focus.column, 0, "the column was reset to zero instead of clamped");
+  });
+
+  test("an ambiguous or absent reading moves nothing, the column included", () => {
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    focus.moveColumn(12, BEFORE.split("\n")[1]);
+    const gone = ["# This Week", "- [ ] second task [[qntm:2]] #task"].join("\n");
+    assert.equal(focus.reanchor(gone).outcome, "absent");
+    assert.equal(focus.lineIndex, 1, "an absent line moved the cursor");
+    assert.equal(focus.column, 12, "an absent line moved the column");
+  });
+
+  test("blur takes the column with it", () => {
+    const focus = new FocusSurface();
+    focus.focus(1, BEFORE);
+    focus.moveColumn(12, BEFORE.split("\n")[1]);
+    focus.blur();
+    assert.equal(focus.column, 0);
+  });
+});
+
+describe("22. w / b / e through the painter — the column moves, the mode does NOT", () => {
+  /** The whole selected line's characters, as the painter actually built them. */
+  const paintedText = (body) =>
+    selectedRows(body)
+      .flatMap((el) => el.children)
+      .map((child) => child.textContent)
+      .join("");
+  const blockChar = (body) => {
+    const cell = walk(body).find((el) => String(el.className ?? "").split(/\s+/).includes("vim-block"));
+    return cell === undefined ? null : cell.textContent;
+  };
+
+  test("w moves the column and opens NO input — pressed four times", () => {
     const v = view();
-    v.focus.focus(1); // "- [ ] first task [[qntm:1]] #task"
+    v.focus.focus(1, v.source); // "- [ ] first task [[qntm:1]] #task"
+    v.repaint();
+    const text = SOURCE.split("\n")[1];
+
+    press(v, "w");
+    assert.equal(v.focus.column, text.indexOf("first"));
+    press(v, "w");
+    assert.equal(v.focus.column, text.indexOf("task"));
+    press(v, "w");
+    press(v, "w");
+
+    assert.equal(v.mode.mode, "NORMAL", "a word jump entered INSERT — the operator's own complaint");
+    assert.equal(inputs(v.body).length, 0, "a word jump opened an editable line");
+    assert.equal(paintedText(v.body), text, "the line's characters changed while the cursor moved");
+  });
+
+  test("the selected line shows its exact source in NORMAL, with the block on the column", () => {
+    const v = view();
+    v.focus.focus(1, v.source);
+    v.repaint();
+    const text = SOURCE.split("\n")[1];
+    assert.equal(paintedText(v.body), text, "the selected line is not its exact source text");
+    assert.equal(blockChar(v.body), text[0]);
+    press(v, "w");
+    assert.equal(blockChar(v.body), "f", "the block did not follow w onto 'first'");
+    assert.equal(paintedText(v.body), text, "moving the cursor changed the characters");
+  });
+
+  test("i then opens INSERT at that same column — one coordinate, two renditions", () => {
+    const v = view();
+    v.focus.focus(1, v.source);
     v.repaint();
     press(v, "w");
+    press(v, "w");
+    const column = v.focus.column;
+    press(v, "i");
     assert.equal(v.mode.mode, "INSERT");
     const line = inputs(v.body)[0];
-    assert.ok(line, "w did not open an editable line");
-    const text = SOURCE.split("\n")[1];
-    assert.equal(line.value, text, "w changed the line's characters");
-    assert.equal(line.selectionStart, text.indexOf("first"));
-    assert.equal(line.selectionEnd, text.indexOf("first"));
+    assert.equal(line.value, SOURCE.split("\n")[1], "i changed the line's characters");
+    assert.equal(line.selectionStart, column, "i ignored the column the word motions established");
   });
 
-  test("2w lands on the second title word", () => {
-    const v = view();
-    v.focus.focus(1);
-    v.repaint();
-    press(v, "2");
-    press(v, "w");
-    const line = inputs(v.body)[0];
-    const text = SOURCE.split("\n")[1];
-    assert.equal(line.selectionStart, text.indexOf("task"));
-  });
-
-  test("e lands at the END of the first title word", () => {
-    const v = view();
-    v.focus.focus(1);
-    v.repaint();
-    press(v, "e");
-    const line = inputs(v.body)[0];
-    const text = SOURCE.split("\n")[1];
-    assert.equal(line.selectionStart, text.indexOf("first") + "first".length);
-  });
-
-  test("b with no count lands on the LAST title word", () => {
-    const v = view();
-    v.focus.focus(1);
-    v.repaint();
-    press(v, "b");
-    const line = inputs(v.body)[0];
-    const text = SOURCE.split("\n")[1];
-    assert.equal(line.selectionStart, text.indexOf("task"));
-  });
-
-  test("a count that overruns the title clamps to the last word rather than doing nothing or wrapping", () => {
-    const v = view();
-    v.focus.focus(1);
-    v.repaint();
-    press(v, "9");
-    press(v, "w");
-    assert.equal(v.mode.mode, "INSERT", "an overrun count refused the motion instead of clamping");
-    const line = inputs(v.body)[0];
-    const text = SOURCE.split("\n")[1];
-    assert.equal(line.selectionStart, text.indexOf("task"));
-  });
-
-  test("w on the heading — no title at all — does nothing: no <input>, mode stays NORMAL", () => {
-    const v = view();
-    v.focus.focus(0); // "# This Week" — heading text present, so this is NOT the no-title case…
-    v.repaint();
-    // …use a bare heading marker instead ("## ", hashes + whitespace + no text), which
-    // titleSpans defines as having no title.
+  test("w on a line with no title does nothing: no <input>, mode stays NORMAL, column unmoved", () => {
     const v2 = view("## \n" + SOURCE.split("\n").slice(1).join("\n"));
-    v2.focus.focus(0);
+    v2.focus.focus(0, v2.source);
     v2.repaint();
     press(v2, "w");
     assert.equal(v2.mode.mode, "NORMAL", "w opened INSERT on a line with no title");
+    assert.equal(v2.focus.column, 0);
     assert.equal(inputs(v2.body).length, 0);
   });
 
-  test("round trip: entering INSERT via w and leaving via Escape leaves the source byte-identical", () => {
+  test("round trip: w, i, then Escape leaves the source byte-identical and posts nothing", () => {
     const v = view();
-    v.focus.focus(2); // "- [ ] second task [[qntm:2]] #task"
+    v.focus.focus(2, v.source);
     v.repaint();
     press(v, "w");
+    press(v, "i");
     const line = inputs(v.body)[0];
     assert.equal(line.value, SOURCE.split("\n")[2], "the input did not hold the exact source line");
     line.dispatch("keydown", makeEvent({ key: "Escape" }));
     assert.deepEqual(v.commits, [], "Escape posted an edit");
     assert.equal(v.mode.mode, "NORMAL");
     assert.equal(inputs(v.body).length, 0);
-    // Nothing about the FILE moved — v.source (what the next paint reads) is the same string this
-    // view was constructed from, untouched by opening and abandoning an INSERT session on it.
     assert.equal(v.source, SOURCE);
-  });
-
-  test("w never lands inside the identity stamp or the tag, for every count on every fixture line", () => {
-    // THE TEST THAT MATTERS MOST — every count from 1 past the number of words, on every non-blank
-    // SOURCE line, must land either at a title-word boundary or (for an overrun) clamp to one; it
-    // must never fall inside `[[qntm:N]]` or `#task`.
-    for (const line of SOURCE.split("\n")) {
-      for (const motion of ["w", "b", "e"]) {
-        for (let count = 1; count <= 6; count += 1) {
-          const at = wordCaret(line, motion, count);
-          if (at === null) continue;
-          assert.ok(
-            !(at > line.indexOf("[[") && at < line.indexOf("]]") + 2) || line.indexOf("[[") === -1,
-            `${motion}(${count}) on ${JSON.stringify(line)} landed inside the identity stamp`,
-          );
-          const tagAt = line.indexOf("#task");
-          assert.ok(
-            tagAt === -1 || at <= tagAt || at >= tagAt + "#task".length,
-            `${motion}(${count}) on ${JSON.stringify(line)} landed inside the tag`,
-          );
-        }
-      }
-    }
   });
 });

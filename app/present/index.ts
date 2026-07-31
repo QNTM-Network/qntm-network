@@ -50,7 +50,7 @@ export { FocusSurface } from "./focus.js";
 export { ANCHOR_TRUST, anchorFor, resolveAnchor } from "./anchor.js";
 export type { Anchor, AnchorReading, AnchorTier } from "./anchor.js";
 
-export { ModeSurface, clampLine } from "./motions.js";
+export { ModeSurface, clampColumn, clampLine } from "./motions.js";
 export type { Mode, NormalEffect, NormalKeyOutcome } from "./motions.js";
 
 export { boundaryLine } from "./boundary.js";

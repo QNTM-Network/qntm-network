@@ -577,6 +577,72 @@ backlog:
     means less than a green in the monorepo.'
   kind: capability
   state: passing
+- id: vim-normal-mode-slice-5
+  title: '[present] [vim] [DEFECT] `w` ended in INSERT, so it could not repeat — and the
+    reason it could not was that NORMAL rendered the selected line WIRED, against the
+    operator''s own founding rule for this surface. Widen `focusLive` back to what it
+    was before vim existed, give the cursor a COLUMN, and make `w`/`b`/`e` ordinary
+    NORMAL-mode motions with counts. `i` opens at the column, `a` at `column + 1`,
+    `0`/`$` at the line''s ends.'
+  driving_capability: vim-normal-mode-is-a-gesture-not-a-resolution
+  record: '2026-07-31 — SHIPPED. FOUND BY USE, in the operator''s own words: "right now
+    word jump also does insert. so i can''t jump through it just does first jump then
+    wwww typed". Slice 4 ended `w` in `enterInsert(offset)` on
+    design-the-vim-cursor.md §2.2''s reasoning — labelled [REA], never measured — that
+    `w`/`b`/`e` need not be repeatable because the platform''s `Option+←/→` would repeat
+    once the caret was in the box. He is a vim user; in vim `w` repeats, so the second
+    `w` was a literal `w` typed into his line. §Q1 and §2.2 of that document are amended
+    in place rather than left asserting what the code contradicts.
+    THE ROOT CAUSE WAS NOT THE WORD MOTION. paint.ts gated the FOCUS contribution on
+    `mode.mode === "INSERT"`, so in NORMAL the selected line rendered WIRED — against
+    "cursor on the line -> the line renders as its exact source text", which
+    design-presentation-cascade.md and focus.ts''s own header both state, and in NORMAL
+    the cursor IS on the line. It is also the mechanical reason `w` could not repeat:
+    with the line a widget there are no characters for a column to move through. The
+    gate NARROWED an expression that was already right. THE WIDENING IS PROVABLY NOT A
+    THIRD BEHAVIOUR: whenever `mode === undefined` the old expression reduced to
+    `focus !== undefined`, so for every pre-vim caller the two are the same boolean and
+    the only case that changes is NORMAL.
+    THE READONLY-INPUT HYPOTHESIS WAS REFUTED BEFORE IT WAS BUILT. Keeping the `<input>`
+    with `readOnly` would have given a native caret for free. The CSSWG''s July 2025
+    thread on standardising readonly input styles enumerates the divergence: WebKit
+    "doesn''t render a text caret and no focus outline ring is rendered", Firefox "no
+    text caret is rendered", Chromium "renders a text caret (but it doesn''t blink)".
+    Two of three engines paint nothing, so the cursor would have been INVISIBLE on the
+    operator''s platform — the same symptom as the defect. It would also have needed
+    `typingIn` widened (app/index.html''s `tagName === "input"` guard), and a focused
+    readonly input is `e.target` for every later keystroke, so `j`/`k`/`w` — the whole of
+    NORMAL — would have been swallowed. A `<div>` is not typingIn anything, so the guard
+    is untouched. Shipped instead: three spans with a block cursor on the middle one, a
+    terminal''s own device, which every engine paints.
+    THE COLUMN LIVES ON `FocusSurface` and `reanchor` passes it back through `focus()`,
+    clamped into the arriving projection''s text — exactly the fix focus.ts''s own
+    warning comment prescribed. The same trap existed one layer up in
+    `repaintCurrentView` and was caught by the tests rather than by reading.
+    `e` lands on a word''s LAST character (a block cursor sits ON a character, not
+    between two), so `a` from there reaches one-past — the old behaviour, expressible
+    rather than lost. `enterInsert` narrowed from `"end" | number` to `number`: one
+    coordinate system on this axis. `0`/`$` came free — they need the line''s length and
+    nothing else. The painter''s `selected` boolean is DELETED as UNREACHABLE, since
+    FOCUS is the most specific level and the selected line now always resolves raw.
+    PROOF: npm run check 601 tests / 105 suites / 0 fail on origin/main at fe5f12d
+    (RUN, not assumed), 625 / 110 / 0 after (+24/+5, 0 regressions). The complaint is
+    executable — tests/app-vim-wiring.test.mjs "w w w w moves the column four words and
+    types NOTHING" asserts four distinct columns, NORMAL, zero inputs, and the painted
+    characters byte-identical to the source. Same suite: the selected line renders the
+    exact characters of a real ~/qntm/this_week.md line (read-only, copied not read
+    live) with indent, stamp, two tags and three markers; `j`/`k` still answer with the
+    selected line raw (the typingIn guard); the column survives a projection in all
+    three directions — inserted above, shortened (clamped), lengthened (unmoved).
+    tests/present-motions.test.mjs sections 20-22 and tests/app-view-rows.test.mjs (two
+    new structural rules) hold the same at the pure, painter and stylesheet layers.
+    NOT FLOW-TRACE-VERIFIED, SAME GAP AS SLICES 1-4. NOT VERIFIED IN A BROWSER: no key
+    event, no passkey session, no engine run. The readonly-caret refutation is WEB
+    EVIDENCE, not a measurement. This repo is instrumented DECLARATION-ONLY (evidence
+    tier DECLARED, no runtime verifier), so this green means much less than a monorepo
+    green.'
+  kind: capability
+  state: passing
 - id: add-the-user-presentation-level
   title: '[present] [stage 5] [HALF A DAY] Add the USER level — the per-person default
     Resolution, held in the server-side user record behind the passkey session, NOT

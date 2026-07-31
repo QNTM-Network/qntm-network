@@ -492,6 +492,46 @@ describe("one row geometry, two renditions", () => {
     }
   });
 
+  test("the block cursor is a colour and nothing else — it cannot move a line it sits in", () => {
+    // NORMAL's cursor is a background swap on ONE character. A readonly `<input>` would have got a
+    // native caret for free, and was refused because WebKit and Firefox paint none in one (see
+    // app/present/paint.ts for the citation) — so the cursor is drawn rather than borrowed. What
+    // has to stay true of a drawn one is that it costs the row nothing: a padded or bordered block
+    // would make the selected line taller than the same line unselected, which is the jump every
+    // other rule in this file exists to refuse, arriving one character wide.
+    const BLOCK = ".viewbody .vim-block";
+    assert.ok(rulesFor(BLOCK).length > 0, "the block cursor has no rule at all");
+    assert.ok(declared(BLOCK, "background") !== undefined, "the block cursor has no fill, so it is invisible");
+    for (const property of [...BOX_PROPERTIES, "display", "line-height", "font-size"]) {
+      assert.equal(
+        declared(BLOCK, property), undefined,
+        `${BLOCK} sets ${property} — a cursor that changes its line's metrics IS the jump`,
+      );
+    }
+  });
+
+  test("NORMAL and INSERT wear the same row, so `i` cannot move the line it opens", () => {
+    // TWO EMBODIMENTS OF ONE RENDITION (app/present/paint.ts): a `<div>` in NORMAL and an `<input>`
+    // in INSERT, both holding the SAME source characters. `i` swaps one for the other in place, so
+    // any metric they disagree about is a jump on every keystroke that enters INSERT.
+    const NORMAL = ".viewbody div.rawline";
+    const INSERT = ".viewbody input.rawline";
+    assert.ok(rulesFor(NORMAL).length > 0, "NORMAL's raw line has no rule at all");
+    for (const property of ["height", "line-height", "color"]) {
+      assert.equal(
+        declared(NORMAL, property), declared(INSERT, property),
+        `the two renditions of a raw line disagree about ${property}, which is the jump on \`i\``,
+      );
+    }
+    // AND THE ONE THING AN <input> GAVE FOR FREE THAT A <div> DOES NOT. Without it the engine's
+    // four-space indent and every double space inside a chrome cell collapse, and "its exact source
+    // text" becomes approximately its source text.
+    assert.equal(
+      declared(NORMAL, "white-space"), "pre",
+      `${NORMAL} must not collapse whitespace — the raw rendition claims to be the source`,
+    );
+  });
+
   test("the trailing target is sized by the page's own touch token, not by a fresh number", () => {
     // The one child of the column that is allowed a box of its own, and the whole of what it is
     // allowed to say. If it ever acquires a `margin` it would take the column's gap for itself
@@ -526,9 +566,13 @@ describe("one row geometry, two renditions", () => {
     // `vim-selected` is the same shape of thing: a state ANY line kind wears when it is vim's
     // NORMAL-mode selection (app/present/paint.ts), declaring only `background` and `box-shadow`
     // — neither a BOX_PROPERTY — so it cannot be the jump the row invariant above exists to catch.
+    // `vim-block` is a TOKEN, the same shape as `tagchip`: an inline span INSIDE a line, carrying
+    // NORMAL mode's block cursor (app/present/paint.ts's `normalLine`). It declares `background`
+    // and `color` and nothing else — no padding, no border, no box at all — so unlike the chip it
+    // cannot make its line taller even in principle. The test below holds it to that.
     const LINES = ["task", "done", "syncing", "rawline", "vim-selected"];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
-    const TOKENS = ["tagchip"];
+    const TOKENS = ["tagchip", "vim-block"];
     const known = new Set([...LINES, ...TRAILING, ...TOKENS]);
 
     const strays = new Set();

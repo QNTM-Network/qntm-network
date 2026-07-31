@@ -591,6 +591,36 @@
   }
   .viewbody input.rawline:focus { outline: none; box-shadow: inset 0 -1px 0 var(--green-hairline); }
 
+  /* THE SAME ROW, IN NORMAL — the same source characters, in a <div> rather than an <input>.
+     It carries `rawline` too, deliberately: NORMAL and INSERT are two embodiments of ONE raw
+     rendition (app/present/paint.ts), so they must occupy the SAME box or `i` becomes the jump
+     ".viewbody"'s own comment block above exists to refuse. Everything the input rule sets that a
+     div does not already get is restated here and nothing else is.
+
+     `white-space: pre` IS THE ONE THING AN INPUT GAVE FOR FREE AND A DIV DOES NOT. The engine
+     indents a nested line by four spaces and prints double spaces inside chrome cells; a div
+     collapses both, so the raw rendition would silently show different characters from the source
+     it claims to be. `pre` is what makes "its exact source text" true rather than approximate. */
+  .viewbody div.rawline {
+    height: var(--row); line-height: var(--row); color: var(--ink);
+    white-space: pre;
+  }
+
+  /* THE BLOCK CURSOR — NORMAL mode's caret, and a terminal's own device rather than a browser's.
+     A readonly <input> was the cheaper route and it was refused on evidence: WebKit and Firefox
+     paint no caret in one at all (app/present/paint.ts cites the CSSWG thread), so on the
+     operator's own platform the cursor would have been invisible. A background colour is not an
+     optional affordance — every engine paints it — and a block in NORMAL against the bar in INSERT
+     makes the mode legible from the cursor itself.
+
+     IT INVERTS RATHER THAN OVERLAYS, so the character under it stays readable: the identity green
+     behind, the page's own background colour in front. No border, no outline, no padding — the cell
+     is exactly one character wide and costs no layout, so moving it cannot move the line. */
+  .viewbody .vim-block {
+    background: var(--green);
+    color: var(--bg);
+  }
+
   /* THE NEW LINE SPACE — the room below the last line, and the only reason it is here.
      "if I click after, in the new line space, nothing happens" was literally true: the column ends
      where its last row ends, so there was nothing under it to click. The painter now appends one
@@ -1310,8 +1340,19 @@ function repaintCurrentView() {
   // Clamp whatever `focus.lineIndex` currently IS — but only if it is a real number. `null` means
   // "no real line should read as focused right now" (set deliberately by `o`/`O`, or by never
   // having painted a view with vim wired at all) and is left alone rather than guessed back to 0.
+  //
+  // THE COLUMN GOES THROUGH TOO, AND IT HAS TO BE SAID OUT LOUD. `focus.focus` resets the column to
+  // zero unless one is passed (focus.ts), so this line — which runs on EVERY repaint, and a repaint
+  // is what every motion causes — would otherwise send the cursor back to the head of the line the
+  // instant `w` moved it off. That is the same trap `focus.reanchor` carries a warning about, one
+  // layer up in the page, and it is the same answer: pass the column back in and let `focus` clamp
+  // it into whatever characters the line now has.
   if (focus.lineIndex !== null) {
-    focus.focus(clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)), v.markdown);
+    focus.focus(
+      clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)),
+      v.markdown,
+      focus.column,
+    );
   }
   paint(body, v.markdown, presentation, {
     markdown: md,
@@ -1713,7 +1754,11 @@ document.addEventListener("keydown", (e) => {
     if (v === undefined) return;
     const lastIndex = Math.max(0, v.markdown.split("\n").length - 1);
     const current = focus.lineIndex ?? 0;
-    const outcome = mode.handleKey(e.key, current, lastIndex);
+    // `focus.column` IS THE FOURTH ARGUMENT FOR THE SAME REASON `current` IS THE SECOND: the cursor
+    // has two axes now and `mode.handleKey` decides `i`/`a` relative to both. It reads the column
+    // and never writes it — every column that lands back on the surface goes through
+    // `focus.moveColumn`/`focus.focus` below.
+    const outcome = mode.handleKey(e.key, current, lastIndex, focus.column);
     if (!outcome.handled) return;
     e.preventDefault();
     // THE PAINTER STILL DOES NOT DECIDE. `mode.handleKey` is the one place a keystroke becomes a
@@ -1781,20 +1826,30 @@ document.addEventListener("keydown", (e) => {
         commitLine(v, { lineIndex: current, text, markdown });
       }
     } else if (effect.kind === "word") {
-      // `w`/`b`/`e` — `wordCaret` (app/present/word.ts) decides the offset, from the SAME source
-      // string every other motion here reads, never a second opinion parsed in this file. `null`
-      // means the selected line has no title at all (a bare heading marker, a blank line, chrome
-      // with nothing after it) — "does nothing", per the brief, so neither the mode nor the
-      // selection changes and there is nothing to repaint that a repaint would show differently.
+      // `w`/`b`/`e` — `wordCaret` (app/present/word.ts) decides the column, from the SAME source
+      // string every other motion here reads and from the cursor's CURRENT column, never a second
+      // opinion parsed in this file. `null` means the selected line has no title at all (a bare
+      // heading marker, a blank line, chrome with nothing after it) — "does nothing", per the
+      // brief, so nothing moves and there is nothing to repaint.
+      //
+      // IT STAYS IN NORMAL. It used to end in `mode.enterInsert(offset)`, and the operator found
+      // that by using it: "right now word jump also does insert. so i can't jump through it just
+      // does first jump then wwww typed". A motion that changes the mode is a motion that cannot
+      // repeat. `focus.lineIndex` is already `current`, so only the column moves.
       const line = v.markdown.split("\n")[current] ?? "";
-      const offset = wordCaret(line, effect.motion, effect.count);
-      if (offset !== null) {
-        // `mode.enterInsert(offset)`, NOT something `handleKey` already did — see motions.ts's
-        // slice 4 note for why this effect leaves `#mode` at NORMAL until the caller (here) has
-        // the offset in hand. `focus.lineIndex` is already `current`, so nothing else moves.
-        mode.enterInsert(offset);
+      const at = wordCaret(line, effect.motion, effect.count, focus.column);
+      if (at !== null) {
+        focus.moveColumn(at, line);
         repaintCurrentView();
       }
+    } else if (effect.kind === "column") {
+      // `0`/`$` — the line's own ends, which need no grammar and no second module: `moveColumn`
+      // clamps `line.length` down to the last character that exists, so `$` is stated as "past the
+      // end" and lands on the end. See motions.ts for why these are the SOURCE line's ends and not
+      // the title's.
+      const line = v.markdown.split("\n")[current] ?? "";
+      focus.moveColumn(effect.to === "start" ? 0 : line.length, line);
+      repaintCurrentView();
     } else {
       // "none" (a bare digit accumulating a count, or a refused `o`/`O`/`x` under a pending count)
       // or "enter-insert" (`i`/Enter/`a` — the mode itself already changed inside `handleKey`).

@@ -216,10 +216,18 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
   });
 
-  /** Load a declaration through the page's own loader and paint through its own painter. */
+  /**
+   * Load a declaration through the page's own loader and paint through its own painter.
+   *
+   * THE CURSOR IS PARKED ON THE LAST LINE FIRST, and that is part of the setup rather than a
+   * workaround. The cursor's own line renders its SOURCE in NORMAL as well as INSERT
+   * (app/present/paint.ts), so a cursor left on the heading would hide the very `<h3>` these tests
+   * are asking the served declaration about. `prose` — line 2 — is the line none of them assert on.
+   */
   async function pagePaints(declaration) {
     served = declaration;
     await page.loadPresentation();
+    page.__setFocus(2, VIEW.markdown);
     page.paintView("this-week");
     return walkPage(elements.get("viewBody"));
   }
@@ -286,8 +294,14 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     // (app.html, `const focus = new FocusSurface()`), so a test that leaves a line focused leaves
     // it focused for every test after it — which is a real property of the page and worth being
     // reminded of by having to write this line.
+    //
+    // AND A BLUR IS NO LONGER ENOUGH TO DO IT. `settle` returns a vim-wired page to NORMAL rather
+    // than blurring (paint.ts's `leaveInsert`: vim always has a cursor on some line), and in NORMAL
+    // the cursor's line shows its SOURCE — so the chipped line would still not be a chipped line
+    // for whatever ran next. Parking is the restore now.
     editable[0].dispatch("blur");
     assert.equal(walkPage(body).filter((el) => el.type === "text").length, 0);
+    page.__setFocus(2, VIEW.markdown);
   });
 
   test("a declaration the page cannot fetch leaves it exactly where it was", async () => {

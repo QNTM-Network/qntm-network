@@ -82,6 +82,40 @@ person knows what green looked like.
 
 ## 1. Q1 — does the cursor stop being one number?
 
+> **[AMENDED 2026-07-31, AFTER THE OPERATOR USED IT — THIS SECTION'S HEADLINE ANSWER IS WRONG.]**
+>
+> This section concluded "the cursor stays one number — mostly false", and §1.4's table below said a
+> column's lifetime is **one paint** and that it **"must not survive a repaint"**. **The cursor is
+> now a LINE AND A COLUMN, and the column survives every repaint and every projection.**
+>
+> The argument was not careless — it was conditional on §2.2, which is also amended, and §2.2's
+> condition failed. §2.2 argued `w`/`b`/`e` need not be repeatable NORMAL-mode motions because the
+> platform's own `Option+←/→` would do the repeating once the caret was inside the `<input>`. On
+> that reading a column IS written once at the NORMAL→INSERT transition and thrown away, and
+> everything §1.2 and §1.4 say follows correctly. **The operator is a vim user and in vim `w`
+> repeats**, so his second `w` was a literal `w` typed into the box: *"right now word jump also does
+> insert. so i can't jump through it just does first jump then wwww typed"*. **A motion that repeats
+> is a position that persists.**
+>
+> WHAT IS STILL RIGHT HERE, AND IT IS MOST OF THE SECTION. §1.3 (`V`'s anchor belongs on
+> `ModeSurface`, not on `FocusSurface`) is untouched and was not built. §1.5 — that the cursor's
+> real problem was a positional index against a string the cycle rewrites — held, was built, and is
+> what MADE the column safe: `reanchor` re-takes `anchor.text` against the arriving projection, so
+> the column is CLAMPED into the line's current characters rather than guessed. §1.4's distinction
+> between a column and a range as two different extensions also holds; only the column's row is
+> wrong. The corrected row:
+>
+> |  | column (as shipped) |
+> |---|---|
+> | lifetime | the whole time the cursor is on the line |
+> | written by | `w`/`b`/`e`/`0`/`$`; reset to 0 by any line move |
+> | read by | the painter (the block cursor), and `i`/`a` |
+> | owner | `FocusSurface`, beside the line index it is an offset into |
+> | survives a repaint? | **must** — and a projection too, clamped |
+>
+> Shipped in `app/present/focus.ts`, `motions.ts`, `word.ts`, `paint.ts`. See
+> `vim-normal-mode-is-a-gesture-not-a-resolution` (slice 5) in `docs/architecture/capabilities.yaml`.
+
 **The premise is half right, and the half that is right is right for a reason nobody asked about.**
 
 ### 1.1 What the cursor is today
@@ -191,6 +225,53 @@ through is the same one three other page-level surfaces already thread through. 
 shape in this codebase. It is the fourth instance of an existing one.
 
 ### 2.2 Once the caret is in the line, further word motion is free
+
+> **[REFUTED 2026-07-31, BY USE. This subsection is the reason `w` shipped broken.]**
+>
+> The claim below is that `w`/`b`/`e` "do not have to be repeatable NORMAL-mode motions" because
+> `{count}w` into INSERT plus the platform's `Option+←/→` satisfies the request. **It does not.** The
+> operator pressed `w` a second time and typed a `w` into his own line.
+>
+> **The mechanical half of the reasoning is sound and the mechanical half is not the claim.** The
+> platform's word motion IS free inside an `<input>`, the global handler DOES refuse every key while
+> `typingIn(e.target)`, and the input's own listener DOES handle only Enter and Escape. All three
+> were verified again while fixing this. What was wrong is the step from "the platform can move a
+> caret" to "so the app need not repeat a motion": a vim user's fingers do not switch to
+> `Option+←/→` in the middle of a NORMAL-mode gesture, and the cost of being wrong was not a missing
+> convenience — it was **characters typed into his source**.
+>
+> **AND THERE WAS A SECOND, LARGER ERROR STANDING BESIDE IT, WHICH §2.3 CAME WITHIN ONE SENTENCE OF
+> CATCHING.** §2.3 records, correctly and as [OBS], that in NORMAL `focusLive` is false so the
+> selected line "renders WIRED", and treats that as the fixed ground the word grammar has to work
+> around. It was not ground — it was a defect. The operator's founding rule for this surface
+> (`design-presentation-cascade.md`, and `app/present/focus.ts`'s own header) is "cursor on the line
+> → the line renders as its exact source text", and **in NORMAL the cursor IS on the line**. The
+> gate `focus !== undefined && (mode === undefined || mode.mode === "INSERT")` NARROWED an
+> expression that was already right — before vim existed it was simply `focus !== undefined` — and
+> it is what made repeating impossible in the first place: **with the line rendered as a widget
+> there are no characters on screen for a column to move through.**
+>
+> The gate is gone. The selected line renders raw in NORMAL as well as INSERT, and the two modes are
+> two EMBODIMENTS of that one raw rendition — a `<div>` carrying a block cursor, or an `<input>`
+> carrying a text caret. §2.3's word grammar survives this completely intact and is what makes the
+> column land on words rather than inside stamps; only its opening premise about what NORMAL shows
+> is amended.
+>
+> **THE EMBODIMENT QUESTION §2.1 NEVER ASKED, ANSWERED HERE.** How do you show a character-level
+> cursor on a line that is not an `<input>`? The cheap answer is to keep the `<input>` and set
+> `readOnly` — native caret for free, `readOnly` blocks typing, `i` is one property flip on the same
+> element. **Refuted before it was built.** The CSS Working Group's July 2025 thread on
+> standardising readonly input styles enumerates the current divergence: WebKit "doesn't render a
+> text caret and no focus outline ring is rendered", Firefox "no text caret is rendered", Chromium
+> "renders a text caret (but it doesn't blink)". **Two of three engines paint nothing**, so on the
+> operator's own platform the cursor would have been invisible — the same symptom as the defect,
+> with a harder cause to find. `caret-color` cannot rescue it; it colours a caret an engine paints.
+> It would also have required widening `typingIn`, the one guard standing between a global letter
+> binding and every text field in the app, since a focused readonly input is `e.target` for every
+> subsequent keystroke and would have swallowed `j`, `k` and `w` entirely. **This is web evidence,
+> not a measurement — no browser was run.** What shipped is a terminal's own answer: three spans,
+> the middle one carrying a block. It paints in every engine, it needs no change to `typingIn`, and
+> it makes the mode legible from the cursor itself.
 
 **[REA]** An `<input type="text">` is a real text control with the platform's own word motion:
 `Option+←`/`Option+→` on macOS, `Ctrl+←`/`Ctrl+→` elsewhere, plus `Cmd+←`/`Cmd+→` for line ends.
