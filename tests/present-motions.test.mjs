@@ -22,9 +22,14 @@ import MarkdownIt from "markdown-it";
 import { makeDocument, makeBody, makeEvent, walk } from "./fixtures/dom-stub.mjs";
 import {
   paint,
+  applyEdit,
+  boundaryLine,
+  classifyLine,
   clampLine,
-  ModeSurface,
+  openLine,
+  DraftSurface,
   FocusSurface,
+  ModeSurface,
   PresentationContext,
 } from "../dist/present.js";
 
@@ -122,7 +127,9 @@ describe("3. a count prefix applies once and then clears", () => {
   test("a non-digit that is itself unbound still clears a pending count", () => {
     const mode = new ModeSurface();
     mode.handleKey("9", 0, 100);
-    const stray = mode.handleKey("x", 0, 100);
+    // "q" rather than "x": slice 2 binds "x" to toggle-done, so it is no longer an example of an
+    // unbound key. "q" is not bound to anything in NORMAL mode.
+    const stray = mode.handleKey("q", 0, 100);
     assert.equal(stray.handled, false, "an unbound key was reported as handled");
     const moved = mode.handleKey("j", 4, 100);
     assert.deepEqual(moved.effect, { kind: "move", lineIndex: 5 }, "the stale count of 9 survived an unbound key");
@@ -199,11 +206,42 @@ describe("5. i and Enter start INSERT; Escape's job belongs to the input, not to
     assert.equal(mode.mode, "INSERT");
   });
 
-  test("a is left unbound — see motions.ts for why end-of-line caret was skipped rather than faked", () => {
+  test("a enters INSERT with the caret hint 'end' — i and Enter leave it unset", () => {
     const mode = new ModeSurface();
     const outcome = mode.handleKey("a", 4, 100);
-    assert.equal(outcome.handled, false);
-    assert.equal(mode.mode, "NORMAL");
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "end" });
+    assert.equal(mode.mode, "INSERT");
+    assert.equal(mode.takeCaretHint(), "end");
+  });
+
+  test("takeCaretHint is undefined for i/Enter, and for a click-equivalent enterInsert()", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("i", 4, 100);
+    assert.equal(mode.takeCaretHint(), undefined);
+
+    const mode2 = new ModeSurface();
+    mode2.handleKey("Enter", 4, 100);
+    assert.equal(mode2.takeCaretHint(), undefined);
+
+    const mode3 = new ModeSurface();
+    mode3.enterInsert(); // the DOM wiring's mouse-click path — no caret argument
+    assert.equal(mode3.takeCaretHint(), undefined);
+  });
+
+  test("takeCaretHint is consumed once — a second read after the first does not see 'end' again", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("a", 4, 100);
+    assert.equal(mode.takeCaretHint(), "end");
+    assert.equal(mode.takeCaretHint(), undefined, "the hint should have been cleared by the first read");
+  });
+
+  test("a discards a pending count rather than refusing — entering INSERT is the same act either way", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("5", 0, 100);
+    const outcome = mode.handleKey("a", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "end" });
+    assert.equal(mode.mode, "INSERT");
   });
 
   test("handleKey is inert while INSERT — the caller's own <input> owns keys once one is open", () => {
@@ -227,6 +265,139 @@ describe("5. i and Enter start INSERT; Escape's job belongs to the input, not to
   });
 });
 
+describe("6. o / O ask for a new line — direction only, this module does not open one", () => {
+  test("o asks to open below", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("o", 4, 100);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "open", direction: "below" });
+    assert.equal(mode.mode, "NORMAL", "o does not itself enter INSERT — opening can be refused");
+  });
+
+  test("O asks to open above", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("O", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "open", direction: "above" });
+  });
+
+  test("a pending count in front of o is refused, not silently discarded", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey("o", 4, 100);
+    assert.equal(outcome.handled, true, "o should still be consumed so the browser default is suppressed");
+    assert.deepEqual(outcome.effect, { kind: "none" }, "3o should not silently open exactly one line");
+  });
+
+  test("a pending count in front of O is refused the same way", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("2", 0, 100);
+    const outcome = mode.handleKey("O", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "none" });
+  });
+
+  test("the count is cleared either way — the next unprefixed motion is not still counted", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    mode.handleKey("o", 4, 100);
+    const outcome = mode.handleKey("j", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 5 }, "the stale count of 3 survived o");
+  });
+});
+
+describe("7. x asks to toggle done — whether the line HAS a checkbox is the caller's to decide", () => {
+  test("x asks to toggle done", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("x", 4, 100);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "toggle-done" });
+    assert.equal(mode.mode, "NORMAL", "toggling done never opens an <input>");
+  });
+
+  test("a pending count in front of x is refused, not toggled once anyway", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey("x", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "none" });
+  });
+});
+
+describe("8. { and } — direction and count only; boundary.ts decides which line", () => {
+  test("} with no count asks to move forward by one boundary", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("}", 4, 100);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "boundary", direction: "next", count: 1 });
+  });
+
+  test("{ with no count asks to move backward by one boundary", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("{", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "boundary", direction: "prev", count: 1 });
+  });
+
+  test("3} composes the count exactly like every other motion", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey("}", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "boundary", direction: "next", count: 3 });
+  });
+
+  test("the count clears after } fires, same as after any other motion", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("5", 0, 100);
+    mode.handleKey("}", 4, 100);
+    const outcome = mode.handleKey("j", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 5 });
+  });
+});
+
+describe("8b. boundaryLine (app/present/boundary.ts) — pure, no DOM, the arithmetic { and } need", () => {
+  const OUTLINE = [
+    "# Top",
+    "- [ ] a task with no heading nearby",
+    "## Overdue",
+    "- [ ] one",
+    "- [ ] two",
+    "## Due This Week",
+    "- [ ] three",
+    "prose with no heading after it",
+  ];
+
+  test("} from line 0 lands on the next heading", () => {
+    assert.equal(boundaryLine(OUTLINE, 0, "next", 1), 2);
+  });
+
+  test("} again from a heading lands on the NEXT one, not the same one", () => {
+    assert.equal(boundaryLine(OUTLINE, 2, "next", 1), 5);
+  });
+
+  test("} past the last heading lands on the last line of the file", () => {
+    assert.equal(boundaryLine(OUTLINE, 5, "next", 1), OUTLINE.length - 1);
+  });
+
+  test("{ from the last line lands on the nearest heading above it", () => {
+    assert.equal(boundaryLine(OUTLINE, OUTLINE.length - 1, "prev", 1), 5);
+  });
+
+  test("{ before the first heading lands on line 0", () => {
+    assert.equal(boundaryLine(OUTLINE, 1, "prev", 1), 0);
+  });
+
+  test("2} composes — two heading-jumps forward from the top", () => {
+    assert.equal(boundaryLine(OUTLINE, 0, "next", 2), 5);
+  });
+
+  test("a count that outruns the remaining headings lands on the file's own end, not the last one found", () => {
+    assert.equal(boundaryLine(OUTLINE, 0, "next", 10), OUTLINE.length - 1);
+  });
+
+  test("a view with no headings at all: } goes to the last line and { goes to the first", () => {
+    const NO_HEADINGS = ["- [ ] a", "- [ ] b", "- [ ] c"];
+    assert.equal(boundaryLine(NO_HEADINGS, 0, "next", 1), 2);
+    assert.equal(boundaryLine(NO_HEADINGS, 2, "prev", 1), 0);
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // 2. WIRED TO THE PAINTER — the thin DOM layer app/index.html adds, reproduced here so the
 //    reducer's outcome can be checked against what actually gets drawn.
@@ -241,28 +412,69 @@ const SOURCE = [
   "- [ ] third task [[qntm:3]] #task",
 ].join("\n");
 
-/** Paint with both surfaces wired, the way app/index.html does once vim is live. */
+/** Paint with every surface wired, the way app/index.html does once vim is live. */
 function view(source = SOURCE) {
   globalThis.document = makeDocument();
   const body = makeBody();
   const focus = new FocusSurface();
   const mode = new ModeSurface();
+  const draft = new DraftSurface();
   const commits = [];
-  const deps = { markdown: md, focus, mode, onLineCommit: (c) => commits.push(c) };
+  const declined = [];
+  const deps = {
+    markdown: md,
+    focus,
+    mode,
+    draft,
+    onLineCommit: (c) => commits.push(c),
+    onNewLineDeclined: (lineIndex) => declined.push(lineIndex),
+  };
   const repaint = () => paint(body, source, new PresentationContext(), deps);
   repaint();
-  return { body, focus, mode, commits, repaint, source };
+  return { body, focus, mode, draft, commits, declined, repaint, source };
 }
 
-/** The thin wiring itself — exactly what the keydown handler in app/index.html does. */
+/**
+ * The thin wiring itself — exactly what the keydown handler in app/index.html does, including the
+ * slice-2 branches (`open`, `toggle-done`, `boundary`). `toggle-done` does not go through
+ * `deps.onLineCommit` — neither does the real page, which builds the commit itself and hands it to
+ * `commitLine` directly — so it is recorded on `v.commits` the same shape that callback already
+ * uses, for one assertion surface regardless of which key produced the commit.
+ */
 function press(v, key) {
   const lastIndex = v.source.split("\n").length - 1;
   const current = v.focus.lineIndex ?? 0;
   const outcome = v.mode.handleKey(key, current, lastIndex);
-  if (outcome.effect.kind === "move") {
-    v.focus.focus(outcome.effect.lineIndex);
+  if (!outcome.handled) {
+    return outcome;
   }
-  if (outcome.handled) {
+  const effect = outcome.effect;
+  if (effect.kind === "move") {
+    v.focus.focus(effect.lineIndex);
+    v.repaint();
+  } else if (effect.kind === "boundary") {
+    v.focus.focus(boundaryLine(v.source.split("\n"), current, effect.direction, effect.count));
+    v.repaint();
+  } else if (effect.kind === "open") {
+    const targetIndex = effect.direction === "below" ? current + 1 : current;
+    const opened = openLine(v.source, targetIndex, v.draft, (lineIndex) => v.declined.push(lineIndex));
+    if (opened) {
+      // Same sequence as app/index.html: blur before enterInsert, so the line o/O was pressed on
+      // does not ALSO become an <input> once mode flips (paint.ts's raw-on-focus gate).
+      v.focus.blur();
+      v.mode.enterInsert();
+    }
+    v.repaint();
+  } else if (effect.kind === "toggle-done") {
+    const line = v.source.split("\n")[current] ?? "";
+    const shape = classifyLine(line);
+    if (shape.kind === "checkbox") {
+      const markdown = applyEdit(v.source, { kind: "set-checkbox", lineIndex: current, checked: !shape.done });
+      if (markdown !== null) {
+        v.commits.push({ lineIndex: current, text: line, markdown });
+      }
+    }
+  } else {
     v.repaint();
   }
   return outcome;
@@ -272,7 +484,7 @@ const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.
 const selectedRows = (body) =>
   walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("vim-selected"));
 
-describe("6. NORMAL: no <input> is open, and the selection is a class, not a caret", () => {
+describe("9. NORMAL: no <input> is open, and the selection is a class, not a caret", () => {
   test("a freshly painted view with vim wired opens nothing", () => {
     const v = view();
     assert.equal(inputs(v.body).length, 0, "NORMAL mode painted an editable line unasked");
@@ -338,7 +550,7 @@ describe("6. NORMAL: no <input> is open, and the selection is a class, not a car
   });
 });
 
-describe("7. i / Enter open INSERT, and the cascade still shows the source characters", () => {
+describe("10. i / Enter open INSERT, and the cascade still shows the source characters", () => {
   test("i opens an <input> on the selected line holding its exact source", () => {
     const v = view();
     v.focus.focus(1);
@@ -372,7 +584,7 @@ describe("7. i / Enter open INSERT, and the cascade still shows the source chara
   });
 });
 
-describe("8. Escape returns to NORMAL without posting, and keeps the selection", () => {
+describe("11. Escape returns to NORMAL without posting, and keeps the selection", () => {
   test("Escape on the open input posts nothing and drops what was typed", () => {
     const v = view();
     v.focus.focus(1);
@@ -409,7 +621,7 @@ describe("8. Escape returns to NORMAL without posting, and keeps the selection",
   });
 });
 
-describe("9. without a ModeSurface, focus behaves exactly as it did before vim existed", () => {
+describe("12. without a ModeSurface, focus behaves exactly as it did before vim existed", () => {
   test("a focused line is still always an editable input — no ModeSurface, no NORMAL/INSERT gate", () => {
     globalThis.document = makeDocument();
     const body = makeBody();
@@ -417,5 +629,245 @@ describe("9. without a ModeSurface, focus behaves exactly as it did before vim e
     focus.focus(1);
     paint(body, SOURCE, new PresentationContext(), { markdown: md, focus });
     assert.equal(inputs(body).length, 1, "click-to-edit regressed for callers with no ModeSurface");
+  });
+});
+
+describe("13. a opens INSERT with the caret at the end of the line", () => {
+  test("the caret lands at the length of the line's source, not at 0", () => {
+    const v = view();
+    v.focus.focus(1); // "- [ ] first task [[qntm:1]] #task"
+    v.repaint();
+    press(v, "a");
+    assert.equal(v.mode.mode, "INSERT");
+    const line = inputs(v.body)[0];
+    assert.ok(line, "a did not open an editable line");
+    const text = SOURCE.split("\n")[1];
+    assert.equal(line.value, text, "a changed the line's characters");
+    assert.equal(line.selectionStart, text.length, "the caret was not at the end");
+    assert.equal(line.selectionEnd, text.length, "the caret was not collapsed at the end");
+  });
+
+  test("i does NOT reposition the caret — the hint is unset, so setSelectionRange is never called", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "i");
+    const line = inputs(v.body)[0];
+    assert.equal(line.selectionStart, undefined, "i moved the caret, which only a set for it");
+  });
+
+  test("a discards a pending count and still lands at the end", () => {
+    const v = view();
+    v.focus.focus(0);
+    v.repaint();
+    press(v, "9");
+    press(v, "a");
+    assert.equal(v.mode.mode, "INSERT");
+    const line = inputs(v.body)[0];
+    const text = SOURCE.split("\n")[0]; // "# This Week"
+    assert.equal(line.selectionStart, text.length);
+  });
+});
+
+describe("14. o / O open a new line below/above and enter INSERT on it", () => {
+  test("o opens a draft below the selected line, and enters INSERT", () => {
+    const v = view();
+    v.focus.focus(1); // "- [ ] first task…"
+    v.repaint();
+    press(v, "o");
+    assert.equal(v.mode.mode, "INSERT");
+    assert.equal(v.draft.draft?.lineIndex, 2, "o did not open below the selected line");
+    assert.equal(inputs(v.body).length, 1, "more than one row is editable at once");
+    assert.equal(inputs(v.body)[0].focused, true, "the cursor did not land in the new line");
+  });
+
+  test("O opens a draft AT the selected line, pushing it down", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "O");
+    assert.equal(v.draft.draft?.lineIndex, 1, "O did not open above the selected line");
+    assert.equal(inputs(v.body).length, 1);
+  });
+
+  test("the seed comes from the SAME chrome Enter's own openLineAt would resolve", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "o");
+    // The task above is unindented, so the new line's seed is a bare unchecked checkbox.
+    assert.equal(v.draft.draft.seed, "- [ ] ");
+  });
+
+  test("o on a view with no evidence of a node line declines, exactly as Enter's openLineAt does", () => {
+    const v = view("prose with no bullet and no heading at all");
+    v.focus.focus(0);
+    v.repaint();
+    press(v, "o");
+    assert.equal(v.mode.mode, "NORMAL", "a declined open must not enter INSERT");
+    assert.equal(v.draft.draft, null, "a declined open must not leave a draft behind");
+    assert.deepEqual(v.declined, [1], "the decline was not reported");
+    assert.equal(inputs(v.body).length, 0);
+  });
+
+  test("a count in front of o refuses the whole gesture — no draft, no INSERT", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "3");
+    press(v, "o");
+    assert.equal(v.mode.mode, "NORMAL");
+    assert.equal(v.draft.draft, null);
+  });
+
+  test("committing the draft returns vim to NORMAL, selected on the line just made", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "o");
+    const draft = inputs(v.body)[0];
+    draft.value = "- [ ] a brand new task";
+    draft.dispatch("blur");
+    assert.equal(v.mode.mode, "NORMAL", "settling the draft left mode stuck in INSERT");
+    assert.equal(v.focus.lineIndex, 2, "the cursor did not land on the newly made line");
+    assert.equal(v.commits.length, 1);
+    assert.equal(v.commits[0].markdown.split("\n")[2], "- [ ] a brand new task");
+  });
+
+  test("abandoning the draft (Escape) also returns vim to NORMAL with a real line selected", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "o");
+    const draft = inputs(v.body)[0];
+    draft.dispatch("keydown", makeEvent({ key: "Escape" }));
+    assert.equal(v.mode.mode, "NORMAL");
+    assert.equal(v.focus.lineIndex, 2, "focus should land where the abandoned line would have been");
+    assert.deepEqual(v.commits, [], "an abandoned draft must not post anything");
+  });
+});
+
+describe("15. x toggles done on the selected line, through applyEdit's own set-checkbox case", () => {
+  test("x on an unchecked task checks it", () => {
+    const v = view();
+    v.focus.focus(1); // "- [ ] first task [[qntm:1]] #task"
+    v.repaint();
+    press(v, "x");
+    assert.equal(v.commits.length, 1);
+    assert.equal(v.commits[0].markdown.split("\n")[1], "- [x] first task [[qntm:1]] #task");
+    assert.equal(v.mode.mode, "NORMAL", "x must not open an <input>");
+  });
+
+  test("x on a checked task unchecks it", () => {
+    const checked = SOURCE.split("\n");
+    checked[1] = "- [x] first task [[qntm:1]] #task";
+    const v = view(checked.join("\n"));
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "x");
+    assert.equal(v.commits[0].markdown.split("\n")[1], "- [ ] first task [[qntm:1]] #task");
+  });
+
+  test("x on the heading does nothing — no checkbox, no commit", () => {
+    const v = view();
+    v.focus.focus(0); // "# This Week"
+    v.repaint();
+    press(v, "x");
+    assert.deepEqual(v.commits, [], "x acted on a line with no checkbox");
+  });
+
+  test("a pending count in front of x does nothing at all", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "3");
+    press(v, "x");
+    assert.deepEqual(v.commits, []);
+  });
+});
+
+describe("16. { and } through the painter — boundaryLine drives the same focus.focus/repaint move does", () => {
+  const OUTLINED = [
+    "# This Week",
+    "- [ ] a task under no sub-heading",
+    "## Overdue",
+    "- [ ] one",
+    "- [ ] two",
+    "## Due This Week",
+    "- [ ] three",
+  ].join("\n");
+
+  test("} moves the selection to the next heading", () => {
+    const v = view(OUTLINED);
+    v.focus.focus(0);
+    v.repaint();
+    press(v, "}");
+    assert.equal(v.focus.lineIndex, 2);
+    assert.equal(selectedRows(v.body).length, 1);
+  });
+
+  test("{ moves the selection to the previous heading", () => {
+    const v = view(OUTLINED);
+    v.focus.focus(6);
+    v.repaint();
+    press(v, "{");
+    assert.equal(v.focus.lineIndex, 5);
+  });
+
+  test("2} composes through the real painter, same as 2j would", () => {
+    const v = view(OUTLINED);
+    v.focus.focus(0);
+    v.repaint();
+    press(v, "2");
+    press(v, "}");
+    assert.equal(v.focus.lineIndex, 5);
+  });
+
+  test("} on a view with no headings lands on the last line, same as G would", () => {
+    const v = view(); // SOURCE has one heading at index 0 and nothing after it to jump to twice
+    v.focus.focus(0);
+    v.repaint();
+    press(v, "}");
+    // SOURCE's only heading is the line we started on, so } must fall through to the last line.
+    assert.equal(v.focus.lineIndex, SOURCE.split("\n").length - 1);
+  });
+});
+
+describe("17. a blank line still shows a visible selection mark", () => {
+  const WITH_BLANK = ["# This Week", "", "- [ ] a task"].join("\n");
+
+  test("selecting the blank line (index 1) draws a marked, empty row", () => {
+    const v = view(WITH_BLANK);
+    v.focus.focus(1);
+    v.repaint();
+    assert.equal(selectedRows(v.body).length, 1, "no mark was drawn for the selected blank line");
+    const mark = selectedRows(v.body)[0];
+    assert.equal(mark.textContent, "", "the blank line's mark must not carry any text");
+    assert.equal(inputs(v.body).length, 0, "a blank line must never become an <input>");
+  });
+
+  test("moving off the blank line removes its mark and marks the real line instead", () => {
+    const v = view(WITH_BLANK);
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "j");
+    assert.equal(v.focus.lineIndex, 2);
+    assert.equal(selectedRows(v.body).length, 1);
+  });
+
+  test("without a ModeSurface, a blank line draws nothing — unchanged from before this slice", () => {
+    globalThis.document = makeDocument();
+    const body = makeBody();
+    const focus = new FocusSurface();
+    focus.focus(1);
+    paint(body, WITH_BLANK, new PresentationContext(), { markdown: md, focus });
+    assert.equal(selectedRows(body).length, 0, "a blank-line mark appeared with no ModeSurface wired");
+  });
+
+  test("the golden config (no focus, no mode) draws nothing for a blank line either", () => {
+    globalThis.document = makeDocument();
+    const body = makeBody();
+    paint(body, WITH_BLANK, new PresentationContext(), { markdown: md });
+    assert.equal(body.children.length, 2, "a blank line grew a row with no focus/mode wired at all");
   });
 });

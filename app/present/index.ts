@@ -38,10 +38,13 @@ export { FocusSurface } from "./focus.js";
 export { ModeSurface, clampLine } from "./motions.js";
 export type { Mode, NormalEffect, NormalKeyOutcome } from "./motions.js";
 
+export { boundaryLine } from "./boundary.js";
+export type { BoundaryDirection } from "./boundary.js";
+
 export { DraftSurface } from "./draft.js";
 export type { Draft } from "./draft.js";
 
-export { seedFor } from "./newline.js";
+export { seedFor, openLine } from "./newline.js";
 export type { NewLine } from "./newline.js";
 
 export { PresentationCascade } from "./cascade.js";

@@ -71,7 +71,7 @@ import type { PresentationContext } from "./context.js";
 import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
 import type { ModeSurface } from "./motions.js";
-import { seedFor } from "./newline.js";
+import { openLine } from "./newline.js";
 import { classifyLine, tagSpans } from "./resolution.js";
 import type { Rendition } from "./resolution.js";
 import { applyEdit } from "./source.js";
@@ -351,6 +351,32 @@ function draftInput(
   // commit removes this element, and removing a focused element fires blur.
   let settled = false;
 
+  /**
+   * HAND THE CURSOR BACK TO VIM, ONLY WHEN VIM IS THE ONE HOLDING IT. A draft is not a line
+   * `FocusSurface` can point at while it exists — `paintDraft()` focuses this `<input>` directly,
+   * with no cascade or mode check at all — so whichever key opened this row (Enter, mid-edit, or
+   * `o`/`O` from NORMAL) leaves `focus` blurred while it is open, which is what stops the line the
+   * draft opened FROM also turning into an `<input>` the instant `mode.enterInsert()` makes every
+   * FOCUSED line raw. Once this row is gone — committed or abandoned — that gap has to close, or
+   * `mode` is left INSERT with no `<input>` anywhere and NORMAL's own keydown handler never
+   * re-engages (it is gated on `mode.mode === "NORMAL"`).
+   *
+   * GATED ON `deps.mode`, NOT UNCONDITIONAL: a caller with no `ModeSurface` wired (click-to-edit,
+   * every test written before vim existed) never touched `focus` from a draft's settlement before
+   * this existed, and nothing in that configuration needs it to now — `leaveInsert`'s own blur is
+   * `rawInput`'s way of saying the same thing for the OTHER affordance, in the OTHER function.
+   */
+  const returnToVim = (source: string): void => {
+    if (deps.mode === undefined) {
+      return;
+    }
+    deps.mode.enterNormal();
+    if (deps.focus !== undefined) {
+      const last = Math.max(0, source.split("\n").length - 1);
+      deps.focus.focus(Math.min(lineIndex, last));
+    }
+  };
+
   /** There is no line here after all. Not a deletion — nothing was ever in the file. */
   const abandon = (): void => {
     if (settled) {
@@ -358,6 +384,7 @@ function draftInput(
     }
     settled = true;
     draft.drop();
+    returnToVim(fileSource);
     repaint(fileSource);
   };
 
@@ -374,6 +401,7 @@ function draftInput(
     // painter — the guard belongs with the edit so that no future caller can route around it.
     const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
     deps.onLineCommit?.({ lineIndex, text, markdown });
+    returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
 
@@ -542,24 +570,17 @@ export function paint(
   /**
    * Ask for a line at `lineIndex`, resolved against `from`. Returns whether one was opened.
    *
-   * THE PAINTER STILL DOES NOT DECIDE. What a new line IS comes from `seedFor`, which walks the
-   * cascade's rungs and reports which one answered; what this function does is ask, and obey the
-   * refusal. `null` means the GLOBAL rung was reached — the view has printed no node line anywhere,
-   * so nothing in the payload knows what a line in it looks like — and the honest response to that
-   * is to open nothing and say so. See newline.ts for what the two available guesses cost, one of
-   * which aborts the operator's entire cycle.
+   * THE PAINTER STILL DOES NOT DECIDE — this is now a two-line wrapper around `newline.ts`'s
+   * `openLine`, adding only the `draft`/`focus` optionality `PaintDeps` carries. `openLine` owns
+   * "ask `seedFor`, obey the refusal"; this function and app/index.html's `o`/`O` handling are its
+   * two callers, not two implementations of it. See newline.ts for what the two available guesses
+   * would cost, one of which aborts the operator's entire cycle.
    */
   const openLineAt = (lineIndex: number, from: string): boolean => {
     if (draft === undefined || focus === undefined) {
       return false;
     }
-    const seed = seedFor(from, lineIndex);
-    if (seed === null) {
-      deps.onNewLineDeclined?.(lineIndex);
-      return false;
-    }
-    draft.open(lineIndex, seed.text);
-    return true;
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined);
   };
 
   /** The raw rendition, embodied for the surface this paint actually has. */
@@ -579,6 +600,16 @@ export function paint(
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       (input as HTMLInputElement).focus?.();
+      // `a`'S CARET, AND THE ONLY PLACE IT IS EMBODIED. `mode.takeCaretHint()` is data motions.ts
+      // already decided (`enterInsert("end")`); turning "end" into a real selection range is a DOM
+      // fact the painter builds, not a decision — the same family as `focus === undefined ?
+      // rawText(...) : rawInput(...)`. `i`/Enter/a mouse click leave the hint unset, so the caret
+      // lands wherever it always did; nothing here changes for them.
+      const caret = mode?.takeCaretHint();
+      if (caret === "end") {
+        const end = lineSource.length;
+        (input as HTMLInputElement).setSelectionRange?.(end, end);
+      }
     }
   };
 
@@ -611,7 +642,23 @@ export function paint(
 
     if (shape.kind === "blank") {
       // A blank line has no rendition at either end — it vanished in the old painter and it
-      // vanishes here — so there is nothing to resolve and nowhere for a cursor to land.
+      // vanishes here — so there is nothing to resolve and nowhere for a cursor to land BY
+      // CLICKING (no `focusable()` call reaches a blank line, above or below this branch).
+      //
+      // BUT VIM'S SELECTION CAN STILL LAND HERE — `j`/`k`/`gg`/`G`/`{`/`}` are arithmetic on a line
+      // INDEX and do not know or care that this index happens to be blank — and slice 1 shipped
+      // that gap honestly: the selection existed but nothing on screen showed it. Fixed here, and
+      // narrowly: an EMPTY marked row is drawn, and only while vim is wired AND this blank line is
+      // the one actually selected — never unconditionally for every blank line, which would be the
+      // "blank source lines become blank rows" affordance this is not. That distinction is what
+      // keeps tests/present-golden.test.mjs (compares against a config with no `mode`/`focus` at
+      // all) and tests/present-focus.test.mjs (click-to-edit, `focus` with no `mode`) untouched:
+      // this branch is silent for both, exactly as the blank-line drop always was.
+      if (mode !== undefined && mode.mode === "NORMAL" && focus !== undefined && focus.isFocused(index)) {
+        const mark = document.createElement("div");
+        mark.className = VIM_SELECTED_CLASS;
+        body.append(mark);
+      }
       return;
     }
 
