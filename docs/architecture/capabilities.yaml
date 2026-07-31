@@ -981,16 +981,32 @@ capabilities:
     what shipped. The count is now one level real and unguarded (FOCUS), one level real and
     node-test-proven (ANCHOR), two absent (DELTA, BASE). The capability is still not falsifiable
     end to end, because the two that are absent are the two that hold the operator's characters.
+    AMENDED AGAIN 2026-07-31 — THE BASE LEVEL IS HALF BUILT, AND THE HALF MATTERS. `BASE (what the
+    edit is computed against) is a closure captured at paint time and posted whole, guarded by
+    nothing` is now false in its second clause and still true in its first. The base is COMPUTED,
+    NAMED, CARRIED AND REPORTED — `app/present/base.ts`, `sha256-<hex>` of the served markdown, on
+    the wire with every write, with a divergence said in the freshness line — and it is still NOT
+    REFUSED, because the server accepts whatever it is sent and making it refuse is
+    `the-write-is-refused-server-side`. See `a-write-refuses-a-stale-base` below for what shipped
+    and for the arm the row's own diagnosis did not name (the checkbox path loses the OPERATOR'S
+    OWN previous tick, not only the cycle's output). The count is now one level real and unguarded
+    (FOCUS), one real and node-test-proven (ANCHOR), one detected-but-not-prevented (BASE), one
+    absent (DELTA). Still not falsifiable end to end: DELTA is the one that holds his characters.
   tier: foundational
   rooting: >-
     isolated FOR NOW, and deliberately rather than by omission. Three of the four levels would root
     against classes that already exist — presentation-painting owns the repaint and the two
     surfaces are inside the capture filter — but the fourth, BASE, is a property of the WRITE PATH,
     which spans app/index.html (outside the capture filter, at the repo root), worker/src/app.js
-    and a graph server that is not in this repository. Rooting the capability through the painter
-    alone would describe the half that is already right and stay silent about the half that is
-    wrong. It roots when the write-safety row lands and the base becomes a value some module
-    computes rather than a closure some function captured.
+    and a graph server that is not in this repository.
+    AMENDED 2026-07-31, AND THE HALF THAT CHANGED IS NOT THE HALF THAT WOULD ROOT IT. The base IS
+    now a value a module computes (`app/present/base.ts`, inside the capture filter) rather than a
+    closure a function captured — the condition this note named. It still does not root, for a
+    reason the note did not anticipate: that module's ONLY caller is `app/index.html`, which the
+    capture filter names and cannot see, so the edge that would root it is unobservable by
+    construction rather than merely undeclared. It roots when the page's script is bundled through
+    scripts/build.mjs, which is the remaining half of `flag-one-markdown-implementation-is-now-three`
+    and a change of its own.
   status: undeclared
 - id: the-cursor-anchors-to-a-node-not-a-line-number
   intent: >-
@@ -1065,6 +1081,77 @@ capabilities:
     surface changed shape: `FocusSurface.focus` gained one OPTIONAL parameter (the same
     optional-dependency posture `PaintDeps` already draws for `focus`/`mode`/`draft`), so every
     caller that predates anchoring goes on painting what it always painted.
+  status: undeclared
+- id: a-write-refuses-a-stale-base
+  intent: >-
+    A SAVE NAMES THE COPY OF THE FILE IT WAS COMPUTED FROM, AND SAYS SO WHEN THAT COPY IS NOT THE
+    ONE THE SERVER HAS. Every save posts the WHOLE FILE and the server overwrites what it is sent,
+    so a save computed against an out-of-date copy discards everything that changed in between —
+    and what changes in between is the CYCLE'S OWN OUTPUT. The operator's typing is never what is
+    lost by this mechanism; a rule's tag and a task the engine created are, silently, exit 0.
+    BOTH ARMS WERE REPRODUCED FIRST on unmodified origin/main (532a8cf), through app/index.html's
+    own lifted script and the shipped dist/present.js, with no live server and no cycle.
+    ARM 1 — a projection arrives while a line is open. The `<input>` closes over the source string
+    the painter gave it, so the repaint that removes it fires blur, the edit is computed against the
+    OLD projection, and the POST is the whole of it: `#blocked` (a rule's output) and `qntm:124` (a
+    task the cycle created) both gone from the file, the operator's typing intact, freshness line
+    reading `as of … · 0 queued`.
+    ARM 2 — TWO TICKS INSIDE ONE CYCLE, AND THIS ONE IS WORSE THAN THE ROW'S OWN DIAGNOSIS SAYS.
+    `toggleTask` does not repaint from its edited string — it toggles a class and a `checked`
+    property — so the painter's source still holds the file as it was BEFORE the first tick. The
+    second POST therefore carries the FIRST TICK UNDONE. On this path the loser is the OPERATOR'S
+    OWN GESTURE, not only the cycle's output, which is a correction to "his typing is never lost".
+    WHAT SHIPPED IS A DETECTOR AND A REPORT, NOT A PREVENTION, and the distinction is deliberate
+    rather than partial. `app/present/base.ts` (new, pure, imports nothing) holds the markdown the
+    server last sent for the file on screen and answers `current` / `stale` / `writing` / `unknown`
+    for any write. `baseOf` is `sha256-<hex>` of the file's UTF-8 bytes, UNNORMALISED. The page
+    carries it on every write and says one sentence in the freshness line when it diverges.
+    THE CLIENT'S OWN CHECK IS A STRING COMPARISON AND THE WIRE CARRIES A HASH — two jobs, one of
+    which needs a digest. The browser already HAS the served markdown, so its check cannot collide;
+    the server cannot be sent the whole previous file, so it gets sha256 of the same bytes. The
+    detector therefore never depends on the hash, which is what makes the two halves shippable a
+    row apart.
+    WHAT IT CANNOT SEE, STATED PLAINLY: a change the browser was never told about. A cycle that
+    rewrote the file on the server while nothing arrived here leaves the base looking current. Only
+    the server can answer "what does this file say NOW" — that is `the-write-is-refused-server-side`
+    and it is exactly why the base goes on the wire rather than only into a comparison.
+    THE PRECONDITION IS THE STRING THE EDIT WAS APPLIED TO, NOT WHAT IS ON SCREEN. `LineCommit` and
+    `CheckboxToggle` gained `source`, because after an optimistic repaint the painter is holding a
+    string this app computed and the page's own `graphData` is not — a base taken from whatever the
+    page had would match every time and refuse nothing. Mutation-proven: pointing the write at the
+    served copy instead turns arm 1 green-to-red in three tests.
+    NO NEW EDIT KIND, NO NEW WRITE UNIT, NO NEW ENDPOINT. `SourceEdit` is still the closed union of
+    three, `markdown` is still the whole view, `motions.ts` still imports nothing, and the two write
+    sites now share one `writeFile` — one place a file is posted, which is what the design already
+    claimed and this makes structural.
+    EVIDENCE TIER — NODE-TEST ONLY, NOT FLOW-TRACE-VERIFIED, and here the gap is structural rather
+    than undischarged: `base.ts`'s only caller is `app/index.html`, which the capture filter names
+    and cannot see, so there is no observable edge to declare and no scenario is written. See
+    flows.yaml's closing note for the measurement behind that decision. 18 new tests in
+    tests/present-base.test.mjs: the digest checked against node's own `createHash` across the
+    padding boundaries and multi-byte input; that nothing is normalised; the surface's four
+    outcomes; both arms driven through the page; a CONTROL arm proving an ordinary save says
+    nothing; and that the sentence follows the save it describes when two are in the air.
+    MUTATION-PROVEN FIVE WAYS, each turning the suite red: the detector deleted (7 red); the base
+    read off the served copy rather than off the edit (3 red); `paintView` never taking a base
+    (4 red); one sha256 round constant flipped (1 red); the note not re-armed for its own write
+    (1 red — the two-saves-in-the-air arm, which is the defect that mutation originally caused).
+    THE ROW'S OWN MUTATION INSTRUCTION WAS "remove the base and watch the assertion go green
+    wrongly", AND IT DOES NOT — it goes red. That is a property built on purpose: a write with no
+    base reads `unknown` and is REPORTED, never treated as current, because a check that quietly
+    passes when it cannot run is decoration.
+    NOT VERIFIED IN A BROWSER. No real cycle ran, no passkey session was opened, no server was
+    contacted, nothing was POSTed anywhere, and the live vault and database were not touched at all.
+    Every "projection" in the evidence is a second string in a test file.
+  tier: functional
+  rooting: >-
+    isolated, and for a reason worth separating from the usual one. `app/present/base.ts` is a new
+    pure module in the same family as `boundary.ts`/`indent.ts`/`word.ts` — but unlike those it has
+    NO importer inside app/present/ at all, by design: the base is a fact about a FILE and the
+    painter's job stops at reporting which string it applied an edit to. Its one caller is the
+    page's own `writeFile`, which is outside the capture filter because node cannot import an HTML
+    document. `LineCommit` and `CheckboxToggle` each gained one field, so every caller that predates
+    it goes on posting exactly what it always posted.
   status: undeclared
 - id: presentation-instance-identity
   intent: >-

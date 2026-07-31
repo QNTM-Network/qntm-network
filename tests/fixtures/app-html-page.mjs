@@ -83,7 +83,13 @@ export function extractPageScript(workDir) {
   // The page keeps its state in module-scoped `let`s and exports nothing. These lines are
   // additive — they read and write what is already there and change no behaviour.
   source += `
-export { paintView, toggleTask, loadPresentation };
+export { paintView, toggleTask, commitLine, loadPresentation };
+// THE BASE. \`served\` is the page's own BaseSurface (app/present/base.ts) — a getter, like the vim
+// pair below, so a suite reads what the page is holding NOW rather than a snapshot from import
+// time. \`writeFile\` is exported for the one thing a driven affordance cannot show: that the write
+// path itself measures and carries the base, independently of which gesture reached it.
+export const __served = () => served;
+export { writeFile as __writeFile };
 export { buildDrawer, openDrawer, closeDrawer, folderOf, foldersOf, drawerStops, viewButtons };
 export { landOn, loadGraph, refresh, showShell };
 export { register, login, logout, friendlyAuthError, showEmpty, hideEmpty, HANDLE_RE, api };
