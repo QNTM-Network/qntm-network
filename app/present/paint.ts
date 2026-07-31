@@ -138,12 +138,15 @@ export interface PaintDeps {
   /**
    * VIM'S NORMAL/INSERT DISTINCTION — optional, and its absence is a real configuration exactly as
    * `focus`'s is. Without it, `focus` behaves exactly as it always has: a focused line is always
-   * raw, always an editable `<input>` (click-to-edit). With it, the raw-on-focus contribution
-   * (`focus.contextFor`) is applied only while `mode.mode === "INSERT"` — while it is `"NORMAL"`
-   * the focused/selected line resolves through the cascade like any other and is marked with a
-   * selection class instead of becoming an `<input>`. See motions.ts for why this is not a fifth
-   * `Contribution` key: NORMAL/INSERT is a fact about which line may be edited and which keys are
-   * live, never a `Rendition` shift, so it never reaches `PresentationContext`.
+   * raw, always an editable `<input>` (click-to-edit).
+   *
+   * WITH IT, THE FOCUSED LINE IS STILL ALWAYS RAW — the mode decides only WHICH ELEMENT holds the
+   * characters. `NORMAL` builds `normalLine` (spans, a block cursor, not typeable) and `INSERT`
+   * builds `rawInput` (an `<input>`). The raw-on-focus contribution is NOT gated on the mode; it
+   * was for one release and that was the defect this field's own note used to describe as the
+   * design. See motions.ts for why the mode is still not a fifth `Contribution` key: NORMAL/INSERT
+   * is a fact about which line may be EDITED and which keys are live, never a `Rendition` shift, so
+   * it never reaches `PresentationContext`.
    */
   readonly mode?: ModeSurface;
   readonly onLineCommit?: (commit: LineCommit) => void;
@@ -181,6 +184,84 @@ export interface PaintDeps {
 function rawText(source: string): HTMLElement {
   const div = document.createElement("div");
   div.textContent = source;
+  return div;
+}
+
+/**
+ * NORMAL MODE'S CURSOR CLASS — the character the block sits on. See app/index.html for its rule.
+ */
+const VIM_BLOCK_CLASS = "vim-block";
+
+/** The one character a block cursor shows when the line has none at that column. */
+const EMPTY_CELL = " ";
+
+/**
+ * The `raw` rendition in NORMAL: the line's exact source characters, with a BLOCK CURSOR on one.
+ *
+ * ── THE HYPOTHESIS THIS REPLACES, AND WHY IT WAS REFUTED BEFORE IT WAS BUILT ──
+ *
+ * The obvious way to show a character-level cursor on a line is to keep the `<input>` and set
+ * `readOnly`: the native caret shows the column for free, `readOnly` blocks typing but permits
+ * caret movement, `w` is `setSelectionRange`, and `i` is `readOnly = false` on the SAME element —
+ * no re-render, no flicker. It was tested rather than assumed and it does not hold.
+ *
+ * A READONLY INPUT DOES NOT PAINT A CARET IN TWO OF THE THREE ENGINES. From the CSS Working Group's
+ * own July 2025 thread on standardising readonly input styles (`lists.w3.org/Archives/Public/
+ * public-css-archive/2025Jul/0463.html`), which enumerates the current divergence: WebKit "doesn't
+ * render a text caret and no focus outline ring is rendered"; Firefox "no text caret is rendered";
+ * Chromium "renders a text caret (but it doesn't blink)". So on the operator's own platform the
+ * cursor would be INVISIBLE — the same symptom as the defect this change exists to fix, with a
+ * harder cause to find. `caret-color` cannot rescue it: it colours a caret the engine paints, it
+ * does not cause one to be painted.
+ *
+ * THIS IS WEB EVIDENCE, NOT A MEASUREMENT. Nobody ran a browser in the worktree that produced this
+ * file. The claim is "three engines are documented as disagreeing and two of them paint nothing",
+ * which is enough to refuse a design whose failure mode is an invisible cursor, and is not the same
+ * as having watched one blink.
+ *
+ * ── AND THE GUARD THAT WOULD HAVE BROKEN FIRST ──
+ *
+ * app/index.html's global keydown handler refuses every key while `typingIn(e.target)` — and
+ * `typingIn` is `tagName === "input"`. A readonly input that the painter focuses in NORMAL is
+ * `e.target` for every subsequent keystroke, so `j`, `k` and `w` — the whole of NORMAL mode —
+ * would have been swallowed by the guard that protects the capture box. Widening `typingIn` to
+ * exempt readonly inputs is one line and would have worked, but it is a line loosening the single
+ * guard standing between a global letter binding and the operator's own text fields, spent to buy
+ * a caret two engines will not draw. A `<div>` is not `typingIn` anything, so this route needs no
+ * such change and the guard is untouched.
+ *
+ * ── WHAT IS BUILT INSTEAD, AND WHY IT IS BETTER AND NOT MERELY SAFER ──
+ *
+ * A terminal's own answer: three spans, and the middle one carries the cursor. It paints in every
+ * engine because a background colour is not an optional affordance. It is also what vim ACTUALLY
+ * LOOKS LIKE — a block in NORMAL, a bar in INSERT — so the mode is legible from the cursor itself
+ * rather than only from the badge above the view.
+ *
+ * ── AND THE ARCHITECTURAL LINE IS UNMOVED ──
+ *
+ * This is a `<div>` holding TEXT, not a `contenteditable` holding a rendition. Nothing here can be
+ * typed into, nothing is ever read back off it, and no markdown is reconstructed from the DOM. The
+ * characters go one way: source string in, spans out.
+ */
+function normalLine(lineSource: string, column: number): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "rawline " + VIM_SELECTED_CLASS;
+
+  // `textContent` on the CHILDREN, never on the parent: the source characters stay characters, the
+  // same guarantee `rawText` above makes, and the three-way split is the only structure added.
+  const head = document.createElement("span");
+  head.textContent = lineSource.slice(0, column);
+  const cell = document.createElement("span");
+  cell.className = VIM_BLOCK_CLASS;
+  // ONE CHARACTER, OR AN EMPTY CELL. `clampColumn` (motions.ts) already keeps the column on a
+  // character that exists for every non-empty line, so the fallback is reached only by a line with
+  // no characters at all — which the painter's blank branch normally intercepts before here. A
+  // zero-width block is a cursor nobody can see, so the empty cell is drawn rather than nothing.
+  cell.textContent = lineSource.slice(column, column + 1) || EMPTY_CELL;
+  const tail = document.createElement("span");
+  tail.textContent = lineSource.slice(column + 1);
+
+  div.append(head, cell, tail);
   return div;
 }
 
@@ -591,10 +672,34 @@ export function paint(
     return openLine(from, lineIndex, draft, deps.onNewLineDeclined);
   };
 
-  /** The raw rendition, embodied for the surface this paint actually has. */
+  /**
+   * The raw rendition, embodied for the surface this paint actually has — and for the MODE it is in.
+   *
+   * THREE EMBODIMENTS OF ONE RENDITION, WHICH IS THE SHAPE THIS FUNCTION ALREADY HAD. `raw` means
+   * "show the characters" at every rung of the cascade; what differs is whether they can be
+   * REACHED, and by what:
+   *
+   *   no focus surface — inert text. Stage 1's painter, and the golden master's.
+   *   NORMAL          — the characters, with a block cursor on one of them. Not typeable.
+   *   INSERT (or no
+   *   mode surface)   — an `<input>`. Typeable, and the only place the file can change.
+   *
+   * The middle one is new and the other two are not touched. That ordering is why widening
+   * `focusLive` below could not change what a pre-vim caller paints: without a `ModeSurface` there
+   * is no NORMAL to be in.
+   */
   const raw = (lineSource: string, lineIndex: number): void => {
     if (focus === undefined) {
       body.append(rawText(lineSource));
+      return;
+    }
+    if (mode !== undefined && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
+      const line = normalLine(lineSource, focus.column);
+      // A CLICK STILL MEANS "EDIT THIS LINE". Every other rendition gets this from `focusable`, and
+      // the selected line must not be the one row on screen that stops answering the mouse just
+      // because the keyboard has reached it.
+      focusable(line, lineIndex);
+      body.append(line);
       return;
     }
     // THE LINE AND THE FILE ARE TWO ARGUMENTS AND THEY ARE NAMED APART. The input shows ONE
@@ -609,18 +714,19 @@ export function paint(
     if (focus.isFocused(lineIndex)) {
       (input as HTMLInputElement).focus?.();
       // THE CARET SEED, AND THE ONLY PLACE IT IS EMBODIED. `mode.takeCaretHint()` is data
-      // motions.ts already decided (`enterInsert("end")` for `a`, `enterInsert(offset)` for
-      // `w`/`b`/`e` via app/index.html's own call into `wordCaret`); turning it into a real
-      // selection range is a DOM fact the painter builds, not a decision — the same family as
-      // `focus === undefined ? rawText(...) : rawInput(...)`. `i`/Enter/a mouse click leave the
-      // hint unset, so the caret lands wherever it always did; nothing here changes for them.
+      // motions.ts already decided — `enterInsert(column)` for `i`/Enter and `enterInsert(column+1)`
+      // for `a`, both measured in the NORMAL cursor's own column. Turning it into a real selection
+      // range is a DOM fact the painter builds, not a decision — the same family as
+      // `focus === undefined ? rawText(...) : rawInput(...)`. A mouse click leaves the hint unset,
+      // so the caret lands where the person clicked and the painter does not overrule it.
       const caret = mode?.takeCaretHint();
       if (caret !== undefined) {
-        // Clamped into the line's own length — defensive, not load-bearing: every caller that
-        // computes a number (word.ts's `wordCaret`) derives it from this SAME `lineSource` via
-        // `titleSpans`, so it is already in range. The clamp is what stops a seed computed against
-        // a source that has since moved from placing a caret outside the string it is shown in.
-        const at = caret === "end" ? lineSource.length : Math.max(0, Math.min(caret, lineSource.length));
+        // CLAMPED INTO THE LINE'S LENGTH, AND HERE IT IS LOAD-BEARING RATHER THAN DEFENSIVE. `a`
+        // asks for `column + 1` and motions.ts cannot know how long the line is — it imports
+        // nothing — so this is the one place that arithmetic meets the string it indexes. On the
+        // last character `column + 1` IS `lineSource.length`, which is one past the last character
+        // and exactly where a caret belongs when appending.
+        const at = Math.max(0, Math.min(caret, lineSource.length));
         (input as HTMLInputElement).setSelectionRange?.(at, at);
       }
     }
@@ -685,17 +791,34 @@ export function paint(
     // same thing all the way down the view; this is the rung that does not, and building the
     // context per line is what lets the painter stay ignorant of which rung that is.
     //
-    // FOCUS CONTRIBUTES ONLY WHILE INSERT IS LIVE (or no `ModeSurface` is wired at all, which is
-    // every caller that predates vim: click-to-edit keeps meaning exactly what it always meant).
-    // In NORMAL, the selected line resolves like any other — see `selected` below for how it is
-    // marked instead. This is an embodiment choice, the same family as `focus === undefined`
-    // already was; motions.ts explains why it is not a second `Contribution`.
-    const focusLive = focus !== undefined && (mode === undefined || mode.mode === "INSERT");
+    // FOCUS CONTRIBUTES WHENEVER THERE IS A CURSOR. Not "whenever there is a cursor and the mode is
+    // INSERT", which is what this line said for one release and which was the defect:
+    //
+    //     focus !== undefined && (mode === undefined || mode.mode === "INSERT")
+    //
+    // In NORMAL the cursor IS on the line, and the operator's founding rule for this surface —
+    // written in docs/implementation-artifacts/design-presentation-cascade.md and in focus.ts's own
+    // header — is "cursor on the line → the line renders as its exact source text". The gate made
+    // the selected line render WIRED, which broke that rule and, mechanically, left `w` with no
+    // characters on screen for a column to move through.
+    //
+    // THE WIDENING RESTORES THE PRE-VIM EXPRESSION EXACTLY, and that is checkable rather than
+    // asserted: whenever `mode === undefined` the old expression reduced to `focus !== undefined`,
+    // so for every caller that predates vim — click-to-edit, the golden master, every test written
+    // before this module existed — the two are the SAME BOOLEAN. The only case that changes is
+    // `mode !== undefined && mode.mode === "NORMAL"`, which is vim, which is the defect. This is not
+    // a third behaviour.
+    const focusLive = focus !== undefined;
     const cascade = new PresentationCascade(focusLive ? focus.contextFor(index, context) : context);
-    // THE VIM SELECTION MARK. True on at most one line per paint — the same "one cursor" FOCUS
-    // already guarantees — and only in NORMAL, since INSERT's `<input>` already carries its own
-    // mark (the caret).
-    const selected = mode !== undefined && mode.mode === "NORMAL" && focus !== undefined && focus.isFocused(index);
+    // THE VIM SELECTION MARK USED TO BE COMPUTED HERE AND HANDED TO THE THREE WIRED BRANCHES BELOW.
+    // It is gone, because widening `focusLive` made it UNREACHABLE rather than merely unused: FOCUS
+    // is the most specific of the seven levels (levels.ts), it contributes `raw` on every key for
+    // the line under the cursor, and it is now contributed whenever there is a cursor at all. So the
+    // selected line ALWAYS resolves raw, always takes `raw()` above, and always carries its mark
+    // inside `normalLine`. A `wired` branch could not draw the selected line if it tried.
+    //
+    // The blank-line branch above still marks its own, and that one is genuinely reachable: a blank
+    // line has no rendition at either end, so it never reaches a cascade or a `raw()` call.
 
     if (shape.kind === "checkbox") {
       if (cascade.resolve("checkbox").rendition === "raw") {
@@ -703,7 +826,7 @@ export function paint(
         return;
       }
       const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "") + (selected ? " " + VIM_SELECTED_CLASS : "");
+      row.className = "task" + (shape.done ? " done" : "");
       // Two spaces of source indent is one nesting level, and one nesting level is 1.2rem.
       // Carried across unchanged from app.html:246 — the arithmetic is a presentation decision
       // and it now lives in the painter rather than in a page.
@@ -748,9 +871,6 @@ export function paint(
       // `#` demotes one level and clamps at 6: the view's own `#` is the page's `<h2>`, because
       // the page already owns an `<h1>`. app.html:259, unchanged.
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      if (selected) {
-        el.className = VIM_SELECTED_CLASS;
-      }
       // The heading's OWN `#`es are not tags and cannot be: `classifyLine` has already taken them
       // off, and the grammar would refuse them anyway (`#` then a space is not a tag body). What
       // is left is the heading's text, which may carry tags like any other line.
@@ -769,9 +889,6 @@ export function paint(
     // Everything else is its own one-line markdown document. Block render, not inline — that is
     // what makes a `- item` line a list and a `| a | b |` line a table row. app.html:266.
     const div = document.createElement("div");
-    if (selected) {
-      div.className = VIM_SELECTED_CLASS;
-    }
     // BLOCK RENDER, AND THE CHIP GOES IN BEFORE IT. This is the branch that carries most of the
     // real tags in a real view: the engine emits a non-checkbox line as `- title #tag`, which is
     // not a task and lands here. It is also the branch where the renderer sometimes refuses the

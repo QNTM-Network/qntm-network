@@ -1,11 +1,17 @@
 /**
  * FocusSurface — where the cursor is, and the FOCUS-level contribution derived from it.
  *
- * PURE. No DOM, no fetch, no clock. It holds one number-or-null and turns it into a level, which
+ * PURE. No DOM, no fetch, no clock. It holds WHERE THE CURSOR IS and turns it into a level, which
  * is the whole of the operator's rule expressed as data:
  *
  *   cursor on the line  -> the line renders as its exact source text
  *   cursor off the line -> the resolved rendition, clickable
+ *
+ * THAT RULE HAS NO MODE IN IT, AND FOR ONE RELEASE THE PAINTER PUT ONE THERE. `paint.ts` gated the
+ * contribution below on `mode.mode === "INSERT"`, so in NORMAL — where the cursor IS on the line —
+ * the line went on showing its rendition. The gate is gone (see motions.ts for the full account);
+ * `focusLive` is `focus !== undefined`, which is what it was before vim existed. NORMAL and INSERT
+ * are two EMBODIMENTS of the one raw rendition this class asks for, not two answers to it.
  *
  * ── WHY THE RULE IS A LEVEL AND NOT AN `if (focused)` IN THE PAINTER ──
  *
@@ -42,6 +48,20 @@
  * cascade cannot tell that this class changed. The anchor decides WHERE the cursor is; it never
  * decides how anything renders.
  *
+ * ── AND THE COLUMN, WHICH IS THE SAME KIND OF FACT AGAIN ──
+ *
+ * `w`/`b`/`e` repeat in NORMAL, so the cursor is a LINE AND A COLUMN. The column is an offset into
+ * the line the anchor already names — never a second coordinate system — and it is subject to every
+ * word above: derived, held while the cursor is there, dropped with it, declared by nothing and
+ * served by nothing. `contextFor` does not read it and the cascade still cannot tell it exists,
+ * which is what keeps "the cursor always wins" a fact about the ORDER of the levels and not about
+ * how far along a line the operator happens to be.
+ *
+ * `design-the-vim-cursor.md` §1.4 said a column's lifetime is "one paint" and that it "must not
+ * survive a repaint". That was true of a column written once at the NORMAL→INSERT transition, which
+ * is what the same document's §2.2 designed. It is false of a column a motion repeats against, and
+ * §1.4's own table is amended in that document rather than left contradicting this file.
+ *
  * ── WHY IT IS RAW ON EVERY KEY ──
  *
  * The contribution is built FROM `RESOLUTION_KEYS` rather than listed by hand. When stage 8 adds
@@ -54,8 +74,22 @@
 import { anchorFor, resolveAnchor } from "./anchor.js";
 import type { Anchor, AnchorReading } from "./anchor.js";
 import { PresentationContext } from "./context.js";
+import { clampColumn } from "./motions.js";
 import { RESOLUTION_KEYS } from "./resolution.js";
 import type { Contribution, Rendition } from "./resolution.js";
+
+/**
+ * The characters of the line at `lineIndex`, or `null` when there is no source to read them from.
+ *
+ * `null` IS NOT AN ERROR. `focus` takes its source optionally (see below), and a caller that gave
+ * none has given this nothing to measure — `clampColumn` says what happens then.
+ */
+function lineTextOf(source: string | undefined, lineIndex: number): string | null {
+  if (source === undefined) {
+    return null;
+  }
+  return source.split("\n")[lineIndex] ?? null;
+}
 
 /** What the FOCUS level says about the line under the cursor: show me the characters. */
 const FOCUSED: Contribution = Object.freeze(
@@ -65,10 +99,24 @@ const FOCUSED: Contribution = Object.freeze(
 export class FocusSurface {
   #lineIndex: number | null = null;
   #anchor: Anchor | null = null;
+  #column = 0;
 
   /** The line the cursor is on, or `null` when it is nowhere. */
   get lineIndex(): number | null {
     return this.#lineIndex;
+  }
+
+  /**
+   * WHICH CHARACTER of that line the cursor is on — an offset into the line's own source string,
+   * clamped to a character that exists. `0` when the cursor is nowhere.
+   *
+   * IT IS AN OFFSET INTO THE LINE THE INDEX ALREADY NAMES, NOT A SECOND COORDINATE SYSTEM. The
+   * anchor decides WHICH line; this decides WHERE IN IT. Every column that enters this surface is
+   * clamped against that line's characters on the way in, which is what makes "clamped to a
+   * character that exists" a property of the surface rather than of each of its callers.
+   */
+  get column(): number {
+    return this.#column;
   }
 
   /**
@@ -95,10 +143,36 @@ export class FocusSurface {
    * THE INDEX AND THE ANCHOR ARE SET IN ONE CALL, on purpose. Two setters would be two facts that
    * can disagree about where one cursor is, and "there is one cursor" is the property every motion
    * in this bundle is arithmetic on.
+   *
+   * `column` DEFAULTS TO ZERO, WHICH IS A DECISION AND NOT AN OMISSION. Landing on a line puts the
+   * cursor at its start: `j`, `k`, `gg`, `G`, `{`, `}` and a mouse click all take this default, so a
+   * line move resets the column. Vim's own `j`/`k` instead remember a DESIRED column and restore it
+   * on a line long enough to hold it — a third piece of state (the desired column is not the actual
+   * one) that nothing in this change needs, so it is not built. What IS needed is that `w`/`b`/`e`
+   * repeat, and they do not move between lines. The one caller that passes a column is `reanchor`
+   * below, which is preserving one rather than choosing one.
    */
-  focus(lineIndex: number, source?: string): void {
+  focus(lineIndex: number, source?: string, column = 0): void {
     this.#lineIndex = lineIndex;
     this.#anchor = source === undefined ? null : anchorFor(source, lineIndex);
+    this.#column = clampColumn(column, lineTextOf(source, lineIndex));
+  }
+
+  /**
+   * Move the cursor along the line it is already on — `w`/`b`/`e`/`0`/`$`, and nothing else.
+   *
+   * IT TAKES THE LINE'S TEXT RATHER THAN LOOKING IT UP, for the same reason `focus` takes a source:
+   * this surface holds no copy of the view and must not start holding one. The caller has the string
+   * the column was computed against (app/index.html reads it out of the same `v.markdown` it hands
+   * `wordCaret`), so passing it is passing the fact, not fetching it twice.
+   *
+   * IT IS A SEPARATE CALL FROM `focus` AND THAT IS NOT THE "TWO SETTERS" THE NOTE ABOVE REFUSES.
+   * That refusal is about two setters for ONE fact — an index and an anchor that could disagree
+   * about which line the cursor is on. A column is a different axis: it cannot disagree with the
+   * index, only be clamped by it, which is exactly what happens here.
+   */
+  moveColumn(column: number, lineText: string): void {
+    this.#column = clampColumn(column, lineText);
   }
 
   /**
@@ -120,12 +194,23 @@ export class FocusSurface {
    * that knows a snapshot landed — the same split `boundaryLine` and `openLine` already have
    * between a pure answer and the wiring that asks for it.
    *
-   * IF THIS SURFACE EVER GAINS A COLUMN — and it is likely to, because `w`/`b`/`e` repeating in
-   * NORMAL makes the cursor a line AND a column — THIS METHOD MUST DECIDE WHAT HAPPENS TO IT
-   * EXPLICITLY. It goes through `focus()` above, which owns the index and the anchor and nothing
-   * else, so a column added as a third field would be silently reset here on every arrival. The
-   * fact it needs is already in hand: `anchor.text` is re-taken against the new projection one line
-   * below, so a column can be clamped into the line's CURRENT characters rather than guessed.
+   * THE COLUMN THIS METHOD WAS WARNED ABOUT NOW EXISTS, AND THIS IS THE EXPLICIT DECISION.
+   *
+   * The warning left here by the row that made the cursor an identity was that a column added as a
+   * third field would be SILENTLY RESET on every arrival, because this method moves the cursor by
+   * calling `focus()` and `focus()` owns the index and the anchor and nothing else. It does not
+   * happen, because the column is passed back through: `focus(lineIndex, source, this.#column)`.
+   *
+   * AND IT IS CLAMPED RATHER THAN CARRIED, which is the fact the warning said was already in hand.
+   * `focus` re-takes the anchor against the ARRIVING projection, so it also has that projection's
+   * text for the line the cursor landed on, and `clampColumn` (motions.ts) cuts the column down to a
+   * character that is really there. A cycle that shortened the line — stripped a marker cell,
+   * rewrote a tail — leaves the cursor on that line's LAST character rather than past its end, and a
+   * cycle that lengthened it leaves the column exactly where the operator put it. Neither outcome is
+   * a guess: both are the same one clamp, applied to whatever arrived.
+   *
+   * ON `ambiguous` AND `absent` THE COLUMN IS UNTOUCHED, for the same reason the index and the
+   * anchor are: nothing about the cursor moves when the world could not tell us where its line went.
    */
   reanchor(source: string): AnchorReading {
     const anchor = this.#anchor;
@@ -134,7 +219,7 @@ export class FocusSurface {
     }
     const reading = resolveAnchor(anchor, source);
     if (reading.outcome === "found") {
-      this.focus(reading.lineIndex, source);
+      this.focus(reading.lineIndex, source, this.#column);
     }
     return reading;
   }
@@ -143,6 +228,7 @@ export class FocusSurface {
   blur(): void {
     this.#lineIndex = null;
     this.#anchor = null;
+    this.#column = 0;
   }
 
   /**

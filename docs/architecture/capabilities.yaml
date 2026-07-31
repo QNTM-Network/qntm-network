@@ -741,6 +741,106 @@ capabilities:
     claim above is a file read, the node test runner, or a static comparison against the engine's own
     source and the operator's real (read-only) vault content — consistent with the rest of this
     capability's evidence tier.
+    SLICE 5 (2026-07-31): THE CURSOR GAINS A COLUMN, AND SLICE 4 IS PARTLY REFUTED BY USE.
+    The operator, in his own words: "right now word jump also does insert. so i can't jump through it
+    just does first jump then wwww typed". Slice 4 ended `w` in `enterInsert(offset)` on
+    `design-the-vim-cursor.md` §2.2's reasoning — labelled [REA], never measured — that `w`/`b`/`e`
+    need not be repeatable NORMAL-mode motions because the platform's `Option+←/→` would repeat once
+    the caret was in the box. He is a vim user; in vim `w` repeats, so his second `w` was a literal
+    `w` typed into his own line. §Q1 and §2.2 of that document are amended in place rather than left
+    asserting what the code now contradicts.
+    THE ROOT CAUSE WAS NOT THE WORD MOTION. `paint.ts` computed
+    `focusLive = focus !== undefined && (mode === undefined || mode.mode === "INSERT")`, so in NORMAL
+    the selected line got no FOCUS contribution and rendered WIRED. That contradicts the founding
+    rule this whole surface is built on and which `focus.ts`'s own header states — "cursor on the
+    line -> the line renders as its exact source text" — and in NORMAL the cursor IS on the line. It
+    is also the MECHANICAL reason `w` could not repeat: with the line rendered as a widget there are
+    no characters on screen for a column to move through, so the mode had nowhere to put a cursor.
+    The gate NARROWED an expression that was already right; before vim existed it was simply
+    `focus !== undefined`, and it is that again. THE WIDENING IS PROVABLY NOT A THIRD BEHAVIOUR:
+    whenever `mode === undefined` the old expression reduced to `focus !== undefined`, so for every
+    caller that predates vim — click-to-edit, the golden master, every pre-vim test — the two are the
+    same boolean, and the only case that changes is `mode.mode === "NORMAL"`.
+    NORMAL AND INSERT ARE NOW TWO EMBODIMENTS OF ONE RAW RENDITION, WHICH IS THE SPLIT THE MODE GATE
+    WAS CONFUSING. "Does this line show its characters?" is the cascade's question and FOCUS has
+    always answered it the same way regardless of mode; "is this line OPEN FOR TYPING?" is
+    `ModeSurface`'s, and it decides only which ELEMENT holds the same characters — `normalLine`
+    (spans, a block cursor, not typeable) or `rawInput` (an `<input>`). Still no MODE contribution,
+    still no fifth `Resolution` key; `motions.ts` still imports nothing.
+    THE READONLY-INPUT HYPOTHESIS WAS TESTED AND REFUTED BEFORE IT WAS BUILT. Keeping the `<input>`
+    and setting `readOnly` would have given the native caret for free and made `i` a one-property
+    flip on the same element. The CSS Working Group's July 2025 thread on standardising readonly
+    input styles enumerates the divergence that kills it: WebKit "doesn't render a text caret and no
+    focus outline ring is rendered", Firefox "no text caret is rendered", Chromium "renders a text
+    caret (but it doesn't blink)". TWO OF THREE ENGINES PAINT NOTHING, so on the operator's own
+    platform the cursor would have been INVISIBLE — the same symptom as the defect, with a harder
+    cause to find; `caret-color` colours a caret an engine paints and cannot cause one. It would also
+    have required widening `typingIn` (app/index.html's `tagName === "input"` guard), since a focused
+    readonly input is `e.target` for every subsequent keystroke and would have swallowed `j`, `k` and
+    `w` — the whole of NORMAL mode. A `<div>` is not `typingIn` anything, so the guard is UNTOUCHED
+    and that failure mode does not exist. What shipped is a terminal's own device: three spans with a
+    block cursor on the middle one, which every engine paints, and which makes the mode legible from
+    the cursor itself rather than only from the badge.
+    THE COLUMN LIVES ON `FocusSurface`, NOT ON `ModeSurface`, AND THE REASON WAS ALREADY WRITTEN
+    DOWN. `focus.ts`'s `reanchor` carried a warning left by the anchor row: a column added as a third
+    field would be silently reset on every projection arrival, because `reanchor` moves the cursor
+    through `focus()` and `focus()` owned the index and the anchor and nothing else — but
+    `anchor.text` is re-taken against the arriving projection, so a column can be CLAMPED into the
+    line's current characters rather than guessed. That is exactly what happens:
+    `focus(lineIndex, source, this.#column)`, and `clampColumn` (beside `clampLine` in motions.ts,
+    same no-wrap arithmetic on the other axis) cuts it down to a character that exists. A cycle that
+    shortened the line leaves the cursor on its last character; one that lengthened it leaves the
+    column where the operator put it. THE SAME TRAP EXISTED ONE LAYER UP AND WAS FOUND BY THE TESTS
+    RATHER THAN BY READING: `app/index.html`'s `repaintCurrentView` re-focuses on EVERY repaint, and
+    a repaint is what every motion causes, so it too passes the column back through.
+    `w`/`b`/`e` ARE ORDINARY MOTIONS NOW. `wordCaret` gained a fourth argument — the cursor's current
+    column — and every motion is measured from it and is STRICT (a motion that can return its own
+    starting point is a motion that does not repeat). `e` lands on a word's LAST CHARACTER rather
+    than one past it, because it positions a block cursor rather than seeding a text caret; `a` from
+    there reaches one-past, so the old behaviour is expressible rather than lost. Slice 4's title
+    grammar is untouched and is what keeps the column out of stamps, tags and marker cells.
+    `i` OPENS AT THE COLUMN AND `a` AT `column + 1`. `a` used to be `"end"` unconditionally, because
+    there was no column for it to be one past; it is now vim's own "after the character under the
+    cursor", and END-OF-LINE FALLS OUT as the boundary case when the cursor is on the last character
+    rather than being kept as a rule. `ModeSurface.enterInsert` narrowed from `"end" | number` to
+    `number` — one coordinate system on this axis, per the brief's constraint, rather than two ways
+    of naming a position.
+    `0` AND `$` CAME FOR FREE and are the SOURCE line's ends, not the title's: they need the line's
+    length and nothing else, so unlike `w`/`b`/`e` they ask no module a second question. A bare `0`
+    was previously left unbound ("not guessed at as column zero"); the order in `handleKey` is what
+    keeps `0`-the-motion and `0`-continuing-a-count apart, exactly as vim does.
+    ONE THING GOT SMALLER. The painter's `selected` boolean, which added `vim-selected` to a wired
+    checkbox/heading/prose row, is DELETED — not unused but UNREACHABLE. FOCUS is the most specific
+    of the seven levels and now contributes whenever there is a cursor, so the selected line always
+    resolves raw, always takes the `raw()` path, and always carries its mark inside `normalLine`. The
+    blank-line mark stays, and it is genuinely reachable: a blank line has no rendition at either end
+    so it never reaches a cascade at all.
+    EVIDENCE TIER — NODE-TEST ONLY, NOT FLOW-TRACE-VERIFIED, SAME GAP AS SLICES 1-4. `npm run check`:
+    601 tests / 105 suites / 0 fail on `origin/main` at `fe5f12d` before this slice (RUN, not
+    assumed), 625 / 110 / 0 fail after (+24/+5, 0 regressions). The operator's complaint is
+    executable as `tests/app-vim-wiring.test.mjs`'s "w w w w moves the column four words and types
+    NOTHING", which asserts four distinct columns, mode still NORMAL, zero `<input>` elements, and
+    the painted characters byte-identical to the source. The same suite proves the selected line
+    renders the exact characters of a REAL line from `~/qntm/this_week.md` (read-only, copied rather
+    than read live) carrying eight spaces of indent, a stamp, two tags and three marker cells; that
+    `j`/`k` still answer once the selected line shows its source (the `typingIn` guard, which was the
+    most likely way this change could have broken everything); and that the column survives a
+    projection arriving in all three directions — line inserted above, line shortened (clamped), line
+    lengthened (unmoved). `tests/present-motions.test.mjs` sections 20-22 hold the same claims at the
+    pure and painter layers, and `tests/app-view-rows.test.mjs` gained two structural rules: the
+    block cursor declares no box property at all, and NORMAL's `div.rawline` agrees with INSERT's
+    `input.rawline` about height, line-height and colour (so `i` cannot move the line it opens) while
+    declaring `white-space: pre`, which is the one thing an `<input>` gave for free and a `<div>` does
+    not — without it the engine's four-space indent collapses and "its exact source text" becomes
+    approximately its source text.
+    NOT VERIFIED IN A BROWSER, AND THE CARET QUESTION IS EXACTLY THE KIND THAT CANNOT BE. No real key
+    event was observed, no passkey session was opened, and no engine was run. The readonly-caret
+    refutation above is WEB EVIDENCE (the CSSWG thread's own enumeration), not a measurement — the
+    claim is "three engines are documented as disagreeing and two paint nothing", which is enough to
+    refuse a design whose failure mode is an invisible cursor, and is not the same as having watched
+    one blink. Nothing in this slice has been seen laid out: not the block cursor's inversion against
+    the identity green, not `white-space: pre` against a wrapped line, not whether a block on a
+    variable-width font sits where the operator expects.
   tier: functional
   rooting: >-
     isolated. `ModeSurface` is a new class with no caller inside app/present/ itself; `paint.ts`

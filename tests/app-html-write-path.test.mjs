@@ -58,6 +58,31 @@ let page;
 let elements;
 let posted;
 
+/**
+ * The clickable TEXT of the first TASK line.
+ *
+ * `walk(body).find((el) => el.tagName === "span")` used to be exactly this, and stopped being it
+ * when the vim cursor's own line started rendering its source characters (app/present/paint.ts's
+ * `normalLine`, three spans). `paintView` seeds the cursor to line 0, so the first span on the page
+ * now belongs to the heading. A task's text span is the one carrying RENDERED markdown; the cursor
+ * line's spans carry `textContent`. Selecting by that selects the thing these tests are about.
+ */
+const taskText = (body) => walk(body).find((el) => el.tagName === "span" && el.innerHTML !== "");
+
+/**
+ * Paint with the cursor parked on line 0 — the heading — so all four task lines paint as tasks.
+ *
+ * NOT COSMETIC, AND NOT A WORKAROUND. The cursor's own line renders its SOURCE in NORMAL as well as
+ * INSERT (app/present/paint.ts), so WHICH line it is on decides which lines are widgets. `page`
+ * holds one `FocusSurface` for the whole file, exactly as the real app holds one for the session,
+ * so a test that just called `paintView` would be asserting against wherever the previous test left
+ * the cursor. These tests are about clicking a TASK; this is them saying so.
+ */
+function paintParked() {
+  page.__setFocus(0, VIEW.markdown);
+  page.paintView("this-week");
+}
+
 before(async () => {
   ({ elements } = installBrowser());
   globalThis.fetch = async (url, init) => {
@@ -83,18 +108,33 @@ before(async () => {
 
 describe("app.html's own write path", () => {
   test("the page paints the view through the presentation bundle", () => {
-    page.paintView("this-week");
+    paintParked();
     const body = elements.get("viewBody");
     const boxes = walk(body).filter((el) => el.type === "checkbox");
     assert.equal(boxes.length, 4, "the page did not paint every task line");
     assert.ok(
-      walk(body).some((el) => el.tagName === "h2"),
+      walk(body).some((el) => el.tagName === "h3"),
       "the page did not paint the demoted headings",
+    );
+    // AND LINE 0 IS THE CURSOR'S, SO IT SHOWS ITS SOURCE RATHER THAN ITS RENDITION. `paintView`
+    // seeds the selection to line 0, and "cursor on the line → the line renders as its exact source
+    // text" holds in NORMAL as well as INSERT. It used to paint an <h2> here; that was the defect.
+    const raw = walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("rawline"));
+    assert.equal(raw.length, 1, "the selected line did not render as its source");
+    assert.equal(
+      raw[0].children.map((child) => child.textContent).join(""),
+      "# This Week",
+      "the selected line's characters are not the source's",
+    );
+    assert.equal(
+      walk(body).filter((el) => el.tagName === "h2").length,
+      0,
+      "the line under the cursor still painted as a heading widget",
     );
   });
 
   test("ticking a box posts the whole file to the write endpoint", async () => {
-    page.paintView("this-week");
+    paintParked();
     const box = walk(elements.get("viewBody")).find((el) => el.type === "checkbox");
     box.checked = true;
     box.dispatch("change");
@@ -108,7 +148,7 @@ describe("app.html's own write path", () => {
 
   test("the posted markdown is the source with exactly one character different", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const box = walk(elements.get("viewBody")).find((el) => el.type === "checkbox");
     box.checked = true;
     box.dispatch("change");
@@ -139,7 +179,7 @@ describe("app.html's own write path", () => {
 
   test("a nested task edits its own line and not its parent's", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const box = walk(elements.get("viewBody")).filter((el) => el.type === "checkbox")[1];
     box.checked = true;
     box.dispatch("change");
@@ -154,7 +194,7 @@ describe("app.html's own write path", () => {
 
   test("unticking is the same operation in reverse", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const box = walk(elements.get("viewBody")).filter((el) => el.type === "checkbox")[2];
     assert.equal(box.checked, true, "the already-done task did not paint as checked");
     box.checked = false;
@@ -184,7 +224,7 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
 
     await servePresentation({ checkbox: "wired", tags: "wired" });
-    page.paintView("this-week");
+    paintParked();
     const wired = walk(elements.get("viewBody")).filter((el) =>
       String(el.innerHTML).includes('class="tagchip"'),
     );
@@ -192,7 +232,7 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     assert.match(wired[0].innerHTML, /<span class="tagchip">#task<\/span>/);
 
     await servePresentation({ checkbox: "wired", tags: "raw" });
-    page.paintView("this-week");
+    paintParked();
     const raw = walk(elements.get("viewBody"));
     assert.equal(
       raw.filter((el) => String(el.innerHTML).includes("tagchip")).length,
@@ -209,7 +249,7 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     // not possibly reproduce them.
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
     await servePresentation({ checkbox: "wired", heading: "wired", prose: "wired", tags: "wired" });
-    page.paintView("this-week");
+    paintParked();
     posted = null;
 
     const box = walk(elements.get("viewBody")).find((el) => el.type === "checkbox");
@@ -228,11 +268,11 @@ describe("the tag chip, through the page (migration stage 8)", () => {
   test("with chips painted, editing a line posts the file with exactly that line replaced", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
     await servePresentation({ checkbox: "wired", heading: "wired", prose: "wired", tags: "wired" });
-    page.paintView("this-week");
+    paintParked();
     posted = null;
 
     const body = elements.get("viewBody");
-    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    taskText(body).dispatch("click", makeEvent());
     const editable = walk(body).find((el) => el.type === "text");
     assert.equal(editable.value, VIEW.markdown.split("\n")[3], "the cursor did not reach the source");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #home 🆕 2026-07-29";
@@ -253,11 +293,11 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     // chip on the page is replaced with something that is not a tag before the affordance is used.
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
     await servePresentation({ checkbox: "wired", heading: "wired", prose: "wired", tags: "wired" });
-    page.paintView("this-week");
+    paintParked();
     posted = null;
 
     const body = elements.get("viewBody");
-    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    taskText(body).dispatch("click", makeEvent());
     for (const el of walk(body)) {
       if (String(el.innerHTML).includes("tagchip")) {
         el.innerHTML = '<span class="tagchip">#WRECKED</span>';
@@ -282,7 +322,7 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     // silence is what keeps this describe from changing the meaning of every test above it.
     await servePresentation({});
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const body = walk(elements.get("viewBody"));
     assert.equal(body.filter((el) => String(el.innerHTML).includes("tagchip")).length, 0);
     assert.equal(body.filter((el) => el.type === "checkbox").length, 4);
@@ -294,9 +334,9 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
 
   test("clicking a line's text shows its verbatim source, in an input, in the page", () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const body = elements.get("viewBody");
-    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    taskText(body).dispatch("click", makeEvent());
 
     const editable = walk(body).filter((el) => el.type === "text");
     assert.equal(editable.length, 1, "the page has no focus surface — clicking a line did nothing");
@@ -308,26 +348,40 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     );
   });
 
-  test("blur returns the checkbox and posts nothing when nothing was typed", async () => {
+  test("blur closes the input and posts nothing when nothing was typed", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const body = elements.get("viewBody");
     posted = null;
-    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    taskText(body).dispatch("click", makeEvent());
     walk(body).find((el) => el.type === "text").dispatch("blur");
     await new Promise((r) => setImmediate(r));
 
-    assert.equal(walk(body).filter((el) => el.type === "checkbox").length, 4);
+    // THE INPUT IS GONE AND NOTHING WAS POSTED — the two facts this test has always been for.
     assert.equal(walk(body).filter((el) => el.type === "text").length, 0);
     assert.equal(posted, null, "leaving a line untouched posted the whole view");
+
+    // IT USED TO ASSERT FOUR CHECKBOXES HERE, i.e. that the line went all the way back to its
+    // rendition. It does not, and should not: `settle` returns this page to NORMAL rather than
+    // blurring (motions.ts — vim always has a cursor on some line), and in NORMAL the cursor's line
+    // shows its source. Three checkboxes is the OTHER three lines, untouched, which is the real
+    // claim; the fourth is the line the cursor is still on.
+    assert.equal(walk(body).filter((el) => el.type === "checkbox").length, 3);
+    const raw = walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("rawline"));
+    assert.equal(raw.length, 1, "the line the cursor stayed on did not render as its source");
+    assert.equal(
+      raw[0].children.map((child) => child.textContent).join(""),
+      VIEW.markdown.split("\n")[3],
+      "and the characters it shows are not the source's",
+    );
   });
 
   test("edit then blur posts the file with exactly that line replaced", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const body = elements.get("viewBody");
     posted = null;
-    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    taskText(body).dispatch("click", makeEvent());
     const editable = walk(body).find((el) => el.type === "text");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04";
     editable.dispatch("blur");
@@ -352,10 +406,10 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
   test("the page's posted file is immune to a corrupted DOM", async () => {
     // The same detector as the checkbox has, aimed at the surface that reads an element back.
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
-    page.paintView("this-week");
+    paintParked();
     const body = elements.get("viewBody");
     posted = null;
-    walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    taskText(body).dispatch("click", makeEvent());
     for (const el of walk(body)) {
       if (el.tagName === "span") el.innerHTML = "<b>WRECKED</b>";
       if (el.tagName === "h2" || el.tagName === "div") el.innerHTML = "WRECKED";
