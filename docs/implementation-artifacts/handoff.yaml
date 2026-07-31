@@ -63,6 +63,15 @@ handoff:
   - id: carry-presentation-through-the-snapshot-envelope
   - id: token-renditions-chips-titles-and-pills
   - id: author-in-the-browser-not-in-obsidian
+  - id: a-write-refuses-a-stale-base
+  - id: the-cursor-anchors-to-a-node-not-a-line-number
+  - id: the-open-line-survives-a-new-projection
+  - id: the-vanished-line-is-parked-not-dropped
+  - id: the-write-is-refused-server-side
+  - id: stop-awaiting-the-cycle-safely
+  - id: the-projection-arrives-without-being-asked-for
+  - id: a-line-being-made-survives-a-projection-too
+  - id: correct-the-dangerous-sentence-in-app-source
   - id: the-focused-line-shows-its-source-rule
   - id: add-the-mode-presentation-level
   - id: add-the-user-presentation-level

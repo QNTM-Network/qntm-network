@@ -469,6 +469,16 @@ capabilities:
     abandoned line therefore needs no DELETE affordance to undo — which is the second thing the
     constraint bought, because a constructive edit that required a destructive one to clean up
     after it would have doubled the union to add one feature.
+    ── UPDATE 2026-07-31, THE SENTENCE ABOVE CARRIES A CORRECTION FROM THE OPERATOR. This intent
+    says "The markdown is the truth, the DOM is a projection", and he answered THAT IS A DANGEROUS
+    SENTENCE. It is true in the direction it was written for and dangerous read as a general claim,
+    so it is annotated rather than rewritten. THE GRAPH IS THE TRUTH; THE MARKDOWN IS A VIEW OF IT.
+    The markdown is authoritative for the DELTA — the change — because a file carries no events, so
+    the only thing it can honestly assert is the difference between what it said and what it now
+    says. It is DERIVED for the state. Against the DOM this capability's version is exactly right
+    and nothing here weakens it; what it must not be read as is a licence for a write to assert the
+    whole file. That reading is live in the shipped app and is measured in
+    docs/implementation-artifacts/design-the-edit-is-a-safe-haven.md section 3.
   tier: foundational
   status: undeclared
 
@@ -569,7 +579,9 @@ capabilities:
     the one control that dismisses it is in the thumb's arc rather than in the top-right corner
     a one-handed grip cannot reach. Every target is at least 44px, stated once as `--touch`.
     WHAT IT DELIBERATELY DOES NOT DO IS WRITE. Every affordance the app offers has to be
-    expressible as an edit to the SOURCE STRING (see source-is-the-only-truth below), and
+    expressible as an edit to the SOURCE STRING (see every-affordance-writes-back-through-the-source
+    above — this read `source-is-the-only-truth`, an id no capability in this file has ever
+    carried; corrected 2026-07-31), and
     navigation is not an edit. The drawer chooses; it does not rename, move, create or delete a
     view, and it never reads the DOM to produce anything. `applyEdit` still knows exactly two
     operations after this capability landed, which is the check that it stayed navigation.
@@ -587,3 +599,109 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# PINNED TOP-LEVEL BY THE OPERATOR, 2026-07-31. Two capabilities, IN TENSION, and the tension is
+# the design — one says hold still, the other says keep moving. Both are declared here so the
+# distance is in the derived queue instead of in a conversation. The spec is
+# docs/implementation-artifacts/design-the-edit-is-a-safe-haven.md.
+#
+# THE PRINCIPLE UNDER BOTH, in the operator's own correction: THE GRAPH IS THE TRUTH, THE MARKDOWN
+# IS A VIEW OF IT. The markdown is authoritative for the DELTA and derived for the STATE, and the
+# cycle COMPUTES BEHAVIOUR — so a projection is a consequence, not a copy.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+- id: the-edit-is-a-safe-haven
+  intent: >-
+    THE LINE UNDER THE CURSOR IS HIS. The world may move around it — but not under it. What the
+    operator is typing is never overwritten, reordered or reflowed by something arriving from
+    elsewhere, and it is never silently discarded. His words for it: "delta focus — like a safe
+    haven."
+    THE SUBJECT IS THE DELTA, NOT THE FILE AND NOT THE VIEW, and getting that right is the whole
+    of the capability. A file nothing may rewrite is a file the engine cannot serve; a view
+    nothing may replace is the second capability refuted. The haven is the characters between the
+    cursor arriving on a line and leaving it — bounded, short-lived, ONE LINE WIDE, and the only
+    region in this app whose content is AUTHORED rather than DERIVED.
+    IT HAS FOUR LEVELS AND THEY FAIL DIFFERENTLY. FOCUS (that a line is open) is held outside the
+    file already. ANCHOR (which line is open) is held as a POSITIONAL INDEX, and an index is
+    meaningful only against the string it indexes. DELTA (what has been typed) lives in a DOM
+    element a repaint destroys. BASE (what the edit is computed against) is a closure captured at
+    paint time and posted whole, guarded by nothing.
+    TWO OF THE FOUR ALREADY EXIST AND WERE BUILT FOR ENTIRELY OTHER REASONS, which is why the
+    remaining work is one type change and one region of the painter rather than an arc.
+    `FocusSurface` holds the cursor as one number outside the source string
+    (app/present/focus.ts:50) because "a fact about the moment written into a file is a fact that
+    outlives the moment" — nothing to do with concurrency. `DraftSurface` holds an uncommitted new
+    line out of the file entirely (app/present/draft.ts:55-83) so that an abandoned line would need
+    no DELETE edit to undo it. That second one is already a working implementation of a region of
+    the screen the source string does not own; this capability asks for exactly one more, with the
+    same lifecycle.
+    NOTHING HERE ADDS AN EDIT KIND. `SourceEdit` stays the closed union of three
+    (app/present/source.ts:114) and keeping it closed is load-bearing. Every behaviour specified is
+    `set-line` or `insert-line` against a CORRECTLY CHOSEN BASE. The one case that would need a
+    fourth kind is the one the design refuses to specify (a vanished line re-inserting itself into
+    a view the cycle removed it from), and the refusal is the point.
+    EVIDENCE TIER — SPLIT PER LEVEL, AND NO PART OF IT IS FALSIFIABLE END TO END TODAY. FOCUS is
+    STRUCTURAL AND UNENFORCED: real, shipped, proven by tests/present-focus.test.mjs, and nothing
+    checks that it stays outside the file. ANCHOR is MEASURED WRONG, not assumed wrong — a
+    hermetic run against the shipped dist/present.js repaints a body from a projection with one
+    line inserted above the cursor, and the cursor lands on a heading with the typing gone. DELTA
+    and BASE are MEASURED ABSENT by the same run — the edited line missing from the new projection
+    paints zero editable rows, `FocusSurface` still reports the old index, and no refusal is
+    reported anywhere. So one level is real and unguarded, one is defective, two do not exist. It
+    becomes falsifiable when the first backlog row lands, and not before.
+  tier: foundational
+  rooting: >-
+    isolated FOR NOW, and deliberately rather than by omission. Three of the four levels would root
+    against classes that already exist — presentation-painting owns the repaint and the two
+    surfaces are inside the capture filter — but the fourth, BASE, is a property of the WRITE PATH,
+    which spans app/index.html (outside the capture filter, at the repo root), worker/src/app.js
+    and a graph server that is not in this repository. Rooting the capability through the painter
+    alone would describe the half that is already right and stay silent about the half that is
+    wrong. It roots when the write-safety row lands and the base becomes a value some module
+    computes rather than a closure some function captured.
+  status: undeclared
+- id: the-world-moves-around-you
+  intent: >-
+    THE SYSTEM COMPUTES BEHAVIOUR, SO THE PROJECTION SHOULD LIVE RATHER THAN WAIT TO BE FETCHED. A
+    cycle fires rules, so an edit can unlock a task, change a node three views away, or make
+    something appear that nobody typed — and those changes should ARRIVE. The operator's words:
+    "the world moving around you, like real life."
+    THIS IS NOT AUTO-REFRESH, and the distinction is the whole capability. Auto-refresh is a client
+    asking again on a timer. What this commits to is that a change the operator DID NOT TYPE
+    reaches his screen without him asking for it — which is the only way a computed consequence is
+    distinguishable from a coincidence. If he has to press refresh to see a rule fire, the rule did
+    not fire FOR HIM; it fired for the database.
+    TODAY EVERY INSTALL OF A PROJECTION IS THE CLIENT ASKING. `loadGraph` at boot and sign-in, the
+    refresh button, and the return of a write are the complete set (app/index.html:1284-1335,
+    :1156-1202). There is no transport by which the server can say anything to this app.
+    THE PAINTER HALF IS ALREADY BUILT, and it is the only part of this above zero. `paint(body,
+    source, context, deps)` empties the body and rebuilds the whole view from ONE STRING
+    (app/present/paint.ts:452, :537), which was done so the cascade would stay the only decider —
+    "a patch-one-element implementation would have to know which lines a focus change could
+    possibly affect, which is a second copy of the precedence order". The consequence nobody was
+    aiming for is that installing a new projection is already a one-argument operation: no diff to
+    compute, no DOM reconciler to write, no partial-update path that could be wrong. The world
+    moving is `repaint(newSource)`.
+    IT IS IN TENSION WITH `the-edit-is-a-safe-haven` AND THEY RESOLVE COMPLETELY RATHER THAN BY
+    COMPROMISE, because their subjects are disjoint. This one owns THE STATE — every line of the
+    view, derived, replaceable at any moment, never authoritative in the browser. That one owns THE
+    DELTA — the characters under the cursor, authored, authoritative, never derived. They looked
+    like a trade-off only because the app today conflates them by posting the whole state in order
+    to express one change.
+    IT MUST NOT SHIP BEFORE THE WRITE IS SAFE, and that ordering is a commitment rather than a
+    preference. A projection arriving unbidden into an app whose every save posts a whole file
+    computed against a stale base is a faster machine for discarding the cycle's own output. The
+    sequence is in design-the-edit-is-a-safe-haven.md section 10 and the reason is in section 3.4.
+    EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF, and it is not even partly true. There is no
+    push, no subscription, no server-sent anything, and the graph server's declared surface is
+    `GET /health`, `GET /graph` and `POST /cycle`. Nothing here can be falsified until a transport
+    exists, and no enforcer is claimed. It is declared so the distance sits in the derived queue
+    instead of in a conversation.
+  tier: foundational
+  rooting: >-
+    isolated — this capability is about a TRANSPORT that does not exist, on a server that is not in
+    this repository. The one thing it would route through in the browser is the painter, which
+    already has a class (presentation-painting) earned by a different capability; claiming it here
+    would root the half that is already built and say nothing about the half that is missing. It
+    roots when something outside this app can address it.
+  status: undeclared
