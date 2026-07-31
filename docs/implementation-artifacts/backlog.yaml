@@ -818,7 +818,50 @@ backlog:
     refusal rather than silence.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
-  state: diagnose-ready
+  record: >-
+    2026-07-31 — SHIPPED. BOTH FAILURES REPRODUCED FIRST on unmodified origin/main (f349b94),
+    against the shipped dist/present.js through tests/fixtures/dom-stub.mjs, from fixtures built out
+    of `~/qntm/this_week.md` (read-only). Cursor in `- [ ] Pay back per Darinz' plan said on 16th
+    May [[qntm:1232]] …`, index 5, characters typed into it. ARM 4 — a cycle inserts one line above
+    him; the one editable row afterwards holds `"## Overdue to Start"`, a HEADING, typing gone,
+    nothing reported. ARM 5 — his node leaves the view; ZERO editable rows painted,
+    `FocusSurface` still says 5, cursor nowhere, nothing reported.
+    WHAT SHIPPED. `app/present/anchor.ts` (new, pure, imports `classifyLine` + `qntmIdSpans` and
+    nothing else) holds `{stamp, text, section, takenAt}` and resolves it against any projection,
+    reporting WHICH RUNG ANSWERED — STAMP, STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION, or `absent`,
+    with `ANCHOR_TRUST` exporting the order. `FocusSurface` gained the anchor (set in the SAME call
+    as the index, so the two cannot disagree about where one cursor is) and `reanchor(source)`.
+    app/index.html's `paintView` — the one place a view is chosen or re-read from the server — asks
+    by identity instead of clamping an index, and says a refusal in the freshness line.
+    IDENTITY BEAT REBASING, AND THE DECIDING FACT WAS NOT ELEGANCE: a rebase needs the OLD source
+    string still in hand when the new one arrives, and `paintView` reads its markdown out of
+    `graphData`, which a fresh snapshot replaces wholesale before anything repaints. A rebase would
+    have had to make the browser retain a projection purely so it could diff it. Identity also
+    survives a move BETWEEN SECTIONS, which a diff sees as a delete plus an insert.
+    ONE CORRECTION TO THE ROW, ON MEASURED EVIDENCE FROM THE OPERATOR'S LIVE VAULT — A `[[qntm:N]]`
+    IS NOT UNIQUE WITHIN A VIEW. `~/qntm/this_week.md` prints THREE nodes twice each, as
+    byte-identical lines under two different headings: 6 of its 15 node lines. Taking the first
+    match would have put the cursor in the wrong printing of the right node across nearly half the
+    operator's current week, and refusing every duplicate would have refused there too. The heading
+    that opens the line's section is what tells the two printings apart, so each rung narrows by it
+    before giving up — which is why there are four rungs and not two.
+    AMBIGUITY IS A THIRD OUTCOME AND IS REFUSED, NOT GUESSED. One rule governs every rung — a rung
+    that finds NOTHING passes, a rung that finds TOO MANY stops. An ambiguous STAMP does not fall
+    through to TEXT: a node printed twice inside one section really is that node on both rows, and
+    picking by characters picks a PRINTING rather than a node.
+    THE BLANK-LINE AUTHORITY, DECIDED ONCE FOR ROWS 3 AND 4 AND FOR ANY LATER VISUAL RANGE — THE
+    ANCHOR IS A SOURCE LINE INDEX, NEVER A PAINTED-ROW ORDINAL. design-the-vim-cursor.md §3.4's
+    divergence is real but is not a second coordinate system: `paint.ts`'s `lastPaintedIndex` holds
+    the SOURCE index of the last line that got a row, so it is a filtered sample of the source
+    indices. Every writer already speaks source indices. A blank line, having no stamp and a text
+    every other blank line shares, gets NO anchor at all — `anchorFor` returns `null` and `reanchor`
+    reports `unanchored` rather than producing a tie nobody can break.
+    NO NEW EDIT KIND, NO NEW CONTRIBUTION, NO NEW LEVEL. `contextFor`/`FOCUSED` byte-unchanged,
+    `motions.ts` still imports nothing, `SourceEdit` still the closed union of three.
+    `npm run check`: 573 tests / 100 suites / 0 fail on origin/main before (verified), 601 / 105 / 0
+    fail after (+28/+5, 0 regressions). NOT VERIFIED IN A BROWSER and NO PROJECTION WAS OBSERVED
+    ARRIVING — every projection in the evidence is a second string in a test file.
+  state: passing
 - id: the-open-line-survives-a-new-projection
   title: >-
     [haven] [3] [HALF A DAY] THIS IS THE CAPABILITY. A repaint from a foreign projection must reuse
@@ -837,6 +880,17 @@ backlog:
     of three stands. Needs 1 and 2, provable with NO server change by repainting from a second
     fixture. FALSIFIER — type into a line, repaint from a projection that changed lines above and
     below it, assert the characters are untouched and the committed file carries both sides.
+    AMENDED 2026-07-31, AFTER ROW 2 LANDED — IT DID GET SMALLER, AND HERE IS EXACTLY HOW MUCH. The
+    index half is DONE and is not this row's work any more: `focus.reanchor(source)` returns the
+    line the cursor is in AFTER a projection lands, and app/index.html already calls it in the one
+    place a projection arrives. Three decisions this row would otherwise have had to make are also
+    made and written down — the anchor is a SOURCE LINE INDEX (not a painted-row ordinal), a blank
+    line gets NO anchor, and an ambiguous identity is refused rather than guessed. WHAT IS LEFT IS
+    THE DELTA AND NOTHING ELSE: hold `input.value` across a repaint, reuse the row rather than
+    rebuilding it from the new source, and let the base underneath it move. ONE OBLIGATION IT
+    GAINED, and it is small: the reading carries a TIER, and a row restored at `TEXT` is a weaker
+    claim than one restored at `STAMP` — `ANCHOR_TRUST` exports the order so this row can decide
+    what, if anything, it does differently for a weak restore rather than treating all four alike.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -862,6 +916,15 @@ backlog:
     IS ADDED FOR IT HERE. Needs 2, sequenced after 3 so it is a real case. FALSIFIER — repaint from
     a projection missing the edited line and assert the characters are recoverable and the
     freshness line says what happened.
+    AMENDED 2026-07-31, AFTER ROW 2 LANDED — HALF OF THIS ROW IS ALREADY DONE, AND IT IS THE HALF
+    THAT WAS SILENT. Detection and the sentence both ship: `focus.reanchor` returns `{outcome:
+    "absent"}` and app/index.html's `reportCursorReading` puts "the line you were on is not in this
+    view any more" in the freshness line, carried through `sayAsOf` so the "as of …" write that
+    every path makes one statement later cannot erase it. `reanchor` deliberately moves nothing and
+    clears nothing on a refusal, so the anchor and the index this row needs are still there to be
+    parked. WHAT IS LEFT is taking the orphaned row out of the reading column and keeping its
+    CHARACTERS where the operator can see and recover them — which needs the DELTA row 3 builds, so
+    the "sequenced after 3" note above is now a dependency rather than a preference.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
