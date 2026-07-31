@@ -586,6 +586,32 @@ capabilities:
     declares no flow for it, so `flow-trace verify .` (2026-07-31, exit 0, 29 PASS / 0 FAIL / 16
     INFO) says nothing about this row either way — its dynamic capture never calls this code. This
     is a real gap, not an oversight papered over: see the backlog row for what closing it needs.
+    SLICE 2 (2026-07-31): `a`, `o`/`O`, `x`, `{`/`}`, PLUS A VISIBLE MARK ON A SELECTED BLANK LINE.
+    Same rule, more gestures, none of them a `Contribution` either. `a` is entering INSERT with a
+    caret hint (`"end"`), a parameter of `enterInsert` rather than a second method. `o`/`O` are the
+    keyboard path to the draft affordance Enter's mid-edit "open below" already used —
+    `app/present/newline.ts`'s `openLine` is now the ONE function both call, not two
+    implementations of "ask `seedFor`, obey the refusal". `x` reuses `applyEdit`'s existing
+    `set-checkbox` case (source.ts); it does not add a write path. `{`/`}` are the one gesture this
+    module could not decide alone — finding a boundary needs `classifyLine` (resolution.ts), and
+    importing that into `motions.ts` would end the "imports nothing" fact the rest of this
+    capability's argument leans on — so a NEW pure module, `app/present/boundary.ts`, imports
+    `classifyLine` and answers "which line", while `ModeSurface` still reports only a direction and
+    a count. `ModeSurface` itself still imports nothing. A structural boundary is defined here as a
+    HEADING LINE — the same boundary `newline.ts` already uses to bound a section — not a blank
+    line, because the operator's own content is task-list-heavy and blank-line-sparse.
+    A LATENT DEFECT WAS FOUND AND FIXED ALONG THE WAY, NOT INTRODUCED BY THIS SLICE. Wiring a real
+    `DraftSurface` alongside `ModeSurface` in a test for the first time (slice 1's own suites never
+    combined them) surfaced that `app/index.html`'s `repaintCurrentView` unconditionally coerced a
+    `null` focus back to line 0 on every repaint — which is right on a view's first paint and wrong
+    on every one after, because it silently undid `o`/`O`'s deliberate `focus.blur()` and reopened a
+    SECOND `<input>` on the line the cursor had just left. The coercion now lives once, in
+    `paintView`, on the way into a view; `repaintCurrentView` clamps whatever `focus.lineIndex`
+    currently is and leaves a deliberate `null` alone. `app/present/paint.ts`'s `draftInput` also
+    gained a `returnToVim` step (gated on `deps.mode !== undefined`, so click-to-edit callers with
+    no `ModeSurface` are untouched): once a draft settles or is abandoned, `mode.enterNormal()` and
+    `focus.focus(...)` hand the cursor back, or `mode` would be left stuck INSERT with no `<input>`
+    open at all and NORMAL's own keydown handler would never re-engage.
   tier: functional
   rooting: >-
     isolated. `ModeSurface` is a new class with no caller inside app/present/ itself; `paint.ts`

@@ -137,3 +137,78 @@ describe("vim, wired through app/index.html's own script", () => {
     assert.equal(page.__vimMode(), "NORMAL", "a stray INSERT survived a view (re)paint");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// SLICE 2 — a, o/O, x, { and }, through the same real document-level wiring.
+//
+// WHAT IS DELIBERATELY NOT EXERCISED HERE: `x`'s actual checkbox toggle, which — through the real
+// page — ends in an async `POST /app/edit-file` via `commitLine`. `graphData` is module-scoped
+// page state shared across every test in this file (there is no per-test reset), and the shared
+// `fetch` stub in `before()` returns `{ ok: true }` with no `snapshot`, so letting a real commit
+// resolve would either throw inside `commitLine` or overwrite `graphData` with a shape later tests
+// do not expect. tests/present-motions.test.mjs's section 15 already proves the computation `x`
+// hands to `commitLine` (`classifyLine` finds the checkbox, `applyEdit` flips it, the markdown is
+// right) at the paint.ts wiring layer; what is left unverified is the network round trip itself —
+// stated plainly, not silently skipped.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("a opens INSERT with the caret at the end of the line, through the real page", () => {
+  test("the caret lands at the end of the exact source line", () => {
+    paintFresh();
+    press("j"); // select line 1 — "- [ ] first task…"
+    press("a");
+    assert.equal(page.__vimMode(), "INSERT");
+    const line = inputs(elements.get("viewBody"))[0];
+    assert.ok(line, "a did not open an editable line through the page's own wiring");
+    const text = VIEW.markdown.split("\n")[1];
+    assert.equal(line.value, text);
+    assert.equal(line.selectionStart, text.length, "the caret was not placed at the end of the line");
+    assert.equal(line.selectionEnd, text.length);
+  });
+});
+
+describe("o / O open a new line through the real page's own wiring", () => {
+  test("o opens a draft below the selected line and enters INSERT", () => {
+    paintFresh();
+    press("j"); // select line 1
+    press("o");
+    assert.equal(page.__vimMode(), "INSERT");
+    const body = elements.get("viewBody");
+    assert.equal(inputs(body).length, 1, "more than one row is editable at once");
+    assert.equal(inputs(body)[0].value, "- [ ] ", "the seed was not the bare unchecked checkbox chrome");
+    assert.equal(inputs(body)[0].focused, true, "the cursor did not land in the new line");
+  });
+
+  test("O opens a draft above the selected line and enters INSERT", () => {
+    paintFresh();
+    press("j");
+    press("j"); // select line 2
+    press("O");
+    assert.equal(page.__vimMode(), "INSERT");
+    assert.equal(inputs(elements.get("viewBody")).length, 1);
+  });
+});
+
+describe("x through the real page's own wiring", () => {
+  test("x on a line with no checkbox does nothing — no network call, no mode or selection change", () => {
+    paintFresh(); // lands on line 0, "# This Week" — a heading, not a checkbox
+    press("x");
+    assert.equal(page.__vimMode(), "NORMAL");
+    assert.equal(page.__focusIndex(), 0, "x moved the selection, which it must never do");
+  });
+});
+
+describe("{ and } through the real page's own wiring", () => {
+  test("} falls through to the last line — VIEW has exactly one heading, at line 0", () => {
+    paintFresh();
+    press("}");
+    assert.equal(page.__focusIndex(), VIEW.markdown.split("\n").length - 1);
+  });
+
+  test("{ from the last line returns to the only heading, line 0", () => {
+    paintFresh();
+    press("G");
+    press("{");
+    assert.equal(page.__focusIndex(), 0);
+  });
+});

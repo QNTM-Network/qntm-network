@@ -71,6 +71,7 @@
 
 import { chromeOf, classifyLine } from "./resolution.js";
 import type { PresentationLevel } from "./levels.js";
+import type { DraftSurface } from "./draft.js";
 
 /** A new line's opening characters, and the rung of the cascade that decided them. */
 export interface NewLine {
@@ -142,4 +143,32 @@ export function seedFor(source: string, lineIndex: number): NewLine | null {
   //    node in it looks like. See the header: both available guesses cost the operator something
   //    and one of them aborts his cycle.
   return null;
+}
+
+/**
+ * Ask for a line at `lineIndex`, resolved against `from`, and open it in `draft` if the cascade has
+ * an answer. Returns whether one was opened.
+ *
+ * THE ONE PLACE "ASK `seedFor`, THEN OBEY THE REFUSAL" IS WRITTEN — vim's slice 2 adds a SECOND
+ * caller of this exact sequence (`o`/`O`, fired from app/index.html's keydown handler with no line
+ * being committed at all) beside the one that already existed (Enter, mid-commit, inside
+ * `paint.ts`'s `rawInput`). Two callers and one function is what keeps GLOBAL's refusal — guessing
+ * costs the operator either a lost line or an aborted cycle, see the header above — a property of
+ * every caller rather than a rule each one has to remember to re-implement. `paint.ts`'s own
+ * `openLineAt` is now a two-line wrapper around this that adds only the `draft`/`focus` optionality
+ * `PaintDeps` carries; nothing here duplicates it.
+ */
+export function openLine(
+  from: string,
+  lineIndex: number,
+  draft: DraftSurface,
+  onDeclined?: (lineIndex: number) => void,
+): boolean {
+  const seed = seedFor(from, lineIndex);
+  if (seed === null) {
+    onDeclined?.(lineIndex);
+    return false;
+  }
+  draft.open(lineIndex, seed.text);
+  return true;
 }

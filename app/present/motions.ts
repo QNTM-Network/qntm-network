@@ -41,6 +41,57 @@
  * drawn above: MODE (the cascade rung) stays silent, exactly as `levels.ts` still says of every
  * rung today, and this module is the reason it gets to go on saying that truthfully.
  *
+ * ── SLICE 2 (2026-07-31): `a`, `o`/`O`, `x`, `{`/`}` — SAME RULE, MORE GESTURES ──
+ *
+ * None of these produce a `Contribution` either, for the same reason the first five did not — they
+ * decide which keys are live and how the selected line is embodied, never how a line RENDERS.
+ *
+ *   `a` — INSERT with the caret at the END of the line, as a PARAMETER of entering INSERT rather
+ *   than a second code path. `enterInsert` takes an optional `caret` and `i`/Enter simply do not
+ *   pass one — same method, same effect KIND (`"enter-insert"`), one field apart.
+ *
+ *   `o`/`O` — open a new line below/above and enter INSERT on it. This module does not know what a
+ *   new line IS (that is `seedFor`/`DraftSurface`, which this module still does not import), so it
+ *   reports the DIRECTION and leaves opening it to the caller — the same split `move` already has
+ *   between "which line" (decided here) and "what happens to it" (decided by `paint.ts`/the DOM
+ *   wiring). See `newline.ts`'s `openLine`, the ONE function both Enter's mid-edit "open below" and
+ *   this key now call — not a parallel implementation.
+ *
+ *   `x` — toggle done on the selected line, reusing `applyEdit`'s existing `set-checkbox` case
+ *   (source.ts) rather than a new one. This module does not know whether the selected line HAS a
+ *   checkbox either — that needs `classifyLine`, which is `resolution.ts`, which this module still
+ *   does not import — so it reports the intent and the caller (which already has the source string)
+ *   decides whether there is anything to toggle. CHOSEN OVER `Alt+D` (the operator's own Obsidian
+ *   binding, research-polish-direction.md §5): `Alt`+letter is not reliably `e.key === "d"` across
+ *   platforms — macOS turns Option+D into `"∂"` at the DOM layer, not `"d"` plus a modifier flag —
+ *   and a binding that silently fails to fire on the operator's own OS, with no test able to catch
+ *   it (this suite's stubs do not model real key composition), is worse than one that works
+ *   everywhere. `x` is vim's own "act on what is under the cursor," repurposed from a character to
+ *   a line the way every other binding here already repurposes column arithmetic into line
+ *   arithmetic — and it costs nothing across platforms.
+ *
+ *   `{`/`}` — move to the previous/next structural boundary. THIS is the one gesture whose target
+ *   line this module genuinely cannot compute: finding a boundary needs `classifyLine`
+ *   (resolution.ts), and importing that here would be importing the SAME module the whole "not a
+ *   Contribution" argument above turns on staying clear of. So `{`/`}` report a DIRECTION and a
+ *   COUNT — the count-prefix arithmetic stays here, with every other motion's — and `boundary.ts`
+ *   (a new, separate, pure module) answers "which line" from the source lines the DOM wiring
+ *   already has. `ModeSurface` still imports nothing; `boundary.ts` imports `classifyLine` and
+ *   nothing else, and is not this file.
+ *
+ * COUNT COMPOSITION, DECIDED PER KEY, NOT ONCE FOR ALL OF THEM. `j`/`k`/`G`/`{`/`}` are motions —
+ * repeating one is well-defined and vim does it, so a pending count multiplies them exactly as it
+ * always has. `i`/Enter/`a` enter INSERT once regardless of a pending count: vim's own repeat-on-
+ * insert only takes effect on the LATER `Escape` (replay the typed text N times), which this
+ * module does not implement, so a count in front of `i`/Enter/`a` has no observable difference from
+ * its absence and discarding it silently is not confusing anyone — the app enters INSERT once
+ * either way, exactly what `i`/Enter already did before this slice. `o`/`O`/`x` are the opposite
+ * case: a count WOULD obviously change what they do (open N lines; nothing well-defined for
+ * "toggle done 3 times"), the brief is explicit that repeating an OPEN is a much bigger write than
+ * repeating a MOVE, and that write is not attempted here — so a pending count in front of `o`/`O`/`x`
+ * makes them consumed-but-inert (`handled: true`, `effect: {kind: "none"}`) rather than silently
+ * doing the un-counted version and leaving the operator to notice the count was ignored.
+ *
  * ── WHAT THIS MODULE ACTUALLY OWNS ──
  *
  *   1. `Mode` — `"NORMAL"` (no `<input>` is open; the selected line is a LINE SELECTION, not a
@@ -50,8 +101,10 @@
  *      exactly as vim's own `j`/`k` refuse to leave the buffer.
  *   3. `ModeSurface.handleKey` — one NORMAL-mode keystroke in, one outcome out: whether it was
  *      recognised (so the caller knows whether to `preventDefault`), and what happened (move the
- *      selection, or start editing). It owns the count-prefix digits and the two-key `gg` binding;
- *      the caller owns nothing but applying the outcome to `FocusSurface` and repainting.
+ *      selection, start editing, ask for a new line, ask for a checkbox toggle, or ask for a
+ *      boundary jump). It owns the count-prefix digits and the two-key `gg` binding; the caller
+ *      owns applying the outcome to `FocusSurface`/`DraftSurface`/`applyEdit` and repainting —
+ *      never re-deciding anything this module already decided.
  */
 
 /** NORMAL: a line selection, no `<input>` open. INSERT: an `<input>` holds the line's characters. */
@@ -74,7 +127,29 @@ export function clampLine(index: number, lastIndex: number): number {
 export type NormalEffect =
   | { readonly kind: "none" }
   | { readonly kind: "move"; readonly lineIndex: number }
-  | { readonly kind: "enter-insert" };
+  /**
+   * `caret` is a PARAMETER of entering INSERT, not a second effect kind — `i`/Enter omit it
+   * (unspecified caret, exactly what they did before this field existed) and `a` sets `"end"`.
+   */
+  | { readonly kind: "enter-insert"; readonly caret?: "end" }
+  /**
+   * `o`/`O` asked for a new line. This module does not know what a new line IS — that is
+   * `seedFor`/`DraftSurface` (newline.ts), which stays unimported here — so it reports only WHERE:
+   * `"below"` the selected line or `"above"` it. The caller opens it, exactly the split `move`
+   * already draws between "which line" (here) and "what that means" (the caller).
+   */
+  | { readonly kind: "open"; readonly direction: "above" | "below" }
+  /** `x` asked to toggle done on the selected line. Whether it HAS a checkbox is the caller's to
+   * decide — this module does not import `resolution.ts`'s `classifyLine` either. */
+  | { readonly kind: "toggle-done" }
+  /**
+   * `{`/`}` asked for the boundary `count` jumps away, in `direction`. This module cannot compute
+   * WHICH LINE that is — that needs `classifyLine` (resolution.ts) over the actual source lines,
+   * which this module has never had and still does not import — so it reports direction and count,
+   * the same count-prefix arithmetic every other motion already shares, and leaves "which line" to
+   * `boundary.ts`, a separate pure module the caller consults.
+   */
+  | { readonly kind: "boundary"; readonly direction: "prev" | "next"; readonly count: number };
 
 /** One keystroke's outcome: whether it was consumed, and what it did. */
 export interface NormalKeyOutcome {
@@ -95,6 +170,7 @@ export class ModeSurface {
   #mode: Mode = "NORMAL";
   #count = "";
   #pendingG = false;
+  #caretHint: "end" | undefined = undefined;
 
   get mode(): Mode {
     return this.#mode;
@@ -102,13 +178,33 @@ export class ModeSurface {
 
   /**
    * Start editing — an `<input>` is about to hold the selected line's characters. Called by
-   * `handleKey` for `i`/`Enter`, and by the DOM wiring for a mouse click, which has meant "edit
+   * `handleKey` for `i`/`Enter`/`a`, and by the DOM wiring for a mouse click, which has meant "edit
    * this line" since before this module existed and goes on meaning it.
+   *
+   * `caret` IS THE PARAMETER `a` NEEDED, NOT A SECOND METHOD. `i`/Enter/a mouse click all pass
+   * nothing (unspecified — the `<input>` gets whatever position it always got, undisturbed) and
+   * `a` passes `"end"`. See `takeCaretHint` for how the painter reads it back.
    */
-  enterInsert(): void {
+  enterInsert(caret?: "end"): void {
     this.#mode = "INSERT";
+    this.#caretHint = caret;
     this.#count = "";
     this.#pendingG = false;
+  }
+
+  /**
+   * The caret hint set by the last `enterInsert`, consumed once and cleared.
+   *
+   * CONSUMED RATHER THAN JUST READ, so a later repaint of the SAME INSERT session (there is none
+   * today — nothing repaints an open `<input>` while it holds focus — but the consume-once shape is
+   * what stops one arriving unnoticed and re-applying a stale "jump to the end" over wherever the
+   * operator has since moved the caret by hand) cannot reapply it. The painter calls this exactly
+   * once, at the moment it builds the `<input>` the hint was for.
+   */
+  takeCaretHint(): "end" | undefined {
+    const hint = this.#caretHint;
+    this.#caretHint = undefined;
+    return hint;
   }
 
   /**
@@ -119,6 +215,7 @@ export class ModeSurface {
    */
   enterNormal(): void {
     this.#mode = "NORMAL";
+    this.#caretHint = undefined;
     this.#count = "";
     this.#pendingG = false;
   }
@@ -196,13 +293,40 @@ export class ModeSurface {
       case "Enter":
         this.enterInsert();
         return { handled: true, effect: { kind: "enter-insert" } };
+      case "a":
+        // A PENDING COUNT IS DISCARDED, NOT REFUSED. See the header: `i`/Enter/`a` enter INSERT
+        // once regardless of a count, because the count's only vim meaning (repeat the typed text
+        // on Escape) is not implemented, so there is no counted behaviour a bare `a` could be
+        // mistaken for skipping.
+        this.enterInsert("end");
+        return { handled: true, effect: { kind: "enter-insert", caret: "end" } };
+      case "o":
+        if (pending !== null) {
+          // A COUNT IS REFUSED, NOT DISCARDED. Unlike `a` above, `3o` has an obvious counted
+          // meaning (open three lines) that this module does not implement, so acting on the
+          // un-counted version would silently do something other than what was asked. See header.
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "open", direction: "below" } };
+      case "O":
+        if (pending !== null) {
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "open", direction: "above" } };
+      case "x":
+        if (pending !== null) {
+          // Same refusal as `o`/`O`: "toggle done three times" has no well-defined meaning, so a
+          // count in front of `x` is consumed and does nothing rather than toggling once anyway.
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "toggle-done" } };
+      case "{":
+        // A MOTION LIKE EVERY OTHER ONE — the count composes exactly as `j`/`k`/`G`'s already do.
+        // `boundaryLine` (boundary.ts) decides which line; this only decides direction and count.
+        return { handled: true, effect: { kind: "boundary", direction: "prev", count: pending ?? 1 } };
+      case "}":
+        return { handled: true, effect: { kind: "boundary", direction: "next", count: pending ?? 1 } };
       default:
-        // Unbound, INCLUDING `a` — the brief allows entering INSERT with the caret at end-of-line
-        // "if it falls out cheaply, otherwise skip it". Threading a caret-position preference
-        // through to the `<input>` paint.ts creates on the next repaint is not cheap: `raw()`'s
-        // autofocus has no such parameter today, and adding one is a real change to a function
-        // that also serves plain click-to-edit. Skipped, so `a` is left unbound rather than
-        // shipped as a false synonym for `i`.
         return { handled: false, effect: { kind: "none" } };
     }
   }

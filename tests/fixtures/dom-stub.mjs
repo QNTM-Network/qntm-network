@@ -89,6 +89,12 @@ class StubElement {
   focus() {
     this.focused = true;
   }
+
+  /** Where the caret landed. Recorded rather than simulated, same posture as `focus()` above. */
+  setSelectionRange(start, end) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
 }
 
 /** An event carrying only what the painter's handlers touch. */

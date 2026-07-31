@@ -215,6 +215,12 @@ export function installBrowser() {
       this.focused = true;
       focused.value = this;
     },
+    // Where the caret landed. Recorded rather than simulated, same posture as `focus()` above —
+    // `a`'s "caret at end of line" is otherwise unobservable through this stub.
+    setSelectionRange(start, end) {
+      this.selectionStart = start;
+      this.selectionEnd = end;
+    },
     append(...nodes) {
       this.children.push(...nodes);
     },

@@ -812,6 +812,10 @@ import MarkdownIt from "https://esm.sh/markdown-it@14";
 // resolve to /app/dist/present.js and 404.
 import {
   paint,
+  applyEdit,
+  boundaryLine,
+  classifyLine,
+  openLine,
   DraftSurface,
   FocusSurface,
   ModeSurface,
@@ -1167,11 +1171,20 @@ function paintView(id) {
   // file nobody was looking at.
   draftLine.drop();
   // AND A SELECTION BELONGS TO THE VIEW IT WAS MADE IN, FOR THE SAME REASON. `mode.enterNormal()`
-  // does not touch `focus.lineIndex` (see motions.ts) — `repaintCurrentView` below is what clamps
-  // it into the new view's line count — but INSERT specifically must not survive a view change: an
-  // `<input>` left open on a line that belongs to a file nobody is looking at is exactly the "row
-  // leaking across a view change" the draft comment above already refuses.
+  // does not touch `focus.lineIndex` (see motions.ts) — but INSERT specifically must not survive a
+  // view change: an `<input>` left open on a line that belongs to a file nobody is looking at is
+  // exactly the "row leaking across a view change" the draft comment above already refuses.
   mode.enterNormal();
+  // THE SELECTION IS SEEDED TO A REAL LINE HERE, ONCE, ON ENTERING A VIEW — not on every repaint.
+  // `focus.lineIndex` starts `null` (no vim wiring has ever set it) and this is what lands it on
+  // line 0 the first time a view with vim wired paints; after that it is whatever `j`/`k`/`gg`/`G`
+  // left it at, clamped so a shorter view cannot leave it pointing past the last line.
+  // `repaintCurrentView` below does NOT repeat this coercion — see its own comment for why a
+  // deliberately blurred focus (`o`/`O` opening a draft) has to survive the repaints in between.
+  const entering = graphData?.snapshot?.views.find((x) => x.id === id);
+  if (entering !== undefined) {
+    focus.focus(clampLine(focus.lineIndex ?? 0, Math.max(0, entering.markdown.split("\n").length - 1)));
+  }
   repaintCurrentView();
 }
 
@@ -1183,6 +1196,16 @@ function paintView(id) {
  * changed) but must NOT drop the draft or force NORMAL — `mode.handleKey` already decided the
  * mode for this keystroke, and calling `paintView` from the keydown handler would immediately
  * undo an `i` by resetting straight back to NORMAL before the `<input>` it just opened ever drew.
+ *
+ * IT DOES NOT COERCE A `null` FOCUS BACK TO A NUMBER, AND THAT IS A SLICE-2 CORRECTION. It used to
+ * — `focus.focus(clampLine(focus.lineIndex ?? 0, lastIndex))`, unconditionally, on every call. That
+ * is right the FIRST time a view paints (`paintView` above now does exactly that, once, on the way
+ * in) and wrong on every call after: `o`/`O` blur `focus` on purpose before opening a draft, so the
+ * line the cursor was just on does not ALSO turn into an `<input>` the instant `mode.enterInsert()`
+ * makes every FOCUSED line raw (paint.ts's `focusLive` gate) — and the unconditional `?? 0` was
+ * undoing that blur on the very next repaint, landing the selection back on line 0 and reopening a
+ * second `<input>` there. Measured with tests/app-vim-wiring.test.mjs before this fix: `o` left TWO
+ * editable rows open at once.
  */
 function repaintCurrentView() {
   const v = graphData?.snapshot?.views.find((x) => x.id === currentViewId);
@@ -1190,12 +1213,12 @@ function repaintCurrentView() {
   body.innerHTML = "";
   updateVimBadge();
   if (!v) return;
-  // THE SELECTION IS CLAMPED TO THIS VIEW'S OWN LINE COUNT, every time — a view switch, a
-  // projection arriving after an edit, all of it. `focus.lineIndex` starts `null` (no vim
-  // wiring has ever set it) and lands on line 0 the first time a view with vim wired paints;
-  // after that it is whatever `j`/`k`/`gg`/`G` left it at, clamped so a shorter view cannot leave
-  // it pointing past the last line.
-  focus.focus(clampLine(focus.lineIndex ?? 0, Math.max(0, v.markdown.split("\n").length - 1)));
+  // Clamp whatever `focus.lineIndex` currently IS — but only if it is a real number. `null` means
+  // "no real line should read as focused right now" (set deliberately by `o`/`O`, or by never
+  // having painted a view with vim wired at all) and is left alone rather than guessed back to 0.
+  if (focus.lineIndex !== null) {
+    focus.focus(clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)));
+  }
   paint(body, v.markdown, presentation, {
     markdown: md,
     focus,
@@ -1213,11 +1236,19 @@ function repaintCurrentView() {
     // it looks like. Guessing costs the operator either a lost line or — measured against the
     // engine's own starter bundle — an aborted cycle, so nothing is written. The sentence goes in
     // the freshness line, which is where this page already says what just happened.
-    onNewLineDeclined: () => {
-      $("freshness").textContent =
-        "no line here yet — this view has nothing in it to say what a new line should be";
-    },
+    onNewLineDeclined: declineNewLine,
   });
+}
+
+/**
+ * A new line was asked for and declined — always the GLOBAL rung (see `openLine`/`seedFor`'s own
+ * comments for why). ONE SENTENCE, NAMED ONCE, because `repaintCurrentView`'s `onNewLineDeclined`
+ * (a click below the last row) and the vim `o`/`O` handling below it are now two callers of
+ * `openLine` and would otherwise be two places this exact message could drift apart.
+ */
+function declineNewLine() {
+  $("freshness").textContent =
+    "no line here yet — this view has nothing in it to say what a new line should be";
 }
 
 /** The one small indicator brief §"Visible state" asks for — NORMAL or INSERT, nothing else. */
@@ -1591,13 +1622,64 @@ document.addEventListener("keydown", (e) => {
     if (!outcome.handled) return;
     e.preventDefault();
     // THE PAINTER STILL DOES NOT DECIDE. `mode.handleKey` is the one place a keystroke becomes a
-    // line index or a mode change (app/present/motions.ts); this is the thin DOM wiring the brief
-    // asks for — apply the outcome, repaint. `repaintCurrentView`, not `paintView`: the latter
-    // forces NORMAL on the way in, which would undo an `i` before its <input> ever drew.
-    if (outcome.effect.kind === "move") {
-      focus.focus(outcome.effect.lineIndex);
+    // line index, a mode change, a new-line request or a checkbox toggle (app/present/motions.ts);
+    // this is the thin DOM wiring the brief asks for — apply the outcome, repaint.
+    // `repaintCurrentView`, not `paintView`: the latter forces NORMAL on the way in, which would
+    // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
+    const effect = outcome.effect;
+    if (effect.kind === "move") {
+      focus.focus(effect.lineIndex);
+      repaintCurrentView();
+    } else if (effect.kind === "boundary") {
+      // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)
+      // is the one place "which line is that" is answered, from the SAME source string, never a
+      // second opinion parsed here.
+      focus.focus(boundaryLine(v.markdown.split("\n"), current, effect.direction, effect.count));
+      repaintCurrentView();
+    } else if (effect.kind === "open") {
+      // `o`/`O` — `openLine` is the SAME function Enter's mid-edit "open a line below" already
+      // calls (app/present/paint.ts's `openLineAt`), not a parallel implementation. It opens
+      // BELOW the selected line (`current + 1`) or AT it (`current`, pushing the selected line's
+      // own content down) — `applyEdit`'s `insert-line` convention, unchanged from Enter's.
+      const targetIndex = effect.direction === "below" ? current + 1 : current;
+      const opened = openLine(v.markdown, targetIndex, draftLine, declineNewLine);
+      if (opened) {
+        // BLUR BEFORE INSERT. The draft row focuses itself unconditionally (paint.ts's
+        // `paintDraft`, no cascade or mode check at all), so `focus` is not what puts the cursor
+        // in it — but `focus.lineIndex` is still the line `o`/`O` was pressed on, and the instant
+        // `mode.enterInsert()` makes every FOCUSED line raw, that line would ALSO become an
+        // `<input>` if focus still pointed at it. Blurring is what leaves exactly one row
+        // editable; `draftInput`'s own `returnToVim` (paint.ts) hands the cursor back once this
+        // row settles or is abandoned.
+        focus.blur();
+        mode.enterInsert();
+      }
+      repaintCurrentView();
+    } else if (effect.kind === "toggle-done") {
+      // `x` — reuses `applyEdit`'s existing `set-checkbox` case (source.ts) and posts through the
+      // SAME write path a mouse click on the box already uses (`commitLine`, below). If the
+      // selected line has no checkbox, `classifyLine` says so and nothing happens — no repaint, no
+      // POST, exactly the brief's own rule for this key.
+      const line = v.markdown.split("\n")[current] ?? "";
+      const shape = classifyLine(line);
+      if (shape.kind === "checkbox") {
+        const markdown = applyEdit(v.markdown, {
+          kind: "set-checkbox",
+          lineIndex: current,
+          checked: !shape.done,
+        });
+        if (markdown !== null) {
+          commitLine(v, { lineIndex: current, text: line, markdown });
+        }
+      }
+    } else {
+      // "none" (a bare digit accumulating a count, or a refused `o`/`O`/`x` under a pending count)
+      // or "enter-insert" (`i`/Enter/`a` — the mode itself already changed inside `handleKey`).
+      // Repainting on "none" is a no-op repaint rather than a special case: it is what this
+      // handler already did for every handled key before this slice, and a digit press or a
+      // refused `3o` changes nothing a repaint would show differently.
+      repaintCurrentView();
     }
-    repaintCurrentView();
   }
 });
 $("captureBox").addEventListener("keydown", async (e) => {

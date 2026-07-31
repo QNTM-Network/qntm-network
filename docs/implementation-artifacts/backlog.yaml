@@ -346,6 +346,86 @@ backlog:
     changed is that a fresh view is no longer keyboard-inert.'
   kind: capability
   state: passing
+- id: vim-normal-mode-slice-2
+  title: '[present] [vim] Five more NORMAL-mode gestures over the operator''s own
+    evidence base (research-polish-direction.md §5): `a` (INSERT with the caret at
+    end of line), `o`/`O` (open a line below/above and enter INSERT on it), `x`
+    (toggle done on the selected line), `{`/`}` (jump to the previous/next heading,
+    with a count), and a visible mark on a selected BLANK line, which slice 1
+    reported as a gap rather than shipped. Same rule as slice 1 — none of these
+    produce a `Contribution`; the cascade''s MODE rung stays silent.'
+  driving_capability: vim-normal-mode-is-a-gesture-not-a-resolution
+  record: '2026-07-31 — SHIPPED, all five, with scope kept deliberately narrow on
+    two of them (see CUT, below). `a`: `ModeSurface.enterInsert` takes an optional
+    `caret` (`"end"` for `a`,
+    unset for `i`/Enter/click, unchanged); `app/present/paint.ts`''s `raw()`
+    calls `mode.takeCaretHint()` (consume-once) and `setSelectionRange` after
+    focus. Distinguished from `i` by an OBSERVABLE caret offset in both
+    tests/present-motions.test.mjs and tests/app-vim-wiring.test.mjs — not
+    claimed on assertion. `o`/`O`: `app/present/newline.ts` gained `openLine`,
+    extracted from `paint.ts`''s own `openLineAt` closure so Enter''s mid-edit
+    "open below" and the new keyboard path are ONE function, not two. `x`:
+    reuses `applyEdit`''s `set-checkbox` case unchanged; posts through the same
+    `commitLine` write path a checkbox click already uses. CHOSE `x` OVER THE
+    OPERATOR''S OWN `Alt+D` (Obsidian) — macOS turns Option+D into `"∂"` at the
+    DOM layer, not `e.key === "d"` plus a modifier flag, and a binding that
+    silently fails on the operator''s own OS with no test able to catch it is
+    worse than a plain key that works everywhere. `{`/`}`: a NEW pure module,
+    `app/present/boundary.ts` (`boundaryLine`), because finding a boundary
+    needs `classifyLine` (resolution.ts) and `motions.ts` still imports
+    nothing at all — `ModeSurface` reports only a direction and a count, the
+    caller (or `boundaryLine` directly) decides which line. A structural
+    boundary is defined as a HEADING LINE, stated in boundary.ts''s own header,
+    reusing the same boundary `newline.ts` already treats a section as bounded
+    by, rather than a blank line (the operator''s content is task-list-heavy
+    and blank-line-sparse — the shipped test fixture has none at all).
+    COUNT COMPOSITION DECIDED PER KEY, NOT ONCE: `{`/`}` compose fully
+    (`3}`, same as `j`/`k`/`G`). `i`/Enter/`a` silently discard a pending
+    count — entering INSERT is the same single act either way, since the
+    repeat-on-Escape vim itself would do is not implemented. `o`/`O`/`x`
+    REFUSE under a pending count (`handled: true`, `effect: {kind: "none"}`)
+    rather than silently doing the un-counted version, because a count in
+    front of them has an obvious different meaning this change does not
+    implement.
+    A LATENT DEFECT FOUND AND FIXED, NOT INTRODUCED HERE: wiring a real
+    `DraftSurface` alongside `ModeSurface` in a test for the first time
+    (slice 1 never combined them) surfaced that app/index.html''s
+    `repaintCurrentView` unconditionally coerced a `null` focus back to line
+    0 on every repaint, which undid `o`/`O`''s deliberate `focus.blur()` and
+    opened a SECOND `<input>` on the line the cursor had just left. Fixed by
+    moving the "seed to line 0" coercion into `paintView` (once, entering a
+    view) and having `repaintCurrentView` clamp whatever `focus.lineIndex`
+    currently is rather than guessing null back to a number.
+    `draftInput` (paint.ts) gained a `returnToVim` step, gated on
+    `deps.mode !== undefined` so callers with no `ModeSurface` (every test
+    written before vim existed, verified untouched — tests/present-newline.test.mjs
+    is 30/30 green with no assertion changed) are unaffected — otherwise a
+    draft settling or being abandoned left `mode` stuck INSERT with no
+    `<input>` open anywhere and NORMAL''s keydown handler never re-engaged.
+    CUT: nothing was cut outright, but scope was kept narrow — `{`/`}` do not
+    treat a blank line as a boundary (stated as a decision, not an oversight),
+    and the blank-line selection mark draws an EMPTY row only when that exact
+    line is selected, never unconditionally for every blank line (which would
+    collide with rendering blank source lines as blank rows generally, a
+    separate and larger affordance this change does not attempt).
+    PROOF: 50 new tests (tests/present-motions.test.mjs sections 6-8, 8b,
+    13-17; tests/app-vim-wiring.test.mjs, five new describe blocks) plus two
+    existing tests updated because they now describe true things falsely (`x`
+    was the unbound-key example and is now bound; `a` was asserted unbound
+    and now is). `npm run check`: 443/443, 87 suites, 0 fail (base 393/74,
+    +50/+13, 0 regressions). `flow-trace verify .` (2026-07-31): exit 0, 38
+    PASS / 0 FAIL / 10 INFO — INFO includes "observed but not declared" for
+    `newline.openLine` and `draft.DraftSurface.open`, the same shape of gap
+    slice 1''s own record names for `ModeSurface`: no `tests/flow_scenarios/*.ts`
+    scenario drives vim yet, so this says nothing about slice 2 either way.
+    NOT VERIFIED IN A REAL BROWSER — no server, no passkey session an agent
+    can complete. NOT VERIFIED: a real key event''s modifier/composition
+    behaviour (the reason `Alt+D` was rejected rests on documented macOS
+    behaviour, not a test — no tool here can drive a real keyboard). This
+    repo is instrumented DECLARATION-ONLY (evidence tier DECLARED, no runtime
+    verifier), so this green means less than a green in the monorepo.'
+  kind: capability
+  state: passing
 - id: add-the-user-presentation-level
   title: '[present] [stage 5] [HALF A DAY] Add the USER level — the per-person default
     Resolution, held in the server-side user record behind the passkey session, NOT

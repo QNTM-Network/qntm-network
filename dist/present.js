@@ -228,18 +228,38 @@ var ModeSurface = class {
   #mode = "NORMAL";
   #count = "";
   #pendingG = false;
+  #caretHint = void 0;
   get mode() {
     return this.#mode;
   }
   /**
    * Start editing — an `<input>` is about to hold the selected line's characters. Called by
-   * `handleKey` for `i`/`Enter`, and by the DOM wiring for a mouse click, which has meant "edit
+   * `handleKey` for `i`/`Enter`/`a`, and by the DOM wiring for a mouse click, which has meant "edit
    * this line" since before this module existed and goes on meaning it.
+   *
+   * `caret` IS THE PARAMETER `a` NEEDED, NOT A SECOND METHOD. `i`/Enter/a mouse click all pass
+   * nothing (unspecified — the `<input>` gets whatever position it always got, undisturbed) and
+   * `a` passes `"end"`. See `takeCaretHint` for how the painter reads it back.
    */
-  enterInsert() {
+  enterInsert(caret) {
     this.#mode = "INSERT";
+    this.#caretHint = caret;
     this.#count = "";
     this.#pendingG = false;
+  }
+  /**
+   * The caret hint set by the last `enterInsert`, consumed once and cleared.
+   *
+   * CONSUMED RATHER THAN JUST READ, so a later repaint of the SAME INSERT session (there is none
+   * today — nothing repaints an open `<input>` while it holds focus — but the consume-once shape is
+   * what stops one arriving unnoticed and re-applying a stale "jump to the end" over wherever the
+   * operator has since moved the caret by hand) cannot reapply it. The painter calls this exactly
+   * once, at the moment it builds the `<input>` the hint was for.
+   */
+  takeCaretHint() {
+    const hint = this.#caretHint;
+    this.#caretHint = void 0;
+    return hint;
   }
   /**
    * Leave editing — the selected line PERSISTS (FocusSurface's `lineIndex` is not touched here;
@@ -249,6 +269,7 @@ var ModeSurface = class {
    */
   enterNormal() {
     this.#mode = "NORMAL";
+    this.#caretHint = void 0;
     this.#count = "";
     this.#pendingG = false;
   }
@@ -317,11 +338,62 @@ var ModeSurface = class {
       case "Enter":
         this.enterInsert();
         return { handled: true, effect: { kind: "enter-insert" } };
+      case "a":
+        this.enterInsert("end");
+        return { handled: true, effect: { kind: "enter-insert", caret: "end" } };
+      case "o":
+        if (pending !== null) {
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "open", direction: "below" } };
+      case "O":
+        if (pending !== null) {
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "open", direction: "above" } };
+      case "x":
+        if (pending !== null) {
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "toggle-done" } };
+      case "{":
+        return { handled: true, effect: { kind: "boundary", direction: "prev", count: pending ?? 1 } };
+      case "}":
+        return { handled: true, effect: { kind: "boundary", direction: "next", count: pending ?? 1 } };
       default:
         return { handled: false, effect: { kind: "none" } };
     }
   }
 };
+
+// app/present/boundary.ts
+function boundaryLine(lines, current, direction, count) {
+  let at = current;
+  for (let step = 0; step < count; step += 1) {
+    const found = direction === "next" ? nextHeading(lines, at) : prevHeading(lines, at);
+    if (found === null) {
+      return direction === "next" ? Math.max(0, lines.length - 1) : 0;
+    }
+    at = found;
+  }
+  return at;
+}
+function nextHeading(lines, from) {
+  for (let at = from + 1; at < lines.length; at += 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      return at;
+    }
+  }
+  return null;
+}
+function prevHeading(lines, from) {
+  for (let at = from - 1; at >= 0; at -= 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      return at;
+    }
+  }
+  return null;
+}
 
 // app/present/draft.ts
 var DraftSurface = class {
@@ -383,6 +455,15 @@ function seedFor(source, lineIndex) {
     }
   }
   return null;
+}
+function openLine(from, lineIndex, draft, onDeclined) {
+  const seed = seedFor(from, lineIndex);
+  if (seed === null) {
+    onDeclined?.(lineIndex);
+    return false;
+  }
+  draft.open(lineIndex, seed.text);
+  return true;
 }
 
 // app/present/cascade.ts
@@ -524,12 +605,23 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
   input.className = "rawline";
   input.value = seed;
   let settled = false;
+  const returnToVim = (source) => {
+    if (deps.mode === void 0) {
+      return;
+    }
+    deps.mode.enterNormal();
+    if (deps.focus !== void 0) {
+      const last = Math.max(0, source.split("\n").length - 1);
+      deps.focus.focus(Math.min(lineIndex, last));
+    }
+  };
   const abandon = () => {
     if (settled) {
       return;
     }
     settled = true;
     draft.drop();
+    returnToVim(fileSource);
     repaint(fileSource);
   };
   const settle = () => {
@@ -541,6 +633,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     draft.drop();
     const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
     deps.onLineCommit?.({ lineIndex, text, markdown });
+    returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
   input.addEventListener("blur", settle);
@@ -604,13 +697,7 @@ function paint(body, source, context, deps) {
     if (draft === void 0 || focus === void 0) {
       return false;
     }
-    const seed = seedFor(from, lineIndex);
-    if (seed === null) {
-      deps.onNewLineDeclined?.(lineIndex);
-      return false;
-    }
-    draft.open(lineIndex, seed.text);
-    return true;
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined);
   };
   const raw = (lineSource, lineIndex) => {
     if (focus === void 0) {
@@ -621,6 +708,11 @@ function paint(body, source, context, deps) {
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
+      const caret = mode?.takeCaretHint();
+      if (caret === "end") {
+        const end = lineSource.length;
+        input.setSelectionRange?.(end, end);
+      }
     }
   };
   body.innerHTML = "";
@@ -642,6 +734,11 @@ function paint(body, source, context, deps) {
     }
     const shape = classifyLine(line);
     if (shape.kind === "blank") {
+      if (mode !== void 0 && mode.mode === "NORMAL" && focus !== void 0 && focus.isFocused(index)) {
+        const mark = document.createElement("div");
+        mark.className = VIM_SELECTED_CLASS;
+        body.append(mark);
+      }
       return;
     }
     lastPaintedIndex = index;
@@ -734,11 +831,13 @@ export {
   RESOLUTION_KEYS,
   SPECIFICITY,
   applyEdit,
+  boundaryLine,
   carriesContent,
   chromeOf,
   clampLine,
   classifyLine,
   isSilent,
+  openLine,
   paint,
   presentationFromDeclaration,
   readDeclaration,
