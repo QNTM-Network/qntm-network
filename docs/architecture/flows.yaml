@@ -390,6 +390,45 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [vim-normal-mode-is-a-gesture-not-a-resolution]
 
+
+  # ── SECTION MEMBERSHIP (2026-08-01) ──────────────────────────────────────────────────────
+  #
+  # `membership.ts` answers "after this edit, does this line still belong in the section it is
+  # in?". Everything it needs about the LINE it gets from `resolution.ts`, and these three edges
+  # are the whole of that dependency — there is no fourth, and the absence of one is the point:
+  # no edge to `context.ts` (membership is not a rendition), none to `source.ts` (it produces no
+  # edit), none to a clock or a fetch. Observed by tests/flow_scenarios/section_membership.ts,
+  # which additionally spies on `PresentationCascade.resolve` and asserts a count of zero.
+  #
+  # `qualification.ts` declares NO flow of its own. It is a reader: it takes an already-parsed
+  # document and returns a table, importing nothing under `app/`. Its one caller inside the app
+  # would be the page, which node cannot import — the same invisibility `base.ts` and `vendor.ts`
+  # record above.
+
+  - id: membership-reads-the-lines-identity-stamp
+    from: app/present/membership
+    to:   app/present/resolution
+    callee: qntmIdSpans
+    event: app.checks-whether-the-line-is-already-a-node
+    class: section-membership
+    gates_capabilities: [section-membership-is-read-not-guessed]
+
+  - id: membership-reads-the-lines-tags
+    from: app/present/membership
+    to:   app/present/resolution
+    callee: tagSpans
+    event: app.resolves-the-lines-fields-from-its-tokens
+    class: section-membership
+    gates_capabilities: [section-membership-is-read-not-guessed]
+
+  - id: membership-checks-the-line-carries-content
+    from: app/present/membership
+    to:   app/present/resolution
+    callee: carriesContent
+    event: app.refuses-a-line-that-would-mint-an-untitled-node
+    class: section-membership
+    gates_capabilities: [section-membership-is-read-not-guessed]
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the

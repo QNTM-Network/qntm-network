@@ -52,6 +52,7 @@
 import { RESOLUTION_KEYS } from "./resolution.js";
 import type { Contribution, Rendition } from "./resolution.js";
 import { STRUCTURAL_KEY } from "./structural.js";
+import { QUALIFICATION_KEY } from "./qualification.js";
 import { INDENT_UNIT } from "./indent.js";
 
 /** The one key of the served document that is prose for a human rather than a declaration. */
@@ -127,6 +128,11 @@ export function readDeclaration(document: unknown): DeclarationReading {
     }
     if (key === STRUCTURAL_KEY) {
       // Not this reader's axis — see the header. `structural.ts` reads and validates it.
+      continue;
+    }
+    if (key === QUALIFICATION_KEY) {
+      // Nor this one. `qualification.ts` reads and validates it — a third grammar over the same
+      // document, on the MEMBERSHIP axis (which section a line belongs in), not the rendition one.
       continue;
     }
     if (key === INDENT_UNIT_KEY) {
