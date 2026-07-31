@@ -171,7 +171,7 @@ describe("1. instancesOf — every printed line gets an id, a blank line gets no
     assert.equal(info.section, 1); // under "## Domain Empty", the SECOND heading
   });
 
-  test("a blank line gets NO id — matching anchor.ts's own anchorFor(...) === null", () => {
+  test("a blank line gets NO id — matching the retired anchor.ts's own anchorFor(...) === null", () => {
     const withBlank = "## A\n- [ ] a task [[qntm:1]] #task\n\n- [ ] b task [[qntm:2]] #task\n";
     const instances = instancesOf(withBlank, "v");
     assert.equal(instances[2], null, "the blank line has no instance");

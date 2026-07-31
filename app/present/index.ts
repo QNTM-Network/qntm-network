@@ -46,9 +46,7 @@ export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
 
 export { FocusSurface } from "./focus.js";
-
-export { ANCHOR_TRUST, anchorFor, resolveAnchor } from "./anchor.js";
-export type { Anchor, AnchorReading, AnchorTier } from "./anchor.js";
+export type { ReanchorReading } from "./focus.js";
 
 export {
   instanceAnchorFor,

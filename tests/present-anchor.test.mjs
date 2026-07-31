@@ -1,38 +1,53 @@
 /**
- * THE HAVEN ROW 2 FALSIFIER — the cursor anchors to a NODE, not to a line number.
+ * THE HAVEN ROW 2 FALSIFIER, REWIRED 2026-07-31 ONTO INSTANCE IDENTITY.
  *
  *   node --test tests/present-anchor.test.mjs
  *
- * ── WHAT WAS REPRODUCED FIRST, ON UNMODIFIED `origin/main` (f349b94) ──
+ * ── WHY THIS FILE CHANGED SHAPE, NOT JUST CONTENT ──
  *
- * Both arms below were run against the SHIPPED `dist/present.js` through this repo's own DOM stub
- * before a line of `anchor.ts` existed, from fixtures built out of `~/qntm/this_week.md`:
+ * `FocusSurface` used to hold an `anchor.ts` `Anchor` and resolve it by walking four rungs —
+ * STAMP, STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION — and this file asserted those exact tier
+ * strings. `app/present/instance.ts`'s `resolveInstanceAnchor` replaces that walk with a two-tier
+ * one (instance match, then node match), and `anchor.ts` is DELETED, not kept beside it — proved
+ * dead by removing it and rebuilding: `npm run typecheck` and `npm run build` both stayed clean
+ * with nothing importing it, and the only failure `npm test` produced was THIS file's own import of
+ * symbols that no longer exist. `git show HEAD~1:app/present/anchor.ts` (or the object hash
+ * `43ca90cc89a51c8754de30e4837c9f65e64a9acd100c2ea290eb4ad3e8eef53` at the commit before deletion)
+ * is where its content lives now.
  *
- *   ARM 4  focus.lineIndex = 5, the operator has typed into that line. A cycle inserts ONE line
- *          into `## Overdue`, above him. Repaint.
- *            -> focus.lineIndex = 5, one editable row, and its value is `"## Overdue to Start"`.
- *               A HEADING. The typing is gone. Nothing reported to any callback.
- *   ARM 5  the same cursor; his node has left the view. Repaint.
- *            -> focus.lineIndex = 5, ZERO editable rows painted, the cursor is nowhere on screen,
- *               and again nothing reported to any callback.
+ * A rung label was never a behaviour the operator has — it was this module's own bookkeeping about
+ * WHICH LOOKUP ANSWERED, and `instance.ts`'s two-tier walk answers the same behavioural questions
+ * with fewer lookups (design-presentation-instance-identity.md §1.2). So every assertion below is
+ * rewritten in terms of WHAT THE CURSOR DOES — does it hold the same line, does it follow a moved
+ * one, is a refusal reported — never in terms of which internal tier produced the answer.
+ * `reading.via` (`"instance"` or `"node"`) is kept where a test needs to say WHY the cursor
+ * followed a node rather than merely that it did, because that distinction is real: a caller
+ * downstream (`the-open-line-survives-a-new-projection`) needs to treat a `"node"` restore as
+ * weaker than an `"instance"` one, the same way `ANCHOR_TRUST`'s ordering used to matter.
  *
- * Sections 3 and 4 are those two arms, re-run against the anchored surface, asserting the outcome
- * the row asks for: the cursor lands on the SAME LINE, and tier 3 produces a REPORTED REFUSAL
- * rather than silence. Section 5 drives the shipped page itself, so the refusal is proven to reach
- * the screen and not merely a callback.
+ * ── THE ONE REGRESSION RISK IN THE WHOLE CHANGE, MADE UNMISSABLE ──
+ *
+ * Section 3 below is the single most important test in this file: A STAMPED NODE THAT MOVES
+ * SECTION STILL KEEPS THE CURSOR. The four-rung STAMP tier searched the whole file for a stamp,
+ * ignoring section, so a node moving section was always found. A NAIVE instance-id lookup (keyed
+ * on `${view}/${section}/${token}`) would have broken that — design doc §3.3's refutation 1 — and
+ * `resolveInstanceAnchor`'s second tier (node search, whole file) is what carries the old
+ * behaviour forward. This is proven twice: once driving `FocusSurface` directly (section 3), and
+ * once driving the real page through its own lifted script (section 5), so a regression here
+ * cannot hide behind either layer alone.
  *
  * ── THE FIXTURES ARE THE OPERATOR'S OWN LINES ──
  *
- * Verbatim from `~/qntm/this_week.md` and `~/qntm/habits.md` (read-only, 2026-07-31), because two
- * of the things this module has to get right are only visible in real content: a view that prints
- * ONE NODE TWICE (this_week.md does it three times over, 6 of its 15 node lines), and a line whose
- * `[[qntm:N]]` is malformed by a typo the operator actually has (`habits.md:19`, `[qntm:1507]]`).
+ * Verbatim from `~/qntm/this_week.md` (read-only, 2026-07-31), because two of the things this
+ * module has to get right are only visible in real content: a view that prints ONE NODE TWICE
+ * (this_week.md does it three times over, 6 of its 15 node lines), and a line whose `[[qntm:N]]`
+ * is malformed by a typo the operator actually has (`habits.md:19`, `[qntm:1507]]`).
  *
  * ── WHAT THIS DOES NOT PROVE ──
  *
  * No browser laid anything out, no passkey session was opened, no server was contacted and no
  * projection was ever observed arriving from a real cycle. Every "projection" here is a second
- * string in this file. The claim is about what the modules do when handed one.
+ * string in this file. The claim is about what these modules do when handed one.
  */
 
 import { test, describe, before } from "node:test";
@@ -42,15 +57,15 @@ import MarkdownIt from "markdown-it";
 import { makeDocument, makeBody, walk } from "./fixtures/dom-stub.mjs";
 import { importPage, installBrowser, makeWorkDir } from "./fixtures/app-html-page.mjs";
 import {
-  ANCHOR_TRUST,
   FocusSurface,
   PresentationContext,
-  anchorFor,
+  instanceAnchorFor,
   paint,
-  resolveAnchor,
+  resolveInstanceAnchor,
 } from "../dist/present.js";
 
 const md = new MarkdownIt("commonmark").enable("table");
+const VIEW = "this-week";
 
 // ── THE PROJECTION THE OPERATOR IS LOOKING AT — `~/qntm/this_week.md`, verbatim ────────────────
 const NOW = [
@@ -91,7 +106,9 @@ const ABSENT = [
 // ── THE CASE INDEX ARITHMETIC CANNOT EXPRESS — a node MOVED BETWEEN SECTIONS ───────────────────
 // `qntm:1986` is under `## Due This Week` in `NOW`; overnight it becomes overdue and the engine
 // prints it under `## Overdue`. To a diff this is a delete plus an insert; to the stamp it is the
-// same node.
+// same node; to a NAIVE instance id (section baked in) it would ALSO look like a delete plus an
+// insert — which is exactly why `resolveInstanceAnchor` falls back to a node search rather than
+// stopping at the instance lookup. See section 3.
 const MOVED_BETWEEN_SECTIONS = [
   "## Overdue",
   "    - [ ] Kick off trial / confirm it's kicked off n#task [[qntm:1986]] #task #work 📅 2026-08-01 🛫 2026-08-01 🆕 2026-07-15",
@@ -105,7 +122,8 @@ const MOVED_BETWEEN_SECTIONS = [
 // ── THE VIEW THAT PRINTS ONE NODE TWICE — this is `~/qntm/this_week.md` as it really is ────────
 // `qntm:1975`, `qntm:1986` and `qntm:1232` each appear once in their own section and again under
 // `## Scheduled This Week`, as byte-identical lines. Neither the stamp nor the text tells the two
-// printings apart; the SECTION does.
+// printings apart; the SECTION does — and an instance id bakes the section in, so this resolves
+// with a single lookup rather than a narrowing step. See section 4.
 const PRINTED_TWICE = [
   ...NOW.split("\n").slice(0, 9),
   "## Scheduled This Week",
@@ -117,12 +135,13 @@ const PRINTED_TWICE = [
 
 const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.type === "text");
 
-/** Paint with a focus surface, the way the page does. */
+/** Paint with a focus surface and a view id, the way the page does. */
 function view(source, focus, reports = []) {
   globalThis.document = makeDocument();
   const body = makeBody();
   paint(body, source, new PresentationContext(), {
     markdown: md,
+    view: VIEW,
     focus,
     onLineCommit: (c) => reports.push(["commit", c.lineIndex, c.text]),
     onNewLineDeclined: (i) => reports.push(["declined", i]),
@@ -145,185 +164,39 @@ function cursorOnPayBack() {
   return { focus, reports, body };
 }
 
-describe("1. the anchor is identity, and it is taken off the line rather than off the index", () => {
-  test("a stamped line anchors on its own stamp, its text and its section", () => {
-    const anchor = anchorFor(NOW, CURSOR);
-    assert.deepEqual(anchor, {
-      stamp: "[[qntm:1232]]",
-      text: CURSOR_LINE,
-      section: "## Overdue to Start",
-      takenAt: CURSOR,
-    });
+describe("1. the anchor is an INSTANCE taken off the line, not an index", () => {
+  test("a stamped line's anchor carries its node and its instance", () => {
+    const anchor = instanceAnchorFor(NOW, CURSOR, VIEW);
+    assert.equal(anchor.node, "qntm:1232");
+    assert.equal(anchor.takenAt, CURSOR);
+    assert.equal(anchor.instance, `${VIEW}/2/qntm:1232`); // "## Overdue to Start" is the third heading
   });
 
-  test("a heading has no stamp, so it anchors on its text — tier 2's whole reason to exist", () => {
-    const anchor = anchorFor(NOW, 4);
-    assert.equal(anchor.stamp, null);
-    assert.equal(anchor.text, "## Overdue to Start");
-    assert.equal(anchor.section, "## Due This Week", "a heading's section is the heading above it");
+  test("a heading has no node, so its anchor is its ordinal — never its characters", () => {
+    const anchor = instanceAnchorFor(NOW, 4, VIEW); // "## Overdue to Start"
+    assert.equal(anchor.node, null);
+    assert.equal(anchor.instance, `${VIEW}/2/§heading`);
   });
 
-  test("a blank line has NO identity and says so, rather than anchoring on a text every other blank line shares", () => {
-    assert.equal(anchorFor(NOW, NOW.split("\n").length - 1), null);
-    assert.equal(anchorFor("- [ ] a [[qntm:1]] #task\n   \n", 1), null, "whitespace-only is blank too");
+  test("a blank line and an out-of-range index both anchor on nothing", () => {
+    assert.equal(instanceAnchorFor(NOW, NOW.split("\n").length - 1, VIEW), null);
+    assert.equal(instanceAnchorFor(NOW, 99, VIEW), null);
+    assert.equal(instanceAnchorFor(NOW, -1, VIEW), null);
   });
 
-  test("an index outside the source anchors on nothing", () => {
-    assert.equal(anchorFor(NOW, 99), null);
-    assert.equal(anchorFor(NOW, -1), null);
-  });
-
-  test("the operator's own malformed stamp is not a stamp — `[qntm:1507]]` has one bracket", () => {
-    // ~/qntm/habits.md:19, read-only. The line carries a typo AND a real stamp; the real one wins
-    // and the typo is left in the text, where tier 2 can still see it.
-    const line =
-      "    - [ ] Started in last 30 days email [qntm:1507]] [[qntm:2423]] #routine #work #every-14d 🛫 2026-07-28";
-    const anchor = anchorFor(`## Work Habits\n${line}\n`, 1);
-    assert.equal(anchor.stamp, "[[qntm:2423]]");
-  });
-
-  test("the FIRST stamp is the node's own — chrome cells are printed after it", () => {
-    // ~/qntm/habits.md:24, read-only. `#requires [[JB to send over Sarasin]]` is an outgoing edge
-    // and is not an identity stamp at all, so it is not even a candidate here; a line carrying two
-    // `[[qntm:N]]`s would still take the first, which is where the renderer puts identity.
-    const line =
-      "    - [x] Store all somewhere [[qntm:1723]] #task #work ✅ 2026-07-13 🆕 2026-07-07 #requires [[JB to send over Sarasin]]";
-    assert.equal(anchorFor(`## Work Habits\n${line}\n`, 1).stamp, "[[qntm:1723]]");
+  test("through FocusSurface: clicking a line takes the SAME anchor `instanceAnchorFor` would", () => {
+    const { focus } = cursorOnPayBack();
+    assert.deepEqual(focus.anchor, instanceAnchorFor(NOW, CURSOR, VIEW));
   });
 });
 
-describe("2. the rungs, and which one answered", () => {
-  test("TIER 1 — a unique stamp, and the index it was taken at is NOT what found it", () => {
-    const anchor = anchorFor(NOW, CURSOR);
-    assert.deepEqual(resolveAnchor(anchor, INSERTED_ABOVE), {
-      outcome: "found",
-      tier: "STAMP",
-      lineIndex: CURSOR + 1,
-    });
-  });
-
-  test("THE MUTATION PROOF — corrupt `takenAt` and the answer does not move", () => {
-    // If the resolver were secretly rebasing an index rather than reading identity, this is where
-    // it would show. `takenAt` is a reporting field and nothing else.
-    const anchor = anchorFor(NOW, CURSOR);
-    for (const nonsense of [0, 999, -7]) {
-      assert.deepEqual(resolveAnchor({ ...anchor, takenAt: nonsense }, INSERTED_ABOVE), {
-        outcome: "found",
-        tier: "STAMP",
-        lineIndex: CURSOR + 1,
-      });
-    }
-  });
-
-  test("TIER 1 SURVIVES A MOVE BETWEEN SECTIONS, which is what index arithmetic cannot do", () => {
-    const anchor = anchorFor(NOW, 3); // `qntm:1986`, under `## Due This Week`
-    const reading = resolveAnchor(anchor, MOVED_BETWEEN_SECTIONS);
-    assert.deepEqual(reading, { outcome: "found", tier: "STAMP", lineIndex: 1 });
-    assert.equal(
-      MOVED_BETWEEN_SECTIONS.split("\n")[reading.lineIndex],
-      NOW.split("\n")[3],
-      "the cursor did not land on the same line",
-    );
-  });
-
-  test("TIER 1 does not require the section to agree — a renamed heading has not moved the line", () => {
-    const renamed = NOW.replace("## Overdue to Start", "## Overdue To Start (renamed by a rule)");
-    assert.deepEqual(resolveAnchor(anchorFor(NOW, CURSOR), renamed), {
-      outcome: "found",
-      tier: "STAMP",
-      lineIndex: CURSOR,
-    });
-  });
-
-  test("TIER 1 NARROWED BY SECTION — the operator's real view prints three nodes twice", () => {
-    const anchor = anchorFor(NOW, CURSOR);
-    const reading = resolveAnchor(anchor, PRINTED_TWICE);
-    assert.deepEqual(reading, { outcome: "found", tier: "STAMP_IN_SECTION", lineIndex: CURSOR });
-    assert.equal(PRINTED_TWICE.split("\n")[reading.lineIndex], CURSOR_LINE);
-  });
-
-  test("TIER 2 — no stamp on the line, so its exact text answers", () => {
-    const anchor = anchorFor(NOW, 4); // `## Overdue to Start`
-    assert.deepEqual(resolveAnchor(anchor, INSERTED_ABOVE), {
-      outcome: "found",
-      tier: "TEXT",
-      lineIndex: 5,
-    });
-  });
-
-  test("TIER 2 — a stamped line whose stamp is NOT in the projection falls through to its text", () => {
-    // A rung that finds NOTHING passes. The engine has re-stamped the line; the characters are the
-    // only thing left that identifies it.
-    const restamped = NOW.replace("[[qntm:1232]]", "[[qntm:9001]]");
-    const anchor = anchorFor(restamped, CURSOR);
-    assert.equal(anchor.stamp, "[[qntm:9001]]");
-    assert.deepEqual(resolveAnchor({ ...anchor, text: CURSOR_LINE }, NOW), {
-      outcome: "found",
-      tier: "TEXT",
-      lineIndex: CURSOR,
-    });
-  });
-
-  test("TIER 2 NARROWED BY SECTION — two identical unstamped lines in two sections", () => {
-    const source = [
-      "## Overdue",
-      "- nothing here yet",
-      "## Due This Week",
-      "- nothing here yet",
-      "",
-    ].join("\n");
-    assert.deepEqual(resolveAnchor(anchorFor(source, 3), source), {
-      outcome: "found",
-      tier: "TEXT_IN_SECTION",
-      lineIndex: 3,
-    });
-  });
-
-  test("AMBIGUOUS IS A THIRD OUTCOME — one node printed twice inside ONE section is refused, not guessed", () => {
-    const twiceInOneSection = [
-      "## Overdue to Start",
-      CURSOR_LINE,
-      "- [ ] Get summer suit [[qntm:2412]] #outcome #personal 🆕 2026-07-27",
-      CURSOR_LINE,
-      "",
-    ].join("\n");
-    const reading = resolveAnchor(anchorFor(NOW, CURSOR), twiceInOneSection);
-    assert.equal(reading.outcome, "ambiguous");
-    assert.equal(reading.tier, "STAMP");
-    assert.deepEqual(reading.candidates, [1, 3], "the candidates are handed back, not thrown away");
-  });
-
-  test("AN AMBIGUOUS STRONG RUNG DOES NOT FALL THROUGH TO A WEAKER ONE", () => {
-    // Two printings of one node whose TEXT differs — a cycle stamped a date onto one of them. The
-    // text would break the tie; using it would be settling a node's identity with its characters,
-    // so the walk stops at the rung that matched.
-    const twiceInOneSection = [
-      "## Overdue to Start",
-      CURSOR_LINE,
-      `${CURSOR_LINE} 🆕 2026-07-31`,
-      "",
-    ].join("\n");
-    const reading = resolveAnchor(anchorFor(NOW, CURSOR), twiceInOneSection);
-    assert.equal(reading.outcome, "ambiguous");
-    assert.equal(reading.tier, "STAMP");
-  });
-
-  test("TIER 3 — the line is not in this projection, and that is REPORTED", () => {
-    assert.deepEqual(resolveAnchor(anchorFor(NOW, CURSOR), ABSENT), { outcome: "absent" });
-  });
-
-  test("the trust order is exported ordered, so a caller never re-derives it from a comment", () => {
-    assert.deepEqual(ANCHOR_TRUST, ["STAMP", "STAMP_IN_SECTION", "TEXT", "TEXT_IN_SECTION"]);
-  });
-});
-
-describe("3. THE FALSIFIER, ARM 4 — a line is inserted above the cursor", () => {
-  test("the cursor lands on the SAME LINE, by identity, and its index moved to say so", () => {
+describe("2. THE CURSOR HOLDS WHEN CONTENT ABOVE IT CHANGES — the original defect, fixed", () => {
+  test("a line inserted above the cursor does not move it off its own line", () => {
     const { focus } = cursorOnPayBack();
 
-    const reading = focus.reanchor(INSERTED_ABOVE);
+    const reading = focus.reanchor(INSERTED_ABOVE, VIEW);
 
-    assert.deepEqual(reading, { outcome: "found", tier: "STAMP", lineIndex: CURSOR + 1 });
+    assert.deepEqual(reading, { outcome: "found", lineIndex: CURSOR + 1, via: "instance" });
     assert.equal(focus.lineIndex, CURSOR + 1, "the cursor did not follow its line");
     assert.equal(
       INSERTED_ABOVE.split("\n")[focus.lineIndex],
@@ -333,10 +206,10 @@ describe("3. THE FALSIFIER, ARM 4 — a line is inserted above the cursor", () =
   });
 
   test("the painted row the cursor is in holds that line's characters, not a heading's", () => {
-    // This is the exact observation from the reproduction: on unmodified main the one editable row
-    // held `"## Overdue to Start"`.
+    // This is the exact observation from the ORIGINAL reproduction against unmodified main: on
+    // that build the one editable row held `"## Overdue to Start"`.
     const { focus } = cursorOnPayBack();
-    focus.reanchor(INSERTED_ABOVE);
+    focus.reanchor(INSERTED_ABOVE, VIEW);
     const body = view(INSERTED_ABOVE, focus);
     const open = inputs(body);
     assert.equal(open.length, 1, "the cursor is not in exactly one editable row");
@@ -345,50 +218,162 @@ describe("3. THE FALSIFIER, ARM 4 — a line is inserted above the cursor", () =
 
   test("the anchor is TAKEN AGAIN against the new projection, so a second arrival still finds it", () => {
     const { focus } = cursorOnPayBack();
-    focus.reanchor(INSERTED_ABOVE);
-    // The engine now stamps a date onto the line. Tier 1 still answers; what would have gone stale
-    // is tier 2's text, and re-taking the anchor is what keeps it current.
+    focus.reanchor(INSERTED_ABOVE, VIEW);
+    // The engine now stamps a date onto the line — its TEXT changed, but its instance did not,
+    // because the instance for a stamped line is `${view}/${section}/${node}`, never its text.
     const stamped = INSERTED_ABOVE.replace(CURSOR_LINE, `${CURSOR_LINE} 🆕 2026-07-31`);
-    assert.equal(focus.reanchor(stamped).outcome, "found");
-    assert.equal(focus.anchor.text, `${CURSOR_LINE} 🆕 2026-07-31`);
+    const reading = focus.reanchor(stamped, VIEW);
+    assert.deepEqual(reading, { outcome: "found", lineIndex: CURSOR + 1, via: "instance" });
+  });
+
+  test("THE MUTATION PROOF — the resolution does not depend on WHERE the anchor was taken", () => {
+    // Adapted from the rung-based suite's own falsifier: corrupt the reporting-only field and
+    // assert the answer does not move. `takenAt` on an InstanceAnchor is exactly that field
+    // (instance.ts's own header) — resolveInstanceAnchor is never handed it and this proves it by
+    // corrupting it rather than by reading the source. Driven through the SAME two calls
+    // FocusSurface.reanchor makes internally, so this is not a duplicate of instance.ts's own
+    // mutation proof — it is the guarantee that FocusSurface's live path inherits it.
+    const anchor = instanceAnchorFor(NOW, CURSOR, VIEW);
+    const real = resolveInstanceAnchor(anchor, INSERTED_ABOVE, VIEW);
+    for (const nonsense of [0, 999, -7]) {
+      const corrupted = resolveInstanceAnchor({ ...anchor, takenAt: nonsense }, INSERTED_ABOVE, VIEW);
+      assert.deepEqual(corrupted, real);
+    }
+    assert.deepEqual(real, { outcome: "found", lineIndex: CURSOR + 1, via: "instance" });
   });
 });
 
-describe("4. THE FALSIFIER, ARM 5 — the cursor's line is absent from the projection", () => {
-  test("tier 3 produces a REPORTED REFUSAL rather than silence", () => {
-    const { focus } = cursorOnPayBack();
-
-    const reading = focus.reanchor(ABSENT);
-
-    assert.deepEqual(reading, { outcome: "absent" }, "the refusal was not reported");
+describe("3. THE REGRESSION RISK — a stamped node that MOVES SECTION still keeps the cursor", () => {
+  // design-presentation-instance-identity.md §3.3, refutation 1: "an instance id alone loses
+  // 'follow the node', which the app has today for free". This is the one property a naive
+  // instance-only implementation would have broken, so it is proven here on its own, unmissably.
+  test("a PURE instance lookup alone would lose it — the trap, demonstrated before it is avoided", () => {
+    const anchor = instanceAnchorFor(NOW, 3, VIEW); // qntm:1986, under "## Due This Week"
+    assert.equal(
+      MOVED_BETWEEN_SECTIONS.includes(anchor.instance),
+      false,
+      "the moved row's instance string really did change — a naive lookup finds nothing",
+    );
   });
 
-  test("the refusal moves nothing and clears nothing — row 4 needs what is left behind", () => {
+  test("resolveInstanceAnchor finds it anyway, by falling back to the node", () => {
+    const anchor = instanceAnchorFor(NOW, 3, VIEW);
+    const reading = resolveInstanceAnchor(anchor, MOVED_BETWEEN_SECTIONS, VIEW);
+    assert.deepEqual(reading, { outcome: "found", lineIndex: 1, via: "node" });
+    assert.equal(
+      MOVED_BETWEEN_SECTIONS.split("\n")[reading.lineIndex],
+      NOW.split("\n")[3],
+      "the cursor did not land on the same line",
+    );
+  });
+
+  test("through FocusSurface, driven by a click — the live cursor follows the moved node", () => {
+    const focus = new FocusSurface();
+    let body = view(NOW, focus);
+    const target = walk(body)
+      .filter((el) => el.tagName === "span")
+      .find((el) => el.innerHTML.includes("Kick off trial"));
+    assert.ok(target, "the fixture no longer contains qntm:1986's line");
+    target.dispatch("click");
+    view(NOW, focus); // the click's own repaint
+    assert.equal(focus.lineIndex, 3);
+
+    const reading = focus.reanchor(MOVED_BETWEEN_SECTIONS, VIEW);
+
+    assert.deepEqual(reading, { outcome: "found", lineIndex: 1, via: "node" });
+    assert.equal(focus.lineIndex, 1, "the live cursor did not follow the node it was on");
+    body = view(MOVED_BETWEEN_SECTIONS, focus);
+    const open = inputs(body);
+    assert.equal(open.length, 1, "the cursor is not in exactly one editable row");
+    assert.equal(open[0].value, MOVED_BETWEEN_SECTIONS.split("\n")[1]);
+  });
+});
+
+describe("4. THE DUPLICATE PRINTING — resolves to the RIGHT one of the two", () => {
+  test("the operator's real view prints three nodes twice; the anchor still finds its OWN printing", () => {
     const { focus } = cursorOnPayBack();
-    focus.reanchor(ABSENT);
+    const reading = focus.reanchor(PRINTED_TWICE, VIEW);
+    assert.deepEqual(reading, { outcome: "found", lineIndex: CURSOR, via: "instance" });
+    assert.equal(PRINTED_TWICE.split("\n")[reading.lineIndex], CURSOR_LINE);
+  });
+
+  test("a node genuinely printed TWICE in one section is refused, not guessed", () => {
+    // The old suite's own case for this, re-expressed: two printings inside ONE section (as
+    // `structural_edge_types allow_repeats` can produce) really are the same node twice, and
+    // choosing between them by anything other than identity would be choosing a PRINTING. The
+    // anchor's own instance (taken where the node was alone in its section) matches neither
+    // duplicate — both now carry a `#1`/`#2` suffix — so the walk falls to the node and finds two.
+    const twiceInOneSection = [
+      "## Overdue",
+      "## Due This Week",
+      "## Overdue to Start",
+      CURSOR_LINE,
+      CURSOR_LINE,
+      "",
+    ].join("\n");
+    const anchor = instanceAnchorFor(NOW, CURSOR, VIEW);
+    const reading = resolveInstanceAnchor(anchor, twiceInOneSection, VIEW);
+    assert.equal(reading.outcome, "ambiguous");
+    assert.deepEqual(reading.candidates, [3, 4], "the candidates are handed back, not thrown away");
+  });
+});
+
+describe("5. AN UNSTAMPED LINE KEEPS THE CURSOR WHILE ITS TEXT IS UNCHANGED", () => {
+  test("a heading keeps the cursor across an insertion elsewhere in the file", () => {
+    const anchor = instanceAnchorFor(NOW, 4, VIEW); // "## Overdue to Start"
+    const reading = resolveInstanceAnchor(anchor, INSERTED_ABOVE, VIEW);
+    assert.deepEqual(reading, { outcome: "found", lineIndex: 5, via: "instance" });
+  });
+
+  test("two identical unstamped lines in two DIFFERENT sections are told apart by section alone", () => {
+    const source = ["## Overdue", "- nothing here yet", "## Due This Week", "- nothing here yet", ""].join(
+      "\n",
+    );
+    const anchor = instanceAnchorFor(source, 3, VIEW);
+    assert.deepEqual(resolveInstanceAnchor(anchor, source, VIEW), {
+      outcome: "found",
+      lineIndex: 3,
+      via: "instance",
+    });
+  });
+});
+
+describe("6. A GENUINELY ABSENT LINE PRODUCES A REPORTED REFUSAL, NOT SILENCE", () => {
+  test("the resolver reports `absent` rather than guessing", () => {
+    assert.deepEqual(resolveInstanceAnchor(instanceAnchorFor(NOW, CURSOR, VIEW), ABSENT, VIEW), {
+      outcome: "absent",
+    });
+  });
+
+  test("through FocusSurface: the refusal is REPORTED and nothing moves or clears", () => {
+    const { focus } = cursorOnPayBack();
+
+    const reading = focus.reanchor(ABSENT, VIEW);
+
+    assert.deepEqual(reading, { outcome: "absent" }, "the refusal was not reported");
     assert.equal(focus.lineIndex, CURSOR, "the cursor was moved by a refusal");
-    assert.equal(focus.anchor.text, CURSOR_LINE, "the anchor was thrown away with the line");
+    assert.equal(focus.anchor.instance, instanceAnchorFor(NOW, CURSOR, VIEW).instance, "the anchor survived");
   });
 
   test("A CURSOR THAT WAS NEVER ANCHORED SAYS SO — it is not silently an absence", () => {
     const focus = new FocusSurface();
     focus.focus(3); // no source: the pre-anchor configuration every older test paints
-    assert.deepEqual(focus.reanchor(ABSENT), { outcome: "unanchored" });
+    assert.deepEqual(focus.reanchor(ABSENT, VIEW), { outcome: "unanchored" });
     const nowhere = new FocusSurface();
-    assert.deepEqual(nowhere.reanchor(ABSENT), { outcome: "unanchored" });
+    assert.deepEqual(nowhere.reanchor(ABSENT, VIEW), { outcome: "unanchored" });
   });
 });
 
-describe("5. and it reaches the screen — through app/index.html's own script", () => {
+describe("7. and it reaches the screen — through app/index.html's own script", () => {
   const WORK = makeWorkDir("present-anchor");
-  const VIEW = { id: "this-week", path: "work/this_week.md", title: "This Week", domain: "work" };
+  const PAGE_VIEW = { id: "this-week", path: "work/this_week.md", title: "This Week", domain: "work" };
   let page;
   let elements;
 
   const snapshot = (markdown) => ({
     snapshot: {
       generated_at: "2026-07-31T00:00:00Z",
-      views: [{ ...VIEW, markdown }],
+      views: [{ ...PAGE_VIEW, markdown }],
     },
     pending_edits: 0,
   });
@@ -424,6 +409,16 @@ describe("5. and it reaches the screen — through app/index.html's own script",
     assert.match(said, /^as of .* · 0 queued$/, `an ordinary re-anchor narrated itself: ${said}`);
   });
 
+  test("THE REGRESSION RISK, END TO END — a node moving section keeps the cursor through the real page", () => {
+    land(NOW);
+    page.__setFocus(3, NOW); // qntm:1986, under "## Due This Week"
+
+    const said = land(MOVED_BETWEEN_SECTIONS);
+
+    assert.equal(page.__focusIndex(), 1, "the cursor did not follow its node across the section move");
+    assert.match(said, /^as of .* · 0 queued$/, `a successful node-follow narrated itself as a loss: ${said}`);
+  });
+
   test("a projection without the cursor's line puts ONE SENTENCE in the freshness line", () => {
     land(NOW);
     page.__setFocus(CURSOR, NOW);
@@ -450,8 +445,8 @@ describe("5. and it reaches the screen — through app/index.html's own script",
       snapshot: {
         generated_at: "2026-07-31T00:00:00Z",
         views: [
-          { ...VIEW, markdown: NOW },
-          { ...VIEW, id: "habits", path: "work/habits.md", title: "Habits", markdown: "## Work Habits\n" },
+          { ...PAGE_VIEW, markdown: NOW },
+          { ...PAGE_VIEW, id: "habits", path: "work/habits.md", title: "Habits", markdown: "## Work Habits\n" },
         ],
       },
       pending_edits: 0,

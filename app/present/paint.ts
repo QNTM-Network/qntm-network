@@ -474,7 +474,7 @@ function draftInput(
       // string (`markdown ?? fileSource`, the argument this closure was handed) and not the string
       // the draft opened against. Anchoring against the pre-insert source would describe a line at
       // an index that has just moved.
-      deps.focus.focus(Math.min(lineIndex, last), source);
+      deps.focus.focus(Math.min(lineIndex, last), source, 0, deps.view);
     }
   };
 
@@ -684,10 +684,11 @@ export function paint(
       event?.preventDefault?.();
       event?.stopPropagation?.();
       // THE SOURCE GOES WITH THE INDEX. A cursor that landed without one is a cursor that cannot
-      // be found again after a projection arrives — see focus.ts's `focus`, and anchor.ts for what
-      // that used to cost. `source` is the string this paint was handed, which is the string the
-      // line the person just clicked came out of.
-      focus.focus(lineIndex, source);
+      // be found again after a projection arrives — see focus.ts's `focus`, and instance.ts for
+      // what that used to cost. `source` is the string this paint was handed, which is the string
+      // the line the person just clicked came out of; `deps.view` is the same id `data-instance`
+      // above is computed from, so the anchor and the row's own key agree.
+      focus.focus(lineIndex, source, 0, deps.view);
       // A CLICK HAS ALWAYS MEANT "EDIT THIS LINE", and vim does not take that away — it only adds
       // a keyboard path that does not need one. `mode` absent: no-op, exactly as before this
       // field existed.

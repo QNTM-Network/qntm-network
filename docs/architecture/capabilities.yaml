@@ -1062,27 +1062,36 @@ capabilities:
     THE ROW WAS STILL ON SCREEN AND THE APP SAID IT WAS GONE. An id keyed on a heading's ORDINAL,
     never its characters, cannot make that mistake, because it never read the ratio in the first
     place.
-    IT DOES NOT REPLACE THE ANCHOR'S RUNGS IN PRODUCTION, AND THAT IS STATED RATHER THAN HIDDEN. The
-    design document's own R1 description reads "resolveAnchor's four rungs become: instance match →
-    node match → ambiguous → absent" — but `tests/present-anchor.test.mjs` pins the FOUR RUNGS'
-    EXACT tier strings (`STAMP`, `STAMP_IN_SECTION`, `TEXT`, `TEXT_IN_SECTION`) and their ambiguous-
-    narrowing behaviour by literal `assert.deepEqual`, and the brief's own proof standard demanded
-    every one of those tests keep passing UNCHANGED. Those two asks are in tension: a resolver that
-    still emits four rung labels for backward compatibility is not a collapse, and a resolver that
-    genuinely collapses cannot honour assertions written against the four-rung shape. Resolved by
-    NOT mutating `anchor.ts` — `instance.ts`'s `instanceAnchorFor`/`resolveInstanceAnchor` are new,
-    additive, fully tested, and `FocusSurface.reanchor` still calls the old four-rung walk. Wiring
-    the live cursor onto the new resolver is therefore NOT done by this capability and is a small,
-    separate decision for whoever lands `the-open-line-survives-a-new-projection` or a dedicated
-    follow-up row.
+    IT REPLACES THE ANCHOR'S RUNGS IN PRODUCTION — AMENDED 2026-07-31, THE SAME DAY, AFTER THE
+    FIRST CUT OF THIS RECORD SAID IT DID NOT. `FocusSurface.reanchor` now calls
+    `instance.ts`'s `resolveInstanceAnchor` directly; `anchor.ts` and its four rungs (STAMP,
+    STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION) are DELETED, not kept beside their replacement — proved
+    dead by removing the file and rebuilding (`npm run typecheck` and `npm run build` both stayed
+    clean with nothing importing it; the only test that broke was the one importing its symbols
+    directly, `tests/present-anchor.test.mjs`, since rewritten). THE TENSION THE FIRST CUT NAMED WAS
+    REAL AND WAS IN THE BRIEF, NOT IN THE DESIGN: "every existing anchor test still passes" was
+    written to mean "do not regress the behaviour", read as "do not touch that test file", and a
+    module that exists and does not reach production is this project's own named highest-frequency
+    bug. The correction: rung labels were never a behaviour the operator has — they were this
+    surface's internal bookkeeping about which lookup answered — so `tests/present-anchor.test.mjs`
+    is rewritten to assert what the cursor DOES (holds, follows, refuses, is not silently guessed)
+    rather than which internal tier produced the answer, and the ONE property worth keeping
+    unmissable is proven twice: a stamped node that MOVES SECTION still keeps the cursor, once
+    driving `FocusSurface` directly and once through `app/index.html`'s own lifted script end to
+    end (refutation 1, design doc §3.3 — see `derive-the-instance-id-in-the-browser`'s record for
+    the tier-by-tier account of what survived).
   tier: functional
   rooting: >-
-    isolated. `app/present/instance.ts` is a new pure module in the same family as
-    `anchor.ts`/`boundary.ts`/`indent.ts`/`word.ts` — imported by `paint.ts` (for `data-instance`)
-    and by nothing else inside app/present/ yet. `PaintDeps` gained one OPTIONAL field (`view`), the
-    same posture `focus`/`mode`/`draft` already have, so every caller that predates it paints
-    exactly what it always painted.
-  status: partial
+    isolated FOR NOW IN ONE SENSE, ROOTED IN ANOTHER. `app/present/instance.ts` is a new pure module
+    in the same family `boundary.ts`/`indent.ts`/`word.ts` still are (`anchor.ts`, the fourth member
+    of that family, is retired) — but unlike those three it is no longer import-adjacent only:
+    `focus.ts` imports it directly and `FocusSurface.reanchor` is its production caller, which is
+    what makes this capability's cursor-holding claims claims about the SHIPPED cursor rather than
+    about a tested-but-unwired module. `paint.ts` imports it too, for `data-instance`. `PaintDeps`
+    and `FocusSurface.focus`/`.reanchor` each gained OPTIONAL/threaded parameters (`view`), the same
+    posture `focus`/`mode`/`draft` already have on `PaintDeps`, so every caller that predates it
+    paints and resolves exactly what it always did when it omits one.
+  status: working
 - id: the-world-moves-around-you
   intent: >-
     THE SYSTEM COMPUTES BEHAVIOUR, SO THE PROJECTION SHOULD LIVE RATHER THAN WAIT TO BE FETCHED. A

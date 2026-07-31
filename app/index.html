@@ -1247,12 +1247,17 @@ function paintView(id) {
   if (entering !== undefined) {
     // THE WORLD ARRIVED IN THE VIEW HE IS ALREADY IN — ASK BY IDENTITY, NOT BY POSITION. The clamp
     // below is the ONLY thing that used to happen here, and a clamp cannot help with either of the
-    // two failures this row measured against unmodified main (see app/present/anchor.ts's header):
-    // a line inserted above the cursor keeps every index in range, so the clamp is a no-op and the
-    // cursor lands on the wrong line; a line that has left the view is a shorter file, so the clamp
-    // moves the cursor to a line the operator never chose. `reanchor` asks WHICH LINE and reports
-    // which rung answered.
-    const cursorReading = sameView ? focus.reanchor(entering.markdown) : { outcome: "unanchored" };
+    // two failures this row measured against unmodified main (see app/present/instance.ts's
+    // header): a line inserted above the cursor keeps every index in range, so the clamp is a
+    // no-op and the cursor lands on the wrong line; a line that has left the view is a shorter
+    // file, so the clamp moves the cursor to a line the operator never chose. `reanchor` asks
+    // WHICH LINE and reports how it found it — the same printing, or the same NODE having moved
+    // section (`reading.via`).
+    //
+    // `id` IS THE VIEW `reanchor` NAMESPACES THE LOOKUP BY — it is the view this whole function is
+    // (re)painting, and `sameView` above is exactly the guard that makes it also the view the
+    // anchor being resolved was taken against.
+    const cursorReading = sameView ? focus.reanchor(entering.markdown, id) : { outcome: "unanchored" };
     if (cursorReading.outcome !== "found") {
       // NOTHING WAS FOUND, SO THE OLD SEEDING STANDS — vim always has a cursor on some line, and
       // this is where a view first gets one. What has changed is that it is no longer the whole
@@ -1265,6 +1270,8 @@ function paintView(id) {
       focus.focus(
         clampLine(focus.lineIndex ?? 0, Math.max(0, entering.markdown.split("\n").length - 1)),
         entering.markdown,
+        0,
+        id,
       );
     }
     reportCursorReading(cursorReading);
@@ -1284,7 +1291,8 @@ function paintView(id) {
  *
  * `found` and `unanchored` say nothing. `found` is the ordinary case and needs no narration;
  * `unanchored` means no cursor was ever anchored (nothing was open, or it was on a blank line,
- * which has no identity — see anchor.ts), so there is nothing that could have been lost.
+ * which has no identity — see app/present/instance.ts), so there is nothing that could have been
+ * lost.
  *
  * WHAT IT DOES NOT DO IS RECOVER THE CHARACTERS. Parking them where the operator can see and
  * retrieve them is row 4 (`the-vanished-line-is-parked-not-dropped`), which is a separate change
@@ -1352,6 +1360,7 @@ function repaintCurrentView() {
       clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)),
       v.markdown,
       focus.column,
+      v.id,
     );
   }
   paint(body, v.markdown, presentation, {
@@ -1769,13 +1778,18 @@ document.addEventListener("keydown", (e) => {
     // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
     const effect = outcome.effect;
     if (effect.kind === "move") {
-      focus.focus(effect.lineIndex, v.markdown);
+      focus.focus(effect.lineIndex, v.markdown, 0, v.id);
       repaintCurrentView();
     } else if (effect.kind === "boundary") {
       // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)
       // is the one place "which line is that" is answered, from the SAME source string, never a
       // second opinion parsed here.
-      focus.focus(boundaryLine(v.markdown.split("\n"), current, effect.direction, effect.count), v.markdown);
+      focus.focus(
+        boundaryLine(v.markdown.split("\n"), current, effect.direction, effect.count),
+        v.markdown,
+        0,
+        v.id,
+      );
       repaintCurrentView();
     } else if (effect.kind === "open") {
       // `o`/`O` — `openLine` is the SAME function Enter's mid-edit "open a line below" already

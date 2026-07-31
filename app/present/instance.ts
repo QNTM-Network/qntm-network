@@ -2,17 +2,21 @@
  * instance — presentation-instance identity: a stable id for a PRINTED LINE, derived from the
  * source string alone. PURE: no DOM, no fetch, no clock.
  *
- * ── WHAT THIS MODULE ANSWERS, AND WHY IT IS NOT anchor.ts ──
+ * ── WHAT THIS MODULE ANSWERS, AND WHAT IT REPLACED ──
  *
- * `anchor.ts` answers "which line is the cursor on now" by walking four rungs — STAMP,
- * STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION — each a fresh scan of the projection, narrowed by a
- * heading's TEXT when a scan finds too many. `design-presentation-instance-identity.md` (§1.2)
- * measured that the first three of those four collapse into ONE fact the engine already computes
- * every cycle and throws away: `(section_id, node_id)` — RenderedLineRecord, renderer.py:169-184,
- * discarded before it reaches `line_cache` (persistence/schema.py:41-49). This module RE-DERIVES
- * that fact in the browser, from data the projection already carries, so the four-rung walk
- * collapses to a single lookup — see anchor.ts's own header for which rungs actually go and which
- * one survives, and why.
+ * `FocusSurface` used to answer "which line is the cursor on now" by walking four rungs — STAMP,
+ * STAMP_IN_SECTION, TEXT, TEXT_IN_SECTION, in a module called `anchor.ts` — each a fresh scan of
+ * the projection, narrowed by a heading's TEXT when a scan found too many.
+ * `design-presentation-instance-identity.md` (§1.2) measured that the first three of those four
+ * collapse into ONE fact the engine already computes every cycle and throws away:
+ * `(section_id, node_id)` — RenderedLineRecord, renderer.py:169-184, discarded before it reaches
+ * `line_cache` (persistence/schema.py:41-49). This module RE-DERIVES that fact in the browser, from
+ * data the projection already carries, and IS what `focus.ts` calls now — `anchor.ts` is deleted
+ * (2026-07-31, proved dead by removing it and rebuilding: `npm run typecheck` and `npm run build`
+ * stayed clean with nothing importing it, and the only test that broke was the one that imported
+ * its symbols directly, since rewritten — `tests/present-anchor.test.mjs`), not kept beside its
+ * replacement. Its four-rung walk collapses to the two-tier one below — see `resolveInstanceAnchor`
+ * for which tiers survive, and why.
  *
  * ── THE SECTION IS AN ORDINAL, NEVER THE HEADING'S CHARACTERS — THIS IS THE WHOLE FIX ──
  *
@@ -41,23 +45,23 @@
  *
  * ── NODE BESIDE INSTANCE, NEVER INSTANCE ALONE — REFUTATION 1 FROM THE DESIGN DOCUMENT ──
  *
- * A pure instance-id lookup is not enough and shipping only one would be a regression: today, a
- * uniquely-stamped node that MOVES SECTION keeps the cursor via `anchor.ts`'s STAMP rung, because
- * that rung searches by stamp across the whole file and does not care which heading is above it. An
- * instance id encodes the section, so the row that printed under the OLD section and the row that
- * prints under the NEW one are, correctly, two different instances — the design's own §2.4 argument
- * for why that is right, not a bug: the row under the old heading ceased to exist and a new row
+ * A pure instance-id lookup is not enough and shipping only one would be a regression: the retired
+ * `anchor.ts` kept the cursor on a uniquely-stamped node that MOVES SECTION via its STAMP rung,
+ * because that rung searched by stamp across the whole file and did not care which heading was
+ * above it. An instance id encodes the section, so the row that printed under the OLD section and
+ * the row that prints under the NEW one are, correctly, two different instances — the design's own
+ * §2.4 argument for why that is right, not a bug: the row under the old heading ceased to exist and a new row
  * came into existence, and only the NODE persisted. So `LineInstance.node` rides beside `instance`
  * on every line that has one, and `resolveInstanceAnchor` below is a TWO-TIER walk for exactly this
  * reason — instance match first (the same printing, cursor holds), node match second (the printing
  * moved, cursor follows and the caller can say so) — never instance alone.
  *
- * ── WHAT DOES NOT COLLAPSE, AND MATCHES anchor.ts'S OWN HONESTY ABOUT IT ──
+ * ── WHAT DOES NOT COLLAPSE, AND MATCHES THE RETIRED anchor.ts'S OWN HONESTY ABOUT IT ──
  *
  * A line with no stamp (a heading, or a line the operator has typed but the cycle has not stamped
  * yet) has no node to fall back to, so its identity IS its instance — section ordinal plus its own
  * exact text (or, for a heading, the constant token above). If that text changes, the OLD instance
- * will not be found, by the same construction that made TEXT the honest floor in anchor.ts: a
+ * will not be found, by the same construction that made TEXT the honest floor in `anchor.ts`: a
  * line's characters are a content hash, not an identity, and this module does not pretend
  * otherwise for a line the engine has never rendered. §3.2 of the design document names this the
  * hard case this module does not and cannot fix — see `a-line-being-made-survives-a-projection-too`
@@ -70,9 +74,9 @@
  * headings, and it is the view the false-`absent` bug was measured on. An id space that only named
  * node lines could not address the view that most needed it. `{`/`}` already jump to headings
  * (`boundary.ts`), so a heading needs an id for the same reason a node line does — a grid with holes
- * in it is not a grid. The one thing that still gets NO id is a BLANK line, matching `anchorFor`'s
- * own `null` (`anchor.ts:184-199`) and `paint.ts`'s own blank-line branch, which draws no row for
- * one at all — there is nothing here for an id to be an id OF.
+ * in it is not a grid. The one thing that still gets NO id is a BLANK line, matching the retired
+ * `anchor.ts`'s own `anchorFor(...) === null` for one and `paint.ts`'s own blank-line branch, which
+ * draws no row for one at all — there is nothing here for an id to be an id OF.
  *
  * ── THE FORMAT, AND WHY R2 SHOULD PRODUCE THE SAME STRING ──
  *
