@@ -1,0 +1,338 @@
+## The architecture gate — the half of CI this repo has never had. build.yml and worker.yml check
+# that the app BUILDS and DEPLOYS; nothing here has ever checked that the code still does what
+# docs/architecture/flows.yaml and capabilities.yaml SAY it does. Modelled on the monorepo's gate
+# (../qntm/.github/workflows/deploy.yml) but NOT copied — the two differ on lane count, verb and
+# runner, each for a reason recorded below, because copying a design without the reason it earned
+# is how a small repo ends up carrying machinery it does not need.
+#
+# ONE LANE, NOT TWO. The monorepo splits a cheap per-PR `map .` headline from a heavy `map . --full`
+# batched onto main, because that fan was 9 minutes on a GitHub-hosted runner and 101s even on a
+# 12-core self-hosted box, and its runner executes one job at a time, so a heavy per-PR gate would
+# queue every other job behind it. Neither applies here: this project's whole scenario suite (four
+# scenarios) ran `flow-trace verify .` in under three seconds against this worktree, measured
+# 2026-07-31 (see the PR description for the numbers), and this workflow runs on GitHub-hosted
+# `ubuntu-latest`, which does not serialise jobs the way one self-hosted executor does. So the full
+# check runs on every PR and every push to main — no batch lane, no `--full` split, no baseline file
+# for this repo to own.
+#
+# `verify`, NOT `map` / `map --full`. This is the one place this repo's gate MUST diverge from the
+# monorepo's, and it is not a style choice — .flow-trace.yaml (this repo's own config header)
+# documents that `map --full` and `capability-rollup` install canonical-routing probe anchors that
+# BLIND the JS observer for a TypeScript target: with those anchors installed, the observer records
+# no cross-module calls at all, and every declared flow reads UNVERIFIABLE. Measured again while
+# building this workflow (2026-07-31): `flow-trace map . --full` reports 16 FAIL / 15 PASS / 6
+# capabilities `partial` on a tree `flow-trace verify .` reports as 0 FAIL / 36 PASS on. Adding a
+# brand-new, real, exercised scenario in this same change (tests/flow_scenarios/vim_gestures.ts) did
+# not move `map --full`'s numbers AT ALL — it is blind to the new coverage, exactly as documented,
+# while `verify .`'s pass_count moved 36 → 38 and it recorded the new cross-module calls as
+# `observed but not declared` INFO. `verify .` is also read-only here — confirmed by a clean `git
+# status` after every local run in this change, where `map . --full` wrote (and this change reverted)
+# docs/architecture/capabilities.yaml, docs/implementation-artifacts/backlog.yaml and
+# docs/implementation-artifacts/handoff.yaml, three files this PR does not own. Gating on `map` would
+# gate on a verdict this project's own config already names as untrustworthy, and — separately — a
+# gate that writes to files outside this PR's ownership is a gate this PR cannot run safely at all.
+#
+# GATE-EXIT-CODE-FIRST. flow-trace reports a crash and a verdict through the SAME mechanism (a
+# non-zero exit), and they are not the same thing:
+#   exit 0   clean. No FAIL, no unobserved declared flow.
+#   exit 1   a REAL VERDICT — at least one FAIL. Read the findings below; something declared is not
+#            what is observed, or a static invariant did not hold.
+#   exit 2   a CRASH. flow-trace never reached an opinion — bad invocation, a dependency that failed
+#            to install, a scenario that failed to execute. There is NOTHING to read as a finding;
+#            treating it as "some FAILs" is exactly the misreading that has misled investigations on
+#            this project before (see the monorepo's deploy.yml, which names the same trap and calls
+#            it a standing open decision there — this file is the same fix, applied here first).
+# Confirmed by direct test while building this workflow: `flow-trace verify /tmp/does-not-exist`
+# exits 2 with no findings at all, not "zero PASS, zero FAIL" — the verdict step below reads the
+# exit code before it reads anything else, on purpose.
+#
+# ADVISORY ON THIS FIRST OUTING, NOT BLOCKING — a judgement call, recorded so it can be revisited on
+# evidence rather than habit. Locally `verify .` is clean (exit 0, 0 FAIL) both before and after this
+# change's new scenario, so the specific worry that motivated caution here — capabilities.yaml's
+# 2026-07-23 fossil `verify: PASS` fields going red on first contact — did NOT reproduce; checked,
+# not assumed (see docs/implementation-artifacts/backlog.yaml#flag-every-verify-pass-in-capabilities-
+# yaml, which is about the fields never having been re-verified against a real run, not about the
+# current run being red). What remains untested is CI ITSELF: this is the first time this instrument
+# has run in this environment rather than on a laptop, .flow-trace.yaml documents a real (tool-side,
+# pre-existing, not this repo's to fix) capture-truncation flake in `verify`'s own JS observer, and a
+# gate with zero real CI runs behind it that goes red on arrival gets ignored rather than fixed. So
+# this job REPORTS every run — full findings in the step summary, the exit code distinguished per the
+# note above — but does not fail the workflow. Flip `continue-on-error` below to `false` once a
+# handful of real PR runs have come back clean/consistent and the capabilities/backlog rows this PR
+# proposes (see the PR description — they could not be written here; capabilities.yaml and
+# backlog.yaml belong to a sibling change in flight) are folded in.
+#
+# HOW THIS JOB GETS flow-trace. CI checks out exactly one repository, so the local invocation this
+# repo's own docs quote — `uv run --python 3.12 --with-editable ../qntm/tools/flow-trace flow-trace
+# <verb> .` — has no `../qntm` to resolve here (and, worth recording: even locally the RIGHT relative
+# path depends on exactly how deep the checkout is nested — `../../../qntm/tools/flow-trace` from a
+# worktree at worktrees/qntm-network/trace-gate, `../qntm/tools/flow-trace` only from a flatter
+# layout — which is itself an argument against a bare relative path surviving into CI unexamined).
+# Three designs were weighed:
+#   a bare relative path      ruled out — nothing to be relative TO in a single-repo checkout, and
+#                              fragile even locally (above).
+#   a published package       the cleanest long-term answer, and not available today: flow-trace has
+#                              no release process or package index of its own yet.
+#   a second checkout, PINNED what this job does. `actions/checkout` pulls QNTM-Network/qntm a second
+#                              time, at an EXPLICIT commit (FLOW_TRACE_TOOL_REF below) rather than
+#                              `main` — a float on `main` would let the monorepo change this repo's
+#                              gate behaviour with no qntm-network commit recording why, the same
+#                              invisible-coupling failure mode as a dependency with no lockfile.
+#                              Bumping the pin is therefore a deliberate, reviewed edit to this file.
+# A route needing NO secret at all was considered and rejected for now: GitHub lets a private repo's
+# own Settings → Actions → Access allow-list grant OTHER repos' default GITHUB_TOKEN read access
+# without any PAT. It would remove FLOW_TRACE_CHECKOUT_TOKEN entirely — but granting it is a change
+# to QNTM-Network/qntm's repository settings, on the PRIVATE trunk this workflow's own author was
+# explicitly barred from touching or configuring. Recorded here as the better answer IF the operator
+# wants to enable it on the qntm side; this file does not assume it.
+#
+# THE SECRET, NAMED ONCE, PLAINLY: create a repo secret called `FLOW_TRACE_CHECKOUT_TOKEN` on
+# `QNTM-Network/qntm-network`, holding a fine-grained GitHub PAT scoped to READ-ONLY *contents* on
+# `QNTM-Network/qntm` alone. Without it: the `flow-trace` job below does not run at all (skipped, not
+# failed — see the next note), and the companion `flow-trace-gate-unavailable` job explains why in
+# its own name and step summary on every run until the secret exists.
+#
+# A MISSING SECRET MEANS SKIPPED, NOT FAILED (fixed 2026-07-31, after the first real PR run: the
+# second checkout step above errored `Input required and not supplied: token` and, because
+# `continue-on-error` only silences a STEP's failure and not a missing job precondition, that put a
+# red `flow-trace` check on every PR in this repo until the secret existed — training reviewers to
+# stop reading the one check this PR exists to add, exactly the failure mode ADVISORY-vs-BLOCKING
+# above already argues against one level up).
+#
+# THE MECHANISM, CONFIRMED RATHER THAN WRITTEN FROM MEMORY. `secrets` is NOT a supported context in
+# either a job's or a step's `if:` — confirmed against GitHub's own actions/runner issue tracker
+# (actions/runner#520, "Secrets cannot be used to condition job runs") and community docs while
+# fixing this. The supported workaround, confirmed the same way: a small preceding job reads the
+# secret inside an ordinary `run:` step (secrets ARE readable there), emits a boolean — never the
+# secret's own value — to `$GITHUB_OUTPUT`, and every dependent job's `if:` reads that through the
+# `needs` context, which IS supported at the job level. `check-token` below does exactly this. One
+# more thing confirmed rather than assumed: GitHub redacts a job OUTPUT that contains an actual
+# secret VALUE ("Skip output ... since it may contain secret") — irrelevant here, because the output
+# is the literal string `"true"`/`"false"`, never the token itself, so nothing is ever at risk of
+# being silently dropped by that redaction.
+#
+# VISIBLY SKIPPED, NOT SILENTLY GREEN. `flow-trace` itself shows GitHub's own grey "Skipped" status
+# when the token is absent — real, but easy to read as "did this even run?" without a second look.
+# So `flow-trace-gate-unavailable` runs in exactly the opposite case (same `check-token` output,
+# negated) and does one thing: write a `::warning::` annotation (visible on the PR's checks summary
+# without opening a single run) plus a step-summary paragraph naming the secret and what to do.
+# Between the two, a human sees either a real verdict, or an unmistakable "this did not run and
+# here is why" — never an unexplained grey dash and never a false green.
+#
+# RUNNER: GitHub-hosted `ubuntu-latest`, matching build.yml and worker.yml — deliberately NOT the
+# monorepo's self-hosted `luke2`. Three reasons, all checked rather than assumed:
+#   1. COST DOES NOT APPLY HERE. The monorepo moved to `luke2` because its org (QNTM-Network) is on
+#      GitHub's Free plan with PRIVATE-repo Actions minutes exhausted — confirmed there 2026-07-29,
+#      reconfirmed while building this workflow (`/orgs/QNTM-Network` still reports `plan.name:
+#      free`). qntm-network is PUBLIC, and GitHub does not charge public repositories against that
+#      allowance at all — hosted minutes here are free regardless of the org's plan.
+#   2. NO SINGLE-EXECUTOR CONTENTION. `luke2` runs one job at a time, which is the entire reason the
+#      monorepo's heavy fan was moved off the per-PR path — a 101s job would queue every other job
+#      behind it. GitHub-hosted runners are not one shared executor; PRs here do not queue behind
+#      each other's gates.
+#   3. THE OPERATIONAL COST OF luke2 IS REAL AND UNNEEDED HERE. It is a user LaunchAgent behind
+#      FileVault on the operator's second Mac — it does not survive an unattended reboot. Putting
+#      this repo's only architecture gate behind a machine that can silently stop taking jobs, for a
+#      fan that costs single-digit seconds on a free hosted runner, would trade a real fragility for
+#      a benefit this repo does not have.
+name: flow-trace
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  # PINNED, NOT `main` — see "HOW THIS JOB GETS flow-trace" above. Bump this deliberately when
+  # flow-trace changes in a way this repo wants, and say why in the commit that bumps it.
+  FLOW_TRACE_TOOL_REF: c0d77b71a18613d159e3572a99b013b2e9c69765
+
+jobs:
+  # THE SECRET GATE. Cheap (one step, no checkout) and always runs, so its own status is never the
+  # thing a reviewer has to puzzle over. Never echoes the secret's value — only whether it is
+  # non-empty. A secret that is unset resolves to `''` here (GitHub's documented behaviour for a
+  # missing secret, not an error), so `[ -n ... ]` correctly reads "not set" and "set to empty" the
+  # same way, which is the semantic this gate wants either way.
+  check-token:
+    runs-on: ubuntu-latest
+    outputs:
+      has-token: ${{ steps.check.outputs.has-token }}
+    steps:
+      - name: is FLOW_TRACE_CHECKOUT_TOKEN set?
+        id: check
+        run: |
+          if [ -n "${{ secrets.FLOW_TRACE_CHECKOUT_TOKEN }}" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  flow-trace:
+    needs: check-token
+    if: needs.check-token.outputs.has-token == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout qntm-network
+        uses: actions/checkout@v4
+
+      # No token guard needed here any more — this whole job only runs when check-token confirmed
+      # the secret exists (see the header note on the mechanism). sparse-checkout is scoped to
+      # tools/flow-trace alone — no reason to pull the rest of a private monorepo into a public
+      # repo's runner workspace.
+      - name: checkout flow-trace (QNTM-Network/qntm, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: QNTM-Network/qntm
+          ref: ${{ env.FLOW_TRACE_TOOL_REF }}
+          token: ${{ secrets.FLOW_TRACE_CHECKOUT_TOKEN }}
+          path: qntm-tool-checkout
+          sparse-checkout: |
+            tools/flow-trace
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # node_modules/ is gitignored (.flow-trace.yaml's own precondition #2) — a fresh checkout has
+      # neither this repo's nor the tool's, and the scenarios import markdown-it.
+      - run: npm ci
+
+      # The tool's own JS observer dependencies (.flow-trace.yaml's precondition #1) are normally
+      # SELF-installing on first use (flow_trace.js_capture.ensure_observer_dependencies, confirmed
+      # by reading the tool's source while building this workflow) as long as npm is on PATH, which
+      # the setup-node step above guarantees — no separate install step should be strictly needed.
+      # Kept explicit anyway: a CI failure that traces back to "the tool silently tried to npm-install
+      # mid-gate and something about this runner forbade it" is a worse debugging session than one
+      # extra green step, and this makes the precondition visible in the log rather than implied.
+      - name: install flow-trace's own observer dependencies
+        run: npm ci
+        working-directory: qntm-tool-checkout/tools/flow-trace/js
+
+      # THE GATE ITSELF. `--format json` so the verdict step below can read structured findings
+      # rather than re-parsing rendered text — the same reason the monorepo's gate tees JSON.
+      # ADVISORY (continue-on-error: true) — see the header note on why, and when to flip it.
+      - name: flow-trace verify .
+        id: verify
+        continue-on-error: true
+        run: |
+          set +e
+          uv run --python 3.12 --with-editable qntm-tool-checkout/tools/flow-trace \
+            flow-trace verify . --format json | tee "$RUNNER_TEMP/verify.json"
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          echo "flow-trace verify . exited ${code}"
+
+      # GATE-EXIT-CODE-FIRST, applied. Reads the exit code BEFORE it reads any finding, and never
+      # describes exit 2 as containing FAILs — see the header note for why that distinction matters
+      # enough to test explicitly (it was, against a deliberately bad invocation).
+      - name: read the verdict
+        if: always()
+        env:
+          VERIFY_EXIT: ${{ steps.verify.outputs.exit_code }}
+        run: |
+          case "$VERIFY_EXIT" in
+            0)
+              echo "flow-trace verify . is CLEAN (exit 0)." | tee -a "$GITHUB_STEP_SUMMARY"
+              ;;
+            1)
+              {
+                echo "## flow-trace found a REAL VERDICT (exit 1)"
+                echo
+                echo "At least one FAIL or an unobserved declared flow. This is NOT a crash — read"
+                echo "the findings table below."
+              } | tee -a "$GITHUB_STEP_SUMMARY"
+              ;;
+            2)
+              {
+                echo "## flow-trace CRASHED (exit 2) — THIS IS NOT A VERDICT"
+                echo
+                echo "flow-trace never reached an opinion: a bad invocation, a dependency that"
+                echo "failed to install, or a scenario that failed to execute. There is no FAIL to"
+                echo "hunt for — fix the tool error (see the raw log above) and re-run."
+              } | tee -a "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "no exit code recorded — the verify step did not run to completion." \
+                | tee -a "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+          if [ -f "$RUNNER_TEMP/verify.json" ]; then
+            python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+
+          path = os.path.join(os.environ["RUNNER_TEMP"], "verify.json")
+          with open(path, encoding="utf-8") as handle:
+              doc = json.load(handle)
+
+          summary = doc.get("summary", {})
+          print()
+          print("| counter | value |")
+          print("| --- | --- |")
+          for key in ("fail_count", "pass_count", "info_count", "total_scenarios_run"):
+              if key in summary:
+                  print(f"| `{key}` | {summary[key]} |")
+
+          fails = [f for f in doc.get("findings", []) if f.get("status") == "FAIL"]
+          if fails:
+              print()
+              print(f"### {len(fails)} FAIL(s)")
+              print()
+              print("| mode | declaration_ref | message |")
+              print("| --- | --- | --- |")
+              for f in fails[:40]:
+                  msg = (f.get("message") or "").replace("|", "\\|").replace("\n", " ")[:220]
+                  print(f"| {f.get('mode')} | `{f.get('declaration_ref') or '-'}` | {msg} |")
+              if len(fails) > 40:
+                  print()
+                  print(f"…and {len(fails) - 40} more — see the `flow-trace verify .` step's log.")
+          PY
+          fi
+
+      # RE-RAISE THE VERDICT so a human scanning the run's step list (not just the step summary tab)
+      # still sees a red X next to this step for a non-clean exit. `continue-on-error: true` here
+      # too, on purpose: it is what makes "this step failed" and "the job/PR check is red" two
+      # different facts. Without it, this step alone would make the whole job fail, silently
+      # re-introducing the blocking behaviour the header explicitly says this first outing does not
+      # want yet.
+      - name: fail loudly if red (informational only — the job itself stays advisory)
+        if: always() && steps.verify.outputs.exit_code != '0'
+        continue-on-error: true
+        run: |
+          echo "flow-trace verify . did not exit 0 (exit ${{ steps.verify.outputs.exit_code }})." >&2
+          echo "This step is informational: the job is ADVISORY on its first outing (see" >&2
+          echo "flow-trace.yml's header). It will start blocking once continue-on-error is removed" >&2
+          echo "from BOTH this step and the verify step above." >&2
+          exit 1
+
+  # THE EXPLAINER. Runs exactly when `flow-trace` above does not (the same check-token output,
+  # negated), so exactly one of the two is ever green/grey on a given run. Its whole job is to make
+  # "this did not run, and here is why" impossible to miss — a `::warning::` annotation surfaces on
+  # the PR's checks overview without opening any run, and the step summary spells out the fix.
+  flow-trace-gate-unavailable:
+    needs: check-token
+    if: needs.check-token.outputs.has-token != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: explain why the flow-trace gate did not run
+        run: |
+          echo "::warning title=flow-trace gate skipped::FLOW_TRACE_CHECKOUT_TOKEN is not set on this repo, so the architecture gate did not run (skipped, not failed). See .github/workflows/flow-trace.yml for what to create."
+          {
+            echo "## flow-trace did NOT run — \`FLOW_TRACE_CHECKOUT_TOKEN\` is not set"
+            echo
+            echo "This is expected until the operator creates the secret; it is not a failure of"
+            echo "this PR or this commit. The \`flow-trace\` job above is genuinely SKIPPED (GitHub's"
+            echo "grey status), and this job exists only so that fact is impossible to miss."
+            echo
+            echo "**To fix, once, for every future PR:** create a repository secret named"
+            echo "\`FLOW_TRACE_CHECKOUT_TOKEN\` on \`QNTM-Network/qntm-network\` holding a"
+            echo "fine-grained GitHub PAT scoped to READ-ONLY **contents** on \`QNTM-Network/qntm\`"
+            echo "alone. The moment it exists, the \`flow-trace\` job starts running on its own —"
+            echo "no further edit to this file, no new PR."
+          } >> "$GITHUB_STEP_SUMMARY"
