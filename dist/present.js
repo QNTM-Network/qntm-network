@@ -217,6 +217,112 @@ var FocusSurface = class {
   }
 };
 
+// app/present/motions.ts
+function clampLine(index, lastIndex) {
+  const floor = 0;
+  const ceiling = lastIndex < 0 ? 0 : lastIndex;
+  return Math.max(floor, Math.min(index, ceiling));
+}
+var DIGIT = /^[0-9]$/;
+var ModeSurface = class {
+  #mode = "NORMAL";
+  #count = "";
+  #pendingG = false;
+  get mode() {
+    return this.#mode;
+  }
+  /**
+   * Start editing — an `<input>` is about to hold the selected line's characters. Called by
+   * `handleKey` for `i`/`Enter`, and by the DOM wiring for a mouse click, which has meant "edit
+   * this line" since before this module existed and goes on meaning it.
+   */
+  enterInsert() {
+    this.#mode = "INSERT";
+    this.#count = "";
+    this.#pendingG = false;
+  }
+  /**
+   * Leave editing — the selected line PERSISTS (FocusSurface's `lineIndex` is not touched here;
+   * see paint.ts's `settle`, which stops calling `focus.blur()` once a `ModeSurface` is wired in,
+   * for exactly this reason). Vim always has a cursor on some line; only whether that line is open
+   * for text ever turns off.
+   */
+  enterNormal() {
+    this.#mode = "NORMAL";
+    this.#count = "";
+    this.#pendingG = false;
+  }
+  /**
+   * One keystroke while in NORMAL mode. No-op (and reports unhandled) while in INSERT — the
+   * `<input>`'s own keydown listener owns keys once one is open, and this module never reaches
+   * into it.
+   *
+   * `current`/`lastIndex` are `FocusSurface.lineIndex` (never `null` while vim owns the cursor —
+   * the DOM wiring is responsible for giving it a starting value) and the last valid line index
+   * for the view being shown.
+   *
+   * COUNT PREFIX: digits accumulate; `1`-`9` may start one, `0` may only CONTINUE one already
+   * started (a bare `0` is left unbound rather than guessed at as "column zero", per the brief).
+   * Any non-digit key — bound or not — consumes and clears the pending digits, which is why the
+   * count is reset before the switch below runs rather than only inside the branches that use it.
+   *
+   * `gg`: the one two-key binding. A `g` that is not followed by a second `g` is silently
+   * abandoned and the key that broke the pair is processed as an ordinary keystroke — so `g` then
+   * `j` moves down by one rather than doing nothing at all.
+   */
+  handleKey(key, current, lastIndex) {
+    if (this.#mode !== "NORMAL") {
+      return { handled: false, effect: { kind: "none" } };
+    }
+    if (this.#pendingG) {
+      this.#pendingG = false;
+      if (key === "g") {
+        this.#count = "";
+        return { handled: true, effect: { kind: "move", lineIndex: clampLine(0, lastIndex) } };
+      }
+    }
+    if (key === "g") {
+      this.#pendingG = true;
+      return { handled: false, effect: { kind: "none" } };
+    }
+    if (DIGIT.test(key)) {
+      if (key === "0" && this.#count === "") {
+        return { handled: false, effect: { kind: "none" } };
+      }
+      this.#count += key;
+      return { handled: true, effect: { kind: "none" } };
+    }
+    const pending = this.#count === "" ? null : Number(this.#count);
+    this.#count = "";
+    switch (key) {
+      case "j":
+        return {
+          handled: true,
+          effect: { kind: "move", lineIndex: clampLine(current + (pending ?? 1), lastIndex) }
+        };
+      case "k":
+        return {
+          handled: true,
+          effect: { kind: "move", lineIndex: clampLine(current - (pending ?? 1), lastIndex) }
+        };
+      case "G":
+        return {
+          handled: true,
+          effect: {
+            kind: "move",
+            lineIndex: pending === null ? clampLine(lastIndex, lastIndex) : clampLine(pending - 1, lastIndex)
+          }
+        };
+      case "i":
+      case "Enter":
+        this.enterInsert();
+        return { handled: true, effect: { kind: "enter-insert" } };
+      default:
+        return { handled: false, effect: { kind: "none" } };
+    }
+  }
+};
+
 // app/present/draft.ts
 var DraftSurface = class {
   #draft = null;
@@ -361,6 +467,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
   input.type = "text";
   input.className = "rawline";
   input.value = lineSource;
+  const mode = deps.mode;
   let settled = false;
   const settle = (commit, openBelow = false) => {
     if (settled) {
@@ -368,11 +475,16 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     }
     settled = true;
     const wasFocused = focus.isFocused(lineIndex);
-    if (wasFocused) {
-      focus.blur();
-    }
+    const leaveInsert = () => {
+      if (mode !== void 0) {
+        mode.enterNormal();
+      } else {
+        focus.blur();
+      }
+    };
     if (!commit) {
       if (wasFocused) {
+        leaveInsert();
         repaint(fileSource);
       }
       return;
@@ -382,6 +494,13 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     deps.onLineCommit?.({ lineIndex, text, markdown });
     const next = markdown ?? fileSource;
     const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (wasFocused) {
+      if (opened && mode !== void 0) {
+        mode.enterInsert();
+      } else {
+        leaveInsert();
+      }
+    }
     if (markdown !== null || wasFocused || opened) {
       repaint(next);
     }
@@ -443,6 +562,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
 var TAG_CHIP_CLASS = "tagchip";
 var CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
 var CHIP_CLOSE = "</span>";
+var VIM_SELECTED_CLASS = "vim-selected";
 function renderTags(text, tags, render) {
   if (tags === "raw") {
     return render(text);
@@ -464,6 +584,7 @@ function renderTags(text, tags, render) {
 function paint(body, source, context, deps) {
   const focus = deps.focus;
   const draft = deps.draft;
+  const mode = deps.mode;
   const repaint = (nextSource) => {
     paint(body, nextSource, context, deps);
   };
@@ -475,6 +596,7 @@ function paint(body, source, context, deps) {
       event?.preventDefault?.();
       event?.stopPropagation?.();
       focus.focus(lineIndex);
+      mode?.enterInsert();
       repaint(source);
     });
   };
@@ -523,16 +645,16 @@ function paint(body, source, context, deps) {
       return;
     }
     lastPaintedIndex = index;
-    const cascade = new PresentationCascade(
-      focus === void 0 ? context : focus.contextFor(index, context)
-    );
+    const focusLive = focus !== void 0 && (mode === void 0 || mode.mode === "INSERT");
+    const cascade = new PresentationCascade(focusLive ? focus.contextFor(index, context) : context);
+    const selected = mode !== void 0 && mode.mode === "NORMAL" && focus !== void 0 && focus.isFocused(index);
     if (shape.kind === "checkbox") {
       if (cascade.resolve("checkbox").rendition === "raw") {
         raw(shape.source, index);
         return;
       }
       const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "");
+      row.className = "task" + (shape.done ? " done" : "") + (selected ? " " + VIM_SELECTED_CLASS : "");
       row.style.marginLeft = shape.indent.length / 2 * 1.2 + "rem";
       const box = document.createElement("input");
       box.type = "checkbox";
@@ -562,6 +684,9 @@ function paint(body, source, context, deps) {
         return;
       }
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
+      if (selected) {
+        el.className = VIM_SELECTED_CLASS;
+      }
       el.innerHTML = renderTags(
         shape.text,
         cascade.resolve("tags").rendition,
@@ -576,6 +701,9 @@ function paint(body, source, context, deps) {
       return;
     }
     const div = document.createElement("div");
+    if (selected) {
+      div.className = VIM_SELECTED_CLASS;
+    }
     div.innerHTML = renderTags(
       shape.source,
       cascade.resolve("tags").rendition,
@@ -600,6 +728,7 @@ export {
   DEFAULT,
   DraftSurface,
   FocusSurface,
+  ModeSurface,
   PresentationCascade,
   PresentationContext,
   RESOLUTION_KEYS,
@@ -607,6 +736,7 @@ export {
   applyEdit,
   carriesContent,
   chromeOf,
+  clampLine,
   classifyLine,
   isSilent,
   paint,

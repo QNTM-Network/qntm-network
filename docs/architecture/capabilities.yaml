@@ -543,6 +543,17 @@ capabilities:
     declaration.
     EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. Falsifiable from migration stages 4 and
     5, each by resolving one fixture twice and asserting the painted DOM differs.
+    CORRECTED 2026-07-31 — VIM NORMAL/INSERT IS NOT WHAT "MODE" MEANS HERE, AND THIS ROW STAYS
+    UNCLAIMED BY IT. A sibling row, `vim-normal-mode-is-a-gesture-not-a-resolution` below, ships
+    reading-vs-editing per LINE. This capability is reading-vs-authoring per VIEW — a `Resolution`
+    shift for every line at once, the same vocabulary GLOBAL and USER already speak. They looked
+    like the same rung until the vim row tried to speak it: gating that row's raw-on-focus
+    contribution by mode (so NORMAL's selected line does not become an `<input>`) is exactly the
+    branch this capability's own MODE rung would need to stay silent for, which is the tell that
+    they are not one feature wearing two names. See app/present/motions.ts's own header for the
+    argument in full, and research-polish-direction.md §5 for why the operator's brief already
+    shipped them in that order — reading/source first, motions second, "because #1 proves the
+    mode plumbing".
   tier: functional
   rooting: >-
     isolated STILL. `presentation-resolution` exists as of 2026-07-30 (stage 1) and USER and
@@ -551,6 +562,38 @@ capabilities:
     CONTRIBUTES at either level: no user record field, no session mode. Rooting a capability
     whose levels nothing populates would describe a path no code takes. It roots at stages 4
     and 5, each of which ships a contributor and a test that reads it back.
+  status: undeclared
+- id: vim-normal-mode-is-a-gesture-not-a-resolution
+  intent: >-
+    NORMAL/INSERT is the operator's own request (research-polish-direction.md §5, read off his
+    Obsidian config — `vimMode: true`, a relative line-numbers plugin, four of seven hand-bound
+    hotkeys are navigation): `j`/`k` move a LINE SELECTION by a count prefix, `gg`/`G` jump to the
+    ends, `i`/Enter opens the selected line as the `<input>` the app already builds for a click,
+    Escape returns to NORMAL through the SAME discard path that already existed, and the selection
+    survives — vim always has a cursor on some line, only whether it may be typed into turns off.
+    IT IS A GESTURE, NOT A FIFTH `Resolution` KEY. `app/present/motions.ts`'s `ModeSurface` never
+    imports `resolution.ts` and never produces a `Contribution` — it decides which keys are live
+    and whether the selected line's embodiment is an `<input>` or its ordinary rendered form with
+    a selection mark, both DOM-embodiment choices `paint.ts` already made in this family (`focus
+    === undefined ? rawText(...) : rawInput(...)`). The cascade's own `MODE` rung stays silent —
+    `levels.ts`'s claim that every rung is silent remains true after this ships, by choice rather
+    than by accident.
+    EVIDENCE TIER — NODE-TEST ONLY, NOT FLOW-TRACE-VERIFIED. `tests/present-motions.test.mjs`
+    (pure `ModeSurface`/`clampLine`, then the reducer wired to `paint()` exactly as the DOM layer
+    wires it) and `tests/app-vim-wiring.test.mjs` (the SAME keystrokes, fired at `document` through
+    app/index.html's own lifted script) are green — 45 tests, `npm run check` unaffected elsewhere.
+    No `tests/flow_scenarios/*.ts` scenario exercises `ModeSurface` yet and `.flow-trace.yaml`
+    declares no flow for it, so `flow-trace verify .` (2026-07-31, exit 0, 29 PASS / 0 FAIL / 16
+    INFO) says nothing about this row either way — its dynamic capture never calls this code. This
+    is a real gap, not an oversight papered over: see the backlog row for what closing it needs.
+  tier: functional
+  rooting: >-
+    isolated. `ModeSurface` is a new class with no caller inside app/present/ itself; `paint.ts`
+    reads it through the same optional-dependency pattern `focus`/`draft` already use
+    (presentation-painting's own class), and app/index.html wires it the same way it wires
+    `FocusSurface`/`DraftSurface` today. No existing class's declared surface changed shape —
+    `PaintDeps` gained one optional field — so nothing here is rooted through a class that did not
+    already exist for a different reason.
   status: undeclared
 - id: the-app-has-a-shell-and-views-are-chosen-by-folder
   intent: >-

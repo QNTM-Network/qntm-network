@@ -93,6 +93,11 @@ export const __currentViewId = () => currentViewId;
 export function __setGraphData(next) { graphData = next; }
 export function __setCurrentViewId(next) { currentViewId = next; }
 export const __drawerIsOpen = () => drawerIsOpen;
+// VIM. \`mode\` and \`focus\` are module-scoped consts, same shape as \`currentViewId\` above —
+// getters rather than raw exports so a test reads the live value instead of a snapshot from
+// import time.
+export const __vimMode = () => mode.mode;
+export const __focusIndex = () => focus.lineIndex;
 `;
 
   const file = join(workDir, "page.mjs");

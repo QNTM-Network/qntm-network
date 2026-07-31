@@ -292,6 +292,60 @@ backlog:
   driving_capability: presentation-resolution-is-user-and-mode-aware
   kind: capability
   state: diagnose-ready
+- id: vim-normal-mode
+  title: '[present] [vim] Vim NORMAL/INSERT for the reading column: `j`/`k` move a
+    line SELECTION (a count prefix accumulates, any non-digit clears it), `gg`/`G`
+    jump to the ends, `i`/Enter opens the selected line as the `<input>` a click already
+    opens, Escape returns to NORMAL through the SAME discard path rather than a second
+    one, and the selection survives Escape — only whether the line may be typed into
+    turns off. The operator''s own request, read off his Obsidian config (research-polish-direction.md
+    §5): `vimMode: true`, a relative line-numbers plugin, four of seven hand-bound
+    hotkeys are navigation.
+    REFUTES THE PREMISE THAT THIS IS THE SAME RUNG AS `add-the-mode-presentation-level`
+    ABOVE. Tried as a fifth `Resolution` contribution at the cascade''s MODE rung and
+    rejected: NORMAL''s selected line must NOT become an `<input>` the way FOCUS''s
+    existing raw-on-focus contribution already makes it, and gating that is an embodiment
+    decision in `paint.ts` (the same family as `focus === undefined ? rawText(...)
+    : rawInput(...)`), never a second `Contribution`. Shipped as `app/present/motions.ts`
+    (`ModeSurface`, pure — no DOM, no `Contribution`, no cascade import) plus a thin
+    wire in `paint.ts` (one optional `PaintDeps.mode`) and `app/index.html` (one document
+    keydown listener, guarded by the SAME `typingIn()` the drawer''s `\` already uses).
+    See `vim-normal-mode-is-a-gesture-not-a-resolution` for the capability and the
+    full argument.'
+  driving_capability: vim-normal-mode-is-a-gesture-not-a-resolution
+  record: '2026-07-31 — SHIPPED. tests/present-motions.test.mjs: the pure reducer
+    (clampLine, count-prefix accumulate-then-clear, gg/G, i/Enter, handleKey inert
+    while INSERT) with no DOM, then the SAME reducer wired to paint() exactly as app/index.html
+    wires it (NORMAL opens no <input>; the selected line carries a class, not a caret;
+    i/Enter opens an <input> holding the cascade''s raw rendition of the exact source
+    line; Escape returns to NORMAL without posting and keeps the selection; a caller
+    with no ModeSurface is byte-for-byte the click-to-edit behaviour that shipped before
+    this arc). tests/app-vim-wiring.test.mjs drives the SAME keystrokes through app/index.html''s
+    own lifted script (tests/fixtures/app-html-page.mjs), not a reconstruction of its
+    wiring — j moves the selection, i opens the real <input>, Escape returns to NORMAL,
+    gg/G reach both ends, a keystroke targeted at a text field is refused. 45 new tests,
+    npm run check 393/393 (base 348/348, +45/+45, 0 regressions; the one CSS-class
+    registry test in tests/app-view-rows.test.mjs needed `vim-selected` added to its
+    known-classes list, which is that suite doing its job).
+    NOT FLOW-TRACE-VERIFIED. No tests/flow_scenarios/*.ts scenario calls ModeSurface
+    and .flow-trace.yaml declares no flow for it, so flow-trace verify . (exit 0, 29
+    PASS / 0 FAIL / 16 INFO) says nothing about this row either way — same shape of
+    gap adopt-typescript-flow-capture closed for the edit/view-mode capability, not
+    yet closed here. A follow-up row, not this one: it needs a scenario that actually
+    drives ModeSurface under the node observer, which this branch did not attempt.
+    NOT VERIFIED IN A REAL BROWSER — no server, no passkey session an agent can complete,
+    so nothing here was clicked in Chrome. What IS true: `npm run build` produced dist/present.js
+    from the changed sources with no type error, and every DOM primitive the new code
+    touches (createElement, className, classList, addEventListener, value, focus())
+    is one the existing suites already drive through the same stub.
+    ALSO A REAL UX CHANGE, SAID PLAINLY: every view now opens in NORMAL with the first
+    line selected and nothing editable until a click or `i`/Enter — before this arc
+    a view opened with nothing selected and every line one click from editable. A
+    mouse click still opens INSERT directly (`focusable()`''s handler now also calls
+    `mode.enterInsert()`), so nothing that worked by clicking stopped working; what
+    changed is that a fresh view is no longer keyboard-inert.'
+  kind: capability
+  state: passing
 - id: add-the-user-presentation-level
   title: '[present] [stage 5] [HALF A DAY] Add the USER level — the per-person default
     Resolution, held in the server-side user record behind the passkey session, NOT

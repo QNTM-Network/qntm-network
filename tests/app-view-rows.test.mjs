@@ -523,7 +523,10 @@ describe("one row geometry, two renditions", () => {
     // about, which is exactly how `<h4>` ended up drawn by the browser's own stylesheet.
     // `syncing` is a STATE a task line wears while its POST is in flight (app/index.html's
     // `toggleTask`), not a kind of line — it only ever declares `opacity`, which costs no layout.
-    const LINES = ["task", "done", "syncing", "rawline"];
+    // `vim-selected` is the same shape of thing: a state ANY line kind wears when it is vim's
+    // NORMAL-mode selection (app/present/paint.ts), declaring only `background` and `box-shadow`
+    // — neither a BOX_PROPERTY — so it cannot be the jump the row invariant above exists to catch.
+    const LINES = ["task", "done", "syncing", "rawline", "vim-selected"];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
     const TOKENS = ["tagchip"];
     const known = new Set([...LINES, ...TRAILING, ...TOKENS]);

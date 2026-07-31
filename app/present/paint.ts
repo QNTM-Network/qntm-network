@@ -70,6 +70,7 @@ import { PresentationCascade } from "./cascade.js";
 import type { PresentationContext } from "./context.js";
 import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
+import type { ModeSurface } from "./motions.js";
 import { seedFor } from "./newline.js";
 import { classifyLine, tagSpans } from "./resolution.js";
 import type { Rendition } from "./resolution.js";
@@ -134,6 +135,17 @@ export interface PaintDeps {
    * be identical to. app.html supplies one; a test that wants the old surface omits it.
    */
   readonly focus?: FocusSurface;
+  /**
+   * VIM'S NORMAL/INSERT DISTINCTION — optional, and its absence is a real configuration exactly as
+   * `focus`'s is. Without it, `focus` behaves exactly as it always has: a focused line is always
+   * raw, always an editable `<input>` (click-to-edit). With it, the raw-on-focus contribution
+   * (`focus.contextFor`) is applied only while `mode.mode === "INSERT"` — while it is `"NORMAL"`
+   * the focused/selected line resolves through the cascade like any other and is marked with a
+   * selection class instead of becoming an `<input>`. See motions.ts for why this is not a fifth
+   * `Contribution` key: NORMAL/INSERT is a fact about which line may be edited and which keys are
+   * live, never a `Rendition` shift, so it never reaches `PresentationContext`.
+   */
+  readonly mode?: ModeSurface;
   readonly onLineCommit?: (commit: LineCommit) => void;
   /**
    * WHERE A LINE IS BEING MADE — optional, and its absence is a real configuration exactly as
@@ -212,6 +224,7 @@ function rawInput(
   input.type = "text";
   input.className = "rawline";
   input.value = lineSource;
+  const mode = deps.mode;
 
   // ONE SETTLEMENT PER INPUT. Blur can arrive twice (a keypress that commits, then the element
   // losing focus as the repaint removes it), and a second settlement would compute a second edit
@@ -223,13 +236,23 @@ function rawInput(
     }
     settled = true;
     const wasFocused = focus.isFocused(lineIndex);
-    if (wasFocused) {
-      focus.blur();
-    }
+    // LEAVING THE LINE, AND THE TWO THINGS IT CAN MEAN. `deps.mode` absent: this is the app as it
+    // was before vim — focus off means off, exactly as `focus.blur()` always did. `deps.mode`
+    // present: vim always has a cursor on SOME line, so leaving edit returns to NORMAL and the
+    // selection stays on this line — `focus.lineIndex` is left untouched. See motions.ts,
+    // `ModeSurface.enterNormal`.
+    const leaveInsert = (): void => {
+      if (mode !== undefined) {
+        mode.enterNormal();
+      } else {
+        focus.blur();
+      }
+    };
     if (!commit) {
       // Escape: the cursor leaves and the characters it was holding are dropped. Nothing is
       // computed, nothing is posted, and the line returns to whatever the cascade resolves.
       if (wasFocused) {
+        leaveInsert();
         repaint(fileSource);
       }
       return;
@@ -247,6 +270,16 @@ function rawInput(
     // new line's shape from characters that are no longer there.
     const next = markdown ?? fileSource;
     const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (wasFocused) {
+      if (opened && mode !== undefined) {
+        // Enter opened a NEW editable row below — the pre-existing draft affordance, untouched by
+        // vim — and it is about to take the cursor. Report INSERT rather than NORMAL for the
+        // instant in which a line really is open for text.
+        mode.enterInsert();
+      } else {
+        leaveInsert();
+      }
+    }
     if (markdown !== null || wasFocused || opened) {
       // Optimistic, and the same posture the checkbox already had: show the edit immediately,
       // let the caller replace it with the server's copy when the cycle comes back.
@@ -384,6 +417,16 @@ const CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
 const CHIP_CLOSE = "</span>";
 
 /**
+ * NORMAL MODE'S SELECTION MARK — one class, on whichever element a WIRED line rendered as, when
+ * that line is the vim cursor. Deliberately not the caret's own green: `.viewbody input.rawline`
+ * marks INSERT with `caret-color` and a bottom hairline, and the brief is explicit that NORMAL's
+ * mark must "be clearly not a text caret" — reusing the caret's own visual vocabulary for a
+ * DIFFERENT fact would be exactly the confusion that line exists to prevent. See app/index.html
+ * for the rule this class carries.
+ */
+const VIM_SELECTED_CLASS = "vim-selected";
+
+/**
  * Render `text` with its tags as chips — or with them as characters, if the chip would not survive.
  *
  * ── WHY THE CHIP IS PUT INTO THE MARKDOWN AND NOT INTO THE DOM ──
@@ -457,6 +500,7 @@ export function paint(
 ): void {
   const focus = deps.focus;
   const draft = deps.draft;
+  const mode = deps.mode;
 
   /**
    * Paint the whole view again, from a source string.
@@ -487,6 +531,10 @@ export function paint(
       event?.preventDefault?.();
       event?.stopPropagation?.();
       focus.focus(lineIndex);
+      // A CLICK HAS ALWAYS MEANT "EDIT THIS LINE", and vim does not take that away — it only adds
+      // a keyboard path that does not need one. `mode` absent: no-op, exactly as before this
+      // field existed.
+      mode?.enterInsert();
       repaint(source);
     });
   };
@@ -576,9 +624,18 @@ export function paint(
     // ONE CASCADE PER LINE, because FOCUS is a fact about ONE line. The other six levels say the
     // same thing all the way down the view; this is the rung that does not, and building the
     // context per line is what lets the painter stay ignorant of which rung that is.
-    const cascade = new PresentationCascade(
-      focus === undefined ? context : focus.contextFor(index, context),
-    );
+    //
+    // FOCUS CONTRIBUTES ONLY WHILE INSERT IS LIVE (or no `ModeSurface` is wired at all, which is
+    // every caller that predates vim: click-to-edit keeps meaning exactly what it always meant).
+    // In NORMAL, the selected line resolves like any other — see `selected` below for how it is
+    // marked instead. This is an embodiment choice, the same family as `focus === undefined`
+    // already was; motions.ts explains why it is not a second `Contribution`.
+    const focusLive = focus !== undefined && (mode === undefined || mode.mode === "INSERT");
+    const cascade = new PresentationCascade(focusLive ? focus.contextFor(index, context) : context);
+    // THE VIM SELECTION MARK. True on at most one line per paint — the same "one cursor" FOCUS
+    // already guarantees — and only in NORMAL, since INSERT's `<input>` already carries its own
+    // mark (the caret).
+    const selected = mode !== undefined && mode.mode === "NORMAL" && focus !== undefined && focus.isFocused(index);
 
     if (shape.kind === "checkbox") {
       if (cascade.resolve("checkbox").rendition === "raw") {
@@ -586,7 +643,7 @@ export function paint(
         return;
       }
       const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "");
+      row.className = "task" + (shape.done ? " done" : "") + (selected ? " " + VIM_SELECTED_CLASS : "");
       // Two spaces of source indent is one nesting level, and one nesting level is 1.2rem.
       // Carried across unchanged from app.html:246 — the arithmetic is a presentation decision
       // and it now lives in the painter rather than in a page.
@@ -631,6 +688,9 @@ export function paint(
       // `#` demotes one level and clamps at 6: the view's own `#` is the page's `<h2>`, because
       // the page already owns an `<h1>`. app.html:259, unchanged.
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
+      if (selected) {
+        el.className = VIM_SELECTED_CLASS;
+      }
       // The heading's OWN `#`es are not tags and cannot be: `classifyLine` has already taken them
       // off, and the grammar would refuse them anyway (`#` then a space is not a tag body). What
       // is left is the heading's text, which may carry tags like any other line.
@@ -649,6 +709,9 @@ export function paint(
     // Everything else is its own one-line markdown document. Block render, not inline — that is
     // what makes a `- item` line a list and a `| a | b |` line a table row. app.html:266.
     const div = document.createElement("div");
+    if (selected) {
+      div.className = VIM_SELECTED_CLASS;
+    }
     // BLOCK RENDER, AND THE CHIP GOES IN BEFORE IT. This is the branch that carries most of the
     // real tags in a real view: the engine emits a non-checkbox line as `- title #tag`, which is
     // not a task and lands here. It is also the branch where the renderer sometimes refuses the
