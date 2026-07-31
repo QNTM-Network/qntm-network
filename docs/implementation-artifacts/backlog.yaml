@@ -480,3 +480,206 @@ backlog:
     also testing one build of it against another. Collapsing the two is this rows
     remaining work, and it is a separate change with separate evidence.'
   state: asserted
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# THE SAFE-HAVEN ARC — declared 2026-07-31 against the two capabilities the operator pinned.
+# Spec: docs/implementation-artifacts/design-the-edit-is-a-safe-haven.md.
+#
+# THE ORDER IS THE ARGUMENT. Rows 1-4 are the whole of "the edit is a safe haven" and are one
+# working session between them. Rows 5-7 are the whole of "the world moves around you". The
+# write-safety row comes BEFORE the make-it-fast row, and each row below says why it sits where
+# it does rather than leaving the sequence to be inferred.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+- id: a-write-refuses-a-stale-base
+  title: >-
+    [haven] [1] [HALF A DAY] EVERY SAVE POSTS THE WHOLE FILE WITH NO PRECONDITION, AND THE LOSER
+    IS THE CYCLE'S OWN OUTPUT. `commitLine` (app/index.html:1190) and `toggleTask` (:1164) both
+    POST {path, markdown} where markdown is the entire view, computed by applyEdit against
+    `fileSource` — the projection the painter was handed (app/present/paint.ts:242, :528). The
+    Worker forwards it to POST /vault/file unconditionally (worker/src/app.js:254-259). Nothing in
+    the path compares anything; grep for If-Match / ETag / 409 across worker/src, app and scripts
+    returns one hit and it is a handle collision in auth.js:57. So a cycle that changed line 3
+    while the operator was on line 7 is overwritten by his save. LAST WRITE WINS AND THE LOSER IS
+    THE SYSTEM'S OWN COMPUTED BEHAVIOUR — his typing is never lost, the rule's output always is,
+    silently, exit 0. THIS ROW ADDS THE CLIENT HALF OF OPTIMISTIC CONCURRENCY CONTROL, which is
+    buildable here with NO server change: the browser hashes the markdown it was served, carries
+    that base with every write, and REPORTS a divergence it cannot yet prevent — which converts a
+    defect that has never been seen into one that names itself. THE SERVER HALF IS ROW 5 and is an
+    honest abort, spelled out in section 8 of the design. FIRST IN THE SEQUENCE AND BEFORE ANY
+    SPEED WORK: every later row widens the window in which this fires. FALSIFIER — repaint from a
+    second fixture, commit an edit, and assert the write is refused (or reported) rather than
+    applied; mutation-prove it by removing the base and watching the assertion go green wrongly.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: the-cursor-anchors-to-a-node-not-a-line-number
+  title: >-
+    [haven] [2] [HALF A DAY] THE CURSOR IS HELD AS A POSITIONAL INDEX, AND AN INDEX IS MEANINGFUL
+    ONLY AGAINST THE STRING IT INDEXES. `FocusSurface` holds one number (app/present/focus.ts:50)
+    and the painter restores the cursor by asking `isFocused(lineIndex)` while walking whatever
+    source it is currently given (app/present/paint.ts:532-533). MEASURED, not reasoned: repaint a
+    body from a projection with one line inserted above the cursor and the cursor lands on
+    `## Today` with the typing gone; repaint from one where the edited line is absent entirely and
+    ZERO editable rows are painted while `FocusSurface` still reports the old index — the cursor
+    vanishes and nothing is reported anywhere. THE ANCHOR BECOMES IDENTITY, IN TIERS THAT DEGRADE
+    EXPLICITLY: tier 1 is the `[[qntm:N]]` the engine already stamps into the printed line (it is
+    already on the wire; paint.ts:273 already reasons about it), tier 2 is the exact source text of
+    the line as painted, tier 3 is "not in this projection" and is REPORTED rather than guessed —
+    the same walk-the-rungs-and-say-which-answered shape app/present/newline already uses. Chosen
+    over rebasing the index (diff old against new, map 7 forward) because identity is free, already
+    present, and survives a move BETWEEN SECTIONS, which index arithmetic does not. NEEDS NOTHING,
+    and it is what makes row 3 small. FALSIFIER — the two repaints above, asserting the cursor
+    lands on the SAME LINE after a line is inserted above it, and that tier 3 produces a reported
+    refusal rather than silence.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: the-open-line-survives-a-new-projection
+  title: >-
+    [haven] [3] [HALF A DAY] THIS IS THE CAPABILITY. A repaint from a foreign projection must reuse
+    the row the cursor is in and NEVER source its characters from the new projection — today
+    `input.value = lineSource` takes them straight out of whatever source the painter is walking
+    (app/present/paint.ts:214), so a projection arriving mid-edit silently replaces what was typed.
+    The painter gains a HELD LINE the same way it already has a DRAFT line: an index (from row 2's
+    anchor) plus content that does not come from the source. NOT A NEW IDEA IN THIS CODEBASE —
+    `DraftSurface` (app/present/draft.ts:55-83) is already a working implementation of a region of
+    the screen the source string does not own, shipped 2026-07-31 for a completely different
+    reason. WHAT CHANGES UNDER THE LINE, INVISIBLY, IS THE BASE: the painter's `source` becomes the
+    new projection, so at settlement applyEdit computes `set-line` against the CURRENT projection
+    and the POST carries the cycle's output AND the operator's line. That is the whole fix and it
+    is proven by a control arm — the identical edit against a fresh base preserves everything, so
+    applyEdit is not the defect, the base it is handed is. NO EDIT KIND IS ADDED; the closed union
+    of three stands. Needs 1 and 2, provable with NO server change by repainting from a second
+    fixture. FALSIFIER — type into a line, repaint from a projection that changed lines above and
+    below it, assert the characters are untouched and the committed file carries both sides.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: the-vanished-line-is-parked-not-dropped
+  title: >-
+    [haven] [4] [UNDER AN HOUR] THE HARD CASE — the line being edited is not in the new projection
+    at all. What ships today is the worst of the available behaviours, and it is measured: zero
+    editable rows painted, the characters gone, no refusal written to #freshness, nothing thrown. A
+    person mid-sentence loses the sentence and is told nothing. THIS ROW PARKS IT AND SAYS SO: land
+    the projection, take the orphaned row out of the reading column, keep its characters where they
+    can be seen and recovered, and put one sentence in #freshness — the line this page already uses
+    to report what just happened (app/index.html:1143). Not a dialog; a modal in the middle of a
+    sentence violates the safe haven more than the thing it protects against. AN HOUR BECAUSE IT
+    DECIDES NOTHING. The tempting alternative — keep the orphan in place and commit it as an
+    `insert-line`, which the closed union already supports — is REFUSED here rather than deferred:
+    committing it re-inserts into a view a line the cycle deliberately removed, which the next
+    cycle removes again, and if the NODE is gone it mints a fresh one (the same failure
+    source.ts:84-100 already measured for an empty insert, one degree less obvious). Whether that
+    is right is open decision 1 and it is an ENGINE question. THE APP CAN ALREADY TELL THE TWO
+    APART AND DOES NOT LOOK: snapshot.graph carries {version, nodes, edges} to the browser
+    (graph-sync.mjs:464 -> worker/src/app.js:144) and nothing reads it — which is the existing row
+    resolve-from-the-model-not-the-text becoming load-bearing rather than forward-looking. NO SCOPE
+    IS ADDED FOR IT HERE. Needs 2, sequenced after 3 so it is a real case. FALSIFIER — repaint from
+    a projection missing the edited line and assert the characters are recoverable and the
+    freshness line says what happened.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: the-write-is-refused-server-side
+  title: >-
+    [haven] [5] [HALF A DAY] THE HONEST ABORT — the app cannot make its own write safe alone, and
+    this row is exactly what the engine and the Worker would have to offer. (a) POST /app/edit-file
+    (worker/src/app.js:229) takes {path, markdown} and validates only that both are present
+    (:247-250); it must take {path, markdown, base} and answer 409 with the current content when
+    base does not match — app/index.html already treats a 409 as a distinct field-level refusal in
+    the auth flow (:1441-1443), so the shape exists here. (b) The graph server must be able to
+    answer "what does this file say now": either POST /vault/file accepts an If-Match-style
+    precondition and returns 409 with the current content rather than writing (one comparison
+    before a write it already performs), or a GET /vault/file the Worker reads first — WEAKER,
+    because check-then-act has its own race. THE INSTRUMENT MUST BE PER-FILE AND snapshot.version
+    IS NOT IT: it is a per-SNAPSHOT integer (worker/src/app.js:159-176) so it moves when any of 77
+    views moves, and a precondition on it would refuse an edit to this_week.md because an unrelated
+    view was re-rendered. Note also that on the path the operator actually takes, version is
+    hardcoded null twice (:141 hosted read, :271 write response) — the browser was never given one.
+    A content hash of the served markdown is per-file by construction and needs nothing from
+    anybody, which is why row 1 is shippable without this. TOUCHES worker/ AND A REPOSITORY THAT IS
+    NOT THIS ONE, which is why it is separated from row 1 rather than bundled with it; the graph
+    server's surface is read from docs/architecture/graph-server-plan.md:46-47 and from the calls
+    the Worker makes, and if that plan is stale this is the row to re-check first. Needs 1.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: stop-awaiting-the-cycle-safely
+  title: >-
+    [haven] [6] [HALF A DAY] STOP AWAITING THE ENGINE CYCLE IN POST /app/edit-file — ack on the
+    vault write, cycle behind it. This is item #1 of research-state-and-speed.md's ranked list
+    (:629), worth ~10s -> ~250ms on every checkbox and every line commit, and it is the right
+    change. IT IS SEQUENCED HERE, AFTER 1, 3 AND 5, AND THAT ORDERING IS THE WHOLE POINT OF THIS
+    ROW'S EXISTENCE AS A SEPARATE ITEM. Async does NOT cause the stale-base defect — that is
+    refuted by a reproduction using one tab, two edits and no concurrency, because commitLine
+    repaints OPTIMISTICALLY from the client-computed string (paint.ts:258) and only replaces it
+    when the cycle returns (app/index.html:1192), leaving a ~14s window in which every row is live
+    and nothing is disabled. What async does is remove the three accidents that currently limit the
+    blast radius: the operator stops waiting (so more edits land inside a live cycle, not fewer),
+    the window stops being legible as a stalled UI, and the projection's arrival stops being tied
+    to the gesture that caused it. SHIPPING THIS FIRST WOULD MAKE AN INVISIBLE DEFECT FASTER AND
+    QUIETER. Needs 1, 3 and 5. Cross-referenced rather than duplicated — the measurements and the
+    method belong to research-state-and-speed.md and nothing here restates them.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: the-projection-arrives-without-being-asked-for
+  title: >-
+    [haven] [7] [AN ARC] THIS IS THE SECOND CAPABILITY. A change the operator did not type reaches
+    his screen without him asking for it — push, not poll — installed through row 3's reconciler.
+    Today every install of a projection is the client asking: loadGraph at boot and sign-in, the
+    refresh button, and the return of a write are the complete set (app/index.html:1284-1335,
+    :1156-1202). AN ARC BECAUSE IT NEEDS A TRANSPORT THAT DOES NOT EXIST, ON A SERVER THAT IS NOT
+    IN THIS REPOSITORY: the graph server's declared surface is GET /health, GET /graph and POST
+    /cycle (graph-server-plan.md:46-47), and server-sent events is the usual minimum shape. THE
+    BROWSER HALF IS ALREADY BUILT AND THAT IS WHY THE ARC IS SMALLER THAN IT SOUNDS — paint()
+    rebuilds a whole view from ONE STRING (paint.ts:452, :537), so installing a projection is a
+    one-argument operation with no diff, no DOM reconciler and no partial-update path that could be
+    wrong. MUST NOT PRECEDE 3 AND 5: push into an unsafe write is a faster machine for discarding
+    the cycle's output. ONE MEASURED COST TO CARRY, not new scope — a full repaint of a 670-line
+    view is 49ms p50 on a desktop and a reasoned 4-6x worse on a phone
+    (research-state-and-speed.md:312-320), and arriving unbidden means that lands mid-keystroke
+    rather than on a click; the existing ranked item #7 (memoise the embodiment, 49ms -> ~6ms, half
+    a day) is its precondition on a large view. FALSIFIER — a rule fires on the server and the
+    operator's screen changes with no gesture, while a line he is editing is untouched.
+  driving_capability: the-world-moves-around-you
+  kind: capability
+  state: diagnose-ready
+- id: a-line-being-made-survives-a-projection-too
+  title: >-
+    [haven] [8] [UNDER AN HOUR] paintView calls `draftLine.drop()` unconditionally
+    (app/index.html:1121) with an argued reason — "an index that meant under the third task in one
+    view means something else in the next, and a fresh snapshot has already been through the cycle
+    without it." THAT REASONING IS RIGHT FOR A VIEW CHANGE AND WRONG FOR A PROJECTION ARRIVAL, and
+    the difference is the one the whole arc turns on: a view change means the operator chose to be
+    somewhere else; an arrival means the world moved while he stayed put, and dropping his
+    half-typed line for that is the safe haven being violated by the very mechanism the second
+    capability needs. A NEW LINE HAS NO IDENTITY STAMP so it cannot reach tier 1 of row 2's anchor,
+    and its text is not in the source at all so tier 2 does not apply either — its anchor is
+    RELATIVE ("after the node qntm:122"), read off the line above it when it was opened. One field
+    on `Draft`. Needs 3 and 7, and genuinely worthless before 7: until a projection can arrive
+    unbidden, `drop()` is correct and this row would be a change with no observable effect.
+  driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: correct-the-dangerous-sentence-in-app-source
+  title: >-
+    [haven] [9] [UNDER AN HOUR] "THE MARKDOWN IS THE TRUTH" IS A DANGEROUS SENTENCE, and the
+    operator said so on 2026-07-31. It is written in five declaration and documentation files and
+    in one application source file — app/present/source.ts:11, "the markdown is the truth, the DOM
+    is a projection of it". IT IS TRUE IN THE DIRECTION IT WAS WRITTEN FOR: against the DOM the
+    markdown really is authoritative, and nothing about that constraint weakens. Its failure is
+    that it says "the truth" full stop, and the reader who comes next is a reader deciding what a
+    WRITE should contain — who takes it at its word and posts the whole file. THE CORRECTION IN ONE
+    SENTENCE: the graph is the truth and the markdown is a VIEW of it; the markdown is
+    authoritative for the DELTA (a file carries no events, so the only thing it can honestly assert
+    is the difference between what it said and what it now says) and DERIVED for the state; the
+    cycle computes behaviour, so a projection is a consequence, not a copy. DOCUMENTATION ONLY — a
+    comment, no behaviour. It is a separate row because the branch that found it was declaration-
+    and-documentation-only and could not touch application source, and leaving it as a remembered
+    intention is how the sentence survives. capabilities.yaml:410 was corrected in place on that
+    branch; the three remaining copies are left because their subject really is the DOM and the
+    general correction now lives in design-the-edit-is-a-safe-haven.md section 2.1.
+  driving_capability: every-affordance-writes-back-through-the-source
+  kind: capability
+  state: diagnose-ready
