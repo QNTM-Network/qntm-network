@@ -52,6 +52,31 @@ export type {
   StructuralReading,
 } from "./structural.js";
 
+export { QUALIFICATION_KEY, readQualificationDeclaration } from "./qualification.js";
+export type {
+  FieldPredicate,
+  FieldValue,
+  FindClause,
+  Qualifier,
+  QualificationLanguage,
+  QualificationReading,
+  SectionQualification,
+} from "./qualification.js";
+
+export {
+  RESOLVABLE_FIELDS,
+  matchesFindClause,
+  matchesQualifier,
+  membershipFor,
+  resolveLineFields,
+} from "./membership.js";
+export type {
+  Abstention,
+  MembershipAnswer,
+  MembershipReading,
+  ResolvedFields,
+} from "./membership.js";
+
 export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
 

@@ -218,3 +218,38 @@ classes:
     governs_sinks:
       - document-mounted
     status: working
+
+  - id: section-membership
+    concern: >
+      Deciding whether a LINE belongs in the SECTION it was typed in — a different question from
+      how that line is SHOWN, which is `presentation-resolution`'s, and from what a GESTURE on it
+      means, which is the structural language's.
+
+      IT GETS ITS OWN CLASS RATHER THAN JOINING presentation-resolution, and the reason is the same
+      one that file gives for the contributors that DID join: the failure worth catching. The
+      failure `presentation-resolution` exists to catch is a path that decides how a line is shown
+      without routing through the cascade. The failure THIS class exists to catch is different in
+      kind — a path that decides where a line BELONGS by re-expressing a pattern rather than
+      reading the published predicate. Membership produces no `Contribution`, consults no
+      `PresentationLevel`, and would not be caught by a spy on `PresentationCascade.resolve`; a
+      concern whose characteristic defect a class cannot see is not that class's concern.
+
+      THE WHOLE CONCERN IS A READ. `scripts/generate-qualification-declaration.mjs` interprets the
+      engine's pattern language ONCE, against the monorepo's config, and publishes a closed
+      predicate grammar of two operators over three node fields. `app/present/qualification.ts`
+      validates that document; `app/present/membership.ts` resolves a line's fields and tests them
+      against a predicate. Neither reads YAML and neither knows what `children:` or `$cycle_today`
+      mean — 116 of the operator's 159 qualifications are refused at publish time, with a recorded
+      reason, precisely so that no code here has to.
+
+      THE INVARIANT THAT MAKES IT SAFE: the answer is only ever DISPLAYED. Nothing in this concern
+      produces a `SourceEdit`, and `tests/flow_scenarios/section_membership.ts` asserts that
+      `membership.ts` imports neither `source.ts` nor `context.ts` and reaches the cascade zero
+      times under a spy on the callee.
+
+      Exercised by tests/present-membership.test.mjs (the operator's own two inbox cases, and every
+      refusal), tests/present-qualification.test.mjs (the reader, and a config-mutation falsifier
+      proving the answers INVERT when the declaration changes), and
+      tests/qualification-agreement.test.mjs (agreement with the engine's own `matches_pattern`
+      over 61 real field triples covering 1501 nodes, and 2184 reachable ones).
+    status: working

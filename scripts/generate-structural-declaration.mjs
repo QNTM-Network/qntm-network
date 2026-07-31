@@ -54,27 +54,12 @@
  */
 
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
+import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
 
-const HERE = resolve(fileURLToPath(import.meta.url), "..");
-const REPO_ROOT = resolve(HERE, "..");
-
-// This worktree lives at .../projects/qntm-network/worktrees/qntm-network/publish-language;
-// the monorepo is a SIBLING of worktrees/, not a sibling of this directory — three levels up,
-// not two. (The flow-trace invocation elsewhere in this repo's docs says `../../qntm`; verified
-// against this worktree's actual nesting, that is one level short. `--config-dir` exists so
-// nothing here depends on getting this guess right.)
-export const DEFAULT_CONFIG_DIR = resolve(
-  REPO_ROOT,
-  "..",
-  "..",
-  "..",
-  "qntm",
-  "apps",
-  "qntm-md",
-  "config",
-);
+// Re-exported, not restated: `tests/present-structural.test.mjs` imports it from here, and
+// `scripts/monorepo-config.mjs` is now the one place the path to the monorepo is written down.
+export { DEFAULT_CONFIG_DIR };
 
 class GenerationError extends Error {}
 

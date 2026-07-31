@@ -1421,3 +1421,99 @@ capabilities:
     and node cannot import an HTML document. See flows.yaml's own note on this, alongside
     `base.ts`'s identical gap.
   status: undeclared
+- id: section-membership-is-read-not-guessed
+  intent: >-
+    AFTER AN EDIT, THE BROWSER CAN SAY WHETHER THE LINE STILL BELONGS IN THE SECTION IT IS IN —
+    for the sections where that is decidable, and it says nothing at all for the rest. The
+    operator's own framing, and his own starting view: take `inbox.md`'s "Domain Empty", which
+    qualifies on `domain-empty` (no domain set, not done). Type a bare line there and nothing sets
+    a domain — `inbox.yaml`'s own header says captures stay untagged deliberately — while the node
+    type falls through the registration cascade to the global default, `task`. So it belongs, and
+    it stays. Add `#work` and it acquires a domain, so it leaves. Both answers are implied by the
+    declaration plus the line's own characters, and neither needs a cycle, a clock or a graph walk.
+    WHAT A QUALIFICATION ACTUALLY IS, MEASURED RATHER THAN ASSUMED (2026-08-01, against the
+    operator's live config). 73 view files, 186 sections, 159 distinct qualifications, 252 pattern
+    definitions in 138 files. Classified by the machinery each definition needs: 122 are a
+    `root.find` over node fields only with `steps: []`; 2 add a self-referential exclusion step
+    (`domain-empty` and `inbox-items`, the only two in the whole corpus using that form); 27
+    traverse an edge (`children`/`parents`/`ancestors` with `exists`/`not_exists`); 8 compare a
+    date against `$cycle_today` or `$cycle_week_end`; and ZERO event-query patterns are referenced
+    by any section. So a qualification is NOT one thing, and "is a qualification locally evaluable"
+    has no single answer — 124 of 159 are a predicate over the candidate node's OWN fields and
+    nothing else, and 35 are not. That split is the finding.
+    WHAT ACTUALLY SHIPS IS SMALLER THAN THAT, AND THE SECOND CUT IS THE HONEST ONE. Being local is
+    necessary and not sufficient: the app must also be able to RESOLVE the line's fields before it
+    can test anything, and for a line being typed it can resolve exactly three — `node_type` (the
+    registration default, or a type token in the line), `domain` (a domain token) and `status` (the
+    checkbox). Each is decided by something visible in the line or by a default published alongside
+    it. `project`, `title`, `cap_state` and the rest are set elsewhere, or by an engine rule at mint
+    time, and a browser that resolved them to "absent" would answer confidently and wrongly. So 43
+    patterns covering 49 of 186 sections are published, and 116 are REFUSED — each with its reason
+    recorded in the document itself, so a config change that moves a section across that boundary
+    shows up in a diff instead of silently shrinking what the app will say.
+    IT IS NOT A SECOND INTERPRETER, AND THE DIRECTION OF TRAVEL IS WHY. The structural-language
+    design concluded the app must READ declarations and never interpret them. The pattern language
+    is interpreted exactly ONCE, in `scripts/generate-qualification-declaration.mjs`, against the
+    monorepo's config, at publish time — and what it emits is a closed grammar of two operators
+    (`eq`, `not`) over three fields. `app/present/qualification.ts` validates that document;
+    `app/present/membership.ts` tests a resolved field set against it. Neither reads YAML; neither
+    knows what `children:` or `$cycle_today` mean; neither can learn. This is the same bet the
+    presentation cascade took and won, with one further protection that cascade did not need: the
+    answer is only ever DISPLAYED. No `Contribution`, no `SourceEdit`, the closed union of three
+    edit kinds untouched, and `tests/flow_scenarios/section_membership.ts` asserts `membership.ts`
+    imports neither `source.ts` nor `context.ts` and reaches the cascade zero times under a spy.
+    THE TWO STEP FORMS TURNED OUT TO BE ONE FORM, which is what made `domain-empty` tractable at
+    all. It hand-authors `- not: [{find_nodes: {status: done}}]` with `min: 1`. Separately,
+    `bundle/pattern_structural_defaults.py` SYNTHESISES an exclusion at bundle load for every
+    schema-declared identity-unique node type (`capability`, `class`, `explainer`, `header`,
+    `package`, `principle`, `sink`) for any pattern whose `find:` names no `node_type` — and emits
+    it in the SAME shape. Over a single candidate, `_evaluate_not` computes the bounded complement
+    of `[candidate]` and `min: 1` requires it non-empty, so both reduce to "the candidate does not
+    match this find". The generator reproduces that desugarer, which is why the app excludes
+    structural chrome the way the engine does rather than placing a header in the inbox.
+    GENERATED, NEVER TRANSCRIBED — the condition `structural-language-is-published-not-guessed`
+    already records for its own key, met the same way and proven the same way.
+    `tests/present-qualification.test.mjs` section 3 regenerates the whole declaration FROM the
+    monorepo's `patterns/`, `views/`, `schema.yaml` and `vocabulary/` and asserts it equals what is
+    committed. Section 4 is the falsifier and goes further than staleness: it copies the real config
+    to a scratch directory, changes `domain-empty`'s predicate from `domain: null` to `domain: work`,
+    regenerates, and asserts the app's two answers INVERT. A second mutation repoints the SECTION at
+    a different pattern; a third makes the pattern traverse an edge and asserts the app goes SILENT
+    rather than answering from the half it still understands. Nothing under `app/` differs between
+    those runs — only the config the declaration came from.
+    AGREEMENT WITH THE ENGINE IS MEASURED, NOT ASSERTED, AND THAT IS THE TEST THAT MATTERS, because
+    divergence here would be silent. `scripts/qualification-agreement.py` runs the engine's OWN
+    `qntm_graph.patterns.engine.matches_pattern` against the real config bundle and a read-only
+    copy of the operator's real `state.db` (no cycle, no vault write, no network), and emits the
+    expected side. Two comparisons follow. First, all 1501 real nodes collapse to 61 distinct
+    `(node_type, domain, status)` triples and every one agrees — and the generator PROVED the
+    collapse is legitimate by checking that every node sharing a triple gets the same engine answer,
+    aborting rather than emitting a fixture otherwise, which is what makes the comparison exhaustive
+    instead of sampled. Second, because the real graph is a sample of history rather than of what
+    can be TYPED (only one of its 61 triples matches `domain-empty` and none matches `inbox-items`),
+    the engine also answers for the full cross product of triples a typed line can reach — 2184 of
+    them, built as in-memory probe nodes. All 2184 agree.
+    WHAT IT REFUSES, WHICH IS WHAT MAKES THE ANSWERS WORTH ANYTHING. No answer for a section whose
+    qualification was not published. No answer for a line already carrying `[[qntm:N]]` — this
+    answers for a line being TYPED, and whether deleting `#work` from an existing node clears its
+    domain is the engine's ingest semantics, not something to guess. No answer for a line that is
+    not a checkbox with a box the config DECLARES (`[X]` is refused; only `[x]` is declared), no
+    answer for an empty line (it would mint an `(untitled)` node), and no answer when two tokens set
+    the same field. Each is `newline.ts`'s GLOBAL-rung posture applied to a different question.
+    NOT VERIFIED. No browser, no passkey session, no live server, no cycle, and nothing was rendered
+    to anybody — see `rooting` below.
+  tier: functional
+  rooting: >-
+    ISOLATED, AND MORE ISOLATED THAN `structural-language-is-published-not-guessed` WAS AT THE SAME
+    STAGE — stated plainly because the difference matters. That capability at least had
+    `presentationFromDeclaration` reading its key in production. This one has NO production caller
+    at all: `app/index.html` does not call `membershipFor`, nothing holds the result, and no pixel
+    changes. The three declared flows are observed only by
+    `tests/flow_scenarios/section_membership.ts`.
+    THAT IS A DELIBERATE STOPPING POINT, NOT AN OVERSIGHT. Showing the answer is a separate
+    decision from computing it, and the wrong version of it is actively harmful: a row that
+    relocates under a live cursor takes away the safe haven an edit in flight is supposed to be.
+    Saying "this will leave Domain Empty" is safe; moving it is not, and the two are one keystroke
+    apart in a painter. The computation is proven correct against the engine first, so that whoever
+    wires the display is arguing about presentation rather than about whether the answer is right.
+  status: working

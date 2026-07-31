@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The qntm.network browser application — markdown rendering and editing. See docs/architecture/capabilities.yaml, 'the application stratum'.",
+  "description": "The qntm.network browser application \u2014 markdown rendering and editing. See docs/architecture/capabilities.yaml, 'the application stratum'.",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "test": "node --test \"tests/**/*.test.mjs\"",
     "check": "npm run typecheck && npm run build && npm test",
     "generate:structural": "node scripts/generate-structural-declaration.mjs",
-    "generate:structural:check": "node scripts/generate-structural-declaration.mjs --check"
+    "generate:structural:check": "node scripts/generate-structural-declaration.mjs --check",
+    "generate:qualification": "node scripts/generate-qualification-declaration.mjs",
+    "generate:qualification:check": "node scripts/generate-qualification-declaration.mjs --check"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

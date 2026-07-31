@@ -64,5 +64,1301 @@
         }
       }
     }
+  },
+  "qualification": {
+    "defaultNodeType": "task",
+    "structuralNodeTypes": [
+      "capability",
+      "class",
+      "explainer",
+      "header",
+      "package",
+      "principle",
+      "sink"
+    ],
+    "tokens": {
+      "node_type": {
+        "#task": "task",
+        "#outcome": "outcome",
+        "#project": "project",
+        "#routine": "routine",
+        "#habit": "habit",
+        "#scorecard": "scorecard",
+        "#phase": "phase",
+        "#mandate": "mandate",
+        "#person": "person",
+        "#group": "group",
+        "#film": "film",
+        "#book": "book",
+        "#tv": "tv_show",
+        "#album": "album",
+        "#writer": "writer",
+        "#blog": "blog",
+        "#attribute": "attribute",
+        "#initiative": "initiative",
+        "#strategy": "strategy",
+        "#system-sharpener": "system_sharpener",
+        "#inbox": "inbox",
+        "#backlog": "backlog",
+        "#explainer": "explainer",
+        "#capability": "capability",
+        "#principle": "principle",
+        "#package": "package",
+        "#class": "class",
+        "#sink": "sink"
+      },
+      "domain": {
+        "#health": "health",
+        "#work": "work",
+        "#personal": "personal",
+        "#dev": "dev",
+        "#home": "home",
+        "#arts": "arts",
+        "#social": "social",
+        "#program": "program",
+        "#character": "character",
+        "#admin": "admin",
+        "#spirit": "spirit",
+        "#life-admin": "life-admin"
+      },
+      "status": {
+        "[ ]": "open",
+        "[x]": "done",
+        "[/]": "in_progress",
+        "[-]": "cancelled",
+        "[~]": "waiting",
+        "[>]": "scheduled"
+      }
+    },
+    "predicates": {
+      "admin-done": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "admin-open": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "not": {
+                "eq": "done"
+              }
+            }
+          }
+        },
+        "exclude": []
+      },
+      "admin-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "admin"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "admin-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "admin"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "albums-listened": {
+        "find": {
+          "nodeType": [
+            "album"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "albums-not-listened": {
+        "find": {
+          "nodeType": [
+            "album"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-arts-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "arts"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-home-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "home"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-program-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-social-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "social"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-spirit-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "spirit"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "attributes-developing": {
+        "find": {
+          "nodeType": [
+            "attribute"
+          ],
+          "fields": {
+            "status": {
+              "not": {
+                "eq": "done"
+              }
+            }
+          }
+        },
+        "exclude": []
+      },
+      "attributes-embodied": {
+        "find": {
+          "nodeType": [
+            "attribute"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "backlog-tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "blogs-done": {
+        "find": {
+          "nodeType": [
+            "blog"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "blogs-open": {
+        "find": {
+          "nodeType": [
+            "blog"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "books-done": {
+        "find": {
+          "nodeType": [
+            "book"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "books-open": {
+        "find": {
+          "nodeType": [
+            "book"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "domain-empty": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": null
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": null,
+            "fields": {
+              "status": {
+                "eq": "done"
+              }
+            }
+          },
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "done-tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "everything-personal-nodes": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "everything-work-nodes": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "work"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "films-to-watch": {
+        "find": {
+          "nodeType": [
+            "film"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "films-watched": {
+        "find": {
+          "nodeType": [
+            "film"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "in-progress-tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "in_progress"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "inbox-items": {
+        "find": {
+          "nodeType": [
+            "inbox"
+          ],
+          "fields": {}
+        },
+        "exclude": [
+          {
+            "nodeType": null,
+            "fields": {
+              "status": {
+                "eq": "done"
+              }
+            }
+          }
+        ]
+      },
+      "life-admin-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "life-admin"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "life-admin-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "life-admin"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "personal-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "personal-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "program-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "program-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "routine-drift": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "social-groups": {
+        "find": {
+          "nodeType": [
+            "group"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "social"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "social-people": {
+        "find": {
+          "nodeType": [
+            "person"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "social"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "spirit-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "spirit"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "spirit-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "spirit"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "tv-done": {
+        "find": {
+          "nodeType": [
+            "tv_show"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "tv-open": {
+        "find": {
+          "nodeType": [
+            "tv_show"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "work-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "work-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "writers-done": {
+        "find": {
+          "nodeType": [
+            "writer"
+          ],
+          "fields": {
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "writers-open": {
+        "find": {
+          "nodeType": [
+            "writer"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      }
+    },
+    "sections": {
+      "admin": {
+        "to-do": {
+          "qualification": "admin-open",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          }
+        },
+        "done": {
+          "qualification": "admin-done",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          }
+        }
+      },
+      "albums": {
+        "not-listened": {
+          "qualification": "albums-not-listened",
+          "nodeType": "album",
+          "defaults": {
+            "domain": "arts"
+          }
+        },
+        "listened": {
+          "qualification": "albums-listened",
+          "nodeType": "album",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      },
+      "all-arts": {
+        "tasks": {
+          "qualification": "all-arts-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      },
+      "all-home": {
+        "tasks": {
+          "qualification": "all-home-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "home"
+          }
+        }
+      },
+      "all-program": {
+        "tasks": {
+          "qualification": "all-program-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          }
+        }
+      },
+      "all-social": {
+        "tasks": {
+          "qualification": "all-social-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "social"
+          }
+        }
+      },
+      "all-spirit": {
+        "tasks": {
+          "qualification": "all-spirit-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          }
+        }
+      },
+      "blogs": {
+        "to-check": {
+          "qualification": "blogs-open",
+          "nodeType": "blog",
+          "defaults": {
+            "domain": "arts"
+          }
+        },
+        "checked": {
+          "qualification": "blogs-done",
+          "nodeType": "blog",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      },
+      "books": {
+        "to-read": {
+          "qualification": "books-open",
+          "nodeType": "book",
+          "defaults": {
+            "domain": "arts"
+          }
+        },
+        "read": {
+          "qualification": "books-done",
+          "nodeType": "book",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      },
+      "daily-personal": {
+        "routine-drift": {
+          "qualification": "routine-drift",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "backlog": {
+          "qualification": "backlog-tasks",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "done": {
+          "qualification": "done-tasks",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          }
+        }
+      },
+      "daily-work": {
+        "in-progress": {
+          "qualification": "in-progress-tasks",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          }
+        }
+      },
+      "ego-ideal": {
+        "developing": {
+          "qualification": "attributes-developing",
+          "nodeType": "attribute",
+          "defaults": {
+            "domain": "character"
+          }
+        },
+        "embodied": {
+          "qualification": "attributes-embodied",
+          "nodeType": "attribute",
+          "defaults": {
+            "domain": "character"
+          }
+        }
+      },
+      "everything-personal": {
+        "everything": {
+          "qualification": "everything-personal-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          }
+        }
+      },
+      "everything-work": {
+        "everything": {
+          "qualification": "everything-work-nodes",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          }
+        }
+      },
+      "films": {
+        "to-watch": {
+          "qualification": "films-to-watch",
+          "nodeType": "film",
+          "defaults": {
+            "domain": "arts"
+          }
+        },
+        "watched": {
+          "qualification": "films-watched",
+          "nodeType": "film",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      },
+      "groups": {
+        "groups": {
+          "qualification": "social-groups",
+          "nodeType": "group",
+          "defaults": {
+            "domain": "social"
+          }
+        }
+      },
+      "inbox": {
+        "inbox-tagged": {
+          "qualification": "inbox-items",
+          "nodeType": "task"
+        },
+        "domain-empty": {
+          "qualification": "domain-empty",
+          "nodeType": "task"
+        }
+      },
+      "people": {
+        "people": {
+          "qualification": "social-people",
+          "nodeType": "person",
+          "defaults": {
+            "domain": "social"
+          }
+        }
+      },
+      "routines-admin": {
+        "admin-routines": {
+          "qualification": "admin-routines",
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "admin"
+          }
+        },
+        "upcoming": {
+          "qualification": "admin-routines-upcoming",
+          "nodeType": "routine"
+        }
+      },
+      "routines-life-admin": {
+        "life-admin-routines": {
+          "qualification": "life-admin-routines",
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "life-admin"
+          }
+        },
+        "upcoming": {
+          "qualification": "life-admin-routines-upcoming",
+          "nodeType": "routine"
+        }
+      },
+      "routines-personal": {
+        "personal-routines": {
+          "qualification": "personal-routines",
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "upcoming": {
+          "qualification": "personal-routines-upcoming",
+          "nodeType": "routine"
+        }
+      },
+      "routines-program": {
+        "program-routines": {
+          "qualification": "program-routines",
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "program"
+          }
+        },
+        "upcoming": {
+          "qualification": "program-routines-upcoming",
+          "nodeType": "routine"
+        }
+      },
+      "routines-spirit": {
+        "spirit-routines": {
+          "qualification": "spirit-routines",
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "spirit"
+          }
+        },
+        "upcoming": {
+          "qualification": "spirit-routines-upcoming",
+          "nodeType": "routine"
+        }
+      },
+      "routines-work": {
+        "work-routines": {
+          "qualification": "work-routines",
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "upcoming": {
+          "qualification": "work-routines-upcoming",
+          "nodeType": "routine"
+        }
+      },
+      "routines": {
+        "admin-routines": {
+          "qualification": "admin-routines",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          }
+        },
+        "life-admin-routines": {
+          "qualification": "life-admin-routines",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "life-admin"
+          }
+        },
+        "work-routines": {
+          "qualification": "work-routines",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "personal-routines": {
+          "qualification": "personal-routines",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "program-routines": {
+          "qualification": "program-routines",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          }
+        },
+        "spirit-routines": {
+          "qualification": "spirit-routines",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          }
+        }
+      },
+      "tv": {
+        "to-watch": {
+          "qualification": "tv-open",
+          "nodeType": "tv_show",
+          "defaults": {
+            "domain": "arts"
+          }
+        },
+        "watched": {
+          "qualification": "tv-done",
+          "nodeType": "tv_show",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      },
+      "writers": {
+        "to-check": {
+          "qualification": "writers-open",
+          "nodeType": "writer",
+          "defaults": {
+            "domain": "arts"
+          }
+        },
+        "checked": {
+          "qualification": "writers-done",
+          "nodeType": "writer",
+          "defaults": {
+            "domain": "arts"
+          }
+        }
+      }
+    },
+    "refused": {
+      "accuracy-carrier-overall-1d": "unresolvable field(s): title",
+      "accuracy-carrier-overall-3d": "unresolvable field(s): title",
+      "accuracy-carrier-overall-7d": "unresolvable field(s): title",
+      "accuracy-carrier-personal-1d": "unresolvable field(s): title",
+      "accuracy-carrier-personal-3d": "unresolvable field(s): title",
+      "accuracy-carrier-personal-7d": "unresolvable field(s): title",
+      "accuracy-carrier-program-1d": "unresolvable field(s): title",
+      "accuracy-carrier-program-3d": "unresolvable field(s): title",
+      "accuracy-carrier-program-7d": "unresolvable field(s): title",
+      "accuracy-carrier-work-1d": "unresolvable field(s): title",
+      "accuracy-carrier-work-3d": "unresolvable field(s): title",
+      "accuracy-carrier-work-7d": "unresolvable field(s): title",
+      "admin-habits": "step 0: traverses (children+exists)",
+      "age-intent-carrier-overall": "unresolvable field(s): title",
+      "age-intent-carrier-personal": "unresolvable field(s): title",
+      "age-intent-carrier-program": "unresolvable field(s): title",
+      "age-intent-carrier-work": "unresolvable field(s): title",
+      "all-personal-nodes": "available_date: operator gt",
+      "all-work-nodes": "available_date: operator gt",
+      "available-overdue": "available_date: operator lt",
+      "available-this-week": "available_date: operator gte+lte",
+      "captured-today": "created_at: cycle variable $cycle_today",
+      "coverage-carrier-overall": "unresolvable field(s): title",
+      "coverage-carrier-personal": "unresolvable field(s): title",
+      "coverage-carrier-program": "unresolvable field(s): title",
+      "coverage-carrier-work": "unresolvable field(s): title",
+      "dev-tickets-diagnose-ready": "unresolvable field(s): stage",
+      "dev-tickets-in-progress": "unresolvable field(s): stage",
+      "dev-tickets-passing": "unresolvable field(s): stage",
+      "dev-tickets-retired": "unresolvable field(s): stage",
+      "dev-tickets-scoped": "unresolvable field(s): stage",
+      "dev-tickets-unscoped": "unresolvable field(s): stage",
+      "due-soon-tasks": "due_date: cycle variable $cycle_today",
+      "due-this-week": "due_date: operator gte+lte",
+      "flowtrace-capabilities-diagnose-ready": "unresolvable field(s): cap_state+project",
+      "flowtrace-capabilities-in-progress": "unresolvable field(s): cap_state+project",
+      "flowtrace-capabilities-passing": "unresolvable field(s): cap_state+project",
+      "flowtrace-capabilities-retired": "unresolvable field(s): cap_state+project",
+      "flowtrace-capabilities-scoped": "unresolvable field(s): cap_state+project",
+      "flowtrace-capabilities-unscoped": "unresolvable field(s): cap_state+project",
+      "flowtrace-classes-concept": "unresolvable field(s): class_state+project",
+      "flowtrace-classes-exists": "unresolvable field(s): class_state+project",
+      "flowtrace-classes-extracted": "unresolvable field(s): class_state+project",
+      "flowtrace-classes-subsumed": "unresolvable field(s): class_state+project",
+      "flowtrace-packages-concept": "unresolvable field(s): package_state+project",
+      "flowtrace-packages-exists": "unresolvable field(s): package_state+project",
+      "flowtrace-packages-extracted": "unresolvable field(s): package_state+project",
+      "flowtrace-packages-subsumed": "unresolvable field(s): package_state+project",
+      "flowtrace-principles-held": "unresolvable field(s): principle_state+project",
+      "flowtrace-principles-held-weak": "unresolvable field(s): principle_state+project",
+      "flowtrace-principles-un-anchored": "unresolvable field(s): principle_state+project",
+      "flowtrace-principles-unverifiable": "unresolvable field(s): principle_state+project",
+      "flowtrace-principles-violated": "unresolvable field(s): principle_state+project",
+      "flowtrace-queue-items": "unresolvable field(s): project",
+      "flowtrace-sinks-all": "unresolvable field(s): project",
+      "free-trial-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "god-box-discussed": "unresolvable field(s): god_box",
+      "god-box-not-discussed": "unresolvable field(s): god_box",
+      "habit-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "habits-with-routines": "step 0: traverses (children+exists)",
+      "high-priority-tasks": "unresolvable field(s): priority",
+      "inverse-orphans": "step 0: traverses (children+not_exists)",
+      "life-admin-habits": "step 0: traverses (children+exists)",
+      "operator-flowtrace-outcomes-open": "unresolvable field(s): project",
+      "operator-flowtrace-tasks-open": "unresolvable field(s): project",
+      "operator-flowtrace-waited-on": "step 0: traverses (exists+parents)",
+      "operator-qntm-network-outcomes-open": "unresolvable field(s): project",
+      "operator-qntm-network-tasks-open": "unresolvable field(s): project",
+      "operator-qntm-network-waited-on": "step 0: traverses (exists+parents)",
+      "operator-qntm-outcomes-open": "unresolvable field(s): project",
+      "operator-qntm-tasks-open": "unresolvable field(s): project",
+      "operator-qntm-waited-on": "step 0: traverses (exists+parents)",
+      "operator-trace-orchestration-outcomes-open": "unresolvable field(s): project",
+      "operator-trace-orchestration-tasks-open": "unresolvable field(s): project",
+      "operator-trace-orchestration-waited-on": "step 0: traverses (exists+parents)",
+      "orphan-outcomes": "step 0: traverses (not_exists+parents)",
+      "outcomes-with-children": "step 0: traverses (children+exists)",
+      "overdue": "due_date: operator lt",
+      "personal-habits": "step 0: traverses (children+exists)",
+      "personal-tasks-waited-on-by-someone": "step 0: traverses (exists+parents)",
+      "program-habits": "step 0: traverses (children+exists)",
+      "qntm-capabilities-diagnose-ready": "unresolvable field(s): cap_state+project",
+      "qntm-capabilities-in-progress": "unresolvable field(s): cap_state+project",
+      "qntm-capabilities-passing": "unresolvable field(s): cap_state+project",
+      "qntm-capabilities-retired": "unresolvable field(s): cap_state+project",
+      "qntm-capabilities-scoped": "unresolvable field(s): cap_state+project",
+      "qntm-capabilities-unscoped": "unresolvable field(s): cap_state+project",
+      "qntm-classes-concept": "unresolvable field(s): class_state+project",
+      "qntm-classes-exists": "unresolvable field(s): class_state+project",
+      "qntm-classes-extracted": "unresolvable field(s): class_state+project",
+      "qntm-classes-subsumed": "unresolvable field(s): class_state+project",
+      "qntm-packages-concept": "unresolvable field(s): package_state+project",
+      "qntm-packages-exists": "unresolvable field(s): package_state+project",
+      "qntm-packages-extracted": "unresolvable field(s): package_state+project",
+      "qntm-packages-subsumed": "unresolvable field(s): package_state+project",
+      "qntm-principles-held": "unresolvable field(s): principle_state+project",
+      "qntm-principles-held-weak": "unresolvable field(s): principle_state+project",
+      "qntm-principles-un-anchored": "unresolvable field(s): principle_state+project",
+      "qntm-principles-unverifiable": "unresolvable field(s): principle_state+project",
+      "qntm-principles-violated": "unresolvable field(s): principle_state+project",
+      "qntm-queue-items": "unresolvable field(s): project",
+      "qntm-sinks-all": "unresolvable field(s): project",
+      "routine-cascade-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "scratchpad-targets": "unresolvable field(s): title",
+      "spirit-habits": "step 0: traverses (children+exists)",
+      "tasks-held-by-requires-personal": "step 0: traverses (children+exists)",
+      "tasks-held-by-requires-work": "step 0: traverses (children+exists)",
+      "tasks-waited-on-by-someone": "step 0: traverses (exists+parents)",
+      "termination-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "trace-orchestration-queue-items": "unresolvable field(s): project",
+      "unanchored-habits": "step 0: traverses (children+not_exists)",
+      "unlocks-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "waiting-personal-tasks": "step 0: traverses (children+exists)",
+      "waiting-tasks": "step 0: traverses (exists+parents)",
+      "waiting-work-tasks": "step 0: traverses (children+exists)",
+      "work-habits": "step 0: traverses (children+exists)"
+    }
   }
 }

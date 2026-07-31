@@ -1886,3 +1886,99 @@ backlog:
     is visibly ranked last rather than silently absent, exactly as research-state-and-speed.md §8
     itself argues for listing it.
   state: diagnose-ready
+
+- id: show-the-membership-answer-in-the-app
+  title: >-
+    [membership] Wire `membershipFor` to something the operator can SEE. The answer is computed,
+    proven against the engine, and displayed nowhere — `app/index.html` does not call it and no
+    pixel changes.
+  driving_capability: section-membership-is-read-not-guessed
+  record: >-
+    NOT SHIPPED, AND DELIBERATELY. Showing the answer is a separate decision from computing it, and
+    the wrong version is worse than nothing: a row that relocates under a live cursor takes away
+    the safe haven an edit in flight is supposed to be. Saying "this will leave Domain Empty" is
+    safe; moving it is not, and in a painter the two are one keystroke apart. Two prerequisites the
+    display needs and does not have. FIRST, the app must know which SECTION the cursor is in —
+    `instance.ts` already derives a section ORDINAL from heading order, but the declaration is keyed
+    on the config's section `id:` string, and nothing maps one to the other. That is the same
+    view/section identity gap `presentation-instance-identity` records and `newline.ts` names as its
+    own blocker. SECOND, the app must know which VIEW it is in as a config id; the snapshot carries
+    `id` per view, so this half is available today. Until the first is closed, a caller cannot ask
+    the question for a real cursor position at all.
+  state: diagnose-ready
+
+- id: widen-membership-to-edge-traversing-qualifications
+  title: >-
+    [membership] 27 of the 159 qualifications (45 of 186 sections) decide membership by ONE hop —
+    `children`/`parents` with `exists`/`not_exists` — and are refused today. The edges are already
+    in the browser.
+  driving_capability: section-membership-is-read-not-guessed
+  record: >-
+    NOT SHIPPED, AND CHEAPER THAN IT LOOKS, WHICH IS WHY IT IS FILED RATHER THAN DISMISSED. Measured
+    2026-08-01: the whole step vocabulary across all 252 pattern definitions is SEVEN operators
+    (`children`, `parents`, `ancestors`, `exists`, `not_exists`, `not`, `min`) in seven distinct
+    shapes, `exists`/`not_exists` are ALWAYS `true` (43/43 and 31/31), `min` is always 1, and there
+    is no `follow`, no `traverse`, no `related`. Traversal is one hop except `ancestors`, which
+    appears in 4 patterns, NONE referenced by a view section. And the data is already on the wire:
+    `graph-sync.mjs` ships `snapshot.graph` as `{version, nodes, edges}` — 1501 nodes and 460 edges,
+    805KB — which reaches the browser and which NOTHING in `app/` reads today (every use of
+    `graphData` is `snapshot.views.find(...)`). THE REAL BLOCKER IS NOT THE PREDICATE, IT IS THE
+    JOIN: a line being typed has no `[[qntm:N]]` stamp, so it has no identity, so it has no edges —
+    a new node's parent would have to be inferred from indent via the structural language rather
+    than looked up. So this widens membership for EXISTING stamped lines first, and that is a
+    different question from the one shipped (see the row below).
+  state: diagnose-ready
+
+- id: widen-membership-to-clock-bound-qualifications
+  title: >-
+    [membership] 8 qualifications (10 sections) compare a date field against `$cycle_today` or
+    `$cycle_week_end` — the this-week and overdue horizons — and are refused today.
+  driving_capability: section-membership-is-read-not-guessed
+  record: >-
+    NOT SHIPPED. All 8 have `steps: []` and are otherwise the simplest shape in the corpus; the only
+    thing that makes them non-local is two variables. Both are DERIVABLE FROM CONFIG the generator
+    already reads — `day_boundary.yaml` declares `{timezone: Europe/London, day_start_hour: 4,
+    week_starts_on: monday}`, and `substrate_wiring/day_boundary.py` has the one resolution the
+    engine uses. TWO REASONS IT IS NOT DONE HERE. The generator publishes a STATIC document baked
+    into `dist/present.js` at build time, so a date computed at publish time is wrong by the next
+    morning; the browser would have to resolve the boundary itself, which means `membership.ts`
+    reading a clock — and it is currently proven pure by a scenario that makes `Date.now` throw.
+    That is a real design decision (a second, clock-aware entry point beside the pure one) rather
+    than an extension, and it belongs in its own change. Note the trap `pattern_resolver.py` records
+    for whoever takes it: `day_start_hour: 4` means a naive `date.today()` is wrong for four hours
+    of every day.
+  state: diagnose-ready
+
+- id: membership-for-a-line-that-is-already-a-node
+  title: >-
+    [membership] `membershipFor` abstains with `already-a-node` for any line carrying `[[qntm:N]]`
+    — which is most lines in a rendered view. It answers only for a line being typed.
+  driving_capability: section-membership-is-read-not-guessed
+  record: >-
+    NOT SHIPPED, AND THE BLOCKER IS SEMANTIC RATHER THAN TECHNICAL. The fields are available: the
+    graph blob reaching the browser carries `{id, type, fields: {title, qntm_id, status, domain,
+    ...}}` per node, and `instance.ts` already scrapes `qntm:N` off a line, so the join needs no new
+    payload. What is NOT known is what an edit MEANS for a stamped node. Adding `#work` to a line
+    plainly sets a domain; DELETING `#work` from it is not that operation inverted, and whether an
+    absent token clears the field is the engine's ingest semantics to decide. Guessing it would
+    produce exactly the confident-and-wrong answer the refusal exists to prevent. Establishing that
+    semantics — by reading the applier rather than by inference — is the work, and it is worth more
+    than the widening it unlocks.
+  state: diagnose-ready
+
+- id: the-browsers-graph-blob-is-shipped-and-unread
+  title: >-
+    [membership] [finding] `snapshot.graph` — 1501 nodes and 460 edges with full per-node fields,
+    805KB — is pushed to the browser on every sync and read by NOTHING in `app/`.
+  driving_capability: section-membership-is-read-not-guessed
+  record: >-
+    NOT A DEFECT AND NOT SHIPPED WORK — filed because it was measured while answering a different
+    question and it changes what the next several rows cost. `scripts/graph-sync.mjs` gathers
+    `graph_state.data` verbatim and the worker serves it at `GET /app/graph`; every consumer in
+    `app/index.html` reaches only `snapshot.views`. So the app already HOLDS the node fields that
+    would let it answer membership for stamped lines, and the edges that would let it answer the 27
+    edge-traversing qualifications — the payload work those rows would otherwise need is already
+    done and paid for. `snapshot.locations` (node -> {view, line}) is on the wire too but ships
+    EMPTY by graph-sync's own note, which is a separate and smaller gap. Also worth watching: the
+    same file warns the graph is nearing D1's 1MB row cap at 805KB.
+  state: diagnose-ready
