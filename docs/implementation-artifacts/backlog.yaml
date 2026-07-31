@@ -1472,3 +1472,96 @@ backlog:
     does not own.'
   captured: '2026-07-31'
   state: asserted
+- id: publish-the-structural-language
+  title: '[present] [structural] Publish the structural language to the browser — item
+    1 of docs/implementation-artifacts/design-the-structural-language.md''s ranked order.
+    The app READS what a gesture means (which edge an indent creates, its direction, its
+    cardinality, any section''s own override) instead of holding a copy or guessing.
+    Closes vim-normal-mode-slice-3''s own open finding on INDENT_UNIT along one axis (the
+    app''s source-edit arithmetic derives from a declared value now) and leaves the other
+    axis (paint.ts''s margin) open, explicitly, with a test that pins the gap rather than
+    letting it drift back into being a silent claim.'
+  driving_capability: structural-language-is-published-not-guessed
+  record: '2026-07-31 — SHIPPED. `presentation.json`''s grammar widened with two known
+    top-level keys, both read by `presentationFromDeclaration` (app/present/context.ts,
+    the ONE wire function, called once per fetch — no second channel):
+    `structural` (app/present/structural.ts, new module) — a LOOKUP TABLE, not a
+    resolver: the global indent binding (edgeType/edgeSource), the cardinality of every
+    edge type the binding or a section override names (not the whole registry — PART_OF
+    and WAITING_FOR today, the only two the operator''s live config actually uses
+    structurally), and per-view per-section overrides for every section that declares
+    one (all six live views: operator-qntm, operator-qntm-network, operator-flowtrace,
+    operator-trace-orchestration, waiting-for-work, waiting-for-personal). NOTHING
+    INTERPRETS IT — no move-vs-add decision, no cursor-to-section resolution, no
+    narration. That is item 3, explicitly not built here (see NOT DONE below).
+    `indentUnit` — read by declaration.ts, not structural.ts, because the design
+    document''s own §3 refutes filing it as structural: detection is unit-free
+    (content_diff.py:721-722), so the number changes no edge, only whether a re-rendered
+    line visibly jumps. It is an OUTPUT fact and rides beside the rendition axis.
+    GENERATED, NOT HAND-WRITTEN: scripts/generate-structural-declaration.mjs reads
+    structural_tokens.yaml, schema.yaml and config/views/*.yaml directly (a targeted
+    indentation-aware scanner, same posture as graph-sync.mjs''s own parseViewMeta — no
+    YAML dependency exists in this repo and adding one for three fields was a bigger
+    surface than a scanner that fails loud the moment a file does not match). It also
+    closes part of the design document''s §1 gap FOR WHAT IT PUBLISHES: every edge type
+    named by the structural language is checked against schema.yaml''s edge_types
+    registry at generation time, and generation refuses rather than publish a name the
+    graph has never heard of. This is a publish-time check, not the engine fix (ranked
+    item #4, out of scope — read-only monorepo).
+    THE INDENT UNIT, WHERE IT ENDED UP: `indent.ts`''s `INDENT_UNIT` is now the FALLBACK,
+    not the source of truth. `indentedLine` gained a fourth parameter (`unit`, default
+    `INDENT_UNIT`) and `app/index.html`''s `loadPresentation` threads the declared value
+    through it. `declaration.ts`''s own fallback constant IS `indent.ts`''s `INDENT_UNIT`,
+    imported rather than re-declared as a second literal 4 — one number, not two, for the
+    floor at least.
+    PAINT.TS''S DISAGREEING COPY — TRIED, CONFIRMED BROKEN, REVERTED, NOT SILENTLY LEFT.
+    Changed the checkbox margin''s divisor from the constant 2 to the declared unit,
+    rebuilt, ran tests/present-golden.test.mjs: three failures (odd indent, tab indent,
+    the generated sweep), all from marginLeft values changing for indented checkbox
+    lines. Reverted rather than weakening that byte-identical comparison. The reverted
+    state is now pinned by a test (tests/present-structural.test.mjs section 4) asserting
+    the OLD, disagreeing marginLeft value, so a future fix has to touch that assertion
+    and the golden together rather than one drifting unnoticed past the other.
+    THE COUPLING TO THE MONOREPO IS A TEST, NOT A CLAIM: tests/present-structural.test.mjs
+    section 3 regenerates the structural declaration from the live monorepo config and
+    asserts it equals presentation.json''s checked-in structural key — skipped, with a
+    stated reason, when the sibling checkout is absent (this repo''s CI does not clone
+    it), same posture scenario-the-vim-gesture-layer''s own CI gate already has.
+    flows.yaml gained context-reads-the-structural-declaration (app/present/context ->
+    app/present/structural.readStructuralDeclaration), observed for free because
+    tests/flow_scenarios/present_cascade.ts already called presentationFromDeclaration
+    three times and that function now reads both axes internally — no new scenario file
+    needed for this edge.
+    PROOF: 17 new tests (tests/present-structural.test.mjs, 4 sections — reads cleanly;
+    unrecognised declarations reported not guessed, 9 cases; the monorepo coupling test;
+    the indent-unit single-source proof plus the paint.ts tripwire). npm run check:
+    674 tests / 126 suites / 0 fail (base 657/122, +17/+4, 0 regressions — base verified
+    by running it, not assumed). flow-trace verify . (2026-07-31, from this worktree
+    against ../../../qntm/tools/flow-trace — NOTE the invocation the brief that
+    commissioned this row gave, ../../qntm, is one level short from this worktree''s
+    actual nesting): exit 0, 42 PASS / 0 FAIL / 20 INFO, including the new edge observed
+    3x. No new INFO introduced by this change beyond the pre-existing truncation gap
+    present_cascade.ts''s own header already documents.
+    WHAT I REFUTED: the tempting reading of my own brief — that INDENT_UNIT belongs beside
+    the structural declaration because indenting is structural. The design document''s §3
+    argument holds: it is a rendition fact (governs how a level is WRITTEN, changes no
+    edge), so it rides with declaration.ts, not structural.ts. Filing it the other way
+    would have been the SAME misfiling the design document itself corrected. Also refuted,
+    by trying rather than assuming: that widening indentedLine''s unit parameter would let
+    paint.ts''s margin be fixed "for free" alongside it — it does not, because paint.ts''s
+    formula is a SEPARATE literal (a bare /2, never importing INDENT_UNIT at all), and the
+    golden master pins its current, wrong behaviour byte for byte.
+    WHAT I LEFT OUT, AND WHY: the whole of structural_tokens.yaml''s vocabulary (wiki-link
+    bindings, field bindings, chain buckets) — nothing reads them yet, and an unread
+    declaration is the bug this whole design exists to disprove. Edge-type validation at
+    the ENGINE''s bundle load (ranked item #4) — read-only monorepo, out of scope.
+    Narration itself (ranked item #3) — explicitly not this row''s job; the shape it needs
+    is exactly `structural` as published: given a section id and a resolved edge type,
+    `structural.sections[view]?.[section] ?? {edgeType: structural.indent.edgeType,
+    edgeSource: structural.indent.edgeSource}` then `structural.edgeCardinality[edgeType]`
+    decides move-vs-add. Resolving WHICH section a line is in is instance.ts/boundary.ts''s
+    job, not built here.
+    NOT VERIFIED: nothing in a real browser, no passkey session, no live server, no
+    qntm-md cycle run (this row is read-only on ~/qntm and ~/.qntm-md throughout — the
+    coupling test and the generator both only ever read the monorepo''s config/ tree).'
+  state: passing

@@ -180,8 +180,180 @@ function titleSpans(line) {
   return words;
 }
 
+// app/present/structural.ts
+var STRUCTURAL_KEY = "structural";
+var EDGE_SOURCES = ["self", "position"];
+var EDGE_DIRECTIONS = ["incoming", "outgoing"];
+var STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections"];
+var INDENT_KEYS = ["edgeType", "edgeSource"];
+var SECTION_LANGUAGE_KEYS = ["edgeTypes", "edgeDirection"];
+var EMPTY = { indent: void 0, edgeCardinality: {}, sections: {} };
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function readIndent(value, problems) {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'structural.indent' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 the global indent binding stays unknown`
+    );
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!INDENT_KEYS.includes(key)) {
+      problems.push(
+        `'structural.indent.${key}' is not a recognised key and was NOT applied \u2014 the keys are ${INDENT_KEYS.join(", ")}`
+      );
+    }
+  }
+  const edgeType = value.edgeType;
+  const edgeSource = value.edgeSource;
+  let ok = true;
+  if (typeof edgeType !== "string" || edgeType === "") {
+    problems.push(
+      `'structural.indent.edgeType' is ${JSON.stringify(edgeType)}, not a non-empty string`
+    );
+    ok = false;
+  }
+  if (!EDGE_SOURCES.includes(edgeSource)) {
+    problems.push(
+      `'structural.indent.edgeSource' is ${JSON.stringify(edgeSource)}, which is not one of ${EDGE_SOURCES.join(", ")}`
+    );
+    ok = false;
+  }
+  if (!ok) {
+    return void 0;
+  }
+  return { edgeType, edgeSource };
+}
+function readEdgeCardinality(value, problems) {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'structural.edgeCardinality' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 every edge type's cardinality stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [edgeType, cardinality] of Object.entries(value)) {
+    if (typeof cardinality !== "string" || cardinality === "") {
+      problems.push(
+        `'structural.edgeCardinality.${edgeType}' is ${JSON.stringify(cardinality)}, not a non-empty string \u2014 that edge type's cardinality stays unknown`
+      );
+      continue;
+    }
+    out[edgeType] = cardinality;
+  }
+  return out;
+}
+function readSectionLanguage(path, value, problems) {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${path}' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 this section's structural language stays unknown`
+    );
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!SECTION_LANGUAGE_KEYS.includes(key)) {
+      problems.push(
+        `'${path}.${key}' is not a recognised key and was NOT applied \u2014 the keys are ${SECTION_LANGUAGE_KEYS.join(", ")}`
+      );
+    }
+  }
+  const edgeTypes = value.edgeTypes;
+  const edgeDirection = value.edgeDirection;
+  let ok = true;
+  if (!Array.isArray(edgeTypes) || edgeTypes.length === 0 || !edgeTypes.every((t) => typeof t === "string" && t !== "")) {
+    problems.push(
+      `'${path}.edgeTypes' is ${JSON.stringify(edgeTypes)}, not a non-empty array of non-empty strings`
+    );
+    ok = false;
+  }
+  if (!EDGE_DIRECTIONS.includes(edgeDirection)) {
+    problems.push(
+      `'${path}.edgeDirection' is ${JSON.stringify(edgeDirection)}, which is not one of ${EDGE_DIRECTIONS.join(", ")}`
+    );
+    ok = false;
+  }
+  if (!ok) {
+    return void 0;
+  }
+  return { edgeTypes, edgeDirection };
+}
+function readSections(value, problems) {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'structural.sections' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 every section override stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [viewId, sectionsValue] of Object.entries(value)) {
+    const path = `structural.sections.${viewId}`;
+    if (!isPlainObject(sectionsValue)) {
+      problems.push(
+        `'${path}' is ${Array.isArray(sectionsValue) ? "an array" : typeof sectionsValue}, not an object \u2014 this view's section overrides stay unknown`
+      );
+      continue;
+    }
+    const sections = {};
+    for (const [sectionId, languageValue] of Object.entries(sectionsValue)) {
+      const language = readSectionLanguage(`${path}.${sectionId}`, languageValue, problems);
+      if (language !== void 0) {
+        sections[sectionId] = language;
+      }
+    }
+    if (Object.keys(sections).length > 0) {
+      out[viewId] = sections;
+    }
+  }
+  return out;
+}
+function readStructuralDeclaration(document2) {
+  if (!isPlainObject(document2)) {
+    return { structural: EMPTY, problems: [] };
+  }
+  if (!(STRUCTURAL_KEY in document2)) {
+    return { structural: EMPTY, problems: [] };
+  }
+  const raw = document2[STRUCTURAL_KEY];
+  const problems = [];
+  if (!isPlainObject(raw)) {
+    problems.push(
+      `'${STRUCTURAL_KEY}' is ${Array.isArray(raw) ? "an array" : typeof raw}, not an object \u2014 the whole structural language stays unknown`
+    );
+    return { structural: EMPTY, problems };
+  }
+  for (const key of Object.keys(raw)) {
+    if (!STRUCTURAL_TOP_KEYS.includes(key)) {
+      problems.push(
+        `'${STRUCTURAL_KEY}.${key}' is not a recognised key and was NOT applied \u2014 the keys are ${STRUCTURAL_TOP_KEYS.join(", ")}`
+      );
+    }
+  }
+  const indent = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
+  const edgeCardinality = "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
+  const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
+  return { structural: { indent, edgeCardinality, sections }, problems };
+}
+
+// app/present/indent.ts
+var INDENT_UNIT = 4;
+var LEADING_WHITESPACE = /^\s*/;
+function indentedLine(line, direction, count, unit = INDENT_UNIT) {
+  const shape = classifyLine(line);
+  if (shape.kind === "blank" || shape.kind === "heading") {
+    return line;
+  }
+  const match = LEADING_WHITESPACE.exec(line);
+  const currentLength = match?.[0].length ?? 0;
+  const rest = line.slice(currentLength);
+  const units = direction === "in" ? Math.floor(currentLength / unit) + count : Math.max(0, Math.ceil(currentLength / unit) - count);
+  return " ".repeat(units * unit) + rest;
+}
+
 // app/present/declaration.ts
 var NOTE = "note";
+var INDENT_UNIT_KEY = "indentUnit";
+var DEFAULT_INDENT_UNIT = INDENT_UNIT;
 var RENDITIONS = ["raw", "wired"];
 function isRendition(value) {
   return typeof value === "string" && RENDITIONS.includes(value);
@@ -191,6 +363,7 @@ function readDeclaration(document2) {
   if (typeof document2 !== "object" || document2 === null || Array.isArray(document2)) {
     return {
       contribution: {},
+      indentUnit: DEFAULT_INDENT_UNIT,
       problems: [
         `the declaration is ${Array.isArray(document2) ? "an array" : typeof document2}, not an object \u2014 every key stays silent and every line falls through to the default`
       ]
@@ -198,10 +371,24 @@ function readDeclaration(document2) {
   }
   const entries = Object.entries(document2);
   const contribution = {};
+  let indentUnit = DEFAULT_INDENT_UNIT;
   for (const [key, value] of entries) {
     if (key === NOTE) {
       if (typeof value !== "string") {
         problems.push(`'${NOTE}' is ${typeof value}, not a string \u2014 it is prose, not a key`);
+      }
+      continue;
+    }
+    if (key === STRUCTURAL_KEY) {
+      continue;
+    }
+    if (key === INDENT_UNIT_KEY) {
+      if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+        problems.push(
+          `'${INDENT_UNIT_KEY}' is ${JSON.stringify(value)}, which is not a positive whole number of spaces \u2014 the built-in default (${DEFAULT_INDENT_UNIT}) is used instead`
+        );
+      } else {
+        indentUnit = value;
       }
       continue;
     }
@@ -219,7 +406,7 @@ function readDeclaration(document2) {
     }
     contribution[key] = value;
   }
-  return { contribution, problems };
+  return { contribution, indentUnit, problems };
 }
 
 // app/present/context.ts
@@ -270,9 +457,12 @@ var PresentationContext = class _PresentationContext {
 };
 function presentationFromDeclaration(document2) {
   const reading = readDeclaration(document2);
+  const structuralReading = readStructuralDeclaration(document2);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
-    problems: reading.problems
+    indentUnit: reading.indentUnit,
+    structural: structuralReading.structural,
+    problems: [...reading.problems, ...structuralReading.problems]
   };
 }
 
@@ -948,21 +1138,6 @@ function prevHeading(lines, from) {
   return null;
 }
 
-// app/present/indent.ts
-var INDENT_UNIT = 4;
-var LEADING_WHITESPACE = /^\s*/;
-function indentedLine(line, direction, count) {
-  const shape = classifyLine(line);
-  if (shape.kind === "blank" || shape.kind === "heading") {
-    return line;
-  }
-  const match = LEADING_WHITESPACE.exec(line);
-  const currentLength = match?.[0].length ?? 0;
-  const rest = line.slice(currentLength);
-  const units = direction === "in" ? Math.floor(currentLength / INDENT_UNIT) + count : Math.max(0, Math.ceil(currentLength / INDENT_UNIT) - count);
-  return " ".repeat(units * INDENT_UNIT) + rest;
-}
-
 // app/present/word.ts
 function wordCaret(line, motion, count, from) {
   const words = titleSpans(line);
@@ -1443,6 +1618,7 @@ function paint(body, source, context, deps) {
 export {
   BaseSurface,
   DEFAULT,
+  DEFAULT_INDENT_UNIT,
   DraftSurface,
   FocusSurface,
   INDENT_UNIT,
@@ -1451,6 +1627,7 @@ export {
   PresentationContext,
   RESOLUTION_KEYS,
   SPECIFICITY,
+  STRUCTURAL_KEY,
   applyEdit,
   baseOf,
   boundaryLine,
@@ -1470,6 +1647,7 @@ export {
   presentationFromDeclaration,
   qntmIdSpans,
   readDeclaration,
+  readStructuralDeclaration,
   resolveInstanceAnchor,
   seedFor,
   tagSpans,

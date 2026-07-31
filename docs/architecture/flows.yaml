@@ -116,6 +116,20 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [presentation-is-resolved-not-chosen]
 
+  # THE STRUCTURAL LANGUAGE REACHES (added 2026-07-31, design-the-structural-language.md item 1).
+  # Same shape as the edge above, same reason it is declared on its own: the INGEST axis (what a
+  # gesture like indent MEANS) is a second grammar over the SAME served document, read by a second
+  # strict reader from the SAME wire function — never a second fetch, never a second channel. This
+  # edge is what makes "the structural reader is wired" observed rather than claimed, exactly as
+  # `context-reads-the-global-declaration` does for the rendition axis above it.
+  - id: context-reads-the-structural-declaration
+    from: app/present/context
+    to:   app/present/structural
+    callee: readStructuralDeclaration
+    event: app.reads-the-structural-declaration
+    class: presentation-resolution
+    gates_capabilities: [structural-language-is-published-not-guessed]
+
   # THE FACTS. The cascade reads each level through the context rather than reaching for a
   # session, a store or a global — which is what lets a test resolve "as if the cursor were here"
   # without a browser, and what stage 3 depends on.

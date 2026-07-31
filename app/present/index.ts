@@ -39,8 +39,18 @@ export type {
   WordSpan,
 } from "./resolution.js";
 
-export { readDeclaration } from "./declaration.js";
+export { DEFAULT_INDENT_UNIT, readDeclaration } from "./declaration.js";
 export type { DeclarationReading } from "./declaration.js";
+
+export { readStructuralDeclaration, STRUCTURAL_KEY } from "./structural.js";
+export type {
+  EdgeDirection,
+  EdgeSource,
+  IndentBinding,
+  SectionStructuralLanguage,
+  StructuralLanguage,
+  StructuralReading,
+} from "./structural.js";
 
 export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
