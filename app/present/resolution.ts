@@ -176,6 +176,123 @@ export function classifyLine(line: string): LineShape {
 }
 
 /**
+ * THE BULLET A NODE LINE IS PRINTED WITH — the one piece of chrome that is not a checkbox.
+ *
+ * The engine prints EVERY node line with a bullet, whatever its type's render shape:
+ * `renderer.py:950` is `f"{'    ' * depth}- {' '.join(cell for cell in cells if cell)}"`, one
+ * unconditional `- ` in front of the cells, and only the CELLS differ between a checkbox shape and
+ * a plain-line shape. So `- ` is chrome and the thing after it is content. The alternation covers
+ * `*` and `+` because a person authoring by hand may type either and markdown-it renders all three
+ * as a list; the engine only ever emits `-`.
+ */
+const BULLET = /^(\s*)([-*+])(\s+|$)/;
+
+/**
+ * THE CHECKBOX GLYPH, AS THE ENGINE READS IT — laxer than `TASK` above, and deliberately so.
+ *
+ * `TASK` is a verbatim transcription of what the browser's old painter matched and may not be
+ * widened: the whole claim of the extraction that created it is that the decisions moved and did
+ * not change. But the ENGINE's reader is looser — `parse_checkbox.py:48` is
+ * `^([-*+])\s(\[.\])\s?(.*)`, with the space after the glyph OPTIONAL — so `- [ ]` with nothing
+ * after it is a checkbox line to the engine and a prose line to `classifyLine`.
+ *
+ * That gap is only ever consulted by `carriesContent`, and there it must be closed in the ENGINE's
+ * favour: the question that predicate asks is "would the engine make a node with no title out of
+ * this", and the engine is the one answering. Any other reader that needs it should think about
+ * which of the two vocabularies it is really asking about first.
+ */
+const CHECKBOX_GLYPH = /^\[.\]\s*/;
+
+/**
+ * Does this line carry anything a node could be made of, once its chrome is taken off?
+ *
+ * ── WHY THIS EXISTS, WHICH IS A MEASURED FACT ABOUT THE ENGINE AND NOT A TASTE ──
+ *
+ * `applyEdit` refuses to INSERT a line that fails this. Run against a hermetic copy of the engine's
+ * shipped starter bundle (`qntm-md init` then `qntm-md run`, 2026-07-31), a new line with no
+ * content has two fates and both are worse than the affordance not firing:
+ *
+ *   * `- [ ] ` MINTS A NODE TITLED NOTHING. There is no empty-title guard between the parser and
+ *     the mint, so the cycle created `qntm:3`, printed it back as `- [ ] [[qntm:3]] #work #task`,
+ *     and — because a node is graph state, not a line — reprinted it in three sections across two
+ *     views. A stray keystroke becomes permanent junk in every view that qualifies it.
+ *   * A wholly blank line is skipped by the shipped `tolerant` input grammar, mints nothing, and is
+ *     GONE the moment the cycle rewrites the view, which it does for every view every cycle.
+ *
+ * ── IT IS ASKED OF THE GRAMMAR THIS MODULE ALREADY OWNS ──
+ *
+ * `classifyLine` first, then the one question each shape needs. Not a fresh regex over the whole
+ * line: the engine's own rule for its tag grammar — "one canonical implementation per capability,
+ * no parallel regex" — is the rule this repo mirrors, and a second opinion about what a checkbox
+ * line is would be exactly that. What is added is `BULLET`, which is about the BULLET and is the
+ * only piece of node-line chrome `classifyLine` did not already have a name for.
+ */
+export function carriesContent(line: string): boolean {
+  const shape = classifyLine(line);
+  if (shape.kind === "blank") {
+    return false;
+  }
+  if (shape.kind === "heading") {
+    return shape.text.trim() !== "";
+  }
+  // EVERY OTHER SHAPE IS CHROME THEN CONTENT, and the chrome is at most a bullet followed by a
+  // checkbox glyph. Both are taken off in that order and whatever survives is the title. This
+  // covers the checkbox shape and the prose shape with one sentence, which is what lets `- [ ]`
+  // with no trailing space — a prose line to `classifyLine` and a checkbox line to the engine — be
+  // refused by the same rule that refuses `- [ ] `. A bare bullet is exactly what a person leaves
+  // behind when they open a line and change their mind.
+  return line.replace(BULLET, "").replace(CHECKBOX_GLYPH, "").trim() !== "";
+}
+
+/**
+ * The chrome a NEW line in this line's company would be printed with, or `null` if this line is
+ * not evidence of anything.
+ *
+ * ── THIS IS THE APP READING THE CASCADE'S ANSWER RATHER THAN RE-DERIVING IT ──
+ *
+ * What shape a new line should take is decided by the engine's `default_node_type`, which cascades
+ * GLOBAL -> VIEW -> STRUCTURAL_NODE (`src/qntm_md/resolution/registration.py:89-113`) and is
+ * consumed at two ends of the same fact:
+ *
+ *   * at ADMISSION, `io/applier.py:110-150` (`_declared_form_is_chrome_free`) decides whether a
+ *     line without a checkbox may be INPUT by asking whether the type it would resolve to declares
+ *     a render shape that is not `checkbox`;
+ *   * at RENDER, `render/renderer.py:909-936` dispatches on the SAME `render.shape` to decide what
+ *     cells the line is PRINTED with.
+ *
+ * One declaration, both directions. So a line the engine has already PRINTED into this view is the
+ * cascade's answer, computed by the thing that owns the cascade and delivered to the browser inside
+ * the view's own source. The app does not need `default_node_type` — which it could not read
+ * anyway, because the snapshot envelope does not carry it — it needs to read what the cascade
+ * already decided, off the SOURCE STRING and never off the DOM.
+ *
+ * ── WHAT COUNTS AS EVIDENCE, AND WHAT DELIBERATELY DOES NOT ──
+ *
+ * Only a line the engine would have printed as a NODE. That is a bullet, optionally followed by a
+ * checkbox. A heading is not evidence (it is a section boundary, and `newline.ts` uses it as one).
+ * A blank line is not evidence. A line with no bullet is not evidence either — the engine never
+ * emits one, so mirroring it would be mirroring something the cascade did not say.
+ *
+ * The checkbox is returned OPEN whatever the evidence line's state. Copying `- [x] ` would make a
+ * new line arrive already completed, which is a fact about the line above it and not about the
+ * shape a new one takes.
+ */
+export function chromeOf(line: string): string | null {
+  const shape = classifyLine(line);
+  if (shape.kind === "checkbox") {
+    return shape.indent + "- [ ] ";
+  }
+  if (shape.kind !== "prose") {
+    return null;
+  }
+  const bullet = BULLET.exec(line);
+  if (bullet === null) {
+    return null;
+  }
+  return (bullet[1] ?? "") + "- ";
+}
+
+/**
  * ── WHAT A TAG IS, AND WHERE THAT ANSWER CAME FROM ──
  *
  * NOT "a word after a hash". The engine has a tag grammar and this is a MIRROR of it, transcribed

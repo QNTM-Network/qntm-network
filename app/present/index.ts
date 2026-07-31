@@ -17,7 +17,7 @@
 export { SPECIFICITY, isSilent } from "./levels.js";
 export type { PresentationLevel } from "./levels.js";
 
-export { DEFAULT, RESOLUTION_KEYS, classifyLine, tagSpans } from "./resolution.js";
+export { DEFAULT, RESOLUTION_KEYS, carriesContent, chromeOf, classifyLine, tagSpans } from "./resolution.js";
 export type {
   Contribution,
   LineShape,
@@ -35,11 +35,17 @@ export type { DeclaredPresentation } from "./context.js";
 
 export { FocusSurface } from "./focus.js";
 
+export { DraftSurface } from "./draft.js";
+export type { Draft } from "./draft.js";
+
+export { seedFor } from "./newline.js";
+export type { NewLine } from "./newline.js";
+
 export { PresentationCascade } from "./cascade.js";
 export type { Resolved } from "./cascade.js";
 
 export { applyEdit } from "./source.js";
-export type { SetCheckbox, SetLine, SourceEdit } from "./source.js";
+export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
 export { paint } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";

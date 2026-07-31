@@ -380,6 +380,20 @@ it is the property that makes every future resolution cheap and one careless com
   stays untouched in the source.
 * A date pill instead of `🆕 2026-07-29` — same.
 * Hiding a token entirely — the safest resolution of all, because hidden text is not edited.
+* **Creating a line** — an insertion into the source string at a known index. Shipped 2026-07-31 as
+  `insert-line`, the third kind and the first CONSTRUCTIVE one. It is the case that tests this
+  section hardest, because a new line has no content: nothing about it can be read from the line, so
+  everything about it is resolved, and the substring operation has to be writable before there are
+  any characters to write. **Two findings, both measured against a hermetic copy of the engine's
+  starter bundle, and both of which changed the design:** (1) an EMPTY inserted line is not a no-op
+  on the other side — `- [ ] ` with no title mints a real node titled nothing, which then reprints
+  itself into every view that qualifies it, so `applyEdit` refuses a contentless insert and the
+  source is never speculatively mutated (a line being made is held out of the file until it settles,
+  which is also why no DELETE edit was needed to undo an abandoned one); (2) the app cannot guess
+  the line's SHAPE, because a checkbox authored into a chrome-free view raises `CycleAbortedError`
+  and kills the whole cycle. What it can do — and what §4.3's missing envelope field would replace —
+  is read the shape the engine already PRINTED into that view, which is the same `render.shape` the
+  applier's admission gate consults. See `a-new-line-is-resolved-not-guessed` in capabilities.yaml.
 
 **What it forbids:**
 

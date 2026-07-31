@@ -227,6 +227,26 @@ const PAINTED_LINES = [
   { tag: "input", classes: ["rawline"] },
 ];
 
+/**
+ * The one child of the column that is NOT a line, and therefore not held to the row invariant.
+ *
+ * `div.newline` is the space below the last line — the target for "make a line here", added
+ * 2026-07-31. It is exempt for a reason that is narrow and checkable rather than a shrug:
+ *
+ *   * THE INVARIANT IS ABOUT SWAPPING. Every rule above exists because the painter REPLACES a
+ *     line's element when the cursor lands on it, so `label.task` and `input.rawline` must occupy
+ *     the same box or every row below jumps. This element is never a rendition of a line and is
+ *     never swapped for another element — it is the same `div` in every paint.
+ *   * IT IS ALWAYS LAST, so there is nothing below it for a taller box to move. That is a fact
+ *     about the PAINTER, not about this stylesheet, so it is asserted where it can be: against the
+ *     real painter, in tests/present-newline.test.mjs, section 2.
+ *
+ * Listed here rather than left out so that the exemption is a declaration. A child of the column
+ * that appears in neither list is a child nothing in this suite is thinking about, which is how the
+ * heading ladder went missing in the first place.
+ */
+const TRAILING_CHILDREN = [{ tag: "div", classes: ["newline"] }];
+
 /** Everything a painted line sits inside, from app/index.html's own markup. */
 const ANCESTORS = [
   { tag: "html" },
@@ -470,6 +490,59 @@ describe("one row geometry, two renditions", () => {
     for (const property of ["margin", "margin-top", "margin-bottom", "height", "min-height"]) {
       assert.equal(declared(CHIP, property), undefined, `${CHIP} sets ${property}, which the row cannot absorb`);
     }
+  });
+
+  test("the trailing target is sized by the page's own touch token, not by a fresh number", () => {
+    // The one child of the column that is allowed a box of its own, and the whole of what it is
+    // allowed to say. If it ever acquires a `margin` it would take the column's gap for itself
+    // (the rule above forbids that for every selector but one) and if it acquired a `line-height`
+    // it would start behaving like a row.
+    const TARGET = ".viewbody .newline";
+    assert.ok(rulesFor(TARGET).length > 0, "the space below the last line has no rule at all");
+    assert.equal(
+      declared(TARGET, "min-height"), "var(--touch)",
+      `${TARGET} must be sized by the page's declared minimum touch target, not by a new number`,
+    );
+    for (const property of ["margin", "margin-top", "margin-bottom", "height", "line-height", "padding"]) {
+      assert.equal(
+        declared(TARGET, property), undefined,
+        `${TARGET} sets ${property} — the trailing target may claim room BELOW the column and ` +
+          "nothing else; a box property beyond min-height starts moving rows that are above it",
+      );
+    }
+  });
+
+  test("every class the column styles is one this suite has an opinion about", () => {
+    // THE LIST THAT MUST NOT SILENTLY GROW, and the reason it is a list of NAMES rather than a
+    // structural check: `.viewbody .newline` (a child of the column) and `.viewbody .tagchip` (a
+    // token inside a line) are the same shape as CSS, and no reader of a stylesheet can tell them
+    // apart. What CAN be held is that a new name arrives with a decision attached — is it a LINE,
+    // held to the row; a TRAILING child, exempt and last; or a TOKEN inside a line, held by the
+    // separate "claims no more of the row than the row has" rule above? A class that reaches the
+    // reading column and appears in none of the three is one nothing in this file is thinking
+    // about, which is exactly how `<h4>` ended up drawn by the browser's own stylesheet.
+    // `syncing` is a STATE a task line wears while its POST is in flight (app/index.html's
+    // `toggleTask`), not a kind of line — it only ever declares `opacity`, which costs no layout.
+    const LINES = ["task", "done", "syncing", "rawline"];
+    const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
+    const TOKENS = ["tagchip"];
+    const known = new Set([...LINES, ...TRAILING, ...TOKENS]);
+
+    const strays = new Set();
+    for (const rule of RULES) {
+      for (const piece of rule.selector.split(",")) {
+        const selector = piece.trim();
+        if (!selector.includes(".viewbody")) continue;
+        for (const [, name] of selector.replace(".viewbody", "").matchAll(/\.([a-zA-Z0-9_-]+)/g)) {
+          if (!known.has(name)) strays.add(`${selector} (.${name})`);
+        }
+      }
+    }
+    assert.deepEqual(
+      [...strays], [],
+      "the reading column styles a class this suite has no opinion about — add it to LINES (and " +
+        "hold it to the row), to TRAILING_CHILDREN (and say why it is exempt), or to TOKENS",
+    );
   });
 
   test("the declared green is named once", () => {

@@ -564,6 +564,24 @@
   }
   .viewbody input.rawline:focus { outline: none; box-shadow: inset 0 -1px 0 var(--green-hairline); }
 
+  /* THE NEW LINE SPACE — the room below the last line, and the only reason it is here.
+     "if I click after, in the new line space, nothing happens" was literally true: the column ends
+     where its last row ends, so there was nothing under it to click. The painter now appends one
+     empty row there (app/present/paint.ts) and this is what makes it big enough to hit.
+
+     `--touch` IS THE PAGE'S OWN DECLARED MINIMUM TARGET — "44px at the root font size, which is the
+     minimum target this page will offer a thumb" — not a number chosen for this rule. Every other
+     control on the page is sized by it and this is a control.
+
+     IT IS EXEMPT FROM THE ROW INVARIANT, AND THE EXEMPTION IS NARROW. That invariant exists because
+     the painter REPLACES a line's element when the cursor arrives, so two renditions of one line
+     must occupy one box or everything below moves. This row is never a rendition of anything: it
+     holds no line, it is never swapped for another element, and it is always the LAST child of the
+     column — so there is nothing below it to move. `tests/present-newline.test.mjs` asserts the
+     "always last" half against the real painter, which is where that claim can actually be tested;
+     `tests/app-view-rows.test.mjs` carries the exemption so it is declared rather than assumed. */
+  .viewbody .newline { min-height: var(--touch); cursor: text; }
+
   /* THE TAG CHIP — the `wired` rendition of the presentation cascade's `tags` key, and the ONLY
      style this stage adds. Scoped to `.viewbody .tagchip` so it cannot reach anything else on the
      page, and named `tagchip` rather than `tag` because `.tag` is already the hero tagline above.
@@ -760,7 +778,7 @@ import MarkdownIt from "https://esm.sh/markdown-it@14";
 //
 // The path is SITE-ROOT-ABSOLUTE: this page is served at /app/, so "./dist/present.js" would
 // resolve to /app/dist/present.js and 404.
-import { paint, FocusSurface, PresentationContext, presentationFromDeclaration } from "/dist/present.js";
+import { paint, DraftSurface, FocusSurface, PresentationContext, presentationFromDeclaration } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -899,6 +917,14 @@ let currentViewId = null;
 // nowhere. It holds one number and nothing else — the FOCUS level is DERIVED from where the cursor
 // is, never declared in a file, because a fact about the moment written down outlives the moment.
 const focus = new FocusSurface();
+
+// WHERE A LINE IS BEING MADE. One surface for the page, for the same reason the focus surface is
+// one: it has to survive the repaint it causes. It holds an index and the characters the row opened
+// with, and NOTHING is written into the view's source until that row settles carrying content — so
+// a line opened and abandoned costs nothing, and the file this app posts is provably the file the
+// server sent with exactly one line inserted. See app/present/draft.ts for what the alternative
+// arrangement would have cost, measured against the engine.
+const draftLine = new DraftSurface();
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
@@ -1085,6 +1111,14 @@ function markWhereWeAre() {
 function paintView(id) {
   currentViewId = id;
   markWhereWeAre();
+  // A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN. This function is the one place a view
+  // is chosen or re-read from the server, and both are moments a half-made line cannot survive: an
+  // index that meant "under the third task" in one view means something else in the next, and a
+  // fresh snapshot has already been through the cycle without it. Dropping it here is not a loss —
+  // by the time a POST comes back the row has settled through `commitLine` anyway; what this stops
+  // is a row leaking across a view change, which is the one way this affordance could write into a
+  // file nobody was looking at.
+  draftLine.drop();
   const v = graphData?.snapshot?.views.find((x) => x.id === id);
   const body = $("viewBody");
   body.innerHTML = "";
@@ -1092,8 +1126,23 @@ function paintView(id) {
   paint(body, v.markdown, presentation, {
     markdown: md,
     focus,
+    draft: draftLine,
     onCheckboxToggle: (toggle) => toggleTask(v, toggle),
+    // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
+    // created arrive here identically — `commit.markdown` is the whole view source either way, and
+    // this page neither knows nor needs to know which it is holding. There is one endpoint, one
+    // write unit and one place a view is replaced; a second write path would have shown up as a
+    // second callback here, and it did not.
     onLineCommit: (commit) => commitLine(v, commit),
+    // THE APP DECLINED TO OPEN A LINE, AND SAYS SO. It happens in one situation: the view has
+    // printed no line the app can read a shape from, so nothing in the payload says what a line in
+    // it looks like. Guessing costs the operator either a lost line or — measured against the
+    // engine's own starter bundle — an aborted cycle, so nothing is written. The sentence goes in
+    // the freshness line, which is where this page already says what just happened.
+    onNewLineDeclined: () => {
+      $("freshness").textContent =
+        "no line here yet — this view has nothing in it to say what a new line should be";
+    },
   });
 }
 

@@ -56,6 +56,7 @@
 
 import { paint } from "../../app/present/paint.js";
 import { PresentationContext, presentationFromDeclaration } from "../../app/present/context.js";
+import { DraftSurface } from "../../app/present/draft.js";
 import { FocusSurface } from "../../app/present/focus.js";
 import type { InlineMarkdown } from "../../app/present/paint.js";
 
@@ -291,5 +292,51 @@ export function run(): void {
   const changed = before.map((_, index) => index).filter((index) => before[index] !== after[index]);
   if (changed.length !== 1 || changed[0] !== FOCUSED_LINE_INDEX) {
     throw new Error(`the edit changed lines ${changed.join(", ")} — it must change exactly one`);
+  }
+
+  // 5. A LINE THAT DID NOT EXIST (2026-07-31). The third source edit, and the only affordance
+  //    whose answer cannot come from the characters in front of it — there are none. The edges it
+  //    makes observable are paint -> newline.seedFor (WHAT IS a new line here), newline ->
+  //    resolution.chromeOf (read the shape the ENGINE printed, rather than re-derive the cascade),
+  //    paint -> draft.DraftSurface.open (where a line that is not in the file lives), and
+  //    source -> resolution.carriesContent (the refusal that stops a node with no title).
+  //
+  //    IT IS SIX LINES OF SCENARIO AND THAT IS DELIBERATE. The header above records that this
+  //    observer TRUNCATES its own capture and that six FIXTURE lines put this scenario permanently
+  //    the wrong side of the budget. The fixture is unchanged; what is added is one gesture over
+  //    the source that is already here.
+  const drafting = new DraftSurface();
+  const made = new StubElement("article");
+  let inserted: string | null = null;
+  paint(made as unknown as HTMLElement, SOURCE, new PresentationContext(), {
+    markdown,
+    focus: new FocusSurface(),
+    draft: drafting,
+    onLineCommit: (commit) => {
+      inserted = commit.markdown;
+    },
+  });
+  // The gesture: click the space below the last line. That is the operator's second ask, and it is
+  // the one that reaches `seedFor` without having to settle a line first.
+  const below = made.children.find((el) => el.className === "newline");
+  if (below === undefined) {
+    throw new Error("the painter offered no space below the last line");
+  }
+  below.dispatch("click");
+  const opened = made.descendants().find((el) => el.type === "text");
+  if (opened === undefined) {
+    throw new Error("clicking below the last line opened no line");
+  }
+  // The seed is the cascade's answer read off what the engine printed: the fixture's node line is
+  // a checkbox, so a new line beside it is one. A scenario that only asserted "a row appeared"
+  // would record the same edges while proving nothing about whether the answer was obeyed.
+  if (opened.value !== "- [ ] ") {
+    throw new Error(`a new line was seeded ${JSON.stringify(opened.value)}, not from the cascade`);
+  }
+  // Settling it with nothing in it must post NOTHING — the refusal that stops the engine minting a
+  // node titled nothing, which it does with no guard of its own.
+  opened.dispatch("blur");
+  if (inserted !== null) {
+    throw new Error("a line with no content produced a file to post");
   }
 }
