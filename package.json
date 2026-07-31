@@ -13,6 +13,7 @@
     "generate:structural:check": "node scripts/generate-structural-declaration.mjs --check"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
     "markdown-it": "^14.1.0"
   },
   "devDependencies": {

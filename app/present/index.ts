@@ -94,3 +94,5 @@ export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
 export { paint } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";
+
+export { EMBEDDED_DECLARATION } from "./embedded-declaration.js";

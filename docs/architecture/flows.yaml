@@ -523,3 +523,25 @@ forbidden_flows:
   # claims that would have lived in one (it imports nothing; it touches no DOM, no fetch and no
   # clock) are proven in tests/present-base.test.mjs section 0 instead, under `node --test`, where
   # that config says there is no budget. This paragraph is the declaration that the gap is known.
+
+  # ── TWO MORE MODULES THAT DECLARE NOTHING HERE, ADDED 2026-07-31 (LOAD-SPEED ARC) ────────
+  #
+  # `app/vendor.ts` (-> dist/vendor.js) — markdown-it and @simplewebauthn/browser, bundled locally
+  # instead of imported from esm.sh (the-load-path-has-no-third-party-cdn, capabilities.yaml). It
+  # gets no `expected_flows` entry for the same reason `base.ts` gets none above: its only importer
+  # is `app/index.html`, which the capture filter names and node cannot import. Nothing under
+  # `app/present/` imports it either — the two libraries are handed to the painter as `PaintDeps`,
+  # the same injection paint.ts's own header already argues for, so a second bundle importing a
+  # third would be exactly the coupling that argument refuses. `flow-trace verify .` confirms this
+  # is a measurement rather than a guess: it reports the same 42 PASS / 0 FAIL / 20 INFO before and
+  # after this file existed — zero new observed edges, because there is nothing to observe.
+  #
+  # `app/present/embedded-declaration.ts` — `presentation.json`'s content, imported at build time
+  # (see that file's own header). Re-exported from `app/present/index.ts`'s barrel, which is why it
+  # DOES have one importer flow-trace can see — and still earns no `expected_flows` entry, because
+  # what crosses that edge is a JSON IMPORT, not a function call. flow-trace's JS observer captures
+  # calls; a `const x = importedValue` assignment is not one, and declaring an edge with no callee
+  # would be inventing a shape the tool cannot check. The one real behavioural edge this file
+  # participates in — `app/index.html`'s `loadPresentation` calling `presentationFromDeclaration`
+  # with this constant — was already undeclared before this change (that caller is the page, same
+  # invisibility as everywhere else in this note) and stays undeclared for the same reason.

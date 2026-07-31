@@ -1615,11 +1615,85 @@ function paint(body, source, context, deps) {
     body.append(below);
   }
 }
+
+// presentation.json
+var presentation_default = {
+  note: "The GLOBAL level of the presentation cascade \u2014 this instance's default rendition for each token family the app can show more than one way. 'wired' is the app's rendition (a checkbox you can click, an <h3>, a rendered sentence, a tag as a chip); 'raw' is the characters, verbatim. GLOBAL is the LEAST specific of the seven levels, so anything a more specific level says beats it \u2014 in particular the cursor: put the cursor on a line and it shows its source characters whatever this file says. A key left out of this file stays silent and falls through to the built-in default; a key MISSPELLED here is reported as a problem rather than ignored, because a declaration nobody reads is the bug this level exists to disprove. 'tags' is the one key whose built-in default is 'raw' and whose value here is 'wired': the floor is what the app did before the key existed, and the chip is a decision this INSTANCE makes. Flip it to 'raw', or delete it, and the chips become characters with nothing rebuilt. Served with the app from the site root and read by app/present/declaration.ts. See docs/implementation-artifacts/design-presentation-cascade.md. 'indentUnit' is the OUTPUT half of the structural language (design-the-structural-language.md section 3): how many leading spaces one nesting level is. It is a citation of apps/qntm-md/src/qntm_md/render/renderer.py lines 947 to 950, transcribed by hand because the engine has no config key of its own yet to generate it from; read by app/present/declaration.ts and app/present/indent.ts. 'structural' is the INGEST half (same design, item 1): what a gesture like indent means, generated from the monorepo's config by scripts/generate-structural-declaration.mjs, never hand-written; read by app/present/structural.ts. Both are read alongside GLOBAL but are not renditions themselves and do not cascade the way checkbox/heading/prose/tags do.",
+  checkbox: "wired",
+  heading: "wired",
+  prose: "wired",
+  tags: "wired",
+  indentUnit: 4,
+  structural: {
+    indent: {
+      edgeType: "PART_OF",
+      edgeSource: "self"
+    },
+    edgeCardinality: {
+      PART_OF: "many_to_one",
+      WAITING_FOR: "many_to_many"
+    },
+    sections: {
+      "operator-flowtrace": {
+        "waiting-for": {
+          edgeTypes: [
+            "WAITING_FOR"
+          ],
+          edgeDirection: "incoming"
+        }
+      },
+      "operator-qntm-network": {
+        "waiting-for": {
+          edgeTypes: [
+            "WAITING_FOR"
+          ],
+          edgeDirection: "incoming"
+        }
+      },
+      "operator-qntm": {
+        "waiting-for": {
+          edgeTypes: [
+            "WAITING_FOR"
+          ],
+          edgeDirection: "incoming"
+        }
+      },
+      "operator-trace-orchestration": {
+        "waiting-for": {
+          edgeTypes: [
+            "WAITING_FOR"
+          ],
+          edgeDirection: "incoming"
+        }
+      },
+      "waiting-for-personal": {
+        "personal-waiting-for": {
+          edgeTypes: [
+            "WAITING_FOR"
+          ],
+          edgeDirection: "incoming"
+        }
+      },
+      "waiting-for-work": {
+        "waiting-for": {
+          edgeTypes: [
+            "WAITING_FOR"
+          ],
+          edgeDirection: "incoming"
+        }
+      }
+    }
+  }
+};
+
+// app/present/embedded-declaration.ts
+var EMBEDDED_DECLARATION = presentation_default;
 export {
   BaseSurface,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
   DraftSurface,
+  EMBEDDED_DECLARATION,
   FocusSurface,
   INDENT_UNIT,
   ModeSurface,

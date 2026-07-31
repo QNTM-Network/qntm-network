@@ -756,6 +756,21 @@
 
 <div class="wrap">
 
+  <!-- BOOT — the only thing on the screen before the module script has done anything.
+       Static HTML, no class beyond `.tag`, no script: the browser paints it the instant the
+       markup parses, before a single byte of the presentation cascade or the vendor bundle has
+       arrived. Before this existed, `#entry`, `#graph` and `#app` all carried `class="hidden"` in
+       their own markup and nothing un-hid any of them until the module script ran — so the reader
+       saw a fixed bar over a black rectangle for the whole cold load (4-7s, see
+       docs/implementation-artifacts/research-state-and-speed.md §7.1). THIS CHANGES NO TIMING AT
+       ALL. It changes what the wait looks like, and it is reported as exactly that — never as a
+       speed-up. The boot IIFE at the foot of the module script hides it in a `finally`, once, on
+       every path out (a painted graph, the entry screen, a 401, or an unreadable read), so it
+       never outlives the moment something else is standing. -->
+  <section id="boot">
+    <p class="tag">opening your graph…</p>
+  </section>
+
   <!-- ENTRY (logged out)
        WHAT THIS SCREEN NOW ANSWERS BEFORE IT ASKS FOR ANYTHING: what qntm is, what a handle is
        and what its rules are, and what pressing "Create passkey" is about to do. It asked for a
@@ -823,8 +838,14 @@
 </div>
 
 <script type="module">
-import { startRegistration, startAuthentication } from "https://esm.sh/@simplewebauthn/browser@13";
-import MarkdownIt from "https://esm.sh/markdown-it@14";
+// THE VENDOR BUNDLE — markdown-it and the passkey library, from ONE same-origin request instead
+// of two esm.sh imports. Those were 17 sub-requests across a dependency chain four levels deep,
+// ~440ms of serial latency cold and still 1,175.6ms with a WARM http cache, because the cost was
+// the round trips rather than the bytes — see app/vendor.ts's own header and
+// docs/implementation-artifacts/research-state-and-speed.md §2.2. SITE-ROOT-ABSOLUTE for the same
+// reason as the presentation-cascade import below: this page is served at /app/, so a relative
+// "./dist/vendor.js" would resolve to /app/dist/vendor.js and 404.
+import { MarkdownIt, startRegistration, startAuthentication } from "/dist/vendor.js";
 
 // THE PRESENTATION CASCADE. Built from app/present/ by scripts/build.mjs and committed, because
 // Pages serves this repo from main:/ with no build step. This page used to decide how a line was
@@ -857,6 +878,7 @@ import {
   PresentationContext,
   presentationFromDeclaration,
   DEFAULT_INDENT_UNIT,
+  EMBEDDED_DECLARATION,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -886,39 +908,40 @@ let indentUnit = DEFAULT_INDENT_UNIT;
 // read by nothing, which is the honest state of "published, not yet consumed".
 let structural = undefined;
 
-// THE PAGE FETCHES; IT DOES NOT READ. Turning the document into levels is
+// THE PAGE READS; IT NO LONGER FETCHES. Turning the document into levels is still
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
 // declaration read inside this file is a declaration whose reader nothing can observe, because
-// node cannot import an HTML document and the JS capture is a module-load hook. What is left
-// here is the fetch, which is what this page is for.
+// node cannot import an HTML document and the JS capture is a module-load hook.
 //
-// SITE-ROOT-ABSOLUTE for the same reason as the import above: presentation.json is served from
-// the site root, and this page is served at /app/.
-async function loadPresentation() {
-  try {
-    const res = await fetch("/presentation.json", { cache: "no-cache" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    // ONE FETCH, ONE READ. `presentationFromDeclaration` reads the rendition axis, the indent
-    // unit and the structural (ingest) axis off the SAME document — two grammars over one
-    // channel, never two (design-the-structural-language.md §0.8, §11). Each half is strict about
-    // only the keys it owns; an unrecognised key anywhere in the document is a reported problem,
-    // never a silent guess.
-    const declared = presentationFromDeclaration(await res.json());
-    for (const problem of declared.problems) {
-      console.warn("presentation.json: " + problem);
-    }
-    presentation = declared.context;
-    indentUnit = declared.indentUnit;
-    structural = declared.structural;
-  } catch (e) {
-    // A declaration that cannot be read is reported, never guessed at. Silence is the honest
-    // fallback: it is the same behaviour as declaring nothing, which is the behaviour the app
-    // had before this level existed.
-    console.warn("presentation.json not read (" + e.message + ") — every level stays silent");
-    presentation = new PresentationContext();
-    indentUnit = DEFAULT_INDENT_UNIT;
-    structural = undefined;
+// `EMBEDDED_DECLARATION` (app/present/embedded-declaration.ts) is `presentation.json`'s content,
+// baked into dist/present.js at build time — see that file's own header for how this cannot drift
+// from the served file. THIS REMOVES A SERIAL ROUND TRIP (§2.5): `enterGraph()` used to
+// `await loadPresentation()` before `await loadGraph()`, on purpose, so the first paint would not
+// change under the reader a moment later — that ordering is unchanged below, it simply no longer
+// costs a network request to keep.
+//
+// A DECLARATION THAT "CANNOT BE READ" IS NO LONGER A CASE THIS FUNCTION HANDLES. Migration stage
+// 2's promise was "a slow, missing or broken presentation.json costs nothing but a warning" — sound
+// for a FETCH, which can fail in ways a build cannot: a malformed presentation.json now fails
+// `npm run build` (esbuild's JSON loader throws on invalid JSON) and CI's own staleness gate
+// refuses to ship a dist/present.js built from anything else. What survives, exactly as before, is
+// a document that PARSES but says something the reader does not recognise — applyPresentation
+// reports that the same way it always did.
+function applyPresentation(document) {
+  // ONE READ. `presentationFromDeclaration` reads the rendition axis, the indent unit and the
+  // structural (ingest) axis off the SAME document — two grammars over one channel, never two
+  // (design-the-structural-language.md §0.8, §11). Each half is strict about only the keys it
+  // owns; an unrecognised key anywhere in the document is a reported problem, never a silent guess.
+  const declared = presentationFromDeclaration(document);
+  for (const problem of declared.problems) {
+    console.warn("presentation.json: " + problem);
   }
+  presentation = declared.context;
+  indentUnit = declared.indentUnit;
+  structural = declared.structural;
+}
+function loadPresentation() {
+  applyPresentation(EMBEDDED_DECLARATION);
 }
 
 const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
@@ -1653,9 +1676,10 @@ async function enterGraph() {
   showShell(true);
   $("graph").classList.remove("hidden");
   // The declaration before the paint, so the first view a person sees is already resolved
-  // against it. Sequential rather than parallel on purpose: two round trips at sign-in is
-  // cheaper than a first paint that changes under the reader a moment later.
-  await loadPresentation();
+  // against it. NO LONGER A ROUND TRIP TO SEQUENCE (§2.5): the declaration is already in the
+  // bundle, so resolving it costs a synchronous read rather than a second `await` — the ordering
+  // that used to need "sequential rather than parallel" is now just "before", for free.
+  loadPresentation();
   await loadGraph();
 }
 
@@ -2034,18 +2058,26 @@ $("captureBox").addEventListener("keydown", async (e) => {
 // is not "the server says you are not authenticated" now keeps the session and says what happened,
 // on the graph screen, where the re-read button is.
 (async () => {
-  if (!token) { show("entry"); return; }
+  // #boot IS HIDDEN IN THE `finally`, ONCE, WHICHEVER WAY THIS EXITS. Every branch below ends
+  // with a screen actually standing — the entry screen, a painted graph, or the "unreadable"
+  // empty state — so "something else is showing" is exactly the condition `finally` here proves,
+  // without naming it three times at three different `return`s.
   try {
-    await enterGraph();
-  } catch (e) {
-    if (e?.status === 401) { localStorage.removeItem(tokenKey); token = null; show("entry"); return; }
-    // `enterGraph` has already revealed the shell and the graph section before the read that
-    // failed, so the screen is standing — what it needs is something in it.
-    showShell(true);
-    $("entry").classList.add("hidden");
-    $("graph").classList.remove("hidden");
-    showEmpty("unreadable", e?.message ?? "");
-    buildDrawer([]);
+    if (!token) { show("entry"); return; }
+    try {
+      await enterGraph();
+    } catch (e) {
+      if (e?.status === 401) { localStorage.removeItem(tokenKey); token = null; show("entry"); return; }
+      // `enterGraph` has already revealed the shell and the graph section before the read that
+      // failed, so the screen is standing — what it needs is something in it.
+      showShell(true);
+      $("entry").classList.add("hidden");
+      $("graph").classList.remove("hidden");
+      showEmpty("unreadable", e?.message ?? "");
+      buildDrawer([]);
+    }
+  } finally {
+    $("boot").classList.add("hidden");
   }
 })();
 </script>

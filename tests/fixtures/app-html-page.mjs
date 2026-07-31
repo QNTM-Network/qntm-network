@@ -8,9 +8,12 @@
  * outside every enforcer this repo has: outside the capture filter (node cannot import an HTML
  * document, so being under `app/` changes nothing), outside tsconfig, outside the bundle. A test
  * that reimplemented its wiring in a fixture would pass forever while the page rotted. So this
- * extracts the page's real `<script type="module">`, swaps ONLY its three import lines (two CDN
- * URLs node cannot fetch, and one site-absolute path that has to become a file URL), appends an
- * export block, and runs it. Every line of logic under test is the line that ships.
+ * extracts the page's real `<script type="module">`, swaps ONLY its two site-root-absolute import
+ * lines for node-resolvable equivalents (the vendor bundle — markdown-it resolved from this repo's
+ * own node_modules, the passkey ceremony routed through a test hook — and the presentation bundle,
+ * turned into a file URL), appends an export block, and runs it. Every line of logic under test is
+ * the line that ships. NEITHER SWAP IS A CDN URL ANY MORE — app/vendor.ts (-> dist/vendor.js)
+ * retired both esm.sh imports; see that file's own header.
  *
  * IT LIVES HERE, IN ONE FILE, BECAUSE THERE ARE NOW TWO SUITES THAT NEED IT — the write path
  * (tests/app-html-write-path.test.mjs) and the served GLOBAL declaration
@@ -44,30 +47,34 @@ export function extractPageScript(workDir) {
     swapped.push(label);
   };
 
-  // 1. The passkey library — a CDN URL node cannot fetch.
+  // 1. The vendor bundle (app/vendor.ts -> dist/vendor.js) — markdown-it and the passkey library,
+  //    imported by the page from ONE site-root-absolute path, split into node-testable pieces:
   //
-  //    IT ROUTES THROUGH A HOOK RATHER THAN BEING A NO-OP, and the default is still the no-op the
-  //    two older suites relied on. What the hook buys is the CEREMONY's failures: a cancelled
-  //    passkey sheet is a `NotAllowedError` raised from inside this call, it is the commonest
-  //    thing a first-time visitor does, and the page's answer to it is untestable if the only
-  //    thing this function can do is succeed silently. A suite sets `globalThis.__webauthn` to
-  //    make it throw what a real browser throws; anything that does not, gets exactly what it got
-  //    before.
+  //      MarkdownIt — same library, same major, resolved from THIS REPO'S node_modules instead of
+  //      dist/vendor.js's minified copy, so the golden comparisons run against the readable source
+  //      rather than a bundle a diff cannot usefully show. Resolved to an absolute URL because the
+  //      rewritten script runs from a temp dir, where a bare specifier has no node_modules to find.
+  //
+  //      startRegistration/startAuthentication — ROUTED THROUGH A HOOK RATHER THAN BEING A NO-OP,
+  //      and the default is still the no-op the older suites relied on. What the hook buys is the
+  //      CEREMONY's failures: a cancelled passkey sheet is a `NotAllowedError` raised from inside
+  //      this call, it is the commonest thing a first-time visitor does, and the page's answer to
+  //      it is untestable if the only thing this function can do is succeed silently. A suite sets
+  //      `globalThis.__webauthn` to make it throw what a real browser throws; anything that does
+  //      not, gets exactly what it got before.
+  //
+  //    Testing dist/vendor.js itself (that it bundles, that it ships no esm.sh) is a SEPARATE proof
+  //    — tests/no-cdn.test.mjs — and deliberately does not run through this fixture, for the same
+  //    reason present-golden.test.mjs imports dist/present.js directly rather than through here:
+  //    the artifact the browser loads has to be the thing under test, not a stand-in for it.
   swap(
-    /^import \{ startRegistration, startAuthentication \} from "https:\/\/esm\.sh\/@simplewebauthn\/browser@13";$/m,
-    "const startRegistration = (...a) => (globalThis.__webauthn?.startRegistration ?? (() => {}))(...a);\n" +
+    /^import \{ MarkdownIt, startRegistration, startAuthentication \} from "\/dist\/vendor\.js";$/m,
+    `import MarkdownIt from ${JSON.stringify(import.meta.resolve("markdown-it"))};\n` +
+      "const startRegistration = (...a) => (globalThis.__webauthn?.startRegistration ?? (() => {}))(...a);\n" +
       "const startAuthentication = (...a) => (globalThis.__webauthn?.startAuthentication ?? (() => {}))(...a);",
-    "@simplewebauthn/browser",
+    "/dist/vendor.js",
   );
-  // 2. markdown-it — same library, same major, resolved from this repo's node_modules instead of
-  //    a CDN. Resolved to an absolute URL because the rewritten script runs from a temp dir,
-  //    where a bare specifier has no node_modules to find.
-  swap(
-    /^import MarkdownIt from "https:\/\/esm\.sh\/markdown-it@14";$/m,
-    `import MarkdownIt from ${JSON.stringify(import.meta.resolve("markdown-it"))};`,
-    "markdown-it",
-  );
-  // 3. The presentation bundle — a SITE-root-absolute path ("/dist/present.js", because the page
+  // 2. The presentation bundle — a SITE-root-absolute path ("/dist/present.js", because the page
   //    is served at /app/) that has to become a FILE url once the script is written to a temp
   //    dir. THE BUNDLE ITSELF IS NOT SUBSTITUTED: this is the same dist/present.js the browser
   //    loads. The leading `/` is asserted, not tolerated — a page that went back to a relative
@@ -78,12 +85,19 @@ export function extractPageScript(workDir) {
     "/dist/present.js",
   );
 
-  assert.equal(swapped.length, 3, "unexpected number of import swaps");
+  assert.equal(swapped.length, 2, "unexpected number of import swaps");
 
   // The page keeps its state in module-scoped `let`s and exports nothing. These lines are
   // additive — they read and write what is already there and change no behaviour.
   source += `
 export { paintView, toggleTask, commitLine, loadPresentation };
+// THE DECLARATION, DRIVEN DIRECTLY. \`loadPresentation\` now reads a bundled constant — see
+// app/present/embedded-declaration.ts — so there is no fetch left for a suite to stub. A test that
+// wants to drive a DIFFERENT document than the one actually shipping (to prove the reader is wired,
+// the same falsifier migration stage 2 always asserted) calls this instead, which is the exact
+// application logic \`loadPresentation\` itself calls, against an arbitrary document rather than the
+// embedded one.
+export { applyPresentation as __applyPresentation };
 // THE BASE. \`served\` is the page's own BaseSurface (app/present/base.ts) — a getter, like the vim
 // pair below, so a suite reads what the page is holding NOW rather than a snapshot from import
 // time. \`writeFile\` is exported for the one thing a driven affordance cannot show: that the write
