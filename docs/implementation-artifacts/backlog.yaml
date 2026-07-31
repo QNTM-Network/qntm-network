@@ -853,7 +853,19 @@ backlog:
     them; the painter takes its renderer as a dependency precisely so that the
     byte-identical claim could be proven against ONE markdown-it rather than silently
     also testing one build of it against another. Collapsing the two is this rows
-    remaining work, and it is a separate change with separate evidence.'
+    remaining work, and it is a separate change with separate evidence.
+
+    2026-07-31 — THE CDN HALF OF THIS CITATION IS NOW STALE, AND THE COUNT DID NOT CHANGE.
+    bundle-vendor-libraries-locally moved the second instance from a CDN
+    (https://esm.sh/markdown-it@14) to a local bundle (app/vendor.ts -> dist/vendor.js,
+    the same npm package app/render/renderer already uses, version 14.3.0 both places).
+    "app.html:156, a CDN markdown-it" is no longer an accurate citation — read
+    app/vendor.ts''s own header instead. STILL TWO INSTANCES FROM TWO SOURCES, still
+    outside anything canonical routing can see (app/vendor.ts has no importer under
+    app/, only app/index.html does, and node cannot import an HTML document — see
+    flows.yaml''s note beside base.ts''s identical gap). Collapsing the two remains this
+    row''s open work; moving the CDN one off a CDN was a delivery-mechanism fix, not the
+    collapse.'
   state: asserted
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -1565,3 +1577,312 @@ backlog:
     qntm-md cycle run (this row is read-only on ~/qntm and ~/.qntm-md throughout — the
     coupling test and the generator both only ever read the monorepo''s config/ tree).'
   state: passing
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# LOAD-SPEED ARC, 2026-07-31 — docs/implementation-artifacts/research-state-and-speed.md, the
+# ranked list at §8. Four rows below are ITEMS 3, 4, 5 and 10, SHIPPED in this arc. The rest of
+# the list is filed here too, unblocked or not, because — bar one exception — it never had a row:
+# item 1 already does (`stop-awaiting-the-cycle-safely`, filed the same day as this arc, correctly
+# sequenced behind the safe-haven rows and untouched here). Items 2, 6, 7, 8, 9, 11, 12 and 13 had
+# no row anywhere in this file before now. THAT GAP IS ITSELF THE FINDING research-state-and-
+# speed.md's own ranked table never became backlog rows, and a ranked list that is not tracked
+# reads as decided once and then forgotten.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+
+- id: bundle-vendor-libraries-locally
+  title: >-
+    [research-state-and-speed item 3] [HALF A DAY] Bundle markdown-it and @simplewebauthn/browser
+    locally; drop both esm.sh imports. MEASURED (research-state-and-speed.md §2.2): 17 third-party
+    sub-requests, a dependency chain four levels deep, ~440ms of serial latency on desktop
+    broadband cold and STILL 1,175.6ms with a WARM http cache, blocking the app's first line of
+    code because the imports are static. Becomes one same-origin request. ALSO SAY WHETHER THE
+    "no CDN dependencies at runtime" CONSTRAINT §2.2 CITES IS WRITTEN DOWN ANYWHERE, AND WHERE.
+  driving_capability: the-load-path-has-no-third-party-cdn
+  kind: capability
+  record: >-
+    2026-07-31 — SHIPPED. `app/vendor.ts` re-exports `MarkdownIt` (from npm `markdown-it`,
+    `startRegistration`/`startAuthentication` (from npm `@simplewebauthn/browser`, newly a
+    dependency, `^13.3.0` — pinned in package-lock.json rather than floating on whatever `@13`
+    esm.sh happened to resolve to). A third esbuild entry point in scripts/build.mjs builds it,
+    MINIFIED (unlike dist/present.js, which stays unminified on purpose for the node test suite —
+    see build.mjs's own updated header for why mixing the two would cost that legibility), to
+    dist/vendor.js. app/index.html's two esm.sh imports become one line: `import { MarkdownIt,
+    startRegistration, startAuthentication } from "/dist/vendor.js"`.
+    MEASURED, THIS CHANGE'S OWN ARTIFACT: dist/vendor.js is 157,000 B raw, 46,359 B brotli
+    (node's zlib.brotliCompressSync, quality 11) — close to the source document's own per-library
+    sum (44,116 + 2,516 = 46,632 B), confirming the two measurements agree. BEFORE numbers are the
+    source document's own [OBS] measurements, REUSED rather than reproduced — no browser was
+    driven this session; see "NOT VERIFIED" below.
+    THE STATED "NO CDN" CONSTRAINT COULD NOT BE FOUND WRITTEN DOWN ANYWHERE IN THIS REPOSITORY.
+    Searched: every docs/ file, brand/BRAND.md, qntm_network_checks.py, state.yaml,
+    capabilities.yaml, architecture.yaml, classes.yaml, flows.yaml, this file. "no CDN", "content
+    policy" and "third-party" appear nowhere except research-state-and-speed.md §2.2's own
+    sentence — which, unlike every other claim in that document, carries no file:line citation.
+    This row does not claim to satisfy a written rule, because none was found; it claims what is
+    independently true and measured (see the-load-path-has-no-third-party-cdn's own record for
+    the full account, including the two things ESTABLISHED rather than assumed before shipping:
+    markdown-it's version is unchanged by bundling, and @simplewebauthn/browser's source was read
+    and shown to touch no browser API at module-import time, only inside the ceremony functions).
+    PROOF: tests/no-cdn.test.mjs — builds fresh, then reads every file GitHub Pages serves
+    (app/index.html, index.html, app.html, dist/present.js, dist/vendor.js, demo/app.js,
+    demo/index.html) for an actual esm.sh URL, not a grep-over-source substring match (a prose
+    comment naming the retired CDN would false-positive on a bare grep; the pattern used requires
+    a quoted `https?://esm.sh/` URL, and the suite proves the pattern is not vacuous both ways).
+    Plus tests/fixtures/app-html-page.mjs's import-swap assertions, which fail loud if the page's
+    vendor import line changes shape. npm run check: 674 -> 687 (+13 tests / +3 suites here; see
+    inline-the-presentation-declaration-at-build-time's row for the running total after all four
+    items). The golden test (present-golden.test.mjs) is unaffected — untouched by this row, since
+    paint.ts already took its markdown-it instance as an injected dependency rather than importing
+    its own (paint.ts's own header explains why, pre-dating this change).
+    NOT VERIFIED: no browser was driven this session — no cold-load network panel, no warm-cache
+    replay. Every "before" number is the source document's [OBS] measurement, cited not
+    reproduced. The "after" number is this artifact's byte count, not a measured page-load time.
+  state: passing
+
+- id: show-something-before-the-script-runs
+  title: >-
+    [research-state-and-speed item 4] [UNDER AN HOUR] Show something before the script runs — a
+    static "opening your graph…" in the HTML itself, un-hidden the instant the markup parses,
+    removed once the entry screen or a painted graph is standing. THIS CHANGES NO TIMING AT ALL —
+    it changes what the wait looks like, and it is not a speed-up.
+  record: >-
+    2026-07-31 — SHIPPED. `<section id="boot">` in app/index.html, no `class="hidden"` (the three
+    real screens all carry it; this one deliberately does not, so the browser paints it on parse,
+    before any script — including the vendor and presentation bundles — has run). The boot IIFE at
+    the foot of the module script wraps its three exits (entry, a painted graph, the "unreadable"
+    empty state) in a `try { ... } finally { $("boot").classList.add("hidden"); }`, so it is hidden
+    exactly once, on whichever path actually stands something up, rather than at three separate
+    `return`s.
+    NO DRIVING_CAPABILITY: no existing capability governs "what the boot screen looks like before
+    content paints", and this row does not invent one — it is UX polish inside the shell, not a new
+    commitment the app makes.
+    NOT REPORTED AS A SPEED-UP, per the source document's own instruction. Cold-load duration is
+    unchanged; the black rectangle is what changed. NOT VERIFIED IN A BROWSER — no screenshot, no
+    visual check; the claim is structural (the markup has no `.hidden`, the finally-block hides it
+    on every exit) and proven by reading the shipped HTML, not by watching a page load.
+  state: passing
+
+- id: cache-the-cors-preflight
+  title: >-
+    [research-state-and-speed item 5] [UNDER AN HOUR] Access-Control-Max-Age: 86400 in
+    worker/src/util.js's cors(). MEASURED (research-state-and-speed.md §2.3): no such header
+    shipped, so Chrome's own default clamps the preflight cache to 5 seconds — every API call more
+    than five seconds after the last one pays a full extra OPTIONS round trip, 105ms to the LHR
+    edge.
+  record: >-
+    2026-07-31 — SHIPPED. One header added to cors()'s return object: `"Access-Control-Max-Age":
+    "86400"` — the ceiling Chromium and Firefox both honour; a longer value is silently clamped to
+    it. Every other header cors() already set (Allow-Origin, Allow-Methods, Allow-Headers, Vary)
+    is unchanged, asserted as such.
+    PROOF: tests/worker-cors.test.mjs, new — the header's exact value, that it applies to every
+    origin the allowlist recognises AND the fallback origin (cors() always answers with a max-age
+    even for a caller it is about to refuse), and that the pre-existing headers are untouched. This
+    is the first test worker/src/util.js's cors() has ever had; the source document itself named
+    "one header with no test" as exactly the thing a later refactor drops.
+    NO DRIVING_CAPABILITY: no existing capability governs the Worker's CORS behaviour specifically
+    (the closest, captures-and-persists-email-signups, mentions CORS only in passing, for a
+    different endpoint). Not invented one for a one-header fix.
+    NOT VERIFIED LIVE: no request was made against the deployed Worker (the brief forbids touching
+    the live server from this worktree) — the 105ms figure and the "no header shipped" baseline are
+    the source document's own [OBS] measurements against production, cited not reproduced. What is
+    newly proven is the header's presence and value in the source `cors()` will build and deploy
+    with; the worker/ CI workflow (`wrangler deploy --dry-run` on PR) validates the bundle builds,
+    not the live preflight response.
+  state: passing
+
+- id: inline-the-presentation-declaration-at-build-time
+  title: >-
+    [research-state-and-speed item 10] [UNDER AN HOUR] Inline presentation.json into the page at
+    build time. It is 1,244 bytes and costs a serial ~110ms round trip in front of the request that
+    actually matters (§2.5). THE TRAP: presentation.json's `structural` key is GENERATED, from the
+    monorepo's config, by scripts/generate-structural-declaration.mjs — inlining must not turn a
+    generated fact into a hand-maintained one, and must not let the page and the served file drift.
+    If drift cannot be prevented, do NOT do this and say why.
+  driving_capability: structural-language-is-published-not-guessed
+  kind: capability
+  record: >-
+    2026-07-31 — SHIPPED, WITH THE DRIFT PREVENTED RATHER THAN ASSUMED AWAY. New file
+    app/present/embedded-declaration.ts: `import presentationJson from "../../presentation.json"
+    with { type: "json" }` — esbuild's built-in JSON loader, no new dependency. Re-exported as
+    `EMBEDDED_DECLARATION` from app/present/index.ts's barrel, so `dist/present.js` carries the
+    document's CURRENT bytes at build time. app/index.html's `loadPresentation()` — previously
+    `async`, `await fetch("/presentation.json")` — is now a synchronous call to
+    `applyPresentation(EMBEDDED_DECLARATION)`; `enterGraph()` no longer `await`s it, only
+    `loadGraph()`.
+    HOW DRIFT IS PREVENTED, NOT ASSUMED AWAY: this file IMPORTS presentation.json rather than
+    copying its bytes by hand, so it is the SAME document generate-structural-declaration.mjs
+    writes and tests/present-structural.test.mjs / tests/present-global.test.mjs read off disk as
+    `SERVED` — one document, one read, no hand-copy step to forget. The staleness guard is the ONE
+    THIS REPO ALREADY TRUSTS: dist/present.js is a committed artifact CI already refuses to ship
+    stale (.github/workflows/build.yml, "fail if a committed bundle is stale", scoped to demo/ and
+    dist/). Because the JSON import makes presentation.json part of dist/present.js's own input
+    graph, that EXISTING gate now also catches "presentation.json changed and nobody rebuilt" — no
+    new CI machinery. tests/present-global.test.mjs section 0 additionally asserts
+    `EMBEDDED_DECLARATION` deep-equals a fresh disk read of presentation.json, so the guard is
+    provable in `npm test` too, not only in a CI diff.
+    presentation.json IS STILL GENERATED THE SAME WAY, BY THE SAME SCRIPT, and is STILL SERVED at
+    the site root as its own resource — this only stops the running app being the thing that has
+    to fetch it.
+    THE FAILURE MODE STAGE 2 TOLERATED NO LONGER APPLIES TO A FETCH, BECAUSE THERE ISN'T ONE. "A
+    slow, missing or broken presentation.json costs nothing but a warning" was sound for a network
+    read; a malformed presentation.json now fails `npm run build` (esbuild's JSON loader throws on
+    invalid JSON) and CI catches it before anything ships. A document that PARSES but says
+    something the reader does not recognise is still reported, never guessed — unchanged.
+    MEASURED: dist/present.js grew 55.2kb -> 58.5kb (+3.3kb, unminified, roughly the pretty-printed
+    JSON plus module wrapper) in exchange for removing a runtime network request entirely — zero
+    requests for presentation.json at page load instead of one ~110ms serial round trip (source
+    document's own [OBS] number, reused not reproduced; no browser was driven this session).
+    tests/present-global.test.mjs section 4 was rewritten: it no longer stubs `globalThis.fetch`
+    (there is nothing left on a wire to stub) and drives declarations through a new test-only
+    export, `__applyPresentation` — the exact function `loadPresentation` itself calls — plus one
+    new test calling the real, unstubbed `loadPresentation()` to prove the actual embedded path
+    reaches the DOM. tests/app-html-write-path.test.mjs's `servePresentation` helper was updated
+    the same way. capabilities.yaml's `structural-language-is-published-not-guessed` and
+    `presentation-is-resolved-not-chosen` both gained a 2026-07-31 update paragraph correcting the
+    "the page fetches" language their earlier text carried.
+    NPM RUN CHECK, RUNNING TOTAL FOR THIS WHOLE ARC (items 3, 4, 5, 10 together): base 674 tests /
+    126 suites / 0 fail (origin/main, verified by running it after `npm ci`, not assumed) -> 688
+    tests / 130 suites / 0 fail. +14 tests, +4 suites, 0 regressions. The golden test
+    (present-golden.test.mjs) is unmoved — this row never touched paint.ts or the rendition axis,
+    only how the document reaches the page.
+    NOT VERIFIED: no browser was driven this session, no passkey session, no live server, no
+    qntm-md cycle. flow-trace verify . (this worktree, against ../../../qntm/tools/flow-trace):
+    exit 0, 42 PASS / 0 FAIL / 20 INFO, IDENTICAL to the pre-arc baseline — the two new files
+    (app/vendor.ts, app/present/embedded-declaration.ts) introduce zero new observed flow edges,
+    confirmed by running the tool before and after rather than assumed; flows.yaml carries the
+    explanation beside base.ts's identical, pre-existing gap.
+  state: passing
+
+- id: wake-the-fly-machine-or-price-min-machines-running
+  title: >-
+    [research-state-and-speed item 2] [UNDER AN HOUR] Either set `min_machines_running = 1` on
+    Fly (4,278ms cold wake -> 27ms, but costs money, ongoing) or fire `GET
+    {GRAPH_SERVER_URL}/health` from the Worker the moment the passkey button is pressed, waking the
+    machine during the 1-3s a person spends looking at the biometric prompt (free, converts idle
+    wait into overlapped wait). NOT FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED. Not started. `fly.toml` (auto_stop_machines/min_machines_running) lives in the
+    sibling monorepo, not this repository, and the money trade-off is explicitly the operator's
+    call per this arc's own brief. The prefetch variant (b) DOES touch this repo (the Worker's
+    login handler) and costs nothing recurring, but was out of scope for this arc's four assigned
+    items and is recorded here rather than started without being asked for.
+  state: diagnose-ready
+
+- id: take-graph-and-locations-off-first-paint
+  title: >-
+    [research-state-and-speed item 6] [HALF A DAY] Take `graph` and `locations` off the
+    first-paint payload; serve them separately for the stage-6 work resolve-from-the-model-
+    not-the-text already plans. MEASURED (research-state-and-speed.md §2.4): the envelope is
+    1,069,305 B raw / 201,315 B gzip / 110,781 B brotli, of which `graph` alone is 741,245 B
+    (69.3%) and is read by NOTHING in app/ today (grep for `graph` / `locations` across app/
+    returns nothing). Without it: 328,062 B raw / 74,653 B gzip / 47,706 B brotli — per load AND
+    per edit, since the same envelope is re-sent on every write today. NOT FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED. Not started, and deliberately: the arc's brief scoped this repo's work to items
+    3, 4, 5 and 10 and named this row explicitly as "not yours unless items 3-5 turn out trivial;
+    if you have room, ask me rather than starting it" — items 3-5 (and 10) shipped inside the
+    session's budget, so there IS room, and the correct next step is to ask rather than start.
+    Touches worker/src/app.js (which forwards e.graph/e.locations regardless) and
+    scripts/graph-sync.mjs (which ships locations: {} with a comment that read-only display does
+    not need it) as well as the app-side envelope shape, so it is not a same-file change and
+    deserves its own scoping conversation, not a rider on this one.
+  state: diagnose-ready
+
+- id: memoise-the-painters-embodiment
+  title: >-
+    [research-state-and-speed item 7] [HALF A DAY] Memoise the painter's embodiment, never the
+    decision — keep a per-line record of (lineSource, resolvedRenditions) beside the element built
+    from it; on repaint, resolve EVERY line through the cascade as now (the discipline stays, at
+    its measured 4.0ms for 670 lines), but rebuild DOM only for a line whose tuple changed.
+    MEASURED (research-state-and-speed.md §3.3): 49.0ms p50 full repaint on the operator's biggest
+    view (670 lines, work/everything.md) but 1.4ms on the view the app actually lands on
+    (this_week.md, 23 lines) — three orders of magnitude apart, and the memoised strategy measured
+    at ~3.4ms for a single changed row (14x). EXPLICITLY NOT ASSIGNED TO THIS ARC — "the naive
+    answer to 'it feels slow'", ranked low on the operator's own reading of the numbers. NOT FILED
+    BEFORE NOW.
+  driving_capability: presentation-is-resolved-not-chosen
+  record: >-
+    NOT SHIPPED. Not started, and explicitly out of scope for this arc per its own brief ("Not
+    yours"). Filed here because the ranked list's gap is the finding, not because this row's
+    priority has changed — the source document's own numbers put it well below items 1-5 by
+    measured time returned per unit of work, and the operator named it the tempting-but-wrong
+    answer to "it feels slow" in the same breath as ranking it.
+  state: diagnose-ready
+
+- id: skeleton-rows-in-viewbody
+  title: >-
+    [research-state-and-speed item 8] [UNDER AN HOUR] Skeleton rows for the reading column — once
+    show-something-before-the-script-runs exists, #viewBody can hold a handful of grey --row-height
+    bars, sized by the row geometry that already exists (--row, --row-gap), so the column does not
+    jump when content replaces them. NOT FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED. Not started — sequenced by the source document AFTER item 4
+    (show-something-before-the-script-runs), which this arc did ship, so this row is now
+    unblocked in the sense that its prerequisite exists, but it was not one of the four items this
+    arc was assigned and was not started without being asked for.
+  state: diagnose-ready
+
+- id: delete-the-dead-capture-one-thing-half
+  title: >-
+    [research-state-and-speed item 9] [UNDER AN HOUR] Delete the dead capture/one-thing half —
+    loadState, render, capture, done, #app and its listeners. MEASURED (research-state-and-speed.md
+    §4): `loadState` has no callers, `show("app")` appears only inside it, and grep for `show("`
+    across app/index.html returns exactly three hits — one inside the dead function, two both
+    `show("entry")`. A complete second application (#app, #oneThing, #restHead, #rest,
+    #captureBox, #doneBtn, #logoutBtn, #appErr, three event listeners) that the shipped flow can
+    never reach, and whose markup, CSS and listeners still load on every boot regardless. NOT
+    FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED. Not started — this arc's four assigned items were 3, 4, 5 and 10; this is a
+    deletion of unreachable code with no timing claim attached (removing dead markup does not
+    itself make anything faster in a way worth measuring), so it was left for its own row rather
+    than folded in as a drive-by change to app/index.html while three other things were already
+    changing in that same file this session.
+  state: diagnose-ready
+
+- id: cache-last-snapshot-client-side
+  title: >-
+    [research-state-and-speed item 11] [HALF A DAY] Cache the last snapshot client-side (IndexedDB
+    or the lean payload from take-graph-and-locations-off-first-paint, NOT localStorage — the
+    snapshot is ~1MB raw and localStorage is ~5MB and synchronous) and paint it before the network
+    call returns, reconciling after. Two cautions from the source document, both load-bearing:
+    take-graph-and-locations-off-first-paint FIRST, and #freshness must say the painted state is
+    stale until the network read confirms it — showing last-known markdown as current is exactly
+    the honesty failure this whole project exists to prevent. NOT FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED. Not started, and explicitly sequenced by the source document after
+    take-graph-and-locations-off-first-paint, which is itself not started (see that row — asked,
+    not begun).
+  state: diagnose-ready
+
+- id: index-qntm-id-lookups-in-qntm-graph
+  title: >-
+    [research-state-and-speed item 12] [AN ARC] Index qntm_id lookups in qntm-graph — cProfile on a
+    real (partial) cycle showed find_nodes at 93.7s of a 107s profiled run (17,280 calls, a linear
+    scan of the whole graph per lookup), which is the reason a checkbox tick costs ten seconds or
+    more today. Rendering all 72 views is 8% of the cost by comparison. THE LARGEST SINGLE NUMBER
+    IN THE SOURCE DOCUMENT, AND IT IS IN A REPOSITORY THAT IS NOT THIS ONE. NOT FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED, AND NOT SHIPPABLE FROM HERE. `qntm-graph` (apps/qntm-md in the monorepo) is
+    outside this worktree's write access — this row is read-only on ~/qntm and ~/.qntm-md
+    throughout, per every row in this arc. Filed so the largest number in research-state-and-
+    speed.md is tracked as a backlog row rather than only as a paragraph in a research document;
+    routing it to the qntm-md/flow-trace side is the next step, not a task this repo can pick up.
+  state: diagnose-ready
+
+- id: adopt-nanostores-for-currentviewid-and-graphdata
+  title: >-
+    [research-state-and-speed item 13] [UNDER AN HOUR] Adopt nanostores (~1KB brotli) for
+    currentViewId/graphData, tidying "where am I" being held in four places
+    (currentViewId itself plus three DOM copies kept in sync by markWhereWeAre). LISTED LAST BY
+    THE SOURCE DOCUMENT'S OWN MEASUREMENTS, NOT OMITTED — it buys no time anywhere in §0's table.
+    NOT FILED BEFORE NOW.
+  record: >-
+    NOT SHIPPED, AND REFUTED AS A PRIORITY BY THE SOURCE DOCUMENT'S OWN MEASUREMENTS, which is
+    itself the finding worth recording: the app's entire state layer is five module-level `let`s
+    and a class holding one integer, the whole cascade that decides how 670 lines render runs in
+    4ms, and nothing in this arc's own measurements (dist/vendor.js's bytes, the CORS header, the
+    embedded-declaration byte count) touches state management at all. Filed as a backlog row so it
+    is visibly ranked last rather than silently absent, exactly as research-state-and-speed.md §8
+    itself argues for listing it.
+  state: diagnose-ready

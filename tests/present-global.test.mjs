@@ -12,14 +12,26 @@
  *
  *   1. THROUGH THE MODULES. `presentationFromDeclaration` -> `paint`, against dist/present.js.
  *      Cheap, precise, and it names which level won.
- *   2. THROUGH app.html'S OWN SCRIPT. The page is lifted out of the HTML and run, its fetch is
- *      answered with a flipped document, and the DOM it paints is asserted. This is the half that
- *      would catch the real failure of this stage: a reader that works perfectly and a page that
- *      never calls it. A green on (1) alone is exactly the shape of the bug being disproved.
+ *   2. THROUGH app/index.html'S OWN SCRIPT. The page is lifted out of the HTML and run, and the
+ *      DOM it paints is asserted. This is the half that would catch the real failure of this
+ *      stage: a reader that works perfectly and a page that never calls it. A green on (1) alone
+ *      is exactly the shape of the bug being disproved.
  *
  * AND THE SHIPPED FILE IS ASSERTED TO CHANGE NOTHING. presentation.json is read off disk and
  * compared, paint for paint, against a context with no declaration at all. Stage 2's promise is
  * that the default value is today's behaviour, so nothing moves until someone flips it.
+ *
+ * SECTION 4 NO LONGER STUBS `fetch`. `loadPresentation()` reads a bundled constant now
+ * (app/present/embedded-declaration.ts, §2.5 of the research doc) — there is nothing left on the
+ * wire to intercept. A suite that wants to drive a document OTHER than the one actually shipping
+ * calls `__applyPresentation`, the exact function `loadPresentation` itself calls. What section 4
+ * used to prove by stubbing a 404 (a fetch that cannot be read leaves the page exactly where it
+ * was) is no longer a reachable failure mode — a malformed presentation.json fails the BUILD, not
+ * the page — so that test is replaced by a stronger one: `EMBEDDED_DECLARATION`, the constant
+ * baked into dist/present.js, is asserted identical to `presentation.json` read fresh off disk.
+ * That is the drift guard for the trap this change was warned about: the page's copy and the
+ * generated file cannot read differently without this failing, in `npm test`, with no build step
+ * or CI diff required to see it.
  */
 
 import { test, describe, before } from "node:test";
@@ -45,6 +57,7 @@ import {
   PresentationCascade,
   PresentationContext,
   RESOLUTION_KEYS,
+  EMBEDDED_DECLARATION,
 } from "../dist/present.js";
 
 const md = new MarkdownIt("commonmark").enable("table");
@@ -57,6 +70,23 @@ function painted(markdown, context) {
 }
 
 const SERVED = JSON.parse(readFileSync(join(REPO, "presentation.json"), "utf8"));
+
+describe("0. the embedded copy cannot drift from the served file", () => {
+  test("EMBEDDED_DECLARATION (baked into dist/present.js) is presentation.json, read fresh", () => {
+    // THE DRIFT GUARD. app/present/embedded-declaration.ts IMPORTS presentation.json rather than
+    // copying it, and dist/present.js is a committed artifact CI already refuses to ship stale
+    // (.github/workflows/build.yml) — so this can only fail if dist/present.js was committed
+    // without running `npm run build` after presentation.json changed. That is exactly the
+    // failure this test exists to catch directly, in `npm test`, rather than only in CI's
+    // build-then-diff step.
+    assert.deepEqual(
+      EMBEDDED_DECLARATION,
+      SERVED,
+      "dist/present.js's embedded declaration has drifted from presentation.json — run " +
+        "'npm run build' and commit the result",
+    );
+  });
+});
 
 describe("1. the committed declaration moves exactly one key and no other", () => {
   test("presentation.json is readable and declares no problems", () => {
@@ -199,45 +229,39 @@ describe("4. the page itself reads it — the half that catches an unwired reade
 
   let page;
   let elements;
-  let served;
 
   before(async () => {
     ({ elements } = installBrowser());
-    globalThis.fetch = async (url) => {
-      // SITE-ROOT-ABSOLUTE, and asserted as such. The page is served at /app/, so a relative
-      // "./presentation.json" would resolve to /app/presentation.json and 404 in the browser —
-      // the declaration would go unread and every level would fall silent, which is exactly the
-      // failure this suite exists to catch. Pinning the leading `/` makes that a red test rather
-      // than a quiet regression to pre-cascade behaviour.
-      assert.equal(url, "/presentation.json", `the page fetched ${url}`);
-      return { ok: true, json: async () => served };
-    };
     page = await importPage(WORK);
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
   });
 
   /**
-   * Load a declaration through the page's own loader and paint through its own painter.
+   * Drive a declaration through the page's own reader and paint through its own painter.
+   *
+   * `__applyPresentation` is the exact function `loadPresentation()` itself calls — see
+   * app/index.html: `loadPresentation` is now `applyPresentation(EMBEDDED_DECLARATION)`, and this
+   * calls `applyPresentation` against whatever document the test wants instead. Nothing on a wire
+   * to stub any more: the reader's own logic is what is under test either way.
    *
    * THE CURSOR IS PARKED ON THE LAST LINE FIRST, and that is part of the setup rather than a
    * workaround. The cursor's own line renders its SOURCE in NORMAL as well as INSERT
    * (app/present/paint.ts), so a cursor left on the heading would hide the very `<h3>` these tests
    * are asking the served declaration about. `prose` — line 2 — is the line none of them assert on.
    */
-  async function pagePaints(declaration) {
-    served = declaration;
-    await page.loadPresentation();
+  function pagePaints(declaration) {
+    page.__applyPresentation(declaration);
     page.__setFocus(2, VIEW.markdown);
     page.paintView("this-week");
     return walkPage(elements.get("viewBody"));
   }
 
-  test("the served declaration reaches the page's painted DOM", async () => {
-    const wired = await pagePaints({ checkbox: "wired", heading: "wired" });
+  test("the served declaration reaches the page's painted DOM", () => {
+    const wired = pagePaints({ checkbox: "wired", heading: "wired" });
     assert.equal(wired.filter((el) => el.type === "checkbox").length, 1);
     assert.ok(wired.some((el) => el.tagName === "h3"));
 
-    const raw = await pagePaints({ checkbox: "raw", heading: "raw" });
+    const raw = pagePaints({ checkbox: "raw", heading: "raw" });
     assert.equal(
       raw.filter((el) => el.type === "checkbox").length,
       0,
@@ -252,20 +276,20 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     assert.ok(raw.some((el) => el.value === "- [ ] Draft [[qntm:121]] #task"));
   });
 
-  test("flipping `tags` in the served file turns chips into characters, in the page", async () => {
+  test("flipping `tags` in the served file turns chips into characters, in the page", () => {
     // ── THE STAGE-8 HEADLINE, ASSERTED WHERE IT COUNTS ──
     //
     // Not "the module can make a chip" — THE SERVED FILE DECIDES WHETHER THERE IS ONE. The page
-    // fetches presentation.json, hands it to the reader, and paints; nothing in this test touches
-    // a context, a cascade or a painter directly. Flip the one key in the document the server
-    // answers with and the DOM changes, with nothing rebuilt. That is the difference between this
+    // reads presentation.json (baked into the bundle — §2.5), hands it to the reader, and paints;
+    // nothing in this test touches a context, a cascade or a painter directly. Flip the one key in
+    // the document and the DOM changes, with nothing rebuilt. That is the difference between this
     // being architecture and being a stylesheet.
-    const wired = await pagePaints({ checkbox: "wired", tags: "wired" });
+    const wired = pagePaints({ checkbox: "wired", tags: "wired" });
     const chipped = wired.filter((el) => String(el.innerHTML).includes('class="tagchip"'));
     assert.equal(chipped.length, 1, "the page painted no tag chip against a declaration of wired");
     assert.match(chipped[0].innerHTML, /<span class="tagchip">#task<\/span>/);
 
-    const raw = await pagePaints({ checkbox: "wired", tags: "raw" });
+    const raw = pagePaints({ checkbox: "wired", tags: "raw" });
     assert.equal(
       raw.filter((el) => String(el.innerHTML).includes("tagchip")).length,
       0,
@@ -278,11 +302,11 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     );
   });
 
-  test("a tag chip is not a cursor target, and the line under it still is", async () => {
+  test("a tag chip is not a cursor target, and the line under it still is", () => {
     // The chip offers NOTHING, so the gesture that reaches a line's source has to be unchanged by
     // its presence. This is the assertion that would catch a chip that quietly swallowed the click
     // the focus surface depends on.
-    await pagePaints({ checkbox: "wired", tags: "wired" });
+    pagePaints({ checkbox: "wired", tags: "wired" });
     const body = elements.get("viewBody");
     walkPage(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
     const editable = walkPage(body).filter((el) => el.type === "text");
@@ -291,9 +315,9 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     assert.ok(editable[0].value.includes("#task"), "the source the cursor reached lost its tag");
 
     // Put the cursor back where it was. The page holds ONE focus surface for its whole lifetime
-    // (app.html, `const focus = new FocusSurface()`), so a test that leaves a line focused leaves
-    // it focused for every test after it — which is a real property of the page and worth being
-    // reminded of by having to write this line.
+    // (app/index.html, `const focus = new FocusSurface()`), so a test that leaves a line focused
+    // leaves it focused for every test after it — which is a real property of the page and worth
+    // being reminded of by having to write this line.
     //
     // AND A BLUR IS NO LONGER ENOUGH TO DO IT. `settle` returns a vim-wired page to NORMAL rather
     // than blurring (paint.ts's `leaveInsert`: vim always has a cursor on some line), and in NORMAL
@@ -304,30 +328,25 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     page.__setFocus(2, VIEW.markdown);
   });
 
-  test("a declaration the page cannot fetch leaves it exactly where it was", async () => {
-    const failed = [];
-    const warn = console.warn;
-    console.warn = (message) => failed.push(message);
-    const fetching = globalThis.fetch;
-    globalThis.fetch = async () => ({ ok: false, status: 404 });
-    try {
-      await page.loadPresentation();
-    } finally {
-      globalThis.fetch = fetching;
-      console.warn = warn;
-    }
+  test("loadPresentation() — no argument, the real path — reads what actually ships", () => {
+    // THE UNSTUBBED CALL. Every test above drives `__applyPresentation` against a document it
+    // supplies, which proves the reader is wired but never calls the function the page actually
+    // calls at boot. This one does: `page.loadPresentation()` with nothing swapped in, against the
+    // real embedded presentation.json (checkbox/heading/prose/tags all "wired" — see that file).
+    page.loadPresentation();
+    page.__setFocus(2, VIEW.markdown);
     page.paintView("this-week");
     const body = walkPage(elements.get("viewBody"));
-    assert.equal(body.filter((el) => el.type === "checkbox").length, 1, "a 404 broke the paint");
-    assert.match(failed.join(" "), /every level stays silent/);
+    assert.equal(body.filter((el) => el.type === "checkbox").length, 1, "the real declaration did not reach the page");
+    assert.ok(body.some((el) => el.tagName === "h3"), "the real declaration's heading did not reach the page");
   });
 
-  test("the page reports a problem in the served document rather than swallowing it", async () => {
+  test("the page reports a problem in the served document rather than swallowing it", () => {
     const said = [];
     const warn = console.warn;
     console.warn = (message) => said.push(message);
     try {
-      await pagePaints({ chekbox: "raw" });
+      pagePaints({ chekbox: "raw" });
     } finally {
       console.warn = warn;
     }

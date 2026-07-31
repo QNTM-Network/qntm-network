@@ -352,6 +352,18 @@ capabilities:
     clean, read by nothing, painted as a checkbox anyway. And hidden text IS edited in this app:
     FOCUS takes a line to `raw` on every key, so the cursor landing makes hidden tags reappear.
     What it would take is renditions that vary per key rather than one union across all of them.
+    ── UPDATE 2026-07-31, THE FETCH THIS SECTION DESCRIBES IS GONE. Every paragraph above says
+    "app.html fetches it" / "answering a flipped fetch" — true of migration stages 2 and 8, no
+    longer true of what ships. `presentation.json` is now read at BUILD time
+    (`app/present/embedded-declaration.ts`, capabilities.yaml's own
+    `structural-language-is-published-not-guessed` carries the full account) and baked into
+    `dist/present.js`; `loadPresentation()` in `app/index.html` calls the reader against that
+    embedded constant instead of `await fetch("/presentation.json")`. THE FALSIFIER THIS CAPABILITY
+    NAMED — "a perfect reader the page never calls" — still has to be caught at the SAME distance:
+    `tests/present-global.test.mjs` section 4 still drives declarations through the page's own
+    lifted script, now via `__applyPresentation` (the exact function `loadPresentation` calls)
+    rather than a stubbed `fetch`, because there is nothing left on a wire to stub. Nothing about
+    WHICH rendition wins, or that an unrecognised key is reported rather than guessed, moved.
   tier: foundational
   status: undeclared
 - id: the-focused-line-shows-its-source
@@ -1231,9 +1243,33 @@ capabilities:
     binding, edge cardinality, per-section overrides for every view that declares one) and
     `indentUnit` (the output axis — see below). Both are read by `presentationFromDeclaration`
     (`app/present/context.ts`), the same one wire function that already read the rendition axis, so
-    the page fetches once and every axis of the one document is validated the same way: an
-    unrecognised key anywhere is REPORTED, never guessed at, and a malformed sub-fact falls back to
-    "unknown" without blinding the reader to the rest of a good document.
+    every axis of the one document is validated the same way: an unrecognised key anywhere is
+    REPORTED, never guessed at, and a malformed sub-fact falls back to "unknown" without blinding
+    the reader to the rest of a good document.
+    ── UPDATE 2026-07-31, THE CHANNEL STOPPED BEING A FETCH. THE SENTENCE ABOVE SAID "the page
+    fetches once"; it no longer does. `app/present/embedded-declaration.ts` imports
+    `presentation.json` at BUILD time (`import presentationJson from "../../presentation.json"`,
+    esbuild's own JSON loader) and `dist/present.js` carries the parsed document as
+    `EMBEDDED_DECLARATION` — removing the ~110ms serial round trip §2.5 of
+    research-state-and-speed.md measured in front of the `/app/graph` request that actually
+    matters. THE GENERATED HALF IS STILL GENERATED, AND STILL ONE DOCUMENT: this file imports
+    `presentation.json`, the exact file `scripts/generate-structural-declaration.mjs` writes and
+    the exact file `tests/present-structural.test.mjs`'s `SERVED` reads off disk — there is no
+    hand-copy step and no second place the structural language could go stale in. THE DRIFT GUARD
+    IS THE ONE THIS REPO ALREADY TRUSTS: `dist/present.js` is a committed artifact CI already
+    refuses to ship stale (`.github/workflows/build.yml`'s "fail if a committed bundle is stale"),
+    and because the JSON import makes `presentation.json` part of that bundle's own input graph,
+    the existing gate now also catches "presentation.json changed and nobody rebuilt" — no new
+    machinery, the same protection `demo/app.js` already had, extended to one more input file.
+    `tests/present-global.test.mjs` section 0 additionally asserts `EMBEDDED_DECLARATION` deep-
+    equals a fresh read of `presentation.json`, so the guard is provable in `npm test` too. THE
+    FAILURE MODE STAGE 2 TOLERATED — "a slow, missing or broken presentation.json costs nothing but
+    a warning" — NO LONGER APPLIES TO A FETCH, because there is not one; a malformed
+    `presentation.json` now fails `npm run build` instead (esbuild's JSON loader throws on invalid
+    JSON), which CI catches before anything ships. What survives unchanged is a document that
+    PARSES but says something the reader does not recognise — still reported, never guessed,
+    exactly as before. `presentation.json` is still served at the site root as its own resource;
+    this change only stops the RUNNING APP being the thing that has to fetch it.
     THE MINIMUM, STATED AS A DECISION: the whole of `structural_tokens.yaml`'s vocabulary is NOT
     published (wiki-link bindings, field bindings, chain buckets) — only the indent binding, the
     cardinality of every edge type that binding or a section override actually names, and the
@@ -1327,4 +1363,61 @@ capabilities:
     already has a class (presentation-painting) earned by a different capability; claiming it here
     would root the half that is already built and say nothing about the half that is missing. It
     roots when something outside this app can address it.
+  status: undeclared
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# LOAD-SPEED ARC, 2026-07-31 — docs/implementation-artifacts/research-state-and-speed.md ranked
+# items 3, 4, 5 and 10. Items 1, 2, 6, 7, 8, 9, 11, 12 and 13 are recorded as backlog rows instead
+# (see backlog.yaml) — none of them changed a running commitment enough to earn a capability of
+# their own, and item 1 (the largest win) is explicitly blocked, not merely undone.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+- id: the-load-path-has-no-third-party-cdn
+  intent: >-
+    THE FIRST BYTE OF APPLICATION CODE DOES NOT WAIT ON A THIRD-PARTY ORIGIN. `app/index.html`
+    used to statically import `markdown-it` and `@simplewebauthn/browser` from `esm.sh` — MEASURED
+    (research-state-and-speed.md §2.2): 17 sub-requests, a dependency chain four levels deep, ~440ms
+    of serial latency on desktop broadband cold, and STILL 1,175.6ms with every byte served from a
+    warm HTTP cache, because the cost was the round trips, not the bytes. Because the imports were
+    static, nothing in the module ran until all four levels resolved — the reader saw a fixed bar
+    over a black rectangle for the whole of that wait.
+    NOW BOTH LIBRARIES ARE BUNDLED LOCALLY. `app/vendor.ts` re-exports both from npm; a third
+    esbuild entry point in `scripts/build.mjs` builds it, minified, to `dist/vendor.js`; the page
+    imports `MarkdownIt`, `startRegistration` and `startAuthentication` from that ONE site-root-
+    absolute, same-origin path. MEASURED, this change's own artifact: `dist/vendor.js` is 157,000
+    bytes raw, 46,359 bytes brotli (`zlib.brotliCompressSync`, quality 11) — 17 requests and a
+    4-deep chain collapse to one request on the connection to `qntm.network` that is already open.
+    THE CONSTRAINT THE RESEARCH DOCUMENT CITED COULD NOT BE FOUND WRITTEN DOWN ANYWHERE IN THIS
+    REPOSITORY. §2.2 of that document says "'No CDN dependencies at runtime' and 'the site has a
+    strict content policy' are incompatible with two https://esm.sh/… imports" and calls that a
+    STATED constraint — but unlike every other claim in that document, it carries no file:line
+    citation. A search of docs/, brand/, qntm_network_checks.py, state.yaml and every other
+    architecture/backlog file for "no CDN", "content policy" and "third-party" found the phrase
+    nowhere except that document's own sentence. THIS CAPABILITY DOES NOT CLAIM TO SATISFY A WRITTEN
+    RULE, because none was found; it claims what is independently true and measured regardless of
+    whether a rule was ever written down — no `esm.sh` (or any other CDN) reference survives in any
+    file GitHub Pages serves, proven by building fresh and reading the output (tests/no-cdn.test.mjs),
+    not by grepping source.
+    TWO THINGS ESTABLISHED, NOT ASSUMED, BEFORE SHIPPING THIS. (1) `markdown-it`'s version is
+    unchanged by bundling — both the page and `tests/present-golden.test.mjs` resolve the same npm
+    package, `14.3.0`, and the golden byte-identical comparison against the historical painter it
+    replaced still passes unmoved. (2) `@simplewebauthn/browser` tolerates bundling: its source was
+    read, not assumed — `WebAuthnAbortService` is the only module-level side effect (an
+    `AbortController`, a standard API in both Node and every target browser) and `startRegistration`
+    / `startAuthentication` touch `navigator.credentials` only inside their own function bodies, at
+    ceremony time, never at import time. Bundling changes WHERE the bytes come from and not what the
+    ceremony does. Its version is now pinned in `package-lock.json` (`^13.3.0`) rather than floating
+    on whatever `esm.sh` resolved `@13` to at fetch time, which is a durability improvement `esm.sh`
+    never offered.
+    NOT VERIFIED IN A BROWSER. No real cold load was measured against the bundled version — every
+    "before" number above is the research document's own `[OBS]` measurement, reused rather than
+    reproduced, and every "after" number is this change's build output measured with Node's `zlib`,
+    not a browser's network panel.
+  tier: functional
+  rooting: >-
+    isolated, same shape as `app-is-a-typed-browser-application` — this is a property of the BUILD
+    (`scripts/build.mjs`, `package.json`) and the DELIVERY PATH (one more committed, CI-staleness-
+    gated bundle in `dist/`), not of application logic with a call path to root against.
+    `app/vendor.ts` has no importer flow-trace can see either way: only `app/index.html` imports it,
+    and node cannot import an HTML document. See flows.yaml's own note on this, alongside
+    `base.ts`'s identical gap.
   status: undeclared

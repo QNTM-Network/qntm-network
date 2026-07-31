@@ -15,6 +15,13 @@ export function cors(origin) {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    // WITHOUT THIS, CHROME CACHES A PREFLIGHT FOR 5 SECONDS (its own default, unstated by this
+    // file until now). Measured: no Access-Control-Max-Age shipped in production, so every API
+    // call more than five seconds after the last one paid a full extra OPTIONS round trip — 105ms
+    // to the LHR edge (docs/implementation-artifacts/research-state-and-speed.md §2.3). 86400s
+    // (24h) is the ceiling Chromium and Firefox both honour; a longer value is silently clamped to
+    // it, so this is the whole of the win rather than a conservative first step.
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }

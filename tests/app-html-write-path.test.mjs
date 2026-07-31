@@ -207,15 +207,15 @@ describe("app.html's own write path", () => {
 });
 
 describe("the tag chip, through the page (migration stage 8)", () => {
-  /** Serve `declaration` to the page's own loader, then put the POST-recording fetch back. */
-  async function servePresentation(declaration) {
-    const recording = globalThis.fetch;
-    globalThis.fetch = async () => ({ ok: true, json: async () => declaration });
-    try {
-      await page.loadPresentation();
-    } finally {
-      globalThis.fetch = recording;
-    }
+  /**
+   * Drive `declaration` through the page's own reader, the way `loadPresentation()` drives the
+   * embedded one. NOT A FETCH STUB ANY MORE — `loadPresentation` reads a bundled constant now
+   * (app/present/embedded-declaration.ts), so there is nothing left to intercept on the wire.
+   * `__applyPresentation` is the exact function `loadPresentation` itself calls, exported so a
+   * suite can point it at a document other than the one actually shipping.
+   */
+  function servePresentation(declaration) {
+    page.__applyPresentation(declaration);
   }
 
   test("the served declaration decides whether the page paints chips at all", async () => {
