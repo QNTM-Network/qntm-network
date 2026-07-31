@@ -79,14 +79,45 @@
 #                              gate behaviour with no qntm-network commit recording why, the same
 #                              invisible-coupling failure mode as a dependency with no lockfile.
 #                              Bumping the pin is therefore a deliberate, reviewed edit to this file.
-# `qntm` is PRIVATE and `qntm-network` is PUBLIC (confirmed via the GitHub API while building this
-# workflow), so the second checkout needs read access from a token the default `GITHUB_TOKEN` does
-# not carry across repositories — see FLOW_TRACE_CHECKOUT_TOKEN below. THIS SECRET DOES NOT EXIST
-# YET; the PR description says exactly what to create. Until it exists, this job fails at the second
-# checkout step rather than silently skipping — a missing gate must be LOUD, not quiet. A
-# fork-submitted pull_request does not receive repository secrets by default (GitHub's standard
-# protection for this trigger), so this token is not exposed to an untrusted PR — it only ever runs
-# with a same-repo branch or on push to main.
+# A route needing NO secret at all was considered and rejected for now: GitHub lets a private repo's
+# own Settings → Actions → Access allow-list grant OTHER repos' default GITHUB_TOKEN read access
+# without any PAT. It would remove FLOW_TRACE_CHECKOUT_TOKEN entirely — but granting it is a change
+# to QNTM-Network/qntm's repository settings, on the PRIVATE trunk this workflow's own author was
+# explicitly barred from touching or configuring. Recorded here as the better answer IF the operator
+# wants to enable it on the qntm side; this file does not assume it.
+#
+# THE SECRET, NAMED ONCE, PLAINLY: create a repo secret called `FLOW_TRACE_CHECKOUT_TOKEN` on
+# `QNTM-Network/qntm-network`, holding a fine-grained GitHub PAT scoped to READ-ONLY *contents* on
+# `QNTM-Network/qntm` alone. Without it: the `flow-trace` job below does not run at all (skipped, not
+# failed — see the next note), and the companion `flow-trace-gate-unavailable` job explains why in
+# its own name and step summary on every run until the secret exists.
+#
+# A MISSING SECRET MEANS SKIPPED, NOT FAILED (fixed 2026-07-31, after the first real PR run: the
+# second checkout step above errored `Input required and not supplied: token` and, because
+# `continue-on-error` only silences a STEP's failure and not a missing job precondition, that put a
+# red `flow-trace` check on every PR in this repo until the secret existed — training reviewers to
+# stop reading the one check this PR exists to add, exactly the failure mode ADVISORY-vs-BLOCKING
+# above already argues against one level up).
+#
+# THE MECHANISM, CONFIRMED RATHER THAN WRITTEN FROM MEMORY. `secrets` is NOT a supported context in
+# either a job's or a step's `if:` — confirmed against GitHub's own actions/runner issue tracker
+# (actions/runner#520, "Secrets cannot be used to condition job runs") and community docs while
+# fixing this. The supported workaround, confirmed the same way: a small preceding job reads the
+# secret inside an ordinary `run:` step (secrets ARE readable there), emits a boolean — never the
+# secret's own value — to `$GITHUB_OUTPUT`, and every dependent job's `if:` reads that through the
+# `needs` context, which IS supported at the job level. `check-token` below does exactly this. One
+# more thing confirmed rather than assumed: GitHub redacts a job OUTPUT that contains an actual
+# secret VALUE ("Skip output ... since it may contain secret") — irrelevant here, because the output
+# is the literal string `"true"`/`"false"`, never the token itself, so nothing is ever at risk of
+# being silently dropped by that redaction.
+#
+# VISIBLY SKIPPED, NOT SILENTLY GREEN. `flow-trace` itself shows GitHub's own grey "Skipped" status
+# when the token is absent — real, but easy to read as "did this even run?" without a second look.
+# So `flow-trace-gate-unavailable` runs in exactly the opposite case (same `check-token` output,
+# negated) and does one thing: write a `::warning::` annotation (visible on the PR's checks summary
+# without opening a single run) plus a step-summary paragraph naming the secret and what to do.
+# Between the two, a human sees either a real verdict, or an unmistakable "this did not run and
+# here is why" — never an unexplained grey dash and never a false green.
 #
 # RUNNER: GitHub-hosted `ubuntu-latest`, matching build.yml and worker.yml — deliberately NOT the
 # monorepo's self-hosted `luke2`. Three reasons, all checked rather than assumed:
@@ -118,16 +149,37 @@ env:
   FLOW_TRACE_TOOL_REF: c0d77b71a18613d159e3572a99b013b2e9c69765
 
 jobs:
+  # THE SECRET GATE. Cheap (one step, no checkout) and always runs, so its own status is never the
+  # thing a reviewer has to puzzle over. Never echoes the secret's value — only whether it is
+  # non-empty. A secret that is unset resolves to `''` here (GitHub's documented behaviour for a
+  # missing secret, not an error), so `[ -n ... ]` correctly reads "not set" and "set to empty" the
+  # same way, which is the semantic this gate wants either way.
+  check-token:
+    runs-on: ubuntu-latest
+    outputs:
+      has-token: ${{ steps.check.outputs.has-token }}
+    steps:
+      - name: is FLOW_TRACE_CHECKOUT_TOKEN set?
+        id: check
+        run: |
+          if [ -n "${{ secrets.FLOW_TRACE_CHECKOUT_TOKEN }}" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+          fi
+
   flow-trace:
+    needs: check-token
+    if: needs.check-token.outputs.has-token == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: checkout qntm-network
         uses: actions/checkout@v4
 
-      # THIS SECRET DOES NOT EXIST YET. See the header note and the PR description for the exact
-      # ask: a fine-grained PAT scoped to read-only contents on QNTM-Network/qntm, stored here as
-      # FLOW_TRACE_CHECKOUT_TOKEN. sparse-checkout is scoped to tools/flow-trace alone — no reason to
-      # pull the rest of a private monorepo into a public repo's runner workspace.
+      # No token guard needed here any more — this whole job only runs when check-token confirmed
+      # the secret exists (see the header note on the mechanism). sparse-checkout is scoped to
+      # tools/flow-trace alone — no reason to pull the rest of a private monorepo into a public
+      # repo's runner workspace.
       - name: checkout flow-trace (QNTM-Network/qntm, pinned)
         uses: actions/checkout@v4
         with:
@@ -258,3 +310,29 @@ jobs:
           echo "flow-trace.yml's header). It will start blocking once continue-on-error is removed" >&2
           echo "from BOTH this step and the verify step above." >&2
           exit 1
+
+  # THE EXPLAINER. Runs exactly when `flow-trace` above does not (the same check-token output,
+  # negated), so exactly one of the two is ever green/grey on a given run. Its whole job is to make
+  # "this did not run, and here is why" impossible to miss — a `::warning::` annotation surfaces on
+  # the PR's checks overview without opening any run, and the step summary spells out the fix.
+  flow-trace-gate-unavailable:
+    needs: check-token
+    if: needs.check-token.outputs.has-token != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: explain why the flow-trace gate did not run
+        run: |
+          echo "::warning title=flow-trace gate skipped::FLOW_TRACE_CHECKOUT_TOKEN is not set on this repo, so the architecture gate did not run (skipped, not failed). See .github/workflows/flow-trace.yml for what to create."
+          {
+            echo "## flow-trace did NOT run — \`FLOW_TRACE_CHECKOUT_TOKEN\` is not set"
+            echo
+            echo "This is expected until the operator creates the secret; it is not a failure of"
+            echo "this PR or this commit. The \`flow-trace\` job above is genuinely SKIPPED (GitHub's"
+            echo "grey status), and this job exists only so that fact is impossible to miss."
+            echo
+            echo "**To fix, once, for every future PR:** create a repository secret named"
+            echo "\`FLOW_TRACE_CHECKOUT_TOKEN\` on \`QNTM-Network/qntm-network\` holding a"
+            echo "fine-grained GitHub PAT scoped to READ-ONLY **contents** on \`QNTM-Network/qntm\`"
+            echo "alone. The moment it exists, the \`flow-trace\` job starts running on its own —"
+            echo "no further edit to this file, no new PR."
+          } >> "$GITHUB_STEP_SUMMARY"
