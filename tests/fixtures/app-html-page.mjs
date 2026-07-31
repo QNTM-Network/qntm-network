@@ -44,10 +44,19 @@ export function extractPageScript(workDir) {
     swapped.push(label);
   };
 
-  // 1. The passkey library — a CDN URL node cannot fetch, and nothing these tests drive calls it.
+  // 1. The passkey library — a CDN URL node cannot fetch.
+  //
+  //    IT ROUTES THROUGH A HOOK RATHER THAN BEING A NO-OP, and the default is still the no-op the
+  //    two older suites relied on. What the hook buys is the CEREMONY's failures: a cancelled
+  //    passkey sheet is a `NotAllowedError` raised from inside this call, it is the commonest
+  //    thing a first-time visitor does, and the page's answer to it is untestable if the only
+  //    thing this function can do is succeed silently. A suite sets `globalThis.__webauthn` to
+  //    make it throw what a real browser throws; anything that does not, gets exactly what it got
+  //    before.
   swap(
     /^import \{ startRegistration, startAuthentication \} from "https:\/\/esm\.sh\/@simplewebauthn\/browser@13";$/m,
-    "const startRegistration = () => {}; const startAuthentication = () => {};",
+    "const startRegistration = (...a) => (globalThis.__webauthn?.startRegistration ?? (() => {}))(...a);\n" +
+      "const startAuthentication = (...a) => (globalThis.__webauthn?.startAuthentication ?? (() => {}))(...a);",
     "@simplewebauthn/browser",
   );
   // 2. markdown-it — same library, same major, resolved from this repo's node_modules instead of
@@ -77,6 +86,9 @@ export function extractPageScript(workDir) {
 export { paintView, toggleTask, loadPresentation };
 export { buildDrawer, openDrawer, closeDrawer, folderOf, foldersOf, drawerStops, viewButtons };
 export { landOn, loadGraph, refresh, showShell };
+export { register, login, logout, friendlyAuthError, showEmpty, hideEmpty, HANDLE_RE, api };
+export const __token = () => token;
+export function __setToken(next) { token = next; }
 export const __currentViewId = () => currentViewId;
 export function __setGraphData(next) { graphData = next; }
 export function __setCurrentViewId(next) { currentViewId = next; }
