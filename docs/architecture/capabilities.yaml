@@ -841,6 +841,34 @@ capabilities:
     one blink. Nothing in this slice has been seen laid out: not the block cursor's inversion against
     the identity green, not `white-space: pre` against a wrapped line, not whether a block on a
     variable-width font sits where the operator expects.
+    ── UPDATE 2026-07-31, THE GAP EVERY SLICE'S EVIDENCE TIER NAMED IS PARTLY CLOSED.
+    tests/flow_scenarios/vim_gestures.ts now drives ModeSurface, boundaryLine, indentedLine and
+    wordCaret directly under flow-trace's node observer, and makes two of this capability's own
+    claims falsifiable rather than merely commented: "motions.ts imports nothing" (read off disk;
+    breaks the scenario if violated) and "the gesture layer never touches PresentationContext or
+    PresentationCascade" (a counting spy on PresentationContext.at/.with and
+    PresentationCascade.resolve, live for the whole drive; breaks the scenario if ANY of the four
+    gesture modules ever calls into the cascade, not only motions.ts). Both were proven against
+    scratch copies with a deliberately reintroduced violation before being trusted. `flow-trace
+    verify .` (re-measured 2026-07-31 in this worktree, after feat/instance-identity (#27) had
+    already merged, exit 0) reads 38 PASS / 0 FAIL / 4 scenarios, up from the 23 PASS / 3 scenarios
+    `.flow-trace.yaml`'s own header recorded on 2026-07-30 before this scenario existed. Three of
+    the new cross-module calls this scenario drives (boundary/indent/word -> resolution) are now
+    declared in flows.yaml (boundary-classifies-the-line, indent-classifies-the-line,
+    word-finds-the-title-words) rather than left as "observed but not declared" INFO.
+    STILL TRUE, NAMED RATHER THAN LEFT IMPLIED. (1) `.github/workflows/flow-trace.yml` runs this
+    scenario in CI, but ADVISORY (continue-on-error), not blocking, pending a handful of real CI
+    runs and a repo secret, FLOW_TRACE_CHECKOUT_TOKEN, that does not exist yet — see the backlog
+    row flow-trace-gate-added-advisory. (2) This scenario asserts two STRUCTURAL claims (purity, no
+    cascade reach) for the four gesture modules; it does not drive every gesture's VALUE-level
+    behaviour under the observer — `j`/`k`/`gg`/`G`/`i`/`a`/`o`/`O`/`x` and the column arithmetic
+    slice 5 shipped are still proven only by tests/present-motions.test.mjs and
+    tests/app-vim-wiring.test.mjs (node-test, not flow-trace-observed). (3) This scenario does not
+    reach `instance.ts`, `focus.ts` or the retired `anchor.ts` at all — confirmed by reading its
+    import list — and instance.ts is now the newest, most load-bearing module the app has
+    (FocusSurface.reanchor's production caller); see the backlog row
+    scenario-instance-ts-coverage-gap, which is its own row rather than a footnote here because the
+    gap is real and instance.ts earned that weight.
   tier: functional
   rooting: >-
     isolated. `ModeSurface` is a new class with no caller inside app/present/ itself; `paint.ts`
