@@ -426,6 +426,69 @@ backlog:
     verifier), so this green means less than a green in the monorepo.'
   kind: capability
   state: passing
+- id: vim-normal-mode-slice-3
+  title: '[present] [vim] `>`/`<` — indent and outdent the selected line, item 1 of
+    docs/implementation-artifacts/design-the-vim-cursor.md''s ranked order. One `set-line`
+    edit to the line''s leading whitespace, no new `SourceEdit` kind, index-stable, counts
+    compose (`3>`). Carries the four-space unit correction that document''s §4.3 names as
+    a real defect and not a cosmetic one: the engine''s indent unit is four spaces
+    (renderer.py:947-950), and the app''s only prior indent arithmetic (paint.ts:697,
+    CSS margin, transcribed from app.html:246) divides by two — reusing it for a SOURCE
+    EDIT would insert two spaces, which the engine''s differ still reparents on (any
+    increase does, content_diff.py:721-722), so the gesture would appear to work and then
+    double under the operator''s hands on the next cycle.'
+  driving_capability: vim-normal-mode-is-a-gesture-not-a-resolution
+  record: '2026-07-31 — SHIPPED. A new pure module, app/present/indent.ts (same shape as
+    boundary.ts — ModeSurface reports only a direction and a composed count; deciding the
+    new TEXT needs classifyLine, to refuse a blank or heading line, so it lives outside
+    motions.ts, which still imports nothing), exports INDENT_UNIT = 4 and indentedLine(line,
+    direction, count). Wired in app/index.html''s existing keydown switch, the same shape
+    as the x/toggle-done branch beside it: indentedLine decides the text, applyEdit''s own
+    "unchanged text is a refusal" rule (source.ts) decides whether anything posts, so
+    outdenting a line already at zero costs nothing beyond that existing guard.
+    THE FOUR-SPACE UNIT WAS VERIFIED, NOT ASSUMED. renderer.py:947-950 (''    '' * depth)
+    read directly; cross-checked against the operator''s own rendered content,
+    ~/qntm/this_week.md (read-only) — depth 1 carries 4 leading spaces, depth 2 carries 8,
+    exactly as the design document''s §0.5 claimed. content_diff.py:721-722''s depth
+    computation and >=-popped stack, and content_diff.py:83''s heading regex (no leading
+    whitespace permitted, matching this app''s own HEADING regex), were also read directly
+    and match the design document''s citations exactly.
+    A HEADING AND A BLANK LINE ARE BOTH REFUSED, A DECISION BEYOND WHAT THE DESIGN DOCUMENT
+    SPECIFIED AND ARGUED IN indent.ts''s OWN HEADER: indenting a heading by even one space
+    stops it being a heading on both ends (the engine''s own heading regex requires the `#`
+    to be the first character), which server-side means the differ''s section-bounding
+    heading branch stops running for it and it falls into the ordinary reparent branch
+    instead — a bigger and stranger corruption than the reparent `>`/`<` are meant to
+    perform. A blank line has no content to reparent.
+    paint.ts:697''s CSS margin arithmetic (still dividing by two) was left UNCHANGED — it
+    is a real, separate display bug (nested content renders at roughly twice the intended
+    on-screen margin per level) but fixing it would edit a file this slice''s sibling owns
+    and would break tests/present-golden.test.mjs''s byte-identical comparison against the
+    historical app.html reference, a separate already-validated claim. Recorded as a
+    finding for a follow-up row, not fixed here.
+    THE ROUNDING RULE IS VIM''S OWN shiftround: every result is a whole multiple of
+    INDENT_UNIT whatever the line started with. A line already on a whole unit round-trips
+    exactly through `>` then `<`; a line that started on an ODD, non-multiple indent does
+    NOT — `>` rounds up and discards the remainder, so a following `<` lands below the
+    original count. Tested as a decision, not left implicit.
+    PROOF: 27 new tests across tests/present-motions.test.mjs (sections 8a — the pure
+    ModeSurface reducer; 8c — the pure indentedLine arithmetic, including the round-trip,
+    the odd-indent decision, a leading tab, and the heading/blank refusals; 18 — the
+    reducer wired to paint() through the same press() helper the other slices use) and
+    tests/app-vim-wiring.test.mjs (one new describe block — deliberately only the
+    heading-refusal path, which posts nothing, for the same reason x''s suite there does
+    not exercise a real commit: the shared fetch stub has no snapshot to survive one).
+    npm run check: 443 tests / 87 suites / 0 fail on origin/main before this slice
+    (verified directly, not assumed), 470 / 91 / 0 fail after (+27/+4, 0 regressions).
+    NOT FLOW-TRACE-VERIFIED, SAME GAP AS SLICES 1 AND 2. No tests/flow_scenarios/*.ts
+    scenario exercises indentedLine or the >/< branch and .flow-trace.yaml declares no
+    flow for it, so flow-trace verify . says nothing about this row either way.
+    NOT VERIFIED IN A REAL BROWSER — no server, no passkey session an agent can complete,
+    so nothing here was clicked in Chrome. This repo is instrumented DECLARATION-ONLY
+    (evidence tier DECLARED, no runtime verifier), so this green means less than a green
+    in the monorepo.'
+  kind: capability
+  state: passing
 - id: add-the-user-presentation-level
   title: '[present] [stage 5] [HALF A DAY] Add the USER level — the per-person default
     Resolution, held in the server-side user record behind the passkey session, NOT

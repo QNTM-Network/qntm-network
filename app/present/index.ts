@@ -41,6 +41,8 @@ export type { Mode, NormalEffect, NormalKeyOutcome } from "./motions.js";
 export { boundaryLine } from "./boundary.js";
 export type { BoundaryDirection } from "./boundary.js";
 
+export { INDENT_UNIT, indentedLine } from "./indent.js";
+
 export { DraftSurface } from "./draft.js";
 export type { Draft } from "./draft.js";
 

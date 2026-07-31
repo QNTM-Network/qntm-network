@@ -612,6 +612,60 @@ capabilities:
     no `ModeSurface` are untouched): once a draft settles or is abandoned, `mode.enterNormal()` and
     `focus.focus(...)` hand the cursor back, or `mode` would be left stuck INSERT with no `<input>`
     open at all and NORMAL's own keydown handler would never re-engage.
+    SLICE 3 (2026-07-31): `>`/`<` — indent and outdent the selected line, one unit each, counts
+    compose (`3>`). NOT bound to `Tab`/`Shift-Tab`: `Tab` carries a browser focus-move default this
+    app does not intercept, `Tab` inside INSERT is already an accidental line-commit (blur settles
+    the input), and `ModeSurface.handleKey` takes no modifier argument, so `Tab`/`Shift-Tab` would
+    arrive as the identical key value. `>`/`<` are vim's own indent keys and need neither.
+    THE UNIT IS FOUR SPACES, VERIFIED AGAINST THE ENGINE AND THE OPERATOR'S REAL CONTENT, NOT THE
+    TWO THIS APP'S OWN CSS ASSUMES. `renderer.py:947-950` emits `'    ' * depth`; confirmed directly
+    against `~/qntm/this_week.md` (read-only) — depth 1 carries 4 leading spaces, depth 2 carries 8.
+    `paint.ts:697`'s ONLY existing indent arithmetic — `(shape.indent.length / 2) * 1.2 + "rem"`, a
+    CSS margin transcribed from `app.html:246` — treats two spaces as one level; reusing it for the
+    SOURCE EDIT would insert two spaces, which the engine's differ (`content_diff.py:721-722`, a raw
+    `>=`-popped leading-space count with no "level" arithmetic) still reparents on, so the gesture
+    would appear to work and then double under the operator's hands on the next cycle. A new pure
+    module, `app/present/indent.ts` (same shape as `boundary.ts` — `ModeSurface` reports only a
+    direction and a composed count, `indentedLine` needs `classifyLine` to decide the text, so it
+    lives outside `motions.ts`), owns `INDENT_UNIT = 4` and is the only place this app computes an
+    indent edit. `paint.ts:697`'s CSS margin is UNCHANGED by this slice — it is a separate, real,
+    pre-existing display bug (nested content renders at roughly twice the intended on-screen margin
+    per level) but correcting it would edit a file this slice's sibling owns and would break
+    `tests/present-golden.test.mjs`'s byte-identical comparison against the historical `app.html`
+    reference, a separate already-validated claim; noted here as a finding, not fixed.
+    A HEADING LINE AND A BLANK LINE ARE BOTH REFUSED — A DECISION ARGUED IN `indent.ts`'S OWN
+    HEADER, NOT ONLY ASSERTED. Both this app's `HEADING` regex and the engine's own
+    `content_diff.py:83` require the `#` to be the line's first character with no leading
+    whitespace at all, so indenting a heading by even one space stops it being a heading on both
+    ends — client-side it reclassifies as prose on the next paint, server-side the differ's heading
+    branch (which resets the structural stack and bounds a section) stops running for it and it
+    falls into the ordinary depth-and-reparent branch instead, corrupting the section the heading
+    was supposed to open. A blank line has no content to reparent. Every OTHER line — checkbox or
+    plain bulleted/prose node line — is indented uniformly, matching the engine's own depth
+    computation, which does not distinguish them either.
+    THE ROUNDING RULE IS VIM'S OWN `shiftround`, NOT "ADD/REMOVE FOUR CHARACTERS": every result is a
+    whole multiple of `INDENT_UNIT` whatever the line started with. Indenting rounds UP past the
+    current floor of units; outdenting rounds DOWN from the current ceiling, clamped at zero — which
+    is also how "outdent at zero is a no-op" falls out of the same formula with no special case,
+    rather than an `if` bolted beside it. One consequence is tested explicitly and is a decision, not
+    an oversight: a line already sitting on a whole unit round-trips exactly through `>` then `<`,
+    but a line that started on an ODD, non-multiple indent does not — `>` rounds it up and DISCARDS
+    the remainder, so a following `<` lands below the original count. The alternative (preserving
+    the remainder) would let `>` emit an indent that is not a whole multiple of the unit whenever the
+    starting line was not one, which is exactly the guarantee this row exists to hold.
+    EVIDENCE TIER — NODE-TEST ONLY, NOT FLOW-TRACE-VERIFIED, SAME GAP AS SLICES 1 AND 2. 27 new
+    tests across `tests/present-motions.test.mjs` (the pure `ModeSurface` reducer, the pure
+    `indentedLine` arithmetic, and the reducer wired to `paint()`) and `tests/app-vim-wiring.test.mjs`
+    (the same keys fired at `document` through app/index.html's own lifted script — deliberately only
+    the heading-refusal path, which posts nothing, for the same reason `x`'s suite there does not
+    exercise a real commit: the shared fetch stub has no `snapshot` to survive one). `npm run check`:
+    443 tests / 87 suites / 0 fail on `origin/main` before this slice (verified, not assumed), 470 /
+    91 / 0 fail after. No `tests/flow_scenarios/*.ts` scenario exercises `indentedLine` or the `>`/`<`
+    branch yet and `.flow-trace.yaml` declares no flow for it, so `flow-trace verify .` says nothing
+    about this addition either way — the same real, undischarged gap the row's SLICE-2 note names.
+    NOT VERIFIED IN A BROWSER. No real key event was observed; every claim above is a file read, the
+    node test runner, or a static comparison against the engine's own source and the operator's real
+    (read-only) vault content — consistent with the rest of this capability's evidence tier.
   tier: functional
   rooting: >-
     isolated. `ModeSurface` is a new class with no caller inside app/present/ itself; `paint.ts`
