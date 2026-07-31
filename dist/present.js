@@ -276,26 +276,157 @@ function presentationFromDeclaration(document2) {
   };
 }
 
+// app/present/anchor.ts
+var ANCHOR_TRUST = ["STAMP", "STAMP_IN_SECTION", "TEXT", "TEXT_IN_SECTION"];
+function stampOf(line) {
+  const [first] = qntmIdSpans(line);
+  return first === void 0 ? null : line.slice(first.start, first.end);
+}
+function sectionOf(lines, lineIndex) {
+  for (let at = lineIndex - 1; at >= 0; at -= 1) {
+    const line = lines[at] ?? "";
+    if (classifyLine(line).kind === "heading") {
+      return line;
+    }
+  }
+  return null;
+}
+function anchorFor(source, lineIndex) {
+  const lines = source.split("\n");
+  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) {
+    return null;
+  }
+  const text = lines[lineIndex] ?? "";
+  if (classifyLine(text).kind === "blank") {
+    return null;
+  }
+  return {
+    stamp: stampOf(text),
+    text,
+    section: sectionOf(lines, lineIndex),
+    takenAt: lineIndex
+  };
+}
+function decide(candidates, lines, anchor, tier, narrowedTier) {
+  if (candidates.length === 0) {
+    return null;
+  }
+  if (candidates.length === 1) {
+    return { outcome: "found", tier, lineIndex: candidates[0] };
+  }
+  const inSection = candidates.filter((at) => sectionOf(lines, at) === anchor.section);
+  if (inSection.length === 1) {
+    return { outcome: "found", tier: narrowedTier, lineIndex: inSection[0] };
+  }
+  return { outcome: "ambiguous", tier, candidates: inSection.length > 1 ? inSection : candidates };
+}
+function resolveAnchor(anchor, source) {
+  const lines = source.split("\n");
+  if (anchor.stamp !== null) {
+    const wanted = anchor.stamp.toLowerCase();
+    const byStamp = [];
+    lines.forEach((line, at) => {
+      if (stampOf(line)?.toLowerCase() === wanted) {
+        byStamp.push(at);
+      }
+    });
+    const reading2 = decide(byStamp, lines, anchor, "STAMP", "STAMP_IN_SECTION");
+    if (reading2 !== null) {
+      return reading2;
+    }
+  }
+  const byText = [];
+  lines.forEach((line, at) => {
+    if (line === anchor.text) {
+      byText.push(at);
+    }
+  });
+  const reading = decide(byText, lines, anchor, "TEXT", "TEXT_IN_SECTION");
+  if (reading !== null) {
+    return reading;
+  }
+  return { outcome: "absent" };
+}
+
 // app/present/focus.ts
 var FOCUSED = Object.freeze(
   Object.fromEntries(RESOLUTION_KEYS.map((key) => [key, "raw"]))
 );
 var FocusSurface = class {
   #lineIndex = null;
+  #anchor = null;
   /** The line the cursor is on, or `null` when it is nowhere. */
   get lineIndex() {
     return this.#lineIndex;
   }
+  /**
+   * WHICH line the cursor is on, expressed as identity rather than as a position — or `null` when
+   * nothing was anchored. See `focus` below for the two ways that happens.
+   */
+  get anchor() {
+    return this.#anchor;
+  }
   isFocused(lineIndex) {
     return this.#lineIndex === lineIndex;
   }
-  /** Put the cursor on a line. One line at a time — there is one cursor. */
-  focus(lineIndex) {
+  /**
+   * Put the cursor on a line. One line at a time — there is one cursor.
+   *
+   * `source` IS OPTIONAL AND ITS ABSENCE IS A REAL CONFIGURATION, the same shape `PaintDeps`
+   * already draws for `focus`, `mode` and `draft`: without it the cursor is a bare index exactly as
+   * it was before this parameter existed, and `reanchor` below reports `unanchored` rather than
+   * pretending. Every caller in the shipped app supplies it (`app/index.html`, `paint.ts`); the
+   * tests written before anchoring existed do not, and go on painting what they always painted.
+   *
+   * THE INDEX AND THE ANCHOR ARE SET IN ONE CALL, on purpose. Two setters would be two facts that
+   * can disagree about where one cursor is, and "there is one cursor" is the property every motion
+   * in this bundle is arithmetic on.
+   */
+  focus(lineIndex, source) {
     this.#lineIndex = lineIndex;
+    this.#anchor = source === void 0 ? null : anchorFor(source, lineIndex);
+  }
+  /**
+   * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and which rung said so?
+   *
+   * On `found` the cursor MOVES to the line it found and the anchor is taken again against the new
+   * projection — a cycle that stamped the line, or rewrote its tail, has changed the text tier 2
+   * would look for next time, and an anchor that went on describing the previous projection would
+   * be the same defect one repaint later.
+   *
+   * ON `ambiguous` AND `absent` NOTHING MOVES AND NOTHING IS CLEARED, which is deliberate rather
+   * than unfinished. Blurring a cursor whose line has vanished would destroy the one thing row 4
+   * (`the-vanished-line-is-parked-not-dropped`) needs in order to park the operator's characters
+   * where he can recover them. This row's whole obligation is that the outcome REACHES THE CALLER
+   * instead of being silence, and the caller decides.
+   *
+   * IT IS THE CALLER'S CALL, NOT THE PAINTER'S. `paint` cannot tell a projection arriving from its
+   * own optimistic repaint of a source it has already seen, so re-anchoring lives with the code
+   * that knows a snapshot landed — the same split `boundaryLine` and `openLine` already have
+   * between a pure answer and the wiring that asks for it.
+   *
+   * IF THIS SURFACE EVER GAINS A COLUMN — and it is likely to, because `w`/`b`/`e` repeating in
+   * NORMAL makes the cursor a line AND a column — THIS METHOD MUST DECIDE WHAT HAPPENS TO IT
+   * EXPLICITLY. It goes through `focus()` above, which owns the index and the anchor and nothing
+   * else, so a column added as a third field would be silently reset here on every arrival. The
+   * fact it needs is already in hand: `anchor.text` is re-taken against the new projection one line
+   * below, so a column can be clamped into the line's CURRENT characters rather than guessed.
+   */
+  reanchor(source) {
+    const anchor = this.#anchor;
+    if (anchor === null) {
+      return { outcome: "unanchored" };
+    }
+    const reading = resolveAnchor(anchor, source);
+    if (reading.outcome === "found") {
+      this.focus(reading.lineIndex, source);
+    }
+    return reading;
   }
   /** Take the cursor off whatever it was on. */
   blur() {
     this.#lineIndex = null;
+    this.#anchor = null;
   }
   /**
    * The context to resolve ONE line against: the caller's facts, plus FOCUS if this is the line.
@@ -751,7 +882,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     deps.mode.enterNormal();
     if (deps.focus !== void 0) {
       const last = Math.max(0, source.split("\n").length - 1);
-      deps.focus.focus(Math.min(lineIndex, last));
+      deps.focus.focus(Math.min(lineIndex, last), source);
     }
   };
   const abandon = () => {
@@ -827,7 +958,7 @@ function paint(body, source, context, deps) {
     element.addEventListener("click", (event) => {
       event?.preventDefault?.();
       event?.stopPropagation?.();
-      focus.focus(lineIndex);
+      focus.focus(lineIndex, source);
       mode?.enterInsert();
       repaint(source);
     });
@@ -961,6 +1092,7 @@ function paint(body, source, context, deps) {
   }
 }
 export {
+  ANCHOR_TRUST,
   DEFAULT,
   DraftSurface,
   FocusSurface,
@@ -970,6 +1102,7 @@ export {
   PresentationContext,
   RESOLUTION_KEYS,
   SPECIFICITY,
+  anchorFor,
   applyEdit,
   boundaryLine,
   carriesContent,
@@ -984,6 +1117,7 @@ export {
   presentationFromDeclaration,
   qntmIdSpans,
   readDeclaration,
+  resolveAnchor,
   seedFor,
   tagSpans,
   titleSpans,

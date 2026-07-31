@@ -847,6 +847,12 @@ capabilities:
     paints zero editable rows, `FocusSurface` still reports the old index, and no refusal is
     reported anywhere. So one level is real and unguarded, one is defective, two do not exist. It
     becomes falsifiable when the first backlog row lands, and not before.
+    AMENDED 2026-07-31 — THE ANCHOR LEVEL IS BUILT. Both measurements above were REPRODUCED first
+    against unmodified origin/main (f349b94) and are now fixed and covered by
+    tests/present-anchor.test.mjs; see the-cursor-anchors-to-a-node-not-a-line-number below for
+    what shipped. The count is now one level real and unguarded (FOCUS), one level real and
+    node-test-proven (ANCHOR), two absent (DELTA, BASE). The capability is still not falsifiable
+    end to end, because the two that are absent are the two that hold the operator's characters.
   tier: foundational
   rooting: >-
     isolated FOR NOW, and deliberately rather than by omission. Three of the four levels would root
@@ -857,6 +863,80 @@ capabilities:
     alone would describe the half that is already right and stay silent about the half that is
     wrong. It roots when the write-safety row lands and the base becomes a value some module
     computes rather than a closure some function captured.
+  status: undeclared
+- id: the-cursor-anchors-to-a-node-not-a-line-number
+  intent: >-
+    THE CURSOR IS HELD AS AN IDENTITY, NOT AS A POSITION, SO A PROJECTION ARRIVING CANNOT MOVE IT
+    ONTO SOMEBODY ELSE'S LINE. `FocusSurface` held one number, and an index is meaningful only
+    against the string it indexes; the painter restored the cursor by asking `isFocused(lineIndex)`
+    while walking whatever source it had just been handed.
+    BOTH FAILURES WERE REPRODUCED FIRST, against the shipped dist/present.js on unmodified
+    origin/main (f349b94), through tests/fixtures/dom-stub.mjs, from fixtures built out of
+    `~/qntm/this_week.md` (read-only). Cursor in `- [ ] Pay back per Darinz' plan said on 16th May
+    [[qntm:1232]] …`, index 5, characters typed into it. (a) A cycle inserts ONE line above him —
+    the one editable row painted afterwards holds `"## Overdue to Start"`, a HEADING, and the typing
+    is gone. (b) His node leaves the view — ZERO editable rows are painted, `FocusSurface` still
+    reports 5, the cursor is nowhere. Both silent, exit 0, nothing thrown, nothing reported to any
+    callback.
+    IDENTITY BEAT REBASING ON EVIDENCE, NOT ON TASTE. Rebasing (diff the old source against the new,
+    map index 5 forward) needs a diff, a tie-break policy for an insertion landing at the anchor,
+    and — the part that decided it — THE OLD SOURCE STRING STILL IN HAND when the new one arrives.
+    In this app it is not: app/index.html's `paintView` reads its markdown out of `graphData`, which
+    a fresh snapshot replaces wholesale before anything repaints, so a rebase would first have to
+    make the browser retain a projection purely to diff it. Identity needs none of that, and it
+    survives the case a diff cannot express at all — a rule moving a node BETWEEN SECTIONS, which is
+    a delete plus an insert to a differ and the same node to a stamp.
+    IT WALKS RUNGS AND REPORTS WHICH ONE ANSWERED, the same shape app/present/newline.ts already
+    uses. `app/present/anchor.ts` (new, pure, imports `classifyLine` and `qntmIdSpans` and nothing
+    else): STAMP (a unique `[[qntm:N]]`), STAMP_IN_SECTION, TEXT (the exact source text, for a
+    heading or a line the cycle has not stamped), TEXT_IN_SECTION, and `absent`. `ANCHOR_TRUST`
+    exports the order, because a cursor restored by TEXT and one restored by STAMP are not equally
+    trustworthy and the next row has to be able to tell.
+    THE SECTION RUNGS ARE NOT DECORATION — THEY ARE MEASURED NECESSITY. `~/qntm/this_week.md`
+    (read-only, 2026-07-31) prints THREE nodes twice each, as byte-identical lines under two
+    different headings — 6 of the file's 15 node lines. So a `[[qntm:N]]` is NOT unique within a
+    view, which the design document assumed it was. A resolver taking the first match would put the
+    cursor in the wrong printing of the right node across nearly half the operator's current week; a
+    resolver refusing every duplicate would refuse there too. The heading that opens the line's
+    section tells the two printings apart, and it is a structure this bundle already reads.
+    AMBIGUITY IS A THIRD OUTCOME AND IT REFUSES RATHER THAN GUESSING. One rule governs every rung —
+    A RUNG THAT FINDS NOTHING PASSES, A RUNG THAT FINDS TOO MANY STOPS. An ambiguous STAMP does not
+    fall through to TEXT: if a node is printed twice inside ONE section both rows really are that
+    node, and choosing between them by their characters chooses a PRINTING rather than a node. The
+    candidates go back to the caller so a refusal can name them.
+    THE ANCHOR IS EXPRESSED AGAINST THE SOURCE LINE INDEX, NEVER A PAINTED-ROW ORDINAL, and this is
+    decided once here for every later row. design-the-vim-cursor.md §3.4 observes that a blank line
+    is dropped from the paint and gets no row — real, and NOT a second coordinate system: paint.ts's
+    own `lastPaintedIndex` holds the SOURCE index of the last line that got a row, so it is a
+    filtered sample of the source indices rather than an ordinal in another space. Everything that
+    writes already speaks source indices (`applyEdit`, `seedFor`, `clampLine`, `boundaryLine`), so
+    any other choice buys a conversion at every one of those boundaries and avoids one at none.
+    A BLANK LINE HAS NO IDENTITY AND SAYS SO: `anchorFor` returns `null` rather than anchoring on a
+    text every other blank line shares, and `reanchor` reports `unanchored`.
+    NO NEW EDIT KIND, NO NEW CASCADE CONTRIBUTION, NO NEW LEVEL. `SourceEdit` is still the closed
+    union of three. `FocusSurface.contextFor` and its `FOCUSED` contribution are byte-unchanged — the
+    anchor decides WHERE the cursor is and never how anything renders — and `motions.ts` still
+    imports nothing.
+    EVIDENCE TIER — NODE-TEST ONLY, NOT FLOW-TRACE-VERIFIED, the same undischarged gap every vim
+    slice's note names. 28 new tests in tests/present-anchor.test.mjs: the rungs and their
+    provenance; a MUTATION PROOF that corrupts the anchor's recorded index and asserts the answer
+    does not move (which is what makes "this is identity, not a rebase" falsifiable rather than
+    claimed); both reproduced arms re-run against the anchored surface; and four tests driving
+    app/index.html's OWN lifted script so the refusal is proven to reach the freshness line rather
+    than a callback. `npm run check`: 573 tests / 100 suites / 0 fail on origin/main before this row
+    (verified, not assumed), 601 / 105 / 0 fail after (+28/+5, 0 regressions).
+    NOT VERIFIED IN A BROWSER, AND NO PROJECTION WAS EVER OBSERVED ARRIVING. No real cycle ran, no
+    passkey session was opened, no server was contacted, and the live vault and database were read
+    only. Every "projection" in the evidence is a second string in a test file. The claim is about
+    what these modules do when handed one — not that one has been seen to arrive.
+  tier: functional
+  rooting: >-
+    isolated. `app/present/anchor.ts` is a new pure module in the same family as
+    `boundary.ts`/`indent.ts`/`word.ts` — the surface holds the fact, a separate module owns the
+    grammar — and its only importer inside app/present/ is `focus.ts`. No existing class's declared
+    surface changed shape: `FocusSurface.focus` gained one OPTIONAL parameter (the same
+    optional-dependency posture `PaintDeps` already draws for `focus`/`mode`/`draft`), so every
+    caller that predates anchoring goes on painting what it always painted.
   status: undeclared
 - id: the-world-moves-around-you
   intent: >-

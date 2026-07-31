@@ -1161,7 +1161,37 @@ function markWhereWeAre() {
   for (const [id, button] of viewButtons) button.classList.toggle("current", id === currentViewId);
 }
 
+/**
+ * WHICH VIEW THE BODY IS CURRENTLY SHOWING — not the same fact as `currentViewId`, which is which
+ * view is SELECTED and is set ahead of the paint in `load` so the drawer's folders open around it.
+ * Set in exactly one place: the bottom of `paintView`.
+ *
+ * It exists because a projection arriving and a view change are opposite events for the cursor, and
+ * `currentViewId` cannot tell them apart at the moment `paintView` needs to know.
+ */
+let paintedViewId = null;
+
+/**
+ * THE REFUSAL, HELD UNTIL THE NEXT THING WRITES THE FRESHNESS LINE.
+ *
+ * Every write path in this page does `paintView(...)` and THEN overwrites the freshness line with
+ * "as of <when> · N queued" (`toggleTask`, `commitLine`, `refresh`, `applySnapshot`). Reporting the
+ * cursor inside `paintView` and stopping there would therefore have been reporting it into a line
+ * that is erased one statement later — the defect this row exists to end, rebuilt one layer up. So
+ * the sentence is held here and `sayAsOf` carries it.
+ */
+let cursorNote = "";
+
 function paintView(id) {
+  // A PROJECTION ARRIVING IS NOT THE SAME EVENT AS A VIEW CHANGE, and this one boolean is the whole
+  // of the difference. Both come through this function — it is the only place a view is chosen or
+  // re-read from the server — but they mean opposite things for the cursor: a view change means the
+  // operator chose to be somewhere else, and a projection arrival means the world moved while he
+  // stayed put. Only the second one has a cursor worth carrying across.
+  const sameView = id === paintedViewId;
+  // ONE PAINT, ONE NOTE. Cleared here so a sentence about a projection that landed two paints ago
+  // can never turn up on a freshness line describing this one.
+  cursorNote = "";
   currentViewId = id;
   markWhereWeAre();
   // A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN. This function is the one place a view
@@ -1185,9 +1215,71 @@ function paintView(id) {
   // deliberately blurred focus (`o`/`O` opening a draft) has to survive the repaints in between.
   const entering = graphData?.snapshot?.views.find((x) => x.id === id);
   if (entering !== undefined) {
-    focus.focus(clampLine(focus.lineIndex ?? 0, Math.max(0, entering.markdown.split("\n").length - 1)));
+    // THE WORLD ARRIVED IN THE VIEW HE IS ALREADY IN — ASK BY IDENTITY, NOT BY POSITION. The clamp
+    // below is the ONLY thing that used to happen here, and a clamp cannot help with either of the
+    // two failures this row measured against unmodified main (see app/present/anchor.ts's header):
+    // a line inserted above the cursor keeps every index in range, so the clamp is a no-op and the
+    // cursor lands on the wrong line; a line that has left the view is a shorter file, so the clamp
+    // moves the cursor to a line the operator never chose. `reanchor` asks WHICH LINE and reports
+    // which rung answered.
+    const cursorReading = sameView ? focus.reanchor(entering.markdown) : { outcome: "unanchored" };
+    if (cursorReading.outcome !== "found") {
+      // NOTHING WAS FOUND, SO THE OLD SEEDING STANDS — vim always has a cursor on some line, and
+      // this is where a view first gets one. What has changed is that it is no longer the whole
+      // story: a refusal is now SAID rather than swallowed.
+      //
+      // NOTE FOR ROW 4 (`the-vanished-line-is-parked-not-dropped`): this call REPLACES the anchor
+      // with whichever line the clamp landed on. `focus.reanchor` deliberately left the vanished
+      // line's anchor intact — that is where the parked row's identity has to be read from — so
+      // when that row lands it must take `focus.anchor` BEFORE this seeding runs, not after.
+      focus.focus(
+        clampLine(focus.lineIndex ?? 0, Math.max(0, entering.markdown.split("\n").length - 1)),
+        entering.markdown,
+      );
+    }
+    reportCursorReading(cursorReading);
   }
+  paintedViewId = id;
   repaintCurrentView();
+}
+
+/**
+ * THE CURSOR COULD NOT BE FOUND IN THE PROJECTION THAT JUST LANDED, AND THE PAGE SAYS SO.
+ *
+ * The exact complaint this row exists to answer is that both failures were SILENT — a person
+ * mid-sentence lost the sentence and was told nothing, exit 0, nothing thrown. One sentence in the
+ * freshness line, in the register that line already uses (`declineNewLine` above is its precedent),
+ * because a modal in the middle of a sentence is a worse violation of the safe haven than the thing
+ * it protects against.
+ *
+ * `found` and `unanchored` say nothing. `found` is the ordinary case and needs no narration;
+ * `unanchored` means no cursor was ever anchored (nothing was open, or it was on a blank line,
+ * which has no identity — see anchor.ts), so there is nothing that could have been lost.
+ *
+ * WHAT IT DOES NOT DO IS RECOVER THE CHARACTERS. Parking them where the operator can see and
+ * retrieve them is row 4 (`the-vanished-line-is-parked-not-dropped`), which is a separate change
+ * with separate evidence. This row's obligation is that the outcome stops being silence.
+ */
+function reportCursorReading(reading) {
+  if (reading.outcome === "absent") {
+    cursorNote = "the line you were on is not in this view any more";
+  } else if (reading.outcome === "ambiguous") {
+    cursorNote = "this view prints that line more than once, so the cursor was not moved";
+  }
+}
+
+/**
+ * "as of <when> · N queued", plus whatever `paintView` just found out about the cursor.
+ *
+ * ONE FUNCTION, THREE CALLERS, because three copies of this string is how the three of them would
+ * come to disagree about whether a refusal survives. The note is consumed: it describes one
+ * projection arriving, not a state the page is in.
+ */
+function sayAsOf(data) {
+  const when = new Date(data.snapshot.generated_at).toLocaleString();
+  const note = cursorNote === "" ? "" : ` · ${cursorNote}`;
+  cursorNote = "";
+  $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued${note}`;
 }
 
 /**
@@ -1219,7 +1311,7 @@ function repaintCurrentView() {
   // "no real line should read as focused right now" (set deliberately by `o`/`O`, or by never
   // having painted a view with vim wired at all) and is left alone rather than guessed back to 0.
   if (focus.lineIndex !== null) {
-    focus.focus(clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)));
+    focus.focus(clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)), v.markdown);
   }
   paint(body, v.markdown, presentation, {
     markdown: md,
@@ -1279,8 +1371,7 @@ async function toggleTask(view, toggle) {
     const data = await api("/app/edit-file", { body: { path: view.path, markdown: next }, auth: true });
     graphData = data;
     paintView(currentViewId);
-    const when = new Date(data.snapshot.generated_at).toLocaleString();
-    $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
+    sayAsOf(data);
   } catch (e) {
     box.checked = !box.checked;
     row.classList.toggle("done", box.checked);
@@ -1305,8 +1396,7 @@ async function commitLine(view, commit) {
     const data = await api("/app/edit-file", { body: { path: view.path, markdown: commit.markdown }, auth: true });
     graphData = data;
     paintView(currentViewId);
-    const when = new Date(data.snapshot.generated_at).toLocaleString();
-    $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
+    sayAsOf(data);
   } catch (e) {
     // The painter has already repainted this view from the edited source, so the page is showing
     // the edit; what failed is the write. Repaint from the LAST KNOWN SERVER STATE so the screen
@@ -1410,17 +1500,20 @@ async function loadGraph(keep = null) {
     showEmpty(data.snapshot ? "no-views" : "no-environment");
     $("viewBody").innerHTML = "";
     currentViewId = null;
+    paintedViewId = null;
     buildDrawer([]);
     return;
   }
   hideEmpty();
-  const when = new Date(data.snapshot.generated_at).toLocaleString();
-  $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued`;
   const def = landOn(data.snapshot.views, keep);
   // Before the tree, so the folders holding the view we are about to paint land OPEN.
   currentViewId = def.id;
   buildDrawer(data.snapshot.views);
   paintView(def.id);
+  // AFTER THE PAINT, NOT BEFORE IT. This line used to be written above `landOn`; it is written
+  // here now because `paintView` may have something to add to it — see `sayAsOf`. Nothing else
+  // about what it says has changed.
+  sayAsOf(data);
 }
 
 // READ THE GRAPH AGAIN, AND STAY WHERE YOU ARE.
@@ -1630,13 +1723,13 @@ document.addEventListener("keydown", (e) => {
     // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
     const effect = outcome.effect;
     if (effect.kind === "move") {
-      focus.focus(effect.lineIndex);
+      focus.focus(effect.lineIndex, v.markdown);
       repaintCurrentView();
     } else if (effect.kind === "boundary") {
       // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)
       // is the one place "which line is that" is answered, from the SAME source string, never a
       // second opinion parsed here.
-      focus.focus(boundaryLine(v.markdown.split("\n"), current, effect.direction, effect.count));
+      focus.focus(boundaryLine(v.markdown.split("\n"), current, effect.direction, effect.count), v.markdown);
       repaintCurrentView();
     } else if (effect.kind === "open") {
       // `o`/`O` — `openLine` is the SAME function Enter's mid-edit "open a line below" already
