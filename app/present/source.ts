@@ -30,6 +30,8 @@
  * over — which is precisely what DOM inversion would look like on its first day.
  */
 
+import { carriesContent } from "./resolution.js";
+
 /**
  * Set the checkbox glyph on one line.
  *
@@ -64,7 +66,52 @@ export interface SetLine {
   readonly text: string;
 }
 
-export type SourceEdit = SetCheckbox | SetLine;
+/**
+ * Put a NEW line into the file at `lineIndex`, pushing every line from there down.
+ *
+ * THE THIRD AFFORDANCE, AND THE FIRST ONE WHOSE SUBJECT DID NOT EXIST BEFORE THE EDIT. `set-line`
+ * and `set-checkbox` both name a line that is already there; this one names the place a line is
+ * ABOUT TO BE. It is still one sentence — "the file gains this string at index N, and nothing else
+ * changes" — which is the whole of the admissibility test, and it is why creating a line is
+ * expressible at all.
+ *
+ * `lineIndex` IS THE INDEX THE NEW LINE WILL OCCUPY, not the line it goes after. So `0` puts it at
+ * the top and `lines.length` appends. That is the one place this kind's range differs from the
+ * other two: `lines.length` is a legal index here and an out-of-range one everywhere else, because
+ * "after the last line" is a real place to put a line and not a real line to edit. The guard is
+ * therefore written here rather than shared with the other two branches.
+ *
+ * ── WHY IT REFUSES A LINE WITH NO CONTENT, WHICH IS THE MOST IMPORTANT LINE IN THIS FILE ──
+ *
+ * An empty new line is not a harmless no-op on the other side. Run against a hermetic copy of the
+ * engine's own starter bundle (`qntm-md init` + `qntm-md run`, 2026-07-31):
+ *
+ *   * `- [ ] ` with an empty title MINTS A REAL NODE. There is no empty-title guard anywhere in the
+ *     engine's parse-to-mint path, so the cycle created `qntm:3` titled `(untitled)` and then
+ *     PROPAGATED it — it came back in three sections across two views, permanently, because a node
+ *     is graph state and every view that qualifies it prints it.
+ *   * A wholly blank line is a grammar SKIP under the shipped `tolerant` input grammar, so no node
+ *     is minted AND the line is gone the moment the cycle re-renders the view, which it does
+ *     unconditionally for every view every cycle.
+ *
+ * Both outcomes are worse than the affordance not firing. So the refusal is structural and it lives
+ * HERE, in the one module that owns source edits, rather than in the painter — a guard in a caller
+ * is a guard the next caller does not have. `carriesContent` is the app's own line grammar
+ * (resolution.ts) asked a question, not a second regex invented for the occasion.
+ *
+ * IT DOES NOT APPLY TO `set-line`, AND THE ASYMMETRY IS DELIBERATE. Emptying a line that already
+ * exists is a legal edit to a node that already exists — the engine re-renders that node's line
+ * from the graph on the next cycle, so nothing is created and nothing is lost. Inserting an empty
+ * line creates a node with no title. Different acts, different rules.
+ */
+export interface InsertLine {
+  readonly kind: "insert-line";
+  /** The index the new line will occupy. `0` is the top; `lines.length` is the end. */
+  readonly lineIndex: number;
+  readonly text: string;
+}
+
+export type SourceEdit = SetCheckbox | SetLine | InsertLine;
 
 // VERBATIM from app.html:275 as it stood at 64c3a87. The capture groups are what make this an
 // edit and not a rewrite: group 1 is everything up to the glyph, group 2 is everything after it,
@@ -87,6 +134,24 @@ const CHECKBOX_GLYPH = /^(\s*- \[)[ xX](\] .*)$/;
  */
 export function applyEdit(source: string, edit: SourceEdit): string | null {
   const lines = source.split("\n");
+
+  // INSERT IS DISCRIMINATED FIRST, because it is the one kind whose index may legally be one past
+  // the end — "after the last line" is a place, not a line. Reading `lines[lineIndex]` before this
+  // branch would refuse an append, which is exactly the gesture the operator asked for.
+  if (edit.kind === "insert-line") {
+    if (!Number.isInteger(edit.lineIndex) || edit.lineIndex < 0 || edit.lineIndex > lines.length) {
+      return null;
+    }
+    if (edit.text.includes("\n") || edit.text.includes("\r")) {
+      return null;
+    }
+    if (!carriesContent(edit.text)) {
+      return null;
+    }
+    lines.splice(edit.lineIndex, 0, edit.text);
+    return lines.join("\n");
+  }
+
   const line = lines[edit.lineIndex];
   if (line === undefined) {
     return null;
@@ -118,6 +183,13 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
   // obvious candidate, `{kind: "delete-span", ...}` — would, if someone added the type and forgot
   // the branch, silently UNTICK a checkbox and POST the whole file, because `edit.checked` would
   // be undefined and undefined is falsy. Discriminating explicitly makes that a refusal instead.
+  //
+  // A THIRD KIND ARRIVED AND THIS GUARD IS WHY IT COST NOTHING. `insert-line` (2026-07-31) is
+  // discriminated at the top of this function and never reaches here; had it been added to the
+  // union and not to the code, it would land on this line and be REFUSED rather than silently
+  // untick the box at whatever index it happened to name. The union stays closed and the
+  // fall-through stays impossible; `tests/present-newline.test.mjs` section 5 proves the second
+  // half by handing this function a kind that does not exist.
   if (edit.kind !== "set-checkbox") {
     return null;
   }

@@ -242,7 +242,107 @@ expected_flows:
     callee: applyEdit
     event: app.computes-a-source-edit
     class: source-write-back
-    gates_capabilities: [every-affordance-writes-back-through-the-source]
+    gates_capabilities:
+      - every-affordance-writes-back-through-the-source
+      - a-new-line-is-resolved-not-guessed
+
+  # ── A NEW LINE, AND THE TWO EDGES THAT MAKE IT A RESOLUTION RATHER THAN A CONSTANT ─────────
+  # Added 2026-07-31. A new line has no content, so nothing about it can be read from the line —
+  # everything about it is resolved. These two are the observable form of that.
+  #
+  # THE FIRST IS THE ONE WORTH WATCHING. `seedFor` walks the rungs of the engine's own
+  # `default_node_type` cascade (GLOBAL -> VIEW -> STRUCTURAL_NODE) as they are legible in what the
+  # engine PRINTED, and reports which one answered. A painter that stopped calling it would be a
+  # painter that had decided what a new line is — which is the exact condition the presentation
+  # cascade exists to end, arriving in the one place where there are no characters to hide it.
+  - id: paint-resolves-what-a-new-line-is
+    from: app/present/paint
+    to:   app/present/newline
+    callee: seedFor
+    event: app.resolves-a-new-line
+    class: presentation-resolution
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  # THE SECOND IS WHERE THE UNCOMMITTED LINE LIVES. It is a separate module from the focus surface
+  # on purpose: `FocusSurface` CONTRIBUTES a level to the cascade and this contributes nothing,
+  # because a line with no content has no rendition to resolve between. What it holds is the fact
+  # that the source string has NOT been touched yet — which is what makes an abandoned line cost
+  # nothing and is why `applyEdit` gained one kind rather than two.
+  - id: paint-opens-a-line-that-is-not-in-the-file
+    from: app/present/paint
+    to:   app/present/draft
+    callee: DraftSurface.open
+    event: app.opens-a-new-line
+    class: presentation-painting
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  # THE GRAMMAR SAYS WHETHER A LINE CARRIES ANYTHING, AND THE WRITE-BACK ASKS IT. Not a second
+  # regex in source.ts: the engine's rule — one canonical implementation per capability, no
+  # parallel regex — is the one this repo mirrors, and "is this line empty" is a question about the
+  # line grammar that `app/present/resolution` already owns. The refusal it gates is the one that
+  # stops a node titled nothing from being minted, which was measured against a real cycle.
+  - id: source-asks-the-grammar-whether-a-line-carries-content
+    from: app/present/source
+    to:   app/present/resolution
+    callee: carriesContent
+    event: app.judges-a-line-empty
+    class: source-write-back
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  # AND THE RESOLUTION OF A NEW LINE READS THE CHROME THE ENGINE PRINTED. The same module, the
+  # other half of the pair: `chromeOf` is what turns "the engine printed this line as a checkbox"
+  # into "a new line beside it is a checkbox". It is the point at which the app reads the cascade's
+  # answer instead of re-deriving it.
+  - id: newline-reads-the-printed-shape
+    from: app/present/newline
+    to:   app/present/resolution
+    callee: chromeOf
+    event: app.reads-the-printed-shape
+    class: presentation-resolution
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  # A HEADING IS WHERE A SECTION ENDS, and that is the whole reason the seed walk classifies lines
+  # at all. It is what separates the STRUCTURAL_NODE rung from the VIEW rung: evidence found
+  # without crossing a heading is the section's own answer, evidence found across one is the
+  # view's. Same grammar as the painter's, asked for a different purpose.
+  - id: newline-finds-the-section-boundary
+    from: app/present/newline
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.finds-a-section-boundary
+    class: presentation-resolution
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  # WHERE THE ROW GOES. Asked once per line of the view, because the row for a line being made sits
+  # AT an index and every line from there down keeps the index it already had — the source is not
+  # renumbered, so the painter has to be told which position it is rather than work it out.
+  - id: paint-asks-where-the-new-line-goes
+    from: app/present/paint
+    to:   app/present/draft
+    callee: DraftSurface.isDraftAt
+    event: app.reads-the-new-line-position
+    class: presentation-painting
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  - id: paint-reads-the-line-being-made
+    from: app/present/paint
+    to:   app/present/draft
+    callee: DraftSurface.draft
+    event: app.reads-the-line-being-made
+    class: presentation-painting
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
+
+  # THE LINE IS ABANDONED — Escape, Backspace on an empty row, or a settlement that carried
+  # nothing. IT IS NOT A DELETION and there is deliberately no source edit for it: the line was
+  # never in the file, so there is nothing to remove. That this edge reaches `draft` and NOT
+  # `source` is the observable form of that claim.
+  - id: paint-abandons-a-line-that-was-never-in-the-file
+    from: app/present/paint
+    to:   app/present/draft
+    callee: DraftSurface.drop
+    event: app.abandons-a-new-line
+    class: presentation-painting
+    gates_capabilities: [a-new-line-is-resolved-not-guessed]
 
 forbidden_flows:
 
@@ -293,6 +393,34 @@ forbidden_flows:
       existed. A call from here into the painter would make the level depend on the page it is
       deciding about, and the FOCUS contribution would stop being derivable without running the
       app — which is exactly the condition the presentation cascade was built to end.
+
+  # Added 2026-07-31 with the third source edit. Two more pure modules, two more of the same rule,
+  # and the second of them is the one most exposed to being "helped" into breaking it.
+
+  - id: newline-never-touches-the-dom
+    from: app/present/newline
+    to:   app/present/paint
+    reason: >
+      `seedFor` decides what a NEW line is, and it decides it from the SOURCE STRING — from the
+      lines the engine has already printed into this view, which are the cascade's answer already
+      computed by the thing that owns the cascade. Reaching into the painter would mean deciding it
+      from the rendered page instead, which is DOM inversion arriving at the one affordance where
+      it would be hardest to see: a new line has no characters, so there is nothing for a
+      byte-comparison to catch. It would also make the four rungs unresolvable without a browser,
+      taking the whole of tests/present-newline.test.mjs section 3 with them.
+
+  - id: draft-never-touches-the-dom
+    from: app/present/draft
+    to:   app/present/paint
+    reason: >
+      THE DRAFT SURFACE IS THE MODULE MOST LIKELY TO BE HELPED INTO TOUCHING THE PAGE, because what
+      it describes IS a row on the page — an `<input>` a person is typing into. It must not. It
+      holds an index and the characters that row opened with, and the whole safety of the affordance
+      rests on that being ALL it holds: the source string is not touched while a line is being made,
+      so the edit is computed once, at settlement, from the string the server sent plus the
+      characters typed. A surface that could read its own row could compute an edit from the page,
+      and the app posts the WHOLE FILE — so a lossy inversion would not corrupt one line, it would
+      rewrite a view.
 
   - id: source-never-touches-the-dom
     from: app/present/source

@@ -453,6 +453,67 @@ capabilities:
     is falsy. Unreachable from a typed caller today; reachable by the next person to add
     `delete-span` and forget a branch, which is exactly the affordance this stage deferred. It
     discriminates explicitly and refuses now, and the guard is mutation-proven.
+    ── UPDATE 2026-07-31, THE THIRD SOURCE EDIT SHIPPED, AND IT IS THE FIRST CONSTRUCTIVE ONE.
+    `insert-line` joins `set-checkbox` and `set-line`, and the union is still CLOSED — the explicit
+    refusal added at stage 8 is what made the third kind cost nothing, and it is re-proven by
+    handing `applyEdit` a kind that does not exist. There is still ONE write path: a line created
+    and a line replaced arrive at the page through the same `onLineCommit` callback carrying the
+    same whole-file markdown, and app/index.html cannot tell them apart because it does not need to.
+    THE CONSTRAINT DID REAL WORK HERE RATHER THAN BEING SATISFIED IN PASSING. Creating a line is
+    expressible — "the file gains this string at index N" — but an EMPTY one is not merely
+    unhelpful, and that was measured rather than reasoned. Against a hermetic copy of the engine's
+    own starter bundle, `- [ ] ` with no title MINTS A NODE: the cycle created qntm:3 titled
+    "(untitled)" and reprinted it into three sections across two views, permanently. So the source
+    string is NEVER speculatively mutated: a line being made is held in `app/present/draft`, out of
+    the file, and reaches `applyEdit` exactly once, at settlement, carrying what was typed. An
+    abandoned line therefore needs no DELETE affordance to undo — which is the second thing the
+    constraint bought, because a constructive edit that required a destructive one to clean up
+    after it would have doubled the union to add one feature.
+  tier: foundational
+  status: undeclared
+
+- id: a-new-line-is-resolved-not-guessed
+  intent: >-
+    A NEW LINE HAS NO CONTENT, SO NOTHING ABOUT IT CAN BE READ FROM THE LINE — everything about it
+    must be RESOLVED. Pressing Enter at the end of a line makes one below it with the cursor in it;
+    clicking the space below the last line makes one there; and what it IS comes from the cascade
+    rather than from a constant in the painter.
+    WHICH CASCADE, PRECISELY. The engine decides what a bare line MEANS with `default_node_type`,
+    which cascades GLOBAL -> VIEW -> STRUCTURAL_NODE (engine `resolution/registration.py:89-113`;
+    shipped GLOBAL `task` at `config/views/default_registration.yaml:4`; `config/views/people.yaml`
+    declares `person`). That decision is consumed at BOTH ends of one declaration: `io/applier.py`
+    `_declared_form_is_chrome_free` (110-150) admits a chrome-free line by asking whether its
+    resolved type's `render.shape` is not `checkbox`, and `render/renderer.py:909-936` dispatches on
+    the SAME shape to decide what the line is PRINTED with. So the app does not re-derive the
+    cascade and could not — the snapshot envelope carries `path`, `title`, `markdown`, `graph` and
+    `locations`, and nothing about registration. It reads the answer the cascade ALREADY GAVE, off
+    the source string, from the nearest line the engine printed as a node. `app/present/newline`
+    walks four rungs and reports which one answered: LINE, STRUCTURAL_NODE, VIEW, GLOBAL.
+    THE GLOBAL RUNG REFUSES RATHER THAN GUESSING, AND THAT IS THE MEASURED HALF. On a view that has
+    printed no node line at all there is no answer to read, and both available guesses cost the
+    operator. Against a hermetic copy of the shipped starter bundle, a checkbox line authored into
+    the starter's `people` view (`person`, fields `[title, qntm_id]`) does not degrade — it raises
+    `CycleAbortedError: ... Node type 'person' does not have field 'status'`, and the WHOLE cycle
+    dies, taking every other edit in it. The other guess, a plain `- `, is refused at the applier's
+    form gate under a checkbox-shaped default and the line vanishes when the view is rewritten. So
+    nothing is written and the app says why.
+    WHAT WOULD CLOSE IT is one field: the snapshot envelope carrying the view's resolved
+    `default_node_type`. That is design-presentation-cascade.md §4.3's own blocker and the
+    precondition of its stage 7. With it the GLOBAL rung becomes a read instead of a refusal and
+    nothing else about `app/present/newline` changes.
+    EVIDENCE TIER — OBSERVED, BOTH HALVES. tests/present-newline.test.mjs (31 assertions) drives
+    the real painter through both gestures and proves the pair with opposite outcomes, the
+    provenance of each rung, the empty-view refusal, and that the posted file is the source with
+    exactly one line inserted and every other line byte-identical — including with every rendered
+    element deliberately wrecked first, which is the DOM-inversion detector for this affordance.
+    Mutation-proven six ways (the content guard removed; the seed hardcoded to a checkbox; the empty
+    view guessing instead of declining; Enter no longer opening a line; the trailing target no
+    longer last; an unknown edit kind falling through to the checkbox branch) — every one goes red.
+    AND THE CYCLE ACCEPTS IT, over four cycles plus a no-op fifth, against a hermetic instance built
+    by `qntm-md init` and driven through the SHIPPED dist/present.js rather than by hand-written
+    markdown: `- [ ] Book the venue` came back `- [ ] Book the venue [[qntm:3]] #work #task` and
+    `- Bob Newcomer` came back `- Bob Newcomer [[qntm:4]] #person`, with every pre-existing line in
+    five control views intact and neither half of the pair leaking into the other.
   tier: foundational
   status: undeclared
 - id: presentation-resolution-is-user-and-mode-aware

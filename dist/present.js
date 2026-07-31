@@ -52,6 +52,32 @@ function classifyLine(line) {
   }
   return { kind: "prose", source: line };
 }
+var BULLET = /^(\s*)([-*+])(\s+|$)/;
+var CHECKBOX_GLYPH = /^\[.\]\s*/;
+function carriesContent(line) {
+  const shape = classifyLine(line);
+  if (shape.kind === "blank") {
+    return false;
+  }
+  if (shape.kind === "heading") {
+    return shape.text.trim() !== "";
+  }
+  return line.replace(BULLET, "").replace(CHECKBOX_GLYPH, "").trim() !== "";
+}
+function chromeOf(line) {
+  const shape = classifyLine(line);
+  if (shape.kind === "checkbox") {
+    return shape.indent + "- [ ] ";
+  }
+  if (shape.kind !== "prose") {
+    return null;
+  }
+  const bullet = BULLET.exec(line);
+  if (bullet === null) {
+    return null;
+  }
+  return (bullet[1] ?? "") + "- ";
+}
 var TAG = /(^|\s)#([a-zA-Z_][a-zA-Z0-9_-]*)/g;
 function tagSpans(text) {
   const spans = [];
@@ -191,6 +217,68 @@ var FocusSurface = class {
   }
 };
 
+// app/present/draft.ts
+var DraftSurface = class {
+  #draft = null;
+  /** The line being made, or `null` when none is. */
+  get draft() {
+    return this.#draft;
+  }
+  /** Is a line being made AT this index? */
+  isDraftAt(lineIndex) {
+    return this.#draft?.lineIndex === lineIndex;
+  }
+  /** Open a line. One at a time — there is one cursor, and a draft always has it. */
+  open(lineIndex, seed) {
+    this.#draft = { lineIndex, seed };
+  }
+  /**
+   * Abandon the line being made.
+   *
+   * NOT A DELETION, and the distinction is the whole point of this module: the line was never in
+   * the file, so there is nothing to remove and no source edit to write down. Escape, Backspace on
+   * an empty draft, and settling without having typed anything all land here.
+   */
+  drop() {
+    this.#draft = null;
+  }
+};
+
+// app/present/newline.ts
+function seedFor(source, lineIndex) {
+  const lines = source.split("\n");
+  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex > lines.length) {
+    return null;
+  }
+  for (let at = lineIndex - 1; at >= 0; at -= 1) {
+    const line = lines[at] ?? "";
+    if (classifyLine(line).kind === "heading") {
+      break;
+    }
+    const chrome = chromeOf(line);
+    if (chrome !== null) {
+      return { text: chrome, level: at === lineIndex - 1 ? "LINE" : "STRUCTURAL_NODE" };
+    }
+  }
+  for (let at = lineIndex; at < lines.length; at += 1) {
+    const line = lines[at] ?? "";
+    if (classifyLine(line).kind === "heading") {
+      break;
+    }
+    const chrome = chromeOf(line);
+    if (chrome !== null) {
+      return { text: chrome.trimStart(), level: "STRUCTURAL_NODE" };
+    }
+  }
+  for (const line of lines) {
+    const chrome = chromeOf(line);
+    if (chrome !== null) {
+      return { text: chrome.trimStart(), level: "VIEW" };
+    }
+  }
+  return null;
+}
+
 // app/present/cascade.ts
 var PresentationCascade = class {
   #context;
@@ -221,9 +309,22 @@ var PresentationCascade = class {
 };
 
 // app/present/source.ts
-var CHECKBOX_GLYPH = /^(\s*- \[)[ xX](\] .*)$/;
+var CHECKBOX_GLYPH2 = /^(\s*- \[)[ xX](\] .*)$/;
 function applyEdit(source, edit) {
   const lines = source.split("\n");
+  if (edit.kind === "insert-line") {
+    if (!Number.isInteger(edit.lineIndex) || edit.lineIndex < 0 || edit.lineIndex > lines.length) {
+      return null;
+    }
+    if (edit.text.includes("\n") || edit.text.includes("\r")) {
+      return null;
+    }
+    if (!carriesContent(edit.text)) {
+      return null;
+    }
+    lines.splice(edit.lineIndex, 0, edit.text);
+    return lines.join("\n");
+  }
   const line = lines[edit.lineIndex];
   if (line === void 0) {
     return null;
@@ -241,7 +342,7 @@ function applyEdit(source, edit) {
   if (edit.kind !== "set-checkbox") {
     return null;
   }
-  const match = CHECKBOX_GLYPH.exec(line);
+  const match = CHECKBOX_GLYPH2.exec(line);
   if (match === null) {
     return null;
   }
@@ -255,13 +356,13 @@ function rawText(source) {
   div.textContent = source;
   return div;
 }
-function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint) {
+function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openLineAt) {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "rawline";
   input.value = lineSource;
   let settled = false;
-  const settle = (commit) => {
+  const settle = (commit, openBelow = false) => {
     if (settled) {
       return;
     }
@@ -279,10 +380,10 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint) {
     const text = input.value;
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
     deps.onLineCommit?.({ lineIndex, text, markdown });
-    if (markdown !== null) {
-      repaint(markdown);
-    } else if (wasFocused) {
-      repaint(fileSource);
+    const next = markdown ?? fileSource;
+    const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (markdown !== null || wasFocused || opened) {
+      repaint(next);
     }
   };
   input.addEventListener("blur", () => settle(true));
@@ -290,10 +391,51 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint) {
     const key = event?.key;
     if (key === "Enter") {
       event?.preventDefault?.();
-      settle(true);
+      settle(true, true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
       settle(false);
+    }
+  });
+  return input;
+}
+function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "rawline";
+  input.value = seed;
+  let settled = false;
+  const abandon = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    draft.drop();
+    repaint(fileSource);
+  };
+  const settle = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    const text = input.value;
+    draft.drop();
+    const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
+    deps.onLineCommit?.({ lineIndex, text, markdown });
+    repaint(markdown ?? fileSource);
+  };
+  input.addEventListener("blur", settle);
+  input.addEventListener("keydown", (event) => {
+    const key = event?.key;
+    if (key === "Enter") {
+      event?.preventDefault?.();
+      settle();
+    } else if (key === "Escape") {
+      event?.preventDefault?.();
+      abandon();
+    } else if (key === "Backspace" && input.value === seed) {
+      event?.preventDefault?.();
+      abandon();
     }
   });
   return input;
@@ -321,6 +463,7 @@ function renderTags(text, tags, render) {
 }
 function paint(body, source, context, deps) {
   const focus = deps.focus;
+  const draft = deps.draft;
   const repaint = (nextSource) => {
     paint(body, nextSource, context, deps);
   };
@@ -335,23 +478,51 @@ function paint(body, source, context, deps) {
       repaint(source);
     });
   };
+  const openLineAt = (lineIndex, from) => {
+    if (draft === void 0 || focus === void 0) {
+      return false;
+    }
+    const seed = seedFor(from, lineIndex);
+    if (seed === null) {
+      deps.onNewLineDeclined?.(lineIndex);
+      return false;
+    }
+    draft.open(lineIndex, seed.text);
+    return true;
+  };
   const raw = (lineSource, lineIndex) => {
     if (focus === void 0) {
       body.append(rawText(lineSource));
       return;
     }
-    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint);
+    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
     }
   };
   body.innerHTML = "";
+  let draftPainted = false;
+  const paintDraft = () => {
+    const open = draft?.draft;
+    if (open === void 0 || open === null || draftPainted) {
+      return;
+    }
+    draftPainted = true;
+    const input = draftInput(open.lineIndex, open.seed, source, draft, deps, repaint);
+    body.append(input);
+    input.focus?.();
+  };
+  let lastPaintedIndex = -1;
   source.split("\n").forEach((line, index) => {
+    if (draft?.isDraftAt(index) === true) {
+      paintDraft();
+    }
     const shape = classifyLine(line);
     if (shape.kind === "blank") {
       return;
     }
+    lastPaintedIndex = index;
     const cascade = new PresentationCascade(
       focus === void 0 ? context : focus.contextFor(index, context)
     );
@@ -413,20 +584,35 @@ function paint(body, source, context, deps) {
     focusable(div, index);
     body.append(div);
   });
+  paintDraft();
+  if (draft !== void 0 && focus !== void 0) {
+    const below = document.createElement("div");
+    below.className = "newline";
+    below.addEventListener("click", (event) => {
+      event?.preventDefault?.();
+      openLineAt(lastPaintedIndex + 1, source);
+      repaint(source);
+    });
+    body.append(below);
+  }
 }
 export {
   DEFAULT,
+  DraftSurface,
   FocusSurface,
   PresentationCascade,
   PresentationContext,
   RESOLUTION_KEYS,
   SPECIFICITY,
   applyEdit,
+  carriesContent,
+  chromeOf,
   classifyLine,
   isSilent,
   paint,
   presentationFromDeclaration,
   readDeclaration,
+  seedFor,
   tagSpans
 };
 //# sourceMappingURL=present.js.map

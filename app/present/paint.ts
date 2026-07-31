@@ -68,7 +68,9 @@
 
 import { PresentationCascade } from "./cascade.js";
 import type { PresentationContext } from "./context.js";
+import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
+import { seedFor } from "./newline.js";
 import { classifyLine, tagSpans } from "./resolution.js";
 import type { Rendition } from "./resolution.js";
 import { applyEdit } from "./source.js";
@@ -108,6 +110,18 @@ export interface LineCommit {
   readonly markdown: string | null;
 }
 
+/**
+ * What the caller is handed when a line that DID NOT EXIST settles with characters in it.
+ *
+ * DELIBERATELY THE SAME SHAPE AS `LineCommit`, AND HANDED TO THE SAME CALLBACK. `markdown` is the
+ * WHOLE view source with exactly one line inserted, or `null` if the insertion was refused — an
+ * index outside the file, text carrying a newline, or (the one that matters) a line with no content
+ * in it. There is no second endpoint, no second write unit and no second place a view is replaced:
+ * the page's `commitLine` posts `commit.markdown` and does not know or need to know whether the
+ * line it is posting is a replacement or an addition. That is what "the write path stays single"
+ * means when it is a property rather than a promise.
+ */
+
 export interface PaintDeps {
   readonly markdown: InlineMarkdown;
   readonly onCheckboxToggle?: (toggle: CheckboxToggle) => void;
@@ -121,6 +135,28 @@ export interface PaintDeps {
    */
   readonly focus?: FocusSurface;
   readonly onLineCommit?: (commit: LineCommit) => void;
+  /**
+   * WHERE A LINE IS BEING MADE — optional, and its absence is a real configuration exactly as
+   * `focus`'s is. Without it a painted view offers no way to create a line at all: Enter settles
+   * and leaves, and the space below the last line is not a target. That is what every test written
+   * before 2026-07-31 paints, which is why the golden master still compares byte for byte.
+   *
+   * IT NEEDS `focus` TO BE USEFUL AND DOES NOT ASSERT IT. A draft is a row with a cursor in it, so
+   * a draft surface without a focus surface would open lines in an app whose lines cannot be
+   * reached — the same half-built configuration `rawInput`'s note describes. The painter simply
+   * does not open one, which keeps this an optional dependency rather than a required pair.
+   */
+  readonly draft?: DraftSurface;
+  /**
+   * A new line was asked for and the app declined to open one — always because `seedFor` reached
+   * the GLOBAL rung, which happens when the view has printed no node line anywhere and the app
+   * therefore does not know what a line in it looks like.
+   *
+   * REPORTED RATHER THAN SWALLOWED. "Nothing happens" is the exact complaint this change exists to
+   * answer, and an affordance that declines silently is the same complaint with a new cause. The
+   * caller decides what to say; see app/index.html, which says it in the freshness line.
+   */
+  readonly onNewLineDeclined?: (lineIndex: number) => void;
 }
 
 /**
@@ -170,6 +206,7 @@ function rawInput(
   focus: FocusSurface,
   deps: PaintDeps,
   repaint: (nextSource: string) => void,
+  openLineAt: (lineIndex: number, from: string) => boolean,
 ): HTMLElement {
   const input = document.createElement("input");
   input.type = "text";
@@ -180,7 +217,7 @@ function rawInput(
   // losing focus as the repaint removes it), and a second settlement would compute a second edit
   // against a source that has already moved — the first shape a double POST takes.
   let settled = false;
-  const settle = (commit: boolean): void => {
+  const settle = (commit: boolean, openBelow = false): void => {
     if (settled) {
       return;
     }
@@ -204,12 +241,21 @@ function rawInput(
     // every other rendered element first and then checking the posted file.
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
     deps.onLineCommit?.({ lineIndex, text, markdown });
-    if (markdown !== null) {
+    // WHAT THE NEXT PAINT IS OF: the committed file if there was an edit, the file as it stands if
+    // there was not. Named once, because the line opened below has to be seeded against the SAME
+    // string the paint is about to walk — seeding against the pre-commit source would resolve the
+    // new line's shape from characters that are no longer there.
+    const next = markdown ?? fileSource;
+    const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (markdown !== null || wasFocused || opened) {
       // Optimistic, and the same posture the checkbox already had: show the edit immediately,
       // let the caller replace it with the server's copy when the cycle comes back.
-      repaint(markdown);
-    } else if (wasFocused) {
-      repaint(fileSource);
+      //
+      // ONE REPAINT, WHETHER OR NOT A LINE WAS OPENED. Enter used to cost exactly one repaint of
+      // the view and it still does — the commit and the opening are decided before anything is
+      // drawn, so the row the cursor moves into is drawn by the same pass that takes it out of the
+      // row it left. At 670 lines that is the 49 ms one repaint has always cost, not 98.
+      repaint(next);
     }
   };
 
@@ -218,10 +264,108 @@ function rawInput(
     const key = (event as KeyboardEvent | undefined)?.key;
     if (key === "Enter") {
       event?.preventDefault?.();
-      settle(true);
+      // ENTER COMMITS THIS LINE AND OPENS THE NEXT ONE, WHEREVER THE CARET IS IN IT.
+      //
+      // It does NOT split the line at the caret, and that is a decision with a reason rather than
+      // an omission. A split is expressible as a source edit — `set-line` for the head plus
+      // `insert-line` for the tail — so the governing constraint does not forbid it. What is not
+      // decided is what it MEANS: a rendered qntm line carries its node's identity stamp, so
+      // splitting `- [ ] Draft the note [[qntm:121]] #task` in the middle hands `[[qntm:121]]` to
+      // whichever half it happens to fall in, silently renaming that node to a fragment and
+      // minting a second node from the other fragment. Which half keeps the node is a graph
+      // decision, and a keystroke with no undo is not where a graph decision belongs. So Enter
+      // means one thing everywhere in a line, which is also the simpler thing to learn.
+      settle(true, true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
       settle(false);
+    }
+  });
+  return input;
+}
+
+/**
+ * THE LINE BEING MADE — an `<input>` for a row that is not in the file yet.
+ *
+ * The same element and the same class as `rawInput`, deliberately: a new line is a raw line whose
+ * source happens to be characters nobody has committed, and giving it a box of its own would be the
+ * jump this app has already paid to remove (app/index.html, "ONE ROW GEOMETRY, TWO RENDITIONS").
+ * It is a separate FUNCTION because its settlement is a different act — `insert-line` rather than
+ * `set-line`, and three keys that mean "there is no line here after all" rather than one.
+ *
+ * ── THE SOURCE IS NEVER SPECULATIVELY MUTATED, WHICH IS THE WHOLE ARRANGEMENT ──
+ *
+ * `fileSource` is the string the server sent, unchanged, for as long as this row exists. The edit
+ * is computed once, at settlement, from that string plus the characters typed. So an abandoned line
+ * costs nothing and needs no deletion to undo, and the file this posts is provably the server's
+ * file with EXACTLY ONE LINE INSERTED — there is no intermediate state in which it was anything
+ * else. See draft.ts for what the alternative would have cost.
+ */
+function draftInput(
+  lineIndex: number,
+  seed: string,
+  fileSource: string,
+  draft: DraftSurface,
+  deps: PaintDeps,
+  repaint: (nextSource: string) => void,
+): HTMLElement {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "rawline";
+  input.value = seed;
+
+  // One settlement per row, for the same reason `rawInput` has one: the repaint that follows a
+  // commit removes this element, and removing a focused element fires blur.
+  let settled = false;
+
+  /** There is no line here after all. Not a deletion — nothing was ever in the file. */
+  const abandon = (): void => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    draft.drop();
+    repaint(fileSource);
+  };
+
+  const settle = (): void => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    const text = input.value;
+    draft.drop();
+    // THE ONE PLACE A CREATED LINE BECOMES A FILE, and it is the same function every other
+    // affordance in this app goes through. `null` here is a REFUSAL and it is the commonest one:
+    // a row opened and left holding nothing but its own chrome. `applyEdit` decides that, not this
+    // painter — the guard belongs with the edit so that no future caller can route around it.
+    const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
+    deps.onLineCommit?.({ lineIndex, text, markdown });
+    repaint(markdown ?? fileSource);
+  };
+
+  input.addEventListener("blur", settle);
+  input.addEventListener("keydown", (event) => {
+    const key = (event as KeyboardEvent | undefined)?.key;
+    if (key === "Enter") {
+      event?.preventDefault?.();
+      // ENTER ON A LINE THAT GAINED NOTHING ENDS THE LIST, which is what Enter on an empty item
+      // does in every editor the operator uses. It is expressed here as "settle", not as a special
+      // case: `applyEdit` refuses a contentless insert, so committing an empty row and abandoning
+      // it are the same act with the same outcome — nothing posted, nothing in the file, the row
+      // gone. One path, one behaviour, and the emptiness is judged by the grammar rather than by a
+      // comparison this function would have to keep in step with it.
+      settle();
+    } else if (key === "Escape") {
+      event?.preventDefault?.();
+      abandon();
+    } else if (key === "Backspace" && input.value === seed) {
+      // BACKSPACE AT THE START OF AN EMPTY NEW LINE CANCELS IT — the conventional gesture, and the
+      // only one of the three that had to be given a condition. It fires only while the row still
+      // holds EXACTLY what it opened with, so backspacing inside characters a person typed does
+      // what backspace always does. It is not a deletion affordance: there is no line to delete.
+      event?.preventDefault?.();
+      abandon();
     }
   });
   return input;
@@ -312,6 +456,7 @@ export function paint(
   deps: PaintDeps,
 ): void {
   const focus = deps.focus;
+  const draft = deps.draft;
 
   /**
    * Paint the whole view again, from a source string.
@@ -346,6 +491,29 @@ export function paint(
     });
   };
 
+  /**
+   * Ask for a line at `lineIndex`, resolved against `from`. Returns whether one was opened.
+   *
+   * THE PAINTER STILL DOES NOT DECIDE. What a new line IS comes from `seedFor`, which walks the
+   * cascade's rungs and reports which one answered; what this function does is ask, and obey the
+   * refusal. `null` means the GLOBAL rung was reached — the view has printed no node line anywhere,
+   * so nothing in the payload knows what a line in it looks like — and the honest response to that
+   * is to open nothing and say so. See newline.ts for what the two available guesses cost, one of
+   * which aborts the operator's entire cycle.
+   */
+  const openLineAt = (lineIndex: number, from: string): boolean => {
+    if (draft === undefined || focus === undefined) {
+      return false;
+    }
+    const seed = seedFor(from, lineIndex);
+    if (seed === null) {
+      deps.onNewLineDeclined?.(lineIndex);
+      return false;
+    }
+    draft.open(lineIndex, seed.text);
+    return true;
+  };
+
   /** The raw rendition, embodied for the surface this paint actually has. */
   const raw = (lineSource: string, lineIndex: number): void => {
     if (focus === undefined) {
@@ -357,7 +525,7 @@ export function paint(
     // write unit and the server overwrites what it is sent. Collapsing them into one `source`
     // parameter is not a tidy-up — it was the first version of this function, and it produced a
     // "file" one line long: tests/present-focus.test.mjs caught it in section 2.
-    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint);
+    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
     // APPEND BEFORE FOCUS. `focus()` on an element that is not in the document does nothing, so
     // the order here is what puts the cursor in the line a person just clicked.
     body.append(input);
@@ -368,7 +536,29 @@ export function paint(
 
   body.innerHTML = "";
 
+  // THE ROW FOR THE LINE BEING MADE, painted at the index it will occupy. The source is UNCHANGED
+  // while it exists, so every line below it keeps the index it already had — which is why the
+  // focus surface, the cascade and every edit computed during a draft go on being right without
+  // anything having to renumber them.
+  let draftPainted = false;
+  const paintDraft = (): void => {
+    const open = draft?.draft;
+    if (open === undefined || open === null || draftPainted) {
+      return;
+    }
+    draftPainted = true;
+    const input = draftInput(open.lineIndex, open.seed, source, draft as DraftSurface, deps, repaint);
+    body.append(input);
+    (input as HTMLInputElement).focus?.();
+  };
+
+  /** The last source line this paint drew a row for. `-1` when the view painted nothing at all. */
+  let lastPaintedIndex = -1;
+
   source.split("\n").forEach((line, index) => {
+    if (draft?.isDraftAt(index) === true) {
+      paintDraft();
+    }
     const shape = classifyLine(line);
 
     if (shape.kind === "blank") {
@@ -376,6 +566,12 @@ export function paint(
       // vanishes here — so there is nothing to resolve and nowhere for a cursor to land.
       return;
     }
+
+    // EVERY OTHER SHAPE GETS EXACTLY ONE ROW, whichever branch below draws it, so this is the one
+    // place that has to know it. It is what "below the last line" resolves to: a click in the space
+    // under the column opens a line after the last line that was DRAWN, which is the last non-blank
+    // line, which is where a person looking at the screen would expect the next one to go.
+    lastPaintedIndex = index;
 
     // ONE CASCADE PER LINE, because FOCUS is a fact about ONE line. The other six levels say the
     // same thing all the way down the view; this is the rung that does not, and building the
@@ -464,4 +660,38 @@ export function paint(
     focusable(div, index);
     body.append(div);
   });
+
+  // A DRAFT OPENED PAST THE LAST LINE. `insert-line` accepts `lines.length` because "after the last
+  // line" is a real place to put a line, and the loop above can never reach that index.
+  paintDraft();
+
+  // ── THE SPACE BELOW THE LAST LINE, AND WHY IT IS AN ELEMENT RATHER THAN A LISTENER ────────────
+  //
+  // "if I click after, in the new line space, nothing happens" — and nothing could, because there
+  // was nothing there. The column ends where its last row ends, so the space under it belongs to
+  // the page, and the page is not where a decision about a view may live.
+  //
+  // A HANDLER ON `body` WOULD LEAK, WHICH IS WHY THIS IS A CHILD. `body.innerHTML = ""` clears the
+  // column's contents and does NOT remove listeners from the column itself, and this painter
+  // repaints the whole view on every focus change — so a listener added to `body` would accumulate
+  // one copy per repaint, and after a few minutes of moving the cursor around one click would open
+  // a line for every repaint that had ever happened. A child element is destroyed with the rest of
+  // the contents, so it carries exactly one listener for exactly as long as the paint that made it.
+  //
+  // It is painted ONLY when there is a draft surface, so a view painted without one — every test
+  // written before this affordance existed, and the golden master — is byte-identical to what it
+  // was.
+  if (draft !== undefined && focus !== undefined) {
+    const below = document.createElement("div");
+    below.className = "newline";
+    below.addEventListener("click", (event) => {
+      event?.preventDefault?.();
+      // A click that landed on a LINE has already been stopped by `focusable`, so anything that
+      // arrives here landed in the empty space. The line goes after the last row drawn — and at
+      // index 0 when nothing was drawn at all, which is the empty view.
+      openLineAt(lastPaintedIndex + 1, source);
+      repaint(source);
+    });
+    body.append(below);
+  }
 }
