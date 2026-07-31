@@ -679,6 +679,94 @@ var FocusSurface = class {
   }
 };
 
+// app/present/instance.ts
+var HEADING_TOKEN = "\xA7heading";
+function nodeStampOf(line) {
+  const [first] = qntmIdSpans(line);
+  if (first === void 0) {
+    return null;
+  }
+  return line.slice(first.start + 2, first.end - 2);
+}
+function instancesOf(source, view) {
+  const lines = source.split("\n");
+  let section = null;
+  const raw = lines.map((line) => {
+    const shape = classifyLine(line);
+    if (shape.kind === "blank") {
+      return null;
+    }
+    if (shape.kind === "heading") {
+      section = section === null ? 0 : section + 1;
+      const node2 = nodeStampOf(line);
+      return { section, node: node2, token: node2 ?? HEADING_TOKEN };
+    }
+    const node = nodeStampOf(line);
+    return { section, node, token: node ?? line };
+  });
+  const key = (r) => `${r.section ?? "none"}\0${r.token}`;
+  const groupSize = /* @__PURE__ */ new Map();
+  for (const r of raw) {
+    if (r === null) {
+      continue;
+    }
+    const k = key(r);
+    groupSize.set(k, (groupSize.get(k) ?? 0) + 1);
+  }
+  const seen = /* @__PURE__ */ new Map();
+  return raw.map((r) => {
+    if (r === null) {
+      return null;
+    }
+    const k = key(r);
+    const occurrence = (seen.get(k) ?? 0) + 1;
+    seen.set(k, occurrence);
+    const size = groupSize.get(k) ?? 1;
+    const suffix = size > 1 ? `#${occurrence}` : "";
+    const sectionToken = r.section === null ? "-" : String(r.section);
+    return {
+      instance: `${view}/${sectionToken}/${r.token}${suffix}`,
+      node: r.node,
+      section: r.section
+    };
+  });
+}
+function instanceOf(source, lineIndex, view) {
+  if (!Number.isInteger(lineIndex) || lineIndex < 0) {
+    return null;
+  }
+  return instancesOf(source, view)[lineIndex] ?? null;
+}
+function instanceAnchorFor(source, lineIndex, view) {
+  const info = instanceOf(source, lineIndex, view);
+  if (info === null) {
+    return null;
+  }
+  return { instance: info.instance, node: info.node, takenAt: lineIndex };
+}
+function resolveInstanceAnchor(anchor, source, view) {
+  const list = instancesOf(source, view);
+  const byInstance = list.findIndex((info) => info?.instance === anchor.instance);
+  if (byInstance !== -1) {
+    return { outcome: "found", lineIndex: byInstance, via: "instance" };
+  }
+  if (anchor.node !== null) {
+    const candidates = [];
+    list.forEach((info, at) => {
+      if (info?.node === anchor.node) {
+        candidates.push(at);
+      }
+    });
+    if (candidates.length === 1) {
+      return { outcome: "found", lineIndex: candidates[0], via: "node" };
+    }
+    if (candidates.length > 1) {
+      return { outcome: "ambiguous", candidates };
+    }
+  }
+  return { outcome: "absent" };
+}
+
 // app/present/boundary.ts
 function boundaryLine(lines, current, direction, count) {
   let at = current;
@@ -1044,6 +1132,13 @@ function paint(body, source, context, deps) {
   const focus = deps.focus;
   const draft = deps.draft;
   const mode = deps.mode;
+  const instances = deps.view === void 0 ? void 0 : instancesOf(source, deps.view);
+  const stampInstance = (element, lineIndex) => {
+    const info = instances?.[lineIndex];
+    if (info !== void 0 && info !== null) {
+      element.dataset.instance = info.instance;
+    }
+  };
   const repaint = (nextSource) => {
     paint(body, nextSource, context, deps);
   };
@@ -1067,16 +1162,20 @@ function paint(body, source, context, deps) {
   };
   const raw = (lineSource, lineIndex) => {
     if (focus === void 0) {
-      body.append(rawText(lineSource));
+      const text = rawText(lineSource);
+      stampInstance(text, lineIndex);
+      body.append(text);
       return;
     }
     if (mode !== void 0 && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
       const line = normalLine(lineSource, focus.column);
       focusable(line, lineIndex);
+      stampInstance(line, lineIndex);
       body.append(line);
       return;
     }
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
+    stampInstance(input, lineIndex);
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
@@ -1142,6 +1241,7 @@ function paint(body, source, context, deps) {
         (markdown) => deps.markdown.renderInline(markdown)
       );
       focusable(span, index);
+      stampInstance(row, index);
       row.append(box, span);
       body.append(row);
       return;
@@ -1158,6 +1258,7 @@ function paint(body, source, context, deps) {
         (markdown) => deps.markdown.renderInline(markdown)
       );
       focusable(el, index);
+      stampInstance(el, index);
       body.append(el);
       return;
     }
@@ -1172,6 +1273,7 @@ function paint(body, source, context, deps) {
       (markdown) => deps.markdown.render(markdown)
     );
     focusable(div, index);
+    stampInstance(div, index);
     body.append(div);
   });
   paintDraft();
@@ -1206,6 +1308,9 @@ export {
   clampLine,
   classifyLine,
   indentedLine,
+  instanceAnchorFor,
+  instanceOf,
+  instancesOf,
   isSilent,
   markerSpans,
   openLine,
@@ -1214,6 +1319,7 @@ export {
   qntmIdSpans,
   readDeclaration,
   resolveAnchor,
+  resolveInstanceAnchor,
   seedFor,
   tagSpans,
   titleSpans,

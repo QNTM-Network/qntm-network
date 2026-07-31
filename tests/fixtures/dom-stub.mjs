@@ -26,6 +26,13 @@ class StubElement {
     this.tagName = tagName;
     this.className = "";
     this.style = {};
+    // A plain object, exactly like tests/fixtures/app-html-page.mjs's own element stub already
+    // uses — `paint.ts`'s `data-instance` (instance.ts, R1 of
+    // design-presentation-instance-identity.md) is the first thing in this bundle to set it, and a
+    // painter reaching for a NEW piece of the DOM is supposed to fail loudly here rather than be
+    // quietly accommodated (see this file's own header) — so it is added on purpose, not by
+    // omission.
+    this.dataset = {};
     this.children = [];
     this.listeners = new Map();
     this.#innerHTML = "";

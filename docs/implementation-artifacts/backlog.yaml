@@ -682,7 +682,18 @@ backlog:
     set. GATED ON open decision 3 (may a node''s presentation differ between two views
     that both show it?) — safer here than on ingest, since presentation has no write-back
     of its own, but it changes what copy/paste means. FALSIFIER: a view sheet declaring
-    a presentation key, asserted end to end from config to painted DOM.'
+    a presentation key, asserted end to end from config to painted DOM.
+
+    AMENDED 2026-07-31, AFTER derive-the-instance-id-in-the-browser (R1 of presentation-instance
+    identity) LANDED — a schema change at these same three producers is also what R2 of that design
+    needs (design-presentation-instance-identity.md section 7: "carry section_id from the view
+    config, server-side"), so the two should land together rather than touch the wire twice. ONE
+    DECISION R2 INHERITS FROM R1, NAMED SO IT IS NOT REDISCOVERED: for the client-derived and
+    server-carried instance strings to be IDENTICAL (the property that makes switching a no-op),
+    the served section field must be the 0-based ORDINAL POSITION of the section in the view''s
+    declared sections: list, never the config''s own id: string (inbox.yaml declares id: inbox-tagged,
+    id: domain-empty; a client holding only markdown can count headings but cannot read those
+    strings). tests/present-instance.test.mjs section 2 proves the ordinal parity this rests on.'
   driving_capability: presentation-is-resolved-not-chosen
   kind: capability
   state: diagnose-ready
@@ -928,6 +939,115 @@ backlog:
     fail after (+28/+5, 0 regressions). NOT VERIFIED IN A BROWSER and NO PROJECTION WAS OBSERVED
     ARRIVING — every projection in the evidence is a second string in a test file.
   state: passing
+- id: derive-the-instance-id-in-the-browser
+  title: >-
+    [present] [instance-identity] [R1, HALF A DAY] `docs/implementation-artifacts/design-presentation-instance-identity.md`
+    §7's R1. A pure module computing `(view, section, node-or-text, ordinal)` from a source string
+    alone, needing nothing from the server, the Worker or the engine. Falsifier: the this_week.md
+    duplicate pair resolves to the correct printing with no `decide()`-style narrowing, and a
+    stamped node moving section still keeps the cursor (refutation 1).
+  driving_capability: presentation-instance-identity
+  kind: capability
+  record: >-
+    2026-07-31 — SHIPPED. `app/present/instance.ts` (new, pure, imports `classifyLine` +
+    `qntmIdSpans` and nothing else — same import posture as `boundary.ts`/`indent.ts`/`word.ts`).
+    `instancesOf(source, view)` computes every printed line's instance in ONE pass: `section` is
+    the 0-based ordinal of the heading that opens the line's section — counted from the markdown
+    alone, never read off a config — and `token` is the line's `qntm:N` stamp (brackets stripped)
+    when it has one, a CONSTANT for an unstamped heading (`§heading`), or the line's own exact
+    source text otherwise. `#N` is appended only when a `(section, token)` pair repeats — the
+    `structural_edge_types allow_repeats` case, design doc §2.4 — so the common case (this_week.md's
+    three duplicated stamps included) needs no suffix at all.
+    THE FORMAT'S ONE DELIBERATE DEPARTURE FROM THE DESIGN DOCUMENT'S OWN WIRE SKETCH, ARGUED IN
+    instance.ts's HEADER RATHER THAN ASSUMED AWAY. §6 there spells `view/section_id/node_id`, where
+    `section_id` is a config-declared string (`apps/qntm-md/config/views/inbox.yaml` really does
+    declare `id: inbox-tagged`, `id: domain-empty`) — a string this module cannot read, because it
+    has no config, only markdown. So `section` here is the ORDINAL POSITION instead, and "R1 and R2
+    produce the identical string" (the property that makes the later switch a no-op) now has an
+    exact, testable precondition: R2 must key its own `section` field on that SAME ordinal, not the
+    config's `id:` string. tests/present-instance.test.mjs §2 proves the ordinal this module counts
+    matches the declared list's position (transcribed from inbox.yaml, not read live — this repo's
+    tests must not depend on a sibling worktree being checked out), which is the exact fact §2.3(c)
+    of the design document measured. This is a decision for R2 to inherit, not one this row can
+    settle alone.
+    THIS FIXES THE FALSE `absent` FOR EVERY HEADING, AND ONLY FOR HEADINGS. `~/qntm/metrics.md`
+    prints five headings as `## <name> <emoji> <ratio>`, the ratio moving every cycle; the shipped
+    anchor keys an unstamped line on its exact text, so a moved ratio answered `absent` for a row
+    still on screen (design doc §1.3). A heading's token here is the CONSTANT `§heading`, never its
+    characters, because exactly one heading opens each section ordinal by construction — so the
+    ordinal alone already disambiguates it and re-deriving a second fact from the changing ratio
+    would only reintroduce the bug. tests/present-instance.test.mjs §5 proves it directly: an anchor
+    taken on a heading survives its ratio changing. WHAT IS NOT FIXED, STATED PLAINLY: an unstamped
+    BODY line (a checkbox or prose line the cycle has not stamped) still has no fallback beyond its
+    own exact text — matching `anchor.ts`'s own honest limit for TEXT (design doc §1.2, "job one
+    survives") — because such a line has no config-declared ordinal of its own to fall back on
+    either. R2 does not change this.
+    REFUTATION 1 (design doc §3.3) IS BUILT IN, NOT BOLTED ON. `InstanceAnchor` carries `node`
+    beside `instance`, and `resolveInstanceAnchor` is a two-tier walk: instance match first (the
+    same printing — cursor holds), node match second, over the WHOLE file, only when the instance
+    did not match (the printing moved — cursor follows, and the caller can say the section changed
+    because the reading names `via: "node"`), node matching more than once refused as `ambiguous`
+    rather than guessed. tests/present-instance.test.mjs §4 proves a PURE instance lookup would lose
+    a node that moved section BEFORE proving the two-tier walk does not.
+    WHICH RUNGS COLLAPSED, PRECISELY, AND WHICH DID NOT SHIP LIVE. Per the design document's own
+    §1.2: STAMP and STAMP_IN_SECTION collapse completely into the instance lookup (it computes
+    exactly the engine's own `(section_id, node_id)` key); TEXT_IN_SECTION collapses too, because
+    instance matching already narrows by section for free, with no separate narrowing step; TEXT
+    survives, exactly as designed, as what an UNSTAMPED line's instance IS. BUT `anchor.ts` ITSELF
+    IS UNTOUCHED — `resolveAnchor`, `ANCHOR_TRUST` and every one of tests/present-anchor.test.mjs's
+    28 tests (including the mutation proof) pass byte-for-byte unmodified, because those tests pin
+    the FOUR RUNGS' exact tier strings and narrowing behaviour by literal assertion, and the design
+    document's own ask ("resolveAnchor's four rungs become...") and the proof standard's ask ("every
+    existing anchor test still passes, unmodified") are in tension for any implementation that
+    actually collapses the live resolver. `instanceAnchorFor`/`resolveInstanceAnchor` are NEW,
+    ADDITIVE exports; `FocusSurface.reanchor` still calls the old four-rung walk in production. See
+    `presentation-instance-identity`'s own record for the fuller argument. WIRING THE LIVE CURSOR
+    ONTO THE NEW RESOLVER IS NOT DONE HERE and is a small, separate decision — probably folded into
+    `the-open-line-survives-a-new-projection` when it lands, see that row's own amendment below.
+    EVERY PRINTED LINE GETS AN ID, NOT ONLY NODE LINES — the operator's own decision (design doc
+    §8): `metrics.md` has zero node lines and five headings, and it is the view the bug was measured
+    on. A blank line gets none, matching `anchorFor`'s own `null` and `paint.ts`'s own blank-line
+    branch, which draws no row for one at all.
+    R3 FOLDED IN, AS THE BRIEF ASKED, AND IT DID NOT FIGHT ANYTHING. `PaintDeps.view` (optional,
+    same posture as `focus`/`mode`/`draft`) and `data-instance` on every element `paint()` appends
+    for a non-blank line, computed once per paint (`instancesOf`, one pass) rather than per line.
+    Absent whenever `deps.view` is, which is every test written before it existed AND
+    tests/present-golden.test.mjs's own deps — so the golden master needed no edit. `data-instance`
+    is deliberately NOT added to `tests/fixtures/dom-stub.mjs`'s `serialize()` (the golden test's
+    comparison instrument): the historical painter it compares against could never have set it, so
+    adding the field there would make that comparison fail forever on a mismatch that is not a
+    defect. `dataset = {}` WAS added to `StubElement`'s constructor — the stub's own header commits
+    to failing loudly when a painter reaches for a new piece of the DOM, so the extension is
+    declared, not silent. `app/index.html`'s `repaintCurrentView` now passes `view: v.id`.
+    `inbox.md` IS THE PRIMARY FIXTURE, PER THE OPERATOR'S OWN CORRECTION — earlier agents used
+    `this_week.md`; he has since said it is not his main view. `~/qntm/*.md` (all five, read-only,
+    2026-07-31) confirms `this_week.md`'s duplication is genuinely the outlier: `inbox.md` (5 lines,
+    3 stamped, 2 headings, zero duplicates), `habits.md` and `routines.md` likewise duplicate
+    nothing. `this_week.md`'s three duplicated stamps are used here as the DEDICATED case they are
+    (`this-week.yaml`'s own header: two lenses on one node, deliberate) — not as the typical shape.
+    PROOF: tests/present-instance.test.mjs, 19 new tests across 6 describes — instancesOf's basic
+    shape and blank-line exclusion (inbox.md); positional parity with the declared config order and
+    the exact string format; the duplicate case resolving with one lookup plus a mutation proof plus
+    an ambiguous-repeat-in-one-section case; refutation 1 end to end; the false-`absent` fix
+    measured on metrics.md's own moving ratio, with an explicit test naming what is and is not
+    fixed; `data-instance` reaching the DOM and staying absent with no view id. `npm run check`: 625
+    tests / 110 suites / 0 fail on origin/main at 4f6c901 (RUN, not assumed, matching the design
+    document's own recorded baseline exactly), 644 / 116 / 0 fail after (+19/+6, 0 regressions).
+    NOT FLOW-TRACE-VERIFIED, SAME GAP AS EVERY VIM SLICE AND THE ANCHOR ROW ITSELF. `flow-trace
+    verify .` (2026-07-31, via `uv run --python 3.12 --with-editable
+    /Users/lukeannison/projects/qntm-network/qntm/tools/flow-trace flow-trace verify .`) reads
+    IDENTICALLY before and after this change — exit 0, 38 PASS / 0 FAIL / 14 INFO — because
+    `tests/flow_scenarios/present_cascade.ts` never sets `deps.view`, so `instance.ts` is never
+    exercised under the observer and no new edge was declared for it. CONSIDERED ADDING ONE:
+    wiring `view:` into an existing `paint()` call there is a one-line change, but that scenario's
+    own header documents the observer TRUNCATING its capture on fixture growth (a six-LINE fixture
+    lost six edges on every run) and this repo's last five slices (anchor.ts included) all shipped
+    the same gap rather than risk it, each saying so plainly. Followed the same precedent rather
+    than break it alone, for a module none of those five slices' own scenario touches either.
+    NOT VERIFIED IN A BROWSER, NO PASSKEY SESSION, NO SERVER CONTACTED, NO CYCLE RUN — read-only on
+    `~/qntm` and `~/.qntm-md` throughout. Every projection in the evidence is a second string in a
+    test file, the same posture tests/present-anchor.test.mjs states about itself.
+  state: passing
 - id: the-open-line-survives-a-new-projection
   title: >-
     [haven] [3] [HALF A DAY] THIS IS THE CAPABILITY. A repaint from a foreign projection must reuse
@@ -957,6 +1077,21 @@ backlog:
     GAINED, and it is small: the reading carries a TIER, and a row restored at `TEXT` is a weaker
     claim than one restored at `STAMP` — `ANCHOR_TRUST` exports the order so this row can decide
     what, if anything, it does differently for a weak restore rather than treating all four alike.
+    AMENDED 2026-07-31, AFTER derive-the-instance-id-in-the-browser LANDED — IT GOT SMALLER AGAIN,
+    THE SAME WAY, AND ONE NEW STEP IS ADDED. The "ONE OBLIGATION IT GAINED" paragraph above asked
+    this row to decide what to do differently for a weak (`TEXT`-tier) restore, over FOUR heuristic
+    rungs. That decision is now over THREE NAMED IDENTITY SPACES instead — `resolveInstanceAnchor`
+    returns `found`/`via: "instance"` (the same printing, a strong restore), `found`/`via: "node"`
+    (the printing moved section — this row's "what, if anything, it does differently" question now
+    has a concrete second case to answer, not just one strength gradient), or `ambiguous`/`absent` —
+    which is a smaller, more legible decision than "is `TEXT` weak enough to treat specially". WHAT
+    IS NOT DONE, STATED PLAINLY: `FocusSurface.reanchor` still calls the OLD four-rung
+    `resolveAnchor`, not the new resolver — see `presentation-instance-identity`'s own capability
+    record for why (the new resolver is additive, proven separately, and switching the LIVE cursor
+    onto it is a small, separate step this row should probably take on rather than assume already
+    done). Reusing `instance.ts`'s output for `data-instance` also means this row's HELD ROW can now
+    be found by a stable key across the repaint it survives, rather than only by the source index
+    row 2 already provides — a smaller win than the resolver swap but a real one.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -991,6 +1126,17 @@ backlog:
     parked. WHAT IS LEFT is taking the orphaned row out of the reading column and keeping its
     CHARACTERS where the operator can see and recover them — which needs the DELTA row 3 builds, so
     the "sequenced after 3" note above is now a dependency rather than a preference.
+    AMENDED 2026-07-31, AFTER derive-the-instance-id-in-the-browser LANDED — SMALLER IN ONE SPECIFIC
+    WAY: "PARKED" NOW HAS A KEY TO BE PARKED UNDER. Before this row's characters can be recovered
+    they need somewhere stable to sit while the operator is elsewhere on the page — an index alone
+    is not enough once other rows have shifted under it (the exact defect row 2 fixed for the
+    cursor). `data-instance` gives that a ready-made key: the orphaned row's own instance, taken
+    before it vanished, is the same opaque string `resolveInstanceAnchor` would use to recognise the
+    SAME NODE printed elsewhere (the operator's own "two rows update immediately" decision — see
+    `derive-the-instance-id-in-the-browser`'s record on why the id is stable enough to support that
+    without this row building the memory). WHAT IS STILL NOT DECIDED, AND R1 DOES NOT TOUCH IT: open
+    decision 1 (does a parked line commit as `insert-line` when the cycle removed it deliberately),
+    and the UI for "here is what you were typing, put it back" — both are this row's alone.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready

@@ -1038,6 +1038,51 @@ capabilities:
     optional-dependency posture `PaintDeps` already draws for `focus`/`mode`/`draft`), so every
     caller that predates anchoring goes on painting what it always painted.
   status: undeclared
+- id: presentation-instance-identity
+  intent: >-
+    A PRINTED LINE IS A THING, ADDRESSABLE BY AN ID, NOT ONLY FINDABLE BY WALKING RUNGS. The
+    operator's own proposal: "surely if it's an app and we render we can tie presentation instances
+    (not unique node ness but rendering structure) to ids and navigate a grid like that."
+    `docs/implementation-artifacts/design-presentation-instance-identity.md` measured that the
+    engine ALREADY computes this fact every cycle — `RenderedLineRecord` carries `(sheet_id,
+    section_id, node_id)`, 1:1-assumed by `markdown_writer.py:188` — and throws it away before
+    `line_cache` persists (six columns, none of them section or node). It is RE-DERIVABLE in the
+    browser without the engine, because a view's declared `sections:` are an ORDERED list and the
+    renderer walks them in that order: the Nth heading in a rendered file is the Nth declared
+    section (measured across all five live views, 24-for-24, exact positional match).
+    R1 (below) DERIVES THE ID CLIENT-SIDE from the markdown alone — `${view}/${section}/${token}`,
+    `section` a 0-based heading ORDINAL rather than a config-read string. R2 (not built) would carry
+    the same fact server-side, from the view config; for the two to produce the IDENTICAL string,
+    R2 must key its own `section` field on that same ordinal, not the config's own `id:` string —
+    a decision for R2, not settled here (see `derive-the-instance-id-in-the-browser`'s record).
+    THIS FIXES A REAL BUG, NOT JUST A CONVENIENCE. `~/qntm/metrics.md` renders every heading as
+    `## <name> <emoji> <ratio>`, and the ratio moves every cycle while the ORDER of the sections
+    does not. The shipped anchor (`the-cursor-anchors-to-a-node-not-a-line-number`) keys an
+    unstamped line's identity on its exact TEXT, so a heading whose ratio moved answered `absent` —
+    THE ROW WAS STILL ON SCREEN AND THE APP SAID IT WAS GONE. An id keyed on a heading's ORDINAL,
+    never its characters, cannot make that mistake, because it never read the ratio in the first
+    place.
+    IT DOES NOT REPLACE THE ANCHOR'S RUNGS IN PRODUCTION, AND THAT IS STATED RATHER THAN HIDDEN. The
+    design document's own R1 description reads "resolveAnchor's four rungs become: instance match →
+    node match → ambiguous → absent" — but `tests/present-anchor.test.mjs` pins the FOUR RUNGS'
+    EXACT tier strings (`STAMP`, `STAMP_IN_SECTION`, `TEXT`, `TEXT_IN_SECTION`) and their ambiguous-
+    narrowing behaviour by literal `assert.deepEqual`, and the brief's own proof standard demanded
+    every one of those tests keep passing UNCHANGED. Those two asks are in tension: a resolver that
+    still emits four rung labels for backward compatibility is not a collapse, and a resolver that
+    genuinely collapses cannot honour assertions written against the four-rung shape. Resolved by
+    NOT mutating `anchor.ts` — `instance.ts`'s `instanceAnchorFor`/`resolveInstanceAnchor` are new,
+    additive, fully tested, and `FocusSurface.reanchor` still calls the old four-rung walk. Wiring
+    the live cursor onto the new resolver is therefore NOT done by this capability and is a small,
+    separate decision for whoever lands `the-open-line-survives-a-new-projection` or a dedicated
+    follow-up row.
+  tier: functional
+  rooting: >-
+    isolated. `app/present/instance.ts` is a new pure module in the same family as
+    `anchor.ts`/`boundary.ts`/`indent.ts`/`word.ts` — imported by `paint.ts` (for `data-instance`)
+    and by nothing else inside app/present/ yet. `PaintDeps` gained one OPTIONAL field (`view`), the
+    same posture `focus`/`mode`/`draft` already have, so every caller that predates it paints
+    exactly what it always painted.
+  status: partial
 - id: the-world-moves-around-you
   intent: >-
     THE SYSTEM COMPUTES BEHAVIOUR, SO THE PROJECTION SHOULD LIVE RATHER THAN WAIT TO BE FETCHED. A
