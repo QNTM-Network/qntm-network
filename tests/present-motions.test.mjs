@@ -29,6 +29,7 @@ import {
   indentedLine,
   INDENT_UNIT,
   openLine,
+  wordCaret,
   DraftSurface,
   FocusSurface,
   ModeSurface,
@@ -611,6 +612,16 @@ function press(v, key) {
     if (markdown !== null) {
       v.commits.push({ lineIndex: current, text, markdown });
     }
+  } else if (effect.kind === "word") {
+    // `w`/`b`/`e` — the same shape as app/index.html's own branch: `wordCaret` decides the offset
+    // (or refuses with `null`), and only then does `mode.enterInsert(offset)` fire — `handleKey`
+    // itself left `#mode` at NORMAL for this effect kind, see motions.ts's slice 4 note.
+    const line = v.source.split("\n")[current] ?? "";
+    const offset = wordCaret(line, effect.motion, effect.count);
+    if (offset !== null) {
+      v.mode.enterInsert(offset);
+      v.repaint();
+    }
   } else {
     v.repaint();
   }
@@ -1075,5 +1086,212 @@ describe("18. > and < through the painter — indentedLine drives the same set-l
     v2.repaint();
     press(v2, "<"); // one bare outdent, no count in front of it on this fresh ModeSurface
     assert.equal(v2.commits[0].markdown.split("\n")[1].match(/^ */)[0].length, 2 * INDENT_UNIT);
+  });
+});
+
+describe("19. w / b / e — motion letter and count only; word.ts decides the caret", () => {
+  test("w with no count asks to jump to word 1", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("w", 4, 100);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "word", motion: "w", count: 1 });
+  });
+
+  test("b and e report their own motion letter the same way", () => {
+    const mode = new ModeSurface();
+    assert.deepEqual(mode.handleKey("b", 4, 100).effect, { kind: "word", motion: "b", count: 1 });
+    assert.deepEqual(mode.handleKey("e", 4, 100).effect, { kind: "word", motion: "e", count: 1 });
+  });
+
+  test("3w composes the count exactly like every other motion", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey("w", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "word", motion: "w", count: 3 });
+  });
+
+  test("handleKey does NOT itself enter INSERT for w/b/e — it does not have the offset yet", () => {
+    // The one way this differs from `i`/Enter/`a`: those flip `#mode` inside `handleKey` because
+    // they need no offset. `w`/`b`/`e` need `wordCaret` (word.ts), which this module still does
+    // not import, so the mode stays NORMAL until the CALLER computes an offset and calls
+    // `enterInsert(offset)` itself — see motions.ts's slice 4 note and section 20 below.
+    const mode = new ModeSurface();
+    mode.handleKey("w", 4, 100);
+    assert.equal(mode.mode, "NORMAL", "handleKey flipped to INSERT with no offset in hand");
+    assert.equal(mode.takeCaretHint(), undefined, "a caret hint appeared with no offset computed");
+  });
+
+  test("the count clears after w fires, same as after any other motion", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("5", 0, 100);
+    mode.handleKey("w", 4, 100);
+    const outcome = mode.handleKey("j", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 5 }, "the stale count of 5 survived w");
+  });
+});
+
+describe("19a. wordCaret (app/present/word.ts) — pure, no DOM, the arithmetic w/b/e need", () => {
+  const LINE = "- [ ] first task [[qntm:1]] #task";
+  // Chrome is "- [ ] " (6 chars); the title tail is "first task [[qntm:1]] #task", so the two
+  // title words are "first" (tail 0-5) and "task" (tail 6-10) — the stamp and the tag are atoms.
+
+  test("w with count 1 lands at the start of the first title word", () => {
+    const at = wordCaret(LINE, "w", 1);
+    assert.equal(LINE.slice(at, at + 5), "first");
+  });
+
+  test("w with count 2 lands at the start of the second title word", () => {
+    const at = wordCaret(LINE, "w", 2);
+    assert.equal(LINE.slice(at, at + 4), "task");
+  });
+
+  test("a count past the last word clamps to the last word — no wrap", () => {
+    const atOverrun = wordCaret(LINE, "w", 99);
+    const atLast = wordCaret(LINE, "w", 2);
+    assert.equal(atOverrun, atLast);
+  });
+
+  test("e lands at the END of the count-th word", () => {
+    const at = wordCaret(LINE, "e", 1);
+    assert.equal(LINE.slice(at - 5, at), "first");
+  });
+
+  test("b, with no established caret, is anchored from the END of the title — count 1 is the LAST word", () => {
+    const at = wordCaret(LINE, "b", 1);
+    assert.equal(LINE.slice(at, at + 4), "task", "b(1) did not land on the last title word");
+  });
+
+  test("b(2) is the second-from-last word, and an overrun clamps to the FIRST word rather than wrapping", () => {
+    const atSecondLast = wordCaret(LINE, "b", 2);
+    assert.equal(LINE.slice(atSecondLast, atSecondLast + 5), "first");
+    const atOverrun = wordCaret(LINE, "b", 99);
+    assert.equal(atOverrun, atSecondLast, "b did not clamp to the first word on overrun");
+  });
+
+  test("a count of 0 behaves as count 1 — the same floor every other motion applies", () => {
+    assert.equal(wordCaret(LINE, "w", 0), wordCaret(LINE, "w", 1));
+  });
+
+  test("a line with no title returns null — a bare heading marker, chrome only, blank", () => {
+    // "## " (hashes + whitespace + nothing) is a heading with empty text — classifyLine requires
+    // the whitespace after the hashes (HEADING's own `\s+`), so "##" with NO trailing space is not
+    // a heading at all; it falls through to `prose` and IS one "word", which is a real quirk of
+    // classifyLine and not this module's to correct.
+    assert.equal(wordCaret("## ", "w", 1), null);
+    assert.equal(wordCaret("- [ ] ", "w", 1), null);
+    assert.equal(wordCaret("", "w", 1), null);
+    assert.equal(wordCaret("   ", "w", 1), null);
+  });
+});
+
+describe("20. w / b / e through the painter — wordCaret drives enterInsert(offset), same shape x's toggle does", () => {
+  test("w opens INSERT with the caret at the start of the first title word", () => {
+    const v = view();
+    v.focus.focus(1); // "- [ ] first task [[qntm:1]] #task"
+    v.repaint();
+    press(v, "w");
+    assert.equal(v.mode.mode, "INSERT");
+    const line = inputs(v.body)[0];
+    assert.ok(line, "w did not open an editable line");
+    const text = SOURCE.split("\n")[1];
+    assert.equal(line.value, text, "w changed the line's characters");
+    assert.equal(line.selectionStart, text.indexOf("first"));
+    assert.equal(line.selectionEnd, text.indexOf("first"));
+  });
+
+  test("2w lands on the second title word", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "2");
+    press(v, "w");
+    const line = inputs(v.body)[0];
+    const text = SOURCE.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("task"));
+  });
+
+  test("e lands at the END of the first title word", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "e");
+    const line = inputs(v.body)[0];
+    const text = SOURCE.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("first") + "first".length);
+  });
+
+  test("b with no count lands on the LAST title word", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "b");
+    const line = inputs(v.body)[0];
+    const text = SOURCE.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("task"));
+  });
+
+  test("a count that overruns the title clamps to the last word rather than doing nothing or wrapping", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "9");
+    press(v, "w");
+    assert.equal(v.mode.mode, "INSERT", "an overrun count refused the motion instead of clamping");
+    const line = inputs(v.body)[0];
+    const text = SOURCE.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("task"));
+  });
+
+  test("w on the heading — no title at all — does nothing: no <input>, mode stays NORMAL", () => {
+    const v = view();
+    v.focus.focus(0); // "# This Week" — heading text present, so this is NOT the no-title case…
+    v.repaint();
+    // …use a bare heading marker instead ("## ", hashes + whitespace + no text), which
+    // titleSpans defines as having no title.
+    const v2 = view("## \n" + SOURCE.split("\n").slice(1).join("\n"));
+    v2.focus.focus(0);
+    v2.repaint();
+    press(v2, "w");
+    assert.equal(v2.mode.mode, "NORMAL", "w opened INSERT on a line with no title");
+    assert.equal(inputs(v2.body).length, 0);
+  });
+
+  test("round trip: entering INSERT via w and leaving via Escape leaves the source byte-identical", () => {
+    const v = view();
+    v.focus.focus(2); // "- [ ] second task [[qntm:2]] #task"
+    v.repaint();
+    press(v, "w");
+    const line = inputs(v.body)[0];
+    assert.equal(line.value, SOURCE.split("\n")[2], "the input did not hold the exact source line");
+    line.dispatch("keydown", makeEvent({ key: "Escape" }));
+    assert.deepEqual(v.commits, [], "Escape posted an edit");
+    assert.equal(v.mode.mode, "NORMAL");
+    assert.equal(inputs(v.body).length, 0);
+    // Nothing about the FILE moved — v.source (what the next paint reads) is the same string this
+    // view was constructed from, untouched by opening and abandoning an INSERT session on it.
+    assert.equal(v.source, SOURCE);
+  });
+
+  test("w never lands inside the identity stamp or the tag, for every count on every fixture line", () => {
+    // THE TEST THAT MATTERS MOST — every count from 1 past the number of words, on every non-blank
+    // SOURCE line, must land either at a title-word boundary or (for an overrun) clamp to one; it
+    // must never fall inside `[[qntm:N]]` or `#task`.
+    for (const line of SOURCE.split("\n")) {
+      for (const motion of ["w", "b", "e"]) {
+        for (let count = 1; count <= 6; count += 1) {
+          const at = wordCaret(line, motion, count);
+          if (at === null) continue;
+          assert.ok(
+            !(at > line.indexOf("[[") && at < line.indexOf("]]") + 2) || line.indexOf("[[") === -1,
+            `${motion}(${count}) on ${JSON.stringify(line)} landed inside the identity stamp`,
+          );
+          const tagAt = line.indexOf("#task");
+          assert.ok(
+            tagAt === -1 || at <= tagAt || at >= tagAt + "#task".length,
+            `${motion}(${count}) on ${JSON.stringify(line)} landed inside the tag`,
+          );
+        }
+      }
+    }
   });
 });

@@ -817,6 +817,7 @@ import {
   classifyLine,
   indentedLine,
   openLine,
+  wordCaret,
   DraftSurface,
   FocusSurface,
   ModeSurface,
@@ -1685,6 +1686,21 @@ document.addEventListener("keydown", (e) => {
       const markdown = applyEdit(v.markdown, { kind: "set-line", lineIndex: current, text });
       if (markdown !== null) {
         commitLine(v, { lineIndex: current, text, markdown });
+      }
+    } else if (effect.kind === "word") {
+      // `w`/`b`/`e` — `wordCaret` (app/present/word.ts) decides the offset, from the SAME source
+      // string every other motion here reads, never a second opinion parsed in this file. `null`
+      // means the selected line has no title at all (a bare heading marker, a blank line, chrome
+      // with nothing after it) — "does nothing", per the brief, so neither the mode nor the
+      // selection changes and there is nothing to repaint that a repaint would show differently.
+      const line = v.markdown.split("\n")[current] ?? "";
+      const offset = wordCaret(line, effect.motion, effect.count);
+      if (offset !== null) {
+        // `mode.enterInsert(offset)`, NOT something `handleKey` already did — see motions.ts's
+        // slice 4 note for why this effect leaves `#mode` at NORMAL until the caller (here) has
+        // the offset in hand. `focus.lineIndex` is already `current`, so nothing else moves.
+        mode.enterInsert(offset);
+        repaintCurrentView();
       }
     } else {
       // "none" (a bare digit accumulating a count, or a refused `o`/`O`/`x` under a pending count)

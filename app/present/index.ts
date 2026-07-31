@@ -17,7 +17,18 @@
 export { SPECIFICITY, isSilent } from "./levels.js";
 export type { PresentationLevel } from "./levels.js";
 
-export { DEFAULT, RESOLUTION_KEYS, carriesContent, chromeOf, classifyLine, tagSpans } from "./resolution.js";
+export {
+  DEFAULT,
+  RESOLUTION_KEYS,
+  carriesContent,
+  chromeOf,
+  classifyLine,
+  markerSpans,
+  qntmIdSpans,
+  tagSpans,
+  titleSpans,
+  wikiLinkSpans,
+} from "./resolution.js";
 export type {
   Contribution,
   LineShape,
@@ -25,6 +36,7 @@ export type {
   Resolution,
   ResolutionKey,
   TagSpan,
+  WordSpan,
 } from "./resolution.js";
 
 export { readDeclaration } from "./declaration.js";
@@ -42,6 +54,9 @@ export { boundaryLine } from "./boundary.js";
 export type { BoundaryDirection } from "./boundary.js";
 
 export { INDENT_UNIT, indentedLine } from "./indent.js";
+
+export { wordCaret } from "./word.js";
+export type { WordMotion } from "./word.js";
 
 export { DraftSurface } from "./draft.js";
 export type { Draft } from "./draft.js";

@@ -489,6 +489,94 @@ backlog:
     in the monorepo.'
   kind: capability
   state: passing
+- id: vim-normal-mode-slice-4
+  title: '[present] [vim] `{count}w`/`b`/`e` — word jump into INSERT, item 2 of
+    docs/implementation-artifacts/design-the-vim-cursor.md''s ranked order. The caret
+    plumbing already existed (slice 2''s `a`); the new work is a word grammar that
+    counts over the line''s TITLE rather than its raw characters, so `3w` cannot send
+    the caret into an identity stamp, a wiki-link, a tag, or a marker''s date the way
+    a naive count would.'
+  driving_capability: vim-normal-mode-is-a-gesture-not-a-resolution
+  record: '2026-07-31 — SHIPPED. `ModeSurface.enterInsert(caret?)` widened from
+    `"end" | undefined` to `"end" | number | undefined` (one field, one existing
+    `setSelectionRange` call in paint.ts widened to accept any defined hint, clamped
+    into the line''s own length) — no second code path for the caret. The real work:
+    `resolution.ts` gained `titleSpans(line)`, built from three grammars —
+    `qntmIdSpans` (mirrors `parse_qntm_id.py`, per the design document, tested against
+    it), `wikiLinkSpans` (mirrors `parse_wiki_link.py` — WIDER, and the one `titleSpans`
+    actually uses, see below), `markerSpans` (matches by Unicode shape, not a
+    hardcoded emoji list, see below) — and a new pure module, `app/present/word.ts`
+    (same shape as boundary.ts/indent.ts: `ModeSurface` reports only a motion letter
+    and a composed count, `wordCaret` needs `titleSpans` so it lives outside
+    motions.ts, which still imports nothing).
+    `w`/`e` anchor at the title''s START; `b` anchors at its END — there is no
+    established caret column in NORMAL to move backward FROM, so `b`''s count counts
+    from the opposite end `w`/`e`''s does, the same way `G` with no count anchors at
+    the buffer''s end. An overrunning count CLAMPS to the first/last title word,
+    never wraps, never refuses.
+    `w`/`b`/`e` MUST end in INSERT but `handleKey` cannot call its own
+    `enterInsert(offset)` for them — it does not have the offset and must not import
+    the module that computes one — so it reports `{kind: "word", motion, count}` and
+    leaves `#mode` at NORMAL; app/index.html''s caller computes the offset via
+    `wordCaret` and calls `mode.enterInsert(offset)` itself, only if a title word was
+    found. `null` (no title at all — a bare heading marker, a blank line, chrome with
+    nothing after it) does nothing, per the brief, rather than opening INSERT
+    somewhere surprising.
+    TWO CORRECTIONS TO THE DESIGN DOCUMENT, ON REAL EVIDENCE FROM `~/qntm/*.md`
+    (read-only, all five files, some observed to change mid-session by the operator''s
+    own live system — copied into fixtures rather than read live, for exactly that
+    reason). (1) THE STAMP GRAMMAR IS WIDER THAN `[[qntm:N]]`: `~/qntm/habits.md`
+    carries `#requires [[JB to send over Sarasin]]`, a general title-form wiki-link
+    with four words of internal whitespace that the id-only regex would not protect.
+    `line_parser.parse_line` itself calls `parse_wiki_link.parse`
+    (line_parser.py:150,357), not `parse_qntm_id.parse`, to decide a hand-typed
+    line''s bracket chrome — so `wikiLinkSpans` mirrors THAT grammar
+    (`\[\[([^\]]+)\]\]`), strictly contains every span `qntmIdSpans` finds, and is
+    what `titleSpans` uses: a widening of the design document''s ask, not a
+    narrowing. `qntmIdSpans` still exists, still tested against `parse_qntm_id.py`''s
+    own regex per the design document''s instruction, and is real code used elsewhere
+    in the engine (orchestrator.py, render_context_parse.py) — just not the grammar
+    this app needed. (2) MARKERS ARE TWELVE, NOT THREE, AND ARE VOCABULARY, NOT A LIST
+    TO MIRROR: the shipped `config/vocabulary/markers.yaml` declares twelve
+    (`📅 🛫 ✅ 🆕 🔽 ⏫ ☑️ 🎯 ⛔ 📌 🏳️ 💤 🔢`) against the design document''s three, confirmed
+    real (`~/qntm/metrics.md`''s `🎯` on a heading, `~/qntm/this_week.md`''s `☑️`).
+    `parse_marker.py` itself has no frozenset of emoji — it builds its matcher from
+    `token_resolver.marker_token_forms()` — so which glyphs are markers is vocabulary,
+    exactly the split `resolution.ts`''s own `TAG` header draws between closed-code
+    SHAPE and vocabulary-owned MEANING, one layer down. `markerSpans` matches by
+    SHAPE (`\p{Extended_Pictographic}`) rather than by the shipped list, so an
+    operator who adds a 13th marker stays protected; a trailing value is consumed
+    only when it is itself value-shaped (ISO date, integer, decimal — the three
+    `KNOWN_HINTS` `qntm_md/types.py:85` declares), never by naming which markers are
+    value-bearing either. NAMED TRADEOFF: none of `~/qntm/*.md` carries a decorative
+    emoji actually typed into a title, but a shape-matching grammar would skip one if
+    it existed — the safe direction for the failure, since a word target one short of
+    expectation is a surprise and a word target inside chrome is a defect.
+    PROOF: 103 new tests. tests/present-word.test.mjs (new) — the mirrored grammars
+    against the engine''s own regexes with generated sweeps, titleSpans over every
+    classifyLine shape including two real quirks found in the vault (`[>]` as
+    CHECKBOX_GLYPH chrome though TASK calls the line prose; `n#task` with no leading
+    whitespace is not a tag), and THE TEST THAT MATTERS MOST — lines copied verbatim
+    out of all five vault files, every count from 1 through word-count+3, every
+    motion, asserting the caret never lands inside a wiki-link, tag or marker span.
+    tests/present-motions.test.mjs sections 19/19a/20 (the pure reducer, the pure
+    wordCaret arithmetic including the clamp-not-wrap behaviour, the reducer wired to
+    paint() including a round trip through Escape). tests/app-vim-wiring.test.mjs
+    (the same keys fired at document through app/index.html''s own lifted script).
+    npm run check: 470 tests / 91 suites / 0 fail on origin/main before this slice
+    (verified, not assumed), 573 / 100 / 0 fail after (+103/+9, 0 regressions).
+    NOT FLOW-TRACE-VERIFIED, SAME GAP AS SLICES 1-3. No tests/flow_scenarios/*.ts
+    scenario exercises titleSpans/wordCaret and .flow-trace.yaml declares no flow for
+    either, so flow-trace verify . says nothing about this addition either way.
+    NOT VERIFIED IN A REAL BROWSER. No real key event was observed, and in particular
+    `\p{Extended_Pictographic}` — the one genuinely new piece of regex syntax this
+    slice introduces — was checked against Node''s own V8 build and reasoned about
+    from documented, years-shipped browser support for Unicode property escapes,
+    never against a real Safari/Chrome/Firefox. This repo is instrumented
+    DECLARATION-ONLY (evidence tier DECLARED, no runtime verifier), so this green
+    means less than a green in the monorepo.'
+  kind: capability
+  state: passing
 - id: add-the-user-presentation-level
   title: '[present] [stage 5] [HALF A DAY] Add the USER level — the per-person default
     Resolution, held in the server-side user record behind the passkey session, NOT
