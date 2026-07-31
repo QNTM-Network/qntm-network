@@ -370,3 +370,269 @@ export function tagSpans(text: string): readonly TagSpan[] {
   }
   return spans;
 }
+
+/**
+ * A located run of characters a word motion must skip over rather than land inside. Shares its
+ * shape with `TagSpan` rather than reusing it, because a `WordSpan` is never a rendition question
+ * (it has no `text` a painter would show differently) — it exists only for `titleSpans` below.
+ */
+export interface WordSpan {
+  /** Index of the span's first character. */
+  readonly start: number;
+  /** Index one past the span's last character. */
+  readonly end: number;
+}
+
+/**
+ * ── `[[qntm:ID]]` — THE IDENTITY STAMP, MIRRORED FROM ONE NAMED PLACE ──
+ *
+ * Verbatim from the engine, cited so it can be checked rather than trusted:
+ *
+ *   the engine, apps/qntm-md/src/qntm_md/io/parser/parse_qntm_id.py:20-23
+ *     _QNTM_ID_RE = re.compile(
+ *         r"\[\[qntm:([A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?)\]\]",
+ *         re.IGNORECASE,
+ *     )
+ *
+ * `i` (JS's case-insensitive flag) is what `re.IGNORECASE` becomes — the engine's own test suite
+ * (`tests/io/parser/test_parse_qntm_id.py:46`) asserts `[[QNTM:42]]` extracts `"42"`, so the
+ * lowercase-only literal used everywhere else in this file (`~/qntm/*.md`'s own stamps are always
+ * lowercase) would silently disagree with a hand-typed uppercase one.
+ *
+ * `qntmIdSpans` exists to be TESTED against this citation, the way `tagSpans` is tested against
+ * `parse_tag.py`'s. It is not what `titleSpans` uses to build its atoms below — see `wikiLinkSpans`
+ * for why the wider grammar is the one this module actually needs.
+ */
+const QNTM_ID = /\[\[qntm:([A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?)\]\]/gi;
+
+/** Every `[[qntm:ID]]` identity stamp in `text`, in order, with its position. */
+export function qntmIdSpans(text: string): readonly WordSpan[] {
+  const spans: WordSpan[] = [];
+  for (const match of text.matchAll(QNTM_ID)) {
+    const start = match.index ?? 0;
+    spans.push({ start, end: start + match[0].length });
+  }
+  return spans;
+}
+
+/**
+ * ── `[[...]]` — EVERY BRACKETED LINK, NOT ONLY THE IDENTITY-SHAPED ONE ──
+ *
+ * `parse_qntm_id.py` is real code and is really called (`orchestrator.py:831-832`,
+ * `render_context_parse.py:137`) — but NOT by the path that decides what a hand-typed LINE's
+ * trailing chrome is. That path is `line_parser.parse_line`, and its own composition order says so
+ * explicitly (`line_parser.py:79`): "Call `parse_wiki_link.parse(remainder)` … before
+ * directive/tag extraction". `parse_wiki_link.py`'s grammar is wider than an identity stamp:
+ *
+ *   the engine, apps/qntm-md/src/qntm_md/io/parser/parse_wiki_link.py:26
+ *     _WIKI_LINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
+ *
+ * and its own docstring is explicit that BOTH `[[qntm:N]]` and `[[Some Note]]` match it — "form"
+ * (`"qntm_id"` vs `"title"`) is decided AFTER the same bracket grammar matches, not by a different
+ * regex per shape.
+ *
+ * THIS IS A CORRECTION TO WHAT THE DESIGN DOCUMENT ASKED FOR, MADE ON REAL EVIDENCE. Section 5.3
+ * of `design-the-vim-cursor.md` names only the identity stamp. `~/qntm/habits.md:24` (read-only)
+ * carries a line this app must also protect and that a narrower id-only regex would not:
+ *
+ *   - [x] Store all somewhere [[qntm:1723]] #task #work ✅ 2026-07-13 🆕 2026-07-07 #requires [[JB to send over Sarasin]]
+ *
+ * `#requires [[JB to send over Sarasin]]` is outgoing-edge chrome (`renderer.py`'s `chrome_cells`,
+ * emitted LAST, after the markers) and its bracketed target carries FOUR words separated by
+ * whitespace. A word grammar that only recognised `[[qntm:N]]` would treat "JB", "to", "send",
+ * "over" and "Sarasin]]" as five ordinary title words and would happily land `{count}w` between
+ * them — not inside an identity stamp, but inside a structural edge reference all the same, which
+ * a stray keystroke corrupts by the same "absorbed into the title, exit 0, no diagnostic" failure
+ * mode the design document names for the id form. `wikiLinkSpans` is the grammar that actually
+ * protects both, and it strictly contains every span `qntmIdSpans` would find (every `[[qntm:N]]`
+ * is also a `[[...]]`), so using it in `titleSpans` below is a widening, never a narrowing, of what
+ * the design document asked to be skipped.
+ */
+const WIKI_LINK = /\[\[([^\]]+)\]\]/g;
+
+/** Every `[[...]]` bracketed span in `text` — an identity stamp or a title-form link, either way. */
+export function wikiLinkSpans(text: string): readonly WordSpan[] {
+  const spans: WordSpan[] = [];
+  for (const match of text.matchAll(WIKI_LINK)) {
+    const start = match.index ?? 0;
+    spans.push({ start, end: start + match[0].length });
+  }
+  return spans;
+}
+
+/**
+ * ── EMOJI MARKERS — THE ONE ATOM THAT IS GENUINELY VOCABULARY, NOT CODE ──
+ *
+ * `TAG`'s own header (above) draws the line this app otherwise leans on throughout: the tag's
+ * LEXICAL SHAPE is closed code, and only its MEANING is `config/vocabulary/*.yaml`. A marker does
+ * not split that way. `parse_marker.py:64` builds its matcher from
+ * `token_resolver.marker_token_forms()` — there is no frozenset of emoji in the engine at all — so
+ * WHICH GLYPHS ARE MARKERS is itself vocabulary, declared in `config/vocabulary/markers.yaml`.
+ *
+ * The design document names three, all seen on one line (`📅 🛫 🆕`). Reading the shipped config
+ * finds TWELVE, not three: `📅 🛫 ✅ 🆕 🔽 ⏫ ☑️ 🎯 ⛔ 📌 🏳️ 💤 🔢`
+ * (`apps/qntm-md/config/vocabulary/markers.yaml`, every row) — confirmed against real content,
+ * `~/qntm/metrics.md` carries `🎯` (a render-only "par" marker on a heading, not a task line) and
+ * `~/qntm/this_week.md` / `habits.md` carry `☑️` (render-only "done_task_count"), neither of which
+ * the design document's three-item list would have caught.
+ *
+ * BUT HARDCODING THOSE TWELVE WOULD BE THE SAME MISTAKE THE TAG HEADER WARNS AGAINST, JUST ONE
+ * REPO LAYER DOWN: a literal list mirrors THIS INSTANCE'S current declaration, not the grammar, and
+ * an operator who adds a thirteenth marker to his own vocabulary would silently get no protection
+ * from a grammar that is supposed to protect him. So this function does not match a list of emoji.
+ * It matches the SHAPE the engine's own comment insists every marker keeps
+ * (`markers.yaml:32-36`, on why `asserted_state` uses two glyphs rather than one ligature): "every
+ * token here is a genuinely single grapheme" — `\p{Extended_Pictographic}`, ES2018's Unicode
+ * property escape for exactly that class, with an optional trailing `️` (variation selector
+ * 16) for a base character below the astral plane that still renders as an emoji (`☑️`, `🏳️`).
+ *
+ * VALUE-BEARING MARKERS consume a trailing token too — `parse_marker.py:98-99` always treats the
+ * FIRST whitespace-separated run after a value-bearing marker as its value, splitting on the same
+ * rule this function reads back (`raw_token = stripped.split(None, 1)[0]`). Which markers are
+ * value-bearing is ALSO vocabulary (`extraction_hint` in `markers.yaml`), so the same argument
+ * applies: rather than hardcode the seven that currently carry one, a trailing run is consumed
+ * only when its own SHAPE says it is a value — an ISO date, an integer, or a decimal, the three
+ * `KNOWN_HINTS` the engine's own type file declares (`qntm_md/types.py:85`,
+ * `trailing_date`/`trailing_int`/`trailing_float`). A static marker (`⛔`, `📌`, …) is never
+ * followed by something value-shaped in real content, so this costs nothing there; a value-bearing
+ * one always is, so this catches every row in the shipped config without naming one of them.
+ *
+ * WHAT THIS DOES NOT CATCH: a genuinely decorative emoji a person typed INTO a title (`"Buy 🎂 for
+ * the party"`). None of `~/qntm/*.md` (read-only, all five files) contains one — every emoji in
+ * every line read for this change is trailing chrome — so this is a real, named, unverified-against
+ * counter-evidence tradeoff rather than a silent one: an operator who starts writing decorative
+ * emoji into a title would find `{count}w` skipping over it. That is the SAFE direction for the
+ * failure to fall in — a word target that is one word short of where a person expects is a
+ * surprise; a word target sitting inside chrome that silently corrupts a stamp is a defect. See the
+ * report for this change for the same point made in the open.
+ */
+const MARKER_GLYPH = /\p{Extended_Pictographic}️?/gu;
+const MARKER_VALUE = /^(?:\d{4}-\d{2}-\d{2}|\d+(?:\.\d+)?)$/;
+
+/** Every marker glyph in `text`, each extended to include its trailing value when it has one. */
+export function markerSpans(text: string): readonly WordSpan[] {
+  const spans: WordSpan[] = [];
+  for (const match of text.matchAll(MARKER_GLYPH)) {
+    const glyphStart = match.index ?? 0;
+    const glyphEnd = glyphStart + match[0].length;
+    const after = text.slice(glyphEnd);
+    const leadingSpace = /^\s+/.exec(after);
+    let end = glyphEnd;
+    if (leadingSpace !== null) {
+      const rest = after.slice(leadingSpace[0].length);
+      const token = /^\S+/.exec(rest);
+      if (token !== null && MARKER_VALUE.test(token[0])) {
+        end = glyphEnd + leadingSpace[0].length + token[0].length;
+      }
+    }
+    spans.push({ start: glyphStart, end });
+  }
+  return spans;
+}
+
+/**
+ * ── `titleSpans` — WHERE THE THIRD WORD ACTUALLY IS ──
+ *
+ * `design-the-vim-cursor.md` section 2.3: "the third word counted while looking at NORMAL is not
+ * the third word of the source string" — the operator sees a checkbox widget and a CSS margin
+ * where the source holds fifteen characters of chrome, then a title, then an identity stamp, tags
+ * and markers he never meant to count past. This is the grammar that counts what he counts: every
+ * ordered run of non-whitespace characters in the line's TITLE, with chrome, the identity/wiki-link
+ * stamp, every tag and every marker cut out first as atoms a word motion skips rather than enters.
+ *
+ * ── WHERE THE TITLE STARTS, PER SHAPE ──
+ *
+ * Reuses `classifyLine` rather than re-deciding what a line is:
+ *
+ *   * checkbox — `shape.tail` is already the chrome-free remainder (`TASK`'s own capture group);
+ *     the title starts at `line.length - shape.tail.length`, which is exact because `TASK` anchors
+ *     its own tail capture to the end of the line.
+ *   * heading — `shape.text` is the same kind of remainder, for the same reason (`HEADING` anchors
+ *     its own capture to the end of the line too).
+ *   * prose — `classifyLine` has already decided this line is NEITHER a checkbox NOR a heading, so
+ *     what chrome remains is exactly `carriesContent`'s own "bullet then checkbox glyph" sequence
+ *     (`BULLET`, `CHECKBOX_GLYPH`, both above) — the SAME two regexes, asked in the SAME order, so
+ *     a line like `- [>] Reminder …` (a real line, `~/qntm/habits.md:5` — `>` is not `TASK`'s
+ *     `( |x|X)`, so `classifyLine` calls it prose, but `CHECKBOX_GLYPH`'s `\[.\]` accepts any
+ *     single character between the brackets, so the glyph is still recognised as chrome here) has
+ *     its title found the same way `carriesContent` already would have judged it.
+ *   * blank — no title at all. Returns `[]`: "a line with no title … does nothing", per the brief.
+ *
+ * ── WHY ATOMS ARE FOUND IN THAT ORDER, AND WHY IT MATTERS ──
+ *
+ * `wikiLinkSpans`, then `tagSpans`, then `markerSpans` — the same order `line_parser.parse_line`
+ * extracts them in (`line_parser.py:79-89`: wiki-link before tag, tag before marker). The order is
+ * not cosmetic: a bracketed title-form link is extracted BEFORE tag parsing precisely so a
+ * space-then-`#` INSIDE `[[...]]` is not read as a tag (`line_parser.py:80-81`'s own comment says
+ * so). Atoms found later that would start strictly inside an atom already accepted are dropped —
+ * the earlier grammar's span wins, mirroring the engine's own extraction order rather than
+ * re-deciding one independently for this app.
+ *
+ * ── WHY A WORD IS "A RUN THE ATOMS DID NOT CLAIM", NOT "TEXT SPLIT ON WHITESPACE THEN FILTERED" ──
+ *
+ * A value-bearing marker's atom spans A WHITESPACE RUN — `📅 2026-08-28` is glyph, space, date,
+ * ONE atom — so splitting on whitespace FIRST and discarding whichever pieces overlap an atom
+ * SECOND would still treat `2026-08-28` as its own word between two splits. This walks the content
+ * once, character by character, and a position already inside an atom is never the start of a
+ * word — which is what stops `{count}w` from ever counting into the date half of a marker cell.
+ */
+export function titleSpans(line: string): readonly WordSpan[] {
+  const shape = classifyLine(line);
+
+  let content: string;
+  let prefixLen: number;
+  if (shape.kind === "blank") {
+    return [];
+  } else if (shape.kind === "heading") {
+    content = shape.text;
+    prefixLen = line.length - shape.text.length;
+  } else if (shape.kind === "checkbox") {
+    content = shape.tail;
+    prefixLen = line.length - shape.tail.length;
+  } else {
+    // prose — carriesContent's own "bullet then checkbox glyph" chrome sequence, see above.
+    const bullet = BULLET.exec(line);
+    let prefix = bullet !== null ? bullet[0].length : 0;
+    let rest = bullet !== null ? line.slice(prefix) : line;
+    const glyph = CHECKBOX_GLYPH.exec(rest);
+    if (glyph !== null) {
+      prefix += glyph[0].length;
+      rest = rest.slice(glyph[0].length);
+    }
+    content = rest;
+    prefixLen = prefix;
+  }
+
+  const claims: WordSpan[] = [];
+  for (const span of [...wikiLinkSpans(content), ...tagSpans(content), ...markerSpans(content)]) {
+    // Drop a later grammar's span if it starts inside a span an earlier, higher-priority grammar
+    // already claimed — see the header for why the priority order is the engine's own.
+    if (!claims.some((claimed) => span.start >= claimed.start && span.start < claimed.end)) {
+      claims.push(span);
+    }
+  }
+  claims.sort((a, b) => a.start - b.start);
+
+  const atomAt = (index: number): WordSpan | undefined =>
+    claims.find((claim) => index >= claim.start && index < claim.end);
+
+  const words: WordSpan[] = [];
+  let i = 0;
+  while (i < content.length) {
+    const atom = atomAt(i);
+    if (atom !== undefined) {
+      i = atom.end;
+      continue;
+    }
+    if (/\s/.test(content[i] ?? "")) {
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (i < content.length && atomAt(i) === undefined && !/\s/.test(content[i] ?? "")) {
+      i += 1;
+    }
+    words.push({ start: start + prefixLen, end: i + prefixLen });
+  }
+  return words;
+}

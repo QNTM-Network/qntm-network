@@ -236,3 +236,107 @@ describe("> and < through the real page's own wiring", () => {
     assert.equal(page.__focusIndex(), 0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// SLICE 4 — w, b, e, through the same real document-level wiring.
+//
+// tests/present-motions.test.mjs sections 19/19a/20 already prove the reducer (`w`/`b`/`e` report
+// motion+count, `word.ts`'s `wordCaret` decides the offset) and the paint.ts wiring (numeric caret
+// hints reach `setSelectionRange`) by hand-assembling the same dispatch app/index.html's own
+// keydown handler performs. This is the missing link for THIS gesture specifically: that the
+// page's real `effect.kind === "word"` branch — added alongside "move"/"boundary"/"open" — calls
+// `wordCaret` and `mode.enterInsert(offset)` the way it is meant to, through the actual script.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("w / b / e open INSERT at a title word, through the real page's own wiring", () => {
+  test("w lands the caret at the start of the first title word", () => {
+    paintFresh();
+    press("j"); // select line 1 — "- [ ] first task [[qntm:1]] #task"
+    press("w");
+    assert.equal(page.__vimMode(), "INSERT");
+    const line = inputs(elements.get("viewBody"))[0];
+    assert.ok(line, "w did not open an editable line through the page's own wiring");
+    const text = VIEW.markdown.split("\n")[1];
+    assert.equal(line.value, text, "w changed the line's characters");
+    assert.equal(line.selectionStart, text.indexOf("first"));
+    assert.equal(line.selectionEnd, text.indexOf("first"));
+  });
+
+  test("2w lands on the second title word", () => {
+    paintFresh();
+    press("j");
+    press("2");
+    press("w");
+    const line = inputs(elements.get("viewBody"))[0];
+    const text = VIEW.markdown.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("task"));
+  });
+
+  test("e lands at the end of the first title word", () => {
+    paintFresh();
+    press("j");
+    press("e");
+    const line = inputs(elements.get("viewBody"))[0];
+    const text = VIEW.markdown.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("first") + "first".length);
+  });
+
+  test("b with no count lands on the LAST title word — there is no established caret to move back from", () => {
+    paintFresh();
+    press("j");
+    press("b");
+    const line = inputs(elements.get("viewBody"))[0];
+    const text = VIEW.markdown.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("task"));
+  });
+
+  test("a count past the title's last word clamps there instead of refusing or wrapping", () => {
+    paintFresh();
+    press("j");
+    press("9");
+    press("w");
+    assert.equal(page.__vimMode(), "INSERT", "an overrun count refused the motion");
+    const line = inputs(elements.get("viewBody"))[0];
+    const text = VIEW.markdown.split("\n")[1];
+    assert.equal(line.selectionStart, text.indexOf("task"));
+  });
+
+  test("w on the heading — VIEW's line 0, 'This Week' as text but no [[qntm:]] chrome — still opens INSERT normally, proving titleSpans is not checkbox-only", () => {
+    paintFresh(); // line 0, "# This Week"
+    press("w");
+    assert.equal(page.__vimMode(), "INSERT");
+    const line = inputs(elements.get("viewBody"))[0];
+    const text = VIEW.markdown.split("\n")[0];
+    assert.equal(line.selectionStart, text.indexOf("This"));
+  });
+
+  test("w on a line with no title does nothing — no network call, no mode or selection change", () => {
+    // Reuses the "x on a heading with no checkbox" posture: nothing here should reach the network,
+    // so `graphData` (module state every other test in this file shares) is fine to leave as is.
+    page.__setGraphData({
+      snapshot: {
+        generated_at: "2026-07-31T00:00:00Z",
+        views: [{ ...VIEW, markdown: "## \n" + VIEW.markdown.split("\n").slice(1).join("\n") }],
+      },
+    });
+    paintFresh(); // "## " — a bare heading marker, no title
+    press("w");
+    assert.equal(page.__vimMode(), "NORMAL", "w opened INSERT on a line with no title");
+    assert.equal(page.__focusIndex(), 0, "w moved the selection, which it must never do");
+    assert.equal(inputs(elements.get("viewBody")).length, 0);
+    // Restore the shared VIEW for every test that runs after this one in the file.
+    page.__setGraphData({ snapshot: { generated_at: "2026-07-31T00:00:00Z", views: [VIEW] } });
+  });
+
+  test("Escape after w leaves NORMAL and posts nothing — the round trip through the real page", () => {
+    paintFresh();
+    press("j");
+    press("j"); // line 2 — "- [ ] second task…"
+    press("w");
+    const line = inputs(elements.get("viewBody"))[0];
+    line.dispatch("keydown", makeEvent({ key: "Escape" }));
+    assert.equal(page.__vimMode(), "NORMAL");
+    assert.equal(page.__focusIndex(), 2, "Escape moved the selection instead of only leaving INSERT");
+    assert.equal(inputs(elements.get("viewBody")).length, 0);
+  });
+});

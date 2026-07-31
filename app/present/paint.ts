@@ -600,15 +600,20 @@ export function paint(
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       (input as HTMLInputElement).focus?.();
-      // `a`'S CARET, AND THE ONLY PLACE IT IS EMBODIED. `mode.takeCaretHint()` is data motions.ts
-      // already decided (`enterInsert("end")`); turning "end" into a real selection range is a DOM
-      // fact the painter builds, not a decision — the same family as `focus === undefined ?
-      // rawText(...) : rawInput(...)`. `i`/Enter/a mouse click leave the hint unset, so the caret
-      // lands wherever it always did; nothing here changes for them.
+      // THE CARET SEED, AND THE ONLY PLACE IT IS EMBODIED. `mode.takeCaretHint()` is data
+      // motions.ts already decided (`enterInsert("end")` for `a`, `enterInsert(offset)` for
+      // `w`/`b`/`e` via app/index.html's own call into `wordCaret`); turning it into a real
+      // selection range is a DOM fact the painter builds, not a decision — the same family as
+      // `focus === undefined ? rawText(...) : rawInput(...)`. `i`/Enter/a mouse click leave the
+      // hint unset, so the caret lands wherever it always did; nothing here changes for them.
       const caret = mode?.takeCaretHint();
-      if (caret === "end") {
-        const end = lineSource.length;
-        (input as HTMLInputElement).setSelectionRange?.(end, end);
+      if (caret !== undefined) {
+        // Clamped into the line's own length — defensive, not load-bearing: every caller that
+        // computes a number (word.ts's `wordCaret`) derives it from this SAME `lineSource` via
+        // `titleSpans`, so it is already in range. The clamp is what stops a seed computed against
+        // a source that has since moved from placing a caret outside the string it is shown in.
+        const at = caret === "end" ? lineSource.length : Math.max(0, Math.min(caret, lineSource.length));
+        (input as HTMLInputElement).setSelectionRange?.(at, at);
       }
     }
   };

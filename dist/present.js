@@ -88,6 +88,97 @@ function tagSpans(text) {
   }
   return spans;
 }
+var QNTM_ID = /\[\[qntm:([A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?)\]\]/gi;
+function qntmIdSpans(text) {
+  const spans = [];
+  for (const match of text.matchAll(QNTM_ID)) {
+    const start = match.index ?? 0;
+    spans.push({ start, end: start + match[0].length });
+  }
+  return spans;
+}
+var WIKI_LINK = /\[\[([^\]]+)\]\]/g;
+function wikiLinkSpans(text) {
+  const spans = [];
+  for (const match of text.matchAll(WIKI_LINK)) {
+    const start = match.index ?? 0;
+    spans.push({ start, end: start + match[0].length });
+  }
+  return spans;
+}
+var MARKER_GLYPH = /\p{Extended_Pictographic}️?/gu;
+var MARKER_VALUE = /^(?:\d{4}-\d{2}-\d{2}|\d+(?:\.\d+)?)$/;
+function markerSpans(text) {
+  const spans = [];
+  for (const match of text.matchAll(MARKER_GLYPH)) {
+    const glyphStart = match.index ?? 0;
+    const glyphEnd = glyphStart + match[0].length;
+    const after = text.slice(glyphEnd);
+    const leadingSpace = /^\s+/.exec(after);
+    let end = glyphEnd;
+    if (leadingSpace !== null) {
+      const rest = after.slice(leadingSpace[0].length);
+      const token = /^\S+/.exec(rest);
+      if (token !== null && MARKER_VALUE.test(token[0])) {
+        end = glyphEnd + leadingSpace[0].length + token[0].length;
+      }
+    }
+    spans.push({ start: glyphStart, end });
+  }
+  return spans;
+}
+function titleSpans(line) {
+  const shape = classifyLine(line);
+  let content;
+  let prefixLen;
+  if (shape.kind === "blank") {
+    return [];
+  } else if (shape.kind === "heading") {
+    content = shape.text;
+    prefixLen = line.length - shape.text.length;
+  } else if (shape.kind === "checkbox") {
+    content = shape.tail;
+    prefixLen = line.length - shape.tail.length;
+  } else {
+    const bullet = BULLET.exec(line);
+    let prefix = bullet !== null ? bullet[0].length : 0;
+    let rest = bullet !== null ? line.slice(prefix) : line;
+    const glyph = CHECKBOX_GLYPH.exec(rest);
+    if (glyph !== null) {
+      prefix += glyph[0].length;
+      rest = rest.slice(glyph[0].length);
+    }
+    content = rest;
+    prefixLen = prefix;
+  }
+  const claims = [];
+  for (const span of [...wikiLinkSpans(content), ...tagSpans(content), ...markerSpans(content)]) {
+    if (!claims.some((claimed) => span.start >= claimed.start && span.start < claimed.end)) {
+      claims.push(span);
+    }
+  }
+  claims.sort((a, b) => a.start - b.start);
+  const atomAt = (index) => claims.find((claim) => index >= claim.start && index < claim.end);
+  const words = [];
+  let i = 0;
+  while (i < content.length) {
+    const atom = atomAt(i);
+    if (atom !== void 0) {
+      i = atom.end;
+      continue;
+    }
+    if (/\s/.test(content[i] ?? "")) {
+      i += 1;
+      continue;
+    }
+    const start = i;
+    while (i < content.length && atomAt(i) === void 0 && !/\s/.test(content[i] ?? "")) {
+      i += 1;
+    }
+    words.push({ start: start + prefixLen, end: i + prefixLen });
+  }
+  return words;
+}
 
 // app/present/declaration.ts
 var NOTE = "note";
@@ -239,7 +330,11 @@ var ModeSurface = class {
    *
    * `caret` IS THE PARAMETER `a` NEEDED, NOT A SECOND METHOD. `i`/Enter/a mouse click all pass
    * nothing (unspecified — the `<input>` gets whatever position it always got, undisturbed) and
-   * `a` passes `"end"`. See `takeCaretHint` for how the painter reads it back.
+   * `a` passes `"end"`. `w`/`b`/`e` (slice 4) pass a NUMBER — the offset `word.ts`'s `wordCaret`
+   * computed — which is why this parameter is `"end" | number` rather than the narrower `"end"`
+   * slice 1 shipped: a caret seed is a column, and `"end"` was always shorthand for "the column
+   * one past the last character", not a fact any type poorer than a number should have to name.
+   * See `takeCaretHint` for how the painter reads it back.
    */
   enterInsert(caret) {
     this.#mode = "INSERT";
@@ -364,6 +459,12 @@ var ModeSurface = class {
         return { handled: true, effect: { kind: "indent", direction: "in", count: pending ?? 1 } };
       case "<":
         return { handled: true, effect: { kind: "indent", direction: "out", count: pending ?? 1 } };
+      case "w":
+        return { handled: true, effect: { kind: "word", motion: "w", count: pending ?? 1 } };
+      case "b":
+        return { handled: true, effect: { kind: "word", motion: "b", count: pending ?? 1 } };
+      case "e":
+        return { handled: true, effect: { kind: "word", motion: "e", count: pending ?? 1 } };
       default:
         return { handled: false, effect: { kind: "none" } };
     }
@@ -412,6 +513,25 @@ function indentedLine(line, direction, count) {
   const rest = line.slice(currentLength);
   const units = direction === "in" ? Math.floor(currentLength / INDENT_UNIT) + count : Math.max(0, Math.ceil(currentLength / INDENT_UNIT) - count);
   return " ".repeat(units * INDENT_UNIT) + rest;
+}
+
+// app/present/word.ts
+function wordCaret(line, motion, count) {
+  const words = titleSpans(line);
+  if (words.length === 0) {
+    return null;
+  }
+  const n = Math.max(1, count);
+  if (motion === "b") {
+    const index2 = Math.max(0, words.length - n);
+    return words[index2]?.start ?? null;
+  }
+  const index = Math.min(n - 1, words.length - 1);
+  const word = words[index];
+  if (word === void 0) {
+    return null;
+  }
+  return motion === "e" ? word.end : word.start;
 }
 
 // app/present/draft.ts
@@ -728,9 +848,9 @@ function paint(body, source, context, deps) {
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
       const caret = mode?.takeCaretHint();
-      if (caret === "end") {
-        const end = lineSource.length;
-        input.setSelectionRange?.(end, end);
+      if (caret !== void 0) {
+        const at = caret === "end" ? lineSource.length : Math.max(0, Math.min(caret, lineSource.length));
+        input.setSelectionRange?.(at, at);
       }
     }
   };
@@ -858,11 +978,16 @@ export {
   classifyLine,
   indentedLine,
   isSilent,
+  markerSpans,
   openLine,
   paint,
   presentationFromDeclaration,
+  qntmIdSpans,
   readDeclaration,
   seedFor,
-  tagSpans
+  tagSpans,
+  titleSpans,
+  wikiLinkSpans,
+  wordCaret
 };
 //# sourceMappingURL=present.js.map

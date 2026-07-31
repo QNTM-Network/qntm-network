@@ -79,6 +79,21 @@
  *   already has. `ModeSurface` still imports nothing; `boundary.ts` imports `classifyLine` and
  *   nothing else, and is not this file.
  *
+ * ── SLICE 4 (2026-07-31): `w`, `b`, `e` — word jump into INSERT ──
+ *
+ * SAME SHAPE AS `{`/`}`/`>`/`<`, ONE STEP FURTHER. Where the count-th TITLE word starts or ends
+ * needs `titleSpans`, which needs `classifyLine` — `resolution.ts` again — so this module reports
+ * only a motion letter (`"w"`/`"b"`/`"e"`) and a composed count; `word.ts`'s `wordCaret` turns that
+ * into a caret offset, or `null` on a line with no title. The one way this differs from `{`/`}` and
+ * `>`/`<`: those effects leave `Mode` untouched (a line move, an edit) and this one MUST end in
+ * INSERT, which is `enterInsert(caret)`'s job — but this module still cannot call it, because it
+ * does not have the offset. So `handleKey` does NOT flip `#mode` for `w`/`b`/`e`; the caller
+ * computes the offset from the reported motion and count, then calls `mode.enterInsert(offset)`
+ * itself if one was found, exactly the way `{`/`}`'s caller calls `focus.focus(boundaryLine(...))`
+ * rather than this module calling it. See word.ts for the full argument, including why a count
+ * with no established caret column is anchored to a fixed end of the title rather than to a
+ * remembered position.
+ *
  * ── SLICE 3 (2026-07-31): `>` and `<` — indent and outdent the selected line ──
  *
  * SAME SHAPE AS `{`/`}`, FOR THE SAME REASON. Turning a keystroke into a new leading-whitespace
@@ -170,7 +185,15 @@ export type NormalEffect =
    * `indent.ts`'s job (this module still does not import it) — so it reports direction and the
    * same composed count every other motion reports.
    */
-  | { readonly kind: "indent"; readonly direction: "in" | "out"; readonly count: number };
+  | { readonly kind: "indent"; readonly direction: "in" | "out"; readonly count: number }
+  /**
+   * `w`/`b`/`e` asked to jump `count` title words and enter INSERT there. This module cannot
+   * compute the caret OFFSET that lands on — that needs `titleSpans` (resolution.ts), which is
+   * `word.ts`'s job (this module still does not import it) — so it reports the motion letter and
+   * the same composed count every other motion reports. The caller calls `wordCaret`, then this
+   * surface's own `enterInsert(offset)` if one was found; `handleKey` does not flip `#mode` here.
+   */
+  | { readonly kind: "word"; readonly motion: "w" | "b" | "e"; readonly count: number };
 
 /** One keystroke's outcome: whether it was consumed, and what it did. */
 export interface NormalKeyOutcome {
@@ -191,7 +214,7 @@ export class ModeSurface {
   #mode: Mode = "NORMAL";
   #count = "";
   #pendingG = false;
-  #caretHint: "end" | undefined = undefined;
+  #caretHint: "end" | number | undefined = undefined;
 
   get mode(): Mode {
     return this.#mode;
@@ -204,9 +227,13 @@ export class ModeSurface {
    *
    * `caret` IS THE PARAMETER `a` NEEDED, NOT A SECOND METHOD. `i`/Enter/a mouse click all pass
    * nothing (unspecified — the `<input>` gets whatever position it always got, undisturbed) and
-   * `a` passes `"end"`. See `takeCaretHint` for how the painter reads it back.
+   * `a` passes `"end"`. `w`/`b`/`e` (slice 4) pass a NUMBER — the offset `word.ts`'s `wordCaret`
+   * computed — which is why this parameter is `"end" | number` rather than the narrower `"end"`
+   * slice 1 shipped: a caret seed is a column, and `"end"` was always shorthand for "the column
+   * one past the last character", not a fact any type poorer than a number should have to name.
+   * See `takeCaretHint` for how the painter reads it back.
    */
-  enterInsert(caret?: "end"): void {
+  enterInsert(caret?: "end" | number): void {
     this.#mode = "INSERT";
     this.#caretHint = caret;
     this.#count = "";
@@ -222,7 +249,7 @@ export class ModeSurface {
    * operator has since moved the caret by hand) cannot reapply it. The painter calls this exactly
    * once, at the moment it builds the `<input>` the hint was for.
    */
-  takeCaretHint(): "end" | undefined {
+  takeCaretHint(): "end" | number | undefined {
     const hint = this.#caretHint;
     this.#caretHint = undefined;
     return hint;
@@ -354,6 +381,16 @@ export class ModeSurface {
         return { handled: true, effect: { kind: "indent", direction: "in", count: pending ?? 1 } };
       case "<":
         return { handled: true, effect: { kind: "indent", direction: "out", count: pending ?? 1 } };
+      case "w":
+        // A MOTION LIKE EVERY OTHER ONE — the count composes exactly as `{`/`}`/`>`/`<`'s already
+        // do. `wordCaret` (app/present/word.ts) decides the actual offset and whether one exists;
+        // this only decides the motion letter and count. See the header for why `#mode` does NOT
+        // change here, unlike `i`/Enter/`a`.
+        return { handled: true, effect: { kind: "word", motion: "w", count: pending ?? 1 } };
+      case "b":
+        return { handled: true, effect: { kind: "word", motion: "b", count: pending ?? 1 } };
+      case "e":
+        return { handled: true, effect: { kind: "word", motion: "e", count: pending ?? 1 } };
       default:
         return { handled: false, effect: { kind: "none" } };
     }
