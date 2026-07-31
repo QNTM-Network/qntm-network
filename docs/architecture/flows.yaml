@@ -473,3 +473,39 @@ forbidden_flows:
       Paired with a runtime falsifier rather than left as a static rule: the `is immune to a
       corrupted DOM` test corrupts every rendered element and then uses the affordance, asserting
       the posted markdown is unaffected. Mutation-proven 2026-07-30.
+
+  # Added 2026-07-31 with the write's base (`a-write-refuses-a-stale-base`). Same rule again, and
+  # this module has its own reason for needing it.
+
+  - id: base-never-touches-the-dom
+    from: app/present/base
+    to:   app/present/paint
+    reason: >
+      THE BASE IS WHAT THE SERVER LAST SENT FOR A FILE, and the one thing that could destroy it as
+      a precondition is deriving it from the page instead of from the string the server sent. The
+      app posts the WHOLE FILE and the server overwrites what it is sent, so a base read off the
+      rendered document would be a precondition that describes the projection rather than the
+      source — it would match whatever is on screen, refuse nothing, and be indistinguishable from
+      the silence this module exists to end.
+
+      It is also the module most likely to be "helped" into reaching for a clock rather than the
+      DOM, which the tool cannot see and tests/present-base.test.mjs therefore proves directly by
+      making `Date.now` throw for the whole of a drive. A base with an age invites a rule about how
+      old is too old; the surface holds the STRING, so the answer is exact and no timer is needed.
+
+  # ── WHAT THE WRITE PATH'S NEW HALF DOES *NOT* DECLARE, SAID RATHER THAN LEFT IMPLIED ──────
+  #
+  # `app/present/base.ts` gets no `expected_flows` entry, and that is a measurement rather than an
+  # omission. Its only caller is `app/index.html` — `writeFile`, the one place a file is posted —
+  # and this file's own header plus `.flow-trace.yaml` both record why that caller is invisible:
+  # capture is a node module-load hook and node cannot import an HTML document. There is no
+  # TS-to-TS edge to declare, because the module deliberately imports nothing and nothing in
+  # `app/present/` imports it: the base is a fact about a FILE, the painter's job stops at handing
+  # up the string an edit was applied to (`LineCommit.source`), and a painter that hashed would be
+  # a painter that knows what a wire is.
+  #
+  # A scenario would therefore observe zero flows while still spending the observer's budget, which
+  # `.flow-trace.yaml` measures as costing the OTHER scenarios their last edges. The structural
+  # claims that would have lived in one (it imports nothing; it touches no DOM, no fetch and no
+  # clock) are proven in tests/present-base.test.mjs section 0 instead, under `node --test`, where
+  # that config says there is no budget. This paragraph is the declaration that the gap is known.

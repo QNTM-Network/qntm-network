@@ -848,6 +848,8 @@ import {
   indentedLine,
   openLine,
   wordCaret,
+  baseOf,
+  BaseSurface,
   DraftSurface,
   FocusSurface,
   ModeSurface,
@@ -1008,6 +1010,16 @@ const draftLine = new DraftSurface();
 // selects one with `j`/`k` and presses `i`/Enter. Read motions.ts's own header before assuming
 // this is "the MODE level, stage 4" (reading vs authoring) — it is a deliberately different rung.
 const mode = new ModeSurface();
+
+// WHAT THE SERVER LAST SENT FOR THE FILE ON SCREEN (app/present/base.ts). One surface for the page,
+// same reason as the three above — it has to survive the repaint it describes.
+//
+// IT IS A PER-FILE FACT AND `focus` HOLDS A PER-LINE ONE. They are not two halves of one thing and
+// must not be merged: the anchor answers "where did my cursor go when the world moved", this
+// answers "is the copy of the file this save was computed from the copy the server has". A cursor
+// that resolved perfectly tells you nothing about the second question, and that is exactly the
+// combination that loses a cycle's output.
+const served = new BaseSurface();
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
@@ -1212,6 +1224,25 @@ let paintedViewId = null;
  */
 let cursorNote = "";
 
+/**
+ * THE DIVERGENCE, HELD FOR THE SAME REASON AND ON A LONGER LEASH.
+ *
+ * A stale base is found at the moment a write LEAVES and the operator is still looking at the line
+ * he just left; the freshness line is then overwritten twice before he could read it — by
+ * "syncing…", and ~14 s later by `sayAsOf` after the cycle returns. So this sentence is said
+ * immediately AND carried, and it is deliberately NOT cleared by `paintView`: the paint it has to
+ * survive is the one the write's own answer causes. `sayAsOf` and the two failure paths consume it.
+ */
+let writeNote = "";
+
+/** ` · <note>` for each note that has something to say, consuming them. Empty when neither has. */
+function takeNotes() {
+  const notes = [cursorNote, writeNote].filter((note) => note !== "");
+  cursorNote = "";
+  writeNote = "";
+  return notes.map((note) => ` · ${note}`).join("");
+}
+
 function paintView(id) {
   // A PROJECTION ARRIVING IS NOT THE SAME EVENT AS A VIEW CHANGE, and this one boolean is the whole
   // of the difference. Both come through this function — it is the only place a view is chosen or
@@ -1245,6 +1276,13 @@ function paintView(id) {
   // deliberately blurred focus (`o`/`O` opening a draft) has to survive the repaints in between.
   const entering = graphData?.snapshot?.views.find((x) => x.id === id);
   if (entering !== undefined) {
+    // THE BASE IS TAKEN HERE AND NOWHERE ELSE, from the markdown the server sent, in the same call
+    // that installs it for painting — the discipline `focus`'s anchor already follows, applied to a
+    // per-file fact. This function is the only place a view is chosen or re-read from the server, so
+    // a base taken here can never describe a projection the painter was not handed. It is REPLACED
+    // rather than accumulated: one base, for the file on screen, because a base that outlives the
+    // projection it came from is a lie about the server's copy.
+    served.take(entering.path, entering.markdown);
     // THE WORLD ARRIVED IN THE VIEW HE IS ALREADY IN — ASK BY IDENTITY, NOT BY POSITION. The clamp
     // below is the ONLY thing that used to happen here, and a clamp cannot help with either of the
     // two failures this row measured against unmodified main (see app/present/instance.ts's
@@ -1307,17 +1345,16 @@ function reportCursorReading(reading) {
 }
 
 /**
- * "as of <when> · N queued", plus whatever `paintView` just found out about the cursor.
+ * "as of <when> · N queued", plus whatever `paintView` just found out about the cursor, plus
+ * whatever the last write found out about its base.
  *
  * ONE FUNCTION, THREE CALLERS, because three copies of this string is how the three of them would
- * come to disagree about whether a refusal survives. The note is consumed: it describes one
- * projection arriving, not a state the page is in.
+ * come to disagree about whether a refusal survives. The notes are consumed: each describes one
+ * event — a projection arriving, a write leaving — not a state the page is in.
  */
 function sayAsOf(data) {
   const when = new Date(data.snapshot.generated_at).toLocaleString();
-  const note = cursorNote === "" ? "" : ` · ${cursorNote}`;
-  cursorNote = "";
-  $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued${note}`;
+  $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued${takeNotes()}`;
 }
 
 /**
@@ -1404,6 +1441,83 @@ function updateVimBadge() {
   badge.classList.toggle("vim-badge-insert", mode.mode === "INSERT");
 }
 
+/**
+ * WHAT THE OPERATOR IS TOLD WHEN THE BASE OF HIS SAVE IS NOT THE FILE THE SERVER HAS.
+ *
+ * ONE SENTENCE EACH, IN THE FRESHNESS LINE — the register `reportCursorReading` and
+ * `declineNewLine` already use, and for the same reason: interrupting a person mid-sentence with a
+ * dialogue is a worse violation of the safe haven than the thing it warns about.
+ *
+ * THEY SAY WHAT IS LOST, NOT WHAT WENT WRONG. "the cycle" and "the earlier save" are the things
+ * actually overwritten, and naming them is the entire point of this row — the failure mode is
+ * silent and its victim is work nobody typed, so a message that said "conflict" would leave the
+ * reader exactly as unable to see it as the silence did.
+ *
+ * `current` SAYS NOTHING. It is the ordinary case and narrating it would make the sentence that
+ * matters unreadable within a day.
+ */
+const BASE_REFUSALS = {
+  stale:
+    "this save was computed from an out-of-date copy of this file — whatever changed in it since is overwritten",
+  writing:
+    "this save left while an earlier save of this file was still running — the earlier one is overwritten",
+  unknown: "this save could not be checked against the copy the server sent",
+};
+
+/**
+ * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
+ *
+ * `source` is the string the edit was computed against, handed up by the painter (`paint.ts`'s
+ * `LineCommit.source`), never re-derived here: after an optimistic repaint the painter is holding a
+ * string this app computed and the page's own `graphData` is not, so anything reconstructed here
+ * would compare the wrong two strings and pass.
+ *
+ * ── THREE THINGS HAPPEN AND THEY ARE DELIBERATELY SEPARABLE ──
+ *
+ * 1. THE DIVERGENCE IS MEASURED against what the server last sent (`served.read`).
+ * 2. IT IS SAID, twice — beside "syncing…" now, because the operator is still looking at the line
+ *    he just left, and again through `sayAsOf` when the answer lands ~14 s later, because that
+ *    line overwrites this one wholesale. Held in `writeNote` rather than written twice.
+ * 3. THE BASE GOES ON THE WIRE so the server can one day refuse. Nothing reads it today:
+ *    `worker/src/app.js`'s `POST /app/edit-file` forwards `{path, markdown}` and ignores every
+ *    other field, so this costs nothing and changes nothing until row 5
+ *    (`the-write-is-refused-server-side`) lands.
+ *
+ * ── AND THE WRITE STILL GOES ──
+ *
+ * THE DIVERGENCE IS REPORTED, NOT PREVENTED, AND THAT IS THE DECISION. Refusing here would throw
+ * away characters a person typed and give him a sentence in a status line in exchange — his typing
+ * lost to a check whose entire purpose is that nothing is lost silently. The server is the only
+ * place a write can be refused safely, because it is the only place that knows what the file says;
+ * see design-the-edit-is-a-safe-haven.md §8 for the two sentences that half needs.
+ */
+async function writeFile(view, markdown, source) {
+  const reading = served.read(view.path, source);
+  const note = BASE_REFUSALS[reading.outcome] ?? "";
+  writeNote = note;
+  $("freshness").textContent = "syncing…" + (note === "" ? "" : ` · ${note}`);
+  // SYNCHRONOUS, AND app/present/base.ts's OWN HEADER SAYS WHY IT HAD TO BE: an `await` here would
+  // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
+  // implementation detail.
+  const body = { path: view.path, markdown, base: baseOf(source) };
+  // COUNTED ACROSS THE AWAIT, so a second save made while this one is in the air is measurable as
+  // one — which is the checkbox's own failure mode and is invisible to the string comparison above
+  // (a tick does not repaint the painter's source, so the second edit's base looks perfectly
+  // current while the server has already moved past it).
+  served.open(view.path);
+  try {
+    return await api("/app/edit-file", { body, auth: true });
+  } finally {
+    served.close(view.path);
+    // THE NOTE IS RE-ARMED FOR THIS WRITE'S OWN ANSWER, and that is not belt-and-braces — it is
+    // what stops two saves in the air at once from swapping sentences. Every caller says the
+    // freshness line one statement after its `await` returns, so without this the note set when the
+    // SECOND save left would be consumed by the FIRST save's answer and gone by the time the second
+    // one landed. Measured: the two-ticks-in-one-cycle arm reported nothing at all.
+    writeNote = note;
+  }
+}
+
 // Tick/untick a task: POST the edited view, let the server cycle, then re-render from the fresh
 // projection. Optimistic — the box shows its new state immediately; reverts on failure.
 //
@@ -1417,9 +1531,8 @@ async function toggleTask(view, toggle) {
   row.classList.toggle("done", box.checked);
   row.classList.add("syncing");
   box.disabled = true;
-  $("freshness").textContent = "syncing…";
   try {
-    const data = await api("/app/edit-file", { body: { path: view.path, markdown: next }, auth: true });
+    const data = await writeFile(view, next, toggle.source);
     graphData = data;
     paintView(currentViewId);
     sayAsOf(data);
@@ -1428,7 +1541,7 @@ async function toggleTask(view, toggle) {
     row.classList.toggle("done", box.checked);
     row.classList.remove("syncing");
     box.disabled = false;
-    $("freshness").textContent = "sync failed: " + e.message;
+    $("freshness").textContent = "sync failed: " + e.message + takeNotes();
   }
 }
 
@@ -1442,9 +1555,8 @@ async function toggleTask(view, toggle) {
 // line was left unchanged, or the text was not one line — and a refusal is not a POST.
 async function commitLine(view, commit) {
   if (commit.markdown === null) return;
-  $("freshness").textContent = "syncing…";
   try {
-    const data = await api("/app/edit-file", { body: { path: view.path, markdown: commit.markdown }, auth: true });
+    const data = await writeFile(view, commit.markdown, commit.source);
     graphData = data;
     paintView(currentViewId);
     sayAsOf(data);
@@ -1453,7 +1565,7 @@ async function commitLine(view, commit) {
     // the edit; what failed is the write. Repaint from the LAST KNOWN SERVER STATE so the screen
     // stops claiming something the vault does not have.
     paintView(currentViewId);
-    $("freshness").textContent = "sync failed: " + e.message;
+    $("freshness").textContent = "sync failed: " + e.message + takeNotes();
   }
 }
 
@@ -1717,6 +1829,9 @@ function logout() {
   localStorage.removeItem(tokenKey); token = null;
   graphData = null;
   currentViewId = null;
+  // AND THE BASE GOES WITH THE GRAPH IT DESCRIBED. A base held past the projection it was taken
+  // from is a claim about a file this session can no longer see.
+  served.drop();
   // A message earned by the LAST person to use this browser is not a greeting for the next one,
   // and neither is an open <input>: the same leak the comment above already refuses.
   mode.enterNormal();

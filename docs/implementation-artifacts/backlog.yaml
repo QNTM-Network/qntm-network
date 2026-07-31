@@ -886,7 +886,65 @@ backlog:
     applied; mutation-prove it by removing the base and watching the assertion go green wrongly.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
-  state: diagnose-ready
+  record: >-
+    2026-07-31 — SHIPPED, AS A DETECTOR AND A REPORT. BOTH ARMS REPRODUCED FIRST on unmodified
+    origin/main (532a8cf), driven through app/index.html's own lifted script (tests/fixtures/
+    app-html-page.mjs) and the shipped dist/present.js. No server, no cycle, no POST anywhere.
+    ARM 1 — a projection arrives while a line is open. The `<input>` closes over the source the
+    painter gave it, the repaint that removes it fires blur, and the POST is the whole of the OLD
+    projection: `#blocked` (a rule's output) and `qntm:124` (a task the cycle created) gone, his
+    typing intact, the freshness line reading `as of … · 0 queued` and nothing else.
+    ARM 2 IS A CORRECTION TO THIS ROW'S OWN DIAGNOSIS, AND IT IS THE WORSE PATH. `toggleTask` does
+    not repaint from its edited string, so the painter's source still holds the file as it was
+    BEFORE the first tick; a second tick inside the same cycle posts the FIRST TICK UNDONE. On the
+    checkbox path the loser is the OPERATOR'S OWN GESTURE, not only the cycle's output — so "his
+    typing is never lost" is true of `commitLine` and false of `toggleTask`.
+    WHAT SHIPPED. `app/present/base.ts` (new, pure, imports nothing, no DOM/fetch/clock) holds the
+    markdown the server last sent for the file on screen and reads any write as `current`, `stale`,
+    `writing` or `unknown`. `baseOf` is `sha256-<hex>` of the file's UTF-8 bytes, UNNORMALISED and
+    written out in TypeScript rather than taken from `crypto.subtle` — measured, that digest's
+    promise resolves AFTER a `setImmediate` scheduled at the same moment, so hashing through it
+    would have moved the POST one asynchronous turn later than every caller of this write path
+    expects. It is checked against node's own `createHash("sha256")` instead of trusted.
+    THE BASE IS TAKEN IN `paintView`, from the markdown the server sent, in the SAME CALL that
+    installs it for painting — the discipline `FocusSurface`'s anchor already follows, applied to a
+    per-FILE fact. One base, for the file on screen, replaced by the next projection and dropped
+    with the graph at sign-out. The pending writes are counted separately because they are a
+    different fact with a different lifetime.
+    THE PRECONDITION IS THE STRING `applyEdit` TRANSFORMED, WHICH IS WHY `LineCommit` AND
+    `CheckboxToggle` GAINED `source`. After an optimistic repaint the painter holds a string this
+    app computed and `graphData` does not; a base read off the page would have matched every time.
+    WHAT THE OPERATOR SEES — one sentence in the freshness line, in the register `reportCursorReading`
+    and `declineNewLine` already use, said at the gesture beside "syncing…" AND again when that
+    write's own answer lands ~14 s later: "this save was computed from an out-of-date copy of this
+    file — whatever changed in it since is overwritten", or "this save left while an earlier save of
+    this file was still running — the earlier one is overwritten".
+    THE NOTE IS RE-ARMED FOR ITS OWN WRITE, and that was a measured defect before it was a comment:
+    every caller says the freshness line one statement after its `await`, so a note set when the
+    SECOND save left was consumed by the FIRST save's answer and the arm reported nothing at all.
+    IT REPORTS AND DOES NOT PREVENT, DELIBERATELY. The server accepts whatever it is sent; refusing
+    client-side would throw away characters a person typed in exchange for a status line, which is
+    strictly worse than the defect. tests/present-base.test.mjs asserts the clobber still happens.
+    NO NEW EDIT KIND, NO NEW WRITE UNIT. `SourceEdit` still the closed union of three, `markdown`
+    still the whole view, `motions.ts` still imports nothing, and the two write sites now share one
+    `writeFile` — one place a file is posted.
+    NO SCENARIO, AND IT IS A MEASUREMENT NOT AN OMISSION. `base.ts`'s only caller is
+    `app/index.html`; capture is a node module-load hook and node cannot import an HTML document,
+    so there is no observable edge and a scenario would spend the observer's budget to buy nothing
+    — which `.flow-trace.yaml` measures as costing the other three scenarios their last edges. The
+    structural claims (imports nothing; no DOM, no fetch, no clock) are proven under `node --test`
+    instead, and flows.yaml gains `base-never-touches-the-dom` plus a note saying all of this.
+    `npm run check`: 639 tests / 118 suites / 0 fail on origin/main before (verified by running it),
+    657 / 122 / 0 fail after (+18/+4, 0 regressions). `flow-trace verify .` exit 0, 41 PASS, 0 FAIL.
+    MUTATION-PROVEN FIVE WAYS, each turning the new suite red: the detector deleted (7 red); the
+    base read off the served copy rather than off the edit (3 red); `paintView` never taking a base
+    (4 red); one sha256 round constant flipped (1 red); the note not re-armed (1 red). THIS ROW'S
+    OWN INSTRUCTION — "remove the base and watch the assertion go green wrongly" — IS REFUTED: it
+    goes RED, on purpose, because a write with no base reads `unknown` and is reported rather than
+    treated as current.
+    NOT VERIFIED IN A BROWSER. No cycle, no passkey session, no live server, nothing POSTed, and
+    the vault and database untouched. Every projection in the evidence is a second string in a file.
+  state: passing
 - id: the-cursor-anchors-to-a-node-not-a-line-number
   title: >-
     [haven] [2] [HALF A DAY] THE CURSOR IS HELD AS A POSITIONAL INDEX, AND AN INDEX IS MEANINGFUL
@@ -1224,6 +1282,22 @@ backlog:
     NOT THIS ONE, which is why it is separated from row 1 rather than bundled with it; the graph
     server's surface is read from docs/architecture/graph-server-plan.md:46-47 and from the calls
     the Worker makes, and if that plan is stale this is the row to re-check first. Needs 1.
+    SMALLER AND MORE EXACT SINCE ROW 1 LANDED (2026-07-31), AND (a) IS NOW A THREE-LINE CHANGE.
+    The browser ALREADY SENDS `base` on every write — `{path, markdown, base}`, where `base` is
+    `sha256-<hex>` of the file's UTF-8 bytes, unnormalised, of exactly the string the edit was
+    computed against. `POST /app/edit-file` forwards `{path, markdown}` today and ignores the field,
+    so nothing has to be added to the browser and nothing has to be agreed about the token: any
+    language's sha256 of the file's bytes reproduces it, which is checked against node's own
+    `createHash` in tests/present-base.test.mjs. (a) becomes: forward `base`, and turn the graph
+    server's refusal into a 409 carrying the current content.
+    THE FIELD IS ABSENT WHEN THERE IS NO BASE — it is never sent empty or null — so a server reading
+    it never has to tell "no base" from "the wrong base".
+    AND THE SENTENCE ALREADY EXISTS. app/index.html says one line in the freshness line when it
+    detects a divergence it cannot prevent; a 409 arriving is the same event with a better source of
+    truth, so the 409 branch reports rather than inventing a second vocabulary.
+    WHAT ROW 1 COULD NOT DO AND THIS ROW STILL MUST: see a change the browser was never told about.
+    A cycle that rewrote the file on the server while nothing arrived in the browser leaves the
+    client's base looking current, and no amount of client-side work fixes that.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready

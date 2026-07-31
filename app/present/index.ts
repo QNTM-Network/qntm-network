@@ -48,6 +48,9 @@ export type { DeclaredPresentation } from "./context.js";
 export { FocusSurface } from "./focus.js";
 export type { ReanchorReading } from "./focus.js";
 
+export { BaseSurface, baseOf } from "./base.js";
+export type { BaseReading } from "./base.js";
+
 export {
   instanceAnchorFor,
   instanceOf,

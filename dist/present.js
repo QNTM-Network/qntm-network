@@ -710,6 +710,215 @@ var FocusSurface = class {
   }
 };
 
+// app/present/base.ts
+var BASE_PREFIX = "sha256-";
+var K = Uint32Array.from([
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+]);
+var H0 = Uint32Array.from([
+  1779033703,
+  3144134277,
+  1013904242,
+  2773480762,
+  1359893119,
+  2600822924,
+  528734635,
+  1541459225
+]);
+var rotr = (word2, bits) => word2 >>> bits | word2 << 32 - bits;
+var word = (words, index) => words[index] ?? 0;
+function sha256Hex(bytes) {
+  const blocks = new Uint8Array(((bytes.length + 9 + 63) / 64 | 0) * 64);
+  blocks.set(bytes);
+  blocks[bytes.length] = 128;
+  const view = new DataView(blocks.buffer);
+  const bits = bytes.length * 8;
+  view.setUint32(blocks.length - 8, Math.floor(bits / 4294967296));
+  view.setUint32(blocks.length - 4, bits >>> 0);
+  const h = Uint32Array.from(H0);
+  const w = new Uint32Array(64);
+  for (let start = 0; start < blocks.length; start += 64) {
+    for (let i = 0; i < 16; i += 1) {
+      w[i] = view.getUint32(start + i * 4);
+    }
+    for (let i = 16; i < 64; i += 1) {
+      const x = word(w, i - 15);
+      const y = word(w, i - 2);
+      const s0 = rotr(x, 7) ^ rotr(x, 18) ^ x >>> 3;
+      const s1 = rotr(y, 17) ^ rotr(y, 19) ^ y >>> 10;
+      w[i] = word(w, i - 16) + s0 + word(w, i - 7) + s1 >>> 0;
+    }
+    let a = word(h, 0);
+    let b = word(h, 1);
+    let c = word(h, 2);
+    let d = word(h, 3);
+    let e = word(h, 4);
+    let f = word(h, 5);
+    let g = word(h, 6);
+    let work = word(h, 7);
+    for (let i = 0; i < 64; i += 1) {
+      const s1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const choice = e & f ^ ~e & g;
+      const t1 = work + s1 + choice + word(K, i) + word(w, i) >>> 0;
+      const s0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const majority = a & b ^ a & c ^ b & c;
+      const t2 = s0 + majority >>> 0;
+      work = g;
+      g = f;
+      f = e;
+      e = d + t1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2 >>> 0;
+    }
+    const round = [a, b, c, d, e, f, g, work];
+    for (let i = 0; i < 8; i += 1) {
+      h[i] = word(h, i) + (round[i] ?? 0) >>> 0;
+    }
+  }
+  return Array.from(h).map((word2) => word2.toString(16).padStart(8, "0")).join("");
+}
+function baseOf(markdown) {
+  return BASE_PREFIX + sha256Hex(new TextEncoder().encode(markdown));
+}
+var BaseSurface = class {
+  #path = null;
+  #markdown = null;
+  #writing = /* @__PURE__ */ new Map();
+  /** The file this surface is holding a base for, or `null` when it holds none. */
+  get path() {
+    return this.#path;
+  }
+  /** The markdown the server last sent for that file, or `null` when none was taken. */
+  get markdown() {
+    return this.#markdown;
+  }
+  /**
+   * THE SERVER SENT THIS FILE. Hold it as the base every write of that file is measured against.
+   *
+   * Called with the markdown out of the projection being installed — never with a string this app
+   * computed. That distinction is the whole detector: the painter repaints OPTIMISTICALLY from its
+   * own edited string after a commit (`paint.ts`'s `settle`), so a second edit made before the
+   * answer comes back is computed against a string the server has never seen, and the comparison
+   * below is what notices.
+   */
+  take(path, markdown) {
+    this.#path = path;
+    this.#markdown = markdown;
+  }
+  /** A write of `path` left for the server and has not answered. */
+  open(path) {
+    this.#writing.set(path, (this.#writing.get(path) ?? 0) + 1);
+  }
+  /** It answered, or it failed. Either way it is no longer in the air. */
+  close(path) {
+    const open = (this.#writing.get(path) ?? 0) - 1;
+    if (open > 0) {
+      this.#writing.set(path, open);
+    } else {
+      this.#writing.delete(path);
+    }
+  }
+  /** How many writes of `path` have not answered yet. */
+  writing(path) {
+    return this.#writing.get(path) ?? 0;
+  }
+  /**
+   * IS THIS WRITE'S BASE THE FILE THE SERVER LAST SENT? `source` is the exact string the edit was
+   * applied to — `applyEdit`'s own input, handed up by the painter, never re-derived here.
+   *
+   * `stale` IS CHECKED BEFORE `writing` because it is the stronger statement: it says this write's
+   * base is provably not the served copy, where `writing` only says the server has moved past
+   * whatever base it carries. The two overlap (a second line commit inside one cycle is both) and
+   * one sentence is what the operator gets, so the more specific one wins.
+   */
+  read(path, source) {
+    if (this.#path !== path || this.#markdown === null) {
+      return { outcome: "unknown" };
+    }
+    if (this.#markdown !== source) {
+      return { outcome: "stale" };
+    }
+    if (this.writing(path) > 0) {
+      return { outcome: "writing" };
+    }
+    return { outcome: "current" };
+  }
+  /**
+   * Forget the base. The pending writes are NOT forgotten — they are still in the air, and a
+   * surface that pretended otherwise would report `current` for a save it knows is already
+   * superseded.
+   */
+  drop() {
+    this.#path = null;
+    this.#markdown = null;
+  }
+};
+
 // app/present/boundary.ts
 function boundaryLine(lines, current, direction, count) {
   let at = current;
@@ -764,13 +973,13 @@ function wordCaret(line, motion, count, from) {
   const last = words[words.length - 1];
   const first = words[0];
   if (motion === "b") {
-    const before = words.map((word) => word.start).filter((at) => at < from);
+    const before = words.map((word2) => word2.start).filter((at) => at < from);
     if (before.length === 0) {
       return first.start;
     }
     return before[Math.max(0, before.length - n)];
   }
-  const after = motion === "e" ? words.map((word) => word.end - 1).filter((at) => at > from) : words.map((word) => word.start).filter((at) => at > from);
+  const after = motion === "e" ? words.map((word2) => word2.end - 1).filter((at) => at > from) : words.map((word2) => word2.start).filter((at) => at > from);
   if (after.length === 0) {
     return motion === "e" ? last.end - 1 : last.start;
   }
@@ -969,7 +1178,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     }
     const text = input.value;
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
     const next = markdown ?? fileSource;
     const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
     if (wasFocused) {
@@ -1029,7 +1238,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     const text = input.value;
     draft.drop();
     const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
     returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
@@ -1175,7 +1384,7 @@ function paint(body, source, context, deps) {
           lineIndex: index,
           checked: box.checked
         });
-        deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, box, row });
+        deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
       });
       const span = document.createElement("span");
       span.innerHTML = renderTags(
@@ -1232,6 +1441,7 @@ function paint(body, source, context, deps) {
   }
 }
 export {
+  BaseSurface,
   DEFAULT,
   DraftSurface,
   FocusSurface,
@@ -1242,6 +1452,7 @@ export {
   RESOLUTION_KEYS,
   SPECIFICITY,
   applyEdit,
+  baseOf,
   boundaryLine,
   carriesContent,
   chromeOf,

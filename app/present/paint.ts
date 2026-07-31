@@ -88,11 +88,14 @@ export interface InlineMarkdown {
  *
  * `markdown` is the WHOLE view source with exactly one glyph changed, or `null` if the edit did
  * not apply. The caller posts it; it never builds it.
+ *
+ * `source` is the string that edit was applied TO — see `LineCommit.source` for what it is for.
  */
 export interface CheckboxToggle {
   readonly lineIndex: number;
   readonly checked: boolean;
   readonly markdown: string | null;
+  readonly source: string;
   readonly box: HTMLInputElement;
   readonly row: HTMLElement;
 }
@@ -110,6 +113,20 @@ export interface LineCommit {
   readonly lineIndex: number;
   readonly text: string;
   readonly markdown: string | null;
+  /**
+   * THE STRING THE EDIT WAS APPLIED TO — `applyEdit`'s own input, verbatim.
+   *
+   * It is here because the WHOLE FILE goes on the wire and the server overwrites what it is sent,
+   * so "which copy of the file was this computed from" is a fact about the write that only the
+   * painter knows: the source a row closes over is the string that paint was handed, and after an
+   * optimistic repaint (`settle` below) that is a string the app computed rather than one the
+   * server sent. The caller compares it against the served copy (`app/present/base.ts`) and hashes
+   * it for the wire. The painter neither compares nor hashes — it reports which base it used.
+   *
+   * NOT A SECOND WRITE UNIT AND NOT A NEW EDIT KIND. `markdown` is still the whole view and still
+   * the only thing posted; `SourceEdit` is still the closed union of three.
+   */
+  readonly source: string;
 }
 
 /**
@@ -360,7 +377,7 @@ function rawInput(
     // `source` exactly as they went in. tests/present-focus.test.mjs proves that by wrecking
     // every other rendered element first and then checking the posted file.
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
     // WHAT THE NEXT PAINT IS OF: the committed file if there was an edit, the file as it stands if
     // there was not. Named once, because the line opened below has to be seeded against the SAME
     // string the paint is about to walk — seeding against the pre-commit source would resolve the
@@ -501,7 +518,7 @@ function draftInput(
     // a row opened and left holding nothing but its own chrome. `applyEdit` decides that, not this
     // painter — the guard belongs with the edit so that no future caller can route around it.
     const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
     returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
@@ -889,7 +906,7 @@ export function paint(
           lineIndex: index,
           checked: box.checked,
         });
-        deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, box, row });
+        deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
       });
       const span = document.createElement("span");
       // THE TAG RENDITION IS RESOLVED PER LINE, LIKE EVERY OTHER ONE. Asked before it is used and
