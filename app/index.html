@@ -815,6 +815,7 @@ import {
   applyEdit,
   boundaryLine,
   classifyLine,
+  indentedLine,
   openLine,
   DraftSurface,
   FocusSurface,
@@ -1671,6 +1672,19 @@ document.addEventListener("keydown", (e) => {
         if (markdown !== null) {
           commitLine(v, { lineIndex: current, text: line, markdown });
         }
+      }
+    } else if (effect.kind === "indent") {
+      // `>`/`<` — `indentedLine` (app/present/indent.ts) decides the new leading whitespace, in
+      // whole units of the engine's own four-space depth (renderer.py:947-950), never the two-
+      // space margin arithmetic paint.ts uses for CSS. It returns the line UNCHANGED when there is
+      // nothing to do (a blank/heading line, or outdenting a line already at zero), and
+      // `applyEdit`'s own "unchanged text is a refusal" rule (source.ts) is what turns that into
+      // "post nothing" — no second no-op check is needed here, same posture as `x` above.
+      const line = v.markdown.split("\n")[current] ?? "";
+      const text = indentedLine(line, effect.direction, effect.count);
+      const markdown = applyEdit(v.markdown, { kind: "set-line", lineIndex: current, text });
+      if (markdown !== null) {
+        commitLine(v, { lineIndex: current, text, markdown });
       }
     } else {
       // "none" (a bare digit accumulating a count, or a refused `o`/`O`/`x` under a pending count)

@@ -26,6 +26,8 @@ import {
   boundaryLine,
   classifyLine,
   clampLine,
+  indentedLine,
+  INDENT_UNIT,
   openLine,
   DraftSurface,
   FocusSurface,
@@ -351,6 +353,43 @@ describe("8. { and } — direction and count only; boundary.ts decides which lin
   });
 });
 
+describe("8a. > and < — direction and count only; indent.ts decides the new text", () => {
+  test("> with no count asks to indent by one unit", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey(">", 4, 100);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "indent", direction: "in", count: 1 });
+  });
+
+  test("< with no count asks to outdent by one unit", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("<", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "indent", direction: "out", count: 1 });
+  });
+
+  test("3> composes the count exactly like every other motion", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey(">", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "indent", direction: "in", count: 3 });
+  });
+
+  test("2< composes the same way", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("2", 0, 100);
+    const outcome = mode.handleKey("<", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "indent", direction: "out", count: 2 });
+  });
+
+  test("the count clears after > fires, same as after any other motion", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("5", 0, 100);
+    mode.handleKey(">", 4, 100);
+    const outcome = mode.handleKey("j", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 5 });
+  });
+});
+
 describe("8b. boundaryLine (app/present/boundary.ts) — pure, no DOM, the arithmetic { and } need", () => {
   const OUTLINE = [
     "# Top",
@@ -395,6 +434,95 @@ describe("8b. boundaryLine (app/present/boundary.ts) — pure, no DOM, the arith
     const NO_HEADINGS = ["- [ ] a", "- [ ] b", "- [ ] c"];
     assert.equal(boundaryLine(NO_HEADINGS, 0, "next", 1), 2);
     assert.equal(boundaryLine(NO_HEADINGS, 2, "prev", 1), 0);
+  });
+});
+
+describe("8c. indentedLine (app/present/indent.ts) — pure, no DOM, the arithmetic > and < need", () => {
+  test("the unit is four spaces, taken from the engine — renderer.py:947-950", () => {
+    assert.equal(INDENT_UNIT, 4);
+  });
+
+  test("> on a line with no indent emits exactly four spaces", () => {
+    const result = indentedLine("- [ ] a task", "in", 1);
+    assert.equal(result, "    - [ ] a task");
+    assert.equal(result.match(/^ */)[0].length, INDENT_UNIT);
+  });
+
+  test("< at zero indent is a no-op — the line comes back unchanged, not an error, not a wrap", () => {
+    const line = "- [ ] a task";
+    assert.equal(indentedLine(line, "out", 1), line);
+  });
+
+  test("> then < returns the line to byte-identical original, from zero", () => {
+    const original = "- [ ] a task";
+    const indented = indentedLine(original, "in", 1);
+    const restored = indentedLine(indented, "out", 1);
+    assert.equal(restored, original);
+  });
+
+  test("> then < returns the line to byte-identical original, from an already-indented line", () => {
+    const original = "    - [ ] a nested task";
+    const indented = indentedLine(original, "in", 1);
+    assert.equal(indented, "        - [ ] a nested task");
+    const restored = indentedLine(indented, "out", 1);
+    assert.equal(restored, original);
+  });
+
+  test("a count applies — 3> indents three units in one call", () => {
+    const result = indentedLine("- [ ] a task", "in", 3);
+    assert.equal(result, "            - [ ] a task"); // 12 spaces
+    assert.equal(result.match(/^ */)[0].length, 3 * INDENT_UNIT);
+  });
+
+  test("a count applies to outdent too, floored at zero", () => {
+    const twelve = "            - [ ] a task";
+    assert.equal(indentedLine(twelve, "out", 2), "    - [ ] a task");
+    assert.equal(indentedLine(twelve, "out", 10), "- [ ] a task");
+  });
+
+  test("the emitted indent is always a whole multiple of the unit — a line starting at an ODD number of spaces rounds up on indent", () => {
+    // Three spaces is not a multiple of four. The decision: > rounds UP to the next multiple
+    // rather than adding four to whatever was there (which would leave seven — not a multiple).
+    const odd = "   - [ ] odd indent";
+    const result = indentedLine(odd, "in", 1);
+    assert.equal(result, "    - [ ] odd indent"); // four, not seven
+    assert.equal(result.match(/^ */)[0].length % INDENT_UNIT, 0);
+  });
+
+  test("the odd-indent decision means > then < does NOT round-trip — outdent removes a further whole unit from the rounded value, not the original three", () => {
+    const odd = "   - [ ] odd indent";
+    const indented = indentedLine(odd, "in", 1); // -> 4 spaces
+    const restored = indentedLine(indented, "out", 1); // -> 0, not back to 3
+    assert.equal(restored, "- [ ] odd indent");
+    assert.notEqual(restored, odd, "the odd remainder was silently preserved instead of rounded away");
+  });
+
+  test("outdenting an odd, non-multiple indent rounds DOWN to the nearest multiple below it", () => {
+    const odd = "     - [ ] five spaces"; // 5 spaces — not a multiple of 4
+    assert.equal(indentedLine(odd, "out", 1), "    - [ ] five spaces"); // down to 4, the nearest multiple below 5
+  });
+
+  test("a leading tab counts toward the length being rounded, and the output is always pure spaces", () => {
+    const tabbed = "\t- [ ] tab indent";
+    const result = indentedLine(tabbed, "in", 1);
+    assert.ok(!result.includes("\t"), "a tab survived into the emitted indent");
+    assert.equal(result, "    - [ ] tab indent");
+  });
+
+  test("a heading line refuses — indenting it would stop it being a heading, on both ends", () => {
+    const heading = "## Overdue";
+    assert.equal(indentedLine(heading, "in", 1), heading);
+    assert.equal(indentedLine(heading, "out", 1), heading);
+  });
+
+  test("a blank line refuses — there is no content to reparent", () => {
+    assert.equal(indentedLine("", "in", 1), "");
+    assert.equal(indentedLine("   ", "in", 1), "   ");
+  });
+
+  test("a plain prose (non-checkbox, non-bulleted) node line is indented the same way a checkbox line is", () => {
+    const prose = "some continuation text";
+    assert.equal(indentedLine(prose, "in", 1), "    some continuation text");
   });
 });
 
@@ -473,6 +601,15 @@ function press(v, key) {
       if (markdown !== null) {
         v.commits.push({ lineIndex: current, text: line, markdown });
       }
+    }
+  } else if (effect.kind === "indent") {
+    // `>`/`<` — the same shape as app/index.html's own branch: `indentedLine` decides the text,
+    // `applyEdit`'s own no-op refusal (an unchanged line) decides whether anything is posted.
+    const line = v.source.split("\n")[current] ?? "";
+    const text = indentedLine(line, effect.direction, effect.count);
+    const markdown = applyEdit(v.source, { kind: "set-line", lineIndex: current, text });
+    if (markdown !== null) {
+      v.commits.push({ lineIndex: current, text, markdown });
     }
   } else {
     v.repaint();
@@ -869,5 +1006,74 @@ describe("17. a blank line still shows a visible selection mark", () => {
     const body = makeBody();
     paint(body, WITH_BLANK, new PresentationContext(), { markdown: md });
     assert.equal(body.children.length, 2, "a blank line grew a row with no focus/mode wired at all");
+  });
+});
+
+describe("18. > and < through the painter — indentedLine drives the same set-line commit x's toggle does", () => {
+  test("> indents the selected line by exactly one unit (four spaces), posted as a single set-line commit", () => {
+    const v = view();
+    v.focus.focus(1); // "- [ ] first task [[qntm:1]] #task"
+    v.repaint();
+    press(v, ">");
+    assert.equal(v.commits.length, 1);
+    const posted = v.commits[0].markdown.split("\n")[1];
+    assert.equal(posted, "    - [ ] first task [[qntm:1]] #task");
+    assert.equal(posted.match(/^ */)[0].length, INDENT_UNIT);
+    assert.equal(v.mode.mode, "NORMAL", "> must not open an <input>");
+    // Index-stable: the line count and every other line are untouched.
+    assert.equal(v.commits[0].markdown.split("\n").length, v.source.split("\n").length);
+  });
+
+  test("< outdents back to zero, and > then < round-trips to the byte-identical original view", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, ">");
+    const afterIndent = v.commits[0].markdown;
+    const v2 = view(afterIndent);
+    v2.focus.focus(1);
+    v2.repaint();
+    press(v2, "<");
+    assert.equal(v2.commits[0].markdown, v.source, "> then < did not restore the original file exactly");
+  });
+
+  test("< on a line already at zero indent does nothing — no commit posted, not an error", () => {
+    const v = view();
+    v.focus.focus(1); // no indent on this fixture's lines
+    v.repaint();
+    press(v, "<");
+    assert.deepEqual(v.commits, [], "outdenting a zero-indent line posted an edit");
+    assert.equal(v.mode.mode, "NORMAL");
+  });
+
+  test("> on the heading does nothing — no commit, same refusal x already gives that line", () => {
+    const v = view();
+    v.focus.focus(0); // "# This Week"
+    v.repaint();
+    press(v, ">");
+    assert.deepEqual(v.commits, [], "> indented a heading, which stops it being a heading");
+  });
+
+  test("3> composes through the real painter, same as 3} would", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "3");
+    press(v, ">");
+    const posted = v.commits[0].markdown.split("\n")[1];
+    assert.equal(posted.match(/^ */)[0].length, 3 * INDENT_UNIT);
+  });
+
+  test("a single < after a composed 3> removes exactly one unit, not three — the count does not stick", () => {
+    const v = view();
+    v.focus.focus(1);
+    v.repaint();
+    press(v, "3");
+    press(v, ">"); // 12 spaces
+    const v2 = view(v.commits[0].markdown);
+    v2.focus.focus(1);
+    v2.repaint();
+    press(v2, "<"); // one bare outdent, no count in front of it on this fresh ModeSurface
+    assert.equal(v2.commits[0].markdown.split("\n")[1].match(/^ */)[0].length, 2 * INDENT_UNIT);
   });
 });

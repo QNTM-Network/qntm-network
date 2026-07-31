@@ -360,6 +360,10 @@ var ModeSurface = class {
         return { handled: true, effect: { kind: "boundary", direction: "prev", count: pending ?? 1 } };
       case "}":
         return { handled: true, effect: { kind: "boundary", direction: "next", count: pending ?? 1 } };
+      case ">":
+        return { handled: true, effect: { kind: "indent", direction: "in", count: pending ?? 1 } };
+      case "<":
+        return { handled: true, effect: { kind: "indent", direction: "out", count: pending ?? 1 } };
       default:
         return { handled: false, effect: { kind: "none" } };
     }
@@ -393,6 +397,21 @@ function prevHeading(lines, from) {
     }
   }
   return null;
+}
+
+// app/present/indent.ts
+var INDENT_UNIT = 4;
+var LEADING_WHITESPACE = /^\s*/;
+function indentedLine(line, direction, count) {
+  const shape = classifyLine(line);
+  if (shape.kind === "blank" || shape.kind === "heading") {
+    return line;
+  }
+  const match = LEADING_WHITESPACE.exec(line);
+  const currentLength = match?.[0].length ?? 0;
+  const rest = line.slice(currentLength);
+  const units = direction === "in" ? Math.floor(currentLength / INDENT_UNIT) + count : Math.max(0, Math.ceil(currentLength / INDENT_UNIT) - count);
+  return " ".repeat(units * INDENT_UNIT) + rest;
 }
 
 // app/present/draft.ts
@@ -825,6 +844,7 @@ export {
   DEFAULT,
   DraftSurface,
   FocusSurface,
+  INDENT_UNIT,
   ModeSurface,
   PresentationCascade,
   PresentationContext,
@@ -836,6 +856,7 @@ export {
   chromeOf,
   clampLine,
   classifyLine,
+  indentedLine,
   isSilent,
   openLine,
   paint,

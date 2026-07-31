@@ -79,6 +79,20 @@
  *   already has. `ModeSurface` still imports nothing; `boundary.ts` imports `classifyLine` and
  *   nothing else, and is not this file.
  *
+ * ── SLICE 3 (2026-07-31): `>` and `<` — indent and outdent the selected line ──
+ *
+ * SAME SHAPE AS `{`/`}`, FOR THE SAME REASON. Turning a keystroke into a new leading-whitespace
+ * string needs `classifyLine` — a heading and a blank line are both refused, see `indent.ts` for
+ * why — so this module reports only a DIRECTION (`"in"`/`"out"`) and a COUNT, composed with the
+ * same count-prefix arithmetic every other motion here already shares (`3>` indents three units in
+ * one keystroke, exactly as `3}` jumps three boundaries). `indent.ts`, a new pure module the same
+ * shape as `boundary.ts`, turns that into the line's new text; this module still imports nothing.
+ * NOT bound to `Tab`/`Shift-Tab`: `Tab` carries a browser focus-move default this app does not
+ * intercept, `Tab` inside INSERT is already an accidental line-commit (see `paint.ts`'s blur-
+ * settles-the-input path), and this module's own `handleKey(key, …)` takes no modifier argument, so
+ * `Tab` and `Shift-Tab` would arrive as the identical `key` value and be indistinguishable here.
+ * `>`/`<` are vim's own indent keys, carry no browser default, and need no signature change.
+ *
  * COUNT COMPOSITION, DECIDED PER KEY, NOT ONCE FOR ALL OF THEM. `j`/`k`/`G`/`{`/`}` are motions —
  * repeating one is well-defined and vim does it, so a pending count multiplies them exactly as it
  * always has. `i`/Enter/`a` enter INSERT once regardless of a pending count: vim's own repeat-on-
@@ -149,7 +163,14 @@ export type NormalEffect =
    * the same count-prefix arithmetic every other motion already shares, and leaves "which line" to
    * `boundary.ts`, a separate pure module the caller consults.
    */
-  | { readonly kind: "boundary"; readonly direction: "prev" | "next"; readonly count: number };
+  | { readonly kind: "boundary"; readonly direction: "prev" | "next"; readonly count: number }
+  /**
+   * `>`/`<` asked to indent/outdent the selected line `count` units. This module cannot compute
+   * the new TEXT — that needs `classifyLine` to refuse a blank or heading line, which is
+   * `indent.ts`'s job (this module still does not import it) — so it reports direction and the
+   * same composed count every other motion reports.
+   */
+  | { readonly kind: "indent"; readonly direction: "in" | "out"; readonly count: number };
 
 /** One keystroke's outcome: whether it was consumed, and what it did. */
 export interface NormalKeyOutcome {
@@ -326,6 +347,13 @@ export class ModeSurface {
         return { handled: true, effect: { kind: "boundary", direction: "prev", count: pending ?? 1 } };
       case "}":
         return { handled: true, effect: { kind: "boundary", direction: "next", count: pending ?? 1 } };
+      case ">":
+        // A MOTION LIKE EVERY OTHER ONE — `3>` indents three units in one keystroke, the same
+        // count-prefix arithmetic `{`/`}`/`j`/`k`/`G` already compose. `indent.ts`'s `indentedLine`
+        // decides the actual text; this only decides direction and count.
+        return { handled: true, effect: { kind: "indent", direction: "in", count: pending ?? 1 } };
+      case "<":
+        return { handled: true, effect: { kind: "indent", direction: "out", count: pending ?? 1 } };
       default:
         return { handled: false, effect: { kind: "none" } };
     }

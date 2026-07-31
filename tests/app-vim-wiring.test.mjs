@@ -212,3 +212,27 @@ describe("{ and } through the real page's own wiring", () => {
     assert.equal(page.__focusIndex(), 0);
   });
 });
+
+describe("> and < through the real page's own wiring", () => {
+  // WHAT IS DELIBERATELY NOT EXERCISED HERE, FOR THE SAME REASON GIVEN ABOVE FOR `x`: indenting a
+  // real checkbox line ends in the same async `POST /app/edit-file` via `commitLine`, against the
+  // same shared `fetch` stub that returns no `snapshot`. tests/present-motions.test.mjs sections
+  // 8a/8c/18 already prove the computation (`ModeSurface.handleKey` reports the count-composed
+  // direction, `indentedLine` decides the text, `applyEdit` posts a single `set-line`) at the
+  // paint.ts wiring layer, including the four-space unit, the round trip, and the count. What is
+  // left unverified here is only that THIS page's own keydown handler reaches that same branch —
+  // proven below on the one line that must NOT reach the network at all: the heading.
+  test("> on the heading does nothing — no network call, no mode or selection change", () => {
+    paintFresh(); // lands on line 0, "# This Week" — a heading, refused by indentedLine
+    press(">");
+    assert.equal(page.__vimMode(), "NORMAL");
+    assert.equal(page.__focusIndex(), 0, "> moved the selection, which it must never do");
+  });
+
+  test("< on the heading does nothing either", () => {
+    paintFresh();
+    press("<");
+    assert.equal(page.__vimMode(), "NORMAL");
+    assert.equal(page.__focusIndex(), 0);
+  });
+});
