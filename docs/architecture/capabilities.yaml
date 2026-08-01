@@ -2159,3 +2159,95 @@ capabilities:
     scanner read — not a comparison against a running server's actual HTTP response, which this
     repo cannot make (the server-side half is filed, not built: see intent).
   status: working
+- id: projection-replay-convergence-is-measured
+  intent: >-
+    design-the-resolution-architecture.md STEP 12, "the projection-replay convergence test" — L7
+    RECONCILIATION. §6.2 D4 named the gap: `tests/qualification-agreement.test.mjs` already proves
+    the browser and the engine agree about WHAT (one predicate, one field set, one instant); nothing
+    proved they agree about WHEN — the cycle's own clock, the order rows land in, what happens when
+    the operator types between a prediction and its arrival. THIS IS THAT TEST: `replay()`
+    (`tests/fixtures/replay-harness.mjs`) takes a real `before`, a gesture, and an arriving
+    projection (a fixture — see below), and reports whether the cursor found its line and by which
+    rung, whether the membership and ordering predictions converged, whether the operator's own
+    characters survived, and whether base staleness fired correctly. It is built ENTIRELY from
+    already-shipped pure functions (`instance.ts`, `membership.ts`, `ordering.ts`, `address.ts`,
+    `base.ts`) — no new resolution logic, only the comparison nothing had been asked to make before.
+    TEST HARNESS, NOT A RUNTIME CHECK — ARGUED, NOT DEFAULTED TO. Two reasons, both in
+    `tests/present-replay.test.mjs`'s own header: (1) the comparison needs the PREDICTION held past
+    the moment `app/index.html`'s own freshness-line write overwrites it — `writeFile`'s own header
+    already refuses that ("a stale prediction is worse than none"), so a runtime version would have
+    to reintroduce the exact state that comment exists to prevent; (2) the marquee finding below
+    means the comparison mostly CANNOT be made yet, for the one prediction that matters most — a
+    runtime checker wired to an unconfirmable comparison would either say nothing (no better than
+    today) or manufacture a confirmation it does not have (worse than today). ONE PART OF THIS IS
+    ALREADY A LIVE RUNTIME CHECK, named rather than glossed over: `BaseSurface`/`writeFile` already
+    compare a write's base against what the server last sent, on every save — §5 of the test file
+    exercises that EXISTING surface with a fixture, adding no new production logic there at all.
+    THE MARQUEE FINDING. `membershipFor` answers only when `qntmIdSpans(line).length === 0`
+    (`membership.ts`) — it predicts ONLY for a line with no `[[qntm:N]]` of its own. The instant that
+    prediction is meaningful (the operator has just typed something that changes the answer),
+    `instanceAnchorFor` gives that line's anchor `node: null` (`instance.ts` — an unstamped line's
+    identity IS its own changing text, and there is no node yet to fall back to). So the SAME event
+    that makes a membership prediction worth making is, by construction, the event that leaves the
+    cursor's second identity tier (the one that would follow a moved NODE across sections) with
+    nothing to search with — and the first tier fails too, because the operator's own edit already
+    changed the text that tier matches on. `tests/present-replay.test.mjs` §1 measures this directly
+    against the operator's own worked example from `membership.ts`'s own header ("add #work and it
+    leaves Domain Empty"): the prediction is real (not an abstention), the cursor outcome is
+    `absent`, and the harness reports `membership.converged: null` — UNCONFIRMABLE, not "wrong", a
+    distinction this capability's own comparison design insists on (see the harness's own header,
+    point 2) because there is nothing to compare the prediction against, not a comparison that came
+    out false. §1's third test states the generalisation directly rather than leaving it implied:
+    this holds for EVERY real membership prediction the app can make today, not only the two
+    fixtures measured, because it follows from `membershipFor`'s own precondition combined with
+    `instanceAnchorFor`'s own field, not from anything particular to inbox.md. WHAT DOES CONVERGE,
+    MEASURED RATHER THAN ASSUMED AWAY BY THE SAME FINDING: ordering predictions on an ALREADY-STAMPED
+    line sidestep the problem entirely — `orderingFor` has no "already-a-node" abstention, so §3
+    proves a genuine confirmed prediction over real `~/qntm/dev/flow-trace/queue.md` content
+    (`qntm:2303` reprioritised, predicted `afterRank` equalling the arrived rank exactly). Cursor
+    convergence across the other four transformation kinds the step's brief names (a line inserted
+    above, a line moved between sections, a line deleted, a heading's own value changing) all measure
+    `found`, proven over real `~/qntm/inbox.md`, `~/qntm/dev/flow-trace/queue.md` and
+    `~/qntm/metrics.md` content (§2) — the addressing layer (steps 1-3, 11) works exactly as
+    designed; it is membership's own precondition, not addressing, that blocks confirmation.
+    THE MUTATION PROOF (§6): three of the passing checks above, deliberately corrupted the way a
+    real defect would corrupt them (a tick silently reverted, a stamp dropped, a reprioritisation
+    overridden), all caught — `preserved` and `converged` both flip to `false`/non-matching rather
+    than staying vacuously green. THE DESIGN DOCUMENT'S OWN FALSIFIER, LITERALLY (§7): "apply the
+    browser's predicted change to the before, assert it equals the after" — run once where it holds
+    (a checkbox tick, nothing else touched) and once where it does not (the marquee fixture itself),
+    proving the falsifier discriminates rather than passing either way by construction.
+    WHAT THIS DOES NOT DO FOR THE TWO OPEN BACKLOG ROWS IT MEASURES AGAINST
+    (`the-open-line-survives-a-new-projection`, `the-vanished-line-is-parked-not-dropped`): it does
+    NOT shrink either row's remaining implementation — holding a line's characters across a repaint,
+    and parking a vanished row where it can be recovered, are both still entirely unbuilt. What it
+    DOES do is turn "detects; cannot yet prove" into a measured, named, regression-checkable fact —
+    §2d's own fixture demonstrates the `absent` outcome has (at least) two distinguishable root
+    causes at the anchor level (`anchor.node === null`, the authoring/first-stamp case, vs.
+    `anchor.node` present but genuinely gone, a real deletion), a distinction future work on those
+    rows will need and did not have a fixture proving before this step.
+  tier: functional
+  rooting: >-
+    LIVES ENTIRELY UNDER `tests/`, imports nothing new from `app/` — `tests/fixtures/replay-
+    harness.mjs` imports only symbols `app/present/index.ts`'s barrel already exports
+    (`applyEdit`, `BaseSurface`, `instanceAnchorFor`, `membershipFor`, `orderingFor`,
+    `resolveInstanceAnchor`, `sectionAt`, `sectionOrderFor`), the same way every other
+    `tests/present-*.test.mjs` file does. NO NEW FLOW EDGE, on the same grounds step 11's own
+    entry above states for its two call sites: `.flow-trace.yaml`'s capture filter is
+    `include: [app]`, `tests/` is outside it, so nothing this step adds is observable by the JS
+    module-load hook flow-trace's TypeScript backend uses — see `flows.yaml`'s own comment on this
+    step for the "no new edge, and why" account, restated rather than left for a reader to
+    rediscover. `flow-trace verify .` re-run after this change: no new PASS/FAIL rows, because
+    there is nothing under `app/` for it to capture.
+    NOT VERIFIED: no browser, no passkey session, no live server, no cycle — every `before` string
+    is a literal copy of real `~/qntm` content read read-only on 2026-08-01 and embedded directly
+    (never re-read at test time — see the test file's own header for why: a fixture that only ran
+    against a personal vault checked out at a fixed path would be untestable in CI and unreadable
+    by a reviewer without that vault); every `after` string is hand-built the way a real cycle
+    transforms a line, never the output of running anything. The `2c` "moved between sections"
+    fixture is CONSTRUCTED rather than drawn from real content, stated plainly in both the test
+    file and here: no predicate in the operator's real published config moves a line between two
+    sections of one view today (`inbox`'s own `domain-empty` leaves the VIEW entirely when it stops
+    qualifying, never a sibling section of it), so a minimal two-section declaration stands in,
+    built from the same real vocabulary (`#work`) the operator's own config uses elsewhere.
+  status: working

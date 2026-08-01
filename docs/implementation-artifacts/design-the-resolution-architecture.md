@@ -416,6 +416,66 @@ verified**: no browser, no passkey session, no live server, no cycle, no `/confi
 `server/app.py` was read only, never run; the byte-identity proof compares two independent
 READS of the same real config, not a running server's actual HTTP response.
 
+**STATUS, UPDATED 2026-08-01 (eighth pass) — STEP 12 IS DONE, one agent, one worktree
+(`feat/replay-convergence`), against `origin/main` @ `3ab384f`.** **THE MARQUEE FINDING: A REAL
+MEMBERSHIP PREDICTION CANNOT BE CONFIRMED ONCE THE CYCLE STAMPS THE LINE IT WAS MADE ABOUT.**
+`membershipFor` (step 4) answers only when `qntmIdSpans(line).length === 0` — it predicts
+exclusively for a line with no `[[qntm:N]]` of its own — and `instanceAnchorFor` (the row that
+built the two-tier cursor) gives that same line's anchor `node: null` the instant it is typed,
+because there is no node yet to fall back to. So the SAME event that makes a membership
+prediction worth making (the operator typed something that changes the answer) is, by
+construction, the event that leaves the cursor's node tier with nothing to search with, while the
+instance tier fails too because the operator's own edit already changed the text it would have
+matched. **Measured directly against the operator's own worked example from `membership.ts`'s own
+header** ("add `#work` and it leaves Domain Empty", `tests/present-replay.test.mjs` §1): the
+prediction is real, not an abstention; the arriving projection (a fixture — no cycle ran) resolves
+the cursor `absent`; the harness reports `membership.converged: null` — UNCONFIRMABLE, a
+deliberately different reading from "wrong", because there is nothing to compare the prediction
+against, not a comparison that came out false. §1's third test states the generalisation directly:
+this holds for every real membership prediction the app can make today, following from
+`membershipFor`'s own precondition combined with `instanceAnchorFor`'s own field, not from
+anything particular to one fixture. **What DOES converge, measured rather than assumed away by the
+same finding**: an ordering prediction on an ALREADY-STAMPED line sidesteps the problem entirely —
+`orderingFor` has no "already-a-node" abstention — and §3 proves a genuine confirmed prediction
+over real `~/qntm/dev/flow-trace/queue.md` content (`qntm:2303` reprioritised, predicted
+`afterRank` equalling the arrived rank exactly). Cursor convergence across the other four
+transformation kinds this step's own brief names (a line inserted above, a line moved between
+sections, a line deleted, a heading's own value changing) all measure `found`, over real
+`~/qntm/inbox.md`, `~/qntm/dev/flow-trace/queue.md` and `~/qntm/metrics.md` content (§2) — the
+ADDRESSING layer (steps 1-3, 11) works exactly as designed; it is membership's own precondition,
+not addressing, that blocks confirmation. **TEST HARNESS, NOT A RUNTIME CHECK, ARGUED RATHER THAN
+DEFAULTED TO** (`tests/present-replay.test.mjs`'s own header carries the full argument): a runtime
+version would need the prediction held past the moment the freshness line's own next write
+overwrites it, which `writeFile`'s own header already refuses on the record ("a stale prediction is
+worse than none") — and the marquee finding above means the comparison mostly cannot be made yet
+for the one prediction that matters most, so a runtime checker would either say nothing or
+manufacture a confirmation it does not have. Base staleness (§5) is the one part of this file that
+IS already a live runtime check (`BaseSurface`/`writeFile`); the harness exercises that existing
+surface with a fixture rather than adding new production logic. **THE MUTATION PROOF** (§6): three
+of the passing checks, deliberately corrupted the way a real defect would corrupt them (a tick
+silently reverted, a stamp dropped, a reprioritisation overridden by the cycle's own cascade), all
+caught. **THE DESIGN DOCUMENT'S OWN FALSIFIER, LITERALLY** (§7): "apply the browser's predicted
+change to the before, assert it equals the after" — run once where it holds (a checkbox tick,
+nothing else touched) and once where it does not (the marquee fixture itself), proving the
+falsifier discriminates rather than passing either way by construction. **NO PRODUCTION CODE
+CHANGED.** `tests/fixtures/replay-harness.mjs` and `tests/present-replay.test.mjs` import only
+symbols `app/present/index.ts`'s barrel already exports; zero lines under `app/`. `npm run check`:
+898 tests / 182 suites / 0 fail before this step (this agent's own re-run in its own worktree via
+`npm ci`, matching the recorded baseline exactly); 914 / 189 / 0 fail after (+16/+7, 0
+regressions). Capability `projection-replay-convergence-is-measured` (capabilities.yaml) carries
+the full record; `widen-instance-identity-past-the-first-stamp` (backlog.yaml) names, without
+sizing, what closing the marquee finding would need — a third identity tier `instance.ts` does not
+have today, deliberately not built here since it is a change to a module this step was told not to
+touch. **What this step does NOT do**: it does not shrink `the-open-line-survives-a-new-projection`
+or `the-vanished-line-is-parked-not-dropped` (backlog.yaml) — both amended to say so plainly, and
+to record the concrete fixture each can check its own future work against. **Not verified**: no
+browser, no passkey session, no live server, no cycle — every `before` string is a literal copy of
+real `~/qntm` content read read-only on 2026-08-01 and embedded directly, never re-read at test
+time; every `after` string is hand-built the way a real cycle transforms a line, never the output
+of running anything. The §2c "moved between sections" fixture is CONSTRUCTED rather than drawn
+from real content — no predicate in the operator's real published config moves a line between two
+sections of one view today — stated plainly in both the test file and the capability record.
+
 | # | step | layer | size | needs | falsifier, in one line | status |
 |---|---|---|---|---|---|---|
 | 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown | **DONE** |
@@ -429,7 +489,7 @@ READS of the same real config, not a running server's actual HTTP response.
 | 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator | **DONE (other repo, PR #58)** |
 | 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin | **DONE (other repo, PR #59)** |
 | 11 | carry section identity + resolved registration in the ENVELOPE | L1 | **½** | 2 | envelope section order == generator section order, all 72 views | **DONE — narrowed, see status block** |
-| 12 | the projection-replay convergence test | **L7** | **½** | 4, 11 | it IS the falsifier — it fails when a prediction and a cycle disagree | — |
+| 12 | the projection-replay convergence test | **L7** | **½** | 4, 11 | it IS the falsifier — it fails when a prediction and a cycle disagree | **DONE — measures a real, unconfirmable divergence, see status block** |
 | 13 | the server refuses a stale write (other repo) | L7 | **½** | — | a POST carrying a stale `sha256-…` is rejected, not applied | — |
 
 **A browser-side rule evaluator is still refused**, for two independent reasons **[REPO]**
