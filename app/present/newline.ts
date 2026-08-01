@@ -68,8 +68,11 @@
  *
  *   * no `GlobalRegistration` was supplied at all (a caller with no declaration, or a test
  *     exercising the print-based rungs alone) — the exact previous behaviour, unchanged;
- *   * `sectionAt` cannot name a `(view, section)` for `lineIndex` — above the first heading, an
- *     unaddressable view, or a markdown file with more headings than the config declares;
+ *   * `sectionForInsertAt` cannot name a `(view, section)` for `lineIndex` — a line inserted above
+ *     the file's first heading, an unaddressable view, or a markdown file with more headings than
+ *     the config declares. NOT `sectionAt`: `lineIndex` is where the new line WILL BE and that is
+ *     a different position from where a line IS. See that function's own header, and the
+ *     2026-08-01 browser observation it answers;
  *   * the named section is not in `qualification.sections[view]` — one of the 118 (of 159)
  *     qualifications the generator refused to normalise, `daily-work`'s 4 of 5 unpublished
  *     sections and `daily-personal`'s 5 of 8 among them; THIS IS A REAL, MEASURED CASE, not a
@@ -123,6 +126,19 @@
  * reason a caller should prefer it firing over the VIEW rung's cross-heading guess, though nothing
  * here changes which one the walk reaches first (LINE, then STRUCTURAL_NODE, then VIEW, then
  * GLOBAL — most specific PRINTED evidence always wins over the declaration, unchanged).
+ *
+ * ── THE WALK ORDER WAS RE-EXAMINED ON 2026-08-01 AND KEPT, ON MEASUREMENT ──
+ *
+ * A real browser run reported that `o` on a trailing blank line seeded a bare `- [ ] ` in both
+ * `inbox` and `personal/all`, where `o` one line higher seeded the right thing. The obvious
+ * reading is that the walk is backwards — the operator's cascade is GLOBAL -> VIEW -> SECTION ->
+ * NODE, printed evidence is not one of its levels, and preferring an inference over a declaration
+ * inverts his model. That reading is WRONG HERE, and the measurement is what says so: the printed
+ * rungs answered CORRECTLY at every index measured, the trailing blank line included
+ * (`STRUCTURAL_NODE`, `- [ ] `, from the line above). The chrome was never the defect. The TOKENS
+ * were empty, because the SECTION was never named — `sectionAt` was being asked about an INSERTION
+ * index, and it answers for a line that EXISTS. Nothing about which rung wins had to change, and
+ * the proven behaviour this header records above is therefore intact rather than merely tolerated.
  */
 
 import { sectionForInsertAt } from "./address.js";
@@ -186,7 +202,8 @@ export interface NewLine {
   readonly level: PresentationLevel;
   /**
    * The declared tokens seeded into `text`, in the engine's own order — `["#task", "#personal"]`.
-   * Empty when no declaration was supplied, when `sectionAt` could not name the section, or when
+   * Empty when no declaration was supplied, when `sectionForInsertAt` could not name the section
+   * (a line inserted above the file's first heading is in none), or when
    * the section has nothing spellable to say. Carried out separately from `text` so a caller can
    * report WHAT was said without re-parsing the characters it just asked for.
    */
@@ -316,8 +333,9 @@ function chromeFor(
 
   // 4. GLOBAL — READ, not guessed (design-the-resolution-architecture.md step 6). Nothing in this
   //    view has ever been PRINTED as a node, so there is no evidence left to walk up to — but the
-  //    declaration may still know what a node here looks like. `sectionAt` named the section the
-  //    same way L3 ADDRESSING always does; its `nodeType` is the MINTING default (never
+  //    declaration may still know what a node here looks like. `sectionForInsertAt` named the
+  //    section the same way L3 ADDRESSING always does, for the position the new line will TAKE
+  //    rather than the one it would read; its `nodeType` is the MINTING default (never
   //    `baseNodeType`, the revert target — see the header); `chromeShapes` is the one further fact
   //    that settles checkbox-vs-plain, which the type name alone cannot. Any one of the three
   //    missing is a refusal, exactly as it always was — this branch only ever RETURNS an answer,
