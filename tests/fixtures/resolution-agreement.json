@@ -396,5 +396,1683 @@
         "domain": "arts"
       }
     }
+  ],
+  "seeds": [
+    {
+      "view": "admin",
+      "section": "to-do",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#admin"
+      ]
+    },
+    {
+      "view": "admin",
+      "section": "done",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#admin"
+      ]
+    },
+    {
+      "view": "albums",
+      "section": "not-listened",
+      "nodeType": "album",
+      "tokens": [
+        "#album",
+        "#arts"
+      ]
+    },
+    {
+      "view": "albums",
+      "section": "listened",
+      "nodeType": "album",
+      "tokens": [
+        "#album",
+        "#arts"
+      ]
+    },
+    {
+      "view": "all-arts",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#arts"
+      ]
+    },
+    {
+      "view": "all-home",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#home"
+      ]
+    },
+    {
+      "view": "all-personal",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "all-program",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "all-social",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#social"
+      ]
+    },
+    {
+      "view": "all-spirit",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "all-work",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "backlog",
+      "section": "unscoped",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "backlog",
+      "section": "diagnose-ready",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "backlog",
+      "section": "scoped",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "backlog",
+      "section": "in-progress",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "backlog",
+      "section": "passing",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "backlog",
+      "section": "retired",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "blogs",
+      "section": "to-check",
+      "nodeType": "blog",
+      "tokens": [
+        "#blog",
+        "#arts"
+      ]
+    },
+    {
+      "view": "blogs",
+      "section": "checked",
+      "nodeType": "blog",
+      "tokens": [
+        "#blog",
+        "#arts"
+      ]
+    },
+    {
+      "view": "books",
+      "section": "to-read",
+      "nodeType": "book",
+      "tokens": [
+        "#book",
+        "#arts"
+      ]
+    },
+    {
+      "view": "books",
+      "section": "read",
+      "nodeType": "book",
+      "tokens": [
+        "#book",
+        "#arts"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "high-priority",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "due-soon",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "waiting",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "routine-drift",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "capture",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "orphans",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "backlog",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-personal",
+      "section": "done",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "daily-work",
+      "section": "in-progress",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "daily-work",
+      "section": "urgent",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "daily-work",
+      "section": "due-today",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "daily-work",
+      "section": "waiting",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "daily-work",
+      "section": "capture",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "ego-ideal",
+      "section": "developing",
+      "nodeType": "attribute",
+      "tokens": [
+        "#attribute",
+        "#character"
+      ]
+    },
+    {
+      "view": "ego-ideal",
+      "section": "embodied",
+      "nodeType": "attribute",
+      "tokens": [
+        "#attribute",
+        "#character"
+      ]
+    },
+    {
+      "view": "everything-personal",
+      "section": "everything",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "everything-work",
+      "section": "everything",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "films",
+      "section": "to-watch",
+      "nodeType": "film",
+      "tokens": [
+        "#film",
+        "#arts"
+      ]
+    },
+    {
+      "view": "films",
+      "section": "watched",
+      "nodeType": "film",
+      "tokens": [
+        "#film",
+        "#arts"
+      ]
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "unscoped",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#unscoped",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "diagnose-ready",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#diagnose-ready",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "scoped",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#cap-scoped",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "in-progress",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#in-progress",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "passing",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#passing",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "retired",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#retired",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "exists",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-exists",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "concept",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-concept",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "extracted",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-extracted",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "subsumed",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-subsumed",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "exists",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-exists"
+      ]
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "concept",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-concept"
+      ]
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "extracted",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-extracted"
+      ]
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "subsumed",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-subsumed"
+      ]
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "held",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#held"
+      ]
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "held-weak",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#held-weak"
+      ]
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "violated",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#violated"
+      ]
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "unverifiable",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#unverifiable"
+      ]
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "un-anchored",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#un-anchored"
+      ]
+    },
+    {
+      "view": "flowtrace-queue",
+      "section": "queue",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "flowtrace-sinks",
+      "section": "sinks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "free-trial-dojo",
+      "section": "fragments",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "god-box",
+      "section": "not-discussed",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit",
+        "#God"
+      ]
+    },
+    {
+      "view": "god-box",
+      "section": "discussed",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit",
+        "#God"
+      ]
+    },
+    {
+      "view": "groups",
+      "section": "groups",
+      "nodeType": "group",
+      "tokens": [
+        "#group",
+        "#social"
+      ]
+    },
+    {
+      "view": "habit-dojo",
+      "section": "classification",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "habits-admin",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#admin"
+      ]
+    },
+    {
+      "view": "habits-admin",
+      "section": "habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#admin"
+      ]
+    },
+    {
+      "view": "habits-life-admin",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#life-admin"
+      ]
+    },
+    {
+      "view": "habits-life-admin",
+      "section": "habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#life-admin"
+      ]
+    },
+    {
+      "view": "habits-personal",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "habits-personal",
+      "section": "habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "habits-program",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "habits-program",
+      "section": "habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "habits-spirit",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "habits-spirit",
+      "section": "habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "habits-work",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "habits-work",
+      "section": "habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "admin-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#admin"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "life-admin-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#life-admin"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "work-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "personal-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "program-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "habits",
+      "section": "spirit-habits",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "inbox",
+      "section": "inbox-tagged",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "inbox",
+      "section": "domain-empty",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-accuracy-1d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-accuracy-3d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-accuracy-7d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-age-of-intent",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-coverage",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-accuracy-1d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-accuracy-3d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-accuracy-7d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-age-of-intent",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-coverage",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-accuracy-1d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-accuracy-3d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-accuracy-7d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-age-of-intent",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-coverage",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics",
+      "section": "overall-accuracy-1d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics",
+      "section": "overall-accuracy-3d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics",
+      "section": "overall-accuracy-7d",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics",
+      "section": "overall-age-of-intent",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "metrics",
+      "section": "overall-coverage",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "operator-flowtrace",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-flowtrace",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-flowtrace",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-qntm-network",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-qntm-network",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-qntm-network",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-qntm",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-qntm",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-qntm",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-trace-orchestration",
+      "section": "tasks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-trace-orchestration",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "operator-trace-orchestration",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "outcomes-personal",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "outcomes-personal",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "outcomes-program",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "outcomes-program",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "outcomes-spirit",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "outcomes-spirit",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "outcomes",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "outcomes",
+      "section": "outcomes",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "people",
+      "section": "people",
+      "nodeType": "person",
+      "tokens": [
+        "#person",
+        "#social"
+      ]
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "unscoped",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#unscoped",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "diagnose-ready",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#diagnose-ready",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "scoped",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#cap-scoped",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "in-progress",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#in-progress",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "passing",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#passing",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "retired",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#retired",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-classes",
+      "section": "exists",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-exists",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-classes",
+      "section": "concept",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-concept",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-classes",
+      "section": "extracted",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-extracted",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-classes",
+      "section": "subsumed",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#class-subsumed",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-packages",
+      "section": "exists",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-exists"
+      ]
+    },
+    {
+      "view": "qntm-packages",
+      "section": "concept",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-concept"
+      ]
+    },
+    {
+      "view": "qntm-packages",
+      "section": "extracted",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-extracted"
+      ]
+    },
+    {
+      "view": "qntm-packages",
+      "section": "subsumed",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#package-subsumed"
+      ]
+    },
+    {
+      "view": "qntm-principles",
+      "section": "held",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#held"
+      ]
+    },
+    {
+      "view": "qntm-principles",
+      "section": "held-weak",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#held-weak"
+      ]
+    },
+    {
+      "view": "qntm-principles",
+      "section": "violated",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#violated"
+      ]
+    },
+    {
+      "view": "qntm-principles",
+      "section": "unverifiable",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#unverifiable"
+      ]
+    },
+    {
+      "view": "qntm-principles",
+      "section": "un-anchored",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev",
+        "#un-anchored"
+      ]
+    },
+    {
+      "view": "qntm-queue",
+      "section": "queue",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "qntm-sinks",
+      "section": "sinks",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "routine-cascade-dojo",
+      "section": "governed",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines-admin",
+      "section": "admin-routines",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine",
+        "#admin"
+      ]
+    },
+    {
+      "view": "routines-admin",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines-life-admin",
+      "section": "life-admin-routines",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine",
+        "#life-admin"
+      ]
+    },
+    {
+      "view": "routines-life-admin",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines-personal",
+      "section": "personal-routines",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine",
+        "#personal"
+      ]
+    },
+    {
+      "view": "routines-personal",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines-program",
+      "section": "program-routines",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine",
+        "#program"
+      ]
+    },
+    {
+      "view": "routines-program",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines-spirit",
+      "section": "spirit-routines",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "routines-spirit",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines-work",
+      "section": "work-routines",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine",
+        "#work"
+      ]
+    },
+    {
+      "view": "routines-work",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "tokens": [
+        "#routine"
+      ]
+    },
+    {
+      "view": "routines",
+      "section": "admin-routines",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#admin"
+      ]
+    },
+    {
+      "view": "routines",
+      "section": "life-admin-routines",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#life-admin"
+      ]
+    },
+    {
+      "view": "routines",
+      "section": "work-routines",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "routines",
+      "section": "personal-routines",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "routines",
+      "section": "program-routines",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#program"
+      ]
+    },
+    {
+      "view": "routines",
+      "section": "spirit-routines",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#spirit"
+      ]
+    },
+    {
+      "view": "termination-dojo",
+      "section": "fragments",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "test-scratchpad",
+      "section": "scratchpad-targets",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "this-week",
+      "section": "overdue",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "this-week",
+      "section": "due-this-week",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "this-week",
+      "section": "available-overdue",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "this-week",
+      "section": "available-this-week",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "trace-orchestration-queue",
+      "section": "queue",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#dev"
+      ]
+    },
+    {
+      "view": "tv",
+      "section": "to-watch",
+      "nodeType": "tv_show",
+      "tokens": [
+        "#tv",
+        "#arts"
+      ]
+    },
+    {
+      "view": "tv",
+      "section": "watched",
+      "nodeType": "tv_show",
+      "tokens": [
+        "#tv",
+        "#arts"
+      ]
+    },
+    {
+      "view": "unlocks-dojo",
+      "section": "chain",
+      "nodeType": "task",
+      "tokens": [
+        "#task"
+      ]
+    },
+    {
+      "view": "waiting-for-personal",
+      "section": "personal-waiting-for",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "waiting-for-personal",
+      "section": "personal-blocked",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "waiting-for-personal",
+      "section": "personal-held",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#personal"
+      ]
+    },
+    {
+      "view": "waiting-for-work",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "waiting-for-work",
+      "section": "blocked",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "waiting-for-work",
+      "section": "held",
+      "nodeType": "task",
+      "tokens": [
+        "#task",
+        "#work"
+      ]
+    },
+    {
+      "view": "writers",
+      "section": "to-check",
+      "nodeType": "writer",
+      "tokens": [
+        "#writer",
+        "#arts"
+      ]
+    },
+    {
+      "view": "writers",
+      "section": "checked",
+      "nodeType": "writer",
+      "tokens": [
+        "#writer",
+        "#arts"
+      ]
+    }
   ]
 }

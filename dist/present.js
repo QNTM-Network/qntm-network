@@ -64,7 +64,12 @@ function carriesContent(line) {
   if (shape.kind === "heading") {
     return shape.text.trim() !== "";
   }
-  return line.replace(BULLET, "").replace(CHECKBOX_GLYPH, "").trim() !== "";
+  const tail = line.replace(BULLET, "").replace(CHECKBOX_GLYPH, "");
+  let stripped = tail;
+  for (const span of [...tagSpans(tail)].reverse()) {
+    stripped = stripped.slice(0, span.start) + stripped.slice(span.end);
+  }
+  return stripped.trim() !== "";
 }
 function chromeOf(line) {
   const shape = classifyLine(line);
