@@ -974,6 +974,7 @@ import {
   placeFor,
   HeldSurface,
   heldFrom,
+  ProjectionQueue,
   FocusSurface,
   ModeSurface,
   clampLine,
@@ -1231,6 +1232,18 @@ const served = new BaseSurface();
 // where it lives instead. FOCUS is `focus`, ANCHOR is that surface's `InstanceAnchor`, BASE is
 // `served`, and this is the last of the four.
 const held = new HeldSurface();
+
+// THE NEXT PROJECTION FOR A FILE, HELD UNTIL THE SCREEN CAN TAKE IT (app/present/queue.ts). One
+// surface for the page, same reason as the five above — it has to survive the repaints of the
+// gesture it is waiting for.
+//
+// IT IS THE READ PATH'S COUNTERPART TO `served`, AND THE TWO MUST NOT BE MERGED. `served` holds the
+// projection that IS on screen, so a write can be measured against it; this holds the one that is
+// NOT on screen yet, because installing it would repaint a line the operator is typing into. One
+// answers "may I write this", the other answers "may I show this", and a page that confused them
+// would either measure a write against a file nobody is looking at or refuse to show a file nobody
+// is editing.
+const queued = new ProjectionQueue();
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
@@ -1502,6 +1515,175 @@ function refusalNote() {
   return takeNotes();
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE BEHAVIOURAL QUEUE — a projection arriving mid-edit is HELD, and applied when the line settles
+// (docs/implementation-artifacts/design-local-behaviour-and-the-queue.md §5)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// THE DEFECT, EXACTLY. `paint.ts`'s `rawInput` sets `input.value = lineSource` — the characters of
+// an open line come out of whatever source string the painter is walking. So a projection installed
+// while a line is open replaces what the operator typed with what the cycle thinks that line says,
+// silently, mid-word. `commitLine` is async and a cycle takes seconds, so this is not a race that
+// needs an unbidden transport to reach: he ticks a box, opens a line, and the TICK'S OWN ANSWER
+// lands on the line he is now typing into.
+//
+// THE ANSWER IS NOT TO REPAINT MORE CAREFULLY. It is to not repaint yet. The projection is held —
+// one per path, newest wins — and installed the moment nothing is open. Every line then moves
+// together, from one string, through the one function that already knows an arrival from a view
+// change. That coherence is the point: half a view from the cycle and one line from the operator is
+// a screen that describes no file that has ever existed.
+
+/** The freshness line's word for it. One sentence, same register as `BASE_REFUSALS`. */
+const ARRIVAL_HELD = "the cycle answered — it lands on this view when the line you are in settles";
+
+/** And for an answer that carried no projection at all — see `arrive`. */
+const ARRIVAL_EMPTY = "the write landed and the server sent no projection back";
+
+/**
+ * WHAT A WRITE'S OWN ANSWER DID, SAID ONCE. Two callers, one sentence each, because the three
+ * outcomes of `arrive` are exactly the three things the operator could need to know and two of them
+ * used to be unreachable states of the word "syncing…".
+ */
+function sayArrival(landed) {
+  if (landed === "held") {
+    $("freshness").textContent = ARRIVAL_HELD + takeNotes();
+  } else if (landed === "ignored") {
+    $("freshness").textContent = ARRIVAL_EMPTY + takeNotes();
+  }
+}
+
+/**
+ * IS A LINE OPEN — can the operator type into the screen right now?
+ *
+ * THE GATE IS "TYPEABLE", NOT "SELECTED", AND THE DIFFERENCE IS THE WHOLE VALUE OF THE GATE. In
+ * NORMAL the cursor is on a line and that line renders as `normalLine` — characters with a block
+ * cursor drawn on one of them, no `<input>`, nothing to lose (`paint.ts`'s `raw`). A projection
+ * arriving then costs him nothing and is installed immediately, which is what keeps the queue from
+ * becoming "the screen stops updating whenever the cursor exists". vim always has a cursor.
+ *
+ * TWO SHAPES ARE TYPEABLE AND BOTH ARE ASKED FOR HERE. A line being MADE (`draftLine`, a row that
+ * is in no file yet) and a line being EDITED (`focus` + INSERT, an `<input>` holding one line's
+ * source). They are separate surfaces on purpose — see draft.ts — so the question is asked of both
+ * rather than of some third fact that would have to be kept in step with them.
+ *
+ * IT ASKS THE SURFACES, NOT THE DOM. The page never reads the document to decide anything; a
+ * `querySelector` for a live `<input>` would be the painter's output re-entering the page's own
+ * reasoning, which is the inversion this whole app is arranged to refuse.
+ */
+function aLineIsOpen() {
+  if (draftLine.draft !== null) {
+    return true;
+  }
+  return mode.mode === "INSERT" && focus.lineIndex !== null;
+}
+
+/** The file the body is currently showing, or `null` when it is showing nothing. */
+function paintedPath() {
+  return graphData?.snapshot?.views.find((x) => x.id === currentViewId)?.path ?? null;
+}
+
+/**
+ * INSTALL A PROJECTION — the ONE place a projection the server sent becomes what this page holds.
+ *
+ * `toggleTask` and `commitLine` each used to do these three statements themselves. They do not any
+ * more, and the count that used to prove "nothing local reaches a write" moved from five assignment
+ * sites to four because of it (tests/app-membership-note.test.mjs §4). That is the invariant
+ * getting STRONGER rather than weaker: there is now one gate between the wire and `graphData`
+ * instead of three, and the gate is the only thing that can decide a projection is installable.
+ *
+ * `loadGraph` KEEPS ITS OWN, and it is not an oversight. It must assign before the empty-state
+ * branch, which returns without ever painting — a boot that lands on a graph with no views has a
+ * projection to hold and no view to install it into.
+ */
+function installProjection(pending) {
+  graphData = pending.data;
+  paintView(currentViewId, "arrived");
+  sayAsOf(pending.data);
+}
+
+/**
+ * A PROJECTION ARRIVED FOR `path`. Queue it, then install it if the screen can take it.
+ *
+ * ONE FUNCTION FOR BOTH WRITE PATHS, because a tick's answer and a line commit's answer are the
+ * same event to this page and were already handled by three identical statements in two places.
+ *
+ * THE COALESCING IS THE QUEUE'S AND THE GATE IS THIS PAGE'S, and that split is deliberate:
+ * `app/present/queue.ts` is pure and knows nothing about `<input>` elements, and this function
+ * knows nothing about which of two projections is newer. Neither could be tested without the other
+ * if they were one thing.
+ */
+function arrive(path, data) {
+  // AN ANSWER WITH NO SNAPSHOT IN IT IS NOT A PROJECTION, AND MUST NOT BECOME ONE BY BEING QUEUED.
+  // `POST /app/edit-file` always carries a snapshot when it succeeds (worker/src/app.js builds it),
+  // so this is a malformed answer rather than a case — but the queue is drained from a SYNCHRONOUS
+  // keydown handler, outside every `try` a write path has, and an envelope that throws when it is
+  // finally installed would take a keystroke down with it hours after the write that produced it.
+  // Refused at the door instead, where the write path still has a `catch` and a sentence.
+  if (!data?.snapshot) {
+    return "ignored";
+  }
+  queued.offer(path, data.snapshot.generated_at ?? null, data);
+  return drainProjection(path) ? "installed" : "held";
+}
+
+/**
+ * INSTALL WHAT IS WAITING FOR `path`, IF ANYTHING IS AND NOTHING IS OPEN.
+ *
+ * Returns `true` when a projection was installed — the callers that write the freshness line need
+ * to know which sentence they owe, and `sayAsOf` has already run when it returns `true`.
+ *
+ * THE PATH IS CHECKED AGAINST WHAT IS ON SCREEN. A projection for a file the operator is not
+ * looking at is left in the queue rather than installed, because installing it means painting
+ * `currentViewId` — and repainting the view he IS in from a projection for a different file is the
+ * one thing worse than not repainting at all.
+ */
+function drainProjection(path) {
+  const pending = path === null ? null : queued.pending(path);
+  if (pending === null || path !== paintedPath()) {
+    return false;
+  }
+  if (aLineIsOpen()) {
+    // ── THE SCREEN WAITS AND THE BASE DOES NOT, AND THIS IS THE ONE STATEMENT THAT KEEPS THE
+    //    STALE-WRITE DETECTOR HONEST WHILE A PROJECTION IS HELD ──
+    //
+    // `BaseSurface` answers "is the copy this save was computed from the copy the SERVER HAS" —
+    // its own header says WHAT THE SERVER LAST SENT, not what the painter last drew. A projection
+    // sitting in the queue IS what the server last sent, so leaving the base at the previous one
+    // would make the surface answer `current` for a save that provably discards a projection this
+    // page is holding in its own hand. Measured: without this line, ticking a second box while a
+    // line is open reports nothing and silently overwrites the first tick's answer — the detector
+    // firing LESS often because of a change made for speed, which is the trade this whole capability
+    // exists to refuse.
+    //
+    // IT IS STILL SERVER MARKDOWN, WHICH IS THE RULE THAT MATTERS. `base.ts`'s trap is a base taken
+    // from "a string this app computed"; this one is read straight out of the envelope, for the one
+    // path this projection describes. The painter's source is untouched, so the next write reads
+    // `stale` — which is exactly true, and is the sentence the operator needs.
+    const markdown = pending.data.snapshot.views?.find((v) => v.path === path)?.markdown;
+    if (typeof markdown === "string") {
+      served.take(path, markdown);
+    }
+    return false;
+  }
+  installProjection(queued.take(path));
+  return true;
+}
+
+/**
+ * DRAIN WHATEVER IS WAITING FOR THE VIEW ON SCREEN. The counterpart to `arrive`: that one is "a
+ * projection landed", this one is "the line settled, so a projection that landed earlier may go on
+ * now".
+ *
+ * IT IS SILENT WHEN IT INSTALLS NOTHING, and that matters more than it looks. It is called from
+ * the settle path of every line commit and from the vim keydown handler, which is to say on
+ * ORDINARY keystrokes with nothing queued — so a sentence here would be a sentence on every
+ * keypress. When it does install, `sayAsOf` says "as of <when>", which is the true and complete
+ * account of what just happened.
+ */
+function drainPainted() {
+  return drainProjection(paintedPath());
+}
+
 /**
  * Paint a view. `why` is the ONE fact this function could never work out for itself.
  *
@@ -1578,12 +1760,19 @@ function paintView(id, why) {
   // deliberately blurred focus (`o`/`O` opening a draft) has to survive the repaints in between.
   const entering = graphData?.snapshot?.views.find((x) => x.id === id);
   if (entering !== undefined) {
-    // THE BASE IS TAKEN HERE AND NOWHERE ELSE, from the markdown the server sent, in the same call
-    // that installs it for painting — the discipline `focus`'s anchor already follows, applied to a
+    // THE BASE IS TAKEN HERE, from the markdown the server sent, in the same call that installs it
+    // for painting — the discipline `focus`'s anchor already follows, applied to a
     // per-file fact. This function is the only place a view is chosen or re-read from the server, so
     // a base taken here can never describe a projection the painter was not handed. It is REPLACED
     // rather than accumulated: one base, for the file on screen, because a base that outlives the
     // projection it came from is a lie about the server's copy.
+    //
+    // THERE IS NOW A SECOND SITE AND IT IS NOT A SECOND OPINION — `drainProjection`, when a
+    // projection is HELD because a line is open. Read that one's own paragraph: it exists because
+    // "what the server last sent" and "what the painter is holding" stopped being the same string
+    // the day an arrival could be deferred, and this surface answers the FIRST question. Both sites
+    // pass markdown straight out of an envelope; neither can pass a string this app computed, which
+    // is the property the single-site rule was really protecting.
     served.take(entering.path, entering.markdown);
     // RELEASE BEFORE HOLDING, AND BEFORE ANYTHING ELSE READS THIS FILE. Any held row whose
     // characters this arriving file now contains stops being held: the source owns them, so a row
@@ -2211,9 +2400,13 @@ async function toggleTask(view, toggle) {
   box.disabled = true;
   try {
     const data = await writeFile(view, next, toggle.source);
-    graphData = data;
-    paintView(currentViewId, "arrived");
-    sayAsOf(data);
+    // OFFERED, NOT INSTALLED. If he opened a line while this tick was in the air, its answer waits
+    // — see `arrive` — and the sentence below is what says so. THE ROW IS LEFT MARKED `syncing`
+    // in that case, deliberately and without a statement here to do it: the class is dropped by the
+    // repaint on the ordinary path and by the `catch` on a failure, so "still marked" is exactly
+    // "this row's answer is not on screen yet", which is the truth. Clearing it here would have
+    // been this page inventing a third meaning for a class that already has two.
+    sayArrival(arrive(view.path, data));
   } catch (e) {
     box.checked = !box.checked;
     row.classList.toggle("done", box.checked);
@@ -2239,7 +2432,23 @@ async function toggleTask(view, toggle) {
 // painter was given plus the characters the input held. `null` means the edit was refused — the
 // line was left unchanged, or the text was not one line — and a refusal is not a POST.
 async function commitLine(view, commit) {
-  if (commit.markdown === null) return;
+  if (commit.markdown === null) {
+    // THE LINE SETTLED AND CHANGED NOTHING — WHICH IS STILL A SETTLEMENT, AND THE QUEUE WAS
+    // WAITING FOR ONE. He opened a line, a projection arrived and was held, and he left the line
+    // without typing. There is no write to make and there is a screen to catch up: a blur that
+    // changes nothing is the commonest way an open line closes, and returning here without draining
+    // would leave the projection waiting for a gesture that has already happened.
+    //
+    // ONE TURN LATER, AND THE REASON IS EXACT RATHER THAN DEFENSIVE. `paint.ts`'s `settle` calls
+    // this callback IN THE MIDDLE of the settlement — `mode.enterNormal()` and the repaint both
+    // happen after it returns — so at this instant the line is still open and the gate would
+    // (correctly) refuse. Measured: draining here directly leaves the projection queued until the
+    // next keystroke. Scheduling it is what makes "the moment the line settles" mean the moment the
+    // settlement is FINISHED. The other write path needs no such thing: its own `await` is already
+    // a turn, and by the time it returns the mode has changed.
+    queueMicrotask(drainPainted);
+    return;
+  }
   // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's and
   // orderingNoteFor's own headers for what each says, when, and why only the LEAVING transition
   // and a RANK CHANGE (never an unchanged answer) are said at all. Joined into one string here,
@@ -2252,9 +2461,11 @@ async function commitLine(view, commit) {
   sentEdit = { view: view.id, path: view.path, text: commit.text };
   try {
     const data = await writeFile(view, commit.markdown, commit.source, note);
-    graphData = data;
-    paintView(currentViewId, "arrived");
-    sayAsOf(data);
+    // OFFERED, NOT INSTALLED — the same one statement the checkbox path makes, for the same reason.
+    // The commonest shape this catches is his own two-captures-in-a-row gesture: Enter settles this
+    // line and opens the next one, so by the time this answer lands there is already a row open,
+    // and installing it here is exactly what used to destroy that row's characters.
+    sayArrival(arrive(view.path, data));
   } catch (e) {
     // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ──
     //
@@ -2586,6 +2797,11 @@ function logout() {
   // person at the screen. A row surviving here would show one operator's writing to the next one.
   held.clear();
   paintHeldRows();
+  // AND SO DOES ANYTHING WAITING TO BE SHOWN, for the same reason `served.drop()` is two statements
+  // up rather than one: a projection is a copy of the operator's files, and the next person at this
+  // browser must not be able to make it appear by pressing a key. It is DROPPED rather than
+  // installed on the way out — installing it would paint one operator's vault onto a sign-in screen.
+  queued.clear();
   // A message earned by the LAST person to use this browser is not a greeting for the next one,
   // and neither is an open <input>: the same leak the comment above already refuses.
   mode.enterNormal();
@@ -2623,6 +2839,18 @@ const typingIn = (target) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && drawerIsOpen) { e.preventDefault(); closeDrawer(); return; }
   if (e.key === "\\" && !drawerIsOpen && !typingIn(e.target)) { e.preventDefault(); openDrawer(); return; }
+  // THE THIRD DRAIN POINT — the world catches up the moment he is not typing into it.
+  //
+  // The other two are the events a write path already owns: a projection landing (`arrive`) and a
+  // line settling (`commitLine`). This one is for the settlement the page is never told about — a
+  // row abandoned with Escape settles inside `paint.ts` and calls nothing here — and it costs one
+  // map lookup on a keystroke that is not going into an `<input>`.
+  //
+  // BEFORE THE NORMAL GATE AND OUTSIDE IT, ON PURPOSE. A key that this handler goes on to ignore
+  // is still evidence that nothing is open, and the keys it DOES handle are then applied to the
+  // projection that just landed rather than to the one it replaced. In INSERT the gate inside
+  // `drainProjection` refuses anyway, so this is a no-op exactly when it must be.
+  drainPainted();
   // VIM NORMAL MODE. `typingIn(e.target)` is the SAME refusal `\` already earns: while an <input>
   // owns the keystroke (INSERT's own line, the handle field, the capture box, the search a drawer
   // row might grow one day) a global letter key must not eat a character out of it. Also refused

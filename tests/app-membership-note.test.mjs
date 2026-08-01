@@ -341,9 +341,38 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
   // fails against — a measurement of zero new sites is only meaningful once a positive control
   // (these five) is shown passing, which is what each assertion below is.
 
-  test("`graphData` is assigned in exactly five places — every one the server's own envelope", () => {
+  // ── THE `graphData` COUNT MOVED FROM FIVE TO FOUR, AND IT MOVED IN THE SAFE DIRECTION ──
+  //
+  // `a-projection-can-arrive-and-be-held` (the behavioural queue) took the three statements
+  // `toggleTask` and `commitLine` each used to make — assign, paint, say — and put them in ONE
+  // function, `installProjection`, because a projection that arrives while a line is open must be
+  // HELD rather than installed and that decision cannot be made in two places. So the two write
+  // paths stopped assigning `graphData` and the queue's single drain started.
+  //
+  // THE PROPERTY THIS SUITE DEFENDS IS UNCHANGED AND IS NOW EASIER TO CHECK, WHICH IS WHY THE
+  // NUMBER WAS ALLOWED TO MOVE. What research-the-rule-closure.md §8 counted was "every site where
+  // something becomes the page's copy of the server's answer, so that a client-computed string
+  // appearing at one of them is visible". Four sites is a smaller surface than five, and the second
+  // assertion below is stronger than the count ever was: it enumerates what is assigned rather than
+  // how often, so a sixth site that assigned a page-computed envelope would fail on the VALUE even
+  // if someone had adjusted the number.
+  //
+  // `loadGraph` KEEPS ITS OWN and did not fold into `installProjection`: it must assign before its
+  // empty-state branch, which returns without ever painting.
+  test("`graphData` is assigned in exactly four places — every one the server's own envelope", () => {
     const sites = APP_SOURCE.match(/\bgraphData\s*=(?!=)/g) ?? [];
-    assert.equal(sites.length, 5, "membershipNoteFor must not add a client-computed graphData write");
+    assert.equal(sites.length, 4, "membershipNoteFor must not add a client-computed graphData write");
+  });
+
+  test("and what is assigned is only ever `null`, the fetched envelope, or a QUEUED one", () => {
+    const assigned = (APP_SOURCE.match(/\bgraphData\s*=(?!=)\s*([A-Za-z0-9_$.]+)/g) ?? []).map((site) =>
+      site.replace(/^\bgraphData\s*=\s*/, ""),
+    );
+    assert.deepEqual(
+      [...assigned].sort(),
+      ["data", "null", "null", "pending.data"],
+      "a value this page computed became the copy of the file every write is measured against",
+    );
   });
 
   test("`writeFile` has exactly two callers — toggleTask and commitLine, unchanged in count", () => {

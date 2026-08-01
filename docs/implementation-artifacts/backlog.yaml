@@ -882,7 +882,14 @@ backlog:
     write (3). NOTHING PURELY CLIENT-SIDE REMAINS BETWEEN HERE AND AUTHORING IN THE
     BROWSER — (1) is a delivery mechanism this repository owns but which is a transport
     change rather than a presentation one, and (3) is a switch in the other repository and
-    the operator''s own decision.'
+    the operator''s own decision.
+    AMENDED 2026-08-01 — THE DISTANCE IS STILL TWO AND ONE OF THEM SHRANK. Blocker (1) said a projection
+    can only arrive because the browser asked. That is unchanged as a TRANSPORT fact, and its dangerous
+    half is closed: `a-projection-can-arrive-and-be-held` means that when one does arrive, however it
+    arrives, it does not repaint a line he is typing into and it does not move the screen backwards
+    through a projection the server has already left. The browser half row 7 needs is therefore built
+    and proven. What remains of (1) is the transport itself. Blocker (3), the server accepting a stale
+    write, is unchanged and is in the other repository.'
   driving_capability: a-human-authors-in-the-browser
   kind: capability
   state: diagnose-ready
@@ -1351,6 +1358,14 @@ backlog:
     than the anchor) a new assertion belongs beside them proving the row's own characters, not just
     the cursor, survived. Filed as the concrete acceptance test this row did not have before, not
     as work this row no longer has to do.
+    AMENDED 2026-08-01, AFTER THE QUEUE LANDED — SMALLER, AND ITS URGENCY IS SPENT RATHER THAN ITS
+    SCOPE. `a-projection-can-arrive-and-be-held` means a projection arriving while a line is open is NOT
+    INSTALLED, so the repaint this row protects against no longer happens on the path that made it
+    urgent. That is a DIFFERENT fix, not this one: the queue removes the OCCASION and this row removes
+    the DAMAGE if the occasion returns. It returns for anything that installs a projection without
+    consulting the gate — `loadGraph` at boot and the re-read button both still do, deliberately — and
+    the transport row 7 brings will have to choose. WHAT IS LEFT IS EXACTLY WHAT WAS LEFT BEFORE: hold
+    `input.value` across a repaint rather than sourcing it from the arriving projection.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -1598,6 +1613,37 @@ backlog:
     to the gesture that caused it. SHIPPING THIS FIRST WOULD MAKE AN INVISIBLE DEFECT FASTER AND
     QUIETER. Needs 1, 3 and 5. Cross-referenced rather than duplicated — the measurements and the
     method belong to research-state-and-speed.md and nothing here restates them.
+    AMENDED 2026-08-01, AND THE AMENDMENT IS THE SHARPER REASON THIS ROW NEVER STATED. Async does not
+    merely make the defect faster and quieter — WITHOUT THE QUEUE IT DISABLES THE DETECTOR BUILT TO SEE
+    IT. `served.take()` is called only from `paintView`, so an ack WITHOUT a projection leaves
+    `BaseSurface` holding a base nothing refreshes, `read()` answers `current` indefinitely, and the one
+    sentence row 1 shipped stops being said while the thing it describes gets MORE common. So the
+    dependency is 1, 3, 5 AND `a-projection-can-arrive-and-be-held`.
+    THE QUEUE IS NOW CLOSED AND THIS ROW IS STILL BLOCKED — by a different thing, named exactly. The
+    queue closes the READ path: a projection arriving mid-edit is held, and the base moves with a held
+    projection so the detector goes on firing. What async still needs is an answer to WHAT FETCHES THE
+    PROJECTION AFTER AN ACK. Today the complete set of things that install one is boot, the re-read
+    button, and the return of a write — all three are the browser asking. Ack on the vault write and the
+    third disappears, leaving nothing at all, which is `the-projection-arrives-without-being-asked-for`.
+    THE CHEAP HALF OF THAT ROW IS REACHABLE IN THIS REPOSITORY AND IS NOT YET BUILT. `GET /app/graph`
+    reads the hosted model LIVE (worker/src/app.js `graphGet` prefers the Fly envelope; the D1 snapshot
+    is only the fallback), so a poll after an accepted write would see the cycle output — the design
+    section 3.6 spends the operator own sixty-second out-of-view budget on exactly this. TWO THINGS
+    WOULD HAVE TO GO WITH IT AND NEITHER IS OPTIONAL. (a) `POST /app/edit-file` must ack after
+    `/vault/file` and cycle behind it, which needs `ctx.waitUntil`, and `handleApp` takes no `ctx`
+    today. (b) `served.close(path)` must move from the ACK to the ARRIVAL of the projection that write
+    caused. Without (b) a second edit inside the cycle reads `current` the instant the fast ack lands
+    and silently overwrites the first — the two-edits case made WORSE by speed, which is this row own
+    warning arriving one level down.
+    AND THE FRESHNESS LINE MUST STOP SAYING `as of <when>` FOR A WRITE THAT WAS ONLY ACCEPTED. `sayAsOf`
+    reads `data.snapshot.generated_at`, and an async ack carries no snapshot. The honest sentence is
+    about acceptance; the `as of` line belongs to the projection when it lands. It must not claim
+    written when it means accepted.
+    THE BLOCKER IS NOW MEASURED RATHER THAN REASONED. `tests/app-projection-queue.test.mjs` section 7
+    drives the SHAPE an async ack has — `{ok: true}` with no snapshot — through the page as it stands.
+    Two arms, both passing, both of which must go RED before this row can close: the base is still the
+    pre-write projection after the ack, and a second tick then posts a file that provably lacks the
+    first tick while the freshness line says nothing at all. That second arm is this row's falsifier.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -2740,4 +2786,52 @@ backlog:
     can make; `carriesContent` correspondingly still counts a marker-only line as content, stated
     at the site. It does not surface the `dropped` record in the running app, which stays
     design-the-rule-mirror.md row 6. It does not touch rung 3.
+  state: passing
+- id: a-projection-can-arrive-and-be-held
+  title: >-
+    [haven] [4] [HALF A DAY] THE BEHAVIOURAL QUEUE. One coalescing pending projection per path,
+    ordered by `generated_at`, applied through `paintView`, gated by the line the operator has open.
+    Specified in docs/implementation-artifacts/design-local-behaviour-and-the-queue.md section 5.
+    CLOSED 2026-08-01.
+  driving_capability: a-projection-arriving-mid-edit-is-held
+  kind: capability
+  record: >-
+    THE DEFECT NEEDED NO TRANSPORT TO REACH, WHICH IS WHY THIS SHIPPED AHEAD OF ROW 7. `paint.ts`'s
+    `rawInput` sets `input.value = lineSource`, so an open line's characters come out of whatever
+    source string the painter is walking. `commitLine` is async and a cycle takes seconds, so a
+    tick's own answer landed on the line he opened after making it and replaced what he had typed.
+    `app/present/queue.ts` holds one pending projection per path and imports nothing.
+    THE GATE IS "TYPEABLE", NEVER "SELECTED", AND THAT DECISION IS THE DIFFERENCE BETWEEN A QUEUE
+    AND A STALL. In NORMAL the cursor is on a line and that line renders as characters with a block
+    cursor — no `<input>`, nothing to lose — so the world goes on updating. vim always has a cursor;
+    a gate on "selected" would have stopped the screen forever. Two shapes are typeable and both are
+    asked for, because they are deliberately separate surfaces: a line being MADE (`draftLine`) and
+    a line being EDITED (`focus` plus INSERT).
+    ONE THING THE DESIGN DID NOT NAME AND THE WORK FOUND — AND IT IS THE ONE THAT MATTERED. Holding
+    a projection blinds the stale-write detector unless the BASE moves with it. `served.take` ran
+    only when a projection was INSTALLED, so a held projection left `BaseSurface` answering
+    `current` for a save that provably discards a projection the page was holding in its own hand.
+    Measured: tick a box, open a line, tick a second box, and the second write silently overwrote
+    the first tick's answer with no sentence at all. `drainProjection` now takes the base off the
+    held envelope while leaving the screen alone. It is still markdown read straight out of an
+    envelope, which is the property base.ts's "taken here and nowhere else" rule was really
+    protecting, and that rule's comment is amended rather than quietly broken.
+    A SECOND ONE, SMALLER. `paint.ts` calls `onLineCommit` in the MIDDLE of a settlement — the mode
+    changes and the repaint both happen after it returns — so draining there directly always found
+    the line still open. The drain for a blur that changed nothing is scheduled one turn later, so
+    "the moment the line settles" means the moment the settlement is finished.
+    ONE RESIDUAL, NAMED RATHER THAN HIDDEN. A row abandoned with Escape settles inside `paint.ts`
+    and tells the page nothing, so a projection stays held until the next gesture. Held, never lost,
+    and the freshness line says so. The three drain points are a projection landing, a line settling
+    (including a blur that changed nothing), and any keystroke the page sees.
+    COUNTS. `graphData` assignment sites moved 5 to 4 and the direction is toward safety: the two
+    write paths stopped installing a projection each and `installProjection` started, because
+    "install it" and "hold it, a line is open" is one decision that must not be made in two places.
+    `tests/app-membership-note.test.mjs` section 4 gained an assertion stronger than the count it
+    replaced — it enumerates the assigned VALUES, so a site assigning a page-computed envelope fails
+    even if the number were adjusted. `writeFile(` 3, `applyEdit(` 5, `.markdown` never assigned,
+    `held.hold(` 1 and `held.rows` 1 are all unchanged.
+    ENFORCEMENT IS `tests/app-projection-queue.test.mjs` — 24 tests in 6 documented sections, of
+    which 2 are mutation proofs and 3 drive the falsifier with lines changed above the open line,
+    below it, and both.
   state: passing

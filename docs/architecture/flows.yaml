@@ -790,6 +790,31 @@ forbidden_flows:
       derivable without running the app — which is the condition `held.ts` and `focus.ts` already
       refuse for the same reason, and the one the presentation cascade was built to end.
 
+  - id: queue-never-reaches-the-edit-path
+    from: app/present/queue
+    to:   app/present/source
+    reason: >
+      `queue.ts` holds PROJECTIONS — envelopes that came off the wire — and decides which of two is
+      the current one for a file. `source.ts` decides what is written. The property that makes the
+      queue safe is that everything in it came from the server, so that installing one hands
+      `BaseSurface` a base the server really sent; a call from here into the edit constructor would
+      let the module holding the server's answer also compute a change to it, and the string that
+      came back out would be indistinguishable from an arrival. That is `base.ts`'s named trap —
+      "never with a string this app computed" — reached from the one direction that could certify
+      itself. The module imports nothing at all, which makes the rule structural rather than a
+      promise a caller has to keep.
+
+  - id: queue-never-paints
+    from: app/present/queue
+    to:   app/present/paint
+    reason: >
+      HOLDING A PROJECTION AND INSTALLING ONE ARE TWO DECISIONS AND ONLY ONE OF THEM IS THIS
+      MODULE'S. It answers "which projection is the current one for this file", which is pure
+      arithmetic over `generated_at`; whether that projection may go on the screen depends on
+      whether a line is open, which is a fact about an `<input>` element and belongs to the page.
+      A call from here into the painter would fold the two together, and the ordering — the half a
+      test can drive without a browser — would stop being answerable without running the app.
+
   - id: relative-never-touches-the-dom
     from: app/present/relative
     to:   app/present/paint

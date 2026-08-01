@@ -253,9 +253,12 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor'
   const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
   const ORDERING_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "ordering.ts"), "utf8");
 
-  test("`graphData` is still assigned in exactly five places", () => {
+  // FOUR RATHER THAN FIVE SINCE 2026-08-01 — the behavioural queue's one `installProjection`
+  // replaced the two write paths' identical assign-paint-say. tests/app-membership-note.test.mjs §4
+  // carries the account and the stronger value-level assertion that went with it.
+  test("`graphData` is still assigned in exactly four places", () => {
     const sites = APP_SOURCE.match(/\bgraphData\s*=(?!=)/g) ?? [];
-    assert.equal(sites.length, 5, "orderingNoteFor must not add a client-computed graphData write");
+    assert.equal(sites.length, 4, "orderingNoteFor must not add a client-computed graphData write");
   });
 
   test("`writeFile` still has exactly two callers — its declaration plus toggleTask and commitLine", () => {

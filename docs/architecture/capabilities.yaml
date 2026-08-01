@@ -2945,3 +2945,55 @@ capabilities:
     scratch copy of the real config, and 1 is the 186-section agreement against the engine's own
     `source_tags_for_node` via `tests/fixtures/resolution-agreement.json`.
   status: working
+- id: 'a-projection-arriving-mid-edit-is-held'
+  intent: 'A PROJECTION THAT ARRIVES WHILE THE OPERATOR IS TYPING DOES NOT REACH THE SCREEN UNTIL
+    THE LINE SETTLES, AND THEN THE WHOLE VIEW MOVES AT ONCE. `paint.ts`''s `rawInput` sets
+    `input.value = lineSource`, so an open line''s characters come out of whatever source string the
+    painter is walking — which means installing a projection mid-edit replaced what he typed with
+    what the cycle thinks that line says, silently, mid-word. It needed no unbidden transport to
+    reach: `commitLine` is async and a cycle takes seconds, so a tick''s own answer landed on the
+    line he opened after making it.
+    THE ANSWER IS NOT TO REPAINT MORE CAREFULLY. It is to not repaint yet. `app/present/queue.ts`
+    holds ONE pending projection per path, ordered by the envelope''s own `generated_at`, newest
+    wins and the older is DROPPED rather than applied first — "two queued projections is one queued
+    projection and one lie", because a projection is an absolute statement about a file and not an
+    event, so replaying an older one after a newer moves the screen backwards through a state the
+    server has already left.
+    THE GATE IS "TYPEABLE", NEVER "SELECTED", and that is what keeps the queue from becoming a
+    stall. In NORMAL the cursor is on a line and that line renders as characters with a block cursor
+    — no `<input>`, nothing to lose — so the world goes on updating. vim always has a cursor; a gate
+    on "selected" would have stopped the screen forever. Two shapes are typeable and both are asked
+    for: a line being MADE (`draftLine`) and a line being EDITED (`focus` plus INSERT).
+    THREE DRAIN POINTS, and they are the events this page owns: a projection landing, a line
+    settling (including a blur that changed nothing, scheduled one turn later because `paint.ts`
+    calls `onLineCommit` in the MIDDLE of a settlement), and any keystroke the page sees. ONE
+    RESIDUAL, NAMED RATHER THAN HIDDEN: a row abandoned with Escape settles inside `paint.ts` and
+    tells this page nothing, so a projection stays held until the next gesture — held, never lost,
+    and the freshness line says so.
+    IT IS INSTALLED THROUGH `paintView(id, "arrived")`, the function that already distinguishes an
+    arrival from a view change. No new painting path, no new edit kind, no diff and no DOM
+    reconciler — `paint()` rebuilds a whole view from ONE STRING.
+    THE DETECTOR KEEPS WORKING, AND CLOSING THAT WAS PART OF THE WORK RATHER THAN A CHECK ON IT.
+    `served.take` used to run only when a projection was INSTALLED, so a held projection left
+    `BaseSurface` answering `current` for a save that provably discards a projection this page was
+    holding in its own hand — the stale-write report firing LESS often because of a change made for
+    coherence. `drainProjection` now moves the base off the held envelope while leaving the screen
+    alone; it is still markdown read straight out of an envelope, which is the property base.ts''s
+    single-site rule was really protecting.'
+  tier: 'functional'
+  rooting: 'ISOLATED, and it is the strongest form of the property this bundle keeps asking for.
+    `app/present/queue.ts` IMPORTS NOTHING — the same structural fact `held.ts`, `relative.ts`,
+    `base.ts`, `focus.ts`, `draft.ts` and `motions.ts` each have — so "the queue cannot compute an
+    edit" and "the queue cannot paint" are properties of the module rather than rules a caller has
+    to remember. Two forbidden flows in `docs/architecture/flows.yaml` state them
+    (`queue-never-reaches-the-edit-path`, `queue-never-paints`).
+    IT GAINS NO OUTWARD EDGE AND NEITHER DOES ANYTHING ELSE. Only `app/present/index.ts` (the
+    barrel, which holds no logic by construction) and `app/index.html` name it, and the page is
+    invisible to the capture filter for the reason every page-level caller in this document is:
+    node cannot import an HTML document.
+    ENFORCEMENT IS `tests/app-projection-queue.test.mjs` — 24 tests in 3 top-level suites across 6
+    documented sections, of which 2 are mutation proofs (break the ordering, break the gate) and 3
+    are the falsifier driven with lines changed ABOVE the open line, BELOW it, and BOTH. Section 4
+    is the stale-base detector''s own regression guard, in both directions: it fires when a held
+    projection has moved the base, and it stays silent on a clean single write.'
+  status: 'working'
