@@ -99,6 +99,7 @@
 
 import { sectionAt } from "./address.js";
 import { chromeOf, classifyLine } from "./resolution.js";
+import { placeFor } from "./draft.js";
 import type { PresentationLevel } from "./levels.js";
 import type { DraftSurface } from "./draft.js";
 
@@ -241,6 +242,19 @@ export function seedFor(
  * `declared` is threaded straight to `seedFor` and nowhere else — this function still does not
  * decide anything about the GLOBAL rung's answer, it only obeys whatever `seedFor` returns, exactly
  * as it always has for the other three rungs.
+ *
+ * ── IT ALSO TAKES THE ROW'S PLACE, HERE AND NOWHERE ELSE ──
+ *
+ * A row that is going to survive a projection has to know where it sits before the projection
+ * arrives, because by then `from` is gone. `placeFor` (draft.ts) reads it off the SAME string this
+ * function was handed and the SAME index it is opening at, which is the only pairing that means
+ * anything — an index taken against one source and resolved against another describes a different
+ * line. Both callers of this function go through it, so neither has to remember to.
+ *
+ * `view` NAMESPACES THE ANCHOR and must be the id `paintView` will later resolve it against
+ * (`instance.ts`'s instance string is `${view}/${section}/${token}`). It falls back to
+ * `declared.view` — the same id, when a declaration was supplied — and then to `""`, which is what
+ * every caller that never re-places a row already gets from `focus.focus`'s own default.
  */
 export function openLine(
   from: string,
@@ -248,12 +262,13 @@ export function openLine(
   draft: DraftSurface,
   onDeclined?: (lineIndex: number) => void,
   declared?: GlobalRegistration,
+  view?: string,
 ): boolean {
   const seed = seedFor(from, lineIndex, declared);
   if (seed === null) {
     onDeclined?.(lineIndex);
     return false;
   }
-  draft.open(lineIndex, seed.text);
+  draft.open(lineIndex, seed.text, placeFor(from, lineIndex, view ?? declared?.view ?? ""));
   return true;
 }

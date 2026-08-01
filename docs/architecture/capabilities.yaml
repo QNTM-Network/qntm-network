@@ -2591,3 +2591,111 @@ capabilities:
     is sibling-owned and still in flight, so it is deliberately left unscenario'd here … a real gap
     today, not an oversight".
   status: working
+- id: a-line-being-made-survives-a-projection-too
+  intent: >-
+    A LINE HE HAS OPEN AND HAS NOT COMMITTED SURVIVES A PROJECTION ARRIVING. A VIEW CHANGE STILL
+    DESTROYS IT, and both are right. `app/index.html`'s `paintView` called `draftLine.drop()`
+    unconditionally with an argued reason — "an index that meant under the third task in one view
+    means something else in the next" — and that reason is about a VIEW CHANGE, where a row that
+    leaked could settle into an `insert-line` against a file nobody was looking at. `paintView` is
+    called for two reasons. A projection arriving is the same view, the same cursor and the same
+    sentence half-typed; destroying his row for that is the safe haven violated by the mechanism the
+    apex capability needs.
+    WHY THE FUNCTION WAS CALLED IS NOW A PARAMETER, NOT AN INFERENCE. `paintView(id, why)` takes
+    `"chosen"` or `"arrived"` from the caller that knows. The page already held a proxy for the
+    difference (`sameView`, `id === paintedViewId`) and that proxy is right about POSITION and wrong
+    about CAUSE in exactly the two cases that cost characters: clicking the view you are already in
+    is a choice that reads as an arrival, and a re-read landing elsewhere because the file was
+    renamed is an arrival that reads as a choice. `sameView` is left doing the job it was written
+    for — whether an anchor taken in one view may be resolved in another — and is not reinterpreted.
+    Both conditions are required, never either.
+    THE ROW IS ANCHORED ON ITS NEIGHBOUR, AND THAT IS FORCED RATHER THAN CHOSEN. The backlog row
+    said "its anchor is RELATIVE, read off the line above it when it was opened". The second half is
+    right and the first is not: a draft CANNOT carry a relative anchor of its own. `relativeAnchorFor`
+    reads a bracket, a gap, an offset and the characters off a line that IS IN THE SOURCE, and a
+    draft is in NEITHER source by construction — not the one it was opened against (nothing is
+    written until it settles, `draft.ts`) and not the one that arrives (the cycle never saw it).
+    `places[lineIndex]` is the line the row would PUSH DOWN. So `DraftPlace` is an ordinary
+    `InstanceAnchor` for the ADJACENT line plus which side of it the row sits on, resolved by
+    `resolveInstanceAnchor` — which means the row inherits ALL FOUR rungs of `ANCHOR_TRUST`,
+    including `relative`, and no specificity order is re-expressed. The neighbour is the ADJACENT
+    line and the search does not step over a blank: "two below qntm:122 with one blank in between"
+    is an offset read against a gap nothing promises, so it refuses, exactly as `relative.ts` does.
+    THREE ANSWERS, EACH WITH AN OWNER. PLACED — the row goes back beside its neighbour, and the
+    place is re-taken against the arriving markdown for the reason `focus.reanchor` re-takes its own
+    on a `found`. ARRIVED — the cycle ingested his line while he was typing it, so the row is
+    RELEASED rather than re-placed, because a second copy of a line the file owns would mint a
+    second node when it settled. UNPLACED — nothing could be said about where the row goes, so the
+    characters are HELD.
+    THE RELEASE RULE IS `held.ts`'S OWN, REACHED RATHER THAN REWRITTEN. `held.ts` imports nothing by
+    construction, so its copy of the predicate cannot be shared; `relative.ts` carries the second
+    copy WITH a note that a third caller must reach for it rather than write it again. `draft.ts` is
+    that third caller and obeys the note — `extendsLine`, imported. It is GATED ON THE PROJECTION
+    HAVING GAINED THE LINE rather than merely containing one, because releasing a draft is the one
+    outcome here that destroys characters (a released held row is a copy of something the file has;
+    a released draft is the only copy there was), and a view that already prints a matching line
+    must not take his retyping away from him.
+    HOLDING IS A THIRD CAUSE, NOT A THIRD MECHANISM. `HeldReason` gains `"unplaced"` and nothing
+    else changes: one surface, one release rule, one strip, and still no line index anywhere in it.
+    A row holding nothing but its own seed is dropped silently rather than held — `applyEdit` refuses
+    a contentless insert, so there was never a line there to lose, and putting `- [ ] ` on the strip
+    would report an event that cost him nothing.
+    TWO THINGS THE BACKLOG ROW DID NOT NAME AND THE WORK FOUND. FIRST, THE CHARACTERS WERE NOT ON
+    THE SURFACE AT ALL. `Draft` held `{lineIndex, seed}`; what he typed lived only in the `<input>`,
+    which every repaint destroys — `design-the-edit-is-a-safe-haven.md`'s own DELTA finding reaching
+    the last surface that had not answered it. `Draft.typed` is the answer, recorded by the same
+    read `settle` already makes at the end, made earlier; it builds no edit and nothing posts it.
+    SECOND, THE DROP NEVER PROTECTED THE ELEMENT. `paint.ts` builds one `<input>` per row whose
+    `blur` listener SETTLES against the source the row was opened against, and removing a focused
+    element is a blur in every browser that fires one — so a view change could ALREADY post into the
+    view being left, drop or no drop. `DraftSurface.generation` closes that hole as well as the new
+    one it was needed for.
+    THE ROW WAS REACHABLE BEFORE `the-projection-arrives-without-being-asked-for`, WHICH THE BACKLOG
+    ROW DOUBTED IN AS MANY WORDS ("genuinely worthless before 7 … a change with no observable
+    effect"). `commitLine` is async and the cycle takes seconds: he captures a thing, presses Enter,
+    presses `o`, starts the next one, and the FIRST capture's own answer lands on the SECOND
+    capture's open row. Two captures in a row is the operator's ordinary gesture in his own inbox.
+    `tests/app-open-line-survives.test.mjs` section 1 drives exactly that through the page.
+    EVIDENCE TIER — OBSERVED, NODE-TEST ONLY, FIXTURES THROUGHOUT. `tests/app-open-line-survives.test.mjs`,
+    20 arms in six sections driven through `app/index.html`'s REAL keydown wiring: the row surviving
+    with lines changed above it, below it and both; the caret restored; exactly one editable row;
+    the two-captures gesture; five arms proving a view change still drops it (a different view, the
+    SAME view chosen again, a caller that says nothing, an arrival that lands elsewhere, and that
+    nothing is held for any of them); the release; the hold, including the silent drop of a
+    seed-only row and the sentence in the freshness line; the element left behind by a survival,
+    blurred on purpose, posting nothing; and TWO MUTATION PROOFS which restore the unconditional
+    drop and break the hold and show each section go red. `tests/present-replay.test.mjs` section 8
+    adds 12 arms over real `~/qntm/inbox.md` content through the replay harness's seventh reading.
+    TWO OF THIS WORK'S OWN EXPECTATIONS WERE WRONG AND THE CODE WAS RIGHT, which is worth recording
+    because both are facts about `instance.ts` a reader could get wrong the same way. A line the
+    cycle inserts ABOVE the neighbour is re-found by `instance`, not `node` — an instance string
+    carries no position. And two printings of one node in DIFFERENT sections are separated for free
+    by the section ordinal, so producing `ambiguous` needs both printings in ONE section.
+    WHAT IS NOT VERIFIED, SAID PLAINLY. No browser was opened. No passkey session, no live graph
+    server, no engine cycle, no real POST, no `graph-sync`. Every projection is a fixture. The DOM
+    is the suite's stub, so nothing here proves a real browser's own blur-on-removal behaviour —
+    section 5 drives that event explicitly rather than waiting for it. `flow-trace verify .` was NOT
+    RUN: the tool is not installed in this worktree, so the six flow entries this row adds are
+    declared from the scenario's own drive rather than from an observed capture, and
+    `tests/flow_scenarios/draft_placement.ts` was run standalone under node instead (it passes,
+    alongside `instance_anchor.ts` and `vim_gestures.ts`, which are unchanged).
+  tier: functional
+  rooting: >-
+    ROOTED. `app/present/draft.ts` gains its first outward edges and they are exactly two modules:
+    `instance.ts`, to ask where the row's neighbour went, and `relative.ts`, for the one predicate
+    that decides whether the arriving file has taken the characters back. It reaches no DOM, no
+    network, no clock, and — the load-bearing one — no `source.ts`. That is declared rather than
+    promised: `docs/architecture/flows.yaml` adds two `forbidden_flows` entries
+    (`draft-never-reaches-the-edit-path`, `draft-never-touches-the-dom`) beside the pair
+    `relative.ts` already carries, for the same reason one module further on — this module's whole
+    output is a LINE INDEX, which is what `applyEdit`'s `insert-line` takes.
+    FOUR DECLARED EDGES, ALL DRIVEN. `draft -> instance` twice (`instanceAnchorFor`,
+    `resolveInstanceAnchor`), `draft -> relative` (`extendsLine`), and `newline -> draft`
+    (`placeFor`, so the place is taken in ONE place, at the moment the row opens, because an index
+    and the string it indexes only mean anything together). `tests/flow_scenarios/draft_placement.ts`
+    observes all four and additionally reads `draft.ts`'s own source to assert it reaches nothing
+    else — the same structural claim `instance_anchor.ts` makes for `relative.ts`.
+    THE HALF THAT CANNOT BE ROOTED HERE IS UNCHANGED AND ALREADY RECORDED: `app/index.html` is a
+    hand-authored HTML document, node cannot import one, so the placement's CALLER is invisible to
+    flow-trace by construction. It is proved under `node --test` through the lifted page instead.
+  status: working

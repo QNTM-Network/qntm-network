@@ -728,3 +728,273 @@ describe("7. THE DESIGN DOCUMENT'S OWN FALSIFIER — localAfter vs. the arrived 
     },
   );
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. THE DRAFT — a line he has OPEN and has not committed, put back where it was.
+//
+//    THE ROW THE OTHER SEVEN SECTIONS CANNOT DESCRIBE. Every reading above is about a line that is
+//    in a source string at one end or the other. A draft is in NEITHER: not in `before` (nothing
+//    is written until it settles — app/present/draft.ts) and not in `after` (the cycle never saw
+//    it). `relativeAnchorFor` returns `null` for it and cannot do otherwise, which is why the row
+//    is anchored on its NEIGHBOUR and inherits `ANCHOR_TRUST` through it.
+//
+//    THE GESTURE THESE FIXTURES ARE, IN ONE SENTENCE: he captures a thing, presses Enter, presses
+//    `o` and starts the next one — and roughly fourteen seconds later the first capture's own
+//    cycle comes back. That is one gesture in the operator's own inbox, not a corner case.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("8. THE DRAFT — a line being made survives a projection arriving", () => {
+  /** `~/qntm/inbox.md` the moment before `- [ ] Lesley pay tenner` was typed into it. */
+  const BEFORE_HE_TYPED = [
+    "## Inbox",
+    "## Domain Empty",
+    "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+    "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+  ].join("\n");
+
+  const SEED = "- [ ] ";
+  const drafting = (lineIndex, typed = SEED) => ({ lineIndex, seed: SEED, typed });
+
+  test("THE PLACE IS TAKEN AT ALL, and it is the neighbour ABOVE — the row is opened beneath one", () => {
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after: REAL_INBOX,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(3),
+    });
+    assert.equal(result.draft.draft.place.side, "above");
+    assert.equal(result.draft.draft.place.anchor.node, "qntm:2603", "the line `o` was pressed on");
+  });
+
+  test("SURVIVES a line the cycle inserted ABOVE it — the index moved and the row moved with it", () => {
+    // The cycle files something new at the top of Domain Empty. Everything below shifts down one.
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] New capture from the phone [[qntm:2610]] #task 🆕 2026-08-01",
+      "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+      "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+      "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(3, "- [ ] Call the bank"),
+    });
+    assert.equal(result.draft.placement.outcome, "placed");
+    assert.equal(result.draft.placement.lineIndex, 4, "was 3; the insert above moved it to 4");
+    // `instance`, NOT `node`, AND THE REASON IS WORTH RECORDING: an instance string is
+    // `${view}/${section}/${token}` (instance.ts) and carries no position, so a line the cycle
+    // inserted ABOVE the neighbour changes neither the neighbour's section nor its token. The
+    // strongest rung answers, which is exactly what ANCHOR_TRUST is ordered for.
+    assert.equal(result.draft.placement.via, "instance");
+  });
+
+  test("SURVIVES a line the cycle appended BELOW it — nothing above moved, so neither did the row", () => {
+    const after = [
+      REAL_INBOX,
+      "- [ ] Something the cycle filed underneath [[qntm:2611]] #task 🆕 2026-08-01",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(3, "- [ ] Call the bank"),
+    });
+    assert.equal(result.draft.placement.outcome, "placed");
+    assert.equal(result.draft.placement.lineIndex, 3, "the row is where it was");
+  });
+
+  test("SURVIVES lines changed above AND below at once", () => {
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] New capture from the phone [[qntm:2610]] #task 🆕 2026-08-01",
+      "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+      "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+      "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+      "- [ ] Something the cycle filed underneath [[qntm:2611]] #task 🆕 2026-08-01",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(3, "- [ ] Call the bank"),
+    });
+    assert.equal(result.draft.placement.outcome, "placed");
+    assert.equal(result.draft.placement.lineIndex, 4);
+  });
+
+  test(
+    "THE OPERATOR'S OWN DOUBLE CAPTURE — the neighbour was UNSTAMPED when the row was opened " +
+      "beside it, and the arriving cycle stamped it. The row survives by the `relative` rung, " +
+      "which is the rung a draft could never have reached for itself.",
+    () => {
+      // He typed `- [ ] Lesley pay tenner`, pressed Enter, pressed `o`. The painter is showing its
+      // own optimistic string; the neighbour above the row carries no stamp yet.
+      const before = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Lesley pay tenner",
+        "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+        "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+      ].join("\n");
+      const result = replay({
+        view: INBOX_VIEW,
+        before,
+        gesture: { kind: "none", lineIndex: 2 },
+        after: REAL_INBOX,
+        qualification: QUALIFICATION,
+        resolution: RESOLUTION,
+        drafting: drafting(3, "- [ ] Call the bank"),
+      });
+      assert.equal(result.draft.draft.place.anchor.node, null, "the neighbour had no identity of its own");
+      assert.ok(result.draft.draft.place.anchor.relative !== null, "so it carried a relative anchor instead");
+      assert.equal(result.draft.placement.outcome, "placed");
+      assert.equal(result.draft.placement.via, "relative", "reached through the neighbour, not by the row itself");
+      assert.equal(result.draft.placement.lineIndex, 3);
+    },
+  );
+
+  test("RELEASED — the projection already carries his characters, so the row is not duplicated", () => {
+    // He is still typing the line when the cycle ingests it. Re-placing the row here would put a
+    // second copy of a line the file now owns on screen, and settling it would mint a second node.
+    const result = replay({
+      view: INBOX_VIEW,
+      before: BEFORE_HE_TYPED,
+      gesture: { kind: "none", lineIndex: 2 },
+      after: REAL_INBOX,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(2, "- [ ] Lesley pay tenner"),
+    });
+    assert.equal(result.draft.placement.outcome, "arrived", "the cycle brought his line back, stamp appended");
+  });
+
+  test(
+    "AND A LINE THE VIEW ALREADY HAD IS NOT `arrived` — the release is gated on the projection " +
+      "GAINING the characters, because releasing a row is the one outcome here that destroys them",
+    () => {
+      const result = replay({
+        view: INBOX_VIEW,
+        before: REAL_INBOX,
+        gesture: { kind: "none", lineIndex: 2 },
+        after: REAL_INBOX,
+        qualification: QUALIFICATION,
+        resolution: RESOLUTION,
+        // He is retyping, word for word, a line that is already in this view.
+        drafting: drafting(3, "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31"),
+      });
+      assert.equal(result.draft.placement.outcome, "placed", "his characters are kept, not released");
+    },
+  );
+
+  test("A ROW HOLDING ONLY ITS SEED IS NEVER `arrived` — it has no characters to match with", () => {
+    const result = replay({
+      view: INBOX_VIEW,
+      before: BEFORE_HE_TYPED,
+      gesture: { kind: "none", lineIndex: 2 },
+      after: REAL_INBOX,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(2),
+    });
+    assert.notEqual(result.draft.placement.outcome, "arrived");
+  });
+
+  test("UNPLACED — the neighbour left the view, and the row refuses rather than guessing", () => {
+    // The cycle moved qntm:2603 out of the inbox entirely. Nothing that outlives the cycle is left
+    // beside the row, so `placeDraft` says so and the page holds the characters.
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+      "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(3, "- [ ] Call the bank"),
+    });
+    assert.equal(result.draft.placement.outcome, "unplaced");
+    assert.equal(result.draft.placement.because, "absent");
+  });
+
+  test("UNPLACED — the neighbour now prints TWICE, which is refused, never picked between", () => {
+    // BOTH PRINTINGS IN ONE SECTION, and that is what makes this ambiguous rather than merely
+    // duplicated. `instancesOf` separates two printings in DIFFERENT sections for free (their
+    // instance strings differ by the section ordinal — instance.ts §2.4), so a cross-section
+    // duplicate is still found by the strongest rung. Inside ONE section the two printings take
+    // `#1`/`#2` suffixes, neither of which is the unsuffixed instance the place was taken with, so
+    // the walk falls to the node tier — which finds two and refuses.
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+      "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+      "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+      "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: drafting(3, "- [ ] Call the bank"),
+    });
+    assert.equal(result.draft.placement.outcome, "unplaced");
+    assert.equal(result.draft.placement.because, "ambiguous");
+  });
+
+  test(
+    "UNPLACED — `no-place`: nothing adjacent to the row has an identity at all. This is " +
+      "`the-relative-anchor-has-no-landmark-in-an-empty-section` reaching the draft too, and it " +
+      "refuses for the same reason: a section with nothing stamped in it offers no landmark.",
+    () => {
+      const empty = ["## Inbox", "", ""].join("\n");
+      const result = replay({
+        view: INBOX_VIEW,
+        before: empty,
+        gesture: { kind: "none", lineIndex: 0 },
+        after: empty,
+        qualification: QUALIFICATION,
+        resolution: RESOLUTION,
+        drafting: drafting(2, "- [ ] The first thing in an empty section"),
+      });
+      assert.equal(result.draft.draft.place, null, "a blank above and a blank below is no place");
+      assert.equal(result.draft.placement.outcome, "unplaced");
+      assert.equal(result.draft.placement.because, "no-place");
+    },
+  );
+
+  test("EVERY FIXTURE WITHOUT A `drafting` READS `null` — the reading is additive, not a default", () => {
+    const result = replay({
+      view: INBOX_VIEW,
+      before: REAL_INBOX,
+      gesture: { kind: "none", lineIndex: 2 },
+      after: REAL_INBOX,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+    });
+    assert.equal(result.draft, null);
+  });
+});

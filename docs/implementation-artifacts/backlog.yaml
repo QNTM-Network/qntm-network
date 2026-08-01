@@ -792,15 +792,26 @@ backlog:
     it is smaller than the thing just closed: (1) a projection can still only arrive
     because the browser asked for it — `the-projection-arrives-without-being-asked-for`
     is open, so the cursor recovery this row now has is exercised on a poll the operator
-    triggered rather than on the world moving under him; (2) `paintView` still calls
-    `draftLine.drop()` unconditionally on arrival, so a line he has OPENED but not yet
-    committed is still destroyed — `a-line-being-made-survives-a-projection-too`, which
-    now has an anchor to be re-anchored WITH and is otherwise unchanged; (3) the server
+    triggered rather than on the world moving under him; (2) CLOSED 2026-08-01 —
+    `a-line-being-made-survives-a-projection-too`. A line he has OPENED but not yet
+    committed now survives a projection arriving, moves with the lines the cycle changed
+    around it, is released rather than duplicated when the cycle ingested it, and is HELD
+    rather than destroyed when its place cannot be re-found. A view change still drops it,
+    which is the half of that row''s reasoning that was always right; (3) the server
     still accepts a stale write — `the-write-is-refused-server-side` shipped the Worker
     half but the refusal is not switched on, which is the operator''s decision and needs
     the other repository; (4) a capture into a section with NO stamped line in it is
     still refused, deliberately — see `the-relative-anchor-has-no-landmark-in-an-empty-
-    section`.'
+    section`. THAT REFUSAL NOW REACHES THE ROW BEING MADE TOO: a row opened where nothing
+    adjacent carries an identity has no place, so its characters are held rather than
+    re-placed. Holding is the right answer and it is not the same as authoring there.
+    SO THE DISTANCE IS NOW THREE, AND ONE OF THEM IS IN ANOTHER REPOSITORY. What a person
+    can do today, end to end and without leaving the browser: open a view, put the cursor
+    on a line, press `o`, type a capture, press Enter, watch the cycle take it and keep the
+    cursor on it — and open the NEXT one while that cycle is still running, without losing
+    it. What he still cannot rely on: the page telling him the world moved without him
+    asking (1), the server refusing a stale write (3), and a first capture into a section
+    the cycle has never touched (4).'
   driving_capability: a-human-authors-in-the-browser
   kind: capability
   state: diagnose-ready
@@ -1550,26 +1561,45 @@ backlog:
     the difference is the one the whole arc turns on: a view change means the operator chose to be
     somewhere else; an arrival means the world moved while he stayed put, and dropping his
     half-typed line for that is the safe haven being violated by the very mechanism the second
-    capability needs. A NEW LINE HAS NO IDENTITY STAMP so it cannot reach tier 1 of row 2's anchor,
-    and its text is not in the source at all so tier 2 does not apply either — its anchor is
-    RELATIVE ("after the node qntm:122"), read off the line above it when it was opened. One field
-    on `Draft`. Needs 3 and 7, and genuinely worthless before 7: until a projection can arrive
-    unbidden, `drop()` is correct and this row would be a change with no observable effect.
-    HALF OF THIS ROW LANDED 2026-08-01 AND HALF DID NOT, and the split is worth stating exactly.
-    THE ANCHOR EXISTS NOW — `app/present/relative.ts` builds precisely the RELATIVE anchor this row
-    names, and it is a construct rather than "one field on `Draft`": a bracket (nearest stamped node
-    above AND below), a gap count, an offset, and the characters, because "after the node qntm:122"
-    alone cannot tell two lines opened one after another apart and says nothing at all about a line
-    opened at the TOP of a section, which is where a real capture lands in the operator's own inbox.
-    WHAT IS STILL OPEN IS THE `drop()` CALL ITSELF. `app/index.html`'s `paintView` still drops the
-    draft unconditionally on a projection arrival, and this row's reasoning about why that is wrong
-    is untouched. What has changed is that the hard part is no longer missing: a dropped draft could
-    now be re-anchored, where before there was nothing to re-anchor it to. The row is still gated on
-    7 (`the-world-moves-around-you`) for the same reason it always was — until a projection can
-    arrive unbidden, `drop()` is correct and changing it would have no observable effect.
+    capability needs.
+    CLOSED 2026-08-01. `paintView(id, why)` takes the caller's own event and only `"arrived"` on the
+    SAME view carries the row across; every other caller drops it exactly as before.
+    THE ROW'S OWN SKETCH OF THE ANCHOR WAS WRONG, AND THE CORRECTION IS THE FINDING. It said "its
+    anchor is RELATIVE, read off the line above it when it was opened … one field on `Draft`", and
+    the second half of that is right while the first is not: a draft CANNOT carry a relative anchor
+    of its own. `relativeAnchorFor` needs `places[lineIndex]` to be a real line, and a draft is in
+    NEITHER source string by construction — not the one it was opened against (nothing is written
+    until it settles) and not the one that arrives (the cycle never saw it). `places[lineIndex]` is
+    the line the row would PUSH DOWN, not the row. So the place is an ordinary `InstanceAnchor` for
+    the ADJACENT line plus which side of it the row sits on, resolved by `resolveInstanceAnchor` —
+    which means the row inherits all four rungs of `ANCHOR_TRUST` including `relative`, and no
+    specificity order is re-expressed anywhere.
+    THE ROW'S "GENUINELY WORTHLESS BEFORE 7" IS REFUTED, AND THE REFUTATION IS DRIVEN THROUGH THE
+    PAGE. `commitLine` is async and the cycle takes seconds. He captures a thing, presses Enter,
+    presses `o` and starts typing the next one — and the FIRST capture's own answer landed on the
+    SECOND capture's open row and destroyed it. Two captures in a row is the operator's ordinary
+    gesture in his own inbox, not a race that needs an unbidden projection to reach.
+    THREE THINGS THE ROW DID NOT NAME AND THE WORK FOUND. (a) THE CHARACTERS WERE NOT ON THE
+    SURFACE AT ALL — `Draft` held `{lineIndex, seed}` and what he typed lived only in the `<input>`,
+    which every repaint destroys. That is `design-the-edit-is-a-safe-haven.md`'s own DELTA finding
+    reaching the last surface that had not answered it; `Draft.typed` is the answer. (b) THE
+    PROJECTION MAY ALREADY CARRY HIS LINE, in which case re-placing the row puts a second copy of a
+    line the file owns on screen and settling it mints a second node — released instead, by
+    `held.ts`'s own rule reached through `relative.ts`'s `extendsLine` rather than written a third
+    time. (c) THE DROP NEVER PROTECTED THE ELEMENT. `paint.ts` builds one `<input>` per row whose
+    `blur` listener SETTLES, and removing a focused element is a blur in every browser that fires
+    one — so a view change could already post into the view being left. `DraftSurface.generation`
+    closes that, and it had to exist for a surviving row anyway.
+    See capability `a-line-being-made-survives-a-projection-too`.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
-  state: diagnose-ready
+  record: >-
+    DraftPlace/DraftPlacement/placeFor/placeDraft/typed/generation in app/present/draft.ts;
+    paintView(id, why) and the placement block in app/index.html; the third HeldReason in
+    app/present/held.ts; tests/app-open-line-survives.test.mjs (20 arms, 2 mutation proofs);
+    tests/present-replay.test.mjs section 8 + the harness's seventh reading;
+    tests/flow_scenarios/draft_placement.ts.
+  state: passing
 - id: the-relative-anchor-has-no-landmark-in-an-empty-section
   title: >-
     [present] [HALF A DAY] `app/present/relative.ts` REFUSES to take an anchor at all when nothing

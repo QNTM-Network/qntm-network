@@ -615,6 +615,55 @@ expected_flows:
     class: section-addressing
     gates_capabilities: [a-line-being-authored-keeps-its-cursor-through-the-first-stamp]
 
+  # ── THE ROW BEING MADE (2026-08-01, a-line-being-made-survives-a-projection-too) ──
+  #
+  # `draft.ts` imported NOTHING until this row, and the reason it does now is worth stating rather
+  # than inferring. A draft is a line that is in NEITHER source string — not the one it was opened
+  # against (nothing is written until it settles) and not the one that arrives (the cycle never saw
+  # it) — so `relativeAnchorFor` returns `null` for it and cannot do otherwise. What it has instead
+  # is the NEIGHBOUR it was opened beside, which is a real line with a real identity. These four
+  # edges are that borrowing, and they are the whole of it: the row asks `instance.ts` where its
+  # neighbour went and asks `relative.ts` one predicate, and decides nothing about specificity for
+  # itself. Observed by tests/flow_scenarios/draft_placement.ts.
+
+  - id: draft-takes-its-neighbours-anchor
+    from: app/present/draft
+    to:   app/present/instance
+    callee: instanceAnchorFor
+    event: app.takes-the-place-of-a-row-that-is-in-no-file
+    class: section-addressing
+    gates_capabilities: [a-line-being-made-survives-a-projection-too]
+
+  - id: draft-resolves-its-neighbours-anchor
+    from: app/present/draft
+    to:   app/present/instance
+    callee: resolveInstanceAnchor
+    event: app.finds-where-a-row-being-made-goes-in-the-arriving-projection
+    class: section-addressing
+    gates_capabilities: [a-line-being-made-survives-a-projection-too]
+
+  # THE RELEASE RULE, REACHED RATHER THAN REWRITTEN. `held.ts` owns the rule ("the file has taken
+  # the characters back") and imports nothing by construction, so its copy of the predicate cannot
+  # be shared. `relative.ts` already carries the second copy WITH the note that a third caller must
+  # reach for it rather than write it a third time. This is that third caller, obeying that note.
+  - id: draft-asks-whether-the-file-took-the-characters-back
+    from: app/present/draft
+    to:   app/present/relative
+    callee: extendsLine
+    event: app.releases-a-row-the-arriving-projection-already-carries
+    class: section-addressing
+    gates_capabilities: [a-line-being-made-survives-a-projection-too]
+
+  # THE PLACE IS TAKEN IN ONE PLACE, at the moment the row opens, because the index and the string
+  # it is an index INTO only mean anything together — see `openLine`'s own header.
+  - id: newline-takes-the-rows-place-when-it-opens-it
+    from: app/present/newline
+    to:   app/present/draft
+    callee: placeFor
+    event: app.records-where-a-new-row-sits-before-anything-can-move-it
+    class: section-addressing
+    gates_capabilities: [a-line-being-made-survives-a-projection-too]
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
@@ -680,6 +729,31 @@ forbidden_flows:
       whose job is to say WHERE a line went also decide what is written to it, and "the app never
       reconstructs markdown" would stop being a property of the write path and start being a rule
       each caller had to remember.
+
+  # Added 2026-08-01 with `a-line-being-made-survives-a-projection-too`. `draft.ts` is now the
+  # SECOND module in this bundle whose output is a line index, and it is closer to a write than
+  # `relative.ts` is: the index it produces is the one `applyEdit`'s `insert-line` takes, and the
+  # row it describes is one the operator is actively typing into.
+  - id: draft-never-reaches-the-edit-path
+    from: app/present/draft
+    to:   app/present/source
+    reason: >
+      `draft.ts` says WHERE a row being made sits. `source.ts` says what is written. The whole
+      arrangement that makes an uncommitted row safe is that the source string is byte-for-byte the
+      one the server sent for as long as the row exists, and exactly one `insert-line` is computed
+      from it — by `paint.ts`, at settlement, from the characters in the element. A call from here
+      into `source.ts` would let the module that decides where a row goes also decide what is
+      written there, which is one module holding both halves of the only write this affordance has.
+
+  - id: draft-never-touches-the-dom
+    from: app/present/draft
+    to:   app/present/paint
+    reason: >
+      The dependency runs one way: `paint.ts` reads this surface and this surface knows nothing
+      about a page. It holds the characters a row is carrying so a repaint can put them back, and
+      the moment it could ask the painter what is on screen those characters would stop being
+      derivable without running the app — which is the condition `held.ts` and `focus.ts` already
+      refuse for the same reason, and the one the presentation cascade was built to end.
 
   - id: relative-never-touches-the-dom
     from: app/present/relative

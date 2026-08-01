@@ -130,8 +130,8 @@ export { INDENT_UNIT, indentedLine } from "./indent.js";
 export { wordCaret } from "./word.js";
 export type { WordMotion } from "./word.js";
 
-export { DraftSurface } from "./draft.js";
-export type { Draft } from "./draft.js";
+export { DraftSurface, placeDraft, placeFor } from "./draft.js";
+export type { Draft, DraftPlace, DraftPlacement } from "./draft.js";
 
 export { HeldSurface, heldFrom, keyOf } from "./held.js";
 export type { HeldEdit, HeldReason, HeldRow } from "./held.js";
