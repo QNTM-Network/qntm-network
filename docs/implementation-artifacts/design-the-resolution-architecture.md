@@ -123,21 +123,34 @@ L2 read declaration  →  L3 address (view, section)  →  L4 registration  → 
 
 Full detail, dependencies and falsifiers in §7. Sizes: **h** = under an hour, **½** = half a day.
 
-| # | step | layer | size | needs | falsifier, in one line |
-|---|---|---|---|---|---|
-| 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown |
-| 2 | `sectionAt(source, lineIndex) → sectionId` | **L3** | **h** | 1 | agrees with the engine's own `section_id` for every line of all 72 views |
-| 3 | wire `readQualificationDeclaration` into the app's one reader | L2 | **h** | — | `presentationFromDeclaration(...).qualification.predicates` has 43 entries |
-| 4 | **SAY the membership answer** — tonight's work becomes visible | L6 | **½** | 2, 3 | the row shows nothing for all five `Abstention` values |
-| 5 | publish the config-only resolution table (registration + defaults + clock) | L2 | **½** | 1 | generator `--check` + per-section agreement with `ResolutionCascade.resolve` |
-| 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line |
-| 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections |
-| 8 | the day boundary — 04:00, Europe/London, week starts Monday | L2+L5 | **h** | 5 | 03:59 returns yesterday's date; 04:01 returns today's |
-| 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator |
-| 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin |
-| 11 | carry section identity + resolved registration in the ENVELOPE | L1 | **½** | 2 | envelope section order == generator section order, all 72 views |
-| 12 | the projection-replay convergence test | **L7** | **½** | 4, 11 | it IS the falsifier — it fails when a prediction and a cycle disagree |
-| 13 | the server refuses a stale write (other repo) | L7 | **½** | — | a POST carrying a stale `sha256-…` is rejected, not applied |
+**STATUS, UPDATED 2026-08-01 — steps 1, 2 and 3 are DONE, one agent, one branch (`feat/addressing`),
+against `origin/main` @ `45fc0ac`.** `membership.ts` is now callable and correct — see
+`app/present/address.ts` (`sectionAt`, step 2's join), the `sectionOrder` key
+`scripts/generate-qualification-declaration.mjs` now publishes (step 1), and
+`app/present/context.ts`'s `presentationFromDeclaration` now returning a `qualification` field
+(step 3). Falsifiers for all three ran and passed — `tests/present-address.test.mjs`,
+`tests/present-qualification.test.mjs` (sections 1a/1b), `tests/flow_scenarios/section_addressing.ts`
+— and `membership.ts`'s existing 18 tests plus `qualification-agreement.test.mjs`'s 6 pass
+unmodified. Capability `section-addressing-reads-the-full-declared-order` (capabilities.yaml) and
+the updated `section-membership-is-read-not-guessed` rooting carry the detail. Step 4 (SAY the
+membership answer) is the next agent's and is untouched — no pixel changes, per this branch's own
+brief.
+
+| # | step | layer | size | needs | falsifier, in one line | status |
+|---|---|---|---|---|---|---|
+| 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown | **DONE** |
+| 2 | `sectionAt(source, lineIndex) → sectionId` | **L3** | **h** | 1 | agrees with the engine's own `section_id` for every line of all 72 views | **DONE** |
+| 3 | wire `readQualificationDeclaration` into the app's one reader | L2 | **h** | — | `presentationFromDeclaration(...).qualification.predicates` has 43 entries | **DONE** |
+| 4 | **SAY the membership answer** — tonight's work becomes visible | L6 | **½** | 2, 3 | the row shows nothing for all five `Abstention` values | — |
+| 5 | publish the config-only resolution table (registration + defaults + clock) | L2 | **½** | 1 | generator `--check` + per-section agreement with `ResolutionCascade.resolve` | — |
+| 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line | — |
+| 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections | — |
+| 8 | the day boundary — 04:00, Europe/London, week starts Monday | L2+L5 | **h** | 5 | 03:59 returns yesterday's date; 04:01 returns today's | — |
+| 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator | — |
+| 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin | — |
+| 11 | carry section identity + resolved registration in the ENVELOPE | L1 | **½** | 2 | envelope section order == generator section order, all 72 views | — |
+| 12 | the projection-replay convergence test | **L7** | **½** | 4, 11 | it IS the falsifier — it fails when a prediction and a cycle disagree | — |
+| 13 | the server refuses a stale write (other repo) | L7 | **½** | — | a POST carrying a stale `sha256-…` is rejected, not applied | — |
 
 **A browser-side rule evaluator is still refused**, for two independent reasons **[REPO]**
 (`research-the-rule-closure.md` §10; `research-the-resolution-universe.md` §5.3). It is not in the
@@ -665,7 +678,7 @@ Every step names its layer, its size, its dependencies, and the test that would 
 
 ---
 
-### Step 1 — publish the ORDERED section id list · **under an hour** · L2 DECLARATION · needs nothing
+### Step 1 — publish the ORDERED section id list · **under an hour** · L2 DECLARATION · needs nothing · **DONE 2026-08-01**
 
 **What.** `scripts/generate-qualification-declaration.mjs` emits, per view, the **full ordered list of
 section ids** — including the sections whose predicate it refused.
@@ -700,7 +713,7 @@ emitting a heading — which is the one assumption step 2 rests on.
 
 ---
 
-### Step 2 — `sectionAt(source, lineIndex) → sectionId` · **under an hour** · **L3 ADDRESSING** · needs 1
+### Step 2 — `sectionAt(source, lineIndex) → sectionId` · **under an hour** · **L3 ADDRESSING** · needs 1 · **DONE 2026-08-01**
 
 **What.** Count headings above `lineIndex`, index step 1's list. `boundary.ts:76-83` already has
 `prevHeading`; `instance.ts` already computes the ordinal. This is the join, and it is the named
@@ -721,7 +734,7 @@ on every one. A disagreement means the heading assumption broke, and it names th
 
 ---
 
-### Step 3 — wire the qualification reader · **under an hour** · L2 DECLARATION · needs nothing
+### Step 3 — wire the qualification reader · **under an hour** · L2 DECLARATION · needs nothing · **DONE 2026-08-01**
 
 **What.** `presentationFromDeclaration` calls `readQualificationDeclaration` and returns it on
 `DeclaredPresentation`, exactly the way it already returns `structural`. Three lines in

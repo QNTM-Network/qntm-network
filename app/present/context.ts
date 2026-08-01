@@ -26,6 +26,8 @@ import type { PresentationLevel } from "./levels.js";
 import { readDeclaration } from "./declaration.js";
 import { readStructuralDeclaration } from "./structural.js";
 import type { StructuralLanguage } from "./structural.js";
+import { readQualificationDeclaration } from "./qualification.js";
+import type { QualificationLanguage } from "./qualification.js";
 import type { Contribution } from "./resolution.js";
 
 export class PresentationContext {
@@ -88,6 +90,12 @@ export interface DeclaredPresentation {
   /** The INGEST axis — what a gesture like indent MEANS. See `structural.ts`'s header for why
    * this is a lookup table rather than a fifth cascade level. */
   readonly structural: StructuralLanguage;
+  /** The MEMBERSHIP axis — which section a line belongs in, and the full declared section order
+   * per view that `app/present/address.ts`'s `sectionAt` indexes. See `qualification.ts`'s header
+   * for why this is a lookup table too, and `membership.ts` for what tests a resolved field set
+   * against it. Was read only by tests until this wiring; see this field's own history for why "a
+   * declaration that exists and does not reach" is this system's highest-frequency bug. */
+  readonly qualification: QualificationLanguage;
   readonly problems: readonly string[];
 }
 
@@ -110,14 +118,22 @@ export interface DeclaredPresentation {
  * language, which `isSilent` and `structural.ts`'s own silence-is-legal rule both treat the same
  * way. So the worst case of a broken declaration is TODAY'S BEHAVIOUR PLUS A PROBLEM MESSAGE,
  * never a blank page and never a guess.
+ *
+ * `qualification.ts`'s reader joins the same way `structural.ts`'s did — read HERE, off the SAME
+ * document, and returned on `DeclaredPresentation` rather than left for each caller to fetch a
+ * third time. Before this, `readQualificationDeclaration` had no production caller at all: only
+ * tests called it directly. 20+ KB of predicate table shipped in every build and no running line
+ * of code opened it — exactly the failure mode this function's own header names first.
  */
 export function presentationFromDeclaration(document: unknown): DeclaredPresentation {
   const reading = readDeclaration(document);
   const structuralReading = readStructuralDeclaration(document);
+  const qualificationReading = readQualificationDeclaration(document);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
     structural: structuralReading.structural,
-    problems: [...reading.problems, ...structuralReading.problems],
+    qualification: qualificationReading.qualification,
+    problems: [...reading.problems, ...structuralReading.problems, ...qualificationReading.problems],
   };
 }

@@ -57,6 +57,17 @@
  * the browser to DISPLAY a consequence of an edit already in flight; `app/present/membership.ts`
  * produces no `Contribution`, no `SourceEdit`, and nothing reaches a POST body.
  *
+ * ── `sectionOrder` — THE ORDINAL→ID JOIN, published BESIDE `sections`, NEVER DERIVED FROM IT ──
+ *
+ * `sections` (above) is the PUBLISHED subset — one entry per section whose qualification survived
+ * normalisation. `sectionOrder` is the FULL declared order — every section id `view.sections`
+ * lists, in the order it lists them, with no filtering at all. The app's L3 ADDRESSING layer
+ * (`app/present/address.ts`) counts headings positionally and indexes THIS list, because a section
+ * still emits its heading even when its qualification was refused: `daily-work` publishes 1 of 5
+ * sections and `daily-personal` 3 of 8, so indexing `sections`' own keys by ordinal would silently
+ * misaddress every line under an unpublished section on the operator's two daily surfaces — the
+ * exact trap `sectionOrder` exists to make impossible rather than merely avoided.
+ *
  * ── USAGE ──
  *
  *   node scripts/generate-qualification-declaration.mjs                 write presentation.json
@@ -303,6 +314,7 @@ function readViews(configDir) {
   }
 
   const views = {};
+  const sectionOrder = {};
   for (const file of files) {
     if (file === "default_registration.yaml") continue;
     const document = readYaml(join(dir, file));
@@ -315,6 +327,7 @@ function readViews(configDir) {
     const viewNodeType =
       typeof view.default_node_type === "string" ? view.default_node_type : globalNodeType;
     const sections = {};
+    const order = [];
     for (const section of view.sections) {
       if (!section || typeof section !== "object") continue;
       const { id, qualification, defaults } = section;
@@ -334,10 +347,20 @@ function readViews(configDir) {
         if (Object.keys(fixed).length > 0) entry.defaults = fixed;
       }
       sections[id] = entry;
+      // THE FULL DECLARED ORDER, captured BEFORE `generateQualification` drops any section whose
+      // qualification was refused (see the `sections` assembly below). This is what `sectionAt`
+      // (L3 ADDRESSING, `app/present/address.ts`) indexes — never `Object.keys(sections[view])`,
+      // which is a proper SUBSET on `daily-work` (1 of 5 published) and `daily-personal` (3 of 8):
+      // indexing the subset by ordinal silently misaddresses every line under an unpublished
+      // section on the operator's two most-used daily surfaces.
+      order.push(id);
     }
-    if (Object.keys(sections).length > 0) views[viewId] = sections;
+    if (Object.keys(sections).length > 0) {
+      views[viewId] = sections;
+      sectionOrder[viewId] = order;
+    }
   }
-  return { views, globalNodeType };
+  return { views, globalNodeType, sectionOrder };
 }
 
 // ── 5. vocabulary/*.yaml -> the tokens that set a RESOLVABLE field ─────────────────────────────
@@ -387,7 +410,7 @@ function readTokens(configDir) {
 export function generateQualification(configDir) {
   const structuralTypes = readStructuralNodeTypes(configDir);
   const rawPatterns = readPatterns(configDir);
-  const { views, globalNodeType } = readViews(configDir);
+  const { views, globalNodeType, sectionOrder } = readViews(configDir);
   const tokens = readTokens(configDir);
 
   const referenced = new Set();
@@ -434,6 +457,10 @@ export function generateQualification(configDir) {
     tokens,
     predicates,
     sections,
+    // The FULL declared order, per view — every section id, including the ones dropped from
+    // `sections` above because their qualification was refused. See the capture site in
+    // `readViews` for why this must never be re-derived from `sections`' own keys.
+    sectionOrder,
     refused,
   };
 }

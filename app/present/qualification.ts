@@ -111,6 +111,16 @@ export interface QualificationLanguage {
   readonly tokens: Readonly<Record<string, Readonly<Record<string, FieldValue>>>>;
   readonly predicates: Readonly<Record<string, Qualifier>>;
   readonly sections: Readonly<Record<string, Readonly<Record<string, SectionQualification>>>>;
+  /**
+   * Per view, the FULL declared order of section ids — including sections whose qualification was
+   * refused. `sections` above is a proper SUBSET, filtered to what the app can decide, and 2 of 27
+   * published views (`daily-work` 1 of 5, `daily-personal` 3 of 8) are that subset for real. L3
+   * ADDRESSING (`app/present/address.ts`'s `sectionAt`) indexes THIS list by heading ordinal, never
+   * `Object.keys(sections[view])` — that would work on 25 views and silently misaddress the two
+   * daily surfaces the operator actually uses. See `generate-qualification-declaration.mjs`'s
+   * header for where this is captured, and why it must never be re-derived from `sections`.
+   */
+  readonly sectionOrder: Readonly<Record<string, readonly string[]>>;
   /** pattern name -> why nothing was published for it. Never read to decide anything. */
   readonly refused: Readonly<Record<string, string>>;
 }
@@ -130,6 +140,7 @@ const TOP_KEYS = [
   "tokens",
   "predicates",
   "sections",
+  "sectionOrder",
   "refused",
 ] as const;
 const SECTION_KEYS = ["qualification", "nodeType", "defaults"] as const;
@@ -140,6 +151,7 @@ const EMPTY: QualificationLanguage = {
   tokens: {},
   predicates: {},
   sections: {},
+  sectionOrder: {},
   refused: {},
 };
 
@@ -382,6 +394,29 @@ function readStringList(path: string, value: unknown, problems: string[]): strin
   return value as string[];
 }
 
+/**
+ * `sectionOrder`: per view, an array of section ids — the full declared order, unfiltered. Read
+ * with the same "one bad view does not blind the reader to the rest" posture as `sections`: a
+ * malformed view's order is reported and dropped; the rest survive.
+ */
+function readSectionOrder(
+  value: unknown,
+  problems: string[],
+): Record<string, readonly string[]> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${QUALIFICATION_KEY}.sectionOrder' is ${shapeOf(value)}, not an object — no section can ` +
+        "be addressed by its position in the file",
+    );
+    return {};
+  }
+  const out: Record<string, readonly string[]> = {};
+  for (const [viewId, order] of Object.entries(value)) {
+    out[viewId] = readStringList(`${QUALIFICATION_KEY}.sectionOrder.${viewId}`, order, problems);
+  }
+  return out;
+}
+
 function readRefused(value: unknown, problems: string[]): Record<string, string> {
   if (!isPlainObject(value)) {
     problems.push(`'${QUALIFICATION_KEY}.refused' is ${shapeOf(value)}, not an object`);
@@ -460,6 +495,7 @@ export function readQualificationDeclaration(document: unknown): QualificationRe
       tokens: "tokens" in raw ? readTokens(raw.tokens, problems) : {},
       predicates,
       sections: "sections" in raw ? readSections(raw.sections, predicates, problems) : {},
+      sectionOrder: "sectionOrder" in raw ? readSectionOrder(raw.sectionOrder, problems) : {},
       refused: "refused" in raw ? readRefused(raw.refused, problems) : {},
     },
     problems,
