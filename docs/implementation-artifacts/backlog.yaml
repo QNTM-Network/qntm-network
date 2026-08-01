@@ -800,18 +800,22 @@ backlog:
     which is the half of that row''s reasoning that was always right; (3) the server
     still accepts a stale write — `the-write-is-refused-server-side` shipped the Worker
     half but the refusal is not switched on, which is the operator''s decision and needs
-    the other repository; (4) a capture into a section with NO stamped line in it is
-    still refused, deliberately — see `the-relative-anchor-has-no-landmark-in-an-empty-
-    section`. THAT REFUSAL NOW REACHES THE ROW BEING MADE TOO: a row opened where nothing
-    adjacent carries an identity has no place, so its characters are held rather than
-    re-placed. Holding is the right answer and it is not the same as authoring there.
-    SO THE DISTANCE IS NOW THREE, AND ONE OF THEM IS IN ANOTHER REPOSITORY. What a person
+    the other repository; (4) CLOSED 2026-08-01 — `the-relative-anchor-has-no-landmark-
+    in-an-empty-section`. A capture into a section with NO stamped line in it was refused
+    outright, which was the majority of his sections and not a corner: 109 of 191 rendered
+    sections carry no stamped line and 94 are heading-only, `## Inbox`, `## Work Capture`
+    and `## Personal Capture` among them. The landmark it had missed is the section''s own
+    HEADING, addressed by the ordinal a heading''s identity token is already built from.
+    SO THE DISTANCE IS NOW TWO, AND ONE OF THEM IS IN ANOTHER REPOSITORY. What a person
     can do today, end to end and without leaving the browser: open a view, put the cursor
-    on a line, press `o`, type a capture, press Enter, watch the cycle take it and keep the
-    cursor on it — and open the NEXT one while that cycle is still running, without losing
-    it. What he still cannot rely on: the page telling him the world moved without him
-    asking (1), the server refusing a stale write (3), and a first capture into a section
-    the cycle has never touched (4).'
+    on a line, press `o`, type a capture into a section the cycle has never filled, press
+    Enter, watch the cycle take it and keep the cursor on it — and open the NEXT one while
+    that cycle is still running, without losing it. What he still cannot rely on: the page
+    telling him the world moved without him asking (1), and the server refusing a stale
+    write (3). NOTHING PURELY CLIENT-SIDE REMAINS BETWEEN HERE AND AUTHORING IN THE
+    BROWSER — (1) is a delivery mechanism this repository owns but which is a transport
+    change rather than a presentation one, and (3) is a switch in the other repository and
+    the operator''s own decision.'
   driving_capability: a-human-authors-in-the-browser
   kind: capability
   state: diagnose-ready
@@ -1602,33 +1606,52 @@ backlog:
   state: passing
 - id: the-relative-anchor-has-no-landmark-in-an-empty-section
   title: >-
-    [present] [HALF A DAY] `app/present/relative.ts` REFUSES to take an anchor at all when nothing
-    in the line's section carries a `[[qntm:N]]` — there is no landmark that outlives the cycle, so
-    a bracket of two nulls would be the whole file wearing a bracket's clothes. That refusal is
-    correct as written and it is also a real remaining hole in the apex capability: the operator's
-    FIRST capture into a section is exactly the case with no stamped neighbour, and it is the case
-    where losing the cursor costs the most, because there is nothing else on screen to land on.
-    `tests/present-relative.test.mjs` section 1 asserts the refusal directly, and
-    `tests/present-replay.test.mjs` section 1's marquee fixture is one instance of it — though that
-    fixture is NOT evidence for this row, because its line genuinely leaves the view and no anchor
-    of any kind could bring it back.
-    THREE CANDIDATE LANDMARKS, NONE COSTED, AND EACH HAS A DIFFERENT OWNER. (a) THE SECTION ITSELF —
-    "the Kth line in section ordinal N" is already derivable in the browser, and it survives the
-    stamp, but it does NOT survive the cycle inserting anything above the line, which is what a
-    cycle does to a section it has just started filling. (b) THE NEIGHBOURING SECTION'S nearest
-    stamped node — widens the bracket across a heading, which `relative.ts` currently refuses as
-    `bracket-crossed` on purpose, and would need an argument that a heading is not a real boundary
-    for this one purpose. (c) THE ENGINE MINTS THE ID BEFORE THE WRITE — the operator's own edit
-    would carry a node from the start and none of this would be needed; that is an ENGINE question
-    and belongs in the other repository, and it is the only one of the three that removes the
-    problem rather than routing around it.
-    NOT SIZED AND DELIBERATELY NOT GUESSED AT HERE. Whichever lands, the rule this module already
-    keeps must survive it: a landmark that can put the cursor on a line the operator did not write
-    is worse than a refusal, and the TEXT rung already catches the sub-case where the characters
-    alone can answer.
+    [present] CLOSED 2026-08-01. `app/present/relative.ts` REFUSED to take an anchor at all when
+    nothing in the line's section carried a `[[qntm:N]]`, on the stated reason that such a section
+    "offers no landmark that outlives the cycle". THE ROW'S OWN FALSIFIER WAS "SHOW A LANDMARK IN AN
+    EMPTY SECTION THAT OUTLIVES THE CYCLE", and there is one — the section's own HEADING, addressed
+    by the 0-based ORDINAL that `app/present/instance.ts` already builds a heading's identity token
+    from and that `app/present/address.ts`'s `sectionOrdinalAt` already counts. It is the same fact,
+    not a weaker one, which is why `~/qntm/metrics.md`'s headings survive a ratio that changes every
+    cycle.
+    THE MEASUREMENT, TAKEN BEFORE ANYTHING WAS BUILT AND REPORTED WHATEVER IT SAID. Counted
+    read-only against the operator's live vault on 2026-08-01, over 77 rendered files — 191 sections,
+    of which 109 carry NO stamped line, of which 94 are HEADING-ONLY. Named capture surfaces in that
+    set include `inbox.md :: ## Inbox`, `work/daily.md :: ## Work Capture / ## In Progress /
+    ## Urgent / ## Due Today`, `personal/daily.md :: ## Personal Capture / ## High Priority /
+    ## Due Soon`, `this_week.md :: ## Overdue` and each `dev/<project>/operator.md :: ## Tasks /
+    ## Waiting For`. This is not one section nobody captures into; it is the majority of them, and
+    the operator's own inbox is in it.
+    CANDIDATE (a) LANDED, AND THE OBJECTION AGAINST IT WAS REFUTED BY MEASUREMENT. The row said "the
+    Kth line in section ordinal N … does NOT survive the cycle inserting anything above the line".
+    True, and it is not the defect the row assumed — a region that gained a line is `gap-changed`,
+    which is a REFUSAL, not a wrong cursor, and the TEXT rung then catches the sub-case the row
+    itself said it would. Candidates (b) and (c) are untouched and remain the right owners of what
+    they describe.
+    WHAT WAS ACTUALLY CHANGED IS ONE GUARD AND ONE DERIVATION. The take side refused on `above ===
+    null && below === null`; it now refuses only when `section === null` as well — the region above
+    the file's first heading, which has no heading and so no ordinal. The resolve side derived the
+    region's section from whichever bracketing node resolved; with NO bracket it now reads
+    `anchor.section`, the ordinal the anchor already carried and nothing read. Two new named
+    refusals — `section-absent` (the ordinal is not in the arriving projection) and `no-landmark`
+    (no bracket and no ordinal, which `relativeAnchorFor` never mints and which therefore guards the
+    exported resolver against a hand-built anchor).
+    WHAT THE LANDMARK CANNOT SURVIVE, NAMED. If the HEADING itself does not render — the measured
+    collision case, dormant, zero firings across the live views — every ordinal below it shifts and
+    `anchor.section` names a different section. Its gap count and its characters then disagree,
+    `gap-changed` or `text-changed` follows, then the TEXT rung, then `held.ts`. That exposure is
+    not new and not local: an ordinal that shifts already breaks a heading's own INSTANCE rung
+    everywhere in this bundle. An anchor taken while the section was EMPTY does not survive the
+    section filling up by the bracket either — the gap is a count — and is carried by the characters
+    instead, which is reported as `via: "text"` rather than hidden.
   driving_capability: a-line-being-authored-keeps-its-cursor-through-the-first-stamp
   kind: capability
-  state: diagnose-ready
+  record: >-
+    the narrowed take-side guard, the `anchor.section` region derivation and the two new
+    `RelativeRefusal` members in app/present/relative.ts; tests/present-relative.test.mjs sections
+    1, 2b, 3, 5 and the new section 6; tests/present-replay.test.mjs section 1c;
+    tests/flow_scenarios/instance_anchor.ts claim 5.
+  state: passing
 - id: correct-the-dangerous-sentence-in-app-source
   title: >-
     [haven] [9] [UNDER AN HOUR] "THE MARKDOWN IS THE TRUTH" IS A DANGEROUS SENTENCE, and the

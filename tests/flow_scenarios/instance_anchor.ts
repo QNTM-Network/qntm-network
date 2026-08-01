@@ -35,6 +35,13 @@
  *    into it and rewrites the characters) and the walk reports `absent` with a reason, rather than
  *    landing the cursor on a line the operator did not write.
  *
+ * 5. A SECTION WITH NOTHING STAMPED IN IT IS STILL ADDRESSABLE, BY ITS OWN HEADING. Added with
+ *    `the-relative-anchor-has-no-landmark-in-an-empty-section`. The first capture of the day lands
+ *    in a section the cycle has never filled — 109 of the operator's 191 rendered sections carry no
+ *    stamped line, 94 of them heading-only — and `relative.ts` used to refuse it outright. The
+ *    landmark is the section ORDINAL, which is the same fact `instance.ts` builds a heading's own
+ *    identity token from. Driven here as one more arrival, through the same one walk.
+ *
  * ── WHAT IS STUBBED, AND WHY THAT IS HONEST ──
  *
  * Nothing under `app/` is stubbed — the real `instance.ts`, `relative.ts` and `resolution.ts` run.
@@ -106,6 +113,19 @@ const UNRECOGNISABLE = [
   "  - [ ] Ring the dentist [[qntm:2604]] #task",
   "  - [ ] Something else [[qntm:2605]] #task",
   "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+].join("\n");
+
+/**
+ * CLAIM 5's fixture — `~/qntm/inbox.md`'s `## Inbox`, which is heading-only in the live file. The
+ * capture is the ONLY body line of its section, so there is nothing stamped either side of it and
+ * the section's own heading ordinal is the whole landmark.
+ */
+const EMPTY_SECTION = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+const EMPTY_SECTION_AT = 2;
+const EMPTY_SECTION_STAMPED = [
+  "## Inbox",
+  "## Domain Empty",
+  "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
 ].join("\n");
 
 /** A STAMPED row, and the same row printed under a different heading — the `node` rung's own case. */
@@ -205,6 +225,21 @@ function driveTheRefusal(): void {
   }
 }
 
+/** CLAIM 5 — the first capture into a section with nothing stamped in it keeps its cursor. */
+function driveTheEmptySection(): void {
+  const anchor = instanceAnchorFor(EMPTY_SECTION, EMPTY_SECTION_AT, VIEW);
+  if (anchor === null || anchor.relative === null) {
+    throw new Error("an empty section is anchored by its own heading ordinal — the anchor is missing");
+  }
+  if (anchor.relative.above !== null || anchor.relative.below !== null) {
+    throw new Error("the fixture was meant to have nothing stamped either side of the capture");
+  }
+  if (anchor.relative.section !== 1) {
+    throw new Error(`the landmark is the section ordinal, and it read ${String(anchor.relative.section)}`);
+  }
+  expectRung(EMPTY_SECTION, EMPTY_SECTION_AT, EMPTY_SECTION_STAMPED, "relative", 2);
+}
+
 export function run(): void {
   assertRelativeImportsNothing();
   assertInstanceReachesOnlyTwo();
@@ -215,6 +250,7 @@ export function run(): void {
   try {
     driveEveryRung();
     driveTheRefusal();
+    driveTheEmptySection();
   } finally {
     restoreEnvironment();
   }

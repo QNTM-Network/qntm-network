@@ -2570,6 +2570,46 @@ capabilities:
     for a `via:"instance"` match the two ordinals are equal by construction, so every reading it gave
     before is unchanged. `tests/present-replay.test.mjs` §1b's third test is what this unlocks: a
     membership prediction on an authored line now reports `converged: true` where it reported `null`.
+    AND THE ONE HOLE IT LEFT IS NOW CLOSED — `the-relative-anchor-has-no-landmark-in-an-empty-
+    section`, 2026-08-01. As merged this module refused any section carrying no stamped line,
+    because "a bracket of two nulls is the whole file wearing a bracket's clothes". THAT SENTENCE
+    WAS WRONG ABOUT ONE LANDMARK AND THE LANDMARK WAS ALREADY IN THE ANCHOR — `section`, the 0-based
+    ordinal of the heading that opens it, which this same bundle already trusts a heading's own
+    identity token to and which `address.ts`'s `sectionOrdinalAt` already counts. So "the Kth
+    non-blank line of the Nth section" is a claim about the SAME fact, not a weaker one. The two
+    bracket edges already fell back to the section's own first and last line when one side was null;
+    with BOTH null the region is simply the whole section, and the section's first line IS its
+    heading by construction, because `instancesOf` opens a new ordinal ON the heading line.
+    IT IS THE MAJORITY OF HIS SECTIONS, NOT A CORNER. Counted read-only against `~/qntm` on
+    2026-08-01, across 77 rendered files — 191 sections, 109 with no stamped line, 94 heading-only.
+    `inbox.md :: ## Inbox`, `work/daily.md :: ## Work Capture`, `personal/daily.md :: ## Personal
+    Capture`, `this_week.md :: ## Overdue` and every `dev/<project>/operator.md :: ## Tasks` are in
+    that set. Every capture into one of them lost its cursor unconditionally — and because NO anchor
+    was taken at all, it was also denied the TEXT rung, which is what actually rescues the inbox
+    case, where the cycle re-sorts a new capture out of `## Inbox` and into `## Domain Empty`.
+    TWO NEW NAMED REFUSALS. `section-absent` — the ordinal is not in the arriving projection at all,
+    which is distinct from `gap-changed` because `gap-changed` says the region IS there and has a
+    different shape. `no-landmark` — no bracket AND no ordinal, the region above the file's first
+    heading; `relativeAnchorFor` never mints one, so this guards the EXPORTED resolver against a
+    hand-built anchor rather than a shape the take side can produce, and it is said that way rather
+    than implied.
+    WHAT THE ORDINAL CANNOT SURVIVE, NAMED RATHER THAN DISCOVERED LATER. If the heading does not
+    render — the measured collision case, dormant, zero firings across the live views — every
+    ordinal below it shifts, `anchor.section` names a DIFFERENT section, and its gap count and its
+    characters disagree. `gap-changed` or `text-changed` follows, then the TEXT rung, then
+    `held.ts`. That exposure is neither new nor local: an ordinal that shifts already breaks a
+    heading's own INSTANCE rung everywhere in this bundle, so this rung inherits it and does not add
+    it. An anchor taken while the section was EMPTY also does not survive the section FILLING UP by
+    the bracket — the gap is a count — and is carried by the characters instead, reported as
+    `via: "text"` rather than hidden.
+    THE NON-REGRESSION IS PROVED BY COMPARISON, NOT BY ARGUMENT. `tests/present-relative.test.mjs`
+    §6 loads a copy of the shipped `dist/present.js` with this row's one behavioural change REVERTED
+    and compares every anchor and every reading, line for line, over six fixtures — the real inbox,
+    a capture at the top of a stamped section, a capture between two stamped lines, a stamped node
+    that moved section, metrics.md's changing ratio, and the region above the first heading. They
+    are identical everywhere, and one control test shows the revert is live rather than inert.
+    §5's fifth mutation breaks the new landmark itself (the region falls back to `null`, the
+    file's pre-heading region) and shows the cursor land on a stranger's line.
     WHAT IS NOT VERIFIED, SAID PLAINLY. No browser was opened. No passkey session, no live graph
     server, no engine cycle, no real POST, no `graph-sync`. Every projection is a fixture and every
     stamp is hand-written the way the operator's own real lines show one. `flow-trace verify .` was

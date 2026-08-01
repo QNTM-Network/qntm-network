@@ -40,9 +40,41 @@
  *            when there is none, in which case the bracket's top is the section's own first line.
  *   below    the same, downward — or `null`, in which case the bracket's bottom is the section's
  *            own last line.
+ *   section  the 0-based ordinal of the heading that opens the line's section.
  *   gap      how many non-blank lines stood between the brackets when the anchor was taken.
  *   offset   which of those the line was, 0-based.
  *   text     the characters the line had.
+ *
+ * ── BOTH BRACKETS NULL IS A REAL ANCHOR, AND THE LANDMARK IS THE SECTION'S OWN HEADING ──
+ *
+ * As merged, this module refused a section with NO stamped line in it — "such a section offers no
+ * landmark that outlives the cycle". THAT SENTENCE WAS WRONG ABOUT ONE LANDMARK, and the landmark
+ * was already in the anchor: `section`, the 0-based ordinal of the heading that opens it.
+ *
+ * A HEADING IS ADDRESSED BY ORDINAL AND NEVER BY ITS CHARACTERS (`instance.ts`, `HEADING_TOKEN`;
+ * `address.ts`, `sectionOrdinalAt`), which is exactly why `~/qntm/metrics.md`'s five headings
+ * survive a ratio that changes every cycle. So "the Kth non-blank line of the Nth section" is a
+ * claim about the SAME fact the heading's own identity token is built on — not a weaker one, and
+ * not a new one. The bracket's two edges already fall back to the section's own first and last
+ * line when one side is `null`; when BOTH are `null` the region is simply the whole section, and
+ * the section's first line IS its heading by construction (`instancesOf` opens a new ordinal ON
+ * the heading line, so `boundsOf(places, N).first` cannot be anything else).
+ *
+ * WHAT IT COSTS TO GET THIS WRONG IS BOUNDED BY THE SAME TWO GUARDS AS EVERY OTHER BRACKET. If the
+ * heading is GONE — the one measured way an ordinal can lie, when a graph node's title collides
+ * with a section name and the section renders with no heading at all — every ordinal below it
+ * shifts by one, `anchor.section` names a DIFFERENT section, and its gap count and its characters
+ * will not agree. `gap-changed` or `text-changed` follows, then the TEXT rung, then `held.ts`. That
+ * failure is not new and not local: an ordinal that shifts already breaks the heading's own
+ * INSTANCE rung everywhere in this bundle. This rung inherits that exposure; it does not add one.
+ *
+ * AND IT IS THE OPERATOR'S OWN FIRST CAPTURE OF THE DAY. Measured against his live vault
+ * (2026-08-01, read read-only): 109 of 191 rendered sections carry no stamped line, 94 of them are
+ * heading-only — including `~/qntm/inbox.md`'s `## Inbox`, `work/daily.md`'s `## Work Capture`,
+ * `personal/daily.md`'s `## Personal Capture` and `this_week.md`'s `## Overdue`. Every capture into
+ * one of those lost its cursor unconditionally, because no anchor was taken at all — which also
+ * denied it the TEXT rung, and the TEXT rung is what actually rescues the inbox case, where the
+ * cycle re-sorts a new capture out of `## Inbox` and into `## Domain Empty`.
  *
  * "AFTER NODE 122" ALONE WAS THE OTHER CANDIDATE AND IT IS NOT ENOUGH. It cannot tell two lines
  * opened one after another under the same node apart, and it says nothing at all about a line
@@ -67,6 +99,13 @@
  *      bracket to fall back to and inventing one would be inventing a neighbourhood.
  *   4. A BRACKETING NODE PRINTING TWICE. `above-ambiguous` / `below-ambiguous` — the same refusal
  *      `resolveInstanceAnchor`'s node tier already makes for the same reason.
+ *   5. THE SECTION ITSELF NOT BEING IN THE ARRIVING PROJECTION. `section-absent`, and it is only
+ *      reachable for a whole-section bracket, where the ordinal is the only landmark there is. A
+ *      view that printed six headings and now prints four has no section 5 for the anchor to mean.
+ *   6. NO LANDMARK AT ALL. `no-landmark` — an anchor with no bracket AND no section ordinal, which
+ *      is the region above the file's first heading with nothing stamped in it. `relativeAnchorFor`
+ *      never mints one (it returns `null` for exactly this case), so this refusal guards the
+ *      EXPORTED resolver against a hand-built anchor rather than a shape the take side can produce.
  *
  * ── THE TEXT CHECK IS A CONFIRMATION, NOT A SEARCH — AND THE SHAPE WAS MEASURED ──
  *
@@ -130,6 +169,8 @@ export type RelativeRefusal =
   | "below-ambiguous"
   | "bracket-crossed"
   | "gap-changed"
+  | "no-landmark"
+  | "section-absent"
   | "text-changed";
 
 /**
@@ -235,9 +276,11 @@ function printingsOf(places: readonly (LinePlace | null)[], node: string): reado
  *   * the line ALREADY CARRIES A STAMP — the node tier owns it and a second, weaker claim about
  *     the same line could only ever disagree with a stronger one (see the module header);
  *   * the line is the HEADING THAT OPENS ITS SECTION — see below;
- *   * NOTHING IN ITS SECTION CARRIES A STAMP — an empty section, or a section holding only lines
- *     the cycle has never seen. There is nothing to be relative TO, and a bracket of two nulls is
- *     the whole file wearing a bracket's clothes.
+ *   * NOTHING IN ITS SECTION CARRIES A STAMP AND THE SECTION HAS NO HEADING — the region above the
+ *     file's first heading (`section === null`) with nothing stamped in it. A bracket of two nulls
+ *     THERE is the whole file wearing a bracket's clothes, because there is no ordinal to name the
+ *     region by. Inside a real section the same two nulls mean the whole section, and the heading's
+ *     ordinal names it — see the module header.
  *
  * THE HEADING EXCLUSION IS THE ONE THAT NEEDED ARGUING, AND IT WAS FOUND BY A TEST RATHER THAN
  * FORESEEN. A heading carries no stamp, so it reaches this function by the same path an authored
@@ -251,10 +294,11 @@ function printingsOf(places: readonly (LinePlace | null)[], node: string): reado
  * (`instance.ts` attributes a heading's own record to the section it opens), which is a fact
  * already encoded in the ordinals this function receives.
  *
- * The LAST case is the one worth stating plainly, because it is the operator's own first capture
- * into an empty section: this construct REFUSES it, and the honest reason is that a section with no
- * stamped line in it offers no landmark that outlives the cycle. `instance.ts`'s walk then falls to
- * `absent` and the characters are held (`held.ts`), which is what already happens today.
+ * THE LAST CASE USED TO BE WIDER AND IT IS NOW NARROW, WHICH IS THE WHOLE OF THIS CHANGE. It read
+ * "nothing in its section carries a stamp" and refused the operator's first capture into an empty
+ * section outright. It now refuses only when there is no section ORDINAL either — because the
+ * ordinal is a landmark, and it is the same landmark a heading's own identity token is built on.
+ * See the module header for the argument, the measurement, and what the ordinal cannot survive.
  */
 export function relativeAnchorFor(
   places: readonly (LinePlace | null)[],
@@ -315,7 +359,10 @@ export function relativeAnchorFor(
     }
   }
 
-  if (above === null && below === null) {
+  // NO BRACKET AND NO ORDINAL IS NO LANDMARK. Two nulls INSIDE a section still name a region — the
+  // section itself, by the ordinal of the heading that opens it. Above the file's first heading
+  // there is no heading and so no ordinal, and the region would be the whole file.
+  if (above === null && below === null && section === null) {
     return null;
   }
 
@@ -392,10 +439,21 @@ function bracketRung(
     }
   }
 
-  const section = aboveAt !== -1 ? aboveSection : belowSection;
+  // WHICH SECTION THE REGION IS IN. A bracket that resolved names it directly — the section the
+  // bracketing node prints in NOW, which is what makes a node that moved section refuse rather than
+  // bracket a region it left. With NO bracket at all the region is the whole section, and the only
+  // thing naming it is the ordinal the anchor recorded: the heading's own landmark. See the module
+  // header for why that is the same fact `instance.ts` already trusts a heading's identity to.
+  const bracketed = aboveAt !== -1 || belowAt !== -1;
+  if (!bracketed && anchor.section === null) {
+    return { outcome: "refused", because: "no-landmark" };
+  }
+  const section = bracketed ? (aboveAt !== -1 ? aboveSection : belowSection) : anchor.section;
   const bounds = boundsOf(places, section);
   if (bounds === null) {
-    return { outcome: "refused", because: "gap-changed" };
+    // A view that printed six headings and now prints four has no section 5 to be relative to.
+    // Distinct from `gap-changed`, which says the region IS there and has a different shape.
+    return { outcome: "refused", because: bracketed ? "gap-changed" : "section-absent" };
   }
   const from = aboveAt === -1 ? bounds.first : aboveAt + 1;
   const to = belowAt === -1 ? bounds.last : belowAt - 1;

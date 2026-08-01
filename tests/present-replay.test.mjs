@@ -343,6 +343,139 @@ describe("1b. THE MEASURED BLOCKER — his own line, reproduced first, then clos
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+// 1c. THE FIRST CAPTURE OF THE DAY — into a section with NOTHING STAMPED IN IT.
+//
+//     §1b's fixture types into `## Domain Empty`, which already holds two stamped lines. THE
+//     OPERATOR'S OWN `## Inbox` HOLDS NONE: it is heading-only in the live file, and it is not
+//     alone — counted read-only against `~/qntm` on 2026-08-01, 109 of 191 rendered sections carry
+//     no stamped line and 94 of those are heading-only, `work/daily.md`'s `## Work Capture` and
+//     `personal/daily.md`'s `## Personal Capture` among them.
+//
+//     `relative.ts` refused all of them, so `resolveInstanceAnchor` returned `absent` and the
+//     characters went to `held.ts` — every time, for the one gesture the apex capability is about.
+//     The landmark it had missed is the section's own HEADING, addressed by the ordinal
+//     `instance.ts` already builds a heading's identity token from.
+//
+//     NO NEW HARNESS AND NO NEW READING. Every assertion below is a field `replay()` already
+//     computed; what changed is that `cursor` can now answer for these fixtures at all.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("1c. THE FIRST CAPTURE OF THE DAY — into a section with nothing stamped in it", () => {
+  test(
+    "HIS OWN INBOX — typed into heading-only `## Inbox`, re-sorted by the cycle into " +
+      "`## Domain Empty`. The cursor follows, and the reading says which rung carried it.",
+    () => {
+      // A capture has no domain until he tags it, so it qualifies for `domain-empty` and the cycle
+      // prints it at the top of that section — newest first, above 2603, which is the order the
+      // three real lines in `REAL_INBOX` already show.
+      const after = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+        ...REAL_INBOX.split("\n").slice(2),
+      ].join("\n");
+      const result = replay({
+        view: INBOX_VIEW,
+        before: REAL_INBOX,
+        gesture: { kind: "insert-line", lineIndex: 1, text: "- [ ] Ring the dentist" },
+        after,
+        qualification: QUALIFICATION,
+        resolution: RESOLUTION,
+      });
+
+      assert.equal(result.anchor.node, null, "an unstamped line has no node to search with");
+      assert.notEqual(result.anchor.relative, null, "and NOW it has a relative anchor — this is the row");
+      assert.equal(result.anchor.relative.section, 0, "the ordinal of `## Inbox` is the whole landmark");
+      assert.deepEqual(
+        [result.anchor.relative.above, result.anchor.relative.below],
+        [null, null],
+        "there is nothing stamped in that section to bracket with, and there does not need to be",
+      );
+
+      assert.equal(result.cursor.outcome, "found", "it was `absent`, unconditionally, before this row");
+      assert.equal(
+        result.cursor.via,
+        "text",
+        "the section he typed into no longer holds it — a WEAKER claim, said plainly",
+      );
+      assert.equal(result.cursor.lineIndex, 2);
+      assert.equal(result.preserved, true, "the cycle appended to what he typed rather than replacing it");
+      assert.equal(result.held, null, "nothing needs holding — the file owns the characters now");
+      assert.equal(result.membership.actual.kind, "leaves", "and the row really did leave section 0");
+    },
+  );
+
+  test("THE SAME CAPTURE WHEN THE CYCLE LEAVES IT WHERE HE PUT IT — the STRONG rung answers", () => {
+    // `~/qntm/inbox.md` with `## Domain Empty` emptied — the shape the live file's `## Inbox` has,
+    // and the shape 94 of his sections have.
+    const before = ["## Inbox", "## Domain Empty"].join("\n");
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before,
+      gesture: { kind: "insert-line", lineIndex: 2, text: "- [ ] Ring the dentist" },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+    });
+
+    assert.equal(result.cursor.outcome, "found");
+    assert.equal(result.cursor.via, "relative", "the section held its shape, so the bracket answered");
+    assert.equal(result.cursor.lineIndex, 2);
+    assert.equal(result.membership.actual.kind, "stays");
+    assert.equal(result.held, null);
+  });
+
+  test("AND WHEN THE LINE IS NOT IN THE PROJECTION AT ALL, `held.ts` still has it — unchanged", () => {
+    // The floor this row does not touch and must not: a capture the cycle files into a view he is
+    // not looking at is not findable by any rung, and the characters are held rather than dropped.
+    const before = ["## Inbox", "## Domain Empty"].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before,
+      gesture: { kind: "insert-line", lineIndex: 2, text: "- [ ] Ring the dentist #work" },
+      after: before,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+    });
+
+    assert.equal(result.cursor.outcome, "absent");
+    assert.notEqual(result.held, null, "the operator's own chosen answer, and it still fires");
+    assert.equal(result.held.text, "- [ ] Ring the dentist #work");
+  });
+
+  test("A ROW HE HAS OPEN in the empty section is placed too, through the same one walk", () => {
+    // `draft.ts` anchors an uncommitted row on the NEIGHBOUR it was opened beside. The neighbour
+    // here is the capture he settled a second ago into a section with nothing stamped in it — and
+    // that neighbour had no relative anchor before this row, so the draft went `unplaced` the
+    // instant the cycle stamped it.
+    const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+    ].join("\n");
+    const result = replay({
+      view: INBOX_VIEW,
+      before,
+      gesture: { kind: "none", lineIndex: 2 },
+      after,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+      drafting: { lineIndex: 3, seed: "- [ ] ", typed: "- [ ] Call the bank" },
+    });
+
+    assert.equal(result.draft.placement.outcome, "placed");
+    assert.equal(result.draft.placement.via, "relative", "the neighbour was re-found by the rung this row added");
+    assert.equal(result.draft.placement.lineIndex, 3);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
 // 2. CURSOR CONVERGENCE — the four other transformation kinds the step's own brief names.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
