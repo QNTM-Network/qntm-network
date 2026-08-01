@@ -108,12 +108,16 @@ export { BaseSurface, baseOf } from "./base.js";
 export type { BaseReading } from "./base.js";
 
 export {
+  ANCHOR_TRUST,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
   resolveInstanceAnchor,
 } from "./instance.js";
-export type { InstanceAnchor, InstanceReading, LineInstance } from "./instance.js";
+export type { AnchorVia, InstanceAnchor, InstanceReading, LineInstance } from "./instance.js";
+
+export { extendsLine, relativeAnchorFor, resolveRelativeAnchor } from "./relative.js";
+export type { LinePlace, RelativeAnchor, RelativeReading, RelativeRefusal } from "./relative.js";
 
 export { ModeSurface, clampColumn, clampLine } from "./motions.js";
 export type { Mode, NormalEffect, NormalKeyOutcome } from "./motions.js";

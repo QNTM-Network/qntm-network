@@ -68,6 +68,15 @@
  * in the backlog, a different construct (a RELATIVE anchor, "after instance X"), not a consequence
  * of this one.
  *
+ * THAT SECOND CONSTRUCT NOW EXISTS AND IS `relative.ts`, AND THE SENTENCE ABOVE STANDS UNCHANGED:
+ * this module still does not and cannot fix the case. What it does instead is CARRY the second
+ * construct's answer, because the ORDER of the rungs is a fact that must live in exactly one place
+ * (`ANCHOR_TRUST` below) and splitting the walk across two modules is how the engine's own
+ * `levels.py` acquired three copies of one ordering. `InstanceAnchor.relative` is computed by
+ * `relative.ts` and read by `relative.ts`; nothing here interprets it, and it is `null` for every
+ * line that carries a stamp — which is why the two tiers below are provably unchanged. The
+ * dependency runs one way only: this module imports `relative.ts`, never the reverse.
+ *
  * ── WHY EVERY PRINTED LINE GETS ONE, NOT ONLY NODE LINES ──
  *
  * The operator decided this directly (design doc §8): `metrics.md` has ZERO node lines and five
@@ -101,6 +110,8 @@
  * choice it never argued for.
  */
 
+import { relativeAnchorFor, resolveRelativeAnchor } from "./relative.js";
+import type { RelativeAnchor, RelativeRefusal } from "./relative.js";
 import { classifyLine, qntmIdSpans } from "./resolution.js";
 
 /** The identity token an unstamped heading uses — see the header for why it is a constant. */
@@ -225,7 +236,49 @@ export interface InstanceAnchor {
   readonly instance: string;
   readonly node: string | null;
   readonly takenAt: number;
+  /**
+   * WHERE THE LINE SAT, for a line that has no identity of its own yet — `relative.ts`. `null` for
+   * every line carrying a stamp (the node tier owns those) and for every line with no stamped
+   * neighbour in its section (nothing to be relative to). Read only by `relative.ts`; this module
+   * carries it and never interprets it.
+   */
+  readonly relative: RelativeAnchor | null;
 }
+
+/**
+ * THE ORDER OF THE RUNGS, OWNED HERE AND NOWHERE ELSE — most trusted first.
+ *
+ * The retired `anchor.ts` exported an `ANCHOR_TRUST` for exactly this job and it is revived rather
+ * than re-invented, because the engine's own `levels.py` carries a comment recording what an order
+ * re-expressed per site cost this project once already: three copies, and the hand-rolled one was
+ * the wrong one. `resolveInstanceAnchor` walks these in this order and no caller may re-express it;
+ * `tests/present-relative.test.mjs` asserts the walk against this tuple rather than against prose.
+ *
+ *   instance  the same printing, exactly. `${view}/${section}/${token}` matched.
+ *   node      the engine's own identity, which it guarantees across a move between sections.
+ *   relative  a NEIGHBOURHOOD claim, confirmed by the characters. Weaker than `node` because the
+ *             engine guarantees a node id and guarantees nothing about a node's neighbours.
+ *   text      a CONTENT claim with no position behind it. The floor, and the weakest thing this
+ *             bundle will act on.
+ *
+ * WHY `relative` IS AFTER `node` AND NOT BEFORE IT — the question the brief asked. `node` is a fact
+ * the engine mints and preserves; `relative` is an inference from two other lines' node ids holding
+ * still, which nothing promises. A rung that made a weaker claim before a stronger one could answer
+ * would be a regression the day a stamped line moved section — the exact property `focus.ts`'s own
+ * header calls the one regression risk in the whole anchor arc. AND THE QUESTION IS MOOT BY
+ * CONSTRUCTION AS WELL AS BY ARGUMENT: a `relative` anchor is only ever taken for a line with NO
+ * node (`relative.ts`), so the two rungs can never both have something to say about one line.
+ *
+ * WHY `text` IS BELOW `relative` RATHER THAN "BETWEEN TEXT AND NODE" — the brief's own guess needs
+ * correcting. There is no separate TEXT rung above; `anchor.ts`'s four rungs collapsed into two and
+ * TEXT was one of the three that collapsed INTO `instance` (see the module header). What
+ * `relative.ts` revives under the name `text` is a strictly weaker relation than the retired one —
+ * an EXTENSION, not an equality, over the whole view — so it sits at the bottom, not in the middle.
+ */
+export const ANCHOR_TRUST = ["instance", "node", "relative", "text"] as const;
+
+/** How a `found` reading was reached — graded by `ANCHOR_TRUST`, most trusted first. */
+export type AnchorVia = (typeof ANCHOR_TRUST)[number];
 
 /**
  * What the collapsed walk found — three outcomes, matching `design-presentation-instance-identity.md`
@@ -241,24 +294,46 @@ export interface InstanceAnchor {
  *   absent                  neither the instance nor (if it had one) the node was found.
  */
 export type InstanceReading =
-  | { readonly outcome: "found"; readonly lineIndex: number; readonly via: "instance" | "node" }
+  | { readonly outcome: "found"; readonly lineIndex: number; readonly via: AnchorVia }
   | { readonly outcome: "ambiguous"; readonly candidates: readonly number[] }
-  | { readonly outcome: "absent" };
+  | { readonly outcome: "absent"; readonly because?: RelativeRefusal };
 
-/** The anchor for the line at `lineIndex` in `source`, or `null` when it has no identity — out of
- * range or blank, matching `instanceOf`. */
+/**
+ * The anchor for the line at `lineIndex` in `source`, or `null` when it has no identity — out of
+ * range or blank, matching `instanceOf`.
+ *
+ * IT NOW ALSO TAKES THE RELATIVE ANCHOR, IN THE SAME ONE PASS. `instancesOf` has already been
+ * walked to get the instance, and `relative.ts` reads exactly that list — so the second construct
+ * costs one more scan of an array already in hand, not a second parse of the source. It is `null`
+ * for every stamped line and for every line with no stamped neighbour; see `relative.ts` for the
+ * three cases and why each one is a refusal rather than a guess.
+ */
 export function instanceAnchorFor(source: string, lineIndex: number, view: string): InstanceAnchor | null {
-  const info = instanceOf(source, lineIndex, view);
+  const list = instancesOf(source, view);
+  const info = list[lineIndex] ?? null;
   if (info === null) {
     return null;
   }
-  return { instance: info.instance, node: info.node, takenAt: lineIndex };
+  return {
+    instance: info.instance,
+    node: info.node,
+    takenAt: lineIndex,
+    relative: relativeAnchorFor(list, source.split("\n"), lineIndex),
+  };
 }
 
 /**
- * Where `anchor`'s line is in `source` now, walking the two tiers instance identity actually
- * needs — see `InstanceReading` above for what each outcome means and the module header for why a
- * pure instance lookup is not the whole answer.
+ * Where `anchor`'s line is in `source` now, walking the rungs in `ANCHOR_TRUST` order — see
+ * `InstanceReading` above for what each outcome means and the module header for why a pure instance
+ * lookup is not the whole answer.
+ *
+ * THE FIRST TWO RUNGS ARE UNTOUCHED, AND THIS IS THE ONE REGRESSION CLAIM WORTH CHECKING RATHER
+ * THAN TRUSTING. The rungs `relative.ts` adds run ONLY on the path that used to return `absent`,
+ * and they run at all only when `anchor.relative !== null` — which `relativeAnchorFor` returns for
+ * NO line carrying a stamp. So for every stamped line this function is byte-identical to what it
+ * was; and for an unstamped line it could previously return only `found`/`via:"instance"` or
+ * `absent`, because `ambiguous` requires a node to search with. Nothing that answered before
+ * answers differently now.
  */
 export function resolveInstanceAnchor(
   anchor: InstanceAnchor,
@@ -285,6 +360,21 @@ export function resolveInstanceAnchor(
     if (candidates.length > 1) {
       return { outcome: "ambiguous", candidates };
     }
+  }
+
+  // RUNGS 3 AND 4 — the line the operator is authoring, which the two above cannot reach by
+  // construction (see the module header and `relative.ts`). The refusal REASON is carried out on
+  // `absent` rather than dropped: "the line you were on is gone" and "the neighbourhood it sat in
+  // changed shape" are different events to the person who typed it.
+  if (anchor.relative !== null) {
+    const reading = resolveRelativeAnchor(anchor.relative, list, source.split("\n"));
+    if (reading.outcome === "found") {
+      return { outcome: "found", lineIndex: reading.lineIndex, via: reading.via };
+    }
+    if (reading.outcome === "ambiguous") {
+      return { outcome: "ambiguous", candidates: reading.candidates };
+    }
+    return { outcome: "absent", because: reading.because };
   }
 
   return { outcome: "absent" };

@@ -564,6 +564,57 @@ expected_flows:
   # for what the step proves and the one thing it deliberately does not (a runtime version of this
   # check, argued against in the test file's own header).
 
+  # ── L3 ADDRESSING — THE ANCHOR WALK (2026-08-01, widen-instance-identity-past-the-first-stamp) ──
+  #
+  # `instance.ts` answers "which line is the cursor on now". Until this row it reached ONE module,
+  # `resolution.ts`, and declared nothing here — because `tests/flow_scenarios/vim_gestures.ts`
+  # recorded in as many words that `instance.ts` was "sibling-owned and still in flight, so it is
+  # deliberately left unscenario'd here … a real gap today, not an oversight". That sibling landed,
+  # and `tests/flow_scenarios/instance_anchor.ts` closes the gap for both modules at once.
+  #
+  # `relative.ts` is the second construct the design refused to fold into instance identity
+  # (design-presentation-instance-identity.md §3.2): a line the operator is AUTHORING has no node
+  # to search with and its characters change the instant the cycle stamps it, so both of the walk's
+  # first two rungs are structurally unavailable at once. It IMPORTS NOTHING — the same structural
+  # property `held.ts` has, for a related reason: a module that turns a projection into a POSITION
+  # must not be able to reach one that turns a position into a write. The dependency therefore runs
+  # ONE WAY ONLY, and these two edges are the whole of it.
+
+  - id: instance-asks-where-the-line-sat
+    from: app/present/instance
+    to:   app/present/relative
+    callee: relativeAnchorFor
+    event: app.takes-a-relative-anchor-for-a-line-with-no-identity
+    class: section-addressing
+    gates_capabilities: [a-line-being-authored-keeps-its-cursor-through-the-first-stamp]
+
+  - id: instance-resolves-where-the-line-sat
+    from: app/present/instance
+    to:   app/present/relative
+    callee: resolveRelativeAnchor
+    event: app.walks-the-two-weakest-anchor-rungs
+    class: section-addressing
+    gates_capabilities: [a-line-being-authored-keeps-its-cursor-through-the-first-stamp]
+
+  # THE OTHER HALF OF `instance.ts`'S REACH, declared now that a scenario drives it deliberately
+  # rather than reaching it by accident — the same reason the three gesture-layer edges above were
+  # promoted from INFO to declared on 2026-07-31.
+  - id: instance-classifies-the-line
+    from: app/present/instance
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.counts-the-section-a-printed-row-sits-in
+    class: section-addressing
+    gates_capabilities: [a-line-being-authored-keeps-its-cursor-through-the-first-stamp]
+
+  - id: instance-reads-the-stamp
+    from: app/present/instance
+    to:   app/present/resolution
+    callee: qntmIdSpans
+    event: app.reads-a-printed-rows-node-id
+    class: section-addressing
+    gates_capabilities: [a-line-being-authored-keeps-its-cursor-through-the-first-stamp]
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
@@ -613,6 +664,33 @@ forbidden_flows:
       existed. A call from here into the painter would make the level depend on the page it is
       deciding about, and the FOCUS contribution would stop being derivable without running the
       app — which is exactly the condition the presentation cascade was built to end.
+
+  # Added 2026-08-01 with `widen-instance-identity-past-the-first-stamp`. The relative anchor is
+  # the module in this bundle that comes CLOSEST to being a write, and the distance is one field.
+  - id: relative-never-reaches-the-edit-path
+    from: app/present/relative
+    to:   app/present/source
+    reason: >
+      `relative.ts` turns a projection into a LINE INDEX — which is exactly what `applyEdit` takes.
+      It is the same hazard `held.ts` answers by carrying no index at all, arriving at the opposite
+      end: this module's whole output IS an index, so the separation has to be that it can never
+      reach the thing an index would be handed to. The module imports nothing, which makes the rule
+      structural rather than a promise (tests/flow_scenarios/instance_anchor.ts, claim 1, reads its
+      own source and fails on any import line). A call from here into `source.ts` would let a module
+      whose job is to say WHERE a line went also decide what is written to it, and "the app never
+      reconstructs markdown" would stop being a property of the write path and start being a rule
+      each caller had to remember.
+
+  - id: relative-never-touches-the-dom
+    from: app/present/relative
+    to:   app/present/paint
+    reason: >
+      The relative anchor answers "where did the line the operator was writing go", from two
+      strings and nothing else. A call into the painter would make the answer depend on what is
+      currently drawn — so a cursor could only be recovered by running the app, which is the exact
+      condition the pure presentation bundle exists to end. It is also what keeps every refusal in
+      this module testable: `gap-changed`, `bracket-crossed` and the rest are facts about two
+      strings, and a fact about two strings can be put in a fixture.
 
   # Added 2026-07-31 with the third source edit. Two more pure modules, two more of the same rule,
   # and the second of them is the one most exposed to being "helped" into breaking it.
