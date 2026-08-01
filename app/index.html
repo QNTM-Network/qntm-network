@@ -1638,13 +1638,31 @@ function arrive(path, data) {
  * one thing worse than not repainting at all.
  */
 function drainProjection(path) {
-  if (path === null || queued.pending(path) === null) {
-    return false;
-  }
-  if (path !== paintedPath()) {
+  const pending = path === null ? null : queued.pending(path);
+  if (pending === null || path !== paintedPath()) {
     return false;
   }
   if (aLineIsOpen()) {
+    // ── THE SCREEN WAITS AND THE BASE DOES NOT, AND THIS IS THE ONE STATEMENT THAT KEEPS THE
+    //    STALE-WRITE DETECTOR HONEST WHILE A PROJECTION IS HELD ──
+    //
+    // `BaseSurface` answers "is the copy this save was computed from the copy the SERVER HAS" —
+    // its own header says WHAT THE SERVER LAST SENT, not what the painter last drew. A projection
+    // sitting in the queue IS what the server last sent, so leaving the base at the previous one
+    // would make the surface answer `current` for a save that provably discards a projection this
+    // page is holding in its own hand. Measured: without this line, ticking a second box while a
+    // line is open reports nothing and silently overwrites the first tick's answer — the detector
+    // firing LESS often because of a change made for speed, which is the trade this whole capability
+    // exists to refuse.
+    //
+    // IT IS STILL SERVER MARKDOWN, WHICH IS THE RULE THAT MATTERS. `base.ts`'s trap is a base taken
+    // from "a string this app computed"; this one is read straight out of the envelope, for the one
+    // path this projection describes. The painter's source is untouched, so the next write reads
+    // `stale` — which is exactly true, and is the sentence the operator needs.
+    const markdown = pending.data.snapshot.views?.find((v) => v.path === path)?.markdown;
+    if (typeof markdown === "string") {
+      served.take(path, markdown);
+    }
     return false;
   }
   installProjection(queued.take(path));
@@ -1742,12 +1760,19 @@ function paintView(id, why) {
   // deliberately blurred focus (`o`/`O` opening a draft) has to survive the repaints in between.
   const entering = graphData?.snapshot?.views.find((x) => x.id === id);
   if (entering !== undefined) {
-    // THE BASE IS TAKEN HERE AND NOWHERE ELSE, from the markdown the server sent, in the same call
-    // that installs it for painting — the discipline `focus`'s anchor already follows, applied to a
+    // THE BASE IS TAKEN HERE, from the markdown the server sent, in the same call that installs it
+    // for painting — the discipline `focus`'s anchor already follows, applied to a
     // per-file fact. This function is the only place a view is chosen or re-read from the server, so
     // a base taken here can never describe a projection the painter was not handed. It is REPLACED
     // rather than accumulated: one base, for the file on screen, because a base that outlives the
     // projection it came from is a lie about the server's copy.
+    //
+    // THERE IS NOW A SECOND SITE AND IT IS NOT A SECOND OPINION — `drainProjection`, when a
+    // projection is HELD because a line is open. Read that one's own paragraph: it exists because
+    // "what the server last sent" and "what the painter is holding" stopped being the same string
+    // the day an arrival could be deferred, and this surface answers the FIRST question. Both sites
+    // pass markdown straight out of an envelope; neither can pass a string this app computed, which
+    // is the property the single-site rule was really protecting.
     served.take(entering.path, entering.markdown);
     // RELEASE BEFORE HOLDING, AND BEFORE ANYTHING ELSE READS THIS FILE. Any held row whose
     // characters this arriving file now contains stops being held: the source owns them, so a row
@@ -2413,7 +2438,15 @@ async function commitLine(view, commit) {
     // without typing. There is no write to make and there is a screen to catch up: a blur that
     // changes nothing is the commonest way an open line closes, and returning here without draining
     // would leave the projection waiting for a gesture that has already happened.
-    drainPainted();
+    //
+    // ONE TURN LATER, AND THE REASON IS EXACT RATHER THAN DEFENSIVE. `paint.ts`'s `settle` calls
+    // this callback IN THE MIDDLE of the settlement — `mode.enterNormal()` and the repaint both
+    // happen after it returns — so at this instant the line is still open and the gate would
+    // (correctly) refuse. Measured: draining here directly leaves the projection queued until the
+    // next keystroke. Scheduling it is what makes "the moment the line settles" mean the moment the
+    // settlement is FINISHED. The other write path needs no such thing: its own `await` is already
+    // a turn, and by the time it returns the mode has changed.
+    queueMicrotask(drainPainted);
     return;
   }
   // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's and
