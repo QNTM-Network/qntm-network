@@ -11,7 +11,16 @@ import { handleApp } from "./app.js";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default {
-  async fetch(request, env) {
+  // `ctx` IS THE THIRD ARGUMENT THE RUNTIME HAS ALWAYS PASSED AND THIS ROUTER NEVER TOOK. It is the
+  // ExecutionContext, and the one thing on it that matters here is `waitUntil` — work the Worker
+  // goes on doing AFTER the response has been sent. `POST /app/edit-file` needs it to answer on the
+  // vault write and run the ~10 s engine cycle behind it; see `editFile` in app.js.
+  //
+  // OPTIONAL ALL THE WAY DOWN. Nothing below requires it to be present: a caller that invokes this
+  // handler with two arguments (every test in this repository did until now) gets `undefined`, and
+  // every path that would use it falls back to doing the work inline, which is exactly what it did
+  // before. There is no route that stops working for want of a `ctx`.
+  async fetch(request, env, ctx) {
     const origin = request.headers.get("Origin") || "";
     const url = new URL(request.url);
 
@@ -25,7 +34,7 @@ export default {
       if (res) return res;
     }
     if (url.pathname.startsWith("/app/")) {
-      const res = await handleApp(request, env, url, origin);
+      const res = await handleApp(request, env, url, origin, ctx);
       if (res) return res;
     }
 

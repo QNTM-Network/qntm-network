@@ -2721,6 +2721,147 @@ var ProjectionQueue = class {
   }
 };
 
+// app/present/pickup.ts
+var PICKUP_DELAYS = [1e4, 1e4, 2e4];
+var PickupSchedule = class {
+  #delays;
+  #waiting = /* @__PURE__ */ new Map();
+  constructor(delaysMs = PICKUP_DELAYS) {
+    this.#delays = [...delaysMs];
+  }
+  /** How many attempts one write buys before the schedule gives up. */
+  get attempts() {
+    return this.#delays.length;
+  }
+  /**
+   * A WRITE WAS ACCEPTED FOR `path` — its answer is owed, so place a read.
+   *
+   * `token` is the write's own handle (`correlation.ts`'s `mintWriteToken`) or `null` when the
+   * browser could not mint one. It is held OPAQUELY and only handed back at `attempt` time; nothing
+   * here compares it to anything.
+   */
+  schedule(path, token = null) {
+    const held = this.#waiting.get(path);
+    if (held !== void 0) {
+      held.token = token;
+      held.attempt = 0;
+      return { outcome: "joined", attempt: 0 };
+    }
+    this.#waiting.set(path, { token, attempt: 0 });
+    return { outcome: "scheduled", delayMs: this.#delayFor(0), attempt: 0 };
+  }
+  /**
+   * THE TIMER FIRED. Start the next attempt, or report that there is nothing left to collect.
+   *
+   * `cancelled` is not a failure: it is what a pickup that has already been satisfied by another
+   * route — the re-read button, a later write's own projection — looks like from inside the timer
+   * that was still counting.
+   */
+  attempt(path) {
+    const held = this.#waiting.get(path);
+    if (held === void 0) {
+      return { outcome: "cancelled" };
+    }
+    held.attempt += 1;
+    return { outcome: "read", attempt: held.attempt, token: held.token };
+  }
+  /**
+   * THE ATTEMPT ANSWERED. `satisfied` is the PAGE'S judgement that the write this pickup was
+   * collecting has been answered — see the header for why it is told rather than decided here.
+   *
+   * `exhausted` DROPS THE RECORD. There is nothing left to collect and nothing will re-arm on its
+   * own; the next read of this file is a gesture the operator makes.
+   */
+  answered(path, satisfied) {
+    const held = this.#waiting.get(path);
+    if (held === void 0) {
+      return { outcome: "done" };
+    }
+    if (satisfied) {
+      this.#waiting.delete(path);
+      return { outcome: "done" };
+    }
+    if (held.attempt >= this.#delays.length) {
+      this.#waiting.delete(path);
+      return { outcome: "exhausted" };
+    }
+    return { outcome: "again", delayMs: this.#delayFor(held.attempt), attempt: held.attempt };
+  }
+  /** A projection for `path` arrived by some other route. Returns whether one was outstanding. */
+  cancel(path) {
+    return this.#waiting.delete(path);
+  }
+  /** The write a pickup for `path` is collecting the answer to, or `null` when there is none. */
+  token(path) {
+    return this.#waiting.get(path)?.token ?? null;
+  }
+  /** Is a pickup outstanding for `path`? */
+  waiting(path) {
+    return this.#waiting.has(path);
+  }
+  /** How many paths have a pickup outstanding. */
+  get size() {
+    return this.#waiting.size;
+  }
+  /** Every pickup dropped — the graph was dropped, or the session ended. */
+  clear() {
+    this.#waiting.clear();
+  }
+  /** The wait before the attempt AFTER `made`, clamped to the last declared delay. */
+  #delayFor(made) {
+    return this.#delays[Math.min(made, this.#delays.length - 1)] ?? 0;
+  }
+};
+
+// app/present/accepted.ts
+var AcceptedSource = class {
+  #path = null;
+  #markdown = null;
+  /** The file this is about, or `null` when nothing is held. */
+  get path() {
+    return this.#path;
+  }
+  /** What the server said that file holds, or `null` when nothing is held. */
+  get markdown() {
+    return this.#markdown;
+  }
+  /**
+   * THE SERVER ACCEPTED THIS FILE'S CONTENT. Hold it until a projection for the path arrives.
+   *
+   * Called with the markdown that WENT ON THE WIRE and was answered 200 — never with a string the
+   * app merely intends to send, and never with one a write failed or was refused on. A 409 says
+   * nothing was written, so nothing may be taken here from one.
+   */
+  take(path, markdown) {
+    this.#path = path;
+    this.#markdown = markdown;
+  }
+  /** What the painter should walk for `path`, or `null` when this surface has nothing to say. */
+  sourceFor(path) {
+    return this.#path === path ? this.#markdown : null;
+  }
+  /**
+   * A PROJECTION FOR `path` ARRIVED, so this is superseded. Returns whether anything was dropped.
+   *
+   * PATH-CHECKED RATHER THAN UNCONDITIONAL, because a projection is installed for the painted view
+   * and the accepted file may be another one — a write leaves for one path and the operator may be
+   * looking at a second by the time it answers.
+   */
+  drop(path) {
+    if (this.#path !== path) {
+      return false;
+    }
+    this.#path = null;
+    this.#markdown = null;
+    return true;
+  }
+  /** Everything dropped — the graph was dropped, or the session ended. */
+  clear() {
+    this.#path = null;
+    this.#markdown = null;
+  }
+};
+
 // app/present/correlation.ts
 var WRITE_ECHO_KEY = "writes";
 function samePath(path) {
@@ -7600,6 +7741,7 @@ var presentation_default = {
 var EMBEDDED_DECLARATION = presentation_default;
 export {
   ANCHOR_TRUST,
+  AcceptedSource,
   BaseSurface,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
@@ -7609,6 +7751,8 @@ export {
   HeldSurface,
   INDENT_UNIT,
   ModeSurface,
+  PICKUP_DELAYS,
+  PickupSchedule,
   PresentationCascade,
   PresentationContext,
   ProjectionQueue,

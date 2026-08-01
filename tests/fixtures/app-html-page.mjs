@@ -174,6 +174,14 @@ export { drainPainted as __drainPainted, aLineIsOpen as __aLineIsOpen };
 // "what did the write path do about it" are different failures.
 export const __writes = () => writes;
 export { correlate as __correlate };
+// THE PICKUP (app/present/pickup.ts) AND THE ACCEPTED SOURCE (app/present/accepted.ts). Getters,
+// the same reason \`__queued\`, \`__writes\`, \`__held\` and \`__served\` are: a suite reads what the page
+// is holding NOW. \`__collect\` is exported so a suite can drive ONE pickup attempt without waiting
+// out a real \`setTimeout\` — the timer is the page's and the policy is the module's, and a test that
+// could only wait ten seconds could prove neither.
+export const __pickups = () => pickups;
+export const __accepted = () => accepted;
+export { collect as __collect, startPickup as __startPickup };
 `;
 
   const file = join(workDir, "page.mjs");

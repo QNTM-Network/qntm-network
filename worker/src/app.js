@@ -304,7 +304,28 @@ async function editPost(request, env, origin, session) {
 // change sends a request byte-for-byte identical to the one it sent before, and gets today's
 // unconditional write. Everything else fails OPEN: a graph server that never learns to refuse
 // never refuses, and this path behaves exactly as it did.
-async function editFile(request, env, origin, session) {
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// AND THE WRITE CAN NOW ANSWER BEFORE THE CYCLE — `ack: true`, OPT-IN, FROM THE BROWSER
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// The two fetches below are ~250 ms and ~10 s. Waiting for the second is why a checkbox takes ten
+// seconds to answer, and the cycle's output is not what the operator is waiting to see — he already
+// knows what he ticked. So `ack: true` splits the answer in two: the write is confirmed on the vault
+// write, and the cycle runs in `ctx.waitUntil`, which keeps the Worker alive past the response.
+//
+// THE PROJECTION IS THEN COLLECTED SEPARATELY, by the browser, as a bounded series of `GET
+// /app/graph` reads placed after the write (app/present/pickup.ts). It is NOT a poll: nothing is
+// read unless a write was accepted, the series ends, and the whole window falls inside the wake the
+// write itself already paid for on the Fly machine.
+//
+// THREE WAYS IT FALLS BACK TO TODAY'S BEHAVIOUR, AND ALL THREE ARE THE SAME DIRECTION. A browser
+// that does not send `ack` gets the synchronous answer it has always had. A runtime that hands this
+// handler no `ctx` (every test that called it with four arguments, and any future caller) gets the
+// synchronous answer, because there would be nothing to run the cycle. And a 409 or a failed write
+// is answered BEFORE this branch is reached, so an accepted-but-unwritten file is not a state that
+// exists. Fail open, in both directions, exactly as `base` and `token` already do.
+async function editFile(request, env, origin, session, ctx) {
   // The write half of the tenancy boundary, and the one that must REFUSE rather than degrade.
   // `POST /vault/file` on the hosted model writes into the operator's live vault at a path this
   // request body chooses, and `POST /cycle` then ingests it as authored content. There is no
@@ -379,6 +400,36 @@ async function editFile(request, env, origin, session) {
     );
   }
   if (!w.ok) return json({ ok: false, error: "write failed" }, 502, origin);
+
+  // 1b. THE ACK. The vault holds the operator's bytes; the cycle is the engine's answer to them, and
+  // it is not what he is waiting to see. `accepted: true` is the browser's signal that this answer
+  // is deliberately projection-less — it is the difference between "the server sent no projection"
+  // and "the server sent a malformed one", and the page says a different sentence for each.
+  //
+  // NO SNAPSHOT KEY AT ALL, absent rather than null, for the reason `echoFields` states one
+  // paragraph up: absent and empty are different statements. The page reads `!data.snapshot` as "no
+  // projection came back" and must not be handed an empty one to paint.
+  //
+  // `waitUntil` TAKES THE PROMISE AND NOTHING READS IT. A cycle that fails after this point cannot
+  // be reported to a response that has already been sent, and inventing a second channel to report
+  // it on would be a worse answer than the one that exists: the browser's pickup finds no
+  // acknowledgement of its write, gives up after a bounded series, and says so.
+  if (body?.ack === true && typeof ctx?.waitUntil === "function") {
+    ctx.waitUntil(fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth }));
+    return json(
+      {
+        ok: true,
+        handle: session.handle,
+        source: "server",
+        accepted: true,
+        path,
+        pending_edits: await pendingCount(env, session.user_id),
+      },
+      200,
+      origin
+    );
+  }
+
   // 2. cycle (ingest the edit + re-project) — this is the ~14s step
   const c = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });
   const cd = await c.json().catch(() => ({}));
@@ -511,7 +562,7 @@ async function editsPending(request, env, origin, userId) {
 
 // Route /app/* -> handler. Session routes need a bearer session; operator routes (the headless
 // laptop producer) need GRAPH_PUSH_KEY. Returns null if not an app route.
-export async function handleApp(request, env, url, origin) {
+export async function handleApp(request, env, url, origin, ctx) {
   const key = `${request.method} ${url.pathname}`;
 
   // Operator routes — the snapshot producer, behind the shared key (not a user session).
@@ -539,5 +590,9 @@ export async function handleApp(request, env, url, origin) {
 
   const session = await getSession(env, request);
   if (!session) return json({ ok: false, error: "not authenticated" }, 401, origin);
-  return fn(request, env, origin, session);
+  // `ctx` IS PASSED TO EVERY SESSION ROUTE AND READ BY ONE. Handing it to all six rather than
+  // special-casing `editFile` keeps the call shape single — the same reason there is one
+  // `sessionRoutes` table rather than a branch per path — and the five that ignore it are unchanged
+  // by an extra argument. It is `undefined` whenever the caller did not supply one.
+  return fn(request, env, origin, session, ctx);
 }
