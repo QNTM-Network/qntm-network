@@ -129,6 +129,9 @@ export type { WordMotion } from "./word.js";
 export { DraftSurface } from "./draft.js";
 export type { Draft } from "./draft.js";
 
+export { HeldSurface, heldFrom, keyOf } from "./held.js";
+export type { HeldEdit, HeldReason, HeldRow } from "./held.js";
+
 export { seedFor, openLine } from "./newline.js";
 export type { GlobalRegistration, NewLine } from "./newline.js";
 

@@ -2115,6 +2115,109 @@ var DraftSurface = class {
   }
 };
 
+// app/present/held.ts
+function heldFrom(reason, edit) {
+  if (edit.text.trim() === "") {
+    return null;
+  }
+  return { ...edit, reason };
+}
+function sourceOwns(text, lines) {
+  const appended = text.trimEnd() === text && text !== "" ? text + " " : null;
+  return lines.some((line) => line === text || appended !== null && line.startsWith(appended));
+}
+var HeldSurface = class {
+  #rows = [];
+  #next = 1;
+  /**
+   * Every held row, NEWEST FIRST — the order the operator's attention is in. He has one cursor, so
+   * rows can only ever be produced one at a time, and the most recent one is the one he was
+   * looking at when it went.
+   */
+  get rows() {
+    return this.#rows;
+  }
+  get count() {
+    return this.#rows.length;
+  }
+  /**
+   * Hold an edit. `null` in — as `heldFrom` returns for empty characters — is a no-op returning
+   * `null`, so a caller never has to guard twice.
+   *
+   * ── ONE HELD ROW OR MANY, ANSWERED RATHER THAN LEFT UNDEFINED ──
+   *
+   * MANY. He has one cursor, so a second held row can only exist because a FIRST one is still
+   * unresolved — and the rule this whole module serves is "fail toward keeping his characters", so
+   * a second event must not evict the first. A bounded list would have the same defect at its
+   * bound.
+   *
+   * WITH ONE SUPERSESSION RULE, AND IT IS LOSSLESS BY CONSTRUCTION. The obvious way to accumulate
+   * junk is the same line refused twice — he retries a declined save and gets a second row for the
+   * same characters. So a new row REPLACES an existing one for the same key when the new text
+   * CONTAINS the old text: everything the earlier row was holding is still held afterwards, so the
+   * replacement cannot lose a character. Anything else stacks, because two texts where neither
+   * contains the other are two different pieces of writing.
+   *
+   * The key is the view plus the identity the line had, falling back to the characters themselves
+   * for a line that never had one — the same fallback `instance.ts` makes for an unstamped line,
+   * and for the same reason: its text IS its identity.
+   */
+  hold(edit) {
+    if (edit === null) {
+      return null;
+    }
+    const row = { ...edit, id: this.#next };
+    this.#next += 1;
+    const key = keyOf(edit);
+    const supersedes = this.#rows.findIndex((held) => keyOf(held) === key && edit.text.includes(held.text));
+    if (supersedes !== -1) {
+      this.#rows.splice(supersedes, 1);
+    }
+    this.#rows.unshift(row);
+    return row;
+  }
+  /** He is done with one row. The only release he asks for by hand. Returns whether it was held. */
+  discard(id) {
+    const at = this.#rows.findIndex((row) => row.id === id);
+    if (at === -1) {
+      return false;
+    }
+    this.#rows.splice(at, 1);
+    return true;
+  }
+  /**
+   * THE FILE TOOK THE CHARACTERS BACK — release every row for `path` that `source` now owns.
+   *
+   * This is the automatic release, and it is the ONLY one. A held row that the file now contains
+   * is a second copy of something the source owns, which is the one thing a held row must never
+   * be. Everything else — a repaint, a view change, time passing, another hold — releases nothing:
+   * a row is held until the characters are safe somewhere else or he says he is done with them.
+   *
+   * IT IS ALSO THE RECOVERY PATH, WHICH IS WHY THERE IS NO "PUT IT BACK" BUTTON. He retypes the
+   * line himself, the write lands, the next projection carries the characters, and the row that
+   * was holding them clears itself. Nothing this module holds ever re-enters the write path; the
+   * write is the gesture he makes, exactly as it always was.
+   *
+   * Returns the rows released, so a caller can say what happened rather than guessing.
+   */
+  settle(path, source) {
+    const lines = source.split("\n");
+    const released = this.#rows.filter((row) => row.path === path && sourceOwns(row.text, lines));
+    if (released.length === 0) {
+      return released;
+    }
+    this.#rows = this.#rows.filter((row) => !released.includes(row));
+    return released;
+  }
+  /** Let everything go. Sign-out only — see `app/index.html`. Not a lifecycle event on a view. */
+  clear() {
+    this.#rows = [];
+  }
+};
+function keyOf(edit) {
+  return `${edit.view} ${edit.instance ?? edit.text}`;
+}
+
 // app/present/newline.ts
 function seedFor(source, lineIndex, declared) {
   const lines = source.split("\n");
@@ -4440,6 +4543,7 @@ export {
   DraftSurface,
   EMBEDDED_DECLARATION,
   FocusSurface,
+  HeldSurface,
   INDENT_UNIT,
   ModeSurface,
   PresentationCascade,
@@ -4458,11 +4562,13 @@ export {
   clampColumn,
   clampLine,
   classifyLine,
+  heldFrom,
   indentedLine,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
   isSilent,
+  keyOf,
   markerSpans,
   markerValue,
   matchesFindClause,

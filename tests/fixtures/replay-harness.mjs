@@ -63,11 +63,20 @@
  *    `BaseSurface` directly — `served.take(view.path, before)`, `served.read(view.path, editBase)` —
  *    no new logic, the harness merely wires the same surface `app/index.html`'s `writeFile` already
  *    uses into one fixture call.
+ *
+ * 6. HELD — WOULD THE OPERATOR'S CHARACTERS SURVIVE THIS ARRIVAL, and which characters would they
+ *    be? Added with `a-refused-edit-is-held-unanchored`. It is the same posture as the five above:
+ *    the decision is `app/present/held.ts`'s own `heldFrom`, called with the facts this harness
+ *    already computed, and NO new judgement is added here. It matters because points 1-5 all report
+ *    what happened to a ROW, and every one of them goes `unknown` for exactly the arrivals that
+ *    cost him work — `absent` is where the harness ran out of things to say, and this is what it
+ *    can say instead.
  */
 
 import {
   applyEdit,
   BaseSurface,
+  heldFrom,
   instanceAnchorFor,
   membershipFor,
   orderingFor,
@@ -214,6 +223,34 @@ function preservedFor(gesture, after, reading) {
 }
 
 /**
+ * WOULD THIS ARRIVAL HOLD THE OPERATOR'S CHARACTERS, AND WHICH ONES? See this file's header,
+ * point 6. `null` when nothing is held, which is every outcome but `absent`.
+ *
+ * IT MIRRORS `app/index.html`'s OWN CHOICE OF CHARACTERS RATHER THAN INVENTING ONE, and the choice
+ * is the part worth checking: the TYPED text when there was a gesture (that is what he wrote), the
+ * line as it stood in `before` when there was not (he was parked on a line the world removed). The
+ * page makes exactly this choice from `sentEdit` and `paintedSource`; here the same two facts are
+ * `gesture.text` and `before`.
+ *
+ * `ambiguous` HOLDS NOTHING, and that is a real assertion rather than an omission — the line is
+ * still in the arrived source, printed more than once, so the characters are not at risk.
+ */
+function heldFor(view, before, gesture, anchor, reading) {
+  if (reading.outcome !== "absent") {
+    return null;
+  }
+  const text = gesture.kind === "none" ? (before.split("\n")[gesture.lineIndex] ?? "") : gesture.text;
+  return heldFrom("vanished", {
+    text,
+    view: view.id,
+    path: view.path,
+    instance: anchor.instance,
+    node: anchor.node,
+    base: null,
+  });
+}
+
+/**
  * Replay ONE gesture-then-projection cycle and report what converged.
  *
  * `view`: `{ id, path }`.
@@ -275,5 +312,7 @@ export function replay({ view, before, editBase, gesture, after, qualification, 
   served.take(view.path, before);
   const baseReading = served.read(view.path, base);
 
-  return { cursor, membership, ordering, preserved, base: baseReading, anchor, sectionId };
+  const held = heldFor(view, before, gesture, anchor, cursor);
+
+  return { cursor, membership, ordering, preserved, base: baseReading, anchor, sectionId, held };
 }

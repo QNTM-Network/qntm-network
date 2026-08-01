@@ -33,8 +33,19 @@ export const REPO = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
  * Write app.html's module script to a temp file node can import, changing nothing else.
  *
  * Returns the path. The caller owns the directory and removes it.
+ *
+ * `mutate` IS FOR MUTATION PROOFS ONLY, AND IT IS DELIBERATELY THE LAST THING APPLIED — after both
+ * import swaps and after the export block, so a mutation can reach any line of the page's real
+ * logic and cannot be silently undone by a rewrite that runs later. It receives the finished source
+ * and returns the source to write; the default is identity, so every existing caller is unchanged.
+ *
+ * A GUARD THAT CANNOT GO RED IS DECORATION, and a suite proving that the page holds a vanished
+ * edit has no other way to show its assertions would fail if the holding were removed: the page is
+ * one hand-authored file with no seam to inject at. Breaking one named expression and re-importing
+ * is that seam. `assertMutated` below is what stops a typo in the pattern from producing a green
+ * "mutation proof" against an unmodified page.
  */
-export function extractPageScript(workDir) {
+export function extractPageScript(workDir, mutate = (source) => source) {
   const html = readFileSync(join(REPO, "app", "index.html"), "utf8");
   const match = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
   assert.ok(match, "app/index.html no longer contains a module script");
@@ -136,11 +147,31 @@ export { membershipNoteFor as __membershipNoteFor };
 // THE ORDERING NOTE (design-the-resolution-architecture.md step 7). Same reasoning as
 // __membershipNoteFor immediately above — its own separate computation, exported on its own.
 export { orderingNoteFor as __orderingNoteFor };
+// HELD — characters no file owns (app/present/held.ts). A getter, the same reason \`__served\` is
+// one: a suite reads what the page is holding NOW. \`__paintHeldRows\` is exported so a suite can
+// assert the strip redraws itself without also driving a whole repaint, and \`__sentEdit\` so the
+// one-turn handoff between \`commitLine\` and \`paintView\` is observable rather than inferred.
+export const __held = () => held;
+export { paintHeldRows as __paintHeldRows };
+export const __sentEdit = () => sentEdit;
 `;
 
   const file = join(workDir, "page.mjs");
-  writeFileSync(file, source);
+  writeFileSync(file, mutate(source));
   return file;
+}
+
+/**
+ * Replace `pattern` with `replacement` exactly once, asserting it was really there.
+ *
+ * The whole value of a mutation proof is that the mutation LANDED. A `String.replace` whose pattern
+ * has drifted returns the original string and the suite then proves the unmodified page still
+ * works — a green test reporting the opposite of what it claims. This refuses instead.
+ */
+export function assertMutated(source, pattern, replacement) {
+  const occurrences = source.split(pattern).length - 1;
+  assert.equal(occurrences, 1, `the mutation pattern must appear exactly once, found ${occurrences}: ${pattern}`);
+  return source.replace(pattern, replacement);
 }
 
 /** A temp directory that removes itself when the process exits. */
@@ -336,7 +367,13 @@ export function walk(element, out = []) {
   return out;
 }
 
-/** Import the lifted page once, with a fetch stub installed. Returns the module. */
-export async function importPage(workDir) {
-  return import(pathToFileURL(extractPageScript(workDir)).href);
+/**
+ * Import the lifted page once, with a fetch stub installed. Returns the module.
+ *
+ * ONE MODULE INSTANCE PER `workDir`, because node caches by path — so a suite wanting a MUTATED
+ * page beside an unmutated one asks for a second `makeWorkDir` and passes `mutate`. Two calls with
+ * the same directory return the same module, which is what every existing caller relies on.
+ */
+export async function importPage(workDir, mutate) {
+  return import(pathToFileURL(extractPageScript(workDir, mutate)).href);
 }

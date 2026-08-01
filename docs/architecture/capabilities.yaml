@@ -1004,6 +1004,22 @@ capabilities:
     OWN previous tick, not only the cycle's output). The count is now one level real and unguarded
     (FOCUS), one real and node-test-proven (ANCHOR), one detected-but-not-prevented (BASE), one
     absent (DELTA). Still not falsifiable end to end: DELTA is the one that holds his characters.
+    AMENDED 2026-08-01 — ALL FOUR LEVELS NOW EXIST, AND THE ONE THAT WAS MISSING IS THE ONE THAT
+    HOLDS HIS CHARACTERS. "DELTA (what has been typed) lives in a DOM element a repaint destroys"
+    is now false. `HeldSurface` (app/present/held.ts) holds it outside the file entirely, with
+    `DraftSurface`'s lifecycle and for the mirrored reason — a draft is a line not in the file YET,
+    a held row is one not in the file ANY MORE. See
+    `a-vanished-or-refused-edit-is-held-unanchored` below for what shipped, what he sees, when it
+    clears, and the two mutation proofs. The count is now: one level real and unguarded (FOCUS), one
+    real and node-test-proven (ANCHOR), one detected-but-not-prevented (BASE), one real and
+    node-test-proven (DELTA).
+    IT IS STILL NOT FALSIFIABLE END TO END, and the reason has moved rather than gone. It used to be
+    that the level holding his characters did not exist; it is now that the ONE remaining gap is
+    outside this repository — the graph server does not refuse a stale write, so the full sequence
+    (a real server declines a real save and the browser keeps the typing) has never once run. Every
+    piece of it is proven separately, under `node --test`, against fixtures. `NOTHING HERE ADDS AN
+    EDIT KIND` above is unchanged and was re-measured: `SourceEdit` is still the closed union of
+    three, and the one case that would need a fourth is still the one the design refuses to specify.
   tier: foundational
   rooting: >-
     isolated FOR NOW, and deliberately rather than by omission. Three of the four levels would root
@@ -2332,4 +2348,123 @@ capabilities:
     BOTH SIDES OF THE BRANCH BASE (bc47598) rather than asserted: `await writeFile(` 2 and 2,
     `graphData = ` 5 and 5, `.markdown = ` 0 and 0, and `applyEdit(` 5 external callers and 5
     (2 in app/index.html, 3 in app/present/paint.ts).
+  status: working
+
+- id: a-vanished-or-refused-edit-is-held-unanchored
+  intent: >-
+    THE OPERATOR'S CHARACTERS SURVIVE THE TWO EVENTS THAT USED TO DESTROY THEM, and it is the
+    behaviour he chose by name when asked directly: "hold the edit, unanchored — your typing
+    survives as a row the source doesn't own, like the draft line already works. The app says the
+    line it belonged to is gone and asks where it goes." He chose it over REFUSING the arrival
+    (cheap, never wrong, but the typing is lost) and over MOVING TO THE NEAREST SURVIVOR (never
+    stuck, but he types into a line he did not choose).
+    TWO BACKLOG ROWS, ONE MECHANISM, AND SAYING SO IS PART OF THE RECORD.
+    `the-vanished-line-is-parked-not-dropped` is about a line the CYCLE removed;
+    `a-refused-edit-is-held-unanchored` is about a write the SERVER declined. They were filed
+    separately and they are the same thing to the person typing — characters the source string does
+    not own — so they are built and recorded as one piece: one surface, one strip on the page, one
+    release rule, one sentence pattern.
+    THIS IS THE FOURTH LEVEL OF THE HAVEN. design-the-edit-is-a-safe-haven.md names four (FOCUS,
+    ANCHOR, DELTA, BASE) and measured DELTA as the one that did not exist at all — "what has been
+    typed lives in a DOM element a repaint destroys". It exists now. FOCUS is `FocusSurface`, ANCHOR
+    is that surface's `InstanceAnchor`, BASE is `BaseSurface`, and DELTA is `HeldSurface`.
+    WHAT HE SEES. A strip under the reading column, headed "Held — characters no file owns. Nothing
+    here is saved." Each row holds the characters in a readonly input he can select and copy, names
+    its own FILE, says what happened to it, and carries a Discard button. The freshness line gains
+    one clause in each of its two existing sentences and no new register: "the line you were on is
+    not in this view any more — what was on it is held below", and "… the server refused it and
+    nothing was written · what you typed is still on this line, and held below". Not a dialog. A
+    modal in the middle of a sentence violates the safe haven more than the thing it protects
+    against.
+    NOTHING HELD IS EVER WRITTEN, AND THE MODULE IS BUILT SO IT CANNOT BE — a construction, not a
+    promise. `app/present/held.ts` imports nothing, so it cannot reach `applyEdit`. A held record
+    carries NO LINE INDEX, which is the single most important field it does not have: an index is
+    what `applyEdit` takes, so a record with one is a record a later change could post. It carries
+    an INSTANCE instead — an identity, `instance.ts` — which can be recognised and reported and
+    nothing else. `SourceEdit` is still the closed union of three.
+    THE FOUR PINNED WRITE-ADJACENT COUNTS ARE UNMOVED, re-measured on this branch rather than
+    asserted: `graphData` assigned 5, `writeFile(` 3 occurrences (its declaration plus two callers),
+    `applyEdit(` 5 outside its own module (2 in app/index.html, 3 in app/present/paint.ts), and
+    `.markdown` never assigned anywhere under app/. A fifth count is added and pinned by this
+    change: the held surface is reached from exactly five expressions in the page, `held.hold` from
+    exactly one of them, and `held.rows` from exactly one.
+    THE STRIP IS OUTSIDE THE READING COLUMN, WHICH IS THE STRUCTURAL HALF OF THE SAME ARGUMENT.
+    `#heldStrip` is a SIBLING of `#viewBody`; `paint()` is handed `#viewBody` and a source string
+    and cannot walk into a sibling. So no held row can ever be part of the element tree the painter
+    walks or the source string it computes an edit from. app/present/paint.ts is untouched by this
+    change.
+    OPEN DECISION 1 IS NOT ANSWERED AND THE REFUSAL TO ANSWER IT IS KEPT. Re-placing a vanished line
+    means re-inserting into a view the cycle deliberately removed it from — which the next cycle
+    removes again, or, if the node is gone, mints a fresh one, the exact failure
+    `app/present/source.ts` already measured for an empty insert. design-the-edit-is-a-safe-haven.md
+    §6.4 refuses that behaviour and §11 says the question belongs to the ENGINE. So there is no "put
+    it back" button. What replaces it is that RETYPING is the recovery path and needs none: the
+    retyped line commits through the ordinary write path, and the release rule clears the held row
+    when the projection carries the characters back.
+    WHEN IT CLEARS, EXACTLY. (1) The file takes the characters back — `settle` releases every row
+    for the arriving file whose text that file now owns, either as a whole line or as a PREFIX with
+    a token appended after a space, which is the one real shape a cycle produces. (2) He presses
+    Discard. (3) He signs out. Nothing else: not a repaint, not time passing, not another hold, and
+    NOT A VIEW CHANGE. The comparison in (1) is deliberately the strict one, because releasing
+    wrongly loses his characters while releasing late costs him one dismissal.
+    IT SURVIVES A VIEW CHANGE AND A DRAFT DOES NOT, AND BOTH ARE RIGHT. `paintView` drops a draft on
+    every view change with an argued reason — "a row leaking across a view change is the one way
+    this affordance could write into a file nobody was looking at". That reason is about the WRITE
+    and does not transfer: a draft carries a line index and settles into an `insert-line` against
+    whatever source is on screen; a held row carries neither and has no settle path at all. The
+    hazard the drop protects against does not exist here, while the COST of dropping would be the
+    thing this capability forbids — his characters destroyed by a click in the drawer. Every held
+    row is painted whatever view is on screen, each naming its own file, because held work he cannot
+    see is held work he does not know he has.
+    A SECOND HELD ROW STACKS RATHER THAN EVICTING THE FIRST, with one lossless supersession rule: a
+    new row replaces an existing one for the same key only when the new text CONTAINS the old, so
+    the replacement cannot lose a character. That is what stops a retried save accumulating
+    duplicates without ever choosing between two pieces of his writing.
+    AMBIGUOUS HOLDS NOTHING, and it is a decision rather than an omission. `ambiguous` means the
+    view prints that line in MORE THAN ONE place — the characters are demonstrably still in the
+    file, so a held copy would be a third thing claiming to be them. `absent` is the whole trigger.
+    EVIDENCE TIER — OBSERVED, NODE-TEST ONLY, FIXTURES THROUGHOUT. tests/app-held-edit.test.mjs, 38
+    arms. The module's own shape (imports nothing; pure, proved by making the DOM, `fetch` and the
+    clock all throw for the whole of a drive; no line index; no edit constructor named). The surface
+    (stacking, supersession, and six release cases including four that must NOT release). All four
+    ways a line goes absent, driven through the real app/index.html — a genuine deletion, the first
+    stamp of authoring, a move out of the view, and a 409 — plus the ambiguous and ordinary-arrival
+    controls. The clearing rules including the view change. The pinned counts. A falsifier on the
+    wire: with a row held, a tick and a line commit are driven and neither POST body contains any of
+    the held characters.
+    THE TWO `absent` CAUSES ARE DRIVEN SEPARATELY, using the distinction step 12 built and handed
+    over. `tests/present-replay.test.mjs` §1 measures a first-stamp-of-authoring absence
+    (`anchor.node === null`, the node tier never ran) and §2d a genuine deletion (`anchor.node` is a
+    real id, the node tier ran and found nothing). The replay harness now reports a sixth reading —
+    `held` — computed by the shipped `heldFrom`, and both sections assert the hold with the right
+    characters and the right node. The app holds in both cases and does not need to tell them apart,
+    which is why `snapshot.graph` staying unread (`resolve-from-the-model-not-the-text`) does not
+    block this.
+    MUTATION-PROVEN TWICE, BY REWRITING THE PAGE RATHER THAN BY NARRATING IT.
+    `tests/fixtures/app-html-page.mjs` gained an optional `mutate` applied last, plus `assertMutated`
+    which refuses when the pattern is not found exactly once — so a drifted pattern fails instead of
+    producing a green mutation proof against an unmodified page. Neuter the one holding expression
+    and the survival assertion goes red while the freshness sentence still fires, which is what makes
+    it a mutation of the HOLDING rather than of the detection. Neuter the release and the clearance
+    assertion goes red.
+    WHAT IS NOT VERIFIED, SAID PLAINLY. No browser was opened. No passkey session, no live graph
+    server, no engine cycle, no real POST, no `graph-sync`. Every projection is a fixture and every
+    409 is a stubbed `fetch`. The end-to-end path — a real server refusing a real write and the
+    browser holding the characters — has never run, and cannot until
+    `vault-file-accepts-a-precondition` lands in the other repository.
+    AND IT DOES NOT SWITCH THE REFUSAL ON. That is the operator's decision and it is a separate one.
+    What this changes is that it is now SAFE to make: the trade
+    `the-write-carries-a-precondition-the-server-can-refuse` refused to accept — a silent loss of
+    the engine's output for a visible loss of the operator's typing — is no longer the trade on
+    offer, because a refused edit's characters now survive the repaint that used to erase them.
+  tier: foundational
+  rooting: >-
+    isolated, for the same measured reason `app/present/base.ts` is and NOT as an omission.
+    `app/present/held.ts` imports nothing, nothing under `app/present/` imports it, and its only
+    caller is `app/index.html` — which `.flow-trace.yaml`'s filter names and which node cannot
+    import, because capture is a module-load hook and an HTML document is not a module. So the one
+    edge that would root this capability is unobservable by construction. It roots when the page's
+    script is bundled through scripts/build.mjs, which is the remaining half of
+    `flag-one-markdown-implementation-is-now-three` and a change of its own. See docs/architecture/
+    flows.yaml for the matching `forbidden_flows` entry and for why no scenario is written.
   status: working

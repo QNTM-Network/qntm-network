@@ -27,6 +27,15 @@
  * destroying what he typed. The day `POST /vault/file` learns to compare, all of it wakes up with
  * no further change in this repository. Every arm below is a FIXTURE. No live server was contacted.
  *
+ * AMENDED 2026-08-01 — THE HOLDING HALF NOW EXISTS, and the paragraph above it is amended rather
+ * than deleted because its ARGUMENT is what sequenced the work. `a-refused-edit-is-held-unanchored`
+ * shipped `app/present/held.ts`: a refused edit's characters go into a surface no file owns, so
+ * they survive the next projection rather than only the current screen, and the sentence this
+ * suite asserts gained the clause that says so. THE REFUSAL IS STILL NOT SWITCHED ON — that is
+ * `vault-file-accepts-a-precondition`, in the other repository, and enabling it is the operator's
+ * decision. What changed is that the precondition for enabling it is met. See
+ * tests/app-held-edit.test.mjs for the evidence.
+ *
  * ── THE PROPERTY THAT MATTERS MOST IS A NEGATIVE ONE ──
  *
  * A wrongly-refused write is worse than the clobber, because it means he cannot save. So the
@@ -390,7 +399,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     await settle();
 
     assert.match(onScreen(), /BY FRIDAY/, "the refusal deleted the characters he typed");
-    assert.equal(freshness(), REFUSED + " · what you typed is still on this line");
+    assert.equal(freshness(), REFUSED + " · what you typed is still on this line, and held below");
     // AND THE PAGE DID NOT ADOPT THE SERVER'S COPY. `current` is on the wire for the holding half
     // to use; taking it as the new base here would make the NEXT save a clobber with a blessing.
     assert.equal(page.__served().markdown, V1, "the base moved to a copy the painter never saw");
@@ -445,7 +454,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     input.dispatch("blur");
     await settle();
 
-    assert.equal(freshness(), REFUSED + " · what you typed is still on this line");
+    assert.equal(freshness(), REFUSED + " · what you typed is still on this line, and held below");
     assert.doesNotMatch(freshness(), /is overwritten/, "two verdicts about one save");
   });
 
