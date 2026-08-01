@@ -343,6 +343,7 @@ var TOP_KEYS = [
   "tokens",
   "predicates",
   "sections",
+  "sectionOrder",
   "refused"
 ];
 var SECTION_KEYS = ["qualification", "nodeType", "defaults"];
@@ -352,6 +353,7 @@ var EMPTY2 = {
   tokens: {},
   predicates: {},
   sections: {},
+  sectionOrder: {},
   refused: {}
 };
 function isPlainObject2(value) {
@@ -559,6 +561,19 @@ function readStringList(path, value, problems) {
   }
   return value;
 }
+function readSectionOrder(value, problems) {
+  if (!isPlainObject2(value)) {
+    problems.push(
+      `'${QUALIFICATION_KEY}.sectionOrder' is ${shapeOf(value)}, not an object \u2014 no section can be addressed by its position in the file`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [viewId, order] of Object.entries(value)) {
+    out[viewId] = readStringList(`${QUALIFICATION_KEY}.sectionOrder.${viewId}`, order, problems);
+  }
+  return out;
+}
 function readRefused(value, problems) {
   if (!isPlainObject2(value)) {
     problems.push(`'${QUALIFICATION_KEY}.refused' is ${shapeOf(value)}, not an object`);
@@ -618,6 +633,7 @@ function readQualificationDeclaration(document2) {
       tokens: "tokens" in raw ? readTokens(raw.tokens, problems) : {},
       predicates,
       sections: "sections" in raw ? readSections2(raw.sections, predicates, problems) : {},
+      sectionOrder: "sectionOrder" in raw ? readSectionOrder(raw.sectionOrder, problems) : {},
       refused: "refused" in raw ? readRefused(raw.refused, problems) : {}
     },
     problems
@@ -699,6 +715,32 @@ function readDeclaration(document2) {
     contribution[key] = value;
   }
   return { contribution, indentUnit, problems };
+}
+
+// app/present/address.ts
+function sectionOrdinalAt(source, lineIndex) {
+  const lines = source.split("\n");
+  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex >= lines.length) {
+    return null;
+  }
+  let ordinal = null;
+  for (let at = 0; at <= lineIndex; at += 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      ordinal = ordinal === null ? 0 : ordinal + 1;
+    }
+  }
+  return ordinal;
+}
+function sectionAt(source, lineIndex, view, sectionOrder) {
+  const ordinal = sectionOrdinalAt(source, lineIndex);
+  if (ordinal === null) {
+    return null;
+  }
+  const order = sectionOrder[view];
+  if (order === void 0) {
+    return null;
+  }
+  return order[ordinal] ?? null;
 }
 
 // app/present/membership.ts
@@ -815,11 +857,13 @@ var PresentationContext = class _PresentationContext {
 function presentationFromDeclaration(document2) {
   const reading = readDeclaration(document2);
   const structuralReading = readStructuralDeclaration(document2);
+  const qualificationReading = readQualificationDeclaration(document2);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
     structural: structuralReading.structural,
-    problems: [...reading.problems, ...structuralReading.problems]
+    qualification: qualificationReading.qualification,
+    problems: [...reading.problems, ...structuralReading.problems, ...qualificationReading.problems]
   };
 }
 
@@ -3218,6 +3262,338 @@ var presentation_default = {
         }
       }
     },
+    sectionOrder: {
+      admin: [
+        "to-do",
+        "done"
+      ],
+      albums: [
+        "not-listened",
+        "listened"
+      ],
+      "all-arts": [
+        "tasks"
+      ],
+      "all-home": [
+        "tasks"
+      ],
+      "all-personal": [
+        "tasks"
+      ],
+      "all-program": [
+        "tasks"
+      ],
+      "all-social": [
+        "tasks"
+      ],
+      "all-spirit": [
+        "tasks"
+      ],
+      "all-work": [
+        "tasks"
+      ],
+      backlog: [
+        "unscoped",
+        "diagnose-ready",
+        "scoped",
+        "in-progress",
+        "passing",
+        "retired"
+      ],
+      blogs: [
+        "to-check",
+        "checked"
+      ],
+      books: [
+        "to-read",
+        "read"
+      ],
+      "daily-personal": [
+        "high-priority",
+        "due-soon",
+        "waiting",
+        "routine-drift",
+        "capture",
+        "orphans",
+        "backlog",
+        "done"
+      ],
+      "daily-work": [
+        "in-progress",
+        "urgent",
+        "due-today",
+        "waiting",
+        "capture"
+      ],
+      "ego-ideal": [
+        "developing",
+        "embodied"
+      ],
+      "everything-personal": [
+        "everything"
+      ],
+      "everything-work": [
+        "everything"
+      ],
+      films: [
+        "to-watch",
+        "watched"
+      ],
+      "flowtrace-capabilities": [
+        "unscoped",
+        "diagnose-ready",
+        "scoped",
+        "in-progress",
+        "passing",
+        "retired"
+      ],
+      "flowtrace-classes": [
+        "exists",
+        "concept",
+        "extracted",
+        "subsumed"
+      ],
+      "flowtrace-packages": [
+        "exists",
+        "concept",
+        "extracted",
+        "subsumed"
+      ],
+      "flowtrace-principles": [
+        "held",
+        "held-weak",
+        "violated",
+        "unverifiable",
+        "un-anchored"
+      ],
+      "flowtrace-queue": [
+        "queue"
+      ],
+      "flowtrace-sinks": [
+        "sinks"
+      ],
+      "free-trial-dojo": [
+        "fragments"
+      ],
+      "god-box": [
+        "not-discussed",
+        "discussed"
+      ],
+      groups: [
+        "groups"
+      ],
+      "habit-dojo": [
+        "classification"
+      ],
+      "habits-admin": [
+        "unanchored-habits",
+        "habits"
+      ],
+      "habits-life-admin": [
+        "unanchored-habits",
+        "habits"
+      ],
+      "habits-personal": [
+        "unanchored-habits",
+        "habits"
+      ],
+      "habits-program": [
+        "unanchored-habits",
+        "habits"
+      ],
+      "habits-spirit": [
+        "unanchored-habits",
+        "habits"
+      ],
+      "habits-work": [
+        "unanchored-habits",
+        "habits"
+      ],
+      habits: [
+        "unanchored-habits",
+        "admin-habits",
+        "life-admin-habits",
+        "work-habits",
+        "personal-habits",
+        "program-habits",
+        "spirit-habits"
+      ],
+      inbox: [
+        "inbox-tagged",
+        "domain-empty"
+      ],
+      "metrics-personal": [
+        "personal-accuracy-1d",
+        "personal-accuracy-3d",
+        "personal-accuracy-7d",
+        "personal-age-of-intent",
+        "personal-coverage"
+      ],
+      "metrics-program": [
+        "program-accuracy-1d",
+        "program-accuracy-3d",
+        "program-accuracy-7d",
+        "program-age-of-intent",
+        "program-coverage"
+      ],
+      "metrics-work": [
+        "work-accuracy-1d",
+        "work-accuracy-3d",
+        "work-accuracy-7d",
+        "work-age-of-intent",
+        "work-coverage"
+      ],
+      metrics: [
+        "overall-accuracy-1d",
+        "overall-accuracy-3d",
+        "overall-accuracy-7d",
+        "overall-age-of-intent",
+        "overall-coverage"
+      ],
+      "operator-flowtrace": [
+        "tasks",
+        "outcomes",
+        "waiting-for"
+      ],
+      "operator-qntm-network": [
+        "tasks",
+        "outcomes",
+        "waiting-for"
+      ],
+      "operator-qntm": [
+        "tasks",
+        "outcomes",
+        "waiting-for"
+      ],
+      "operator-trace-orchestration": [
+        "tasks",
+        "outcomes",
+        "waiting-for"
+      ],
+      "outcomes-personal": [
+        "childless-outcomes",
+        "outcomes"
+      ],
+      "outcomes-program": [
+        "childless-outcomes",
+        "outcomes"
+      ],
+      "outcomes-spirit": [
+        "childless-outcomes",
+        "outcomes"
+      ],
+      outcomes: [
+        "childless-outcomes",
+        "outcomes"
+      ],
+      people: [
+        "people"
+      ],
+      "qntm-capabilities": [
+        "unscoped",
+        "diagnose-ready",
+        "scoped",
+        "in-progress",
+        "passing",
+        "retired"
+      ],
+      "qntm-classes": [
+        "exists",
+        "concept",
+        "extracted",
+        "subsumed"
+      ],
+      "qntm-packages": [
+        "exists",
+        "concept",
+        "extracted",
+        "subsumed"
+      ],
+      "qntm-principles": [
+        "held",
+        "held-weak",
+        "violated",
+        "unverifiable",
+        "un-anchored"
+      ],
+      "qntm-queue": [
+        "queue"
+      ],
+      "qntm-sinks": [
+        "sinks"
+      ],
+      "routine-cascade-dojo": [
+        "governed"
+      ],
+      "routines-admin": [
+        "admin-routines",
+        "upcoming"
+      ],
+      "routines-life-admin": [
+        "life-admin-routines",
+        "upcoming"
+      ],
+      "routines-personal": [
+        "personal-routines",
+        "upcoming"
+      ],
+      "routines-program": [
+        "program-routines",
+        "upcoming"
+      ],
+      "routines-spirit": [
+        "spirit-routines",
+        "upcoming"
+      ],
+      "routines-work": [
+        "work-routines",
+        "upcoming"
+      ],
+      routines: [
+        "admin-routines",
+        "life-admin-routines",
+        "work-routines",
+        "personal-routines",
+        "program-routines",
+        "spirit-routines"
+      ],
+      "termination-dojo": [
+        "fragments"
+      ],
+      "test-scratchpad": [
+        "scratchpad-targets"
+      ],
+      "this-week": [
+        "overdue",
+        "due-this-week",
+        "available-overdue",
+        "available-this-week"
+      ],
+      "trace-orchestration-queue": [
+        "queue"
+      ],
+      tv: [
+        "to-watch",
+        "watched"
+      ],
+      "unlocks-dojo": [
+        "chain"
+      ],
+      "waiting-for-personal": [
+        "personal-waiting-for",
+        "personal-blocked",
+        "personal-held"
+      ],
+      "waiting-for-work": [
+        "waiting-for",
+        "blocked",
+        "held"
+      ],
+      writers: [
+        "to-check",
+        "checked"
+      ]
+    },
     refused: {
       "accuracy-carrier-overall-1d": "unresolvable field(s): title",
       "accuracy-carrier-overall-3d": "unresolvable field(s): title",
@@ -3383,6 +3759,8 @@ export {
   readStructuralDeclaration,
   resolveInstanceAnchor,
   resolveLineFields,
+  sectionAt,
+  sectionOrdinalAt,
   seedFor,
   tagSpans,
   titleSpans,

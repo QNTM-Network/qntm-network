@@ -1504,16 +1504,97 @@ capabilities:
     to anybody — see `rooting` below.
   tier: functional
   rooting: >-
-    ISOLATED, AND MORE ISOLATED THAN `structural-language-is-published-not-guessed` WAS AT THE SAME
-    STAGE — stated plainly because the difference matters. That capability at least had
-    `presentationFromDeclaration` reading its key in production. This one has NO production caller
-    at all: `app/index.html` does not call `membershipFor`, nothing holds the result, and no pixel
-    changes. The three declared flows are observed only by
-    `tests/flow_scenarios/section_membership.ts`.
-    THAT IS A DELIBERATE STOPPING POINT, NOT AN OVERSIGHT. Showing the answer is a separate
-    decision from computing it, and the wrong version of it is actively harmful: a row that
-    relocates under a live cursor takes away the safe haven an edit in flight is supposed to be.
-    Saying "this will leave Domain Empty" is safe; moving it is not, and the two are one keystroke
-    apart in a painter. The computation is proven correct against the engine first, so that whoever
-    wires the display is arguing about presentation rather than about whether the answer is right.
+    PARTIALLY ROOTED AS OF 2026-08-01, CORRECTING THE CLAIM THIS FIELD MADE THE DAY BEFORE. It used
+    to read "NO production caller at all" and that is no longer true of the DECLARATION half:
+    design-the-resolution-architecture.md step 3 wired `readQualificationDeclaration` into
+    `app/present/context.ts`'s `presentationFromDeclaration` — the same one reader
+    `structural-language-is-published-not-guessed` already had, now joined by a third axis. The
+    edge is declared (`context-reads-the-qualification-declaration`, flows.yaml) and observed by
+    `tests/flow_scenarios/present_cascade.ts`, which already called `presentationFromDeclaration`
+    for the other two axes and exercises this one for free. `app/index.html` holds the result in a
+    page-level variable (`qualification`) that nothing downstream consumes yet — the same "published,
+    not yet narrated" posture `structural` has had since 2026-07-31.
+    WHAT IS STILL NOT ROOTED, AND IT IS THE LARGER HALF: `membershipFor` ITSELF has no production
+    caller. `app/index.html` does not call it, nothing holds an answer, and no pixel changes. That
+    gap had a second, harder layer under it until step 2 closed it — the app knew a section only by
+    POSITIONAL ORDINAL and the declaration is keyed on the config's `id:` string, so a caller could
+    not even NAME the section a real cursor position is in. `app/present/address.ts`'s `sectionAt`
+    is that join now (its own capability, `section-addressing-reads-the-full-declared-order`,
+    below) — so what remains before `membershipFor` can be called for a real cursor line is
+    display wiring alone, not a missing fact. The four declared `section-membership` flows plus
+    `address-classifies-the-line` are observed only by `tests/flow_scenarios/section_membership.ts`
+    and `tests/flow_scenarios/section_addressing.ts`, neither of which paints anything.
+    THAT REMAINING GAP IS A DELIBERATE STOPPING POINT, NOT AN OVERSIGHT. Showing the answer is a
+    separate decision from computing it, and the wrong version of it is actively harmful: a row
+    that relocates under a live cursor takes away the safe haven an edit in flight is supposed to
+    be. Saying "this will leave Domain Empty" is safe; moving it is not, and the two are one
+    keystroke apart in a painter. The computation is proven correct against the engine first, so
+    that whoever wires the display (design doc step 4) is arguing about presentation rather than
+    about whether the answer is right, or about whether it can even be asked for a real line.
+  status: working
+- id: section-addressing-reads-the-full-declared-order
+  intent: >-
+    THE APP NAMES WHICH SECTION A PRINTED ROW IS IN, BY THE CONFIG'S OWN ID — AND THE MAPPING IS
+    BUILT SO THE OBVIOUS SHORTCUT CANNOT BE TAKEN, NOT MERELY AVOIDED.
+    docs/implementation-artifacts/design-the-resolution-architecture.md names L3 ADDRESSING as the
+    layer the brief's own candidate list omitted, and step 2 as "the blocker": the app already knew
+    a section by its POSITIONAL ORDINAL (`instance.ts`'s own `section` field, the Nth heading
+    walked from the markdown), and `section-membership-is-read-not-guessed`'s declaration is keyed
+    on the config's section `id:` string (`inbox-tagged`, `domain-empty`). Nothing mapped one to
+    the other, so `membershipFor` could not be called for a real cursor line at all.
+    THE TRAP, MEASURED RATHER THAN ASSUMED (2026-08-01, against the operator's live config): heading
+    count equals declared section count in 71 of 71 checked views (186 declared, 184 headings
+    matched positionally — see `rooting` below for the one file the sweep could not check and why).
+    So the naive join — `Object.keys(sections[view])[ordinal]`, indexing the PUBLISHED predicate
+    table by ordinal — looks safe, and IS safe, on 25 of 27 published views. It is silently WRONG on
+    the operator's two daily surfaces: `daily-work` publishes a qualification for 1 of its 5
+    declared sections, `daily-personal` for 3 of its 8, because the published table
+    (`QualificationLanguage.sections`) is a proper SUBSET, filtered to what the app can decide
+    (`section-membership-is-read-not-guessed`'s own record: 43 of 159 qualifications). Indexing
+    that subset by ordinal returns the WRONG section id, or nothing, for every unpublished ordinal —
+    silently, because both views print exactly as many headings as sections either way.
+    THE FIX MAKES THE MISTAKE UNREPRESENTABLE, NOT MERELY DOCUMENTED AGAINST. Step 1 of the design
+    document adds `sectionOrder` — per view, the FULL declared order of section ids, unfiltered,
+    captured in `scripts/generate-qualification-declaration.mjs`'s `readViews` BEFORE the existing
+    `sections` filter runs, published as a sibling key to `sections` rather than derived from it.
+    `app/present/address.ts`'s `sectionAt` (step 2) takes `sectionOrder` as its one config-shaped
+    parameter — its type is `Record<string, readonly string[]>`, a different shape from `sections`'
+    `Record<string, Record<string, SectionQualification>>` — so a caller cannot pass the published
+    subset where the full order is expected; TypeScript refuses the call. There is no code path
+    through which the trap can be re-introduced by accident, which is the whole difference between
+    "avoided" and "impossible" this capability's own name insists on.
+    THE ORDINAL ITSELF IS COUNTED THE SAME WAY `instance.ts` ALREADY COUNTS IT — a heading OPENS the
+    section it is the first line of (the same renderer.py:399/:430 attribution `instance.ts`'s own
+    header cites), so `sectionOrdinalAt` walks every line at-or-above the target counting headings,
+    0-based, `null` above the file's first heading. Deliberately NOT reused from `instancesOf`,
+    which returns no id for a BLANK line — a blank line still sits inside a section positionally,
+    and `sectionAt` must still answer for the cursor resting on one before anything is typed.
+    PROVEN AGAINST THE TRAP DIRECTLY, NOT ONLY AGAINST THE EASY CASE. `tests/present-address.test.mjs`
+    section 2 addresses all 5 of `daily-work`'s ordinals and all 8 of `daily-personal`'s — including
+    every unpublished one — against real vault headings, and section 3 mutates a scratch copy of the
+    real config (rename a section id; reorder two sections) and asserts `sectionAt`'s answer follows,
+    the same falsifier `section-membership-is-read-not-guessed` already proved for the predicate
+    axis. `tests/flow_scenarios/section_addressing.ts` proves the same trap closed under the node
+    observer, and additionally proves the JOIN composes honestly: `sectionAt` names `daily-work`'s
+    unpublished "urgent" ordinal correctly, and `membershipFor`, given that correct name, still
+    abstains with `no-section-declaration` — L3 answering "where" and L5 declining "whether" are
+    both right, and neither module can be used to fake the other's job.
+    NOT VERIFIED. No browser, no passkey session, no live server, no cycle, and no comparison
+    against the engine's own `RenderedLineRecord.section_id` — that needs a running cycle, which
+    this worktree is forbidden from running. What section 4 of the test file proves instead is the
+    positional agreement `design-presentation-instance-identity.md` §2.3(c) already measured and
+    `instance.ts`'s own shipped ordinal already trusts, extended from 5 views to 71 of 72.
+  tier: functional
+  rooting: >-
+    isolated, same family `presentation-instance-identity`'s own `instance.ts` still is:
+    `app/present/address.ts` has no importer inside `app/` yet — `app/index.html` does not call
+    `sectionAt`, and neither does `membership.ts` (the two are composed only by
+    `tests/flow_scenarios/section_addressing.ts`, standing in for the caller step 4 would add). The
+    one declared flow, `address-classifies-the-line`, is observed by that scenario alone.
+    ONE MEASUREMENT GAP, STATED RATHER THAN LEFT IMPLIED: the 71-of-72 sweep
+    (`tests/present-address.test.mjs` section 4) skips whichever view's markdown `~/qntm` did not
+    have at read time (a crude test-local `path:` extraction found one missing file in a pass
+    measured while building this capability) — a genuine absence in the operator's vault, not a
+    defect in the sweep, and it is why the assertion floor is "≥ 60 views, ≥ 150 headings" rather
+    than a hard-coded 72/186 that would break the moment his vault's file count moves by one.
   status: working

@@ -908,6 +908,15 @@ let indentUnit = DEFAULT_INDENT_UNIT;
 // read by nothing, which is the honest state of "published, not yet consumed".
 let structural = undefined;
 
+// THE MEMBERSHIP AXIS (design-the-resolution-architecture.md, L5 EVALUATION) — which section a
+// declared predicate says a line belongs in, and the full declared section order per view that L3
+// ADDRESSING (app/present/address.ts's sectionAt) indexes. Read and validated here, the same
+// posture as `structural` above: this variable is read by nothing yet — showing the membership
+// answer on screen is a separate, later step (design doc step 4), deliberately not this one. What
+// this wiring changes is that `readQualificationDeclaration` now has a production caller at all;
+// before, only tests called it, and 20+ KB of predicate table shipped on every load unread.
+let qualification = undefined;
+
 // THE PAGE READS; IT NO LONGER FETCHES. Turning the document into levels is still
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
 // declaration read inside this file is a declaration whose reader nothing can observe, because
@@ -939,6 +948,7 @@ function applyPresentation(document) {
   presentation = declared.context;
   indentUnit = declared.indentUnit;
   structural = declared.structural;
+  qualification = declared.qualification;
 }
 function loadPresentation() {
   applyPresentation(EMBEDDED_DECLARATION);

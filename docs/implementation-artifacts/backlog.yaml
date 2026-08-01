@@ -1894,17 +1894,26 @@ backlog:
     pixel changes.
   driving_capability: section-membership-is-read-not-guessed
   record: >-
-    NOT SHIPPED, AND DELIBERATELY. Showing the answer is a separate decision from computing it, and
-    the wrong version is worse than nothing: a row that relocates under a live cursor takes away
-    the safe haven an edit in flight is supposed to be. Saying "this will leave Domain Empty" is
-    safe; moving it is not, and in a painter the two are one keystroke apart. Two prerequisites the
-    display needs and does not have. FIRST, the app must know which SECTION the cursor is in —
-    `instance.ts` already derives a section ORDINAL from heading order, but the declaration is keyed
-    on the config's section `id:` string, and nothing maps one to the other. That is the same
-    view/section identity gap `presentation-instance-identity` records and `newline.ts` names as its
-    own blocker. SECOND, the app must know which VIEW it is in as a config id; the snapshot carries
-    `id` per view, so this half is available today. Until the first is closed, a caller cannot ask
-    the question for a real cursor position at all.
+    NOT SHIPPED, AND DELIBERATELY — BUT ITS BLOCKING PREREQUISITE IS NOW CLOSED, UPDATED 2026-08-01.
+    Showing the answer is a separate decision from computing it, and the wrong version is worse than
+    nothing: a row that relocates under a live cursor takes away the safe haven an edit in flight is
+    supposed to be. Saying "this will leave Domain Empty" is safe; moving it is not, and in a
+    painter the two are one keystroke apart. Two prerequisites the display needed. FIRST, the app
+    had to know which SECTION the cursor is in BY THE CONFIG'S OWN ID — `instance.ts` already
+    derived a section ORDINAL from heading order, but the declaration is keyed on the config's
+    section `id:` string, and nothing mapped one to the other. THIS IS NOW CLOSED:
+    design-the-resolution-architecture.md steps 1-3 shipped `sectionOrder` (the full declared order,
+    published beside the published-predicate subset — `scripts/generate-qualification-declaration.mjs`),
+    `app/present/address.ts`'s `sectionAt` (the join, proven against the trap where the published
+    subset would have misaddressed daily-work/daily-personal), and wired
+    `readQualificationDeclaration` into `presentationFromDeclaration` so the predicate table has a
+    production reader at all. See capability `section-addressing-reads-the-full-declared-order`.
+    SECOND, the app must know which VIEW it is in as a config id; the snapshot carries `id` per
+    view, so this half was already available. WHAT REMAINS IS PURELY THE DISPLAY DECISION (design
+    doc step 4): call `membershipFor(currentViewId, sectionAt(source, cursorLine, currentViewId,
+    qualification.sectionOrder), line, qualification)` on the cursor's line and paint the answer
+    when it is not an `Abstention` — no new fact is needed, only the wiring and the paint-time
+    decision about what "nothing" looks like for all five refusal values.
   state: diagnose-ready
 
 - id: widen-membership-to-edge-traversing-qualifications

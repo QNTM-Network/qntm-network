@@ -130,6 +130,22 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [structural-language-is-published-not-guessed]
 
+  # THE MEMBERSHIP AXIS REACHES (added 2026-08-01, design-the-resolution-architecture.md step 3).
+  # Same shape as the two edges above, same reason it is its own declaration: `qualification.ts`
+  # had NO production caller before this — only tests called `readQualificationDeclaration`
+  # directly, and 20+ KB of predicate table shipped in every build unread. This edge is what makes
+  # "the qualification reader is wired" observed rather than claimed. Observed by
+  # tests/flow_scenarios/present_cascade.ts, which already called `presentationFromDeclaration`
+  # for the other two axes and now exercises this one for free — no scenario changes needed for
+  # this edge specifically.
+  - id: context-reads-the-qualification-declaration
+    from: app/present/context
+    to:   app/present/qualification
+    callee: readQualificationDeclaration
+    event: app.reads-the-qualification-declaration
+    class: presentation-resolution
+    gates_capabilities: [section-membership-is-read-not-guessed]
+
   # THE FACTS. The cascade reads each level through the context rather than reaching for a
   # session, a store or a global — which is what lets a test resolve "as if the cursor were here"
   # without a browser, and what stage 3 depends on.
@@ -428,6 +444,24 @@ expected_flows:
     event: app.refuses-a-line-that-would-mint-an-untitled-node
     class: section-membership
     gates_capabilities: [section-membership-is-read-not-guessed]
+
+  # ── L3 ADDRESSING (2026-08-01, design-the-resolution-architecture.md step 2) ────────────────
+  #
+  # `address.ts`'s `sectionAt` names the `(view, section)` a printed row sits in, BY THE CONFIG'S
+  # OWN SECTION ID — the join `membershipFor` needs and could not get before this. Counting section
+  # ordinals needs to know which lines are headings, and that is the whole of the dependency: one
+  # edge, to `resolution.ts`, same as `membership.ts`'s own three. Observed by
+  # tests/flow_scenarios/section_addressing.ts, which also proves the join closes THE TRAP —
+  # `sectionAt` names an UNPUBLISHED section (`daily-work`'s "urgent", ordinal 1) correctly, and
+  # `membershipFor`, given that correct name, still honestly abstains, because addressing and
+  # evaluation are two different layers with two different reaches.
+  - id: address-classifies-the-line
+    from: app/present/address
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.counts-a-lines-section-ordinal
+    class: section-addressing
+    gates_capabilities: [section-addressing-reads-the-full-declared-order]
 
 forbidden_flows:
 

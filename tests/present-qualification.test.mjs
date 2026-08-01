@@ -27,7 +27,12 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readQualificationDeclaration, readDeclaration, membershipFor } from "../dist/present.js";
+import {
+  readQualificationDeclaration,
+  readDeclaration,
+  membershipFor,
+  presentationFromDeclaration,
+} from "../dist/present.js";
 import {
   generateQualification,
   DEFAULT_CONFIG_DIR,
@@ -91,6 +96,76 @@ describe("1. the shipped declaration reads cleanly", () => {
         `'${name}' is both refused and published — the two halves disagree`,
       );
     }
+  });
+});
+
+describe("1a. sectionOrder — the FULL declared order, published beside the published subset", () => {
+  // design-the-resolution-architecture.md step 1, and the trap step 1 exists to close: the
+  // published predicate table (`sections`, above) is a proper SUBSET of the declared sections in
+  // 2 of 27 published views. `sectionOrder` is the join `app/present/address.ts`'s `sectionAt`
+  // indexes — the FULL order, unfiltered — and this section pins the numbers that make the trap
+  // real, not hypothetical.
+  test("inbox: the full order matches its two real sections, in declared order", () => {
+    const { qualification } = readQualificationDeclaration(SERVED);
+    assert.deepEqual(qualification.sectionOrder["inbox"], ["inbox-tagged", "domain-empty"]);
+  });
+
+  test("daily-work: 5 declared, only 1 published — sectionOrder still carries all 5", () => {
+    const { qualification } = readQualificationDeclaration(SERVED);
+    assert.deepEqual(
+      qualification.sectionOrder["daily-work"],
+      ["in-progress", "urgent", "due-today", "waiting", "capture"],
+    );
+    assert.deepEqual(Object.keys(qualification.sections["daily-work"]), ["in-progress"]);
+  });
+
+  test("daily-personal: 8 declared, only 3 published — sectionOrder still carries all 8", () => {
+    const { qualification } = readQualificationDeclaration(SERVED);
+    assert.equal(qualification.sectionOrder["daily-personal"].length, 8);
+    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 3);
+  });
+
+  test("every published section's id also appears in its view's full order", () => {
+    // sectionOrder is a SUPERSET of sections' keys, per view — never disjoint, never a stray id.
+    const { qualification } = readQualificationDeclaration(SERVED);
+    for (const [viewId, sections] of Object.entries(qualification.sections)) {
+      for (const sectionId of Object.keys(sections)) {
+        assert.ok(
+          (qualification.sectionOrder[viewId] ?? []).includes(sectionId),
+          `${viewId}.${sectionId} is published but absent from its own view's sectionOrder`,
+        );
+      }
+    }
+  });
+
+  test("STEP 1's OWN FALSIFIER, restated: sectionOrder's length per view is >= its published count", () => {
+    const { qualification } = readQualificationDeclaration(SERVED);
+    for (const [viewId, sections] of Object.entries(qualification.sections)) {
+      const order = qualification.sectionOrder[viewId] ?? [];
+      assert.ok(
+        order.length >= Object.keys(sections).length,
+        `${viewId}: sectionOrder has fewer entries than the published subset — impossible if ` +
+          "sectionOrder is truly the SUPERSET",
+      );
+    }
+  });
+});
+
+describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into the app's ONE reader", () => {
+  test("presentationFromDeclaration(EMBEDDED_DECLARATION)'s shape carries the qualification axis", () => {
+    // Before this change, `presentationFromDeclaration` (app/present/context.ts) called
+    // `readDeclaration` and `readStructuralDeclaration` only — `readQualificationDeclaration` had
+    // no production caller, only tests called it directly. This is the falsifier that it now does.
+    const declared = presentationFromDeclaration(SERVED);
+    assert.equal(Object.keys(declared.qualification.predicates).length, 43);
+    assert.equal(Object.keys(declared.qualification.sections).length, 27);
+    assert.deepEqual(declared.problems, [], "wiring qualification in introduced a reported problem");
+  });
+
+  test("a document with no qualification key at all still wires cleanly — silence, not a crash", () => {
+    const declared = presentationFromDeclaration({ checkbox: "wired" });
+    assert.deepEqual(declared.qualification.predicates, {});
+    assert.deepEqual(declared.qualification.sectionOrder, {});
   });
 });
 
@@ -158,6 +233,22 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     const { qualification, problems } = readQualificationDeclaration({ qualification: [] });
     assert.equal(problems.length, 1);
     assert.deepEqual(qualification.predicates, {});
+  });
+
+  test("sectionOrder of the wrong shape is reported and stays empty, other keys unaffected", () => {
+    const { qualification, problems } = read({ predicates: {}, sectionOrder: "not-an-object" });
+    assert.deepEqual(qualification.sectionOrder, {});
+    assert.ok(problems.some((p) => p.includes("sectionOrder")), problems.join("\n"));
+  });
+
+  test("one view's malformed order is reported and dropped; another view's survives", () => {
+    const { qualification, problems } = read({
+      predicates: {},
+      sectionOrder: { good: ["a", "b"], bad: [1, 2] },
+    });
+    assert.deepEqual(qualification.sectionOrder.good, ["a", "b"]);
+    assert.deepEqual(qualification.sectionOrder.bad, []);
+    assert.ok(problems.some((p) => p.includes("sectionOrder.bad")), problems.join("\n"));
   });
 });
 
