@@ -2815,6 +2815,7 @@ function rawText(source) {
   return div;
 }
 var VIM_BLOCK_CLASS = "vim-block";
+var paintGeneration = 0;
 var EMPTY_CELL = "\xA0";
 function normalLine(lineSource, column) {
   const div = document.createElement("div");
@@ -2862,6 +2863,9 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "set-line" });
     const next = markdown ?? fileSource;
     const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (opened) {
+      focus.blur();
+    }
     if (wasFocused) {
       if (opened && mode !== void 0) {
         mode.enterInsert();
@@ -2991,6 +2995,9 @@ function renderTokens(text, tags, stamp, render) {
   return intact ? html : render(text);
 }
 function paint(body, source, context, deps) {
+  paintGeneration += 1;
+  const mine = paintGeneration;
+  const superseded = () => paintGeneration !== mine;
   const focus = deps.focus;
   const draft = deps.draft;
   const mode = deps.mode;
@@ -3041,6 +3048,9 @@ function paint(body, source, context, deps) {
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
+      if (superseded()) {
+        return;
+      }
       const caret = mode?.takeCaretHint();
       if (caret !== void 0) {
         const at = Math.max(0, Math.min(caret, lineSource.length));
@@ -3049,6 +3059,9 @@ function paint(body, source, context, deps) {
     }
   };
   body.innerHTML = "";
+  if (superseded()) {
+    return;
+  }
   let draftPainted = false;
   const paintDraft = () => {
     const open = draft?.draft;
@@ -3067,12 +3080,18 @@ function paint(body, source, context, deps) {
     );
     body.append(input);
     input.focus?.();
+    if (superseded()) {
+      return;
+    }
     if (open.typed !== open.seed) {
       input.setSelectionRange?.(open.typed.length, open.typed.length);
     }
   };
   let lastPaintedIndex = -1;
   source.split("\n").forEach((line, index) => {
+    if (superseded()) {
+      return;
+    }
     if (draft?.isDraftAt(index) === true) {
       paintDraft();
     }
@@ -3152,7 +3171,13 @@ function paint(body, source, context, deps) {
     stampInstance(div, index);
     body.append(div);
   });
+  if (superseded()) {
+    return;
+  }
   paintDraft();
+  if (superseded()) {
+    return;
+  }
   if (draft !== void 0 && focus !== void 0) {
     const below = document.createElement("div");
     below.className = "newline";
