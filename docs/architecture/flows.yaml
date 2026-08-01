@@ -505,6 +505,32 @@ expected_flows:
   # tests/app-membership-note.test.mjs, which drives the page's own lifted script directly. See
   # capability `section-membership-is-said-in-the-freshness-line` (capabilities.yaml) for the rest.
 
+  # ── STEP 7 — ORDERING PREVIEW (2026-08-01) ──────────────────────────────────────────────────
+  #
+  # `ordering.ts` answers "after this edit, will this line sort to a different position within its
+  # section?". Its own reach into `resolution.ts` is the SAME shape `membership.ts`'s three edges
+  # above already declare — one grammar module, asked for a different purpose (finding a section's
+  # line range by counting headings, the same classification `address.ts`'s own edge already uses).
+  # `resolutiontable.ts` is imported TYPE-ONLY (`OrderingKey`/`SectionOrdering`/`OrderingFieldMarker`
+  # shapes, no runtime call), so no edge is declared for it — the same posture this file already
+  # takes for a type-only import elsewhere.
+  - id: ordering-classifies-the-line
+    from: app/present/ordering
+    to:   app/present/resolution
+    callee: classifyLine
+    event: app.finds-a-sections-line-range
+    class: presentation-resolution
+    gates_capabilities: [ordering-position-is-said-in-the-freshness-line]
+
+  # `app/index.html`'s `commitLine` now calls `sectionAt` then `orderingFor` on every committed
+  # edit (`orderingNoteFor`), the same "computed before the write leaves" shape `membershipNoteFor`
+  # already established, and joins whichever of the two notes fired into one freshness-line
+  # sentence. THAT EDGE IS REAL AND UNOBSERVABLE BY THIS TOOL, for the identical reason step 4's own
+  # comment above states: the caller is the page, which node cannot import. No edge is declared
+  # from `app/index.html` for the same reason none is declared for `membershipNoteFor`; the proof
+  # lives in tests/app-ordering-note.test.mjs, which drives the page's own lifted script directly.
+  # See capability `ordering-position-is-said-in-the-freshness-line` (capabilities.yaml) for the rest.
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the

@@ -2077,9 +2077,8 @@ backlog:
 
 - id: wire-config-resolution-table-into-steps-6-7-8
   title: >-
-    [resolution] `resolution.ordering`/`dayBoundary` still have no production reader in `app/` —
-    no row previews its ordering position and the app still computes zero dates. STEP 6's OWN
-    PORTION IS DONE (see record) — this row now tracks only steps 7 and 8.
+    [resolution] `resolution.dayBoundary` still has no production reader in `app/` — the app still
+    computes zero dates. STEPS 6 AND 7 ARE NOW DONE (see record) — this row tracks only step 8.
   driving_capability: config-resolution-table-is-published
   record: >-
     STEP 6 SHIPPED 2026-08-01 (capability `new-line-seed-reads-the-declaration`). `newline.ts`'s
@@ -2089,11 +2088,49 @@ backlog:
     sections[view][section].nodeType` instead, joined against a new fact this step discovered was
     missing and added, `resolution.chromeShapes`. See that capability's own record for the full
     account, including why `baseNodeType` was correctly NOT the field this rung reads.
-    STEPS 7 AND 8 REMAIN NOT SHIPPED, AND DELIBERATELY OUT OF STEP 6'S SCOPE — the design
-    document's own sequence gives each consumer its own step: 7 (ordering preview — a typed row's
-    position follows `resolution.ordering` for the 9 sections that declare one, needs 5 and 8),
-    8 (the day boundary — routes every date decision through one function reading `resolution.
-    dayBoundary` instead of `new Date()`, needs 5). Each is sized `h` in the design document's own
-    table and each has its own falsifier stated there. This row exists so the remaining gap is a
-    planned next step, not a discovered one.
+    STEP 7 SHIPPED 2026-08-01 (capability `ordering-position-is-said-in-the-freshness-line`). NOT
+    "needs 5 and 8", as this row's own original wording assumed, following the design document's
+    own table — MEASURED that none of the 9 declared orderings compares a field against the clock,
+    so step 8 was never a real dependency of ordering itself (only of MEMBERSHIP, a different,
+    already-built layer). What step 7 DID need beyond step 5's own table — a field-name-to-marker
+    map (`resolution.orderingFields`) and each section's `name` — is shipped alongside it. A REAL
+    measurement against `~/qntm/this_week.md`, not assumed, found the flat "compare every printed
+    row" model wrong the moment a section pulls in ancestor context (`section_builder.py`'s own
+    `_order_children` places context rows ahead of qualifying ones, unconditionally) — so the
+    shipped capability refuses (`nested-section`) for exactly the sections that would have gotten
+    this wrong, live-previewing 2 of the 9 declared sections today rather than claiming all 9. See
+    that capability's own record for the full account, including which 2 and why the other 7 refuse.
+    STEP 8 REMAINS NOT SHIPPED. The design document's own falsifier: "03:59 Europe/London's
+    resolver returns yesterday's date; 04:01 returns today's; a Sunday resolves into the week that
+    started the preceding Monday." Sized `h` in the design document's own table. Filed here as the
+    one remaining item this row tracks — it is a precondition of nothing this repo has built yet
+    (§7.8 of the design document: the browser computes no dates at all today, so this is not a live
+    defect), not a blocker discovered by shipping step 7.
+  state: diagnose-ready
+- id: widen-ordering-preview-past-flat-sections
+  title: >-
+    [resolution] `orderingFor` refuses (`nested-section`) the instant a section prints ANY indented
+    row — which is 7 of the 9 declared orderings today (all four `this-week` sections, plus
+    `qntm-queue`'s own "Queue", which turned out to interleave a prose "#summary" child; the two
+    `insertion_order` "capture" sections have no field to preview regardless).
+  driving_capability: ordering-position-is-said-in-the-freshness-line
+  record: >-
+    NOT SHIPPED, BY MEASUREMENT RATHER THAN OMISSION. `apps/qntm-md/src/qntm_md/render/
+    section_builder.py:337-341` (`_order_children`) sorts a section's `ordering:` key only WITHIN
+    the qualifying siblings that share one PARENT, and places every ANCESTOR/context row ahead of
+    every ordering-sorted qualifying row at that SAME tree level, unconditionally — proven against
+    real content, `~/qntm/this_week.md`'s `available-overdue` prints its EARLIEST `available_date`
+    LAST, after two `#outcome` ancestor roots. A correct widening needs the browser to walk the
+    printed tree per PARENT GROUP (comparing only true siblings under the same parent, never across
+    parent boundaries, and never against a context/ancestor row) rather than the flat whole-section
+    rank this step shipped — which is real additional work, not a one-line relaxation of the
+    `nested-section` guard, and touches the same "which printed row is context vs qualifying"
+    question `ordering.ts`'s own header names as unanswerable from text alone without either (a) a
+    second, PARENT-GROUP-aware pass over the indentation the renderer already encodes (depth via
+    leading-space count, `renderer.py:950`'s own `'    ' * depth`), which this app does not yet
+    parse structurally anywhere, or (b) reading `snapshot.graph` for `is_qualifying`-equivalent
+    information the wire does not currently carry (`locations: {}`, §5.9 of the design document).
+    Worth doing once a caller actually needs the 7 currently-refusing sections previewed — the
+    operator's own daily-used surfaces (`this-week`) are among them, so this is a real, likely-soon
+    gap, not a speculative one.
   state: diagnose-ready

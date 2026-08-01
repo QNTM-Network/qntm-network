@@ -75,6 +75,51 @@ describe("1. the shipped declaration reads cleanly", () => {
     assert.equal(resolution.ordering["daily-work"]["capture"].orderingMode, "insertion_order");
   });
 
+  test("step 7 — every ordering section carries the operator's own name for it", () => {
+    const { resolution } = readConfigResolutionDeclaration(SERVED);
+    assert.equal(resolution.ordering["this-week"]["overdue"].name, "Overdue");
+    assert.equal(resolution.ordering["this-week"]["due-this-week"].name, "Due This Week");
+    assert.equal(resolution.ordering["flowtrace-queue"]["queue"].name, "Queue");
+    assert.equal(resolution.ordering["daily-work"]["capture"].name, "Work Capture");
+    // None of these 9 sections is published in qualification.sections (measured 2026-08-01: all 9
+    // traverse an edge, consult the clock, or range over a field the app cannot resolve) — proving
+    // `name` really could not have been joined from there, which is why it rides here instead.
+  });
+
+  test("step 7 — DID NOT NEED THE DAY BOUNDARY: none of the 9 orderings is clock-bound", () => {
+    // THE MEASUREMENT THAT DECIDES WHETHER STEP 7 NEEDS STEP 8. Every `ordering.field` is an
+    // ABSOLUTE value (a literal date or an externally-stamped rank), compared field-to-field, never
+    // against "today" — so sorting an already-placed row needs no clock. A positive control first
+    // (queue_position genuinely is one of the fields) so a result of "zero clock-bound orderings"
+    // cannot be an artefact of an extractor that finds nothing.
+    const { resolution } = readConfigResolutionDeclaration(SERVED);
+    const fields = new Set();
+    for (const sections of Object.values(resolution.ordering)) {
+      for (const section of Object.values(sections)) {
+        for (const key of section.ordering ?? []) fields.add(key.field);
+      }
+    }
+    assert.ok(fields.has("queue_position"), "positive control failed — the extractor found nothing");
+    for (const field of fields) {
+      assert.ok(
+        !/cycle|today|now/i.test(field),
+        `'${field}' looks clock-relative — step 8 really is a dependency after all`,
+      );
+    }
+  });
+
+  test("step 7 — orderingFields publishes a marker for exactly the 3 fields the 9 orderings use", () => {
+    const { resolution } = readConfigResolutionDeclaration(SERVED);
+    assert.deepEqual(Object.keys(resolution.orderingFields).sort(), [
+      "available_date",
+      "due_date",
+      "queue_position",
+    ]);
+    assert.deepEqual(resolution.orderingFields.due_date, { token: "📅", kind: "date" });
+    assert.deepEqual(resolution.orderingFields.available_date, { token: "🛫", kind: "date" });
+    assert.deepEqual(resolution.orderingFields.queue_position, { token: "🔢", kind: "int" });
+  });
+
   test("the day boundary — 04:00, Europe/London, week starts Monday", () => {
     const { resolution } = readConfigResolutionDeclaration(SERVED);
     assert.deepEqual(resolution.dayBoundary, {
@@ -174,6 +219,32 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     assert.ok(problems.some((p) => p.includes("chromeShapes")), problems.join("\n"));
   });
 
+  test("orderingFields: an unrecognised kind is reported and that field drops", () => {
+    const { resolution, problems } = read({
+      orderingFields: { due_date: { token: "📅", kind: "date" }, weird: { token: "❓", kind: "duration" } },
+    });
+    assert.deepEqual(resolution.orderingFields, { due_date: { token: "📅", kind: "date" } });
+    assert.ok(problems.some((p) => p.includes("orderingFields.weird")), problems.join("\n"));
+  });
+
+  test("orderingFields of the wrong shape blinds the reader loudly; other keys survive", () => {
+    const { resolution, problems } = read({
+      orderingFields: "not-an-object",
+      dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" },
+    });
+    assert.deepEqual(resolution.orderingFields, {});
+    assert.equal(resolution.dayBoundary.timezone, "Europe/London", "one bad key blinded the reader to a good one");
+    assert.ok(problems.some((p) => p.includes("orderingFields")), problems.join("\n"));
+  });
+
+  test("a section's `name` that is an empty string is reported and the whole section drops", () => {
+    const { resolution, problems } = read({
+      ordering: { v: { s: { orderingMode: "insertion_order", name: "" } } },
+    });
+    assert.equal(resolution.ordering.v, undefined);
+    assert.ok(problems.some((p) => p.includes("v.s.name")), problems.join("\n"));
+  });
+
   test("one view's malformed ordering is reported and dropped; another view's survives", () => {
     const { resolution, problems } = read({
       ordering: {
@@ -181,7 +252,9 @@ describe("2. a malformed declaration is reported, never guessed", () => {
         bad: { s: { ordering: "not-a-list" } },
       },
     });
-    assert.deepEqual(resolution.ordering.good, { s: { ordering: undefined, orderingMode: "insertion_order" } });
+    assert.deepEqual(resolution.ordering.good, {
+      s: { ordering: undefined, orderingMode: "insertion_order", name: undefined },
+    });
     assert.equal(resolution.ordering.bad, undefined);
     assert.ok(problems.some((p) => p.includes("ordering.bad")), problems.join("\n"));
   });
@@ -289,6 +362,39 @@ describe("4. the falsifier: the app's answer follows the config, because it read
     assert.equal(resolution.chromeShapes.group, "plain_line", "an unrelated node type's shape moved too");
   });
 
+  test("MUTATE A MARKER TOKEN: change queue_position's glyph in markers.yaml, and orderingFields follows", { skip }, () => {
+    const before = generateResolution(DEFAULT_CONFIG_DIR);
+    assert.equal(before.orderingFields.queue_position.token, "🔢");
+    const resolution = withMutatedConfig((configDir) => {
+      const path = join(configDir, "vocabulary", "markers.yaml");
+      const original = readFileSync(path, "utf8");
+      const needle = '{ token: "🔢", field: queue_position, extraction_hint: trailing_int }';
+      assert.equal(original.split(needle).length - 1, 1, "the anchor this falsifier depends on moved");
+      const mutated = original.replace(needle, needle.replace("🔢", "🔟"));
+      assert.notEqual(mutated, original, "the falsifier's own edit did not apply");
+      writeFileSync(path, mutated);
+    });
+    assert.equal(resolution.orderingFields.queue_position.token, "🔟", "the published token did not follow the mutation");
+    // due_date's own marker is untouched — only queue_position's glyph moved.
+    assert.equal(resolution.orderingFields.due_date.token, "📅");
+  });
+
+  test("MUTATE A MARKER OUT OF EXTRACTABILITY: turn queue_position render_only, and it stops publishing", { skip }, () => {
+    // Mirrors markers.yaml's own comment for done_task_count/par: a render_only marker's value is
+    // NEVER ingested from that glyph, so a table that kept publishing it would tell the operator an
+    // edit moves a row by a field the engine itself refuses to read back.
+    const resolution = withMutatedConfig((configDir) => {
+      const path = join(configDir, "vocabulary", "markers.yaml");
+      const original = readFileSync(path, "utf8");
+      const needle = '{ token: "🔢", field: queue_position, extraction_hint: trailing_int }';
+      assert.equal(original.split(needle).length - 1, 1, "the anchor this falsifier depends on moved");
+      const mutated = original.replace(needle, needle.replace(" }", ", render_only: true }"));
+      assert.notEqual(mutated, original, "the falsifier's own edit did not apply");
+      writeFileSync(path, mutated);
+    });
+    assert.equal(resolution.orderingFields.queue_position, undefined, "a render_only marker still published");
+  });
+
   test("MUTATE A CANDIDATE OUT OF EXISTENCE: remove person's render: block, and it still publishes checkbox", { skip }, () => {
     // The engine's own default for an UNDECLARED render block is checkbox (schema.yaml's own
     // comment, mirrored by `node_type_form.py`) — proving the generator follows that default too,
@@ -315,7 +421,9 @@ describe("5. the size assertion — a future widening is visible, not silent", (
     const bytes = JSON.stringify(SERVED.resolution).length;
     // Measured 2026-08-01 at step 5: 994 bytes (registration 4 fields, 2 line grammars, 9
     // ordering sections, 3 day-boundary keys). Step 6 added `chromeShapes` (11 node-type
-    // candidates, checkbox/plain_line only) and measured 1,330 bytes whole-table.
+    // candidates, checkbox/plain_line only) and measured 1,330 bytes whole-table. Step 7 added
+    // each ordering section's `name` and the 3-entry `orderingFields` marker table, measured
+    // 1,732 bytes whole-table.
     // research-the-resolution-universe.md §6.1's per-view slice for the FULL eight-kind table
     // (which this is a deliberate subset of — defaults and the per-view minting default already
     // live on `qualification`) runs 454-1,930 B median 685 B PER VIEW; this whole-instance table

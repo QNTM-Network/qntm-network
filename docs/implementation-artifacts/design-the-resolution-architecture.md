@@ -244,6 +244,59 @@ boundary) — filed as `widen-chrome-shapes-beyond-checkbox-and-plain-line` and 
 verified**: no browser, no passkey session, no live server, no cycle — the app wiring was
 typechecked and exercised through the lifted-page test harness, never watched render in a real tab.
 
+**STATUS, UPDATED 2026-08-01 (fifth pass) — STEP 7 IS DONE, one agent, one worktree
+(`feat/ordering-preview`), against `origin/main` @ `58ac34f`.** **The "needs 5, 8" dependency this
+row states is HALF REFUTED, measured before building rather than assumed.** Every one of the
+operator's real 9 declared orderings sorts on an ABSOLUTE field — `due_date`, `available_date`, or
+`queue_position` — never against `$cycle_today`; the day boundary (step 8) is what MEMBERSHIP needs
+(deciding which section a row is IN), a different, already-shipped layer this step does not touch.
+Comparing two already-placed rows' field values needs no clock at all. So **step 7 needs step 5
+only**, and it was built without step 8 — `tests/present-ordering.test.mjs` §5 poisons `Date.now`
+across every real section and none reaches it. Two facts step 5's table did not carry had to be
+added, the same "found while building it" posture step 6 took with `chromeShapes`:
+`resolution.orderingFields` (field name -> the trailing-token marker `config/vocabulary/
+markers.yaml` declares, `📅`/`🛫`/`🔢`, restricted to the 3 fields the 9 orderings actually use)
+and each section's own `name` (published a SECOND time here, on `resolution.ordering` itself,
+because — measured — none of these 9 sections is in `qualification.sections` at all: every one
+traverses an edge, consults the clock, or ranges over a field the app cannot resolve, so there is
+no other source to join a display name from).
+
+**A second, larger correction came from a real measurement made mid-build, not assumed away.**
+Reading `~/qntm/this_week.md` against the falsifier as literally stated ("browser sort == served
+row order, for `this-week`'s four sections") found it FALSE — `available-overdue`'s printed order
+puts its EARLIEST `available_date` LAST, after two `#outcome` ancestor roots. Reading the engine's
+own `apps/qntm-md/src/qntm_md/render/section_builder.py:337-341` explained why: `_order_children`
+sorts `ordering:` only within same-parent qualifying siblings, and places every ancestor/context row
+ahead of every qualifying row at each tree level, unconditionally — a fact about the ENGINE, not a
+bug in this step's own extraction. **The falsifier's own wording was adapted rather than the finding
+buried**: `orderingFor` refuses outright (a new abstention, `nested-section`) the instant ANY line in
+a section's printed range carries indentation, proven against the SAME real content that broke the
+naive flat model. Measured result: only 2 of the 9 declared sections are genuinely flat in today's
+content and preview live (`flowtrace-queue`/`trace-orchestration-queue`'s "Queue" — `qntm-queue`'s
+own "Queue" turned out to interleave an occasional prose child and refuses too, same as all four
+`this-week` sections); the two `insertion_order` "capture" sections have no field to preview at all.
+A smaller, honestly-scoped capability rather than a wide, unsound one — filed as
+`widen-ordering-preview-past-flat-sections` (backlog.yaml), not silently narrowed. Five named
+abstentions in total (`no-section-declaration`, `insertion-order`, `field-not-published`,
+`nested-section`, `no-value`), each proven to produce silence — `tests/present-ordering.test.mjs`
+§3, `tests/app-ordering-note.test.mjs` §3. **Rule 1 held the same way step 4 held it**: the answer is
+said from `app/index.html`'s new `orderingNoteFor`, called from `commitLine` beside
+`membershipNoteFor` and joined into ONE freshness-line sentence with " · " — no function that
+computes a rank also touches `viewBody`, proven by the same import-enumeration
+`tests/app-ordering-note.test.mjs` §4 uses (extending, not duplicating,
+`tests/app-membership-note.test.mjs`'s own pinned write-adjacent counts: `graphData` 5, `applyEdit`
+5, `writeFile` 2 callers, `.markdown` never assigned — unchanged). `npm run check`: 822 tests / 161
+suites / 0 fail before this step (this agent's own re-run, matching the recorded baseline exactly,
+measured on a clean tree via `git checkout --`); 869 / 172 / 0 fail after (+47/+11, 0 regressions).
+Capability `ordering-position-is-said-in-the-freshness-line` (capabilities.yaml) carries the full
+record. **What this step does NOT do**: preview the 7 sections `nested-section` refuses (filed
+above) and step 8's own work (the day boundary) — `wire-config-resolution-table-into-steps-6-7-8`
+(backlog.yaml) now tracks only step 8. **Not verified**: no browser, no passkey session, no live
+server, no cycle — `section_builder.py`'s own ordering rule was read, not watched running; the
+`~/qntm/this_week.md` measurement is a snapshot of 2026-08-01, pinned by
+`tests/present-ordering.test.mjs` §1b with a comment naming what would make it worth re-examining
+(not blindly narrowing) the `nested-section` refusal.
+
 | # | step | layer | size | needs | falsifier, in one line | status |
 |---|---|---|---|---|---|---|
 | 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown | **DONE** |
@@ -252,7 +305,7 @@ typechecked and exercised through the lifted-page test harness, never watched re
 | 4 | **SAY the membership answer** — tonight's work becomes visible | L6 | **½** | 2, 3 | the freshness line shows nothing for all five `Abstention` values | **DONE** |
 | 5 | publish the config-only resolution table (registration + defaults + clock) | L2 | **½** | 1 | generator `--check` + per-section agreement with `ResolutionCascade.resolve` | **DONE** |
 | 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line | **DONE** |
-| 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections | — |
+| 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections | **DONE — needs 5 only, see status block** |
 | 8 | the day boundary — 04:00, Europe/London, week starts Monday | L2+L5 | **h** | 5 | 03:59 returns yesterday's date; 04:01 returns today's | — |
 | 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator | — |
 | 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin | — |
@@ -985,7 +1038,7 @@ narrowed `wire-config-resolution-table-into-steps-6-7-8` (backlog.yaml).
 
 ---
 
-### Step 7 — ordering preview · **under an hour** · L5 EVALUATION · needs 5, and needs 8 for the dated half
+### Step 7 — ordering preview · **under an hour** · L5 EVALUATION · needs 5 only — needs 8 was measured and refuted · **DONE 2026-08-01**
 
 **What.** For the 9 sections that declare an order (**[REPO]** universe §4.7), place a newly typed
 row where the declared sort puts it, among rows the browser is already painting.
@@ -993,6 +1046,28 @@ row where the declared sort puts it, among rows the browser is already painting.
 **Falsifier.** For `this-week`'s four sections, assert the browser's sort of the currently painted
 rows equals the order those rows appear in the served markdown. If they differ, the browser's sort
 key or its direction is wrong, and the section names which.
+
+**SHIPPED, WITH THE DEPENDENCY REFUTED AND THE FALSIFIER ADAPTED, BOTH ARGUED RATHER THAN SILENTLY
+TAKEN.** The "needs 8 for the dated half" clause is false for ORDERING specifically: all 9 real
+orderings compare a field to another field's value, never to the clock, so the day boundary was
+never this step's dependency (it is `membership.ts`'s, for a different question — which section a
+row is IN — that this step does not ask). Built on step 5 alone, proven with `Date.now` poisoned
+across every real section.
+
+The falsifier as literally stated is FALSE for the four `this-week` sections, measured directly —
+`available-overdue`'s real content prints its earliest `available_date` last, because
+`section_builder.py:337-341`'s `_order_children` places every ancestor/context row ahead of every
+ordering-sorted qualifying row at each tree level, a fact about the engine this step's own
+extraction cannot see from printed text alone. The adapted falsifier: `orderingFor` refuses
+(`nested-section`) the instant a section prints any indented row, proven against the SAME real
+content that broke the literal one (`tests/present-ordering.test.mjs` §1b) — and proven to hold for
+the sections that ARE flat (`tests/present-ordering.test.mjs` §1a, with `queue_position` reaching
+two digits as a positive control against a string-comparison bug). Measured result: 2 of the 9
+declared sections preview live today; the other 7 refuse for a named, tested reason. Full account,
+including the two new published facts (`resolution.orderingFields`, each section's `name`) and the
+five abstentions, in the STATUS block above this table and in capability
+`ordering-position-is-said-in-the-freshness-line` (capabilities.yaml). What this step does NOT do —
+widen past flat sections — is filed as `widen-ordering-preview-past-flat-sections` (backlog.yaml).
 
 ---
 

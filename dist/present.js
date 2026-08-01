@@ -650,10 +650,19 @@ function readQualificationDeclaration(document2) {
 
 // app/present/resolutiontable.ts
 var RESOLUTION_TABLE_KEY = "resolution";
-var TOP_KEYS2 = ["registration", "lineGrammars", "ordering", "dayBoundary", "chromeShapes"];
+var TOP_KEYS2 = [
+  "registration",
+  "lineGrammars",
+  "ordering",
+  "orderingFields",
+  "dayBoundary",
+  "chromeShapes"
+];
 var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
 var ORDERING_KEY_KEYS = ["field", "direction"];
-var SECTION_ORDERING_KEYS = ["ordering", "orderingMode"];
+var SECTION_ORDERING_KEYS = ["ordering", "orderingMode", "name"];
+var ORDERING_FIELD_MARKER_KEYS = ["token", "kind"];
+var ORDERING_FIELD_KINDS = ["date", "int", "float"];
 var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
 var DIRECTIONS = ["asc", "desc"];
 var CHROME_SHAPES = ["checkbox", "plain_line"];
@@ -661,6 +670,7 @@ var EMPTY3 = {
   registration: void 0,
   lineGrammars: {},
   ordering: {},
+  orderingFields: {},
   dayBoundary: void 0,
   chromeShapes: {}
 };
@@ -792,7 +802,15 @@ function readSectionOrdering(path, value, problems) {
     problems.push(`'${path}' declares neither 'ordering' nor 'orderingMode' \u2014 nothing to publish`);
     return void 0;
   }
-  return { ordering, orderingMode };
+  let name;
+  if (value.name !== void 0) {
+    if (typeof value.name !== "string" || value.name === "") {
+      problems.push(`'${path}.name' is ${JSON.stringify(value.name)}, not a non-empty string`);
+      return void 0;
+    }
+    name = value.name;
+  }
+  return { ordering, orderingMode, name };
 }
 function readOrdering(value, problems) {
   if (!isPlainObject3(value)) {
@@ -814,6 +832,45 @@ function readOrdering(value, problems) {
       if (read !== void 0) sections[sectionId] = read;
     }
     if (Object.keys(sections).length > 0) out[viewId] = sections;
+  }
+  return out;
+}
+function readOrderingFieldMarker(path, value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 this field's marker is unknown`);
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!ORDERING_FIELD_MARKER_KEYS.includes(key)) {
+      problems.push(
+        `'${path}.${key}' is not a recognised key \u2014 the keys are ${ORDERING_FIELD_MARKER_KEYS.join(", ")}`
+      );
+    }
+  }
+  const { token, kind } = value;
+  if (typeof token !== "string" || token === "") {
+    problems.push(`'${path}.token' is ${JSON.stringify(token)}, not a non-empty string`);
+    return void 0;
+  }
+  if (!ORDERING_FIELD_KINDS.includes(kind)) {
+    problems.push(
+      `'${path}.kind' is ${JSON.stringify(kind)}, not one of ${ORDERING_FIELD_KINDS.join(", ")}`
+    );
+    return void 0;
+  }
+  return { token, kind };
+}
+function readOrderingFieldMarkers(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.orderingFields' is ${shapeOf2(value)}, not an object \u2014 every field's marker stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [field, raw] of Object.entries(value)) {
+    const read = readOrderingFieldMarker(`${RESOLUTION_TABLE_KEY}.orderingFields.${field}`, raw, problems);
+    if (read !== void 0) out[field] = read;
   }
   return out;
 }
@@ -902,6 +959,7 @@ function readConfigResolutionDeclaration(document2) {
       registration: "registration" in raw ? readRegistration(raw.registration, problems) : void 0,
       lineGrammars: "lineGrammars" in raw ? readLineGrammars(raw.lineGrammars, problems) : {},
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
+      orderingFields: "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {}
     },
@@ -1015,9 +1073,119 @@ function sectionAt(source, lineIndex, view, sectionOrder) {
   return order[ordinal] ?? null;
 }
 
+// app/present/ordering.ts
+var abstains = (because) => ({ kind: "abstains", because });
+function sectionBounds(lines, lineIndex) {
+  let start = 0;
+  for (let at = lineIndex; at >= 0; at -= 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      start = at + 1;
+      break;
+    }
+  }
+  let end = lines.length;
+  for (let at = lineIndex + 1; at < lines.length; at += 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      end = at;
+      break;
+    }
+  }
+  return { start, end };
+}
+var INDENTED_CONTENT = /^\s+\S/;
+function anyLineIndented(lines, start, end) {
+  for (let at = start; at < end; at += 1) {
+    if (INDENTED_CONTENT.test(lines[at] ?? "")) return true;
+  }
+  return false;
+}
+var DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+var INT_SHAPE = /^-?\d+$/;
+var FLOAT_SHAPE = /^-?\d+(?:\.\d+)?$/;
+function shapeMatches(marker, token) {
+  if (marker.kind === "date") return DATE_SHAPE.test(token);
+  if (marker.kind === "int") return INT_SHAPE.test(token);
+  return FLOAT_SHAPE.test(token);
+}
+function markerValue(line, marker) {
+  const at = line.indexOf(marker.token);
+  if (at === -1) return void 0;
+  const after = line.slice(at + marker.token.length);
+  const match = /^\s+(\S+)/.exec(after);
+  if (match === null) return void 0;
+  const token = match[1] ?? "";
+  return shapeMatches(marker, token) ? token : void 0;
+}
+function tupleFor(line, keys, markers) {
+  const values = [];
+  for (const key of keys) {
+    const marker = markers[key.field];
+    if (marker === void 0) return void 0;
+    const value = markerValue(line, marker);
+    if (value === void 0) return void 0;
+    values.push(value);
+  }
+  return values;
+}
+function compareValue(kind, a, b) {
+  if (kind === "date") return a < b ? -1 : a > b ? 1 : 0;
+  return Number(a) - Number(b);
+}
+function compareTuples(a, b, keys, markers) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (key === void 0) continue;
+    const marker = markers[key.field];
+    if (marker === void 0) continue;
+    const diff = compareValue(marker.kind, a[i] ?? "", b[i] ?? "");
+    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
+  }
+  return 0;
+}
+function rankOf(target, siblings, keys, markers) {
+  let rank = 1;
+  for (const sibling of siblings) {
+    if (compareTuples(sibling, target, keys, markers) < 0) rank += 1;
+  }
+  return rank;
+}
+function orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+  const declared = ordering[viewId]?.[sectionId];
+  if (declared === void 0) return abstains("no-section-declaration");
+  const keys = declared.ordering;
+  if (keys === void 0 || keys.length === 0) return abstains("insertion-order");
+  for (const key of keys) {
+    if (orderingFields[key.field] === void 0) return abstains("field-not-published");
+  }
+  const lines = source.split("\n");
+  const { start, end } = sectionBounds(lines, lineIndex);
+  if (anyLineIndented(lines, start, end)) return abstains("nested-section");
+  const beforeText = lines[lineIndex] ?? "";
+  const beforeTuple = tupleFor(beforeText, keys, orderingFields);
+  const afterTuple = tupleFor(afterText, keys, orderingFields);
+  if (beforeTuple === void 0 || afterTuple === void 0) return abstains("no-value");
+  const siblings = [];
+  for (let at = start; at < end; at += 1) {
+    if (at === lineIndex) continue;
+    const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
+    if (tuple !== void 0) siblings.push(tuple);
+  }
+  const beforeRank = rankOf(beforeTuple, siblings, keys, orderingFields);
+  const afterRank = rankOf(afterTuple, siblings, keys, orderingFields);
+  return {
+    kind: "answer",
+    answer: {
+      moved: beforeRank !== afterRank,
+      beforeRank,
+      afterRank,
+      siblingCount: siblings.length
+    }
+  };
+}
+
 // app/present/membership.ts
 var RESOLVABLE_FIELDS = ["node_type", "domain", "status"];
-var abstains = (because) => ({ kind: "abstains", because });
+var abstains2 = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
@@ -1066,11 +1234,11 @@ function resolveLineFields(line, section, language) {
 }
 function membershipFor(viewId, sectionId, line, language) {
   const section = language.sections[viewId]?.[sectionId];
-  if (section === void 0) return abstains("no-section-declaration");
+  if (section === void 0) return abstains2("no-section-declaration");
   const qualifier = language.predicates[section.qualification];
-  if (qualifier === void 0) return abstains("no-section-declaration");
+  if (qualifier === void 0) return abstains2("no-section-declaration");
   const fields = resolveLineFields(line, section, language);
-  if (typeof fields === "string") return abstains(fields);
+  if (typeof fields === "string") return abstains2(fields);
   return {
     kind: "answer",
     answer: {
@@ -4071,12 +4239,14 @@ var presentation_default = {
     ordering: {
       "daily-personal": {
         capture: {
-          orderingMode: "insertion_order"
+          orderingMode: "insertion_order",
+          name: "Personal Capture"
         }
       },
       "daily-work": {
         capture: {
-          orderingMode: "insertion_order"
+          orderingMode: "insertion_order",
+          name: "Work Capture"
         }
       },
       "flowtrace-queue": {
@@ -4086,7 +4256,8 @@ var presentation_default = {
               field: "queue_position",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Queue"
         }
       },
       "qntm-queue": {
@@ -4096,7 +4267,8 @@ var presentation_default = {
               field: "queue_position",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Queue"
         }
       },
       "this-week": {
@@ -4106,7 +4278,8 @@ var presentation_default = {
               field: "due_date",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Overdue"
         },
         "due-this-week": {
           ordering: [
@@ -4114,7 +4287,8 @@ var presentation_default = {
               field: "due_date",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Due This Week"
         },
         "available-overdue": {
           ordering: [
@@ -4122,7 +4296,8 @@ var presentation_default = {
               field: "available_date",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Overdue to Start"
         },
         "available-this-week": {
           ordering: [
@@ -4130,7 +4305,8 @@ var presentation_default = {
               field: "available_date",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Scheduled This Week"
         }
       },
       "trace-orchestration-queue": {
@@ -4140,8 +4316,23 @@ var presentation_default = {
               field: "queue_position",
               direction: "asc"
             }
-          ]
+          ],
+          name: "Queue"
         }
+      }
+    },
+    orderingFields: {
+      due_date: {
+        token: "\u{1F4C5}",
+        kind: "date"
+      },
+      available_date: {
+        token: "\u{1F6EB}",
+        kind: "date"
+      },
+      queue_position: {
+        token: "\u{1F522}",
+        kind: "int"
       }
     },
     dayBoundary: {
@@ -4198,10 +4389,12 @@ export {
   instancesOf,
   isSilent,
   markerSpans,
+  markerValue,
   matchesFindClause,
   matchesQualifier,
   membershipFor,
   openLine,
+  orderingFor,
   paint,
   presentationFromDeclaration,
   qntmIdSpans,
