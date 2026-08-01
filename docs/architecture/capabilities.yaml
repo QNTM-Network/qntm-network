@@ -1950,3 +1950,128 @@ capabilities:
     match ascending" positive control (§1b) start passing, which that test's own comment flags as
     the signal to re-examine (not blindly narrow) the `nested-section` rule.
   status: working
+
+- id: day-boundary-resolver-agrees-with-the-engine
+  intent: >-
+    THE BROWSER HAS ONE FUNCTION FOR "WHAT DAY IS IT", AND IT AGREES WITH THE ENGINE'S OWN —
+    design-the-resolution-architecture.md step 8, L2 + L5. `app/present/today.ts`'s `todayFor`
+    mirrors `qntm_md.substrate_wiring.day_boundary.resolve_logical_day`/`resolve_week_end` field
+    for field: convert the instant to wall-clock components in the DECLARED zone
+    (`resolution.dayBoundary.timezone`, published by step 5, never the device's own default zone),
+    then the logical date is that wall-clock date UNLESS the wall-clock hour is before
+    `day_start_hour`, in which case it is the PREVIOUS calendar date; the week end derives from
+    that date label under `week_starts_on`'s convention.
+    THE CRUX, ANSWERED RATHER THAN ASSUMED: WHICH CLOCK, AND WHAT WHEN THE TWO DISAGREE. The
+    engine's cycle stamps `cycle_today` from `datetime.now(timezone.utc)`
+    (`orchestrator.py:5424,5432-5436`) — an absolute UTC instant, reinterpreted through ONE
+    declared IANA zone. `Date.now()` in the browser is the SAME kind of measurement — a UTC epoch
+    count, not "whatever zone the device displays" — so the two agree exactly when this module
+    converts through the DECLARED zone rather than the device's own default one, proven by
+    §4's own test: the same instant read against `Europe/London` and against
+    `America/Los_Angeles` (an arbitrary device zone) resolves to two calendar days apart, which is
+    exactly the divergence a `new Date().getHours()`-based implementation would have silently
+    produced. THE ONE RESIDUAL RISK THIS MODULE CANNOT CLOSE, NAMED RATHER THAN HIDDEN: if the
+    DEVICE'S OWN SYSTEM CLOCK is wrong (unsynced, drifted, hand-set), `Date.now()` is not the real
+    "now", and no local computation can detect that without a network round-trip this repo's
+    read-only posture does not make. The residual is narrow — the drifted duration, near the
+    boundary only — and this module makes no attempt to guess around it; it has no guess to make,
+    only the instant it is handed, and no caller in this PR treats its answer as authoritative
+    over graph state.
+    THE THREE KEYS, READ RATHER THAN ASSUMED FROM THEIR NAMES.
+    `day_boundary.yaml`'s own header (`day-boundary-is-config-local-consistent`, 2026-06-24) and
+    `resolve_logical_day`'s docstring were read before use, not inferred: `timezone` is an IANA
+    name (capabilities-not-policies — the engine never hardcodes it); `day_start_hour` (0..23) is
+    when the LOGICAL day rolls over, so a completion before it is stamped for the PREVIOUS
+    calendar day (the late-night grace the operator asked for); `week_starts_on` decides where
+    `$cycle_week_end` (the `this-week` view's date-range upper bound) falls, derived from the
+    LOGICAL date label so the day-start-hour boundary is already folded in before week arithmetic
+    runs. With no config the boundary is UTC midnight — legacy, unconfigured-bundle behaviour —
+    but the operator's real config always declares one, so this module never exercises that path
+    against his own data.
+    WHAT CONSUMES THIS, MEASURED RATHER THAN INVENTED. `resolution.dayBoundary` was already
+    PUBLISHED by step 5 (`config-resolution-table-is-published`); this capability is the READ half
+    step 8 itself asks for. TWO CANDIDATE CONSUMERS WERE MEASURED IN THIS STEP AND BOTH REFUTED AS
+    REAL DEPENDENCIES TODAY. ORDERING (`ordering-position-is-said-in-the-freshness-line`, step 7)
+    does not need it — already measured and shipped: none of the 9 declared orderings compares a
+    field to the clock. MEMBERSHIP's 8 clock-bound qualifications
+    (`$cycle_today`/`$cycle_week_end` compared against a date field, `scripts/generate-
+    qualification-declaration.mjs`'s own header) do NOT become answerable by this capability
+    alone — measured directly against that generator's `normalisePredicate`: it refuses BOTH a
+    `$`-prefixed value AND any multi-key predicate (a `{gte:…, lte:…}` range is two keys)
+    UNCONDITIONALLY, for every qualification, clock-bound or not. The refusal is that the
+    predicate grammar has no orderable-comparison or `$variable`-substitution vocabulary at all
+    (`qualification.ts`'s `FieldPredicate` is `{eq}`/`{not}` only), not which value to substitute
+    for "today" — so answering those 8 needs the generator AND `membership.ts`'s evaluator to
+    both learn a wider grammar, a separate and larger unit of work than "read the boundary",
+    filed as `widen-qualification-language-for-clock-bound-predicates` (backlog.yaml) rather than
+    invented here to manufacture a consumer this step does not have. NO RUNTIME CALL SITE IS
+    WIRED IN THIS PR — `todayFor` has no caller under `app/index.html`, stated rather than hidden,
+    the same posture `resolutiontable.ts`'s own header already took for `dayBoundary` before this
+    step (see that module's header, updated this step to say so as a resolver EXISTS, not just a
+    declaration).
+    THE FALSIFIER, THE DESIGN DOCUMENT'S OWN, RUN VERBATIM: "at 03:59 Europe/London the resolver's
+    `today()` returns the previous calendar date; at 04:01 it returns the current one; a Sunday
+    resolves into the week that started the preceding Monday" — `tests/present-today.test.mjs` §1,
+    against the operator's REAL published boundary, all three claims proven plus the exact
+    boundary instant (04:00:00 local belongs to the new day).
+    THE AGREEMENT TEST (proof standard #3), GENERATED FROM THE ENGINE'S OWN DEFINITION, NEVER
+    TRANSCRIBED. `scripts/day-boundary-agreement.py` calls `qntm_md.substrate_wiring.day_boundary.
+    resolve_logical_day`/`resolve_week_end` directly for 14 instants: both DST regimes
+    `Europe/London` carries (GMT and BST), both 2026 DST transition days (a genuine stress of the
+    `Intl`-based zone read, not only the hour arithmetic), and two config-sensitivity cases (the
+    same instant under `day_start_hour` 0 vs 4, and under `week_starts_on` sunday vs monday) —
+    three positive controls refuse to write the fixture if the REAL-boundary cases ever collapse
+    to one date, or either config-sensitivity pair ever stops differing. `tests/present-
+    today.test.mjs` §2 asserts `todayFor` agrees with all 14, committed and never re-derived at
+    test time.
+    THE CLOCK-POISONING PROOF (proof standard #2, this step's own form of it — step 7 proved
+    independence FROM the clock; this step legitimately USES it, so proves the opposite).
+    `today.ts` never calls `Date.now()` itself — every function takes the instant as a parameter,
+    proven by poisoning `Date.now` to throw and confirming `todayFor` still answers correctly
+    (`tests/present-today.test.mjs` §3). Separately, a POISONED `Date.now()` fed through the
+    `todayFor(Date.now(), boundary)` shape a real call site would use produces the correct
+    pre/post-rollover answer for the falsifier's own instants, and the SAME poisoned instant under
+    a DIFFERENT declared boundary (`day_start_hour` 0 vs 4) produces a DIFFERENT answer — proving
+    the result tracks the DECLARED boundary handed to it, not a hardcoded assumption inside the
+    resolver.
+    THE CONFIG-CHANGE FALSIFIER (proof standard #4). `tests/present-today.test.mjs` §6 mutates
+    `day_boundary.yaml` in a SCRATCH COPY of the real config (the same `mkdtempSync`/`cpSync`
+    shape `tests/present-resolution.test.mjs` §4 already established), regenerates via
+    `generateResolution`, and feeds the regenerated table to `todayFor`: the SAME instant now
+    resolves to a DIFFERENT logical date under a mutated `day_start_hour`, and the SAME logical
+    date now ends a DIFFERENT week under a mutated `week_starts_on`.
+    REFUSALS, NAMED RATHER THAN THROWN. `unresolvable-timezone` (a declared zone `Intl` does not
+    recognise) and `unknown-week-start` (a declared weekday name that is not one of the seven),
+    mirroring the engine's own `ValueError` for the same two inputs — proven never to throw under
+    either malformed input (`tests/present-today.test.mjs` §5).
+    NOTHING LOCAL REACHES A WRITE. `today.ts` imports exactly one thing — `DayBoundary`, TYPE-ONLY,
+    from `resolutiontable.ts` — and nothing from `source.ts`/`context.ts`/`cascade.ts`/`paint.ts`
+    (`tests/present-today.test.mjs` §7). The four pinned write-adjacent counts
+    `section-membership-is-said-in-the-freshness-line` established (`graphData` 5, `applyEdit` 5,
+    `writeFile` 2 callers, `.markdown` never assigned) are UNCHANGED by this step — `app/
+    index.html` and `paint.ts` are not touched at all — re-verified by running `tests/app-
+    ordering-note.test.mjs` and `tests/app-membership-note.test.mjs` unmodified after this step's
+    other changes landed.
+  tier: functional
+  rooting: >-
+    `app/present/today.ts` is a leaf module: no outgoing edge to any other `app/present/*` runtime
+    module (its one import is a TYPE), so no new `flows.yaml` entry is declared for it, the same
+    posture already taken for a type-only import elsewhere in this directory (`ordering.ts`'s own
+    import of `resolutiontable.ts`'s types, `flows.yaml`'s own comment on
+    `ordering-classifies-the-line`). `context-reads-the-resolution-declaration`'s own comment
+    (flows.yaml) is updated this step to say a resolver now exists for the day-boundary axis
+    specifically, without a runtime consumer wiring it in — the same honest, unfinished-consumer
+    posture that edge's comment already held for steps 6/7/8 collectively before any of the three
+    shipped.
+    `tests/present-today.test.mjs` is the whole proof, run standalone through `dist/present.js` —
+    node cannot import `app/index.html`, so there is no page-level counterpart the way
+    `app-ordering-note.test.mjs` is one for step 7, because this step wires NO call site into the
+    page at all.
+    NOT VERIFIED: no browser, no passkey session, no live server, no cycle. The `Intl`-based zone
+    conversion was checked against the engine's `zoneinfo`-based one only for the 14 instants
+    `scripts/day-boundary-agreement.py` generated (including both 2026 DST transition days), not
+    exhaustively over every instant a real session could hit; a future IANA tzdata update landing
+    asynchronously in a browser's ICU build vs. the server's system `zoneinfo` package is a
+    theoretical divergence window this arc does not close and no test in this repo can, without a
+    live comparison against a running server.
+  status: working

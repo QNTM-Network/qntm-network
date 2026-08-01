@@ -54,17 +54,24 @@
  *   `scripts/generate-resolution-declaration.mjs`'s own header for the full account, including the
  *   engine function (`qntm_md.grammar.node_type_form.node_type_forms`) this mirrors.
  *
- * ── TWO CONSUMERS NOW, ONE STILL WAITING, STATED RATHER THAN HIDDEN ──
+ * ── THREE READERS NOW, ONE STILL WITHOUT A WIRED CALL SITE, STATED RATHER THAN HIDDEN ──
  *
  * `app/present/newline.ts`'s GLOBAL rung reads `qualification.sections[view][section].nodeType`
  * (the per-section MINTING default, already published) joined against `chromeShapes` above (design
  * step 6). `app/present/ordering.ts` reads `ordering` and `orderingFields` above (design step 7) to
- * preview a row's position within its section. **Step 8's dependency, measured rather than
+ * preview a row's position within its section. **Step 7's dependency, measured rather than
  * assumed: NONE of the 9 declared orderings compares a field against the clock** — all seven
  * field-keyed sections sort on an absolute value (`due_date`, `available_date`, `queue_position`),
  * never a `$cycle_today`-relative one, and the two `insertion_order` sections have no field to
  * compare at all. So step 7 does not, in fact, need step 8 — see `ordering.ts`'s own header for
- * the full measurement. Step 8 (the day boundary itself) is still unread by anything under `app/`.
+ * the full measurement. `app/present/today.ts` (design step 8) now READS `dayBoundary` and
+ * resolves it exactly the way the engine does — proven against the engine's own
+ * `resolve_logical_day`/`resolve_week_end`, `tests/present-today.test.mjs` — but **no call site
+ * under `app/index.html` invokes it**: step 8's own measurement found ordering does not need it
+ * (above) and membership's 8 clock-bound qualifications need MORE than it (the predicate grammar
+ * itself has no orderable-comparison or `$variable` vocabulary today, a separate widening filed as
+ * `widen-qualification-language-for-clock-bound-predicates`, backlog.yaml). See capability
+ * `day-boundary-resolver-agrees-with-the-engine` for the full account.
  *
  * ── WHY THIS IS A THIRD READER, NOT A WIDER `qualification` OR `structural` ──
  *

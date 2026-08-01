@@ -2077,8 +2077,8 @@ backlog:
 
 - id: wire-config-resolution-table-into-steps-6-7-8
   title: >-
-    [resolution] `resolution.dayBoundary` still has no production reader in `app/` — the app still
-    computes zero dates. STEPS 6 AND 7 ARE NOW DONE (see record) — this row tracks only step 8.
+    [resolution] CLOSED — steps 6, 7 and 8 all shipped 2026-08-01. See record for the full account,
+    including why step 8 shipped a resolver with no runtime call site, by measurement not omission.
   driving_capability: config-resolution-table-is-published
   record: >-
     STEP 6 SHIPPED 2026-08-01 (capability `new-line-seed-reads-the-declaration`). `newline.ts`'s
@@ -2100,12 +2100,52 @@ backlog:
     shipped capability refuses (`nested-section`) for exactly the sections that would have gotten
     this wrong, live-previewing 2 of the 9 declared sections today rather than claiming all 9. See
     that capability's own record for the full account, including which 2 and why the other 7 refuse.
-    STEP 8 REMAINS NOT SHIPPED. The design document's own falsifier: "03:59 Europe/London's
-    resolver returns yesterday's date; 04:01 returns today's; a Sunday resolves into the week that
-    started the preceding Monday." Sized `h` in the design document's own table. Filed here as the
-    one remaining item this row tracks — it is a precondition of nothing this repo has built yet
-    (§7.8 of the design document: the browser computes no dates at all today, so this is not a live
-    defect), not a blocker discovered by shipping step 7.
+    STEP 8 SHIPPED 2026-08-01 (capability `day-boundary-resolver-agrees-with-the-engine`). The
+    design document's own falsifier ran and passed: "03:59 Europe/London's resolver returns
+    yesterday's date; 04:01 returns today's; a Sunday resolves into the week that started the
+    preceding Monday" (`tests/present-today.test.mjs` §1). `app/present/today.ts`'s `todayFor`
+    mirrors the engine's own `resolve_logical_day`/`resolve_week_end` and agrees with it over 14
+    engine-generated instants including both DST regimes and both 2026 transition days (§2),
+    proven to read the DECLARED boundary rather than the wall clock or a device-local zone by
+    poisoning `Date.now` (§3) and by comparing against an arbitrary device timezone (§4). **THIS
+    ROW CLOSES WITH NO RUNTIME CALL SITE WIRED, BY MEASUREMENT, NOT BY OMISSION.** Two candidate
+    consumers were checked in this step: ORDERING needs nothing beyond what it already shipped
+    (step 7, above). MEMBERSHIP's 8 clock-bound qualifications do NOT become answerable by this
+    resolver alone — `scripts/generate-qualification-declaration.mjs`'s `normalisePredicate`
+    refuses any `$`-prefixed value AND any multi-key predicate (a date-range `{gte,lte}` is two
+    keys) UNCONDITIONALLY, so the missing piece is the PREDICATE GRAMMAR having no orderable-
+    comparison or `$variable` vocabulary at all, not which "today" value to substitute — a wider,
+    separate unit of work, filed below as `widen-qualification-language-for-clock-bound-
+    predicates` rather than built here to manufacture a consumer this step measured it does not
+    have. "Do not invent a consumer to justify the step" — the step's own brief, held to.
+  state: passing
+- id: widen-qualification-language-for-clock-bound-predicates
+  title: >-
+    [resolution] Membership's 8 clock-bound qualifications (`$cycle_today`/`$cycle_week_end`
+    compared against a date field) stay unpublished and unanswerable even with the day boundary
+    resolver (`day-boundary-resolver-agrees-with-the-engine`) in hand — the PREDICATE GRAMMAR
+    itself, not the clock, is the gap.
+  driving_capability: day-boundary-resolver-agrees-with-the-engine
+  record: >-
+    NOT SHIPPED, MEASURED WHILE BUILDING STEP 8 RATHER THAN ASSUMED AWAY. `scripts/generate-
+    qualification-declaration.mjs`'s `normalisePredicate` refuses in two unconditional places that
+    have nothing to do with whether a boundary resolver exists: any `$`-prefixed scalar value
+    (`refuse(field: cycle variable $value)`) and any predicate with more than one operator key — a
+    date-range `{gte: $cycle_today, lte: $cycle_week_end}` IS two keys, so it is refused as
+    `operator gte+lte` before the `$` is ever inspected. `app/present/qualification.ts`'s own
+    `FieldPredicate` type is `{eq}`/`{not}` only, and `membership.ts`'s `evaluatePredicate` has no
+    branch for an orderable comparison at all. Publishing and reading `resolution.dayBoundary`
+    (steps 5 and 8) supplies the VALUE a `$cycle_today` substitution would need; it supplies
+    nothing the GENERATOR or the EVALUATOR would use that value with. A correct widening needs, at
+    minimum: (a) the generator to admit `gt`/`gte`/`lt`/`lte` as recognised single-purpose
+    operators and a `$cycle_today`/`$cycle_week_end` substitution (resolved once, at generation
+    time, into a concrete date the browser then treats as a plain field bound — never re-resolving
+    "today" per keystroke, which would reopen exactly the clock-in-the-evaluator question step 8's
+    own header refuses); (b) `qualification.ts`'s `FieldPredicate` and `membership.ts`'s
+    `evaluatePredicate` to learn to compare, not only equal. Both are real, scoped work — larger
+    than "read the boundary" (step 8's own size, `h`) — and neither was invented to manufacture a
+    consumer for step 8; this row exists because the measurement found the gap, not because the
+    step needed an excuse to widen something.
   state: diagnose-ready
 - id: widen-ordering-preview-past-flat-sections
   title: >-

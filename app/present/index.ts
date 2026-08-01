@@ -81,6 +81,9 @@ export type {
 export { markerValue, orderingFor } from "./ordering.js";
 export type { OrderingAbstention, OrderingAnswer, OrderingReading } from "./ordering.js";
 
+export { resolveLogicalDate, resolveWeekEnd, todayFor } from "./today.js";
+export type { TodayAbstention, TodayAnswer, TodayReading } from "./today.js";
+
 export {
   RESOLVABLE_FIELDS,
   matchesFindClause,
