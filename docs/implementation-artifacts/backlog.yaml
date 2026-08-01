@@ -770,8 +770,75 @@ backlog:
     that was not `set-line`, so an unknown kind silently UNTICKED a box and returned a whole file
     to POST. Unreachable from a typed caller; reachable by the next person to add `delete-span`
     and forget a branch — which is exactly the affordance this stage deferred.
-    STILL OPEN ON THIS ROW: links (a title instead of [[qntm:121]]), markers (a pill instead of
-    🆕 2026-07-29), and a REMOVABLE chip.'
+    2026-08-01 — SECOND RENDITION SHIPPED; THE ARC STAYS OPEN, AND THIS CLOSES PART OF WHAT THIS
+    ROW ASKED FOR RATHER THAN ALL OF IT. The row asked for "a title instead of [[qntm:121]]" under
+    the name `links`. What shipped is `stamp`, a NARROWER key governing the identity form ONLY:
+    [[qntm:N]] becomes one small mark carrying the id in a title attribute, and every other
+    bracketed form is untouched. So the [[qntm:121]] half of this row''s `links` item is CLOSED and
+    the title-form half is NOT — [[JB to send over Sarasin]] still prints as characters, on purpose.
+    WHY IT IS NOT CALLED `links`, WHICH IS THE FINDING. A key called `links` is a declaration that
+    covers both bracketed forms, so its wired rendition would hide the operator''s own words.
+    ~/qntm/habits.md carries [[Store all somewhere]] and [[JB to send over Sarasin]] — his text, in
+    brackets, on a stamped line. The two grammars are used for OPPOSITE purposes and that asymmetry
+    is the boundary: `wikiLinkSpans` (wide) is what titleSpans skips over, because over-application
+    is the safe direction for a word motion; `stampSpans` (narrow) is what the rendition hides,
+    because under-application is the safe direction for hiding. Naming the key for what it actually
+    governs is what keeps that legible.
+    ACCEPT ⊇ EMIT, AND WHY THIS SHIPPED WITHOUT A SOURCE EDIT. A dropped [[qntm:N]] re-mints the
+    node — the engine absorbs an unrecognised stamp''s content into the node''s title, exit 0, no
+    diagnostic. Hiding is safe BY CONSTRUCTION rather than by care: it happens in the painter''s
+    renderTokens, whose output reaches only element.innerHTML, while every write is computed from
+    the source string the painter was handed and never mutates it. No affordance, no source edit,
+    SourceEdit still the closed union of three — the chip''s posture, for a stricter reason.
+    THE FLOOR IS raw, AND HERE THAT IS SAFETY RATHER THAN ONLY ARCHITECTURE: a declaration that
+    fails to load falls back to SHOWING the stamp, never to hiding it.
+    WHY A MARK AND NOT NOTHING: hidden entirely, a line the model has never seen and a line it has
+    minted a node for are pixel-identical, so "has it got this yet" stops having an answer on the
+    page. One character answers it instead of twelve. Hiding completely is one CSS rule away.
+    PROVEN: tests/present-stamp.test.mjs (51) — the grammar against parse_qntm_id.py over named
+    cases and an 88-case sweep; the round trip over his real lines, as literal copies AND as a
+    read-only sweep of the LIVE vault; the string the write path is handed asserted byte-identical
+    to the source; ticking every box changes exactly one glyph and keeps every stamp in the file in
+    order; every key raw under the cursor; the title form never hidden while word motions still
+    skip it; the id fuzzed against closing its own attribute. 1,118 tests / 0 fail overall, up from
+    1,065. flow-trace verify . exits 0 at 58 PASS / 0 FAIL with paint -> resolution.stampSpans
+    OBSERVED (count 1). The golden master did not move.
+    MUTATION-PROVEN THREE WAYS, each restored: the source stripped before painting (89 of 1,118
+    red, including the headline assertion), the grammar widened to the wiki-link form (5 red, one
+    of them a real vault line carrying #unlocks [[Cluster B]]), the fallback removed (5 red).
+    MEASURED AND NOT 100%: 2,496 stamps in the live vault, 2,390 hidden, 106 still printed — all
+    prose lines indented 4, 8 or 12 spaces, where markdown-it reads the indent as a code block and
+    the fallback correctly restores the whole line. Inherited from the chip, not introduced here.
+    Filed separately as an-indented-prose-line-cannot-carry-a-token-rendition.
+    STILL OPEN ON THIS ROW: links (a TITLE-FORM link rendered as its title), markers (a pill
+    instead of 🆕 2026-07-29), and a REMOVABLE chip.'
+  kind: capability
+  state: diagnose-ready
+- id: an-indented-prose-line-cannot-carry-a-token-rendition
+  title: '[present] An indented PROSE line cannot carry a token rendition — no chip and
+    no identity mark — measured at 106 of 2,496 stamps in the live vault on 2026-08-01.
+    markdown-it reads FOUR LEADING SPACES as an indented code block and ESCAPES everything
+    inside it, so a line reaching the painter''s PROSE branch with the engine''s nesting
+    indent has its injected markup escaped, and renderTokens'' all-or-nothing fallback
+    correctly puts the whole line back to its characters.
+    WHICH LINES, EXACTLY: prose lines indented 4, 8 or 12 spaces — their glyph is [>]
+    (scheduled) or another spelling outside TASK''s ( |x|X), so classifyLine calls them prose
+    rather than checkbox lines. A nested `- [ ]` line is a CHECKBOX line and hides correctly,
+    because the checkbox branch renders only its TAIL, inline, with no indent at all.
+    NOT A REGRESSION AND NOT NEW. Those same 106 lines already show their tags as characters
+    rather than as chips, measured both ways — this is the tag chip''s own fallback, inherited
+    unchanged by the second token rendition rather than introduced by it.
+    THE FALLBACK IS CORRECT AND MUST NOT BE REMOVED. The alternative is escaped markup on the
+    page with the token''s own characters GONE, which is worse than either end of the dial and,
+    for the identity stamp, is an identity neither shown nor marked.
+    WHAT WOULD FIX IT: give the prose branch the shape the checkbox branch already has — render
+    the line''s CONTENT with its chrome stripped, inline, and carry the indent as a margin. That
+    touches paint.ts''s indent display arithmetic, which is separately backlogged and
+    tripwire-tested (present-golden.test.mjs compares those exact marginLeft values byte for
+    byte), so it is a separate change with its own evidence and was deliberately not attempted.
+    FALSIFIER: an indented [>] line paints a stampmark AND a tagchip, and
+    tests/present-golden.test.mjs still passes byte for byte.'
+  driving_capability: presentation-is-resolved-not-chosen
   kind: capability
   state: diagnose-ready
 - id: author-in-the-browser-not-in-obsidian

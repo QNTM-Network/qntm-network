@@ -216,6 +216,25 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [presentation-is-resolved-not-chosen]
 
+  # ── THE IDENTITY STAMP (added 2026-08-01) ─────────────────────────────────────────────────
+  # THE SAME EDGE AS THE TAG GRAMMAR'S, FOR THE SAME REASON, ONE TOKEN FAMILY ALONG. The painter
+  # does not decide what an identity stamp IS; it asks the module that mirrors the engine's own
+  # grammar (parse_qntm_id.py). What makes this edge worth declaring SEPARATELY from
+  # paint-finds-the-tags-in-the-line is that the two grammars are deliberately different WIDTHS —
+  # `stampSpans` is the NARROW identity form and `wikiLinkSpans` is the WIDE one that word motions
+  # use — and an edge that named only "the painter asks resolution about tokens" would hide the
+  # one fact a reader needs: which of the two this rendition hides by.
+  #
+  # IT FIRES ONLY ON THE WIRED PATH, exactly as the tag edge does, so observing it is evidence that
+  # a declaration of `stamp: wired` reached the painter and was obeyed rather than merely loaded.
+  - id: paint-finds-the-identity-stamp-in-the-line
+    from: app/present/paint
+    to:   app/present/resolution
+    callee: stampSpans
+    event: app.finds-the-identity-stamp-in-a-line
+    class: presentation-resolution
+    gates_capabilities: [presentation-is-resolved-not-chosen]
+
   # ── THE CURSOR (added 2026-07-30, migration stage 3) ──────────────────────────────────────
   # WHERE THE CURSOR IS, AS A LEVEL RATHER THAN AS A BRANCH. FOCUS is the most specific of the
   # seven, so the cursor beats every declaration below it — which is what stops a line that

@@ -251,6 +251,48 @@ export function run(): void {
     throw new Error("a declaration of tags: raw still produced a chip — the key is inert");
   }
 
+  // 3c. THE SECOND TOKEN RENDITION (2026-08-01). `stamp: wired` is the other declaration in the
+  //     served file whose value is not the built-in default, and this is the edge that makes the
+  //     IDENTITY grammar observable: paint -> resolution.stampSpans. Declared as its own flow
+  //     rather than folded into the tag edge, because the two grammars are deliberately different
+  //     WIDTHS and an edge that hid which one this rendition hides by would hide the whole
+  //     boundary argument (docs/architecture/flows.yaml,
+  //     paint-finds-the-identity-stamp-in-the-line).
+  //
+  //     THE SAME LINE, THE SAME PAINTER, ONE KEY FLIPPED — the shape section 3b already uses,
+  //     because a run that only ever drove the wired end would record the edge while proving
+  //     nothing about whether the DECLARATION is what decided.
+  const marked = new StubElement("article");
+  paint(
+    marked as unknown as HTMLElement,
+    CHIPPED_LINE,
+    presentationFromDeclaration({ checkbox: "wired", stamp: "wired" }).context,
+    { markdown },
+  );
+  const markCount = marked
+    .descendants()
+    .map((el) => el.innerHTML.split('<span class="stampmark"').length - 1)
+    .reduce((total, count) => total + count, 0);
+  if (markCount !== 1) {
+    throw new Error(`a declaration of stamp: wired produced ${markCount} marks, not 1`);
+  }
+  if (marked.descendants().some((el) => el.innerHTML.includes("[[qntm:9]]"))) {
+    throw new Error("a declaration of stamp: wired still printed the identity stamp");
+  }
+  const unmarked = new StubElement("article");
+  paint(
+    unmarked as unknown as HTMLElement,
+    CHIPPED_LINE,
+    presentationFromDeclaration({ checkbox: "wired", stamp: "raw" }).context,
+    { markdown },
+  );
+  if (unmarked.descendants().some((el) => el.innerHTML.includes("stampmark"))) {
+    throw new Error("a declaration of stamp: raw still produced a mark — the key is inert");
+  }
+  if (!unmarked.descendants().some((el) => el.innerHTML.includes("[[qntm:9]]"))) {
+    throw new Error("a declaration of stamp: raw did not carry the identity stamp's characters");
+  }
+
   // 4. THE CURSOR RULE (migration stage 3). A focus surface is supplied, one line is focused, and
   //    the painter is driven end to end: paint -> FocusSurface.contextFor -> PresentationContext
   //    .with, then the settled line -> source.applyEdit. This is the run that makes the FOCUS
