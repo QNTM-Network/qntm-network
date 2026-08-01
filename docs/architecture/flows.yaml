@@ -149,9 +149,14 @@ expected_flows:
   # THE CONFIG-ONLY RESOLUTION TABLE REACHES (added 2026-08-01, design-the-resolution-
   # architecture.md step 5). Same shape as the three edges above, a fourth axis over the SAME
   # served document: registration's two names (default_node_type/base_node_type), ordering, line
-  # grammars, the day boundary. Unlike the other three, this edge has no display consumer yet —
-  # see app/present/resolutiontable.ts's own header for why it is published anyway (steps 6, 7
-  # and 8 of the same sequence each name it as their one dependency).
+  # grammars, the day boundary. STATUS UPDATED (steps 6, 7, 8 all shipped 2026-08-01):
+  # `chromeShapes` (step 6) and `ordering`/`orderingFields` (step 7) now have real, wired-in
+  # consumers (`newline.ts`'s GLOBAL rung; `ordering.ts`'s preview, called from `app/index.html`).
+  # `dayBoundary` (step 8) does NOT — `app/present/today.ts`'s `todayFor` reads and resolves it,
+  # proven to agree with the engine, but no call site under `app/index.html` invokes it, because
+  # step 8's own measurement found neither ordering (already shipped, clock-free) nor membership's
+  # 8 clock-bound qualifications (need a wider predicate grammar, not only the boundary) is a real
+  # consumer today — see capability `day-boundary-resolver-agrees-with-the-engine`'s own record.
   - id: context-reads-the-resolution-declaration
     from: app/present/context
     to:   app/present/resolutiontable

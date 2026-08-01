@@ -1183,9 +1183,78 @@ function orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, 
   };
 }
 
+// app/present/today.ts
+var abstains2 = (because) => ({ kind: "abstains", because });
+var WEEKDAY_NAMES = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday"
+];
+var pad2 = (n) => String(n).padStart(2, "0");
+var isoDate = (utcMs) => {
+  const d = new Date(utcMs);
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+};
+function localPartsInZone(nowUtcMs, timezone) {
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23"
+    });
+  } catch {
+    return void 0;
+  }
+  const parts = formatter.formatToParts(new Date(nowUtcMs));
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const year = Number(get("year"));
+  const month = Number(get("month"));
+  const day = Number(get("day"));
+  const rawHour = Number(get("hour"));
+  const hour = rawHour === 24 ? 0 : rawHour;
+  if (![year, month, day, hour].every(Number.isFinite)) return void 0;
+  return { year, month, day, hour };
+}
+function resolveLogicalDate(nowUtcMs, boundary) {
+  const parts = localPartsInZone(nowUtcMs, boundary.timezone);
+  if (parts === void 0) return void 0;
+  const asUtcMidnight = Date.UTC(parts.year, parts.month - 1, parts.day);
+  const rolled = parts.hour >= boundary.dayStartHour ? asUtcMidnight : asUtcMidnight - 864e5;
+  return isoDate(rolled);
+}
+function resolveWeekEnd(logicalDate, weekStartsOn) {
+  const startIndex = WEEKDAY_NAMES.indexOf(
+    weekStartsOn.trim().toLowerCase()
+  );
+  if (startIndex === -1) return void 0;
+  const [y, m, d] = logicalDate.split("-").map(Number);
+  if (y === void 0 || m === void 0 || d === void 0) return void 0;
+  const asUtcMidnight = Date.UTC(y, m - 1, d);
+  const jsWeekday = new Date(asUtcMidnight).getUTCDay();
+  const pyWeekday = (jsWeekday + 6) % 7;
+  const daysSinceWeekStart = ((pyWeekday - startIndex) % 7 + 7) % 7;
+  const weekEndMs = asUtcMidnight + (6 - daysSinceWeekStart) * 864e5;
+  return isoDate(weekEndMs);
+}
+function todayFor(nowUtcMs, boundary) {
+  const logicalDate = resolveLogicalDate(nowUtcMs, boundary);
+  if (logicalDate === void 0) return abstains2("unresolvable-timezone");
+  const weekEnd = resolveWeekEnd(logicalDate, boundary.weekStartsOn);
+  if (weekEnd === void 0) return abstains2("unknown-week-start");
+  return { kind: "answer", answer: { logicalDate, weekEnd } };
+}
+
 // app/present/membership.ts
 var RESOLVABLE_FIELDS = ["node_type", "domain", "status"];
-var abstains2 = (because) => ({ kind: "abstains", because });
+var abstains3 = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
@@ -1234,11 +1303,11 @@ function resolveLineFields(line, section, language) {
 }
 function membershipFor(viewId, sectionId, line, language) {
   const section = language.sections[viewId]?.[sectionId];
-  if (section === void 0) return abstains2("no-section-declaration");
+  if (section === void 0) return abstains3("no-section-declaration");
   const qualifier = language.predicates[section.qualification];
-  if (qualifier === void 0) return abstains2("no-section-declaration");
+  if (qualifier === void 0) return abstains3("no-section-declaration");
   const fields = resolveLineFields(line, section, language);
-  if (typeof fields === "string") return abstains2(fields);
+  if (typeof fields === "string") return abstains3(fields);
   return {
     kind: "answer",
     answer: {
@@ -4404,11 +4473,14 @@ export {
   readStructuralDeclaration,
   resolveInstanceAnchor,
   resolveLineFields,
+  resolveLogicalDate,
+  resolveWeekEnd,
   sectionAt,
   sectionOrdinalAt,
   seedFor,
   tagSpans,
   titleSpans,
+  todayFor,
   wikiLinkSpans,
   wordCaret
 };
