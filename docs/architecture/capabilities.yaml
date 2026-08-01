@@ -2843,3 +2843,105 @@ capabilities:
     per-path mutation proofs, 1 is the mutation proof that the guard goes red, 5 drive the CI gate
     as a subprocess, and 5 are the completeness scanner and its two controls.
   status: working
+
+- id: a-new-line-acquires-its-node-type-and-its-defaults
+  intent: >-
+    PRESSING ENTER SEEDS THE LINE WITH WHAT IT IS, NOT ONLY WITH WHICH BOX IT WEARS —
+    design-the-rule-mirror.md's ladder, rungs 1 and 2, shipped together because §3.3 says they ship
+    together or not at all. The operator's own words are the specification: "it gets stamped task.
+    That's what the evidence would be for inbox. Then for personal all it would get stamped task and
+    personal, as we have a default resolution here."
+    `personal/all` was `- [ ] ` and is now `- [ ] #task #personal `. `inbox` was `- [ ] ` and is now
+    `- [ ] #task `. `spirit/God Box` is `- [ ] #task #spirit #God `. Until this capability,
+    `newline.ts` resolved the section's node type on EVERY Enter (`new-line-seed-reads-the-
+    declaration`) and threw the name away, keeping only the checkbox.
+    WHY A DEFAULT CAN BE WRITTEN INTO A LINE, WHICH IS THE WHOLE ADMISSIBILITY ARGUMENT. A
+    `defaults:` block sets a FIELD and a field is not text. What makes it seedable is that the
+    ENGINE ITSELF spells a set field back onto the line every cycle, through
+    `qntm_md.vocabulary.token_resolver.TokenResolver.source_tags_for_node` — "Render: field + value
+    -> canonical token -> text", the render-direction inverse of ingest tokenization and the same
+    call `FieldReconstructor.reconstruct` makes on every line the renderer prints. The operator's
+    own personal/all.md already carries `#task #personal` on every line; those characters are the
+    engine's.
+    `INPUT WINS`, PER FIELD, AND IT IS THE SHARPEST QUESTION HERE. A value the browser writes into
+    the source is ingested as AUTHORED and outranks the rule that produced it
+    (`io/applier.py`'s `_merge_registration_defaults`: the SECTION layer fills only a field the line
+    does not already carry), so seeding converts a DERIVED value into an AUTHORED one. It costs
+    nothing because THE ENGINE PERFORMS THAT SAME CONVERSION ITSELF, one cycle later, when it prints
+    the tag back. Seeding reaches the same fixed point one cycle earlier; it does not create one.
+    A FIELD THE ENGINE PRINTS NO TAG FOR IS NEVER SEEDED, and that is the same rule read the other
+    way rather than a shortfall. THE CENSUS, MEASURED AND PINNED BY A TEST rather than summarised:
+    153 sections declare a `defaults:` block over 8 fields — domain 153, project 60, cap_state 12,
+    principle_state 10, stage 9, class_state 8, package_state 8, god_box 2. SPELLABILITY IS PER
+    (FIELD, VALUE), NOT PER FIELD, and that distinction is the finding. 188 of the 262 declared
+    defaults are spelled (domain 148, cap_state 12, principle_state 10, class_state 8,
+    package_state 8, god_box 2); 74 are not (project 60, stage 9, and domain 5 — the five sections
+    declaring `domain: dojo`, a value no tag spells even though the FIELD is spelled everywhere
+    else). Every one of the 74 is recorded in `resolution.dropped`, per section, with the field
+    named: a browser that wrote `project` into the line would invent a spelling the engine does not
+    use AND freeze a value the engine goes on deciding invisibly. A `render_only` token
+    (`☑️`, `🎯`) is excluded for the sibling reason — the engine never reads that field back from
+    that glyph, so a seeded one would not round-trip.
+    THE 13 SECTIONS §3.3 MEASURED, DERIVED RATHER THAN NAMED. In 13 of 186 sections the view
+    declares `default_node_type: routine`, a bare capture carries no cadence, and a rule retypes it
+    to `task` inside the SAME pass that minted it — so a seed that wrote `#routine` would be
+    confidently wrong within seconds. NO CODE NAMES `routine`, THAT RULE, OR ANY SECTION.
+    `generate-resolution-declaration.mjs` reads `config/rules/*.yaml`, finds every rule with a
+    `set_node_type` action, and normalises its `for_each` pattern and its `when:` into a CLOSED
+    grammar — a `root.find` over node fields with no traversal step, and a `when:` of `null` /
+    `not` / literal `eq`. A rule that normalises and whose `when:` is TRUE for the bare capture that
+    section would mint refuses that section's TYPE tag; its FIELD tags are still seeded. It lands on
+    exactly 13. APPLYING THE DEFAULTS DOES NOT FIX THEM, measured rather than assumed: the rule
+    fires on the ABSENCE of `cadence` and not one of the 13 declares a default supplying it.
+    THE BOUNDARY, STATED RATHER THAN LEFT AS SILENCE. A retype rule whose pattern TRAVERSES (four of
+    the nine) binds through a related node this generator does not read, and is recorded in
+    `dropped` as unevaluated. The corroboration is design-the-rule-mirror.md §3.2's own [OBS] sweep
+    — the engine's real rule pass, over all 186 sections, found the union of rules a bare capture
+    reaches is exactly TWO, and no traversing rule among them.
+    A FIFTH KEY ON `resolution`, NOT A WIDENING OF `qualification.sections`, and the difference is
+    coverage. That table is the MEMBERSHIP half and drops a section whose predicate would not
+    normalise — 137 of 186, and `all-personal.tasks`, HIS OWN WORKED EXAMPLE, is one of them
+    (`all-personal-nodes` compares `available_date` against the clock). What a new line BECOMES does
+    not depend on what already belongs there. `resolution.ordering`'s republished `name:` is the
+    shipped precedent for exactly this, in the same file, for the same reason.
+    A DEFECT THE ROUND TRIP FOUND. A seeded line with no title was POSTED. A tag is not a title:
+    `io/parser/line_parser.py` excises every resolved tag span and normalises what is left, so
+    `- [ ] #task #personal ` reaches the mint with an EMPTY title and gets the fate
+    `carriesContent`'s own header measured — a node called nothing, reprinted into every view that
+    qualifies it, forever. `carriesContent` now takes the tags off before asking. This was always
+    true of a line the operator typed one tag into; seeding made it reachable by default. MARKERS
+    ARE NOT STRIPPED and that is stated at the site: no affordance seeds one, and the marker glyphs
+    are a config fact this module does not hold.
+    THE ACCEPTANCE TEST, BOTH HALVES, AGAINST A SCRATCH COPY OF HIS REAL CONFIG
+    (`tests/present-seed.test.mjs` section 4): a brand new vocabulary FAMILY, a brand new FIELD and
+    a brand new TOKEN with a `defaults:` block pointing at them — the seed follows with no code
+    change; the same for an EXISTING section by changing its declared value; a `defaults:` naming a
+    field no tag spells lands in `dropped`, visibly, and the seed refuses it rather than guessing;
+    and a NEW retype rule refuses a type tag with no code change, which proves the §3.3 gate's own
+    generality rather than the 13 sections it happens to land on today.
+    NOT VERIFIED. No browser, no passkey session, no live server, no cycle. The `app/index.html`
+    wiring (`globalRegistrationFor` gaining `sectionRegistration`) was typechecked and is exercised
+    through the lifted page script, but was never watched render in an actual browser tab. The claim
+    that the engine ACCEPTS a leading-token line (`- [ ] #task #personal buy milk`) rests on reading
+    `line_parser.py`'s excise-then-normalise order and on the app's own reader agreeing, not on a
+    cycle run against a sandbox.
+  tier: functional
+  rooting: >-
+    OBSERVABLE THROUGH ONE EXISTING EDGE, AND NO NEW ONE. `newline.ts` gains no import: the tokens
+    arrive inside the `GlobalRegistration` its caller already assembles, and the only thing done
+    with them is `join(" ")`. What DID change is when `newline-addresses-the-declared-section`
+    (`app/present/newline -> app/present/address`, `sectionAt`) fires — it used to be reached only
+    after all three PRINTED rungs found nothing, and is now reached whenever a declaration is
+    supplied, because the tokens are a fact about the section the line is ACTUALLY in while the
+    chrome may have been copied from a neighbour across a heading. That makes the edge MORE
+    reachable, never less, and `tests/flow_scenarios/present_cascade.ts` drives it unchanged.
+    THE app/index.html HALF IS INVISIBLE BY CONSTRUCTION, the same reason every page-level caller in
+    this document is: node cannot import an HTML document. `tests/present-seed.test.mjs` section 1's
+    "IT REACHES THE PAGE" case drives `paint` with a real `declared` built from the SERVED
+    declaration and asserts the row's own `<input>` carries the seeded characters, which is this
+    project's established pattern for a page-level caller.
+    ENFORCEMENT IS `tests/present-seed.test.mjs` — 26 tests in 6 sections, of which 3 are mutation
+    proofs that each turn a named claim red, 5 are the acceptance test's two halves against a
+    scratch copy of the real config, and 1 is the 186-section agreement against the engine's own
+    `source_tags_for_node` via `tests/fixtures/resolution-agreement.json`.
+  status: working

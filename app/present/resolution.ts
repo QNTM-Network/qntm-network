@@ -275,7 +275,29 @@ export function carriesContent(line: string): boolean {
   // with no trailing space — a prose line to `classifyLine` and a checkbox line to the engine — be
   // refused by the same rule that refuses `- [ ] `. A bare bullet is exactly what a person leaves
   // behind when they open a line and change their mind.
-  return line.replace(BULLET, "").replace(CHECKBOX_GLYPH, "").trim() !== "";
+  //
+  // ── AND THE TAGS COME OFF TOO, WHICH IS A CHANGE THIS FILE'S OWN MEASUREMENT FORCES ──
+  //
+  // A tag is not a title. `io/parser/line_parser.py` excises every resolved tag span from the
+  // remainder and then normalises what is left (`_normalise_title` collapses the whitespace the
+  // excision leaves behind), so `- [ ] #task #personal ` reaches the mint with an EMPTY title and
+  // has exactly the first fate above: a node called nothing, reprinted into every view that
+  // qualifies it, forever. This was always true of a line the operator typed a tag into and
+  // nothing else; it became REACHABLE BY DEFAULT when `newline.ts` started seeding the section's
+  // declared tokens into a new line, so the predicate now asks the question the engine asks.
+  //
+  // ONLY TAGS, NOT MARKERS, AND THAT IS STATED RATHER THAN LEFT AS AN OVERSIGHT. `- [ ] 📅
+  // 2026-08-01` has the same empty-title fate, and this predicate still returns true for it. The
+  // marker glyphs are a config fact this module does not hold (`resolution.orderingFields`
+  // publishes three of the eleven, for a different purpose), and no affordance in this app seeds
+  // one — see `scripts/generate-resolution-declaration.mjs`, which reads no marker at all.
+  const tail = line.replace(BULLET, "").replace(CHECKBOX_GLYPH, "");
+  let stripped = tail;
+  // Backwards, so an earlier span's indices are not moved by a later span's removal.
+  for (const span of [...tagSpans(tail)].reverse()) {
+    stripped = stripped.slice(0, span.start) + stripped.slice(span.end);
+  }
+  return stripped.trim() !== "";
 }
 
 /**

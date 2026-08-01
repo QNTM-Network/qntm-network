@@ -1,3 +1,9 @@
 type_tags:
   - token: "#person"
     node_type: person
+  # The fixture's own `default_node_type` (views/default_registration.yaml). A config whose default
+  # type has no tag is a config the engine prints no type tag for, which the resolution generator
+  # correctly records as a drop — so declaring it here keeps the UNMUTATED fixture clean and leaves
+  # that drop path to be exercised by a mutation, like every other one.
+  - token: "#task"
+    node_type: task

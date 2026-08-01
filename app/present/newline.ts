@@ -84,6 +84,34 @@
  * previous rungs found nothing printed. That is "fires less often", proven directly by
  * `tests/present-newline.test.mjs`, never assumed from the new fact existing.
  *
+ * ── THE DECLARED TOKENS: WHAT THE LINE IS, NOT JUST WHICH BOX IT WEARS ──
+ *
+ * `design-the-rule-mirror.md`'s ladder, rungs 1 and 2, and they arrive together because §3.3 says
+ * they must. The operator's own words: "it gets stamped `task`. That's what the evidence would be
+ * for inbox. Then for `personal all` it would get stamped `task` AND `personal`, as we have a
+ * default resolution here."
+ *
+ * Until now this module resolved the section's node type on EVERY Enter and threw the name away,
+ * keeping only the checkbox. It now also seeds the CHARACTERS the engine itself would print for
+ * that answer — `- [ ] #task ` in `inbox`, `- [ ] #task #personal ` in `personal/all` — read off
+ * `resolution.sectionRegistration[view][section].tokens`.
+ *
+ * THIS MODULE DERIVES NONE OF THAT. It does not know which tag spells `domain: personal`, what
+ * order the engine emits tags in, or that a rule retypes a cadence-less `routine` inside the pass
+ * that mints it. All three are config reads, done once, in
+ * `scripts/generate-resolution-declaration.mjs`, each refusal recorded in that key's `dropped`
+ * map. What arrives here is a list of strings and the only thing done with it is `join(" ")`.
+ *
+ * WHY WRITING THEM INTO THE LINE IS SAFE, WHICH IS THE ONE QUESTION THAT MATTERS. A value the
+ * browser writes into the source is ingested as AUTHORED and outranks the rule that produced it,
+ * so seeding a default converts a DERIVED value into an AUTHORED one. It costs nothing here
+ * because THE ENGINE PERFORMS THAT SAME CONVERSION ITSELF, one cycle later: read the operator's
+ * own `personal/all.md` and every line already carries `#task #personal`, printed by
+ * `TokenResolver.source_tags_for_node` and read back as an authored token on the next ingest.
+ * Seeding reaches the same fixed point one cycle earlier; it does not create one. A field the
+ * engine prints NO tag for — `project`, on 60 sections — is never seeded, and that is the same
+ * rule read the other way rather than a shortfall.
+ *
  * ── ONE LIMITATION, STATED RATHER THAN LEFT TO BE DISCOVERED ──
  *
  * The VIEW rung crosses a heading to find evidence, so it answers with another SECTION's shape.
@@ -129,15 +157,40 @@ export interface GlobalRegistration {
   /** `ConfigResolutionTable.chromeShapes` — the one fact `nodeType` alone cannot supply. A type
    * absent here is a type this module refuses to seed rather than guess a chrome form for. */
   readonly chromeShapes: Readonly<Record<string, "checkbox" | "plain_line">>;
+  /**
+   * `ConfigResolutionTable.sectionRegistration` — read ONLY for `.tokens`, and never re-derived.
+   *
+   * The fourth slice, and the one that turns "which chrome" into "what this line IS". See this
+   * module's header, section THE DECLARED TOKENS. OPTIONAL, like the whole of this interface: a
+   * caller that omits it gets exactly the chrome-only seed that shipped before.
+   */
+  readonly sectionRegistration?: Readonly<
+    Record<
+      string,
+      Readonly<Record<string, { readonly nodeType: string; readonly tokens: readonly string[] }>>
+    >
+  >;
 }
 
 /** A new line's opening characters, and the rung of the cascade that decided them. */
 export interface NewLine {
-  /** The chrome the line starts with — `- [ ] `, `  - `, and so on. Never has content in it. */
+  /**
+   * The characters the line starts with. The chrome — `- [ ] `, `  - ` — followed by the DECLARED
+   * TOKENS, when a declaration was supplied and the section has any. Never the operator's content:
+   * everything here is something the config said, and the cursor sits after all of it.
+   */
   readonly text: string;
-  /** Which rung answered. `GLOBAL` appears only when a `GlobalRegistration` was supplied AND it
-   * had an answer — see this module's header for exactly when that is and when it still refuses. */
+  /** Which rung decided the CHROME. `GLOBAL` appears only when a `GlobalRegistration` was supplied
+   * AND it had an answer — see this module's header for exactly when that is and when it still
+   * refuses. The tokens below are NOT decided by this rung; they are read off the section. */
   readonly level: PresentationLevel;
+  /**
+   * The declared tokens seeded into `text`, in the engine's own order — `["#task", "#personal"]`.
+   * Empty when no declaration was supplied, when `sectionAt` could not name the section, or when
+   * the section has nothing spellable to say. Carried out separately from `text` so a caller can
+   * report WHAT was said without re-parsing the characters it just asked for.
+   */
+  readonly tokens: readonly string[];
 }
 
 /**
@@ -165,6 +218,54 @@ export function seedFor(
     return null;
   }
 
+  // THE SECTION THIS LINE IS IN, named once. Both halves of the answer need it and they must not
+  // disagree: the tokens are a fact about the section the line is ACTUALLY in, while the CHROME
+  // may have come from a neighbour across a heading (the VIEW rung). Resolving it twice would be
+  // two chances for the seed to describe two different sections.
+  const sectionId =
+    declared === undefined
+      ? null
+      : sectionAt(source, lineIndex, declared.view, declared.sectionOrder);
+
+  const chrome = chromeFor(lines, lineIndex, declared, sectionId);
+  if (chrome === null) {
+    return null;
+  }
+
+  // THE DECLARED TOKENS. Read, never derived — `sectionRegistration[view][section].tokens` is the
+  // string the ENGINE would print for the node this section mints, generated once from the same
+  // vocabulary the engine renders through. See this module's header, and
+  // `scripts/generate-resolution-declaration.mjs`'s section 7 for why a field with no token is
+  // never seeded rather than spelled some other way.
+  //
+  // THE TOKENS DO NOT DEPEND ON WHICH RUNG DECIDED THE CHROME, and that is deliberate. The chrome
+  // is printed evidence and the most specific printed evidence wins; the tokens are a declaration
+  // about the section, and the section is the same section whichever line the chrome was copied
+  // from. Joining them by rung would let the VIEW rung's cross-heading answer drag another
+  // section's meaning onto this line.
+  const tokens =
+    sectionId === null || declared === undefined
+      ? []
+      : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
+
+  // `chrome` already ends in the separator its own form carries (`- [ ] `, `- `), so the tokens
+  // join straight on, and the trailing space is what puts the cursor after them rather than
+  // between the last token and the operator's first character.
+  const text = tokens.length === 0 ? chrome.text : `${chrome.text}${tokens.join(" ")} `;
+  return { text, level: chrome.level, tokens };
+}
+
+/**
+ * The four rungs, unchanged in every particular — this is `seedFor`'s original body, lifted whole
+ * so the token seed above can be added WITHOUT touching the cascade walk. Returns the chrome and
+ * the rung that decided it, or `null` when nothing — printed or declared — answers.
+ */
+function chromeFor(
+  lines: readonly string[],
+  lineIndex: number,
+  declared: GlobalRegistration | undefined,
+  sectionId: string | null,
+): { readonly text: string; readonly level: PresentationLevel } | null {
   // 1. UP, stopping at the heading that opens this section. The first evidence found is the LINE
   //    rung if it is the line directly above, and the STRUCTURAL_NODE rung if the search had to
   //    step over blanks or lines that are not node lines to reach it.
@@ -208,16 +309,25 @@ export function seedFor(
 
   // 4. GLOBAL — READ, not guessed (design-the-resolution-architecture.md step 6). Nothing in this
   //    view has ever been PRINTED as a node, so there is no evidence left to walk up to — but the
-  //    declaration may still know what a node here looks like. `sectionAt` names the section the
+  //    declaration may still know what a node here looks like. `sectionAt` named the section the
   //    same way L3 ADDRESSING always does; its `nodeType` is the MINTING default (never
   //    `baseNodeType`, the revert target — see the header); `chromeShapes` is the one further fact
   //    that settles checkbox-vs-plain, which the type name alone cannot. Any one of the three
   //    missing is a refusal, exactly as it always was — this branch only ever RETURNS an answer,
   //    it never has to distinguish "I don't know" from "the answer is no chrome at all".
-  if (declared !== undefined) {
-    const sectionId = sectionAt(source, lineIndex, declared.view, declared.sectionOrder);
+  //
+  //    THE TYPE IS NOW ASKED FOR TWICE, MOST COMPLETE SOURCE LAST-RESORT — `qualification.sections`
+  //    first, exactly as before, then `resolution.sectionRegistration`. They agree wherever both
+  //    answer (`tests/present-newline.test.mjs` asserts it over the operator's whole config); the
+  //    second covers the 137 sections the first drops because their MEMBERSHIP predicate would not
+  //    normalise, which is a fact about what already belongs there and not about what a new line
+  //    becomes. `personal/all` is one of those 137. This rung therefore fires strictly MORE often
+  //    than it did and never differently — the same "fires less often, never never" the header
+  //    records for step 6.
+  if (declared !== undefined && sectionId !== null) {
     const nodeType =
-      sectionId === null ? undefined : declared.sections[declared.view]?.[sectionId]?.nodeType;
+      declared.sections[declared.view]?.[sectionId]?.nodeType ??
+      declared.sectionRegistration?.[declared.view]?.[sectionId]?.nodeType;
     const shape = nodeType === undefined ? undefined : declared.chromeShapes[nodeType];
     if (shape !== undefined) {
       return { text: shape === "checkbox" ? "- [ ] " : "- ", level: "GLOBAL" };

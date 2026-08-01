@@ -298,8 +298,15 @@ function parseSequence(lines, start, indent, path) {
       i = next;
       continue;
     }
+    // A QUOTED KEY IS STILL A KEY. `- "null": [$current.node.fields.created_at]` is real config
+    // (`rules/age_of_intent_tasks.yaml:69`) and this branch used to send it to `parseValueToken`
+    // as a scalar on the strength of its opening quote alone, which then threw "unterminated
+    // double-quoted scalar" — the quote closes, and what follows it is a colon. `splitKey` already
+    // distinguishes the two: `- "a: b"` (a quoted scalar that happens to contain a colon) has
+    // nothing after its closing quote, so `splitKey` returns null and the scalar branch still
+    // takes it. The opening-quote test was therefore not a guard, only a shortcut past the answer.
     const kv = splitKey(rest);
-    if (kv === null || rest.startsWith("{") || rest.startsWith("[") || /^["']/.test(rest)) {
+    if (kv === null || rest.startsWith("{") || rest.startsWith("[")) {
       seq.push(parseValueToken(rest, path, line));
       continue;
     }

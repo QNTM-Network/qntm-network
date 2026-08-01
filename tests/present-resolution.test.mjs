@@ -417,8 +417,16 @@ describe("4. the falsifier: the app's answer follows the config, because it read
 });
 
 describe("5. the size assertion — a future widening is visible, not silent", () => {
-  test("the whole 'resolution' key stays under 3,000 bytes", () => {
+  test("the whole 'resolution' key stays under 50,000 bytes", () => {
     const bytes = JSON.stringify(SERVED.resolution).length;
+    // THE CEILING MOVED, DELIBERATELY, ONCE — rungs 1 and 2 (design-the-rule-mirror.md) added
+    // `sectionRegistration`, which is the first entry in this table that carries a row PER SECTION
+    // rather than per node type or per declared key: 186 sections against the 9 that declare an
+    // ordering. Measured 2026-08-01 at 42,508 B whole-table, of which `sectionRegistration` is
+    // 40,776 B. That is the SAME order as `qualification` (23,872 B) and 5 % of the 805 KB of
+    // graph already on the wire, which is the comparison §9.6 of the design document makes when
+    // it says "the payload objection to a fourth grammar is not an objection". The ceiling below
+    // is set so a SECOND per-section kind is still visible rather than absorbed.
     // Measured 2026-08-01 at step 5: 994 bytes (registration 4 fields, 2 line grammars, 9
     // ordering sections, 3 day-boundary keys). Step 6 added `chromeShapes` (11 node-type
     // candidates, checkbox/plain_line only) and measured 1,330 bytes whole-table. Step 7 added
@@ -431,7 +439,7 @@ describe("5. the size assertion — a future widening is visible, not silent", (
     // magnitude off it either way.
     assert.ok(bytes > 200, `'resolution' is suspiciously small (${bytes} B) — a measurement of ` +
       "near-zero should be treated as broken until a positive control passes");
-    assert.ok(bytes < 3000, `'resolution' grew to ${bytes} B — a kind was added; update this ` +
+    assert.ok(bytes < 50000, `'resolution' grew to ${bytes} B — a kind was added; update this ` +
       "ceiling deliberately rather than let it float");
   });
 });
