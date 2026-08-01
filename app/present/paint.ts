@@ -476,6 +476,7 @@ function rawInput(
 function draftInput(
   lineIndex: number,
   seed: string,
+  typed: string,
   fileSource: string,
   draft: DraftSurface,
   deps: PaintDeps,
@@ -484,11 +485,27 @@ function draftInput(
   const input = document.createElement("input");
   input.type = "text";
   input.className = "rawline";
-  input.value = seed;
+  // THE CHARACTERS THE ROW HOLDS, WHICH IS THE SEED UNTIL SOMEBODY TYPES. They differ only for a
+  // row that has survived a projection (draft.ts's `typed`) — an `<input>` is destroyed by every
+  // repaint, so a surviving row that came back holding its seed would have survived nothing the
+  // operator can see.
+  input.value = typed;
 
   // One settlement per row, for the same reason `rawInput` has one: the repaint that follows a
   // commit removes this element, and removing a focused element fires blur.
   let settled = false;
+
+  /**
+   * WHICH ROW THIS ELEMENT IS — see `DraftSurface.generation`.
+   *
+   * A repaint replaces this element. Until a draft could SURVIVE a repaint that fact was harmless,
+   * because every repaint that reached a live draft had already settled or abandoned it. It is not
+   * harmless now: the removed element's own `blur` would otherwise settle a row that is still open
+   * somewhere else on screen — posting an `insert-line` computed against a source string that has
+   * been replaced. So settlement is gated on this element still BEING the row.
+   */
+  const generation = draft.generation;
+  const stale = (): boolean => draft.generation !== generation;
 
   /**
    * HAND THE CURSOR BACK TO VIM, ONLY WHEN VIM IS THE ONE HOLDING IT. A draft is not a line
@@ -522,7 +539,7 @@ function draftInput(
 
   /** There is no line here after all. Not a deletion — nothing was ever in the file. */
   const abandon = (): void => {
-    if (settled) {
+    if (settled || stale()) {
       return;
     }
     settled = true;
@@ -532,7 +549,7 @@ function draftInput(
   };
 
   const settle = (): void => {
-    if (settled) {
+    if (settled || stale()) {
       return;
     }
     settled = true;
@@ -548,6 +565,10 @@ function draftInput(
     repaint(markdown ?? fileSource);
   };
 
+  // THE CHARACTERS, RECORDED AS THEY ARE TYPED — the only way a repaint can put them back, and the
+  // same read `settle` above already makes at the end (`input.value`), made earlier. It builds no
+  // edit and posts nothing; see draft.ts's `typed` for why the field is not a second write path.
+  input.addEventListener("input", () => draft.type(input.value));
   input.addEventListener("blur", settle);
   input.addEventListener("keydown", (event) => {
     const key = (event as KeyboardEvent | undefined)?.key;
@@ -752,7 +773,7 @@ export function paint(
     if (draft === undefined || focus === undefined) {
       return false;
     }
-    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared);
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared, deps.view);
   };
 
   /**
@@ -832,9 +853,24 @@ export function paint(
       return;
     }
     draftPainted = true;
-    const input = draftInput(open.lineIndex, open.seed, source, draft as DraftSurface, deps, repaint);
+    const input = draftInput(
+      open.lineIndex,
+      open.seed,
+      open.typed,
+      source,
+      draft as DraftSurface,
+      deps,
+      repaint,
+    );
     body.append(input);
     (input as HTMLInputElement).focus?.();
+    // THE CARET GOES BACK TO THE END OF WHAT HE HAD TYPED, and only for a row that has survived a
+    // projection. A row still holding its seed is left exactly as it was — the browser lands the
+    // caret at the end of a freshly focused value anyway, and setting it here would change what
+    // every paint before this row existed produced.
+    if (open.typed !== open.seed) {
+      (input as HTMLInputElement).setSelectionRange?.(open.typed.length, open.typed.length);
+    }
   };
 
   /** The last source line this paint drew a row for. `-1` when the view painted nothing at all. */

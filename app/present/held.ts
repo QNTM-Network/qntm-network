@@ -4,7 +4,7 @@
  *
  * ── THE ONE DECISION THIS MODULE IS ──
  *
- * A line the operator was typing into can stop existing under him in two ways, and this module
+ * A line the operator was typing into can stop existing under him in three ways, and this module
  * treats them as ONE event because they are one event to him:
  *
  *   VANISHED   a projection arrives and the line he was on is not in it. `focus.reanchor` reports
@@ -13,8 +13,17 @@
  *   REFUSED    the server declines the write (a 409). His characters stay on screen only because
  *              `commitLine` does not repaint — and the very next projection to arrive replaces
  *              both the screen and the painter's source.
+ *   UNPLACED   a projection arrives while he is MAKING a line, and the row's place cannot be
+ *              re-found in it (`placeDraft`, app/present/draft.ts). The row is not in either file
+ *              by construction, so there is nowhere to put it back and nothing to re-anchor to.
  *
- * BOTH ARE "CHARACTERS THE SOURCE STRING DOES NOT OWN". That is the whole of the shape, and it is
+ * A THIRD CAUSE AND NOT A THIRD MECHANISM, and the distinction is the one that decided it. The
+ * three differ only in what the operator is told; the surface, the release rule, the strip and the
+ * refusal to carry a line index are one apiece and unchanged. The alternative — a second holding
+ * place for the row being made — would be two stores of the operator's writing competing with each
+ * other, which is the thing this module's own header already refuses for the vault.
+ *
+ * ALL THREE ARE "CHARACTERS THE SOURCE STRING DOES NOT OWN". That is the whole of the shape, and it is
  * a shape this bundle has already shipped once: `DraftSurface` (draft.ts) holds a line that is not
  * in the file YET; this holds one that is not in the file ANY MORE. Same lifecycle, same argument
  * for it, opposite end of the same gesture.
@@ -56,8 +65,8 @@
  * survived a reload would be a second store of the operator's writing, competing with the vault.
  */
 
-/** WHY a row is held. Two causes, one mechanism — see the module header. */
-export type HeldReason = "vanished" | "refused";
+/** WHY a row is held. Three causes, one mechanism — see the module header. */
+export type HeldReason = "vanished" | "refused" | "unplaced";
 
 /**
  * The characters, and enough about where they came from to say it plainly.

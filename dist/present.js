@@ -2278,19 +2278,94 @@ function wordCaret(line, motion, count, from) {
 }
 
 // app/present/draft.ts
+function placeFor(source, lineIndex, view) {
+  const above = lineIndex > 0 ? instanceAnchorFor(source, lineIndex - 1, view) : null;
+  if (above !== null) {
+    return { anchor: above, side: "above" };
+  }
+  const below = instanceAnchorFor(source, lineIndex, view);
+  return below === null ? null : { anchor: below, side: "below" };
+}
+function carries(source, text) {
+  return source.split("\n").some((line) => extendsLine(text, line));
+}
+function placeDraft(draft, before, after, view) {
+  if (draft.typed !== draft.seed && carries(after, draft.typed) && !carries(before, draft.typed)) {
+    return { outcome: "arrived" };
+  }
+  if (draft.place === null) {
+    return { outcome: "unplaced", because: "no-place" };
+  }
+  const reading = resolveInstanceAnchor(draft.place.anchor, after, view);
+  if (reading.outcome === "found") {
+    const at = draft.place.side === "above" ? reading.lineIndex + 1 : reading.lineIndex;
+    return { outcome: "placed", lineIndex: at, via: reading.via };
+  }
+  return { outcome: "unplaced", because: reading.outcome };
+}
 var DraftSurface = class {
   #draft = null;
+  #generation = 0;
   /** The line being made, or `null` when none is. */
   get draft() {
     return this.#draft;
+  }
+  /**
+   * WHICH ROW THE SURFACE IS ON — a monotonic counter, bumped by every one of the three calls that
+   * changes which row exists (`open`, `carry`, `drop`).
+   *
+   * IT IS THE ONLY THING THAT MAKES A SURVIVING DRAFT SAFE, and it closes a hole that was already
+   * there. `paint.ts` builds one `<input>` per row and that element's `blur` listener SETTLES —
+   * computing an `insert-line` against the source string the row was opened against and handing it
+   * to the page's write path. Removing a focused element is a blur in every browser that fires one.
+   * Before this row existed the page dropped the draft and repainted, and the removed element's
+   * blur could still post into the view being left; the drop protected the SURFACE and not the
+   * ELEMENT. A row that now SURVIVES a projection is repainted as a second element, so the first
+   * one has to be answerable for.
+   *
+   * `paint.ts` captures this number when it builds the element and refuses to settle or abandon
+   * when it no longer matches: an element whose row has been dropped, or re-placed, is not the row
+   * on screen and its settlement is not this row's settlement.
+   */
+  get generation() {
+    return this.#generation;
   }
   /** Is a line being made AT this index? */
   isDraftAt(lineIndex) {
     return this.#draft?.lineIndex === lineIndex;
   }
   /** Open a line. One at a time — there is one cursor, and a draft always has it. */
-  open(lineIndex, seed) {
-    this.#draft = { lineIndex, seed };
+  open(lineIndex, seed, place = null) {
+    this.#draft = { lineIndex, seed, typed: seed, place };
+    this.#generation += 1;
+  }
+  /**
+   * The row holds these characters now. Called as they are typed, so a repaint can put them back.
+   *
+   * A NO-OP WHEN NO ROW IS OPEN, rather than an error: the caller is a DOM listener on an element
+   * that may already have been removed, and a listener that can throw during teardown is a
+   * listener that takes the page down with it.
+   */
+  type(text) {
+    if (this.#draft === null) {
+      return;
+    }
+    this.#draft = { ...this.#draft, typed: text };
+  }
+  /**
+   * THE ROW SURVIVED A PROJECTION — same characters, same seed, new index and a freshly taken
+   * place.
+   *
+   * The place is re-taken by the caller against the ARRIVING source rather than carried forward,
+   * for the reason `focus.reanchor` re-takes its own anchor on a `found`: an anchor that goes on
+   * describing the previous projection is an anchor that drifts one cycle at a time.
+   */
+  carry(lineIndex, place) {
+    if (this.#draft === null) {
+      return;
+    }
+    this.#draft = { ...this.#draft, lineIndex, place };
+    this.#generation += 1;
   }
   /**
    * Abandon the line being made.
@@ -2301,6 +2376,7 @@ var DraftSurface = class {
    */
   drop() {
     this.#draft = null;
+    this.#generation += 1;
   }
 };
 
@@ -2449,13 +2525,13 @@ function seedFor(source, lineIndex, declared) {
   }
   return null;
 }
-function openLine(from, lineIndex, draft, onDeclined, declared) {
+function openLine(from, lineIndex, draft, onDeclined, declared, view) {
   const seed = seedFor(from, lineIndex, declared);
   if (seed === null) {
     onDeclined?.(lineIndex);
     return false;
   }
-  draft.open(lineIndex, seed.text);
+  draft.open(lineIndex, seed.text, placeFor(from, lineIndex, view ?? declared?.view ?? ""));
   return true;
 }
 
@@ -2607,12 +2683,14 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
   });
   return input;
 }
-function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
+function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "rawline";
-  input.value = seed;
+  input.value = typed;
   let settled = false;
+  const generation = draft.generation;
+  const stale = () => draft.generation !== generation;
   const returnToVim = (source) => {
     if (deps.mode === void 0) {
       return;
@@ -2624,7 +2702,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     }
   };
   const abandon = () => {
-    if (settled) {
+    if (settled || stale()) {
       return;
     }
     settled = true;
@@ -2633,7 +2711,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     repaint(fileSource);
   };
   const settle = () => {
-    if (settled) {
+    if (settled || stale()) {
       return;
     }
     settled = true;
@@ -2644,6 +2722,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
+  input.addEventListener("input", () => draft.type(input.value));
   input.addEventListener("blur", settle);
   input.addEventListener("keydown", (event) => {
     const key = event?.key;
@@ -2712,7 +2791,7 @@ function paint(body, source, context, deps) {
     if (draft === void 0 || focus === void 0) {
       return false;
     }
-    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared);
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared, deps.view);
   };
   const raw = (lineSource, lineIndex) => {
     if (focus === void 0) {
@@ -2748,9 +2827,20 @@ function paint(body, source, context, deps) {
       return;
     }
     draftPainted = true;
-    const input = draftInput(open.lineIndex, open.seed, source, draft, deps, repaint);
+    const input = draftInput(
+      open.lineIndex,
+      open.seed,
+      open.typed,
+      source,
+      draft,
+      deps,
+      repaint
+    );
     body.append(input);
     input.focus?.();
+    if (open.typed !== open.seed) {
+      input.setSelectionRange?.(open.typed.length, open.typed.length);
+    }
   };
   let lastPaintedIndex = -1;
   source.split("\n").forEach((line, index) => {
@@ -4768,6 +4858,8 @@ export {
   openLine,
   orderingFor,
   paint,
+  placeDraft,
+  placeFor,
   presentationFromDeclaration,
   qntmIdSpans,
   readConfigResolutionDeclaration,

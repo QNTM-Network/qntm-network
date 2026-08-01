@@ -933,6 +933,8 @@ import {
   baseOf,
   BaseSurface,
   DraftSurface,
+  placeDraft,
+  placeFor,
   HeldSurface,
   heldFrom,
   FocusSurface,
@@ -1293,7 +1295,9 @@ function paintFolder(node, into) {
   for (const v of [...node.views].sort((a, b) => a.title.localeCompare(b.title))) {
     const button = treeRow("viewbtn", null, v.title, null);
     button.addEventListener("click", () => {
-      paintView(v.id);
+      // A CHOICE, SAID OUT LOUD. This is the one caller the drop was written for: a row opened in
+      // the view being left must not follow the operator into the view being entered.
+      paintView(v.id, "chosen");
       closeDrawer();
     });
     into.append(button);
@@ -1456,7 +1460,27 @@ function refusalNote() {
   return takeNotes();
 }
 
-function paintView(id) {
+/**
+ * Paint a view. `why` is the ONE fact this function could never work out for itself.
+ *
+ * ── WHY IT IS A PARAMETER AND NOT AN INFERENCE ──
+ *
+ * Two entirely different events reach this function — the operator CHOSE a view, or a projection
+ * ARRIVED — and they mean opposite things for a line he is in the middle of making. The page
+ * already had a proxy for the difference (`sameView`, `id === paintedViewId`) and that proxy is
+ * right about POSITION and wrong about CAUSE: clicking the view you are already in is a choice
+ * that reads as an arrival, and a re-read that lands on a different view because the file was
+ * renamed on the laptop is an arrival that reads as a choice. Both are exactly the cases where
+ * guessing costs the operator characters.
+ *
+ * So the caller says. It knows: a drawer click is `"chosen"`, a write's own answer and a re-read
+ * are `"arrived"`. `sameView` is left doing the job it was written for — deciding whether an
+ * anchor taken in one view may be resolved in another — and is not reinterpreted.
+ *
+ * ANYTHING THAT IS NOT `"arrived"` IS TREATED AS A CHOICE, which is the safe direction: a caller
+ * that says nothing gets exactly the behaviour every caller had before this parameter existed.
+ */
+function paintView(id, why) {
   // WHAT HE TYPED, AND WHAT HE WAS LOOKING AT, READ AND CLEARED IN ONE PLACE. Both describe the
   // moment BEFORE this projection; both are consumed here whether or not a line vanished, so a
   // stale one can never be read against a later arrival.
@@ -1474,19 +1498,36 @@ function paintView(id) {
   cursorNote = "";
   currentViewId = id;
   markWhereWeAre();
-  // A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN. This function is the one place a view
-  // is chosen or re-read from the server, and both are moments a half-made line cannot survive: an
-  // index that meant "under the third task" in one view means something else in the next, and a
-  // fresh snapshot has already been through the cycle without it. Dropping it here is not a loss —
-  // by the time a POST comes back the row has settled through `commitLine` anyway; what this stops
-  // is a row leaking across a view change, which is the one way this affordance could write into a
-  // file nobody was looking at.
-  draftLine.drop();
-  // AND A SELECTION BELONGS TO THE VIEW IT WAS MADE IN, FOR THE SAME REASON. `mode.enterNormal()`
-  // does not touch `focus.lineIndex` (see motions.ts) — but INSERT specifically must not survive a
-  // view change: an `<input>` left open on a line that belongs to a file nobody is looking at is
-  // exactly the "row leaking across a view change" the draft comment above already refuses.
-  mode.enterNormal();
+  // ── A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN, AND SURVIVES A PROJECTION IN IT ──
+  //
+  // A VIEW CHANGE STILL DESTROYS IT, and that half of the original reasoning is untouched: "an
+  // index that meant under the third task in one view means something else in the next", and a row
+  // that leaked across a view change is the one way this affordance could write into a file nobody
+  // was looking at. That hazard is real and the drop below is what stops it.
+  //
+  // A PROJECTION ARRIVING IS NOT THAT EVENT. He did not choose to be somewhere else; the world
+  // moved while he stayed put, on the view he is looking at, mid-sentence. Dropping the row for
+  // that is the safe haven being violated by the mechanism the apex capability needs. So the row
+  // is CARRIED — held on the surface across this paint and re-placed below, once the arriving
+  // markdown is in hand. `placeDraft` (app/present/draft.ts) is the judgement and it can refuse;
+  // nothing here decides where a row goes.
+  //
+  // BOTH CONDITIONS, NOT EITHER. `why` says the caller's event; `sameView` says the row's own view
+  // is still the one on screen. A re-read that lands somewhere else because the file was renamed
+  // is an arrival AND a change of view, and the row must not follow it.
+  const carried = why === "arrived" && sameView ? draftLine.draft : null;
+  if (carried === null) {
+    draftLine.drop();
+    // AND A SELECTION BELONGS TO THE VIEW IT WAS MADE IN, FOR THE SAME REASON. `mode.enterNormal()`
+    // does not touch `focus.lineIndex` (see motions.ts) — but INSERT specifically must not survive a
+    // view change: an `<input>` left open on a line that belongs to a file nobody is looking at is
+    // exactly the "row leaking across a view change" the draft comment above already refuses.
+    //
+    // IT IS INSIDE THIS BRANCH BECAUSE THE TWO FACTS ARE ONE FACT. A carried row IS an open
+    // `<input>`, on this view, with the cursor in it — forcing NORMAL around it would tell the vim
+    // badge one thing while the operator is typing another.
+    mode.enterNormal();
+  }
   // THE SELECTION IS SEEDED TO A REAL LINE HERE, ONCE, ON ENTERING A VIEW — not on every repaint.
   // `focus.lineIndex` starts `null` (no vim wiring has ever set it) and this is what lands it on
   // line 0 the first time a view with vim wired paints; after that it is whatever `j`/`k`/`gg`/`G`
@@ -1508,6 +1549,58 @@ function paintView(id) {
     // row must never be. See `HeldSurface.settle` for the two shapes that count as "owns" and for
     // why the comparison deliberately fails toward keeping the row.
     held.settle(entering.path, entering.markdown);
+    // ── THE LINE HE IS MAKING, PUT BACK WHERE IT WAS — OR HELD. NEVER DESTROYED ──
+    //
+    // BEFORE THE CURSOR BLOCK, because the two decisions overlap in one place and this one has to
+    // win there: while a row is open `focus` is deliberately BLURRED (`o`/`O` blur it so the line
+    // the row was opened from does not also turn into an `<input>`), so the seeding below would
+    // land the selection back on a real line and the next repaint would draw a SECOND editable row.
+    // `keeping` is what stops it, and it can only be known after the placement has answered.
+    //
+    // THE THREE ANSWERS, EACH OF WHICH ALREADY HAS AN OWNER:
+    //   placed    the row goes back beside its neighbour. `placeFor` re-takes the place against the
+    //             ARRIVING markdown, for the reason `focus.reanchor` re-takes its own anchor on a
+    //             `found` — an anchor that keeps describing the previous projection drifts.
+    //   arrived   the cycle ingested his line while he was typing it, so the file now owns the
+    //             characters. The row is released rather than re-placed: two copies of one line on
+    //             screen, and settling the second would mint a second node.
+    //   unplaced  nothing could be said about where the row goes. The characters are HELD
+    //             (app/present/held.ts) — the operator's own chosen answer for exactly this, and
+    //             the direction this whole capability fails in: a held row is an annoyance, a
+    //             destroyed one is lost work.
+    //
+    // A ROW HOLDING NOTHING BUT ITS OWN CHROME IS DROPPED SILENTLY on the last two. `applyEdit`
+    // refuses to insert it, so there was never a line there to lose — and holding `- [ ] ` would
+    // put a row on the strip for an event that cost him nothing.
+    let keeping = false;
+    let draftNote = "";
+    if (carried !== null) {
+      const placement = placeDraft(carried, wasShowing, entering.markdown, id);
+      if (placement.outcome === "placed") {
+        draftLine.carry(placement.lineIndex, placeFor(entering.markdown, placement.lineIndex, id));
+        keeping = true;
+      } else {
+        draftLine.drop();
+        mode.enterNormal();
+        if (placement.outcome === "unplaced" && carried.typed !== carried.seed) {
+          // NO INSTANCE AND NO NODE, AND NOT FOR WANT OF LOOKING. A row that is in no file has no
+          // identity of any kind — that is the whole reason it could not be placed — so the two
+          // fields are `null` and `keyOf` falls back to the characters, which is what `held.ts`
+          // already does for any line the cycle has never seen.
+          holdEdit(
+            heldFrom("unplaced", {
+              text: carried.typed,
+              view: id,
+              path: entering.path,
+              instance: null,
+              node: null,
+              base: null,
+            }),
+          );
+          draftNote = "the cycle moved what you were writing beside — the line you were making is held below";
+        }
+      }
+    }
     // THE ANCHOR OF THE LINE THAT MAY BE ABOUT TO VANISH, TAKEN BEFORE ANYTHING CAN REPLACE IT.
     // The note left here by the row that built `reanchor` is exact about this: the seeding below
     // REPLACES the anchor with whichever line the clamp landed on, so the vanished line's identity
@@ -1552,10 +1645,15 @@ function paintView(id) {
         }),
       );
     }
-    if (cursorReading.outcome !== "found") {
+    if (cursorReading.outcome !== "found" && !keeping) {
       // NOTHING WAS FOUND, SO THE OLD SEEDING STANDS — vim always has a cursor on some line, and
       // this is where a view first gets one. What has changed is that it is no longer the whole
       // story: a refusal is now SAID rather than swallowed.
+      //
+      // `!keeping` IS THE ONE CASE THAT MUST NOT BE SEEDED. A row being made owns the cursor and
+      // `focus` is blurred on purpose while it exists; landing the selection on a real line here
+      // would make that line an `<input>` too the instant the repaint ran — two editable rows at
+      // once, which is the exact defect `repaintCurrentView`'s own comment records measuring.
       //
       // NOTE FOR ROW 4 (`the-vanished-line-is-parked-not-dropped`): this call REPLACES the anchor
       // with whichever line the clamp landed on. `focus.reanchor` deliberately left the vanished
@@ -1569,6 +1667,17 @@ function paintView(id) {
       );
     }
     reportCursorReading(cursorReading);
+    // THE CURSOR'S OWN SENTENCE WINS AND THIS FILLS THE SILENCE. Both describe this one arrival and
+    // there is one slot; when the line he was PARKED on also went, that is the larger event and its
+    // sentence already says his characters are held below.
+    if (draftNote !== "" && cursorNote === "") {
+      cursorNote = draftNote;
+    }
+  } else if (carried !== null) {
+    // THE VIEW IS NOT IN THE SNAPSHOT AT ALL, so there is no markdown to place a row against and no
+    // path to hold it under. It is dropped, which is what happened to it before this row existed.
+    draftLine.drop();
+    mode.enterNormal();
   }
   paintedViewId = id;
   paintedSource = entering === undefined ? "" : entering.markdown;
@@ -1597,6 +1706,7 @@ function holdEdit(record) {
 const HELD_REASONS = {
   vanished: "the line this was on is not in that view any more",
   refused: "the server refused this save — nothing was written",
+  unplaced: "the cycle changed that view while you were making this line — nothing was written",
 };
 
 /**
@@ -2060,7 +2170,7 @@ async function toggleTask(view, toggle) {
   try {
     const data = await writeFile(view, next, toggle.source);
     graphData = data;
-    paintView(currentViewId);
+    paintView(currentViewId, "arrived");
     sayAsOf(data);
   } catch (e) {
     box.checked = !box.checked;
@@ -2101,7 +2211,7 @@ async function commitLine(view, commit) {
   try {
     const data = await writeFile(view, commit.markdown, commit.source, note);
     graphData = data;
-    paintView(currentViewId);
+    paintView(currentViewId, "arrived");
     sayAsOf(data);
   } catch (e) {
     // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ──
@@ -2144,7 +2254,12 @@ async function commitLine(view, commit) {
     // The painter has already repainted this view from the edited source, so the page is showing
     // the edit; what failed is the write. Repaint from the LAST KNOWN SERVER STATE so the screen
     // stops claiming something the vault does not have.
-    paintView(currentViewId);
+    //
+    // `"arrived"` RATHER THAN `"chosen"`, THOUGH NOTHING ARRIVED. The distinction the parameter
+    // carries is "did the operator choose to be somewhere else", and he did not — this is the view
+    // he is in, repainted from the last string the server sent. A row he is making has the same
+    // claim on surviving it that it has on surviving a projection.
+    paintView(currentViewId, "arrived");
     $("freshness").textContent = "sync failed: " + e.message + takeNotes();
   }
 }
@@ -2230,7 +2345,15 @@ function landOn(views, keep) {
       ?? views[0];
 }
 
-async function loadGraph(keep = null) {
+/**
+ * Read the graph and paint where it lands.
+ *
+ * `why` IS PASSED THROUGH RATHER THAN DERIVED FROM `keep`, and the two really are different facts:
+ * the sign-in path reads with no `keep` and the re-read button reads with one, but a future caller
+ * could do either for either reason. The caller that knows why it is reading says so. The default
+ * is `"chosen"`, so a boot — where nothing can be open yet — behaves exactly as it always did.
+ */
+async function loadGraph(keep = null, why = "chosen") {
   const data = await api("/app/graph", { method: "GET", auth: true });
   graphData = data;
   // Identity lives in the bar now, and showShell() is what reveals it — so `#who` is never
@@ -2253,7 +2376,7 @@ async function loadGraph(keep = null) {
   // Before the tree, so the folders holding the view we are about to paint land OPEN.
   currentViewId = def.id;
   buildDrawer(data.snapshot.views);
-  paintView(def.id);
+  paintView(def.id, why);
   // AFTER THE PAINT, NOT BEFORE IT. This line used to be written above `landOn`; it is written
   // here now because `paintView` may have something to add to it — see `sayAsOf`. Nothing else
   // about what it says has changed.
@@ -2277,7 +2400,9 @@ async function refresh() {
   $("refreshBtn").setAttribute("aria-busy", "true");
   $("freshness").textContent = "reading…";
   try {
-    await loadGraph(currentViewId);
+    // AN ARRIVAL. The operator pressed re-read to stay where he is and see what changed — the
+    // definition of the world moving under him rather than of him going somewhere else.
+    await loadGraph(currentViewId, "arrived");
   } catch (e) {
     $("freshness").textContent = "could not read: " + e.message;
   } finally {
@@ -2505,6 +2630,10 @@ document.addEventListener("keydown", (e) => {
         draftLine,
         declineNewLine,
         globalRegistrationFor(v.id),
+        // THE VIEW THE ROW'S PLACE IS TAKEN IN, passed explicitly because it must be the same id
+        // `paintView` resolves against and `globalRegistrationFor` can return nothing at all (no
+        // declaration read yet), in which case there would be no view id inside it to fall back to.
+        v.id,
       );
       if (opened) {
         // BLUR BEFORE INSERT. The draft row focuses itself unconditionally (paint.ts's
