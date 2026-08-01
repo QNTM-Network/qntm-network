@@ -357,6 +357,21 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [a-new-line-is-resolved-not-guessed]
 
+  # THE GLOBAL RUNG BECOMES A READ (design-the-resolution-architecture.md step 6, 2026-08-01).
+  # Added alongside the three edges above rather than replacing any of them — the GLOBAL rung is
+  # walked to LAST, after LINE/STRUCTURAL_NODE/VIEW have all had their turn at the printed source,
+  # so most-specific-PRINTED-evidence still wins outright. This edge fires only when `declared` was
+  # supplied AND every earlier rung found nothing: `seedFor` names the `(view, section)` a bare new
+  # line sits in the SAME way `membershipFor`'s caller does (L3 ADDRESSING, step 2), never by
+  # re-deriving the ordinal itself.
+  - id: newline-addresses-the-declared-section
+    from: app/present/newline
+    to:   app/present/address
+    callee: sectionAt
+    event: app.addresses-the-declared-section
+    class: presentation-resolution
+    gates_capabilities: [new-line-seed-reads-the-declaration]
+
   # WHERE THE ROW GOES. Asked once per line of the view, because the row for a line being made sits
   # AT an index and every line from there down keeps the index it already had — the source is not
   # renumbered, so the painter has to be told which position it is rather than work it out.

@@ -918,6 +918,14 @@ let structural = undefined;
 // line it just changed still belongs in the section it is in.
 let qualification = undefined;
 
+// THE CONFIG-ONLY RESOLUTION TABLE (design-the-resolution-architecture.md step 5) — registration's
+// two names, ordering, line grammars, the day boundary, and (step 6) which node types are
+// checkbox-shaped. Read and validated here, the same posture as `structural`/`qualification` above.
+// STEP 6 GAVE `chromeShapes` A READER: `globalRegistrationFor` below joins it against
+// `qualification.sections`/`sectionOrder` so `newline.ts`'s GLOBAL rung can answer for a view that
+// has printed no node line, instead of refusing outright.
+let resolution = undefined;
+
 // THE PAGE READS; IT NO LONGER FETCHES. Turning the document into levels is still
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
 // declaration read inside this file is a declaration whose reader nothing can observe, because
@@ -950,6 +958,30 @@ function applyPresentation(document) {
   indentUnit = declared.indentUnit;
   structural = declared.structural;
   qualification = declared.qualification;
+  resolution = declared.resolution;
+}
+
+/**
+ * WHAT `newline.ts`'s GLOBAL RUNG READS, FOR ONE VIEW — design-the-resolution-architecture.md
+ * step 6. `undefined` when either declaration axis is missing (before `loadPresentation` has run,
+ * or a broken document), which is exactly the condition under which the GLOBAL rung must refuse
+ * rather than answer — passing `undefined` through to `openLine`/`seedFor` is what makes that
+ * happen, not a branch here.
+ *
+ * BUILT FRESH, NEVER CACHED. Cheap object literal, and caching it would be one more piece of state
+ * that could drift from `qualification`/`resolution` after a projection lands — the same reasoning
+ * `applyPresentation` itself follows for not memoising `presentation`.
+ */
+function globalRegistrationFor(viewId) {
+  if (qualification === undefined || resolution === undefined) {
+    return undefined;
+  }
+  return {
+    view: viewId,
+    sectionOrder: qualification.sectionOrder,
+    sections: qualification.sections,
+    chromeShapes: resolution.chromeShapes,
+  };
 }
 function loadPresentation() {
   applyPresentation(EMBEDDED_DECLARATION);
@@ -1473,12 +1505,18 @@ function repaintCurrentView() {
     // write unit and one place a view is replaced; a second write path would have shown up as a
     // second callback here, and it did not.
     onLineCommit: (commit) => commitLine(v, commit),
-    // THE APP DECLINED TO OPEN A LINE, AND SAYS SO. It happens in one situation: the view has
-    // printed no line the app can read a shape from, so nothing in the payload says what a line in
-    // it looks like. Guessing costs the operator either a lost line or — measured against the
-    // engine's own starter bundle — an aborted cycle, so nothing is written. The sentence goes in
-    // the freshness line, which is where this page already says what just happened.
+    // THE APP DECLINED TO OPEN A LINE, AND SAYS SO. See `newline.ts`'s own header for exactly when
+    // that still happens now that `declared` (below) lets the GLOBAL rung answer for more views
+    // than before — it is fewer situations than it used to be, never zero. Guessing costs the
+    // operator either a lost line or — measured against the engine's own starter bundle — an
+    // aborted cycle, so nothing is written when neither the print-based rungs nor the declaration
+    // have an answer. The sentence goes in the freshness line, which is where this page already
+    // says what just happened.
     onNewLineDeclined: declineNewLine,
+    // THE GLOBAL RUNG'S ONE SOURCE OF TRUTH FOR THIS VIEW (design-the-resolution-architecture.md
+    // step 6) — see `globalRegistrationFor`'s own header for why it is built fresh here rather than
+    // held as page state.
+    declared: globalRegistrationFor(v.id),
   });
 }
 
@@ -2038,7 +2076,13 @@ document.addEventListener("keydown", (e) => {
       // BELOW the selected line (`current + 1`) or AT it (`current`, pushing the selected line's
       // own content down) — `applyEdit`'s `insert-line` convention, unchanged from Enter's.
       const targetIndex = effect.direction === "below" ? current + 1 : current;
-      const opened = openLine(v.markdown, targetIndex, draftLine, declineNewLine);
+      const opened = openLine(
+        v.markdown,
+        targetIndex,
+        draftLine,
+        declineNewLine,
+        globalRegistrationFor(v.id),
+      );
       if (opened) {
         // BLUR BEFORE INSERT. The draft row focuses itself unconditionally (paint.ts's
         // `paintDraft`, no cascade or mode check at all), so `focus` is not what puts the cursor

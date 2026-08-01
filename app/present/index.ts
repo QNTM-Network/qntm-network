@@ -67,6 +67,7 @@ export type {
 
 export { RESOLUTION_TABLE_KEY, readConfigResolutionDeclaration } from "./resolutiontable.js";
 export type {
+  ChromeShape,
   ConfigResolutionReading,
   ConfigResolutionTable,
   DayBoundary,
@@ -121,7 +122,7 @@ export { DraftSurface } from "./draft.js";
 export type { Draft } from "./draft.js";
 
 export { seedFor, openLine } from "./newline.js";
-export type { NewLine } from "./newline.js";
+export type { GlobalRegistration, NewLine } from "./newline.js";
 
 export { PresentationCascade } from "./cascade.js";
 export type { Resolved } from "./cascade.js";

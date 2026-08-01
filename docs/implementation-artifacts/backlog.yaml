@@ -2056,20 +2056,44 @@ backlog:
     existing pattern, so the predicate half is cheap once a consumer exists to justify carrying it.
   state: diagnose-ready
 
+- id: widen-chrome-shapes-beyond-checkbox-and-plain-line
+  title: >-
+    [resolution] `resolution.chromeShapes` publishes only `checkbox`/`plain_line` — a section whose
+    resolved `default_node_type` renders as `stat_line` or `heading` still hits the GLOBAL rung's
+    refusal, on an EMPTY view, even with a full declaration supplied.
+  driving_capability: new-line-seed-reads-the-declaration
+  record: >-
+    NOT SHIPPED, BY DECISION — measured against the operator's real config, none of the 11
+    `default_node_type` candidates render as `stat_line` or `heading` today (9 checkbox, 2
+    plain_line), so this is a real but currently-empty gap, not a live defect anyone hits. Widening
+    it needs `newline.ts` to know what chrome EACH of those two shapes should seed — `stat_line`'s
+    own emit function (`renderer.py`'s `_emit_stat_line_shape`) takes a `value` cell this module has
+    no source for, and `heading`'s own manifest-identity meaning (`## `) is not a body-line bullet
+    at all — so this is not a one-line widening of `SEEDABLE_SHAPES`, it needs its own design
+    decision about what (if anything) a bare Enter should seed for either shape. Filed rather than
+    silently left as "every type happens to be handled today", the same posture `pull_context` was
+    filed under at step 5.
+  state: diagnose-ready
+
 - id: wire-config-resolution-table-into-steps-6-7-8
   title: >-
-    [resolution] `resolution.registration/ordering/lineGrammars/dayBoundary` has no production
-    reader in `app/` — the next-line seed does not use `baseNodeType`, no row previews its
-    ordering position, and the app still computes zero dates.
+    [resolution] `resolution.ordering`/`dayBoundary` still have no production reader in `app/` —
+    no row previews its ordering position and the app still computes zero dates. STEP 6's OWN
+    PORTION IS DONE (see record) — this row now tracks only steps 7 and 8.
   driving_capability: config-resolution-table-is-published
   record: >-
-    NOT SHIPPED, AND DELIBERATELY OUT OF THIS STEP'S SCOPE — the brief for step 5 is "publish",
-    not "consume", and the design document's own sequence gives each consumer its own step:
-    6 (`newline.ts`'s GLOBAL rung reads `registration.baseNodeType`/`defaultNodeType` instead of
-    returning `null`), 7 (ordering preview — a typed row's position follows `resolution.ordering`
-    for the 9 sections that declare one), 8 (the day boundary — routes every date decision through
-    one function reading `resolution.dayBoundary` instead of `new Date()`). Each is sized `h` (step
-    6, 7) or already covered (step 8 is itself `h`) in the design document's own table and each has
-    its own falsifier stated there. This row exists so the gap is a planned next step, not a
-    discovered one.
+    STEP 6 SHIPPED 2026-08-01 (capability `new-line-seed-reads-the-declaration`). `newline.ts`'s
+    GLOBAL rung reads the declaration instead of always returning `null` — never `registration.
+    baseNodeType` (the two-names trap this row's own original wording was about to walk into: the
+    seed MINTS a line, it does not REVERT a node), the MINTING default via `qualification.
+    sections[view][section].nodeType` instead, joined against a new fact this step discovered was
+    missing and added, `resolution.chromeShapes`. See that capability's own record for the full
+    account, including why `baseNodeType` was correctly NOT the field this rung reads.
+    STEPS 7 AND 8 REMAIN NOT SHIPPED, AND DELIBERATELY OUT OF STEP 6'S SCOPE — the design
+    document's own sequence gives each consumer its own step: 7 (ordering preview — a typed row's
+    position follows `resolution.ordering` for the 9 sections that declare one, needs 5 and 8),
+    8 (the day boundary — routes every date decision through one function reading `resolution.
+    dayBoundary` instead of `new Date()`, needs 5). Each is sized `h` in the design document's own
+    table and each has its own falsifier stated there. This row exists so the remaining gap is a
+    planned next step, not a discovered one.
   state: diagnose-ready

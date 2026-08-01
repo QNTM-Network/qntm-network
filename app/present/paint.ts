@@ -73,6 +73,7 @@ import type { FocusSurface } from "./focus.js";
 import { instancesOf } from "./instance.js";
 import type { ModeSurface } from "./motions.js";
 import { openLine } from "./newline.js";
+import type { GlobalRegistration } from "./newline.js";
 import { classifyLine, tagSpans } from "./resolution.js";
 import type { Rendition } from "./resolution.js";
 import { applyEdit } from "./source.js";
@@ -211,14 +212,24 @@ export interface PaintDeps {
   readonly draft?: DraftSurface;
   /**
    * A new line was asked for and the app declined to open one — always because `seedFor` reached
-   * the GLOBAL rung, which happens when the view has printed no node line anywhere and the app
-   * therefore does not know what a line in it looks like.
+   * the GLOBAL rung with no answer: the view has printed no node line anywhere, AND EITHER
+   * `declared` below was not supplied, OR it was and still had nothing to say for this
+   * `(view, section)` — see `newline.ts`'s own header for exactly which cases that still is
+   * (design-the-resolution-architecture.md step 6 narrowed this, it did not remove it).
    *
    * REPORTED RATHER THAN SWALLOWED. "Nothing happens" is the exact complaint this change exists to
    * answer, and an affordance that declines silently is the same complaint with a new cause. The
    * caller decides what to say; see app/index.html, which says it in the freshness line.
    */
   readonly onNewLineDeclined?: (lineIndex: number) => void;
+  /**
+   * WHAT THE GLOBAL RUNG READS WHEN NOTHING IS PRINTED — optional, and its absence means the
+   * GLOBAL rung refuses exactly as it did before this field existed (design-the-resolution-
+   * architecture.md step 6). Threaded straight to `newline.ts`'s `seedFor`/`openLine`; this module
+   * builds none of it and interprets none of it, the same "the app reads, never interprets" rule
+   * `newline.ts`'s own header states for itself.
+   */
+  readonly declared?: GlobalRegistration;
 }
 
 /**
@@ -741,7 +752,7 @@ export function paint(
     if (draft === undefined || focus === undefined) {
       return false;
     }
-    return openLine(from, lineIndex, draft, deps.onNewLineDeclined);
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared);
   };
 
   /**

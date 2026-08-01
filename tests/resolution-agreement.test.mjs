@@ -27,6 +27,16 @@
  *                         `resolution.registration` — checked against `resolve_base_node_type`
  *                         (the REVERT target, GLOBAL only) and `resolve_registration_keys` (the
  *                         MINTING default).
+ *   chromeShapes           design-the-resolution-architecture.md step 6's OWN falsifier: "the
+ *                         seed's chrome matches the render.shape the engine would print for that
+ *                         view's resolved default_node_type — asserted over all 72 views." Every
+ *                         view's resolved type is one of the candidates `resolution.chromeShapes`
+ *                         publishes, so checking every published candidate against the engine's own
+ *                         `qntm_md.grammar.node_type_form.node_type_forms` covers every view by
+ *                         construction. `scripts/resolution-agreement.py` refuses to write the
+ *                         fixture at all if any candidate disagrees (exit 2), and separately asserts
+ *                         a positive control (at least one candidate's engine-read shape is
+ *                         `plain_line`) before trusting "0 mismatches".
  *
  * ── WHAT IT DOES NOT PROVE ──
  *
@@ -131,5 +141,35 @@ describe("2. DEFAULTS + per-section REGISTRATION — every published section agr
     const domainEmpty = inbox.find((row) => row.section === "domain-empty");
     assert.equal(domainEmpty.nodeType, "task");
     assert.equal(domainEmpty.defaults, null, "domain-empty declares no defaults: block");
+  });
+});
+
+describe("3. CHROME SHAPES (step 6) — every candidate agrees with the engine's own render reader", () => {
+  test("every published chromeShapes entry agrees with node_type_forms", () => {
+    const candidates = Object.keys(RESOLUTION.chromeShapes);
+    assert.ok(candidates.length > 0, "no chromeShapes candidates were published to compare");
+    for (const nodeType of candidates) {
+      assert.equal(
+        RESOLUTION.chromeShapes[nodeType],
+        TRUTH.chromeShapes[nodeType],
+        `chromeShapes['${nodeType}'] = '${RESOLUTION.chromeShapes[nodeType]}' disagrees with the ` +
+          `engine's own node_type_forms reading '${TRUTH.chromeShapes[nodeType]}'`,
+      );
+    }
+  });
+
+  test("a positive control: at least one candidate is plain_line, not checkbox", () => {
+    // Worthless if every comparison above happened to be 'checkbox' == 'checkbox' — task, routine,
+    // album and five others all are. person/group are the ones that prove the comparison is live.
+    assert.ok(
+      Object.values(TRUTH.chromeShapes).includes("plain_line"),
+      "every engine-read chrome shape was 'checkbox' — this comparison would pass even if the " +
+        "plain_line branch were completely broken",
+    );
+  });
+
+  test("the operator's own trap case — person, plain_line, the type the design document measured", () => {
+    assert.equal(RESOLUTION.chromeShapes.person, "plain_line");
+    assert.equal(TRUTH.chromeShapes.person, "plain_line");
   });
 });

@@ -83,6 +83,19 @@ describe("1. the shipped declaration reads cleanly", () => {
       weekStartsOn: "monday",
     });
   });
+
+  test("chromeShapes (step 6) — the operator's trap case, and the common case", () => {
+    const { resolution } = readConfigResolutionDeclaration(SERVED);
+    // person and group are the two published views that resolve to a non-checkbox default —
+    // measured directly against schema.yaml; see newline.ts's own header for why this pair matters.
+    assert.equal(resolution.chromeShapes.person, "plain_line");
+    assert.equal(resolution.chromeShapes.group, "plain_line");
+    assert.equal(resolution.chromeShapes.task, "checkbox");
+    // stat_line and heading shapes are never published — newline.ts does not know how to seed them.
+    for (const shape of Object.values(resolution.chromeShapes)) {
+      assert.ok(["checkbox", "plain_line"].includes(shape), `unexpected published shape '${shape}'`);
+    }
+  });
 });
 
 describe("1a. wired into the app's one reader (presentationFromDeclaration)", () => {
@@ -141,6 +154,24 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     const { resolution, problems } = readConfigResolutionDeclaration({ resolution: [] });
     assert.equal(problems.length, 1);
     assert.equal(resolution.registration, undefined);
+  });
+
+  test("chromeShapes: an unrecognised shape is reported and that node type drops", () => {
+    const { resolution, problems } = read({
+      chromeShapes: { task: "checkbox", widget: "stat_line" },
+    });
+    assert.deepEqual(resolution.chromeShapes, { task: "checkbox" });
+    assert.ok(problems.some((p) => p.includes("chromeShapes.widget")), problems.join("\n"));
+  });
+
+  test("chromeShapes of the wrong shape blinds the reader loudly; other keys survive", () => {
+    const { resolution, problems } = read({
+      chromeShapes: "not-an-object",
+      dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" },
+    });
+    assert.deepEqual(resolution.chromeShapes, {});
+    assert.equal(resolution.dayBoundary.timezone, "Europe/London", "one bad key blinded the reader to a good one");
+    assert.ok(problems.some((p) => p.includes("chromeShapes")), problems.join("\n"));
   });
 
   test("one view's malformed ordering is reported and dropped; another view's survives", () => {
@@ -231,17 +262,65 @@ describe("4. the falsifier: the app's answer follows the config, because it read
     });
     assert.equal(resolution.ordering["daily-work"]["due-today"].orderingMode, "insertion_order");
   });
+
+  test("MUTATE A RENDER SHAPE: flip person from plain_line to checkbox, and chromeShapes follows", { skip }, () => {
+    // Step 6's own falsifier proof standard #4: change the DECLARED node type in schema.yaml and
+    // the published seed follows. `person`'s render block is not the only 'shape: plain_line' in
+    // the file (`mandate`, `phase` and others declare one too), so the anchor is the sequence that
+    // is unique to `person`: its own 'shape: plain_line' immediately followed by the NEXT type's
+    // header, '  group:' — verified unique in the file before trusting the replace.
+    const before = generateResolution(DEFAULT_CONFIG_DIR);
+    assert.equal(before.chromeShapes.person, "plain_line");
+    const resolution = withMutatedConfig((configDir) => {
+      const path = join(configDir, "schema.yaml");
+      const original = readFileSync(path, "utf8");
+      const needle = "shape: plain_line\n  group:";
+      assert.equal(
+        original.split(needle).length - 1,
+        1,
+        "the anchor this falsifier depends on is no longer unique in schema.yaml",
+      );
+      const mutated = original.replace(needle, "shape: checkbox\n  group:");
+      assert.notEqual(mutated, original, "the falsifier's own edit did not apply");
+      writeFileSync(path, mutated);
+    });
+    assert.equal(resolution.chromeShapes.person, "checkbox", "the published shape did not follow the mutation");
+    // group's own render block is untouched — only person's, immediately before it, moved.
+    assert.equal(resolution.chromeShapes.group, "plain_line", "an unrelated node type's shape moved too");
+  });
+
+  test("MUTATE A CANDIDATE OUT OF EXISTENCE: remove person's render: block, and it still publishes checkbox", { skip }, () => {
+    // The engine's own default for an UNDECLARED render block is checkbox (schema.yaml's own
+    // comment, mirrored by `node_type_form.py`) — proving the generator follows that default too,
+    // not just the declared-shape branch the mutation above already covers.
+    const resolution = withMutatedConfig((configDir) => {
+      const path = join(configDir, "schema.yaml");
+      const original = readFileSync(path, "utf8");
+      const needle = "    render:\n      shape: plain_line\n  group:";
+      assert.equal(
+        original.split(needle).length - 1,
+        1,
+        "the anchor this falsifier depends on is no longer unique in schema.yaml",
+      );
+      const mutated = original.replace(needle, "  group:");
+      assert.notEqual(mutated, original, "the falsifier's own edit did not apply");
+      writeFileSync(path, mutated);
+    });
+    assert.equal(resolution.chromeShapes.person, "checkbox", "an undeclared render block did not default to checkbox");
+  });
 });
 
 describe("5. the size assertion — a future widening is visible, not silent", () => {
   test("the whole 'resolution' key stays under 3,000 bytes", () => {
     const bytes = JSON.stringify(SERVED.resolution).length;
-    // Measured 2026-08-01: 994 bytes (registration 4 fields, 2 line grammars, 9 ordering
-    // sections, 3 day-boundary keys). research-the-resolution-universe.md §6.1's per-view slice
-    // for the FULL eight-kind table (which this is a deliberate subset of — defaults and the
-    // per-view minting default already live on `qualification`) runs 454-1,930 B median 685 B
-    // PER VIEW; this whole-instance table at under 3,000 B total is comfortably inside that
-    // neighbourhood rather than an order of magnitude off it either way.
+    // Measured 2026-08-01 at step 5: 994 bytes (registration 4 fields, 2 line grammars, 9
+    // ordering sections, 3 day-boundary keys). Step 6 added `chromeShapes` (11 node-type
+    // candidates, checkbox/plain_line only) and measured 1,330 bytes whole-table.
+    // research-the-resolution-universe.md §6.1's per-view slice for the FULL eight-kind table
+    // (which this is a deliberate subset of — defaults and the per-view minting default already
+    // live on `qualification`) runs 454-1,930 B median 685 B PER VIEW; this whole-instance table
+    // at under 3,000 B total is comfortably inside that neighbourhood rather than an order of
+    // magnitude off it either way.
     assert.ok(bytes > 200, `'resolution' is suspiciously small (${bytes} B) — a measurement of ` +
       "near-zero should be treated as broken until a positive control passes");
     assert.ok(bytes < 3000, `'resolution' grew to ${bytes} B — a kind was added; update this ` +
