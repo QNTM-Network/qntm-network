@@ -132,16 +132,34 @@ against `origin/main` @ `45fc0ac`.** `membership.ts` is now callable and correct
 `tests/present-qualification.test.mjs` (sections 1a/1b), `tests/flow_scenarios/section_addressing.ts`
 — and `membership.ts`'s existing 18 tests plus `qualification-agreement.test.mjs`'s 6 pass
 unmodified. Capability `section-addressing-reads-the-full-declared-order` (capabilities.yaml) and
-the updated `section-membership-is-read-not-guessed` rooting carry the detail. Step 4 (SAY the
-membership answer) is the next agent's and is untouched — no pixel changes, per this branch's own
-brief.
+the updated `section-membership-is-read-not-guessed` rooting carry the detail.
+
+**STATUS, UPDATED 2026-08-01 (second pass) — STEP 4 IS DONE, one agent, one branch
+(`feat/say-membership`), against `origin/main` @ `f83c9c1`.** The operator's own case is now visible:
+edit a bare line under "Domain Empty" and it says nothing; add `#work` and the freshness line says
+"this line will leave Domain Empty", the instant the write leaves and gone the instant the cycle's
+own answer lands. `app/index.html`'s new `membershipNoteFor` (called from `commitLine`) is the
+caller `membershipFor`/`sectionAt` had none of; `app/present/paint.ts`'s `LineCommit` gained one
+provenance field (`kind`) and nothing else moved — `paint.ts`'s indent arithmetic and the golden
+master are both untouched. The falsifier ran and passed, adapted from its own text: the design
+document's own wording was "the painted row carries no membership statement" and this step chose
+the freshness line over a row-adjacent message (§ rule 1, "say it, never move it" — see the step's
+own section below for why), so the adapted falsifier is "the freshness line carries no membership
+statement", proven for all five `Abstention` values plus the RETURNING and unchanged-answer cases —
+`tests/app-membership-note.test.mjs`, 20 tests across three suites, plus two new
+`present-membership.test.mjs` cases for the `sectionName` field the message reads. `npm run check`:
+754 tests / 147 suites / 0 fail before this step (this agent's own re-run, matching the recorded
+baseline exactly); 776 / 150 / 0 fail after (+22/+3, 0 regressions). Capability
+`section-membership-is-said-in-the-freshness-line` (capabilities.yaml) carries the detail; the two
+remaining write paths this step does NOT reach (`toggleTask`'s mouse click, vim's `x`) are filed as
+`membership-note-on-a-checkbox-toggle` (backlog.yaml), not silently left out.
 
 | # | step | layer | size | needs | falsifier, in one line | status |
 |---|---|---|---|---|---|---|
 | 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown | **DONE** |
 | 2 | `sectionAt(source, lineIndex) → sectionId` | **L3** | **h** | 1 | agrees with the engine's own `section_id` for every line of all 72 views | **DONE** |
 | 3 | wire `readQualificationDeclaration` into the app's one reader | L2 | **h** | — | `presentationFromDeclaration(...).qualification.predicates` has 43 entries | **DONE** |
-| 4 | **SAY the membership answer** — tonight's work becomes visible | L6 | **½** | 2, 3 | the row shows nothing for all five `Abstention` values | — |
+| 4 | **SAY the membership answer** — tonight's work becomes visible | L6 | **½** | 2, 3 | the freshness line shows nothing for all five `Abstention` values | **DONE** |
 | 5 | publish the config-only resolution table (registration + defaults + clock) | L2 | **½** | 1 | generator `--check` + per-section agreement with `ResolutionCascade.resolve` | — |
 | 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line | — |
 | 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections | — |
@@ -749,7 +767,7 @@ silently shrinks.
 
 ---
 
-### Step 4 — SAY the membership answer · **half a day** · L6 PROJECTION · needs 2 + 3
+### Step 4 — SAY the membership answer · **half a day** · L6 PROJECTION · needs 2 + 3 · **DONE 2026-08-01**
 
 **What.** On the line the cursor is in, call
 `membershipFor(currentViewId, sectionAt(source, lineIndex), line, language)` and, when it answers,
@@ -767,6 +785,23 @@ nothing: `no-section-declaration` (118 of 159 qualifications), `already-a-node`,
 triples. (b) The new arm: for each of the five `Abstention` values, assert the painted row carries no
 membership statement. A painter that showed a default when the layer abstained would be the exact
 failure `membership.ts:20-48` refuses.
+
+**SHIPPED, WITH ONE ADAPTATION TO THE FALSIFIER'S OWN WORDING, ARGUED RATHER THAN SILENTLY TAKEN.**
+Arm (b) as written says "the painted row carries no membership statement" — a row-adjacent message.
+**The message does not live beside the row.** It lives in the freshness line
+(`app/present/base.ts`'s own stale-save register), because that is what makes "say it" and "move it"
+(`paint.ts`'s row-building code) STRUCTURALLY DISTANT rather than merely separated by convention: no
+function this step adds both computes a membership answer and touches `viewBody`, and
+`tests/app-membership-note.test.mjs` §4 proves it by the same enumeration
+`research-the-rule-closure.md` §8 already used for the write path. So arm (b)'s adapted form is **"the
+freshness line carries no membership statement"**, proven for all five `Abstention` values (either
+side of the before/after comparison), plus two cases the original wording did not name: a RETURNING
+transition (was leaving, now stays — silence, because only the leaving direction is said) and an
+INSERTED line (`LineCommit.kind !== "set-line"` — refused outright, because reading its "before" at
+the same source index would misattribute a different, soon-to-be-pushed-down line's answer to it).
+Arm (a) ran unmodified and still passes. `app/index.html`'s `membershipNoteFor` (called from
+`commitLine`) is the caller; `paint.ts`'s `LineCommit` gained one provenance field (`kind`) and
+nothing else. See capability `section-membership-is-said-in-the-freshness-line` for the full record.
 
 ---
 

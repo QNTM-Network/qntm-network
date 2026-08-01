@@ -86,6 +86,13 @@ export interface MembershipAnswer {
   readonly section: string;
   readonly qualification: string;
   readonly fields: ResolvedFields;
+  /**
+   * THE OPERATOR'S OWN WORDS FOR `section` — "Domain Empty", never "domain-empty". Read off the
+   * declaration's `name:` when the config carries one (185 of 186 sections do); for the one that
+   * does not, the id is reformatted (`domain-empty` -> `Domain Empty`) rather than shown raw, so a
+   * caller building a sentence never has to decide what to do with a missing decoration itself.
+   */
+  readonly sectionName: string;
 }
 
 /** Either an answer, or the reason there is none. Never a default, never a guess. */
@@ -94,6 +101,19 @@ export type MembershipReading =
   | { readonly kind: "abstains"; readonly because: Abstention };
 
 const abstains = (because: Abstention): MembershipReading => ({ kind: "abstains", because });
+
+/**
+ * `domain-empty` -> `Domain Empty`. The fallback for the one section (of 186) whose config
+ * declares no `name:` — never used against the operator's real "Domain Empty" case, which has
+ * one, but a caller must still get a sentence rather than a raw id for the section that lacks it.
+ */
+function titleCaseFromId(id: string): string {
+  return id
+    .split("-")
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 /**
  * A checkbox line: optional indent, `- `, a one-character box, a space, then the rest.
@@ -212,6 +232,7 @@ export function membershipFor(
       section: sectionId,
       qualification: section.qualification,
       fields,
+      sectionName: section.name ?? titleCaseFromId(sectionId),
     },
   };
 }

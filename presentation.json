@@ -872,6 +872,7 @@
         "to-do": {
           "qualification": "admin-open",
           "nodeType": "task",
+          "name": "To Do",
           "defaults": {
             "domain": "admin"
           }
@@ -879,6 +880,7 @@
         "done": {
           "qualification": "admin-done",
           "nodeType": "task",
+          "name": "Done",
           "defaults": {
             "domain": "admin"
           }
@@ -888,6 +890,7 @@
         "not-listened": {
           "qualification": "albums-not-listened",
           "nodeType": "album",
+          "name": "Not Listened",
           "defaults": {
             "domain": "arts"
           }
@@ -895,6 +898,7 @@
         "listened": {
           "qualification": "albums-listened",
           "nodeType": "album",
+          "name": "Listened",
           "defaults": {
             "domain": "arts"
           }
@@ -904,6 +908,7 @@
         "tasks": {
           "qualification": "all-arts-nodes",
           "nodeType": "task",
+          "name": "All Arts",
           "defaults": {
             "domain": "arts"
           }
@@ -913,6 +918,7 @@
         "tasks": {
           "qualification": "all-home-nodes",
           "nodeType": "task",
+          "name": "All Home",
           "defaults": {
             "domain": "home"
           }
@@ -922,6 +928,7 @@
         "tasks": {
           "qualification": "all-program-nodes",
           "nodeType": "task",
+          "name": "All Program",
           "defaults": {
             "domain": "program"
           }
@@ -931,6 +938,7 @@
         "tasks": {
           "qualification": "all-social-nodes",
           "nodeType": "task",
+          "name": "All Social",
           "defaults": {
             "domain": "social"
           }
@@ -940,6 +948,7 @@
         "tasks": {
           "qualification": "all-spirit-nodes",
           "nodeType": "task",
+          "name": "All Spirit",
           "defaults": {
             "domain": "spirit"
           }
@@ -949,6 +958,7 @@
         "to-check": {
           "qualification": "blogs-open",
           "nodeType": "blog",
+          "name": "To Check",
           "defaults": {
             "domain": "arts"
           }
@@ -956,6 +966,7 @@
         "checked": {
           "qualification": "blogs-done",
           "nodeType": "blog",
+          "name": "Checked",
           "defaults": {
             "domain": "arts"
           }
@@ -965,6 +976,7 @@
         "to-read": {
           "qualification": "books-open",
           "nodeType": "book",
+          "name": "To Read",
           "defaults": {
             "domain": "arts"
           }
@@ -972,6 +984,7 @@
         "read": {
           "qualification": "books-done",
           "nodeType": "book",
+          "name": "Read",
           "defaults": {
             "domain": "arts"
           }
@@ -981,6 +994,7 @@
         "routine-drift": {
           "qualification": "routine-drift",
           "nodeType": "task",
+          "name": "Routine Drift",
           "defaults": {
             "domain": "personal"
           }
@@ -988,6 +1002,7 @@
         "backlog": {
           "qualification": "backlog-tasks",
           "nodeType": "task",
+          "name": "Backlog",
           "defaults": {
             "domain": "personal"
           }
@@ -995,6 +1010,7 @@
         "done": {
           "qualification": "done-tasks",
           "nodeType": "task",
+          "name": "Done",
           "defaults": {
             "domain": "personal"
           }
@@ -1004,6 +1020,7 @@
         "in-progress": {
           "qualification": "in-progress-tasks",
           "nodeType": "task",
+          "name": "In Progress",
           "defaults": {
             "domain": "work"
           }
@@ -1013,6 +1030,7 @@
         "developing": {
           "qualification": "attributes-developing",
           "nodeType": "attribute",
+          "name": "Developing",
           "defaults": {
             "domain": "character"
           }
@@ -1020,6 +1038,7 @@
         "embodied": {
           "qualification": "attributes-embodied",
           "nodeType": "attribute",
+          "name": "Embodied",
           "defaults": {
             "domain": "character"
           }
@@ -1029,6 +1048,7 @@
         "everything": {
           "qualification": "everything-personal-nodes",
           "nodeType": "task",
+          "name": "Personal Everything",
           "defaults": {
             "domain": "personal"
           }
@@ -1038,6 +1058,7 @@
         "everything": {
           "qualification": "everything-work-nodes",
           "nodeType": "task",
+          "name": "Work Everything",
           "defaults": {
             "domain": "work"
           }
@@ -1047,6 +1068,7 @@
         "to-watch": {
           "qualification": "films-to-watch",
           "nodeType": "film",
+          "name": "To Watch",
           "defaults": {
             "domain": "arts"
           }
@@ -1054,6 +1076,7 @@
         "watched": {
           "qualification": "films-watched",
           "nodeType": "film",
+          "name": "Watched",
           "defaults": {
             "domain": "arts"
           }
@@ -1063,6 +1086,7 @@
         "groups": {
           "qualification": "social-groups",
           "nodeType": "group",
+          "name": "Groups",
           "defaults": {
             "domain": "social"
           }
@@ -1071,17 +1095,20 @@
       "inbox": {
         "inbox-tagged": {
           "qualification": "inbox-items",
-          "nodeType": "task"
+          "nodeType": "task",
+          "name": "Inbox"
         },
         "domain-empty": {
           "qualification": "domain-empty",
-          "nodeType": "task"
+          "nodeType": "task",
+          "name": "Domain Empty"
         }
       },
       "people": {
         "people": {
           "qualification": "social-people",
           "nodeType": "person",
+          "name": "People",
           "defaults": {
             "domain": "social"
           }
@@ -1091,84 +1118,97 @@
         "admin-routines": {
           "qualification": "admin-routines",
           "nodeType": "routine",
+          "name": "Admin Routines",
           "defaults": {
             "domain": "admin"
           }
         },
         "upcoming": {
           "qualification": "admin-routines-upcoming",
-          "nodeType": "routine"
+          "nodeType": "routine",
+          "name": "Upcoming"
         }
       },
       "routines-life-admin": {
         "life-admin-routines": {
           "qualification": "life-admin-routines",
           "nodeType": "routine",
+          "name": "Life Admin Routines",
           "defaults": {
             "domain": "life-admin"
           }
         },
         "upcoming": {
           "qualification": "life-admin-routines-upcoming",
-          "nodeType": "routine"
+          "nodeType": "routine",
+          "name": "Upcoming"
         }
       },
       "routines-personal": {
         "personal-routines": {
           "qualification": "personal-routines",
           "nodeType": "routine",
+          "name": "Personal Routines",
           "defaults": {
             "domain": "personal"
           }
         },
         "upcoming": {
           "qualification": "personal-routines-upcoming",
-          "nodeType": "routine"
+          "nodeType": "routine",
+          "name": "Upcoming"
         }
       },
       "routines-program": {
         "program-routines": {
           "qualification": "program-routines",
           "nodeType": "routine",
+          "name": "Program Routines",
           "defaults": {
             "domain": "program"
           }
         },
         "upcoming": {
           "qualification": "program-routines-upcoming",
-          "nodeType": "routine"
+          "nodeType": "routine",
+          "name": "Upcoming"
         }
       },
       "routines-spirit": {
         "spirit-routines": {
           "qualification": "spirit-routines",
           "nodeType": "routine",
+          "name": "Spirit Routines",
           "defaults": {
             "domain": "spirit"
           }
         },
         "upcoming": {
           "qualification": "spirit-routines-upcoming",
-          "nodeType": "routine"
+          "nodeType": "routine",
+          "name": "Upcoming"
         }
       },
       "routines-work": {
         "work-routines": {
           "qualification": "work-routines",
           "nodeType": "routine",
+          "name": "Work Routines",
           "defaults": {
             "domain": "work"
           }
         },
         "upcoming": {
           "qualification": "work-routines-upcoming",
-          "nodeType": "routine"
+          "nodeType": "routine",
+          "name": "Upcoming"
         }
       },
       "routines": {
         "admin-routines": {
           "qualification": "admin-routines",
           "nodeType": "task",
+          "name": "Admin Routines",
           "defaults": {
             "domain": "admin"
           }
@@ -1176,6 +1216,7 @@
         "life-admin-routines": {
           "qualification": "life-admin-routines",
           "nodeType": "task",
+          "name": "Life Admin Routines",
           "defaults": {
             "domain": "life-admin"
           }
@@ -1183,6 +1224,7 @@
         "work-routines": {
           "qualification": "work-routines",
           "nodeType": "task",
+          "name": "Work Routines",
           "defaults": {
             "domain": "work"
           }
@@ -1190,6 +1232,7 @@
         "personal-routines": {
           "qualification": "personal-routines",
           "nodeType": "task",
+          "name": "Personal Routines",
           "defaults": {
             "domain": "personal"
           }
@@ -1197,6 +1240,7 @@
         "program-routines": {
           "qualification": "program-routines",
           "nodeType": "task",
+          "name": "Program Routines",
           "defaults": {
             "domain": "program"
           }
@@ -1204,6 +1248,7 @@
         "spirit-routines": {
           "qualification": "spirit-routines",
           "nodeType": "task",
+          "name": "Spirit Routines",
           "defaults": {
             "domain": "spirit"
           }
@@ -1213,6 +1258,7 @@
         "to-watch": {
           "qualification": "tv-open",
           "nodeType": "tv_show",
+          "name": "To Watch",
           "defaults": {
             "domain": "arts"
           }
@@ -1220,6 +1266,7 @@
         "watched": {
           "qualification": "tv-done",
           "nodeType": "tv_show",
+          "name": "Watched",
           "defaults": {
             "domain": "arts"
           }
@@ -1229,6 +1276,7 @@
         "to-check": {
           "qualification": "writers-open",
           "nodeType": "writer",
+          "name": "To Check",
           "defaults": {
             "domain": "arts"
           }
@@ -1236,6 +1284,7 @@
         "checked": {
           "qualification": "writers-done",
           "nodeType": "writer",
+          "name": "Checked",
           "defaults": {
             "domain": "arts"
           }

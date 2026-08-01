@@ -114,6 +114,20 @@ export interface LineCommit {
   readonly text: string;
   readonly markdown: string | null;
   /**
+   * WHICH `applyEdit` CASE PRODUCED THIS COMMIT — `"set-line"` (`rawInput`, an existing row) or
+   * `"insert-line"` (`draftInput`, a row that did not exist a moment ago). Provenance, not a
+   * fourth edit kind: `SourceEdit`'s closed union is untouched, this is a copy of the literal
+   * already passed to `applyEdit` at each call site below.
+   *
+   * WHY A CALLER NEEDS IT: for `"set-line"`, `source.split("\n")[lineIndex]` IS the line's own
+   * text a moment ago — a real "before" a caller can compare `text` against. For `"insert-line"`,
+   * that same index in `source` is a DIFFERENT, unrelated line that is about to be pushed down —
+   * `insert-line` makes room for the new row rather than replacing one — so treating it as "the
+   * line's own before" would compare two different lines and call it one line's history. A caller
+   * that cannot tell the two apart has no honest way to ask "did this line's own answer change".
+   */
+  readonly kind: "set-line" | "insert-line";
+  /**
    * THE STRING THE EDIT WAS APPLIED TO — `applyEdit`'s own input, verbatim.
    *
    * It is here because the WHOLE FILE goes on the wire and the server overwrites what it is sent,
@@ -377,7 +391,7 @@ function rawInput(
     // `source` exactly as they went in. tests/present-focus.test.mjs proves that by wrecking
     // every other rendered element first and then checking the posted file.
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "set-line" });
     // WHAT THE NEXT PAINT IS OF: the committed file if there was an edit, the file as it stands if
     // there was not. Named once, because the line opened below has to be seeded against the SAME
     // string the paint is about to walk — seeding against the pre-commit source would resolve the
@@ -518,7 +532,7 @@ function draftInput(
     // a row opened and left holding nothing but its own chrome. `applyEdit` decides that, not this
     // painter — the guard belongs with the edit so that no future caller can route around it.
     const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "insert-line" });
     returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };

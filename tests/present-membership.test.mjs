@@ -59,6 +59,32 @@ describe("1. the operator's own case, against his own config", () => {
     assert.equal(answer.fields.domain, "work", "the #work token did not reach the resolved domain");
   });
 
+  test("the answer carries the section's OWN WORDS, not its config id", () => {
+    // design-the-resolution-architecture.md step 4: "this will leave Domain Empty" reads its noun
+    // off the declaration's `name:`, never off the `id:` (`domain-empty`) membership is keyed by.
+    const answer = answerFor("inbox", "domain-empty", "- [ ] Ring the dentist");
+    assert.equal(answer.sectionName, "Domain Empty");
+  });
+
+  test("a section with no declared name falls back to its id, reformatted rather than raw", () => {
+    // 185 of 186 sections declare `name:`; this is the one that does not, proven with a hand-built
+    // language rather than by finding the one real section, so the fallback is exercised even if
+    // the operator's config later grows a name for the one section that lacks it today.
+    const language = {
+      ...LANGUAGE,
+      sections: {
+        ...LANGUAGE.sections,
+        inbox: {
+          ...LANGUAGE.sections.inbox,
+          "domain-empty": { ...LANGUAGE.sections.inbox["domain-empty"], name: undefined },
+        },
+      },
+    };
+    const reading = membershipFor("inbox", "domain-empty", "- [ ] Ring the dentist", language);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.sectionName, "Domain Empty", "the id 'domain-empty' did not reformat to it");
+  });
+
   test("and the browser can say the same about the OTHER section of the same view", () => {
     // `inbox-tagged` qualifies on node_type=inbox, so a bare line does not belong there either —
     // which is why a capture surfaces under Domain Empty and not under Inbox until it is tagged.

@@ -463,6 +463,19 @@ expected_flows:
     class: section-addressing
     gates_capabilities: [section-addressing-reads-the-full-declared-order]
 
+  # ── STEP 4 — SAY THE MEMBERSHIP ANSWER (2026-08-01) — NO NEW EDGE DECLARED HERE, ON PURPOSE ──
+  #
+  # `app/index.html`'s `commitLine` now calls `sectionAt` then `membershipFor` on every committed
+  # edit (`membershipNoteFor`) and shows the answer in the freshness line. That edge is REAL and
+  # UNOBSERVABLE by this tool by construction — the caller is the page, which `.flow-trace.yaml`'s
+  # capture filter names (`include: [app]`, a path prefix) but which node cannot import at all,
+  # module-load hook or not. The same gap `base.ts` and `vendor.ts` already record above: a page
+  # calling a bundled function is a call nothing here can see, regardless of which function it is.
+  # Declaring an edge from `app/index.html` would be declaring something never observed, which is
+  # its own kind of drift — so this stays a comment, and the proof lives in
+  # tests/app-membership-note.test.mjs, which drives the page's own lifted script directly. See
+  # capability `section-membership-is-said-in-the-freshness-line` (capabilities.yaml) for the rest.
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
