@@ -143,6 +143,18 @@ export function sectionAt(
  * `sectionAt` ITSELF IS UNTOUCHED. Its two callers in `app/index.html` (`commitLine`) address a
  * line the operator has ALREADY typed into, at an index that really holds it; changing that
  * function's range would widen a read to a position with nothing to read.
+ *
+ * ── THERE IS NO RANGE GUARD HERE, AND ITS ABSENCE IS THE MEASURED DECISION ──
+ *
+ * One was written and then removed, because it could not be made to fail. The legal insertion
+ * range is `[0, lines.length]`; subtracting one maps it onto `[-1, lines.length - 1]`, and
+ * `sectionOrdinalAt` already refuses BOTH ends of that — `-1` for being negative and
+ * `lines.length` for being past the last line. So every out-of-range insertion index (negative,
+ * fractional, or past `lines.length`) reaches `sectionAt` as an out-of-range READ index and is
+ * refused there, by the check that already exists. A second guard in front of it would be a branch
+ * no test could turn red, which is worse than no branch: it reads as a protection and defends
+ * nothing. THE REFUSAL IS STILL PROVEN — `tests/app-seed-from-cascade.test.mjs` section 2 asserts
+ * it at `lines.length + 1`, at `-1` and at a fractional index, against this function directly.
  */
 export function sectionForInsertAt(
   source: string,
@@ -150,9 +162,6 @@ export function sectionForInsertAt(
   view: string,
   sectionOrder: Readonly<Record<string, readonly string[]>>,
 ): string | null {
-  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex > source.split("\n").length) {
-    return null;
-  }
   return sectionAt(source, lineIndex - 1, view, sectionOrder);
 }
 

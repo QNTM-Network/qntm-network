@@ -1199,9 +1199,6 @@ function sectionAt(source, lineIndex, view, sectionOrder) {
   return order[ordinal] ?? null;
 }
 function sectionForInsertAt(source, lineIndex, view, sectionOrder) {
-  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex > source.split("\n").length) {
-    return null;
-  }
   return sectionAt(source, lineIndex - 1, view, sectionOrder);
 }
 function sectionOrderFor(view, declared) {
