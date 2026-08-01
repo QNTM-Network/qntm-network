@@ -1239,6 +1239,19 @@ backlog:
     rather than only by the source index row 2 already provides — a smaller win than the resolver
     swap but a real one. STILL NOT DONE: the HELD LINE itself — this row's own delta, holding
     `input.value` across a repaint rather than sourcing it from the arriving projection.
+    AMENDED 2026-08-01, AFTER STEP 12 (projection-replay-convergence-is-measured, capabilities.yaml)
+    LANDED — NOT SMALLER, AND SAID PLAINLY RATHER THAN CLAIMED OTHERWISE. Step 12 measures the
+    EXACT failure this row exists to fix (`tests/present-replay.test.mjs` §1 — a fresh capture's
+    cursor anchor resolves `absent` the instant the cycle mints it) but is a TEST HARNESS, not a
+    held line: it reports the divergence, it does not hold anything across a repaint. This row's
+    own delta — `input.value` surviving a foreign projection rather than being sourced from it — is
+    entirely unbuilt, unchanged by step 12. What step 12 DOES give this row, for free, is a
+    regression fixture: once the held-line delta ships, `tests/present-replay.test.mjs` §1's own
+    two tests are the check that it actually closed the gap — `membership.converged` should stop
+    reading `null` for that exact case, or (more likely, since the held line is a DIFFERENT fact
+    than the anchor) a new assertion belongs beside them proving the row's own characters, not just
+    the cursor, survived. Filed as the concrete acceptance test this row did not have before, not
+    as work this row no longer has to do.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -1284,6 +1297,16 @@ backlog:
     without this row building the memory). WHAT IS STILL NOT DECIDED, AND R1 DOES NOT TOUCH IT: open
     decision 1 (does a parked line commit as `insert-line` when the cycle removed it deliberately),
     and the UI for "here is what you were typing, put it back" — both are this row's alone.
+    AMENDED 2026-08-01, AFTER STEP 12 (projection-replay-convergence-is-measured, capabilities.yaml)
+    LANDED — NOT SMALLER, BUT SHARPER: A FIXTURE NOW DISTINGUISHES THE TWO CAUSES OF "absent" THIS
+    ROW WOULD OTHERWISE HAVE HAD TO TELL APART ITSELF. `tests/present-replay.test.mjs` §2d measures
+    a GENUINE deletion — `resolveInstanceAnchor`'s node tier ran (`anchor.node` is a real id) and
+    found nothing — against §1's authoring case, where the SAME `absent` outcome has a different
+    cause (`anchor.node === null`, so the node tier never ran at all). This row's own "orphaned row"
+    is the §2d shape specifically: a node that existed, had a node, and is genuinely gone from the
+    printed view. Step 12 does NOT decide open decision 1, does NOT build the parking UI, and does
+    NOT reduce this row's estimate — it hands this row a measured, checkable example of the case it
+    is FOR, which did not exist as a fixture before.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -2252,4 +2275,32 @@ backlog:
     count approach is ever measured to disagree with the engine in a real view — no such
     disagreement is on record; `tests/present-address.test.mjs` §4 sweeps all 72 real views and
     finds none.
+  state: diagnose-ready
+- id: widen-instance-identity-past-the-first-stamp
+  title: >-
+    [present] [step 12 finding, size not yet measured] `instance.ts`'s two-tier walk cannot follow a
+    line across its OWN FIRST STAMP — measured, not assumed, by `tests/present-replay.test.mjs` §1
+    (`projection-replay-convergence-is-measured`, capabilities.yaml). An unstamped line's identity
+    IS its own exact text (`instance.ts`'s own header, "WHAT DOES NOT COLLAPSE"); the moment the
+    cycle mints it, BOTH tiers fail at once — the text tier because the operator's own edit already
+    changed what it would have matched, the node tier because the anchor was taken with `node: null`
+    (there was no node yet) and has nothing to search with. This is not the "moved section" case
+    refutation 1 already solved (design-presentation-instance-identity.md §2.3/§2.4) — that case has
+    a node throughout and only its SECTION changes. This is a line acquiring a node for the first
+    time, which the two-tier design (instance.ts's own header) does not name as a case at all.
+    WHAT WOULD CLOSE IT, NAMED WITHOUT BEING SIZED: the operator's own edit already knows the exact
+    text it just committed (`gesture.text` in step 12's own harness, `commit.text` in
+    `app/index.html`'s real `commitLine`). A THIRD TIER — "was the anchor's own instance a PREFIX of
+    a newly-stamped line's text, within the same section, and unique" — could follow the specific
+    transition a first stamp makes (title text first, cycle-appended tokens after, the same shape
+    step 12's own `preserved` check already relies on for every real stamped line in `~/qntm/inbox.md`).
+    NOT SIZED, NOT DESIGNED, AND DELIBERATELY NOT BUILT HERE: a third tier changes `instance.ts`'s
+    own two-tier contract, which `resolveInstanceAnchor`'s own callers (`focus.ts`'s `reanchor`) and
+    its own test suite (`tests/present-instance.test.mjs`, `tests/present-anchor.test.mjs`) are built
+    against; widening it is a change to a module step 12 was expressly told not to touch, and
+    whether a prefix match is SAFE (a title that happens to be a prefix of an unrelated line's title,
+    in the same section, is a real ambiguity a text-prefix tier would have to refuse rather than
+    guess through) is an open question this row states rather than resolves.
+  driving_capability: projection-replay-convergence-is-measured
+  kind: capability
   state: diagnose-ready

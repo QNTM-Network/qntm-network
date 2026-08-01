@@ -549,6 +549,21 @@ expected_flows:
   # for the page's own call to prefer — see capability `section-order-prefers-the-served-envelope`
   # (capabilities.yaml) for what is proven and what is not.
 
+  # ── STEP 12 — THE PROJECTION-REPLAY CONVERGENCE TEST (2026-08-01) — NO NEW EDGE, ON PURPOSE ──
+  #
+  # `tests/fixtures/replay-harness.mjs` calls `applyEdit`, `BaseSurface`, `instanceAnchorFor`,
+  # `membershipFor`, `orderingFor`, `resolveInstanceAnchor`, `sectionAt` and `sectionOrderFor` —
+  # every one of them already an exported symbol from `app/present/index.ts`'s barrel, called the
+  # same way every `tests/present-*.test.mjs` file already calls it. There is no new module-to-
+  # module edge inside `app/` for this step to declare: the harness is a CALLER, and callers under
+  # `tests/` are outside this file's whole domain by construction — `.flow-trace.yaml`'s capture
+  # filter is `include: [app]`, so a test file is no more observable here than `app/index.html`
+  # itself is (see that file's own note, repeated across steps 4, 7 and 11 above). `flow-trace
+  # verify .` re-run after this step: unchanged PASS/FAIL/INFO counts, because nothing under `app/`
+  # changed at all — see capability `projection-replay-convergence-is-measured` (capabilities.yaml)
+  # for what the step proves and the one thing it deliberately does not (a runtime version of this
+  # check, argued against in the test file's own header).
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
