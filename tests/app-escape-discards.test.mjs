@@ -336,5 +336,15 @@ describe("3. reintroduce the defect and the proofs go red", () => {
       !r.posts[0].markdown.includes("[[qntm:2614]]"),
       "the mutation did not actually destroy the stamp",
     );
+
+    // SECTION 1'S OWN ASSERTION, INVERTED — written out rather than left to be inferred, because
+    // "this suite would have been red before the fix" is the claim the mutation arm exists to make
+    // and a reader should be able to check it against one line rather than against a whole section.
+    assert.notDeepEqual(r.posts, [], "section 1's contract still holds with the defect in place");
+    assert.notEqual(
+      r.page.__served().read(PATH, SOURCE).outcome,
+      "current",
+      "the defect moved no base, so section 1's base assertion would not have gone red either",
+    );
   });
 });
