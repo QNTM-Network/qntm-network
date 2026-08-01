@@ -2251,3 +2251,85 @@ capabilities:
     qualifying, never a sibling section of it), so a minimal two-section declaration stands in,
     built from the same real vocabulary (`#work`) the operator's own config uses elsewhere.
   status: working
+- id: the-write-carries-a-precondition-the-server-can-refuse
+  intent: >-
+    design-the-resolution-architecture.md STEP 13, the last of the sequence — L7 RECONCILIATION.
+    THE ANSWER TO THE ROW'S OWN FIRST QUESTION IS NO: the Worker CANNOT refuse a stale write safely
+    on its own, and this record is what was built instead of a refusal that only appears to work.
+    THE STRONG VERSION IS NOT AVAILABLE, MEASURED RATHER THAN ASSUMED. `server/app.py` (the sibling
+    monorepo, read read-only on 2026-08-01 at c0d77b7) offers `POST /vault/file` — an unconditional
+    `target.write_text(...)` with no comparison anywhere in it — and `GET /graph`, the whole 77-view
+    envelope. There is NO per-file read and NO precondition of any kind. So the only refusal this
+    repository could build alone is READ-THEN-WRITE, which the row itself already judges WEAKER
+    because check-then-act races: between the Worker's read and its write, a cycle can rewrite the
+    file and the write clobbers it anyway.
+    AND A SECOND REASON, WHICH IS THE DECIDING ONE AND IS NOT ON THE ROW. A refusal is only safe
+    once the BROWSER can hold a refused edit's characters, and today it cannot. A stale base is an
+    ORDINARY event on this path, not a rare one — `a-write-refuses-a-stale-base`'s own ARM 2
+    measures a second edit inside one ~14 s cycle producing one — so a live refusal would fire
+    during normal use. Switching one on before the holding half exists would trade a SILENT loss of
+    the engine's output for a VISIBLE loss of the operator's typing, which is the worse trade and
+    the one the row's risk note forbids. That is why nothing here refuses today.
+    WHAT SHIPPED IS THE WORKER HALF, COMPLETE AND INERT. `POST /app/edit-file` forwards `base` to
+    `POST /vault/file` when the browser sent one and NOT AT ALL when it did not — absent, never ""
+    and never null, so a receiver never has to tell "no base" from "the wrong base" and a caller
+    that predates this change sends a byte-identical request. A 409 from the graph server becomes a
+    409 to the browser carrying `{refused, path, current}`, and NO CYCLE RUNS BEHIND IT — a cycle
+    after a refused write would hand the browser a fresh projection and let it believe its edit had
+    been ingested. The day `POST /vault/file` learns to compare, every part of this wakes up with no
+    further change in this repository.
+    EXACTLY ONE EXPRESSION CAN REFUSE A WRITE, AND IT IS NOT A COMPARISON: `w.status === 409`, the
+    graph server's own answer. The Worker computes no digest and compares no string, so it cannot
+    invent a mismatch; a `base` it cannot read is still just a string it hands on. Everything else
+    fails OPEN — an unreadable base, a graph server that never learns to refuse, any upstream status
+    other than 409 — and behaves exactly as it did before.
+    WHAT A 409 DOES TO HIS CHARACTERS, STATED PLAINLY BECAUSE IT IS THE RISK. A refused LINE COMMIT
+    does NOT repaint: the painter is already holding his edited source, so the page keeps showing
+    what he typed, and the freshness line says so in the same vocabulary `BASE_REFUSALS.stale`
+    already uses with only the consequence changed. THE COST IS REAL AND IS NAMED: the screen then
+    shows a line the vault does not have. It is the cheaper cost by a distance — a refusal answered
+    by deleting work he DID type would be strictly worse than the defect. A refused TICK reverts the
+    box, which has no characters at stake and is the truth. THIS IS NOT THE EDIT BEING HELD: his
+    characters live in the DOM and in the painter's source, which the next arriving projection
+    replaces. The piece that survives a repaint and offers the edit back is
+    `a-refused-edit-is-held-unanchored`, filed rather than half-built.
+    EVIDENCE TIER — NODE-TEST ONLY, FIXTURES THROUGHOUT, AND NO SCENARIO IS POSSIBLE. 20 tests in
+    tests/app-stale-write-refusal.test.mjs. The row's own falsifier (a POST carrying a stale base is
+    answered 409 with the current content, and `POST /cycle` is never called); a matching base
+    writes; an absent base writes with `base` absent from the forwarded body and the body's keys
+    asserted exactly; four unreadable base shapes ("", null, a number, an object) all write; three
+    bases the Worker has no way to check all write, which is the proof it cannot reject one it
+    should not; four non-409 upstream answers all still produce the 502 they always did; a 409 with
+    no `current` still refuses with `current: null` and reconstructs nothing. Plus the page's half
+    driven through app/index.html's own lifted script: a refused commit keeps the characters on
+    screen, does not adopt the server's copy as a new base, and says one sentence rather than two
+    that contradict each other — with an ordinary FAILURE still repainting from the last server
+    state, and an ordinary SUCCESS still landing, as the two controls.
+    MUTATION-PROVEN SIX WAYS, each turning the suite red: the refusal branch never firing
+    (409 -> 410, 3 red); an absent base substituted with "" (5 red); a cycle run behind a refused
+    write (2 red); the page's 409 branch deleted so a refusal destroys his typing (3 red); the
+    client's contradicting guess no longer dropped (1 red); the tick's refusal branch deleted
+    (1 red).
+    NOT VERIFIED — AND ON THIS ROW THE LIST IS THE POINT. No browser, no passkey session, no live
+    server, no cycle, and NOT ONE REAL POST. Every request in the evidence is a fixture. The 409
+    branch is UNREACHABLE IN PRODUCTION until the monorepo change lands, so what is proven is that
+    it is correct when it is reached, never that it has been reached. The monorepo change itself is
+    specified in backlog row `vault-file-accepts-a-precondition` and is NOT built here.
+  tier: functional
+  rooting: >-
+    TWO FILES, BOTH OUTSIDE flow-trace's reach, and the two reasons differ. `worker/src/app.js` is
+    outside `.flow-trace.yaml`'s `modules.include: [app]` altogether — it is a Cloudflare runtime
+    module, not the application stratum. `app/index.html` is inside the prefix and invisible anyway,
+    because capture is a node module-load hook and node cannot import an HTML document. SO NO
+    SCENARIO COVERS THIS AND NONE CAN; flows.yaml's closing note says so rather than leaving it
+    implied. What stands in its place is a STRUCTURAL assertion under `node --test`: the suite reads
+    worker/src/app.js as text, strips its comments, and asserts `409` occurs exactly twice in the
+    executable code and that no digest is computed anywhere in it. That is the claim a flow edge
+    could not have made in any case — this row's whole safety argument is about what the Worker DOES
+    NOT DO, and flow-trace measures edges that exist. NOTHING NEW IS IMPORTED ANYWHERE:
+    `app/present/base.ts` is untouched, `motions.ts` still imports nothing, `SourceEdit` is still
+    the closed union of three, and the four pinned write-adjacent counts are unmoved, COUNTED ON
+    BOTH SIDES OF THE BRANCH BASE (bc47598) rather than asserted: `await writeFile(` 2 and 2,
+    `graphData = ` 5 and 5, `.markdown = ` 0 and 0, and `applyEdit(` 5 external callers and 5
+    (2 in app/index.html, 3 in app/present/paint.ts).
+  status: working
