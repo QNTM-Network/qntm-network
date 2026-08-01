@@ -106,6 +106,57 @@ export function sectionAt(
 }
 
 /**
+ * ── AN INSERTION INDEX IS NOT A READ INDEX, AND ADDRESSING THEM THE SAME WAY IS A DEFECT ──
+ *
+ * The config's own section id for the section a line INSERTED at `lineIndex` would sit in.
+ * `sectionAt` above answers for a line that EXISTS at `lineIndex`; this one answers for a line that
+ * does not exist yet and is about to take that index, pushing whatever is there now down. Those are
+ * two different positions in the file and they name two different sections at two boundaries:
+ *
+ *   THE END OF THE FILE. `applyEdit`'s `insert-line` convention (source.ts) accepts `lineIndex ===
+ *     lines.length` — one past the last line, which is what `o` on the trailing blank line asks for
+ *     and what every rendered view ends with, because the engine's own writer terminates the file
+ *     with a newline. `sectionOrdinalAt` REFUSES that index (`lineIndex >= lines.length`), and it
+ *     is right to: no line is there to be read. So `sectionAt` returned `null`, `newline.ts` seeded
+ *     no tokens, and a real browser run on 2026-08-01 showed the cost — `o` on the trailing blank
+ *     line of `personal/all` seeded a bare `- [ ] ` where `o` one line higher seeded
+ *     `- [ ] #task #personal `. The chrome was right by COINCIDENCE OF THE NEIGHBOUR (the printed
+ *     rungs still answered from the line above); the declaration was never consulted at all.
+ *
+ *   THE LINE BEFORE A HEADING. Inserting AT the index a heading currently occupies puts the new
+ *     line ABOVE that heading — in the section the heading CLOSES, never the one it opens.
+ *     `sectionAt` at that index names the heading's OWN section, one too far. On `~/qntm/inbox.md`,
+ *     whose two headings are adjacent lines, `o` on `## Inbox` addressed `domain-empty`.
+ *
+ * THE RULE, AND IT IS ARITHMETIC RATHER THAN A SPECIAL CASE. A line inserted at `lineIndex` sits
+ * after existing line `lineIndex - 1` and before existing line `lineIndex`. The headings at or
+ * above it are therefore exactly the headings at or above `lineIndex - 1` — so the insertion's
+ * ordinal IS `sectionOrdinalAt(source, lineIndex - 1)`, and this function is `sectionAt` asked
+ * about the line the new one lands after. Both boundaries fall out of that single subtraction:
+ * `lines.length` becomes the last real line, and a heading's index becomes the line above it.
+ *
+ * `lineIndex === 0` STILL REFUSES, and that refusal is kept rather than tidied away. A line
+ * inserted at 0 lands above the file's first heading, where the config declares no section at all
+ * — `sectionAt(source, -1, …)` is `null` and that is the correct answer, the same one
+ * `sectionOrdinalAt` gives every other position outside a section.
+ *
+ * `sectionAt` ITSELF IS UNTOUCHED. Its two callers in `app/index.html` (`commitLine`) address a
+ * line the operator has ALREADY typed into, at an index that really holds it; changing that
+ * function's range would widen a read to a position with nothing to read.
+ */
+export function sectionForInsertAt(
+  source: string,
+  lineIndex: number,
+  view: string,
+  sectionOrder: Readonly<Record<string, readonly string[]>>,
+): string | null {
+  if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex > source.split("\n").length) {
+    return null;
+  }
+  return sectionAt(source, lineIndex - 1, view, sectionOrder);
+}
+
+/**
  * ── STEP 11, NARROWED TO WHAT THE SERVER CAN ACTUALLY EMIT ──
  * (design-the-resolution-architecture.md step 11: "carry section identity in the envelope")
  *

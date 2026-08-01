@@ -125,7 +125,7 @@
  * GLOBAL — most specific PRINTED evidence always wins over the declaration, unchanged).
  */
 
-import { sectionAt } from "./address.js";
+import { sectionForInsertAt } from "./address.js";
 import { chromeOf, classifyLine } from "./resolution.js";
 import { placeFor } from "./draft.js";
 import type { PresentationLevel } from "./levels.js";
@@ -222,10 +222,17 @@ export function seedFor(
   // disagree: the tokens are a fact about the section the line is ACTUALLY in, while the CHROME
   // may have come from a neighbour across a heading (the VIEW rung). Resolving it twice would be
   // two chances for the seed to describe two different sections.
+  //
+  // `sectionForInsertAt`, NOT `sectionAt` — `lineIndex` is where the new line WILL BE, not where an
+  // existing line IS, and at two boundaries those name different sections. See that function's own
+  // header for the arithmetic and for the 2026-08-01 browser observation it answers: `o` on the
+  // trailing blank line seeded a bare `- [ ] ` in both `inbox` and `personal/all`, because
+  // `sectionAt` refuses `lineIndex === lines.length` and the tokens fell to `[]` while the printed
+  // rungs still copied the neighbour's chrome.
   const sectionId =
     declared === undefined
       ? null
-      : sectionAt(source, lineIndex, declared.view, declared.sectionOrder);
+      : sectionForInsertAt(source, lineIndex, declared.view, declared.sectionOrder);
 
   const chrome = chromeFor(lines, lineIndex, declared, sectionId);
   if (chrome === null) {
