@@ -149,12 +149,33 @@ describe("1. WHAT THE ANCHOR IS — a bracket, a gap, an offset, and the charact
     assert.equal(reading.lineIndex, 0);
   });
 
-  test("NOT TAKEN when NOTHING in the section carries a stamp — the honest refusal, named", () => {
-    // The operator's first capture into an empty section. There is no landmark in it that outlives
-    // the cycle, so no bracket can be built. This is a REFUSAL, not a gap in the construct: a
-    // bracket of two nulls is the whole file wearing a bracket's clothes.
-    const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
-    assert.equal(instanceAnchorFor(before, 2, VIEW).relative, null);
+  test(
+    "TAKEN when nothing in the section carries a stamp — THE BACKLOG ROW'S OWN FALSIFIER, flipped",
+    () => {
+      // `the-relative-anchor-has-no-landmark-in-an-empty-section` asserted the opposite of this
+      // line and called it deliberate. The falsifier it stated was: SHOW A LANDMARK IN AN EMPTY
+      // SECTION THAT OUTLIVES THE CYCLE. It is the section's own HEADING, addressed by the ordinal
+      // `instance.ts` already builds a heading's identity token from — so the whole section is the
+      // region, and `above`/`below` are both `null` because there is genuinely nothing stamped to
+      // bracket with, not because there is nothing to be relative to.
+      const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+      const anchor = instanceAnchorFor(before, 2, VIEW).relative;
+      assert.notEqual(anchor, null, "the empty section is anchored now — this is the row, closed");
+      assert.equal(anchor.above, null, "nothing stamped stands above it");
+      assert.equal(anchor.below, null, "nothing stamped stands below it either");
+      assert.equal(anchor.section, 1, "and the ordinal of the heading that opens it IS the landmark");
+      assert.equal(anchor.gap, 2, "the heading opens the section, so it is in the region");
+      assert.equal(anchor.offset, 1, "he is the second of the two");
+      assert.equal(anchor.text, "- [ ] Ring the dentist");
+    },
+  );
+
+  test("STILL NOT TAKEN above the first heading with nothing stamped — there is no ordinal", () => {
+    // The one place the old refusal was right and stays right. `section === null` is the region
+    // above the file's first heading; it has no heading, so it has no ordinal, so a bracket of two
+    // nulls really would be the whole file wearing a bracket's clothes.
+    const before = ["- [ ] Ring the dentist", "## Inbox", "- [ ] a [[qntm:1]]"].join("\n");
+    assert.equal(instanceAnchorFor(before, 0, VIEW).relative, null);
   });
 
   test("NOT TAKEN for a blank line, or out of range — matching every other anchor in this bundle", () => {
@@ -166,11 +187,15 @@ describe("1. WHAT THE ANCHOR IS — a bracket, a gap, an offset, and the charact
 
   test("a stamped line in ANOTHER section does not bracket it — the scan stops at the section edge", () => {
     const before = ["## Inbox", "- [ ] a [[qntm:1]]", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
-    assert.equal(
-      instanceAnchorFor(before, 3, VIEW).relative,
-      null,
+    const anchor = instanceAnchorFor(before, 3, VIEW).relative;
+    assert.deepEqual(
+      [anchor.above, anchor.below],
+      [null, null],
       "qntm:1 is in section 0 and he is in section 1 — it is not his neighbour",
     );
+    // AND THE ANCHOR IS STILL TAKEN, because his own section's heading is a landmark. Before this
+    // row the two nulls above were the whole answer and no anchor was taken at all.
+    assert.equal(anchor.section, 1, "he is bracketed by his OWN section, never by the one above it");
   });
 });
 
@@ -262,6 +287,207 @@ describe("2. IT SURVIVES THE STAMP — the apex capability's blocker, over real 
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+// 2b. THE FIRST CAPTURE OF THE DAY, INTO A SECTION WITH NOTHING STAMPED IN IT.
+//
+// Measured against the operator's live vault, read read-only 2026-08-01: 109 of 191 rendered
+// sections carry no stamped line and 94 of those are heading-only — `~/qntm/inbox.md`'s `## Inbox`
+// among them, and `work/daily.md`'s `## Work Capture`, and `personal/daily.md`'s `## Personal
+// Capture`. Every capture into one of those lost its cursor unconditionally.
+//
+// EVERY "before" AND "after" BELOW IS BUILT ON `REAL_INBOX`, WHICH IS `~/qntm/inbox.md` VERBATIM.
+// Its `## Inbox` really is heading-only and its three real lines really do all sit under
+// `## Domain Empty`. No cycle ran, nothing was posted, and every arriving string is hand-built.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("2b. AN EMPTY SECTION — the heading is the landmark, and the capture keeps its cursor", () => {
+  test("the line STAYS in the section it was typed into — found by the BRACKET", () => {
+    // `## Domain Empty` with its three real lines removed: a section holding a heading and one
+    // line the cycle has never seen. This is the pure shape.
+    const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+    ].join("\n");
+
+    const { reading } = walk(before, 2, after);
+    assert.equal(reading.outcome, "found", "before this row it was `absent`, every time");
+    assert.equal(reading.via, "relative", "the section held its shape, so the STRONG rung answered");
+    assert.equal(reading.lineIndex, 2);
+  });
+
+  test(
+    "THE OPERATOR'S OWN INBOX — typed under `## Inbox`, re-sorted by the cycle into " +
+      "`## Domain Empty`. The bracket cannot survive that and the TEXT rung catches it — which is " +
+      "a rung the old refusal ALSO denied him, because it took no anchor at all.",
+    () => {
+      // `## Inbox` is heading-only in the live file; a new capture has no domain, so it qualifies
+      // for `## Domain Empty` and the cycle prints it there, newest first, above 2603.
+      const before = ["## Inbox", "- [ ] Ring the dentist", ...REAL_INBOX.split("\n").slice(1)].join("\n");
+      const after = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+        ...REAL_INBOX.split("\n").slice(2),
+      ].join("\n");
+
+      const anchor = instanceAnchorFor(before, 1, VIEW).relative;
+      assert.equal(anchor.section, 0, "he typed into section 0, which holds only its own heading");
+
+      const { reading } = walk(before, 1, after);
+      assert.equal(reading.outcome, "found");
+      assert.equal(reading.via, "text", "the section it was taken in no longer holds it — a WEAKER claim, said plainly");
+      assert.equal(reading.lineIndex, 2);
+    },
+  );
+
+  test("the cursor's COLUMN survives the empty-section capture too, through `FocusSurface`", async () => {
+    const { FocusSurface } = await import("../dist/present.js");
+    const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+    ].join("\n");
+
+    const focus = new FocusSurface();
+    focus.focus(2, before, 18, VIEW);
+    const reading = focus.reanchor(after, VIEW);
+    assert.equal(reading.outcome, "found");
+    assert.equal(focus.lineIndex, 2, "the cursor really moved, not merely reported");
+    assert.equal(focus.column, 18);
+  });
+
+  test(
+    "THE SECTION FILLS UP — an anchor taken when it was empty does NOT survive the section " +
+      "gaining lines by the bracket, and says so. The characters are what carries it.",
+    () => {
+      // The question worth asking of a section that is empty because everything in it was
+      // completed: it may be full tomorrow. The gap is a COUNT, so a section that gained two lines
+      // moved every offset in it and the bracket refuses rather than doing arithmetic on a region
+      // that changed size.
+      const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+      const after = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+        ...REAL_INBOX.split("\n").slice(2),
+      ].join("\n");
+
+      const bracket = relativeOnly(before, 2, after);
+      assert.equal(bracket.via, "text", "the bracket refused; only the characters could still answer");
+
+      const { reading } = walk(before, 2, after);
+      assert.equal(reading.outcome, "found");
+      assert.equal(reading.via, "text");
+      assert.equal(reading.lineIndex, 2);
+    },
+  );
+
+  test("TWO LINES OPENED IN THE EMPTY SECTION are told apart by their offset, and both hold", () => {
+    // `above` and `below` are BOTH null for both of them — "the first line after heading N" alone
+    // could not tell them apart, which is why the offset is carried and not inferred.
+    const before = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist",
+      "- [ ] Call the bank",
+    ].join("\n");
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+      "- [ ] Call the bank [[qntm:2605]] #task 🆕 2026-08-01",
+    ].join("\n");
+
+    const first = instanceAnchorFor(before, 2, VIEW).relative;
+    const second = instanceAnchorFor(before, 3, VIEW).relative;
+    assert.deepEqual(
+      [first.above, first.below, second.above, second.below],
+      [null, null, null, null],
+      "neither has a stamped neighbour — the heading's ordinal is the whole landmark for both",
+    );
+    assert.equal(first.section, second.section, "the same section names both");
+    assert.deepEqual([first.offset, second.offset], [1, 2], "the offset is what tells them apart");
+
+    assert.deepEqual(
+      [walk(before, 2, after).reading.lineIndex, walk(before, 3, after).reading.lineIndex],
+      [2, 3],
+      "and each lands on its own line, not on the other's",
+    );
+  });
+
+  test(
+    "THE CYCLE STAMPS ONLY ONE OF THE TWO — the region changed size, so the bracket refuses for " +
+      "both and neither cursor is guessed at",
+    () => {
+      const before = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Ring the dentist",
+        "- [ ] Call the bank",
+      ].join("\n");
+      // The cycle stamped the first and did not print the second at all — it qualified for no
+      // published section of this view.
+      const after = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+      ].join("\n");
+
+      const kept = walk(before, 2, after).reading;
+      assert.equal(kept.outcome, "found");
+      assert.equal(kept.via, "text", "the region holds one line where it held two — the bracket will not do that sum");
+      assert.equal(kept.lineIndex, 2);
+
+      const lost = walk(before, 3, after).reading;
+      assert.equal(lost.outcome, "absent", "the line is not in the projection at all");
+      assert.equal(lost.because, "gap-changed");
+      // AND THIS IS WHERE `held.ts` TAKES OVER — unchanged by this row, and still the answer.
+    },
+  );
+
+  test(
+    "IF THE HEADING ITSELF IS GONE the ordinal names a DIFFERENT section, and the characters " +
+      "refuse it rather than the cursor landing on a line he never wrote",
+    () => {
+      // The one measured way an ordinal can lie: a declared section renders with NO heading when a
+      // graph node's title collides with the section name (dormant today, zero firings across the
+      // live views). Every ordinal below it then shifts by one. That breaks a heading's own
+      // INSTANCE rung everywhere in this bundle — it is not a hazard this rung introduces — and
+      // here it is caught by the same two guards every other bracket already stands on.
+      const before = ["## Inbox", "- [ ] Ring the dentist", ...REAL_INBOX.split("\n").slice(1)].join("\n");
+      const after = REAL_INBOX.split("\n").slice(1).join("\n"); // `## Inbox` did not render at all
+
+      const { reading } = walk(before, 1, after);
+      assert.equal(reading.outcome, "absent", "his line is not in this projection, and nothing pretends it is");
+      assert.equal(reading.because, "gap-changed", "section 0 is now `## Domain Empty` and it is a different size");
+    },
+  );
+
+  test("A DRAFT reaches all of this through `resolveInstanceAnchor`, not around it", async () => {
+    // `draft.ts` anchors an uncommitted row on the NEIGHBOUR it was opened beside. When that
+    // neighbour is a line he settled a moment ago into an empty section, the neighbour's anchor had
+    // no relative rung and the row went `unplaced` the instant the cycle stamped it. It is the same
+    // one walk that changed, reached by the same one path.
+    const { placeFor, placeDraft } = await import("../dist/present.js");
+    const before = ["## Inbox", "## Domain Empty", "- [ ] Ring the dentist"].join("\n");
+    const after = [
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+    ].join("\n");
+
+    const draft = { lineIndex: 3, seed: "- [ ] ", typed: "- [ ] ", place: placeFor(before, 3, VIEW) };
+    assert.notEqual(draft.place, null, "the line he settled a moment ago is what the row hangs on");
+    const placement = placeDraft(draft, before, after, VIEW);
+    assert.equal(placement.outcome, "placed");
+    assert.equal(placement.via, "relative", "the neighbour was re-found by the rung this row added");
+    assert.equal(placement.lineIndex, 3);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
 // 3. IT REFUSES RATHER THAN GUESSES — one test per named refusal.
 //
 // EACH FIXTURE'S ARRIVED LINE IS RE-INDENTED (`  - [ ] mine`), which is a real thing a cycle does
@@ -334,6 +560,37 @@ describe("3. IT REFUSES RATHER THAN GUESSES — every named case", () => {
     ["## Inbox", "- [ ] a [[qntm:1]]", "- [ ] a completely different line [[qntm:5]]", "- [ ] b [[qntm:2]]"].join("\n"),
     "text-changed",
   );
+
+  // THE TWO REFUSALS THE EMPTY-SECTION LANDMARK ADDED. Both are about the ORDINAL rather than
+  // about a bracketing node, which is what makes them their own names: `gap-changed` says the
+  // region is there and is a different shape, and neither of these can say that.
+
+  refuses(
+    "the section the ordinal names is not in the arriving projection at all",
+    ["## Inbox", REWRITTEN].join("\n"),
+    "section-absent",
+    ["## Inbox", "## Domain Empty", "- [ ] mine"].join("\n"),
+    2,
+  );
+
+  test("no-landmark — a hand-built anchor with no bracket AND no ordinal is refused, not resolved", () => {
+    // `relativeAnchorFor` never mints this shape: above the file's first heading with nothing
+    // stamped, it returns `null`. So this guards the EXPORTED resolver, which any caller holding an
+    // `InstanceAnchor.relative` can reach — and without it, `boundsOf(places, null)` would quietly
+    // bracket the region above the first heading, which is a region the anchor never named.
+    const after = ["- [ ] mine [[qntm:3]] #task", "## Inbox"].join("\n");
+    const handBuilt = { above: null, below: null, section: null, gap: 1, offset: 0, text: "- [ ] mine" };
+    const reading = resolveRelativeAnchor(handBuilt, instancesOf(after, VIEW), after.split("\n"));
+    // The TEXT rung still runs and still answers, which is the point of it — but the BRACKET's own
+    // reason is what a refusal would carry, so it is checked on the one arrival that has no match.
+    assert.equal(reading.outcome, "found");
+    assert.equal(reading.via, "text", "the weak rung is not disabled by the strong one refusing");
+
+    const nothing = ["  - [ ] mine [[qntm:3]] #task", "## Inbox"].join("\n");
+    const refused = resolveRelativeAnchor(handBuilt, instancesOf(nothing, VIEW), nothing.split("\n"));
+    assert.equal(refused.outcome, "refused");
+    assert.equal(refused.because, "no-landmark");
+  });
 
   test("ambiguous — two lines extend his characters, so the cursor is not moved at all", () => {
     // The one case that is not a `refused`: the characters really are in the view, more than once.
@@ -447,16 +704,16 @@ describe("4. THE RUNG ORDER — `ANCHOR_TRUST`, owned in one tuple", () => {
 // `app/` is touched: the mutated source is loaded from a `data:` URL and discarded.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
+const BUNDLE = readFileSync(resolve(HERE, "..", "dist", "present.js"), "utf8");
+
+/** Load a copy of the shipped bundle with one substring replaced. */
+async function mutated(find, replaceWith) {
+  assert.ok(BUNDLE.includes(find), `the mutation target "${find}" is not in dist/present.js`);
+  const source = BUNDLE.replace(find, replaceWith);
+  return import(`data:text/javascript;base64,${Buffer.from(source, "utf8").toString("base64")}`);
+}
+
 describe("5. THE MUTATION PROOF — each guard deleted, each shown to put the cursor on the wrong line", () => {
-  const BUNDLE = readFileSync(resolve(HERE, "..", "dist", "present.js"), "utf8");
-
-  /** Load a copy of the shipped bundle with one substring replaced. */
-  async function mutated(find, replaceWith) {
-    assert.ok(BUNDLE.includes(find), `the mutation target "${find}" is not in dist/present.js`);
-    const source = BUNDLE.replace(find, replaceWith);
-    return import(`data:text/javascript;base64,${Buffer.from(source, "utf8").toString("base64")}`);
-  }
-
   test("DELETE THE GAP GUARD — the cursor lands on a line the operator never wrote", async () => {
     // The cycle put a SECOND line into the bracket. With the guard, this is `gap-changed` and the
     // cursor does not move. Without it, offset 0 of a gap that now holds two lines is the WRONG
@@ -535,5 +792,136 @@ describe("5. THE MUTATION PROOF — each guard deleted, each shown to put the cu
       null,
       "the mutation must change the answer, or the exclusion proves nothing",
     );
+  });
+
+  test("BREAK THE HEADING LANDMARK — the cursor lands on a stranger's line in another region", async () => {
+    // The new rung's ONE load-bearing fact: with no bracket resolved, the region is named by
+    // `anchor.section` — the ordinal of the heading that opens it. Take that away and the region
+    // falls back to `null`, which is the file's own pre-heading region, and the offset is then read
+    // against a neighbourhood the anchor never described.
+    const before = ["## Inbox", "## Domain Empty", "- [ ] mine"].join("\n");
+    const after = [
+      "- [ ] other [[qntm:8]]",
+      "- [ ] mine [[qntm:9]] #task", // somebody else's line, and it happens to extend his characters
+      "## Inbox",
+      "## Domain Empty",
+      "- [ ] mine [[qntm:3]] #task", // HIS
+    ].join("\n");
+
+    const shipped = walk(before, 2, after);
+    assert.equal(shipped.reading.outcome, "found");
+    assert.equal(shipped.reading.via, "relative");
+    assert.equal(shipped.reading.lineIndex, 4, "the ordinal named `## Domain Empty`, where he typed");
+
+    const broken = await mutated(": anchor.section;", ": null;");
+    const anchor = broken.instanceAnchorFor(before, 2, VIEW);
+    const reading = broken.resolveInstanceAnchor(anchor, after, VIEW);
+    assert.equal(reading.outcome, "found", "the mutation must change the answer, or it proves nothing");
+    assert.equal(reading.via, "relative", "and it claims the STRONG rung answered, which is the harm");
+    assert.equal(reading.lineIndex, 1, "the cursor is now on a line he did not write");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 6. THE STAMPED-SECTION PATH IS UNCHANGED — proved against the code as it stood, not asserted.
+//
+// The mutation machinery above runs the other way here: ONE substring of the shipped bundle is put
+// back to what it said before this row (`&& section === null` removed from the take-side guard),
+// which is the whole of the behavioural change. Every anchor and every reading is then compared
+// between the two bundles. They must agree everywhere EXCEPT the empty section.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("6. THE STAMPED-SECTION PATH IS UNCHANGED — compared against the reverted bundle", () => {
+  /** The shipped bundle with this row's one behavioural change put back. */
+  const reverted = () =>
+    mutated("above === null && below === null && section === null", "above === null && below === null");
+
+  /** Every line of every fixture, both bundles, anchor and reading compared. */
+  const FIXTURES = [
+    {
+      name: "the operator's real inbox, unchanged by the cycle",
+      before: REAL_INBOX,
+      after: REAL_INBOX,
+    },
+    {
+      name: "a capture at the top of a stamped section — the bracket case",
+      before: ["## Inbox", "## Domain Empty", "- [ ] mine", ...REAL_INBOX.split("\n").slice(2)].join("\n"),
+      after: [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] mine [[qntm:2604]] #task 🆕 2026-08-01",
+        ...REAL_INBOX.split("\n").slice(2),
+      ].join("\n"),
+    },
+    {
+      name: "a capture between two stamped lines",
+      before: [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+        "- [ ] mine",
+        "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+      ].join("\n"),
+      after: [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+        "- [ ] mine [[qntm:2604]] #task",
+        "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+      ].join("\n"),
+    },
+    {
+      name: "a stamped node that moved section — the one regression risk in the whole anchor arc",
+      before: ["## Bucket", "- [ ] Ring the dentist [[qntm:9000]]", "## Work"].join("\n"),
+      after: ["## Bucket", "## Work", "- [ ] Ring the dentist #work [[qntm:9000]]"].join("\n"),
+    },
+    {
+      name: "metrics.md's changing ratio — headings addressed by ordinal, never by characters",
+      before: ["## On-track accuracy (3d) 🎯 0.44", "## Age of intent (30d) 🎯 5.7"].join("\n"),
+      after: ["## On-track accuracy (3d) 🎯 0.39", "## Age of intent (30d) 🎯 6.1"].join("\n"),
+    },
+    {
+      name: "the region above the first heading, which still has no ordinal to be named by",
+      before: ["- [ ] mine", "## Inbox", "- [ ] a [[qntm:1]]"].join("\n"),
+      after: ["- [ ] mine [[qntm:3]] #task", "## Inbox", "- [ ] a [[qntm:1]]"].join("\n"),
+    },
+  ];
+
+  for (const { name, before, after } of FIXTURES) {
+    test(`identical, line for line — ${name}`, async () => {
+      const old = await reverted();
+      const lines = before.split("\n");
+      let compared = 0;
+      for (let at = 0; at < lines.length; at += 1) {
+        const mine = instanceAnchorFor(before, at, VIEW);
+        const theirs = old.instanceAnchorFor(before, at, VIEW);
+        assert.deepEqual(mine, theirs, `the anchor at line ${at} changed`);
+        if (mine === null) {
+          continue;
+        }
+        compared += 1;
+        assert.deepEqual(
+          resolveInstanceAnchor(mine, after, VIEW),
+          old.resolveInstanceAnchor(theirs, after, VIEW),
+          `the reading at line ${at} changed`,
+        );
+      }
+      assert.ok(compared > 0, "the fixture compared nothing, so it proved nothing");
+    });
+  }
+
+  test("and the ONE place they differ is the empty section — the mutation is live, not inert", async () => {
+    // The control. Without this, every test above would pass against a mutation that did nothing.
+    const old = await reverted();
+    const before = ["## Inbox", "## Domain Empty", "- [ ] mine"].join("\n");
+    const after = ["## Inbox", "## Domain Empty", "- [ ] mine [[qntm:3]] #task"].join("\n");
+
+    assert.equal(old.instanceAnchorFor(before, 2, VIEW).relative, null, "the old bundle took no anchor");
+    assert.equal(
+      old.resolveInstanceAnchor(old.instanceAnchorFor(before, 2, VIEW), after, VIEW).outcome,
+      "absent",
+      "and so it lost the cursor — this is the defect, reproduced",
+    );
+    assert.equal(walk(before, 2, after).reading.via, "relative", "the shipped bundle keeps it");
   });
 });
