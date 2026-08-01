@@ -2869,8 +2869,9 @@ backlog:
     [haven] [OBSERVED 2026-08-01] ENTER ON AN OPEN LINE DESTROYS THE ROW IT OPENS, AND PAINTS THE
     VIEW THREE TIMES. Reproduced deterministically in the harness once "focusing an element blurs
     the one that had focus" is modelled. Found while proving the Escape row; NOT fixed there.
-  kind: null
-  state: diagnose-ready
+  kind: capability
+  driving_capability: enter-opens-a-line-that-survives-the-paint
+  state: passing
   record: >-
     THE MECHANISM, MEASURED. `settle`'s repaint builds a fresh `<input>` for the line just committed
     (INSERT plus focused, so the cascade says raw) and focuses it, then `paintDraft` focuses the
@@ -2882,6 +2883,18 @@ backlog:
     view in the column. This is the likeliest engine behind "keys that do nothing" and it is also a
     live source-clobber route, because a row appended by the outer frame carries a `fileSource` that
     is no longer what the screen shows, and committing that row posts the stale file.
+    2026-08-01 - FIXED, AND IT WAS TWO FAULTS RATHER THAN ONE. Both are named in
+    `enter-opens-a-line-that-survives-the-paint`. The TRIGGER is a missing `focus.blur()` - `settle`
+    opened the draft and left the cursor on the line it had just committed, which is what gave one
+    paint two cursors to focus in turn. `o`/`O` in `app/index.html` has always blurred first. The
+    DANGEROUS HALF is the stale source, and it is separable - `paint` now takes a generation and a
+    superseded frame appends nothing.
+    ONE CORRECTION TO THE DIAGNOSIS ABOVE, MEASURED RATHER THAN ARGUED. Through ENTER the three
+    frames all repaint from the SAME string, so the Enter gesture as reported destroys the row and
+    triples the column but does NOT itself put a stale file on the wire. The stale WRITE is real one
+    gesture over - a row being made, holding characters, settled by a nested paint into a file with
+    one line more, underneath rows still closing over the file with one line less. Both are proven
+    in `tests/app-enter-opens-a-line.test.mjs`, each with its own mutation arm.
 - id: a-save-round-trip-clobbers-mid-typing
   title: >-
     [haven] [OBSERVED 2026-08-01] A SAVE ROUND TRIP CLOBBERS WHAT HE IS TYPING. Reported from the
@@ -2935,3 +2948,9 @@ backlog:
     RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. The document handler refuses every
     key while `typingIn(e.target)`, and a mode left in INSERT with no `<input>` anywhere makes NORMAL
     unreachable - two candidate mechanisms, neither confirmed against his session.
+    2026-08-01 - A THIRD MECHANISM, AND THIS ONE IS MEASURED. `enter-destroys-the-row-it-opens` left
+    the page in NORMAL with no `<input>` anywhere, which is the exact inverse of the second guess
+    above and presents the same way to a person: he pressed Enter for a new line, got none, and every
+    character he typed next went to vim's NORMAL keymap, where most letters are unbound and the rest
+    are motions. That row is now fixed. WHETHER IT WAS THE WHOLE OF THIS ROW IS UNKNOWN - it was
+    never confirmed against his session, and this row stays open until it is.
