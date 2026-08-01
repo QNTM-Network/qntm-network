@@ -1,0 +1,4 @@
+default_registration:
+  default_node_type: task
+  input_grammar: tolerant
+  default_tags: []

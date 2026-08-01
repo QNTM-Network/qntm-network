@@ -1,0 +1,16 @@
+main:
+  path: main.md
+  sections:
+    - id: open
+      qualification: local-tasks
+      name: "Open"
+      defaults:
+        domain: personal
+      ordering:
+        - field: due_date
+          direction: asc
+    - id: nested
+      qualification: traversing-tasks
+      name: "Nested"
+      structural_edge_types: [UNLOCKS]
+      structural_edge_direction: outgoing

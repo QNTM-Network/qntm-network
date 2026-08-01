@@ -1,0 +1,32 @@
+# A MINIMAL SYNTHETIC CONFIG, shaped like the operator's but two orders of magnitude smaller.
+#
+# It exists so the three generators can be RUN IN CI. CI does not check out the monorepo, so the
+# staleness tests that read the operator's real config self-skip there — which is precisely where
+# staleness matters (design-the-rule-mirror.md §9.4). This tree is committed, so every test that
+# reads it runs on every pull request.
+#
+# It is NOT a copy of the operator's config and must never be used to make a claim about his
+# instance. It is a control: a config small enough to reason about completely, whose every drop
+# path can be triggered on purpose by `tests/declaration-drop.test.mjs` and observed.
+
+node_types:
+  task:
+    fields: [title, status, domain]
+    render:
+      shape: checkbox
+  person:
+    fields: [title]
+    render:
+      shape: plain_line
+  header:
+    fields: [title]
+    identity:
+      unique: true
+    render:
+      shape: heading
+
+edge_types:
+  PART_OF:
+    cardinality: one
+  UNLOCKS:
+    cardinality: many

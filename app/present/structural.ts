@@ -96,6 +96,15 @@ export interface StructuralLanguage {
   readonly indent: IndentBinding | undefined;
   readonly edgeCardinality: Readonly<Record<string, string>>;
   readonly sections: Readonly<Record<string, Readonly<Record<string, SectionStructuralLanguage>>>>;
+  /**
+   * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. Not read to decide
+   * anything — the app behaves identically with it present or absent. It is here so the
+   * declaration states what it does NOT contain, which this generator previously did not: a
+   * section declaring `structural_edge_types` with no `structural_edge_direction` was dropped
+   * whole, and the app then used the global indent binding under a heading the operator had told
+   * to do something else. See `scripts/ledger.mjs`.
+   */
+  readonly dropped: Readonly<Record<string, string>>;
 }
 
 /** What reading the structural declaration produced, mirroring `DeclarationReading`'s shape. */
@@ -110,11 +119,39 @@ export const STRUCTURAL_KEY = "structural";
 
 const EDGE_SOURCES: readonly EdgeSource[] = ["self", "position"];
 const EDGE_DIRECTIONS: readonly EdgeDirection[] = ["incoming", "outgoing"];
-const STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections"] as const;
+const STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections", "dropped"] as const;
 const INDENT_KEYS = ["edgeType", "edgeSource"] as const;
 const SECTION_LANGUAGE_KEYS = ["edgeTypes", "edgeDirection"] as const;
 
-const EMPTY: StructuralLanguage = { indent: undefined, edgeCardinality: {}, sections: {} };
+const EMPTY: StructuralLanguage = {
+  indent: undefined,
+  edgeCardinality: {},
+  sections: {},
+  dropped: {},
+};
+
+/** `what -> why`, validated the same way every other string map in this reader is. */
+function readDropped(value: unknown, problems: string[]): Record<string, string> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${STRUCTURAL_KEY}.dropped' is ${Array.isArray(value) ? "an array" : typeof value}, not ` +
+        "an object — what the generator refused to publish stays unknown",
+    );
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [what, why] of Object.entries(value)) {
+    if (typeof why !== "string") {
+      problems.push(
+        `'${STRUCTURAL_KEY}.dropped.${what}' is ${Array.isArray(why) ? "an array" : typeof why}, ` +
+          "not a reason",
+      );
+      continue;
+    }
+    out[what] = why;
+  }
+  return out;
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -302,5 +339,6 @@ export function readStructuralDeclaration(document: unknown): StructuralReading 
   const edgeCardinality =
     "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
   const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
-  return { structural: { indent, edgeCardinality, sections }, problems };
+  const dropped = "dropped" in raw ? readDropped(raw.dropped, problems) : {};
+  return { structural: { indent, edgeCardinality, sections, dropped }, problems };
 }

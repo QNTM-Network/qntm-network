@@ -342,5 +342,19 @@ describe("4. the falsifier: the app's answer follows the config, because it read
       membershipFor("inbox", "domain-empty", BARE_LINE, language).because,
       "no-section-declaration",
     );
+    // ADDED, not changed: this test always encoded a REAL requirement — the app must abstain
+    // rather than answer from half a predicate — and it still does, unedited above. What it never
+    // asserted is that the abstention is EXPLAINED anywhere. It is now: the pattern's reason is in
+    // `refused` and the heading it costs is named in `dropped`, so "the app says nothing" and "the
+    // operator can find out why" stop being the same silence. See scripts/ledger.mjs.
+    assert.ok(
+      "domain-empty" in language.refused,
+      "the refused pattern is not recorded with a reason",
+    );
+    assert.equal(
+      language.dropped["section 'inbox.domain-empty'"],
+      "qualification refused: domain-empty",
+      "the heading the refusal costs is not named in `dropped`",
+    );
   });
 });

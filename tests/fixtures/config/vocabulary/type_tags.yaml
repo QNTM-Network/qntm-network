@@ -1,0 +1,3 @@
+type_tags:
+  - token: "#person"
+    node_type: person

@@ -2793,3 +2793,53 @@ capabilities:
     hand-authored HTML document, node cannot import one, so the placement's CALLER is invisible to
     flow-trace by construction. It is proved under `node --test` through the lifted page instead.
   status: working
+- id: a-config-declaration-the-app-drops-says-so
+  intent: >-
+    THE OPERATOR'S OWN ACCEPTANCE TEST, MADE MEASURABLE. He set the standard:
+    "it shouldn't be specifically wired to any resolution, but should work for any new config the
+    user puts in" — and named the three outcomes for a config entry the browser cannot express.
+    Picks it up: generalised. Refuses it visibly: honest and incomplete, and it must SAY SO.
+    Silently ignores it: the failure this capability exists to remove.
+    ALL THREE GENERATORS SHIPPED THE THIRD OUTCOME, and it was measured rather than suspected.
+    `design-the-rule-mirror.md` §9.3 named one line — a vocabulary token setting any field outside
+    `node_type`/`domain`/`status` was skipped with no `refused` entry, no warning and no exit code.
+    Against the operator's live config that one line dropped 73 of his own tokens. An audit of all
+    three generators (not only the one the finding named) found sixteen call sites of the same
+    shape, including two the finding did not: a section declaring `structural_edge_types` with no
+    `structural_edge_direction` was dropped whole, so the app used the GLOBAL indent binding under
+    a heading he had explicitly told to do otherwise; and a view sheet dropped by
+    `generate-resolution-declaration.mjs` is a view its registration guard never sweeps, which is
+    the one check stopping that generator from publishing a stale GLOBAL `input_grammar` for a
+    sheet that overrides it.
+    WHAT A REFUSAL DOES NOW, AND THE TENSION IT IS DESIGNED AGAINST. Three channels, deliberately
+    not one: the drop is RECORDED in the generated declaration's own `dropped` map (`what -> why`),
+    PRINTED to stderr on every generate, and GATED — because `presentation.json` is committed and
+    `--check` compares the whole generated object, a NEW drop is red until the operator regenerates
+    and commits it. A generate NEVER exits non-zero. A generator that refuses to run because the
+    operator wrote a config it cannot express is a generator that gets `--force`d, and a `--force`
+    in a habit is the same silence with extra steps. Refusing is DATA; only disagreeing with the
+    committed data is an error. So a deliberate config change flows through as a reviewed diff
+    naming exactly what was dropped, and an accidental one turns the gate red.
+    IT DOES NOT WIDEN ANY GRAMMAR, AND THE NUMBER IT PUBLISHES IS THE HONEST ONE. Nothing here
+    makes the app able to express one thing more. `qualification.dropped` carries 214 entries
+    against the operator's config: 77 vocabulary tokens and 137 of his 186 sections whose
+    qualification the browser cannot decide. 137 of 186 was measurable before only by running a
+    script; it is now a fact the declaration states about itself.
+    THE COMPLETENESS IS MACHINE-CHECKED, NOT ASSERTED. Every `continue;` in all three generators
+    must either record a drop or carry a comment saying why it is not one, swept over the RAW
+    SOURCE TEXT (never an AST — this repository has already had an AST scan pass its own control
+    and still miss three call sites named as strings) and validated against a positive control
+    that injects an unclassified `continue` and must be found.
+  tier: foundational
+  rooting: >-
+    ISOLATED, and measured rather than omitted. The whole mechanism is `scripts/ledger.mjs` plus
+    three generators and one check script — Node modules under `scripts/`, which `.flow-trace.yaml`
+    does not observe (`modules.include: [app]`). The app-side change is three READER fields
+    (`qualification.dropped`, `structural.dropped`, `resolution.dropped`), each validated the way
+    every other string map in its reader already is, and none of them adds a call: `app/` behaves
+    identically with the key present or absent. So this capability adds no edge to flows.yaml and
+    no scenario observes it, which is stated here rather than covered by an unexercised
+    declaration. Its enforcement is `tests/declaration-drop.test.mjs`, 55 tests, of which 27 are
+    per-path mutation proofs, 1 is the mutation proof that the guard goes red, 5 drive the CI gate
+    as a subprocess, and 5 are the completeness scanner and its two controls.
+  status: working

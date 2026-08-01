@@ -130,6 +130,22 @@ export interface QualificationLanguage {
   readonly sectionOrder: Readonly<Record<string, readonly string[]>>;
   /** pattern name -> why nothing was published for it. Never read to decide anything. */
   readonly refused: Readonly<Record<string, string>>;
+  /**
+   * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`.
+   *
+   * `refused` above is one KIND of that — a pattern that would not normalise into the local
+   * grammar. `dropped` is all the others, and before it existed not one of them was written down
+   * anywhere: a vocabulary token setting a fourth field, a view sheet the reader could not parse,
+   * a section missing its `qualification:`. `generate-qualification-declaration.mjs:396` dropped
+   * 73 of the operator's own tokens with no record, no warning and no exit code, which is the
+   * third of the three outcomes `design-the-rule-mirror.md` §8.4 names — "silently ignores it" —
+   * and the one it says must not exist.
+   *
+   * Like `refused`, this is not read to DECIDE anything: the app's behaviour is identical with it
+   * present or absent. It is here so the declaration states what it does not contain, and so
+   * `--check` (which compares the whole generated object) turns red when that set changes.
+   */
+  readonly dropped: Readonly<Record<string, string>>;
 }
 
 /** Mirrors `StructuralReading` and `DeclarationReading`: the value, plus what was wrong with it. */
@@ -149,6 +165,7 @@ const TOP_KEYS = [
   "sections",
   "sectionOrder",
   "refused",
+  "dropped",
 ] as const;
 const SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"] as const;
 
@@ -160,6 +177,7 @@ const EMPTY: QualificationLanguage = {
   sections: {},
   sectionOrder: {},
   refused: {},
+  dropped: {},
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -436,15 +454,20 @@ function readSectionOrder(
   return out;
 }
 
-function readRefused(value: unknown, problems: string[]): Record<string, string> {
+/**
+ * Both `refused` and `dropped` are the same shape — a name mapped to a sentence saying why nothing
+ * was published for it — so they are read by one function keyed on which one it is reading. Two
+ * copies of this loop would be two places for the strictness to drift apart.
+ */
+function readReasons(key: string, value: unknown, problems: string[]): Record<string, string> {
   if (!isPlainObject(value)) {
-    problems.push(`'${QUALIFICATION_KEY}.refused' is ${shapeOf(value)}, not an object`);
+    problems.push(`'${QUALIFICATION_KEY}.${key}' is ${shapeOf(value)}, not an object`);
     return {};
   }
   const out: Record<string, string> = {};
   for (const [name, reason] of Object.entries(value)) {
     if (typeof reason !== "string") {
-      problems.push(`'${QUALIFICATION_KEY}.refused.${name}' is ${shapeOf(reason)}, not a string`);
+      problems.push(`'${QUALIFICATION_KEY}.${key}.${name}' is ${shapeOf(reason)}, not a string`);
       continue;
     }
     out[name] = reason;
@@ -515,7 +538,8 @@ export function readQualificationDeclaration(document: unknown): QualificationRe
       predicates,
       sections: "sections" in raw ? readSections(raw.sections, predicates, problems) : {},
       sectionOrder: "sectionOrder" in raw ? readSectionOrder(raw.sectionOrder, problems) : {},
-      refused: "refused" in raw ? readRefused(raw.refused, problems) : {},
+      refused: "refused" in raw ? readReasons("refused", raw.refused, problems) : {},
+      dropped: "dropped" in raw ? readReasons("dropped", raw.dropped, problems) : {},
     },
     problems,
   };

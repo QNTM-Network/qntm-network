@@ -1,0 +1,4 @@
+day_boundary:
+  timezone: Europe/London
+  day_start_hour: 4
+  week_starts_on: monday

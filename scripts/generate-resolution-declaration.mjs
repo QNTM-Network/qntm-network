@@ -96,6 +96,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
+import { Ledger, reportDropped } from "./ledger.mjs";
 
 export { DEFAULT_CONFIG_DIR };
 
@@ -133,6 +134,7 @@ function readRegistration(configDir, viewFiles) {
   // `default_tags:` must fail this generator loudly, not silently keep shipping the stale GLOBAL
   // value — the same posture `readViews` below takes for `default_node_type` (which DOES vary).
   for (const [file, view] of viewFiles) {
+    // NOT A DROP: default_registration.yaml IS the global declaration this guard compares against.
     if (file === "default_registration.yaml") continue;
     if ("input_grammar" in view) {
       throw new GenerationError(
@@ -147,6 +149,7 @@ function readRegistration(configDir, viewFiles) {
       );
     }
     for (const section of Array.isArray(view.sections) ? view.sections : []) {
+      // NOT A DROP: a non-mapping section cannot declare input_grammar or default_tags, so nothing is lost.
       if (!section || typeof section !== "object") continue;
       if ("input_grammar" in section || "default_tags" in section) {
         throw new GenerationError(
@@ -227,7 +230,7 @@ function collectDefaultNodeTypeCandidates(registration, viewFiles) {
   return [...types].sort();
 }
 
-function readChromeShapes(configDir, candidates) {
+function readChromeShapes(configDir, candidates, ledger) {
   const path = join(configDir, "schema.yaml");
   if (!existsSync(path)) throw new GenerationError(`${path} does not exist`);
   const schema = readYaml(path);
@@ -256,29 +259,67 @@ function readChromeShapes(configDir, candidates) {
       : "checkbox";
     if (SEEDABLE_SHAPES.has(shape)) {
       out[name] = shape;
+      // NOT A DROP: this is the KEEP branch.
+      continue;
     }
-    // A shape this generator does not recognise (stat_line, heading, or a future addition) is
-    // left unpublished on purpose — see this file's header. Not an error: schema.yaml is free to
-    // declare shapes newline.ts does not yet seed.
+    // DROP PATH 8. A shape this generator does not recognise (stat_line, heading, or a future
+    // addition) is left unpublished ON PURPOSE — see this file's header. The purpose was right;
+    // the silence was not. The operator declaring `default_node_type: <a stat_line type>` on a
+    // view gets a GLOBAL rung that refuses to seed a new line there, and nothing told him why.
+    ledger.drop(
+      `node type '${name}'`,
+      `it is a default_node_type somewhere in views/, but its render shape '${shape}' is not one ` +
+        `this app knows how to seed (${[...SEEDABLE_SHAPES].sort().join(", ")}), so a new line ` +
+        "under a view defaulting to it gets no chrome and the GLOBAL rung stays silent",
+    );
   }
   return out;
 }
 
 // ── 5. views/*.yaml -> read once, shared by readRegistration's guard and readOrdering ─────────
 
-function readViewFiles(configDir) {
+function readViewFiles(configDir, ledger) {
   const dir = join(configDir, "views");
   if (!existsSync(dir)) throw new GenerationError(`${dir} does not exist`);
   const files = readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort();
   const out = [];
   for (const file of files) {
+    // NOT A DROP: default_registration.yaml is read separately, by readRegistration.
     if (file === "default_registration.yaml") continue;
     const document = readYaml(join(dir, file));
-    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+    // DROP PATHS 4-6, AND THEY COST MORE HERE THAN ANYWHERE ELSE. A view that falls out of this
+    // list is a view `readRegistration`'s guard never sweeps — and that guard is the only thing
+    // stopping this generator from publishing a stale GLOBAL `input_grammar` / `default_tags` for
+    // a sheet that overrides them. So a silent drop here does not merely withhold a fact: it
+    // disables a check whose own comment says it exists so the generator "must fail loudly, not
+    // silently keep shipping the stale GLOBAL value". Recorded, so it cannot.
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      ledger.drop(
+        `views/${file}`,
+        "the file did not parse into a mapping, so its ordering and its registration overrides " +
+          "were neither published nor checked",
+      );
+      continue;
+    }
     const entries = Object.entries(document);
-    if (entries.length !== 1) continue;
+    if (entries.length !== 1) {
+      ledger.drop(
+        `views/${file}`,
+        `the file declares ${entries.length} top-level keys (${Object.keys(document).join(", ")}) ` +
+          "and this generator reads a view sheet as exactly one; its ordering and its " +
+          "registration overrides were neither published nor checked",
+      );
+      continue;
+    }
     const [viewId, view] = entries[0];
-    if (!view || typeof view !== "object" || !Array.isArray(view.sections)) continue;
+    if (!view || typeof view !== "object" || !Array.isArray(view.sections)) {
+      ledger.drop(
+        `views/${file}`,
+        `view '${viewId}' declares no 'sections:' list, so its ordering and its registration ` +
+          "overrides were neither published nor checked",
+      );
+      continue;
+    }
     out.push([file, { viewId, ...view }]);
   }
   return out;
@@ -322,12 +363,21 @@ function readOrderingFields(section, where) {
   return fields;
 }
 
-function readOrdering(viewFiles) {
+function readOrdering(viewFiles, ledger) {
   const out = {};
   for (const [file, view] of viewFiles) {
     const sections = {};
-    for (const section of view.sections) {
-      if (!section || typeof section !== "object" || typeof section.id !== "string") continue;
+    for (const [index, section] of view.sections.entries()) {
+      // DROP PATH 7. A section with no readable `id:` — its `ordering:` is unpublishable because
+      // there is no key to publish it under, and until now nothing said the ordering was lost.
+      if (!section || typeof section !== "object" || typeof section.id !== "string") {
+        ledger.drop(
+          `views/${file}#${index}`,
+          `section at index ${index} of view '${view.viewId}' has no readable 'id:', so any ` +
+            "ordering it declares could not be published under any key",
+        );
+        continue;
+      }
       const fields = readOrderingFields(section, `${file}: section '${section.id}'`);
       if (Object.keys(fields).length === 0) continue;
       // THE OPERATOR'S OWN WORDS FOR THE SECTION, same reasoning
@@ -379,7 +429,7 @@ function orderingFieldNames(ordering) {
   return names;
 }
 
-function readOrderingFieldMarkers(configDir, fields) {
+function readOrderingFieldMarkers(configDir, fields, ledger) {
   if (fields.size === 0) return {};
   const path = join(configDir, "vocabulary", "markers.yaml");
   if (!existsSync(path)) throw new GenerationError(`${path} does not exist`);
@@ -389,36 +439,89 @@ function readOrderingFieldMarkers(configDir, fields) {
   }
   const out = {};
   for (const entry of markers) {
+    // NOT A DROP: a non-mapping marker declares no field. If it was the only marker for a named ordering field, DROP PATH 13 below records that field as unmarked.
     if (!entry || typeof entry !== "object") continue;
     const { token, field, extraction_hint: hint, render_only: renderOnly } = entry;
+    // A marker for a field no section's `ordering:` names is not a drop — this table is
+    // deliberately restricted to the fields the operator's own ordering table asks about, and a
+    // marker outside that set was never a candidate for publication.
+    // NOT A DROP: this table is restricted to the fields the operator's own ordering declares; a marker outside that set was never a candidate.
     if (typeof field !== "string" || !fields.has(field)) continue;
-    if (renderOnly === true) continue; // a derived display value; edits to it are not ingested
+    const what = `ordering field '${field}'`;
+    // DROP PATH 9. Documented, deliberate — and until now unrecorded.
+    if (renderOnly === true) {
+      ledger.drop(
+        what,
+        `its marker '${token}' is 'render_only: true' — the engine never ingests a value from ` +
+          "that glyph, so no ordering preview can be offered for this field",
+      );
+      continue;
+    }
+    // DROP PATH 10 — THE EXACT TWIN OF THE ONE §9.3 NAMES, in a different generator. A new
+    // `extraction_hint:` (or a fixed-`value:` marker) makes an ordering field the operator's
+    // config explicitly names vanish from the published table with no record at all.
     const kind = EXTRACTION_KINDS[hint];
-    if (kind === undefined) continue; // a fixed-`value:` marker, or an unrecognised hint
-    if (!isNonEmptyString(token)) continue;
+    if (kind === undefined) {
+      ledger.drop(
+        what,
+        `its marker '${token}' declares extraction_hint ${JSON.stringify(hint ?? null)}, which ` +
+          `is not one this app can read a value from (${Object.keys(EXTRACTION_KINDS).sort().join(", ")})`,
+      );
+      continue;
+    }
+    // DROP PATH 11. A marker with no token to look for on the line.
+    if (!isNonEmptyString(token)) {
+      ledger.drop(what, "its marker declares no 'token:' string, so there is no glyph to find on a line");
+      continue;
+    }
+    // DROP PATH 12. Two markers for one ordering field: the later one silently won. The
+    // qualification generator throws on a duplicate PATTERN for exactly this reason ("the engine
+    // merges one dict, so a duplicate silently loses"); here the loser is recorded rather than
+    // thrown, because an ordering preview is an affordance and refusing to generate the whole
+    // declaration over one would be the wolf this ledger's header argues against.
+    if (out[field] !== undefined) {
+      ledger.drop(
+        what,
+        `two markers claim it ('${out[field].token}' and '${token}'); the last one read wins and ` +
+          "the other is not published",
+      );
+    }
     out[field] = { token, kind };
   }
-  // A field the ordering table names but this file did not find a usable marker for is left OUT,
-  // never thrown — the same "unpublished is the refusal" posture `readChromeShapes` already takes
-  // for a node type outside its two seedable shapes. `app/present/ordering.ts` reads the absence
-  // as a reason to stay silent about that field, not as a generation failure.
+  // DROP PATH 13. A field the ordering table NAMES and this loop found no marker for at all. The
+  // old comment called this "unpublished is the refusal" and pointed at `app/present/ordering.ts`
+  // reading the absence as a reason to stay silent — true of the app, and no help to the operator,
+  // who declared an ordering key and gets silence with no reason attached to it.
+  for (const field of fields) {
+    if (out[field] === undefined && ledger.toJSON()[`ordering field '${field}'`] === undefined) {
+      ledger.drop(
+        `ordering field '${field}'`,
+        "a section's 'ordering:' names it, but vocabulary/markers.yaml declares no marker for it " +
+          "at all, so nothing can read its value off a line",
+      );
+    }
+  }
   return out;
 }
 
 // ── assemble ─────────────────────────────────────────────────────────────────────────────────
 
-export function generateResolution(configDir) {
-  const viewFiles = readViewFiles(configDir);
+export function generateResolution(configDir, ledger = new Ledger()) {
+  const viewFiles = readViewFiles(configDir, ledger);
   const registration = readRegistration(configDir, viewFiles);
   const candidates = collectDefaultNodeTypeCandidates(registration, viewFiles);
-  const ordering = readOrdering(viewFiles);
+  const ordering = readOrdering(viewFiles, ledger);
+  const orderingFields = readOrderingFieldMarkers(configDir, orderingFieldNames(ordering), ledger);
+  const chromeShapes = readChromeShapes(configDir, candidates, ledger);
   return {
     registration,
     lineGrammars: readLineGrammars(configDir),
     ordering,
-    orderingFields: readOrderingFieldMarkers(configDir, orderingFieldNames(ordering)),
+    orderingFields,
     dayBoundary: readDayBoundary(configDir),
-    chromeShapes: readChromeShapes(configDir, candidates),
+    chromeShapes,
+    // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
+    dropped: ledger.toJSON(),
   };
 }
 
@@ -442,7 +545,8 @@ async function main() {
     process.exit(3);
   }
 
-  const resolution = generateResolution(args.configDir);
+  const ledger = new Ledger();
+  const resolution = generateResolution(args.configDir, ledger);
   const presentationPath = join(REPO_ROOT, "presentation.json");
   const current = JSON.parse(readFileSync(presentationPath, "utf8"));
 
@@ -452,6 +556,13 @@ async function main() {
       return;
     }
     console.error("presentation.json's 'resolution' key is STALE relative to the monorepo config.");
+    const before = current.resolution?.dropped ?? {};
+    for (const [key, why] of Object.entries(resolution.dropped)) {
+      if (!(key in before)) console.error(`  NEWLY DROPPED  ${key}: ${why}`);
+    }
+    for (const key of Object.keys(before)) {
+      if (!(key in resolution.dropped)) console.error(`  NO LONGER DROPPED  ${key}`);
+    }
     process.exit(1);
   }
 
@@ -468,6 +579,7 @@ async function main() {
       `  ordering field markers: ${JSON.stringify(resolution.orderingFields)}\n` +
       `  chrome shapes: ${JSON.stringify(resolution.chromeShapes)}`,
   );
+  reportDropped("resolution", ledger);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

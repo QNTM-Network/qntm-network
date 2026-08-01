@@ -1,0 +1,874 @@
+/**
+ * NO DECLARATION DISAPPEARS WITHOUT A RECORD.
+ *
+ *   node --test tests/declaration-drop.test.mjs
+ *
+ * `design-the-rule-mirror.md` §8.4 states the operator's acceptance test as three outcomes for a
+ * config entry the browser cannot express — picks it up, refuses it visibly, silently ignores it —
+ * and §9.3 measured the third one live, at `generate-qualification-declaration.mjs:396`. This file
+ * is the proof that the third outcome is gone, and it is organised as five claims:
+ *
+ *   1. EVERY DROP PATH LEAVES A RECORD. Sixteen of them, across all three generators, each
+ *      triggered by a real mutation of a real config file rather than asserted from reading the
+ *      source. A path that cannot be triggered is a path that does not exist, and a path proved by
+ *      a grep returning nothing is not proved at all (this document's own evidence rule, §1).
+ *   2. THE MUTATION PROOF. Re-introduce the silent `continue` and a test goes red. A guard that
+ *      cannot go red is decoration, so the guard is shown going red.
+ *   3. THE CI CHECK FAILS ON A STALE DECLARATION — not that it runs, that it exits 1, driven as
+ *      the subprocess `build.yml` actually invokes.
+ *   4. NO WOLF. Against the committed fixture, the ledger records what was really dropped and
+ *      nothing else — a ledger that fired on every legitimate config entry would be noise, and
+ *      noise is what gets ignored.
+ *   5. THE ACCEPTANCE TEST, both halves, against a SCRATCH COPY OF THE OPERATOR'S REAL CONFIG.
+ *      Skipped, loudly, when the monorepo is not checked out; §5 is the only section that skips.
+ *
+ * NOTHING HERE WRITES TO THE OPERATOR'S CONFIG. Every mutation is made to a `cpSync` copy under
+ * the runner's temp dir, and the copy is removed in a `finally`.
+ */
+
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { generateQualification, DEFAULT_CONFIG_DIR } from "../scripts/generate-qualification-declaration.mjs";
+import { generateStructural } from "../scripts/generate-structural-declaration.mjs";
+import { generateResolution } from "../scripts/generate-resolution-declaration.mjs";
+import { checkDeclarations } from "../scripts/checkdeclarations.mjs";
+import { Ledger } from "../scripts/ledger.mjs";
+import { parseYamlSubset } from "../scripts/yaml-subset.mjs";
+import { readQualificationDeclaration } from "../dist/present.js";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(HERE, "..");
+const FIXTURE_CONFIG = join(HERE, "fixtures", "config");
+
+/**
+ * Copy a config tree somewhere writable, mutate it, and hand the copy's path to a reader.
+ * The same shape `tests/present-qualification.test.mjs`'s own falsifier uses, generalised over
+ * which config it copies so the fixture and the operator's real config share one harness.
+ */
+function withMutatedConfig(source, mutate, use) {
+  const scratch = mkdtempSync(join(tmpdir(), "declaration-drop-"));
+  try {
+    const configDir = join(scratch, "config");
+    cpSync(source, configDir, { recursive: true });
+    mutate(configDir);
+    return use(configDir, scratch);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/** Overwrite one config file wholesale. Used where a mutation must break the file's SHAPE. */
+const put = (configDir, relative, text) => writeFileSync(join(configDir, relative), text);
+
+/** Rewrite one config file by string substitution, asserting the edit actually applied. */
+function edit(configDir, relative, from, to) {
+  const path = join(configDir, relative);
+  const before = readFileSync(path, "utf8");
+  assert.ok(before.includes(from), `the mutation's own anchor '${from}' is not in ${relative}`);
+  writeFileSync(path, before.replace(from, to));
+}
+
+/** Generate one declaration from a mutated fixture and return its `dropped` map. */
+const droppedFrom = (generate, mutate) =>
+  withMutatedConfig(FIXTURE_CONFIG, mutate, (configDir) => generate(configDir).dropped);
+
+/** Assert `dropped` names `what` and that the reason says `why`. */
+function assertDropped(dropped, what, why) {
+  assert.ok(
+    what in dropped,
+    `nothing was recorded for '${what}'. Recorded: ${JSON.stringify(Object.keys(dropped))}`,
+  );
+  assert.match(dropped[what], why);
+}
+
+// ── 0. the fixture itself is legal config ─────────────────────────────────────────────────────
+
+describe("0. the committed fixture config is a real config, parsed not assumed", () => {
+  // THE TRAP THIS CLOSES, and it has caught five agents: a plain YAML scalar containing ": "
+  // parses as a nested mapping and breaks declaration loading with exit 2. Reading the whole tree
+  // through the generators' own parser is what turns "it looks fine" into a check.
+  test("every fixture YAML file parses through the generators' own reader", () => {
+    const files = [
+      "schema.yaml",
+      "line_grammars.yaml",
+      "day_boundary.yaml",
+      "patterns/basic.yaml",
+      "views/default_registration.yaml",
+      "views/main.yaml",
+      "vocabulary/type_tags.yaml",
+      "vocabulary/domain_tags.yaml",
+      "vocabulary/status_tags.yaml",
+      "vocabulary/markers.yaml",
+      "vocabulary/structural_tokens.yaml",
+    ];
+    for (const relative of files) {
+      const path = join(FIXTURE_CONFIG, relative);
+      assert.ok(existsSync(path), `${relative} is missing from the fixture`);
+      const parsed = parseYamlSubset(readFileSync(path, "utf8"), path);
+      assert.ok(parsed && typeof parsed === "object", `${relative} did not parse into a mapping`);
+    }
+  });
+
+  test("all three generators run against it and publish something", () => {
+    assert.ok(Object.keys(generateQualification(FIXTURE_CONFIG).predicates).length > 0);
+    assert.ok(generateStructural(FIXTURE_CONFIG).indent.edgeType === "PART_OF");
+    assert.ok(generateResolution(FIXTURE_CONFIG).registration.defaultNodeType === "task");
+  });
+});
+
+// ── 1. every drop path leaves a record ────────────────────────────────────────────────────────
+
+describe("1a. qualification — every path that discards a declaration records it", () => {
+  test("DROP 1: a patterns/ file that is not a mapping", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "patterns/orphan.yaml", "- not\n- a\n- mapping\n"),
+    );
+    assertDropped(dropped, "patterns/orphan.yaml", /did not parse into a mapping/);
+  });
+
+  test("DROP 2: a views/ file that is not a mapping", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "views/extra.yaml", "- just\n- a\n- list\n"),
+    );
+    assertDropped(dropped, "views/extra.yaml", /did not parse into a mapping/);
+  });
+
+  test("DROP 3: a views/ file with more than one top-level key", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "views/two.yaml", "one:\n  sections: []\ntwo:\n  sections: []\n"),
+    );
+    assertDropped(dropped, "views/two.yaml", /declares 2 top-level keys \(one, two\)/);
+  });
+
+  test("DROP 4: a view with no sections list", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "views/bare.yaml", "bare:\n  path: bare.md\n"),
+    );
+    assertDropped(dropped, "views/bare.yaml", /declares no 'sections:' list/);
+  });
+
+  test("DROP 5: a section entry that is not a mapping — and it names the ADDRESSING cost", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      edit(c, "views/main.yaml", "    - id: open", "    - just-a-string\n    - id: open"),
+    );
+    assertDropped(dropped, "views/main.yaml#0", /is not a mapping/);
+    // The reason must name what a missing sectionOrder entry costs, because that is the part a
+    // reader cannot infer: `app/present/address.ts` indexes sectionOrder POSITIONALLY.
+    assertDropped(dropped, "views/main.yaml#0", /shifts the positional ordinal/);
+  });
+
+  test("DROP 6: a section with no 'qualification:' key", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      edit(c, "views/main.yaml", "      qualification: local-tasks\n", ""),
+    );
+    assertDropped(dropped, "views/main.yaml#0", /section 'open'.*declares no 'qualification:'/s);
+  });
+
+  test("DROP 7: a vocabulary file that is not a mapping", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "vocabulary/broken.yaml", "- a\n- list\n"),
+    );
+    assertDropped(dropped, "vocabulary/broken.yaml", /did not parse into a mapping/);
+  });
+
+  test("DROP 8: a vocabulary family that is not a list", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "vocabulary/odd.yaml", "odd_family:\n  token: '#x'\n  field: domain\n"),
+    );
+    assertDropped(dropped, "vocabulary/odd.yaml#odd_family", /is not a list of token entries/);
+  });
+
+  test("DROP 9: a vocabulary entry with no token", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      edit(c, "vocabulary/domain_tags.yaml", '  - token: "#work"\n', "  - field: domain\n"),
+    );
+    assertDropped(dropped, "vocabulary/domain_tags.yaml#domain_tags[0]", /declares no 'token:' string/);
+  });
+
+  test("DROP 10 — THE ONE §9.3 NAMES: a token setting a fourth field", () => {
+    // The operator's own worked example, verbatim from the design document: "If the operator
+    // declares `#p1 -> priority: high` tomorrow, it vanishes from the published grammar and
+    // nothing anywhere says so."
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
+    );
+    assertDropped(dropped, "vocabulary token '#p1'", /sets 'priority'.*node_type, domain, status/s);
+  });
+
+  test("DROP 11: a resolvable field set by a render-only token", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      edit(
+        c,
+        "vocabulary/status_tags.yaml",
+        "    value: done\n",
+        "    value: done\n    render_only: true\n",
+      ),
+    );
+    assertDropped(dropped, "vocabulary token '#done'", /render_only: true/);
+  });
+
+  test("DROP 12: a resolvable field set to something that is not a fixed scalar", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      edit(c, "vocabulary/domain_tags.yaml", "    value: work\n", "    value: [work, admin]\n"),
+    );
+    assertDropped(dropped, "vocabulary token '#work'", /not a fixed scalar/);
+  });
+
+  test("DROP 13: a token setting a field through 'parametric_field:' — a shape the loop never reads", () => {
+    // This is the one an AST scan for `entry.field` cannot find: the field name is spelled under
+    // a DIFFERENT key, so a scanner looking for the property access reports "not a field
+    // declaration" and moves on. The operator wrote a field name either way.
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(
+        c,
+        "vocabulary/parametric.yaml",
+        'parametric_tags:\n  - token: "#every-{n}{unit}"\n    parametric_field:\n      field: cadence\n      capture: n\n',
+      ),
+    );
+    assertDropped(dropped, "vocabulary token '#every-{n}{unit}'", /sets 'cadence' through 'parametric_field:'/);
+  });
+
+  test("DROP 14: a section whose qualification was refused — the app says nothing under that heading", () => {
+    // No mutation needed: the fixture ships one section on each side of the boundary on purpose.
+    const dropped = generateQualification(FIXTURE_CONFIG).dropped;
+    assertDropped(dropped, "section 'main.nested'", /qualification refused: traversing-tasks/);
+    // And the reason is not restated — it lives in `refused`, once, and the two must join.
+    const refused = generateQualification(FIXTURE_CONFIG).refused;
+    assert.ok("traversing-tasks" in refused, "the join target is missing from refused");
+  });
+});
+
+describe("1b. structural — every path that discards a declaration records it", () => {
+  test("DROP 15: a view sheet whose top-level key this line scanner cannot see", () => {
+    const dropped = droppedFrom(generateStructural, (c) =>
+      put(c, "views/indented.yaml", "  buried:\n    sections:\n      - id: x\n"),
+    );
+    assertDropped(dropped, "views/indented.yaml", /no top-level view key this scanner recognises/);
+  });
+
+  test("DROP 16: a view with no sections: at the indent this scanner reads", () => {
+    const dropped = droppedFrom(generateStructural, (c) =>
+      put(c, "views/nosections.yaml", "nosections:\n  path: nosections.md\n"),
+    );
+    assertDropped(dropped, "views/nosections.yaml", /has no 'sections:' key at the indent/);
+  });
+
+  test("DROP 17 — THE WORST OF THE THREE: a HALF-declared structural override", () => {
+    // Types with no direction. Before this change the section was dropped whole and the app
+    // silently used the GLOBAL indent binding under a heading the operator had told to do
+    // something else — a confident wrong answer, not an abstention.
+    const dropped = droppedFrom(generateStructural, (c) =>
+      edit(c, "views/main.yaml", "      structural_edge_direction: outgoing\n", ""),
+    );
+    assertDropped(
+      dropped,
+      "section 'main.nested'",
+      /structural_edge_types with no structural_edge_direction.*falls back to the global indent binding/s,
+    );
+  });
+
+  test("DROP 17b: the other half — direction with no types", () => {
+    const dropped = droppedFrom(generateStructural, (c) =>
+      edit(c, "views/main.yaml", "      structural_edge_types: [UNLOCKS]\n", ""),
+    );
+    assertDropped(
+      dropped,
+      "section 'main.nested'",
+      /structural_edge_direction with no structural_edge_types/,
+    );
+  });
+
+  test("default_registration.yaml is EXCLUDED BY NAME, not by silence", () => {
+    // The one file in a real config that legitimately has no `sections:`. If it were skipped by
+    // silence rather than by name, every other sectionless view would be silent too.
+    assert.deepEqual(generateStructural(FIXTURE_CONFIG).dropped, {});
+  });
+});
+
+describe("1c. resolution — every path that discards a declaration records it", () => {
+  test("DROP 18: a view file that is not a mapping — and the REGISTRATION GUARD it disables", () => {
+    const dropped = droppedFrom(generateResolution, (c) => put(c, "views/x.yaml", "- a\n- list\n"));
+    assertDropped(dropped, "views/x.yaml", /neither published nor checked/);
+  });
+
+  test("DROP 19: a view file with more than one top-level key", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      put(c, "views/two.yaml", "one:\n  sections: []\ntwo:\n  sections: []\n"),
+    );
+    assertDropped(dropped, "views/two.yaml", /declares 2 top-level keys/);
+  });
+
+  test("DROP 20: a view with no sections list", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      put(c, "views/bare.yaml", "bare:\n  path: bare.md\n"),
+    );
+    assertDropped(dropped, "views/bare.yaml", /declares no 'sections:' list/);
+  });
+
+  test("DROP 21: a section with no readable id — its ordering could not be published", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "views/main.yaml", "    - id: open", "    - name: nameless"),
+    );
+    assertDropped(dropped, "views/main.yaml#0", /has no readable 'id:'.*ordering/s);
+  });
+
+  test("DROP 22: a node type whose render shape this app cannot seed", () => {
+    // `person` is a `default_node_type` candidate with shape `plain_line` (seedable). Point a
+    // view's default at a `heading`-shaped type and the GLOBAL rung goes silent for it.
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "views/main.yaml", "main:\n  path: main.md\n", "main:\n  path: main.md\n  default_node_type: header\n"),
+    );
+    assertDropped(dropped, "node type 'header'", /render shape 'heading' is not one this app knows how to seed/);
+  });
+
+  test("DROP 23: an ordering field whose marker is render_only", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "vocabulary/markers.yaml", "    extraction_hint: trailing_date\n", "    extraction_hint: trailing_date\n    render_only: true\n"),
+    );
+    assertDropped(dropped, "ordering field 'due_date'", /render_only: true/);
+  });
+
+  test("DROP 24 — THE EXACT TWIN of §9.3, in another generator: an unrecognised extraction_hint", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "vocabulary/markers.yaml", "extraction_hint: trailing_date", "extraction_hint: trailing_duration"),
+    );
+    assertDropped(dropped, "ordering field 'due_date'", /extraction_hint "trailing_duration"/);
+  });
+
+  test("DROP 25: a marker with no token", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "vocabulary/markers.yaml", '  - token: "📅"\n', "  - x: y\n"),
+    );
+    // With the token line gone the field has no marker at all, which is DROP 26's shape.
+    assertDropped(dropped, "ordering field 'due_date'", /no marker for it at all|declares no 'token:'/);
+  });
+
+  test("DROP 26: two markers claim one ordering field — the loser is named", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(
+        c,
+        "vocabulary/markers.yaml",
+        '  - token: "📅"\n    field: due_date\n    extraction_hint: trailing_date\n',
+        '  - token: "📅"\n    field: due_date\n    extraction_hint: trailing_date\n' +
+          '  - token: "🗓"\n    field: due_date\n    extraction_hint: trailing_date\n',
+      ),
+    );
+    assertDropped(dropped, "ordering field 'due_date'", /two markers claim it/);
+  });
+
+  test("DROP 27: an ordering field the config names and no marker declares", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "views/main.yaml", "        - field: due_date", "        - field: invented_field"),
+    );
+    assertDropped(dropped, "ordering field 'invented_field'", /declares no marker for it at all/);
+  });
+});
+
+// ── 2. the mutation proof: a guard that cannot go red is decoration ───────────────────────────
+
+describe("2. THE MUTATION PROOF — re-introduce a silent drop and a test goes red", () => {
+  /**
+   * Re-create the exact line the finding names, as it stood before this change:
+   *
+   *   if (typeof entry.field !== "string" || !RESOLVABLE_FIELDS.includes(entry.field)) continue;
+   *
+   * — by patching the generator's SOURCE into a temp copy and importing that copy. Nothing on
+   * disk in this repo is modified; the mutant is a sibling module in a temp dir that imports this
+   * repo's real `yaml-subset.mjs`, `monorepo-config.mjs` and `ledger.mjs` by absolute path.
+   */
+  const withMutantGenerator = async (patch, use) => {
+    const scratch = mkdtempSync(join(tmpdir(), "mutant-generator-"));
+    try {
+      const source = readFileSync(join(REPO, "scripts", "generate-qualification-declaration.mjs"), "utf8");
+      const mutated = patch(source);
+      assert.notEqual(mutated, source, "the mutation's own patch did not apply");
+      const rewritten = mutated
+        .replaceAll('from "./yaml-subset.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "yaml-subset.mjs"))}`)
+        .replaceAll('from "./monorepo-config.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "monorepo-config.mjs"))}`)
+        .replaceAll('from "./ledger.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "ledger.mjs"))}`);
+      const path = join(scratch, "mutant.mjs");
+      writeFileSync(path, rewritten);
+      // AWAITED INSIDE THE try, never returned as a pending promise: the `finally` below removes
+      // the directory the mutant module lives in, and an un-awaited import would race it.
+      return await use(path);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  };
+
+  test("CONTROL: the mutant harness reproduces the real generator when it patches nothing real", async () => {
+    // A mutation experiment whose harness is untested proves nothing about the mutation. The
+    // control changes a comment only, and the output must be byte-identical to the real one.
+    const real = JSON.stringify(generateQualification(FIXTURE_CONFIG));
+    const same = await withMutantGenerator(
+      (s) => s.replace("// ── assemble", "// ── assemble (harness control)"),
+      async (path) => {
+        const mutant = await import(`file://${path}`);
+        return JSON.stringify(mutant.generateQualification(FIXTURE_CONFIG));
+      },
+    );
+    assert.equal(same, real, "the mutant harness does not reproduce the real generator");
+  });
+
+  test("MUTANT: restore the silent `continue` at the token loop and the DROP 10 assertion goes RED", async () => {
+    const droppedByMutant = await withMutantGenerator(
+      (source) => {
+        // Replace the whole recorded branch with the single line it replaced.
+        const start = source.indexOf('        if (typeof entry.field === "string") {');
+        assert.notEqual(start, -1, "the recorded branch is not where the mutation expects it");
+        const end = source.indexOf("        // DROP PATH 13.", start);
+        assert.notEqual(end, -1, "the end of the recorded branch was not found");
+        return (
+          source.slice(0, start) +
+          '        if (typeof entry.field !== "string" || !RESOLVABLE_FIELDS.includes(entry.field)) continue;\n' +
+          "        if (entry.render_only === true) continue;\n" +
+          "        if (!isScalar(entry.value) || entry.value === null) continue;\n" +
+          "        tokens[entry.field][entry.token] = entry.value;\n" +
+          "        continue;\n" +
+          source.slice(end)
+        );
+      },
+      async (path) => {
+        const mutant = await import(`file://${path}`);
+        return withMutatedConfig(
+          FIXTURE_CONFIG,
+          (c) => put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
+          (configDir) => mutant.generateQualification(configDir).dropped,
+        );
+      },
+    );
+
+    // THE RED. Under the mutant, `#p1` is dropped and NOTHING says so — which is exactly the
+    // shipped defect. The assertion DROP 10 makes therefore fails here, and this test asserts
+    // that it fails: a guard that cannot go red is decoration.
+    assert.throws(
+      () => assertDropped(droppedByMutant, "vocabulary token '#p1'", /sets 'priority'/),
+      /nothing was recorded for 'vocabulary token '#p1''/,
+      "the mutant still recorded the drop — the guard is not what makes DROP 10 pass",
+    );
+  });
+});
+
+// ── 3. the CI check fails on a stale declaration ──────────────────────────────────────────────
+
+describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declaration", () => {
+  /** Run `scripts/checkdeclarations.mjs` exactly as build.yml does, and report its exit code. */
+  const runCheck = (configDir, presentationPath) => {
+    try {
+      const stdout = execFileSync(
+        process.execPath,
+        [join(REPO, "scripts", "checkdeclarations.mjs"), "--config-dir", configDir, "--presentation", presentationPath],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      );
+      return { code: 0, output: stdout };
+    } catch (error) {
+      return { code: error.status, output: `${error.stdout ?? ""}${error.stderr ?? ""}` };
+    }
+  };
+
+  /** Write a presentation.json holding the three keys generated from `configDir`. */
+  const servedFrom = (configDir, scratch) => {
+    const path = join(scratch, "presentation.json");
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          note: "a synthetic served document",
+          qualification: generateQualification(configDir),
+          structural: generateStructural(configDir),
+          resolution: generateResolution(configDir),
+        },
+        null,
+        2,
+      ),
+    );
+    return path;
+  };
+
+  test("FRESH: a declaration generated from its own config exits 0", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "gate-fresh-"));
+    try {
+      const served = servedFrom(FIXTURE_CONFIG, scratch);
+      const { code } = runCheck(FIXTURE_CONFIG, served);
+      assert.equal(code, 0, "a fresh declaration did not pass the gate");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("STALE: the config gains a token the app cannot express, and the gate EXITS 1", () => {
+    // This is the whole point. Before this change the same mutation moved NOTHING in the
+    // generated output, so no staleness check anywhere could have fired on it.
+    const scratch = mkdtempSync(join(tmpdir(), "gate-stale-"));
+    try {
+      const served = servedFrom(FIXTURE_CONFIG, scratch);
+      const result = withMutatedConfig(
+        FIXTURE_CONFIG,
+        (c) => put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
+        (configDir) => runCheck(configDir, served),
+      );
+      assert.equal(result.code, 1, `the gate did not fail on a stale declaration:\n${result.output}`);
+      assert.match(result.output, /qualification: STALE/);
+      // And it names WHICH declaration vanished, not merely that bytes differ.
+      assert.match(result.output, /NEWLY DROPPED\s+vocabulary token '#p1'/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("STALE: a config change the app CAN express also exits 1 — the gate is not drop-specific", () => {
+    const scratch = mkdtempSync(join(tmpdir(), "gate-stale2-"));
+    try {
+      const served = servedFrom(FIXTURE_CONFIG, scratch);
+      const result = withMutatedConfig(
+        FIXTURE_CONFIG,
+        (c) => edit(c, "views/main.yaml", "        domain: personal", "        domain: work"),
+        (configDir) => runCheck(configDir, served),
+      );
+      assert.equal(result.code, 1, `the gate did not fail on a changed default:\n${result.output}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("NOT CHECKED is not a pass: an absent config dir exits 3, never 0", () => {
+    // build.yml reads this exit code and raises a ::warning:: rather than a green tick, because a
+    // check that could not run must never look like a check that ran and passed.
+    const { code, output } = runCheck(join(tmpdir(), "no-such-config-dir"), join(REPO, "presentation.json"));
+    assert.equal(code, 3);
+    assert.match(output, /NOTHING WAS CHECKED/);
+    assert.match(output, /It is NOT a pass/);
+  });
+
+  test("the in-process comparison agrees with the subprocess, so a test can use either", () => {
+    const served = {
+      qualification: generateQualification(FIXTURE_CONFIG),
+      structural: generateStructural(FIXTURE_CONFIG),
+      resolution: generateResolution(FIXTURE_CONFIG),
+    };
+    assert.deepEqual(checkDeclarations(FIXTURE_CONFIG, served).stale, []);
+    assert.deepEqual(checkDeclarations(FIXTURE_CONFIG, {}).stale, [
+      "qualification",
+      "structural",
+      "resolution",
+    ]);
+  });
+});
+
+// ── 4. no wolf ────────────────────────────────────────────────────────────────────────────────
+
+describe("4. NO WOLF — the ledger records what was dropped, and nothing else", () => {
+  test("the unmutated fixture drops exactly two things, both real", () => {
+    const dropped = generateQualification(FIXTURE_CONFIG).dropped;
+    assert.deepEqual(Object.keys(dropped).sort(), [
+      "section 'main.nested'",
+      "vocabulary token '📅'",
+    ]);
+    assert.deepEqual(generateStructural(FIXTURE_CONFIG).dropped, {});
+    assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {});
+  });
+
+  test("a token on a DIFFERENT axis — an edge tag — is not recorded, because nothing was dropped", () => {
+    const dropped = droppedFrom(generateQualification, (c) =>
+      put(c, "vocabulary/edge_tags.yaml", 'edge_tags:\n  - token: "#unlocks"\n    edge_type: UNLOCKS\n    cardinality: many\n'),
+    );
+    assert.ok(
+      !Object.keys(dropped).some((k) => k.includes("#unlocks")),
+      `an edge tag was recorded as a dropped field declaration: ${JSON.stringify(dropped)}`,
+    );
+  });
+
+  test("a marker for a field no ordering names is not recorded either", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(c, "vocabulary/markers.yaml", "markers:\n", 'markers:\n  - token: "⏳"\n    field: waiting_since\n    extraction_hint: trailing_date\n'),
+    );
+    assert.ok(
+      !("ordering field 'waiting_since'" in dropped),
+      "a marker outside the ordering table was recorded as a drop",
+    );
+  });
+
+  test("a generate NEVER fails on a drop — a generator that cries wolf gets --force'd", () => {
+    // The design decision, asserted rather than left in a comment: `generateQualification` returns
+    // normally with 77 drops against the operator's config and 2 against the fixture. Only
+    // DISAGREEING with the committed record is an error, and that is `--check`'s job (section 3).
+    assert.doesNotThrow(() =>
+      withMutatedConfig(
+        FIXTURE_CONFIG,
+        (c) => put(c, "vocabulary/many.yaml", 'many:\n  - token: "#a"\n    field: alpha\n    value: 1\n  - token: "#b"\n    field: beta\n    value: 2\n'),
+        (configDir) => {
+          const result = generateQualification(configDir);
+          assert.equal(Object.keys(result.dropped).length, 4);
+          return result;
+        },
+      ),
+    );
+  });
+});
+
+// ── 5. the acceptance test, against a scratch copy of the operator's REAL config ───────────────
+
+const monorepo = existsSync(DEFAULT_CONFIG_DIR);
+const skip = monorepo ? false : `monorepo not checked out at ${DEFAULT_CONFIG_DIR}`;
+
+describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his own config", () => {
+  test("BASELINE: his real config today drops 77 tokens and 137 sections, all recorded", { skip }, () => {
+    const dropped = generateQualification(DEFAULT_CONFIG_DIR).dropped;
+    const tokens = Object.keys(dropped).filter((k) => k.startsWith("vocabulary token"));
+    const sections = Object.keys(dropped).filter((k) => k.startsWith("section "));
+    assert.equal(tokens.length, 77, "the token drop count moved — regenerate and say so");
+    assert.equal(sections.length, 137, "the refused-section count moved — regenerate and say so");
+    // design-the-rule-mirror.md §9.2 measured 137 of 186 by running a script. It is now a fact
+    // the declaration states about itself.
+    assert.equal(Object.keys(dropped).length, 214);
+    for (const reason of Object.values(dropped)) assert.ok(reason.length > 0);
+  });
+
+  test("HALF A — a declaration the grammar CANNOT express: a human is told", { skip }, () => {
+    const dropped = withMutatedConfig(
+      DEFAULT_CONFIG_DIR,
+      (configDir) =>
+        writeFileSync(
+          join(configDir, "vocabulary", "urgency_tags.yaml"),
+          'urgency_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n',
+        ),
+      (configDir) => generateQualification(configDir).dropped,
+    );
+    // 1. RECORDED, keyed by the token he typed, with a reason he can act on.
+    assertDropped(dropped, "vocabulary token '#p1'", /sets 'priority'/);
+    assertDropped(dropped, "vocabulary token '#p1'", /node_type, domain, status/);
+    // 2. PRINTED. The same map is what `reportDropped` turns into stderr lines on every generate.
+    const ledger = new Ledger();
+    ledger.drop("vocabulary token '#p1'", dropped["vocabulary token '#p1'"]);
+    const report = ledger.report("qualification").join("\n");
+    assert.match(report, /READ AND NOT PUBLISHED/);
+    assert.match(report, /vocabulary token '#p1'/);
+    // 3. GATED. The committed presentation.json does not carry it, so `--check` is now red.
+    const served = JSON.parse(readFileSync(join(REPO, "presentation.json"), "utf8"));
+    assert.ok(
+      !("vocabulary token '#p1'" in served.qualification.dropped),
+      "the committed declaration already carries this token — the gate arm of this test is void",
+    );
+  });
+
+  test("HALF B — a declaration the grammar CAN express: it flows through, with no code change", { skip }, () => {
+    // The other half, and the test is not a test without it. A new SECTION, with a new
+    // `defaults:` field the generator has never seen, pointing at an already-publishable
+    // qualification. Nothing in `app/` or `scripts/` is edited between the two halves.
+    const language = withMutatedConfig(
+      DEFAULT_CONFIG_DIR,
+      (configDir) => {
+        const path = join(configDir, "views", "inbox.yaml");
+        const before = readFileSync(path, "utf8");
+        assert.ok(before.includes("qualification: domain-empty"), "inbox.yaml's shape moved");
+        writeFileSync(
+          path,
+          before.replace(
+            "    - id: domain-empty",
+            "    - id: invented-section\n" +
+              "      qualification: domain-empty\n" +
+              '      name: "Invented"\n' +
+              "      defaults:\n" +
+              "        invented_field: invented_value\n" +
+              "    - id: domain-empty",
+          ),
+        );
+      },
+      (configDir) => readQualificationDeclaration({ qualification: generateQualification(configDir) }).qualification,
+    );
+
+    const section = language.sections["inbox"]?.["invented-section"];
+    assert.ok(section, "a new section with a publishable qualification did not flow through");
+    assert.equal(section.name, "Invented");
+    assert.equal(section.qualification, "domain-empty");
+    // A NEW FIELD, never enumerated anywhere: the grammar is `{field: scalar}`, not a list of the
+    // eight fields the generator happened to see. This is the generality claim, tested.
+    assert.deepEqual(section.defaults, { invented_field: "invented_value" });
+    // And it takes its place in the FULL declared order, so addressing follows it too.
+    assert.ok(language.sectionOrder["inbox"].includes("invented-section"));
+    assert.deepEqual(language.sectionOrder["inbox"], ["inbox-tagged", "invented-section", "domain-empty"]);
+  });
+
+  test("THE THIRD OUTCOME IS GONE: a config change reaches EXACTLY ONE of the two other rows", { skip }, () => {
+    // The acceptance test, stated as the operator states it. Take the same declaration twice —
+    // one the app can express and one it cannot — and assert each lands in exactly one row, with
+    // "silently ignored" reachable by neither.
+    const publish = withMutatedConfig(
+      DEFAULT_CONFIG_DIR,
+      (configDir) =>
+        writeFileSync(
+          join(configDir, "vocabulary", "extra_domain_tags.yaml"),
+          'extra_domain_tags:\n  - token: "#invented"\n    field: domain\n    value: invented\n',
+        ),
+      (configDir) => generateQualification(configDir),
+    );
+    // ROW 1, picks it up: the token is in the published grammar, and not in `dropped`.
+    assert.equal(publish.tokens.domain["#invented"], "invented");
+    assert.ok(!("vocabulary token '#invented'" in publish.dropped));
+
+    const refuse = withMutatedConfig(
+      DEFAULT_CONFIG_DIR,
+      (configDir) =>
+        writeFileSync(
+          join(configDir, "vocabulary", "extra_domain_tags.yaml"),
+          'extra_domain_tags:\n  - token: "#invented"\n    field: invented_field\n    value: invented\n',
+        ),
+      (configDir) => generateQualification(configDir),
+    );
+    // ROW 2, refuses it visibly: absent from every published token map, present in `dropped`.
+    for (const map of Object.values(refuse.tokens)) {
+      assert.ok(!("#invented" in map), "a token on an unresolvable field reached the published grammar");
+    }
+    assertDropped(refuse.dropped, "vocabulary token '#invented'", /sets 'invented_field'/);
+
+    // ROW 3, silently ignored: no longer reachable. The two runs differ in `dropped`, so the
+    // refusal is not byte-identical to the publish — which is precisely what it used to be.
+    assert.notDeepEqual(publish.dropped, refuse.dropped);
+  });
+});
+
+// ── the ledger itself ─────────────────────────────────────────────────────────────────────────
+
+describe("6. the ledger", () => {
+  test("two drops of one thing join their reasons rather than one overwriting the other", () => {
+    const ledger = new Ledger();
+    ledger.drop("a", "first");
+    ledger.drop("a", "second");
+    assert.equal(ledger.toJSON().a, "first; second");
+    assert.equal(ledger.size, 1);
+  });
+
+  test("keys are sorted, so a directory-walk order never produces a spurious diff", () => {
+    const ledger = new Ledger();
+    for (const key of ["z", "a", "m"]) ledger.drop(key, "why");
+    assert.deepEqual(Object.keys(ledger.toJSON()), ["a", "m", "z"]);
+  });
+
+  test("a drop with no reason is refused — an unexplained record is the silence again", () => {
+    const ledger = new Ledger();
+    assert.throws(() => ledger.drop("a", ""), /must give a reason/);
+    assert.throws(() => ledger.drop("", "why"), /must name what was dropped/);
+  });
+
+  test("an empty ledger reports that plainly, rather than saying nothing", () => {
+    assert.match(new Ledger().report("qualification").join("\n"), /nothing was dropped/);
+  });
+});
+
+// ── 7. the audit is COMPLETE, and the completeness is machine-checked ─────────────────────────
+
+describe("7. THE COMPLETENESS SCANNER — no path may leave a declaration without a verdict", () => {
+  /**
+   * WHY A SCANNER AND NOT A GREP. Sections 1 and 2 prove each drop path I FOUND. They cannot prove
+   * I found them all, and "grep returned nothing" is not a proof of absence — this repository has
+   * already had an AST scan pass its own positive control and still miss three call sites named as
+   * strings. So this scans the RAW SOURCE TEXT of the three generators (never an AST, so a shape
+   * spelled as a string cannot hide from it) and requires every `continue;` to carry exactly one
+   * of two verdicts:
+   *
+   *   RECORDED   a `ledger.drop(` call appears in the twelve lines above it, so the declaration
+   *              it discards leaves a record.
+   *   NOT A DROP a comment saying so, and why — the audit's own finding, written at the site.
+   *
+   * A new `continue` added later carries neither and turns this red. That is the point: the guard
+   * is against the NEXT silent drop, not only the sixteen already closed.
+   */
+  const GENERATORS = [
+    "scripts/generate-qualification-declaration.mjs",
+    "scripts/generate-structural-declaration.mjs",
+    "scripts/generate-resolution-declaration.mjs",
+  ];
+  const WINDOW = 12;
+
+  /** @returns {string[]} `file:line  <source>` for every `continue;` carrying neither verdict. */
+  function unclassified(sources) {
+    const found = [];
+    for (const [name, text] of Object.entries(sources)) {
+      const lines = text.split("\n");
+      lines.forEach((line, i) => {
+        if (!/\bcontinue;/.test(line)) return;
+        const window = lines.slice(Math.max(0, i - WINDOW), i + 1).join("\n");
+        if (/ledger\.drop\(/.test(window)) return;
+        if (/NOT A DROP/.test(window)) return;
+        found.push(`${name}:${i + 1}  ${line.trim()}`);
+      });
+    }
+    return found;
+  }
+
+  const read = () =>
+    Object.fromEntries(GENERATORS.map((g) => [g, readFileSync(join(REPO, g), "utf8")]));
+
+  test("POSITIVE CONTROL: the scanner FINDS an unclassified `continue` when one is injected", () => {
+    // A measurement that returns zero is a broken measurement until a positive control passes
+    // (design-the-resolution-architecture.md:1406-1408). This is that control, and it runs FIRST.
+    const sources = read();
+    const target = GENERATORS[0];
+    sources[target] = sources[target].replace(
+      "export function generateQualification(",
+      "function injectedSilentDrop(xs) {\n" +
+        "  for (const x of xs) {\n" +
+        "    if (x.field !== undefined) continue;\n" +
+        "  }\n" +
+        "}\n\n" +
+        "export function generateQualification(",
+    );
+    const found = unclassified(sources);
+    assert.equal(found.length, 1, `the control did not produce exactly one finding: ${found.join("\n")}`);
+    assert.match(found[0], /if \(x\.field !== undefined\) continue;/);
+  });
+
+  test("SECOND CONTROL: a `continue` labelled NOT A DROP is accepted, and only then", () => {
+    const sources = read();
+    const target = GENERATORS[1];
+    sources[target] = sources[target].replace(
+      "export function generateStructural(",
+      "function labelled(xs) {\n" +
+        "  for (const x of xs) {\n" +
+        "    // NOT A DROP: a synthetic control.\n" +
+        "    if (x) continue;\n" +
+        "  }\n" +
+        "}\n\n" +
+        "export function generateStructural(",
+    );
+    assert.deepEqual(unclassified(sources), []);
+  });
+
+  test("THE SWEEP: every `continue;` in all three generators carries a verdict", () => {
+    const found = unclassified(read());
+    assert.deepEqual(
+      found,
+      [],
+      "a `continue` in a generator neither records a drop nor says why it is not one:\n" +
+        found.join("\n"),
+    );
+  });
+
+  test("the sweep is not vacuous — it looked at a real number of statements", () => {
+    // A scanner whose corpus is empty passes trivially. This pins the corpus size, so a refactor
+    // that moved the generators somewhere the scanner cannot see fails here rather than passing.
+    const sources = read();
+    const total = Object.values(sources).reduce(
+      (n, text) => n + text.split("\n").filter((l) => /\bcontinue;/.test(l)).length,
+      0,
+    );
+    assert.ok(total >= 40, `the scanner only saw ${total} continue statements, which cannot be right`);
+  });
+
+  test("every ledger.drop call site is inside a generator this scanner reads", () => {
+    // The other direction: a drop recorded somewhere the sweep does not scan would be a path
+    // whose completeness nothing checks.
+    const sources = read();
+    const recorded = Object.values(sources).reduce(
+      (n, text) => n + (text.match(/ledger\.drop\(/g) ?? []).length,
+      0,
+    );
+    assert.ok(recorded >= 16, `only ${recorded} recorded drop sites were found across the three generators`);
+  });
+});

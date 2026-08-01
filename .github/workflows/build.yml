@@ -57,3 +57,58 @@ jobs:
             echo "::error::demo/ or dist/ is out of date with app/ — run 'npm run build' and commit the result."
             exit 1
           fi
+
+      # THE DECLARATION FRESHNESS GATE. design-the-rule-mirror.md §9.4 measured the hole this
+      # closes: all three generators have a `--check` that exits 1 on a stale declaration, NONE of
+      # the three was wired into CI, and the tests that would catch it self-skip precisely in CI
+      # because the runner does not clone the monorepo. So a stale declaration shipped green.
+      #
+      # WHY HERE, IN build.yml, AND NOT IN flow-trace.yml. build.yml runs on every push AND every
+      # pull_request and is BLOCKING. flow-trace.yml is advisory, and is SKIPPED entirely until
+      # FLOW_TRACE_CHECKOUT_TOKEN exists — a gate placed there would not run at all today.
+      #
+      # WHY IT IS PLACED AFTER `npm test` RATHER THAN INSTEAD OF IT. The check CI can genuinely
+      # perform runs inside `npm test`: tests/declaration-drop.test.mjs drives this same script
+      # against the committed tests/fixtures/config/ tree, so a GENERATOR changing without its
+      # output being regenerated is caught unconditionally, on every PR, with no monorepo. This
+      # step covers the other half — the operator's own config drifting out from under the
+      # committed declaration — and it can only do that where the config exists.
+      #
+      # EXIT 3 IS "NOT CHECKED", NEVER A PASS. On a GitHub-hosted runner the monorepo is absent and
+      # this step raises a ::warning:: rather than a green tick, for the same reason
+      # flow-trace.yml's `flow-trace-gate-unavailable` job exists: a check that could not run must
+      # never be indistinguishable from a check that ran and passed. Exit 1 fails the build.
+      - name: declaration freshness (exit 3 = NOT CHECKED, not a pass)
+        run: |
+          set +e
+          node scripts/checkdeclarations.mjs
+          code=$?
+          set -e
+          case "$code" in
+            0)
+              echo "All three generated declarations match the config they were generated from."
+              ;;
+            1)
+              echo "::error::A generated declaration is STALE relative to the config. Run the matching 'npm run generate:*' and commit presentation.json (and 'npm run build' for the bundle)."
+              exit 1
+              ;;
+            3)
+              echo "::warning title=declaration freshness NOT CHECKED::The qntm-md config is not present on this runner, so presentation.json was NOT checked against it. This is NOT a pass. The generator half of the check DID run, in 'npm test' (tests/declaration-drop.test.mjs) against tests/fixtures/config/."
+              {
+                echo "## Declaration freshness was NOT checked against the operator's config"
+                echo
+                echo "CI does not clone the private monorepo, so \`scripts/checkdeclarations.mjs\`"
+                echo "exited 3 — it had nothing to compare \`presentation.json\` against. Read this"
+                echo "as \"not checked\", never as \"checked and fine\"."
+                echo
+                echo "What DID run, unconditionally, in \`npm test\`:"
+                echo "\`tests/declaration-drop.test.mjs\` drives the same script against the"
+                echo "committed \`tests/fixtures/config/\` tree, so a generator whose behaviour"
+                echo "changed without its output being regenerated fails this build."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::error::scripts/checkdeclarations.mjs exited ${code} — it never reached a verdict. This is a crash, not a staleness finding."
+              exit 1
+              ;;
+          esac

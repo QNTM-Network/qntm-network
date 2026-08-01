@@ -71,7 +71,16 @@ describe("1. the shipped declaration's structural key reads cleanly", () => {
   test("a document with no structural key at all is silence, not a problem", () => {
     const { structural, problems } = readStructuralDeclaration({ checkbox: "raw" });
     assert.deepEqual(problems, []);
-    assert.deepEqual(structural, { indent: undefined, edgeCardinality: {}, sections: {} });
+    assert.deepEqual(structural, {
+      indent: undefined,
+      edgeCardinality: {},
+      sections: {},
+      // `dropped` joined the EMPTY shape when the generators started recording what they refuse
+      // to publish (scripts/ledger.mjs). Empty here for the same reason every other key is: this
+      // document declares no structural language, so there is nothing published AND nothing
+      // dropped. The claim this test makes — silence is not a problem — is unchanged.
+      dropped: {},
+    });
   });
 
   test("declaration.ts does not misreport 'structural' or 'indentUnit' as unrecognised", () => {
@@ -96,7 +105,16 @@ describe("2. an unrecognised structural declaration is reported, never guessed",
 
   test("'structural' itself, wrong shape, is reported whole", () => {
     const { structural, problems } = readStructuralDeclaration({ structural: "PART_OF" });
-    assert.deepEqual(structural, { indent: undefined, edgeCardinality: {}, sections: {} });
+    assert.deepEqual(structural, {
+      indent: undefined,
+      edgeCardinality: {},
+      sections: {},
+      // `dropped` joined the EMPTY shape when the generators started recording what they refuse
+      // to publish (scripts/ledger.mjs). Empty here for the same reason every other key is: this
+      // document declares no structural language, so there is nothing published AND nothing
+      // dropped. The claim this test makes — silence is not a problem — is unchanged.
+      dropped: {},
+    });
     assert.match(problems.join(" "), /'structural' is string, not an object/);
   });
 

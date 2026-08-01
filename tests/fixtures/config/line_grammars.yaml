@@ -1,0 +1,5 @@
+# The two line grammars `generate-resolution-declaration.mjs` publishes.
+line_grammars:
+  grammars:
+    tolerant: [checkbox, plain_line]
+    strict: [checkbox]

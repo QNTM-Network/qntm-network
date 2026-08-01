@@ -1,0 +1,7 @@
+domain_tags:
+  - token: "#work"
+    field: domain
+    value: work
+  - token: "#personal"
+    field: domain
+    value: personal
