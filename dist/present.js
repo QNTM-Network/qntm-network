@@ -1198,6 +1198,9 @@ function sectionAt(source, lineIndex, view, sectionOrder) {
   }
   return order[ordinal] ?? null;
 }
+function sectionForInsertAt(source, lineIndex, view, sectionOrder) {
+  return sectionAt(source, lineIndex - 1, view, sectionOrder);
+}
 function sectionOrderFor(view, declared) {
   if (view.sections === void 0) {
     return declared;
@@ -2682,7 +2685,7 @@ function seedFor(source, lineIndex, declared) {
   if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex > lines.length) {
     return null;
   }
-  const sectionId = declared === void 0 ? null : sectionAt(source, lineIndex, declared.view, declared.sectionOrder);
+  const sectionId = declared === void 0 ? null : sectionForInsertAt(source, lineIndex, declared.view, declared.sectionOrder);
   const chrome = chromeFor(lines, lineIndex, declared, sectionId);
   if (chrome === null) {
     return null;
@@ -7444,6 +7447,7 @@ export {
   resolveRelativeAnchor,
   resolveWeekEnd,
   sectionAt,
+  sectionForInsertAt,
   sectionOrderFor,
   sectionOrdinalAt,
   seedFor,

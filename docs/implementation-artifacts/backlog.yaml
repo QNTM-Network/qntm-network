@@ -2920,13 +2920,33 @@ backlog:
 - id: the-new-line-seed-resolves-from-the-neighbour
   title: >-
     [haven] [OBSERVED 2026-08-01] THE SEED FOR A NEW LINE RESOLVES FROM THE NEIGHBOURING LINE RATHER
-    THAN FROM THE VIEW. Reported from the same browser run; filed, not diagnosed.
-  kind: null
-  state: unscoped
+    THAN FROM THE VIEW. Reported from the same browser run; diagnosed and fixed.
+  driving_capability: the-seed-addresses-the-line-it-is-about-to-make
+  kind: capability
+  state: passing
   record: >-
-    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. `app/present/newline.ts`'s
-    `seedFor` and the GLOBAL registration it reads are where this lands. Related to, and possibly a
-    regression of, `the-new-line-seed-reads-the-declaration`.
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. `o` on a real line seeded exactly
+    the right thing - `- [ ] #task #personal ` in `personal/all`, `- [ ] #task ` in `inbox`. `o` on
+    the TRAILING BLANK LINE seeded a bare `- [ ] ` in BOTH.
+    2026-08-01 - DIAGNOSED AND FIXED. It was ADDRESSING, not the rung order.
+    THE RUNG ORDER WAS TESTED AS A CANDIDATE AND REJECTED ON MEASUREMENT. The reading that a
+    declaration should beat printed evidence does not explain the observation: `chromeFor`'s
+    printed rungs answered CORRECTLY at every index measured, the trailing blank line included -
+    `STRUCTURAL_NODE`, chrome `- [ ] `, from the line above. The chrome was never wrong. The TOKENS
+    were empty, and they were empty because the section was never named.
+    AN INSERTION INDEX IS NOT A READ INDEX. `seedFor` asked `sectionAt` for the section, passing
+    the INSERTION index - where the new line WILL BE. `sectionAt` answers for a line that EXISTS at
+    an index, and `sectionOrdinalAt` refuses `lineIndex >= lines.length`, correctly. `o` on a
+    trailing blank line asks for exactly `lines.length`, and every rendered view ends with one
+    because the engine's own writer terminates the file with a newline.
+    THE FIX IS ONE SUBTRACTION. `sectionForInsertAt` (app/present/address.ts) addresses the line the
+    new one lands AFTER. It closes a second boundary the same way - inserting AT a heading's index
+    puts the new line ABOVE that heading, in the section the heading CLOSES; `sectionAt` named the
+    one it OPENS. On `~/qntm/inbox.md`, whose two headings are adjacent, `o` on `## Inbox` addressed
+    `domain-empty`.
+    3524 insertion points over 71 real views; 3342 identical; 182 moved, all three boundary classes
+    and nothing else. `sectionAt` itself is untouched.
+    NOT VERIFIED - no browser was opened by the fix. See the capability's own NOT VERIFIED note.
 - id: the-page-clock-goes-stale
   title: >-
     [haven] [OBSERVED 2026-08-01] THE PAGE CLOCK GOES STALE - the freshness line keeps saying "as

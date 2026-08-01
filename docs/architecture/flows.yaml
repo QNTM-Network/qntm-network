@@ -394,15 +394,24 @@ expected_flows:
   # section the line is ACTUALLY in while the CHROME may have been copied from a neighbour across a
   # heading (the VIEW rung). Resolving it twice would be two chances for one seed to describe two
   # different sections. The walk order above is unchanged; only how often this call is reached is.
+  # THE CALLEE CHANGED 2026-08-01 (`the-seed-addresses-the-line-it-is-about-to-make`), and the walk
+  # order STILL did not. `sectionAt` answers for a line that EXISTS at an index; `seedFor`'s index
+  # is an INSERTION index — where the new line WILL BE. At two boundaries those are different
+  # sections, and `sectionAt` refuses one of them outright: `lineIndex === lines.length`, which is
+  # exactly what `o` on a trailing blank line asks for, and every rendered view ends with one. A
+  # real browser run showed the cost — the seed dropped the declaration and the printed rungs
+  # carried on copying the neighbour, so it gave the right answer only where the neighbour agreed.
+  # `sectionForInsertAt` is `sectionAt` asked about the line the new one lands AFTER.
   - id: newline-addresses-the-declared-section
     from: app/present/newline
     to:   app/present/address
-    callee: sectionAt
+    callee: sectionForInsertAt
     event: app.addresses-the-declared-section
     class: presentation-resolution
     gates_capabilities:
       - new-line-seed-reads-the-declaration
       - a-new-line-acquires-its-node-type-and-its-defaults
+      - the-seed-addresses-the-line-it-is-about-to-make
 
   # WHERE THE ROW GOES. Asked once per line of the view, because the row for a line being made sits
   # AT an index and every line from there down keeps the index it already had — the source is not

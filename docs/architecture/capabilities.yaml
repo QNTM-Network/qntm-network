@@ -2930,7 +2930,7 @@ capabilities:
     OBSERVABLE THROUGH ONE EXISTING EDGE, AND NO NEW ONE. `newline.ts` gains no import: the tokens
     arrive inside the `GlobalRegistration` its caller already assembles, and the only thing done
     with them is `join(" ")`. What DID change is when `newline-addresses-the-declared-section`
-    (`app/present/newline -> app/present/address`, `sectionAt`) fires — it used to be reached only
+    (`app/present/newline -> app/present/address`) fires — it used to be reached only
     after all three PRINTED rungs found nothing, and is now reached whenever a declaration is
     supplied, because the tokens are a fact about the section the line is ACTUALLY in while the
     chrome may have been copied from a neighbour across a heading. That makes the edge MORE
@@ -2944,6 +2944,72 @@ capabilities:
     proofs that each turn a named claim red, 5 are the acceptance test's two halves against a
     scratch copy of the real config, and 1 is the 186-section agreement against the engine's own
     `source_tags_for_node` via `tests/fixtures/resolution-agreement.json`.
+  status: working
+- id: the-seed-addresses-the-line-it-is-about-to-make
+  intent: >-
+    THE SEED RESOLVES FROM THE VIEW'S DECLARATION, NOT FROM WHATEVER THE NEIGHBOUR HAPPENS TO SAY.
+    A real browser run on 2026-08-01 found the capability above giving the right answer for the
+    wrong reason. `o` on a real line seeded exactly the right thing — `- [ ] #task #personal ` in
+    `personal/all`, `- [ ] #task ` in `inbox`. `o` on the TRAILING BLANK LINE seeded a bare
+    `- [ ] ` in BOTH. It was copying the neighbour, and his neighbours happen to carry the right
+    tags.
+    THE RUNG ORDER WAS NOT WRONG, WHICH IS THE FINDING. The candidate reading that a declaration
+    should beat printed evidence was tested and rejected on measurement. `chromeFor`'s printed
+    rungs answered CORRECTLY at every index measured, the trailing blank line included —
+    `STRUCTURAL_NODE`, chrome `- [ ] `, from the line above. The chrome was never the defect. What
+    was lost is the TOKENS, and it was lost in ADDRESSING.
+    AN INSERTION INDEX IS NOT A READ INDEX. `seedFor` named the section with `sectionAt(source,
+    lineIndex, …)`. `lineIndex` is the index the new line WILL OCCUPY (`applyEdit`'s `insert-line`
+    convention); `sectionAt` answers for a line that EXISTS at that index, and `sectionOrdinalAt`
+    refuses `lineIndex >= lines.length` — correctly, since nothing is there to read. `o` on the
+    trailing blank line asks for exactly `lines.length`, and the engine's own writer terminates
+    every rendered view with a newline, so every real view has that line. The section came back
+    `null`, the tokens fell to `[]`, and the printed rungs carried on answering.
+    THE FIX IS ONE SUBTRACTION AND IT CLOSES A SECOND BOUNDARY THE SAME WAY. A line inserted at
+    `lineIndex` sits after existing line `lineIndex - 1`, so the headings at or above it are the
+    headings at or above `lineIndex - 1`. `sectionForInsertAt` is `sectionAt` asked about the line
+    the new one lands AFTER. The end of the file becomes the last real line; and inserting AT a
+    heading's own index — which puts the new line ABOVE that heading, in the section the heading
+    CLOSES — stops naming the section the heading OPENS. On `~/qntm/inbox.md`, whose two headings
+    are adjacent lines, `o` on `## Inbox` addressed `domain-empty`. It now addresses
+    `inbox-tagged`.
+    WHICH ANSWERS MOVED, MEASURED OVER HIS OWN VIEWS RATHER THAN ARGUED. 3524 insertion points
+    across 71 real views; 3342 identical; 182 moved. 70 at index 0 (above the first heading, where
+    the seed used to spell the FIRST section's meaning onto a line that is in no section — it now
+    seeds no tokens, and the chrome still comes from printed evidence); 65 at `lines.length` (the
+    defect); 47 at a heading's own index. ZERO anywhere else, asserted rather than sampled.
+    `sectionAt` IS UNTOUCHED. Its two callers in `app/index.html` (`commitLine`) address a line the
+    operator has already typed into, at an index that really holds it. Widening that function's
+    range would widen a READ to a position with nothing to read, which is the mistake this defect
+    is made of, applied to the other direction.
+    NO RANGE GUARD WAS ADDED, AND THAT IS MEASURED TOO. One was written and removed: subtracting
+    one maps the legal insertion range `[0, lines.length]` onto `[-1, lines.length - 1]`, and
+    `sectionOrdinalAt` already refuses both ends, so every out-of-range index was refused twice. A
+    branch no mutant can turn red reads as a protection and defends nothing. The refusal is
+    unchanged and is now asserted directly.
+    NOT VERIFIED. NO BROWSER WAS OPENED BY THIS WORK. The reproduction drives `app/index.html`'s
+    own lifted keydown handler against `installBrowser`'s DOM stub — a real keypress in a real tab
+    was never watched. No graph server, no passkey session, no engine cycle, no POST. `~/qntm` and
+    `~/.qntm-md` were read read-only; the acceptance test mutates a `cpSync` copy of the config
+    under the runner's temp dir. `flow-trace verify` was NOT run — the tool is not present in this
+    worktree's environment.
+  tier: functional
+  rooting: >-
+    THE SAME ONE EDGE, WITH A NEW CALLEE AND NO NEW IMPORT. `newline-addresses-the-declared-section`
+    (`app/present/newline -> app/present/address`) now names `sectionForInsertAt` instead of
+    `sectionAt`. `newline.ts` imports the same module it already imported, and `address.ts` imports
+    nothing new — `sectionForInsertAt` calls `sectionAt`, in the same file. No module was added, no
+    edge was added, and no edge was removed.
+    THE SECTION IS STILL RESOLVED EXACTLY ONCE per seed, and a test asserts the call count directly
+    rather than leaving it as a claim: two resolutions would be two chances for one seed to describe
+    two different sections.
+    ENFORCEMENT IS `tests/app-seed-from-cascade.test.mjs` — 30 tests in 7 sections, of which 3 are
+    mutation proofs (undo the subtraction, unwire the call site, over-correct the subtraction), 4
+    are the acceptance test against a scratch copy of the real config, 6 are the named refusals, and
+    2 are the invariance sweep over his 71 real views with a positive control per boundary class.
+    Section 1 drives the page's own key wiring on fixtures verbatim from `~/qntm/inbox.md` and
+    `~/qntm/personal/all.md`, trailing newline included — a fixture that trimmed that blank is a
+    fixture the defect cannot appear in.
   status: working
 - id: 'a-projection-arriving-mid-edit-is-held'
   intent: 'A PROJECTION THAT ARRIVES WHILE THE OPERATOR IS TYPING DOES NOT REACH THE SCREEN UNTIL
