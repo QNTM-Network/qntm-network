@@ -1072,6 +1072,12 @@ function sectionAt(source, lineIndex, view, sectionOrder) {
   }
   return order[ordinal] ?? null;
 }
+function sectionOrderFor(view, declared) {
+  if (view.sections === void 0) {
+    return declared;
+  }
+  return { ...declared, [view.id]: view.sections };
+}
 
 // app/present/ordering.ts
 var abstains = (because) => ({ kind: "abstains", because });
@@ -4476,6 +4482,7 @@ export {
   resolveLogicalDate,
   resolveWeekEnd,
   sectionAt,
+  sectionOrderFor,
   sectionOrdinalAt,
   seedFor,
   tagSpans,

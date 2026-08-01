@@ -880,6 +880,7 @@ import {
   DEFAULT_INDENT_UNIT,
   EMBEDDED_DECLARATION,
   sectionAt,
+  sectionOrderFor,
   membershipFor,
   orderingFor,
 } from "/dist/present.js";
@@ -1596,7 +1597,13 @@ function membershipNoteFor(view, commit) {
   if (qualification === undefined || commit.kind !== "set-line") {
     return "";
   }
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, qualification.sectionOrder);
+  // STEP 11 (design-the-resolution-architecture.md, narrowed — see address.ts's own header for
+  // why): prefer a served `view.sections` order over the static declaration when the server ever
+  // carries one. `server/app.py` carries none today, so `sectionOrderFor` returns
+  // `qualification.sectionOrder` UNCHANGED and this line behaves exactly as it did before this
+  // step — additive, not a behaviour change.
+  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
   if (sectionId === null) {
     return "";
   }
@@ -1631,7 +1638,10 @@ function orderingNoteFor(view, commit) {
   if (resolution === undefined || qualification === undefined || commit.kind !== "set-line") {
     return "";
   }
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, qualification.sectionOrder);
+  // Same preference as membershipNoteFor above, and for the same reason — see that function's own
+  // comment and address.ts's `sectionOrderFor` header.
+  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
   if (sectionId === null) {
     return "";
   }
