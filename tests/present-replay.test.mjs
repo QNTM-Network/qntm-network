@@ -161,6 +161,17 @@ describe("1. THE MARQUEE FINDING — membership prediction vs. the first stamp",
       // prediction against, because the row that would carry the answer cannot be found at all.
       assert.equal(result.membership.actual.kind, "unknown");
       assert.equal(result.membership.converged, null);
+
+      // AND WHAT THE APP DOES WITH THE CHARACTERS, ADDED WITH `a-refused-edit-is-held-unanchored`.
+      // Every reading above goes `unknown` for this arrival, which is exactly the situation the
+      // holding surface exists for: the harness ran out of things to say about the ROW, and this is
+      // what it can still say about the WRITING. The characters held are the ones the operator
+      // TYPED — `gesture.text` — not the line as it stood before he typed into it.
+      assert.notEqual(result.held, null, "the marquee case dropped his typing");
+      assert.equal(result.held.text, "- [ ] Ring the dentist #work");
+      assert.equal(result.held.reason, "vanished");
+      assert.equal(result.held.node, null, "the held row carries the SAME null node the anchor had");
+      assert.equal(result.held.instance, result.anchor.instance);
     },
   );
 
@@ -245,6 +256,9 @@ describe("2. CURSOR CONVERGENCE across the cycle's real transformations", () => 
     assert.equal(result.cursor.outcome, "found");
     assert.equal(result.cursor.via, "instance", "same node, same section — the STAMP tier never had to run");
     assert.equal(result.cursor.lineIndex, 3, "the row moved from index 2 to index 3, and the anchor followed it");
+    // THE CONTROL FOR THE HOLDING READING. A row that was found is a row the file still owns, so
+    // holding a copy of it would put a second claim to the same characters on screen.
+    assert.equal(result.held, null, "an ordinary arrival held a row it had no reason to");
   });
 
   test(
@@ -289,6 +303,7 @@ describe("2. CURSOR CONVERGENCE across the cycle's real transformations", () => 
       // the CURSOR alone.
       assert.equal(result.membership.predicted.kind, "abstain");
       assert.equal(result.membership.converged, null);
+      assert.equal(result.held, null, "a row found by the NODE tier is still a row the file owns");
     },
   );
 
@@ -320,6 +335,16 @@ describe("2. CURSOR CONVERGENCE across the cycle's real transformations", () => 
       assert.equal(result.cursor.outcome, "absent");
       assert.equal(result.anchor.node, "qntm:2598", "the anchor DID have a node — the node tier ran and found nothing");
       assert.equal(result.membership.actual.kind, "unknown");
+
+      // HELD, AND IT IS THE OTHER `absent` CAUSE — the one distinction this fixture exists to draw.
+      // §1's held row carries `node: null` because the node tier never ran; this one carries a real
+      // id because it ran and found nothing. The app holds in BOTH cases and does not need to tell
+      // them apart to do the safe thing — which is why `snapshot.graph` staying unread
+      // (`resolve-from-the-model-not-the-text`) does not block this row.
+      assert.notEqual(result.held, null, "a line the cycle deleted took the operator's row with it");
+      assert.equal(result.held.text, "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31");
+      assert.equal(result.held.node, "qntm:2598");
+      assert.equal(result.held.path, "inbox.md", "a held row must name the file it came from");
     },
   );
 

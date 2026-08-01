@@ -2215,7 +2215,7 @@ var HeldSurface = class {
   }
 };
 function keyOf(edit) {
-  return `${edit.view}\0${edit.instance ?? edit.text}`;
+  return `${edit.view} ${edit.instance ?? edit.text}`;
 }
 
 // app/present/newline.ts

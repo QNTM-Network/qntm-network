@@ -226,5 +226,5 @@ export class HeldSurface {
 
 /** The supersession key — see `hold`. Exported so a test can assert the rule rather than infer it. */
 export function keyOf(edit: HeldEdit): string {
-  return `${edit.view} ${edit.instance ?? edit.text}`;
+  return `${edit.view} ${edit.instance ?? edit.text}`;
 }
