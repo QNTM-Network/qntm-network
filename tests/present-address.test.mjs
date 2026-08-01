@@ -38,7 +38,7 @@ import { tmpdir, homedir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { sectionAt, sectionOrdinalAt } from "../dist/present.js";
+import { sectionAt, sectionOrderFor, sectionOrdinalAt } from "../dist/present.js";
 import {
   generateQualification,
   DEFAULT_CONFIG_DIR,
@@ -319,4 +319,198 @@ describe("4. THE SWEEP — every one of the 72 real views this instance declares
       assert.ok(headingsChecked >= 150, `only checked ${headingsChecked} headings — expected close to 186`);
     },
   );
+});
+
+/**
+ * ── STEP 11 — `sectionOrderFor`, AND ITS OWN FALSIFIER, SIMULATED ──
+ *
+ * `server/app.py` does not serve a `sections` field today (design doc §5.9, address.ts's own
+ * header), so there is nothing live to compare against. What can be proven here, honestly:
+ *
+ *   5. IGNORING THE FIELD REPRODUCES TODAY'S BEHAVIOUR EXACTLY — proof standard #3. A served view
+ *      shaped exactly as `server/app.py:_read_views` emits it today (`{id, path, title, domain,
+ *      markdown}`, no `sections` key) makes `sectionOrderFor` return `declared` BY REFERENCE, and
+ *      `sectionAt` through it agrees with `sectionAt` through `declared` directly, over the full
+ *      72-view sweep.
+ *   6. THE DESIGN DOCUMENT'S OWN FALSIFIER, SIMULATED — "the envelope's section order for every
+ *      view equals the generator's, for all 72." An INDEPENDENT scanner (deliberately NOT
+ *      `generateQualification`/`parseYamlSubset` — a flat regex walk over `sections:` / `- id:`
+ *      lines, the same posture `server/app.py`'s own `_parse_view_meta` already takes for
+ *      `id:`/`path:`/`domain:`) stands in for what a widened `_read_views` would publish. Compared
+ *      against `SECTION_ORDER` (the generator's own answer, a different code path over the same
+ *      config) for every one of the real views.
+ *   7. THE POSITIVE CONTROL for #6 — a scratch config mutation moves the independent scanner's
+ *      answer, proving it is not vacuously always equal (proof standard #4, reused from section 3).
+ *   8. NO FORK — when a served view's order genuinely disagrees with the declared one (synthetic),
+ *      `sectionOrderFor` picks the served order WHOLESALE, never a per-element merge of the two.
+ */
+describe("5. sectionOrderFor — ignoring the field reproduces today's behaviour exactly", () => {
+  test("a view shaped exactly as server/app.py emits it today returns `declared` BY REFERENCE", () => {
+    const servedView = { id: "inbox", path: "inbox.md", title: "Inbox", domain: "all", markdown: "" };
+    const result = sectionOrderFor(servedView, SECTION_ORDER);
+    assert.equal(result, SECTION_ORDER, "no `sections` key present — nothing to prefer over `declared`");
+  });
+
+  const skip = monorepoAvailable && vaultAvailable
+    ? false
+    : "needs both the monorepo and the vault — see section 4's own skip condition";
+
+  test(
+    "over the full 72-view sweep, sectionAt through sectionOrderFor(todaysShapedView, declared) " +
+      "agrees with sectionAt through declared directly, for every heading",
+    { skip },
+    () => {
+      const generated = generateQualification(DEFAULT_CONFIG_DIR);
+      const viewsDir = join(DEFAULT_CONFIG_DIR, "views");
+      const files = readdirSync(viewsDir).filter(
+        (f) => f.endsWith(".yaml") && f !== "default_registration.yaml",
+      );
+      let headingsChecked = 0;
+      for (const file of files) {
+        const text = readFileSync(join(viewsDir, file), "utf8");
+        const pathMatch = text.match(/^\s*path:\s*(\S+)\s*$/m);
+        const idMatch = text.match(/^([A-Za-z0-9_-]+):\s*$/m);
+        if (!pathMatch || !idMatch) continue;
+        const path = pathMatch[1].replace(/^["']|["']$/g, "");
+        const viewId = idMatch[1];
+        const mdPath = join(vaultDir, path);
+        if (!existsSync(mdPath)) continue;
+        const markdown = readFileSync(mdPath, "utf8");
+        const order = generated.sectionOrder[viewId];
+        if (order === undefined) continue;
+
+        const servedView = { id: viewId, path, title: viewId, domain: null, markdown };
+        const merged = sectionOrderFor(servedView, generated.sectionOrder);
+        assert.equal(merged, generated.sectionOrder, `${file}: unexpected preference over declared`);
+
+        markdown.split(/\r?\n/).forEach((line, lineIndex) => {
+          if (!/^#{1,6} /.test(line)) return;
+          assert.equal(
+            sectionAt(markdown, lineIndex, viewId, merged),
+            sectionAt(markdown, lineIndex, viewId, generated.sectionOrder),
+            `${file}:${lineIndex} diverged when routed through sectionOrderFor`,
+          );
+          headingsChecked += 1;
+        });
+      }
+      assert.ok(headingsChecked >= 150, `only checked ${headingsChecked} headings — expected close to 186`);
+    },
+  );
+});
+
+/**
+ * An independent stand-in for what a widened `server/app.py:_read_views` would publish — a flat
+ * regex walk, never the generator's own `parseYamlSubset`. Two-space `sections:`, four-space
+ * `- id: <value>` — the shape every one of the operator's 72 real view files uses (verified by
+ * section 4's own sweep passing over all of them with this same indentation assumption baked into
+ * the generator it compares against). Returns `null` when the file declares no `sections:` block.
+ */
+function scanDeclaredSectionOrder(text) {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((l) => l === "  sections:");
+  if (start === -1) return null;
+  const order = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    const idLine = line.match(/^ {4}- id:\s*(\S+)\s*$/);
+    if (idLine) {
+      order.push(idLine[1]);
+      continue;
+    }
+    // A line at or below `sections:`'s own indentation, that is not a `- id:` line, ends the block.
+    if (/^ {0,2}\S/.test(line)) break;
+  }
+  return order;
+}
+
+describe("6. THE DESIGN DOCUMENT'S OWN FALSIFIER, SIMULATED — envelope order == generator order, all 72", () => {
+  const skip = monorepoAvailable
+    ? false
+    : `monorepo not checked out at ${DEFAULT_CONFIG_DIR} — skipped in CI, same posture as section 3`;
+
+  test(
+    "an INDEPENDENT scanner over the real config agrees with the generator's sectionOrder, per view",
+    { skip },
+    () => {
+      const generated = generateQualification(DEFAULT_CONFIG_DIR);
+      const viewsDir = join(DEFAULT_CONFIG_DIR, "views");
+      const files = readdirSync(viewsDir).filter(
+        (f) => f.endsWith(".yaml") && f !== "default_registration.yaml",
+      );
+      let viewsChecked = 0;
+      for (const file of files) {
+        const text = readFileSync(join(viewsDir, file), "utf8");
+        const idMatch = text.match(/^([A-Za-z0-9_-]+):\s*$/m);
+        if (!idMatch) continue;
+        const viewId = idMatch[1];
+        const declaredOrder = generated.sectionOrder[viewId];
+        if (declaredOrder === undefined) continue; // no published sections for this view — nothing to compare
+
+        const scanned = scanDeclaredSectionOrder(text);
+        assert.ok(scanned !== null, `${file}: independent scanner found no sections: block`);
+        assert.deepEqual(
+          scanned,
+          declaredOrder,
+          `${file}: independent scan disagrees with the generator's own sectionOrder`,
+        );
+        viewsChecked += 1;
+      }
+      assert.ok(viewsChecked >= 60, `only checked ${viewsChecked} views — expected close to 72`);
+    },
+  );
+
+  test(
+    "POSITIVE CONTROL: a scratch reorder moves the independent scanner's answer — proof it is not vacuous",
+    { skip },
+    () => {
+      const scratch = mkdtempSync(join(tmpdir(), "address-scanner-control-"));
+      try {
+        const configDir = join(scratch, "config");
+        cpSync(DEFAULT_CONFIG_DIR, configDir, { recursive: true });
+        const path = join(configDir, "views", "inbox.yaml");
+        const before = scanDeclaredSectionOrder(readFileSync(path, "utf8"));
+        assert.deepEqual(before, ["inbox-tagged", "domain-empty"]);
+
+        const lines = readFileSync(path, "utf8").split("\n");
+        const startOf = (id) => lines.findIndex((l) => l.trim() === `- id: ${id}`);
+        const first = startOf("inbox-tagged");
+        const second = startOf("domain-empty");
+        const blockA = lines.slice(first, second);
+        const blockB = lines.slice(second, second + (second - first));
+        const reordered = [...lines.slice(0, first), ...blockB, ...blockA, ...lines.slice(second + blockA.length)];
+        writeFileSync(path, reordered.join("\n"));
+
+        const after = scanDeclaredSectionOrder(readFileSync(path, "utf8"));
+        assert.deepEqual(after, ["domain-empty", "inbox-tagged"], "the scanner did not track the edit");
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    },
+  );
+});
+
+describe("7. sectionOrderFor — no fork: a disagreeing served order wins WHOLESALE, never merged element-by-element", () => {
+  const DECLARED = { inbox: ["inbox-tagged", "domain-empty"], "this-week": ["a", "b", "c"] };
+
+  test("a served view's own order replaces its view's declared entry entirely", () => {
+    const servedView = { id: "inbox", sections: ["domain-empty", "inbox-tagged"] };
+    const merged = sectionOrderFor(servedView, DECLARED);
+    assert.deepEqual(merged.inbox, ["domain-empty", "inbox-tagged"], "served order wins for this view");
+    assert.equal(merged["this-week"], DECLARED["this-week"], "an untouched view's declared order is unchanged");
+  });
+
+  test("sectionAt through the merged table names the SERVED id at each ordinal, never a mix of the two", () => {
+    const servedView = { id: "inbox", sections: ["domain-empty", "inbox-tagged"] };
+    const merged = sectionOrderFor(servedView, DECLARED);
+    const source = ["## Anything", "## Anything Else"].join("\n");
+    assert.equal(sectionAt(source, 0, "inbox", merged), "domain-empty");
+    assert.equal(sectionAt(source, 1, "inbox", merged), "inbox-tagged");
+  });
+
+  test("an empty served order is still a WHOLESALE replacement, not treated as absent", () => {
+    const servedView = { id: "inbox", sections: [] };
+    const merged = sectionOrderFor(servedView, DECLARED);
+    assert.deepEqual(merged.inbox, []);
+    assert.equal(sectionAt("## Anything", 0, "inbox", merged), null, "nothing to address into an empty order");
+  });
 });

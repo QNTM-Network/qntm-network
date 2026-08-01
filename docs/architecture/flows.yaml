@@ -536,6 +536,19 @@ expected_flows:
   # lives in tests/app-ordering-note.test.mjs, which drives the page's own lifted script directly.
   # See capability `ordering-position-is-said-in-the-freshness-line` (capabilities.yaml) for the rest.
 
+  # ── STEP 11 — CARRY SECTION IDENTITY IN THE ENVELOPE (2026-08-01) — NO NEW EDGE, ON PURPOSE ──
+  #
+  # `address.ts` gains `sectionOrderFor(view, declared)` — it imports NOTHING new (still only
+  # `classifyLine` from `resolution.ts`, the edge `address-classifies-the-line` above already
+  # declares), so there is no new module-to-module edge for this file to declare a callee of.
+  # `app/index.html`'s `membershipNoteFor`/`orderingNoteFor` now call `sectionOrderFor` before
+  # `sectionAt`, on every committed edit — THAT call is real and unobservable by this tool, the same
+  # page-is-not-importable gap steps 4 and 7's own comments above record. The proof lives in
+  # `tests/present-address.test.mjs` §5-7 (the pure function, over the operator's real 72 views) and
+  # is exercised end to end nowhere yet, because `server/app.py` does not serve a `sections` field
+  # for the page's own call to prefer — see capability `section-order-prefers-the-served-envelope`
+  # (capabilities.yaml) for what is proven and what is not.
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
