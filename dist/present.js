@@ -2835,27 +2835,28 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
   input.className = "rawline";
   input.value = lineSource;
   const mode = deps.mode;
-  let settled = false;
-  const settle = (commit, openBelow = false) => {
-    if (settled) {
+  const leaveInsert = () => {
+    if (mode !== void 0) {
+      mode.enterNormal();
+    } else {
+      focus.blur();
+    }
+  };
+  let settlement = "open";
+  const discard = () => {
+    if (settlement !== "open") {
       return;
     }
-    settled = true;
+    settlement = "discarded";
+    leaveInsert();
+    repaint(fileSource);
+  };
+  const settle = (openBelow = false) => {
+    if (settlement !== "open") {
+      return;
+    }
+    settlement = "committed";
     const wasFocused = focus.isFocused(lineIndex);
-    const leaveInsert = () => {
-      if (mode !== void 0) {
-        mode.enterNormal();
-      } else {
-        focus.blur();
-      }
-    };
-    if (!commit) {
-      if (wasFocused) {
-        leaveInsert();
-        repaint(fileSource);
-      }
-      return;
-    }
     const text = input.value;
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
     deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "set-line" });
@@ -2872,15 +2873,15 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
       repaint(next);
     }
   };
-  input.addEventListener("blur", () => settle(true));
+  input.addEventListener("blur", () => settle());
   input.addEventListener("keydown", (event) => {
     const key = event?.key;
     if (key === "Enter") {
       event?.preventDefault?.();
-      settle(true, true);
+      settle(true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
-      settle(false);
+      discard();
     }
   });
   return input;
