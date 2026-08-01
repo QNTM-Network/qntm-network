@@ -27,19 +27,18 @@
  *   §5  TWO EDITS INSIDE ONE CYCLE. The second edit is made while the first is in flight — the case
  *       that must not lose work — and neither side is lost.
  *   §6  MUTATION PROOFS. Break the coalescing and break the gate; watch the guards go red.
- *   §7  WHY THE ASYNC HALF IS NOT HERE. `stop-awaiting-the-cycle-safely`'s blocker, DRIVEN: an ack
- *       carrying no projection leaves `BaseSurface` where it was, and the next tick then discards
- *       the previous one in silence. Not a proposal — the measurement that says async must wait.
+ *   §7  THE ASYNC ACK. The two arms that were this suite's blocker, INVERTED in place: an ack
+ *       refreshes the base, and two ticks inside one cycle carry both. Plus the two refusals that
+ *       keep §4's own statement intact — a queued projection, and an open line.
  *
  * ── WHAT THIS SUITE DOES NOT VERIFY ──
  *
  * No browser was opened. No passkey session, no live graph server, no engine cycle, no real POST.
  * Every projection below is a FIXTURE — a second string, hand-built the way a real cycle transforms
- * a real line. The DOM is `installBrowser`'s stub. Nothing here measures latency, and nothing here
- * exercises an ASYNCHRONOUS ack: `POST /app/edit-file` still awaits the cycle, so every arrival
- * below is the return of a write, which is the only way a projection reaches this page today. §7
- * drives the SHAPE an async ack would have — `{ok: true}` with no snapshot — against the page as it
- * stands; it does not make the Worker asynchronous and it measures no latency.
+ * a real line. The DOM is `installBrowser`'s stub. Nothing here measures latency and no Worker runs:
+ * §7 drives the SHAPE the ack has — `{ok, accepted: true, path}` with no snapshot — against the page
+ * as it stands, and the Worker's own half is proven in tests/app-async-ack.test.mjs. The ~10 s ->
+ * ~250 ms this whole change is for is a claim about a network nothing here touches.
  */
 
 import { test, describe, before, beforeEach } from "node:test";
@@ -302,6 +301,12 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
       assert.ok(next, "the page posted more times than this arm has answers for");
       return { ok: true, status: 200, json: async () => next };
     };
+    // THE PICKUP'S TIMER, CAPTURED RATHER THAN ARMED. `accept` places a read for every ack (see
+    // app/present/pickup.ts), and a real `setTimeout` would keep this process alive for ten seconds
+    // and then fire a `GET` into a stub that only answers POSTs. What the timer DOES is proven in
+    // tests/app-async-ack.test.mjs, which drives it deterministically; here it is recorded and
+    // dropped, so §7 measures the ack alone.
+    globalThis.setTimeout = () => 0;
     page = await importPage(WORK);
   });
 
@@ -569,49 +574,59 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
   });
 
   // ════════════════════════════════════════════════════════════════════════════════════════════
-  // 7. WHY THE ASYNC HALF IS NOT IN THIS BRANCH — the blocker, DRIVEN rather than argued
+  // 7. THE ASYNC ACK — the two arms that were this section's blocker, now its acceptance
   // ════════════════════════════════════════════════════════════════════════════════════════════
   //
-  // `stop-awaiting-the-cycle-safely` would have `POST /app/edit-file` ack on the vault write and let
-  // the cycle run behind it — ~10 s down to ~250 ms on every checkbox and every line commit. The
-  // design's own sharper reason for sequencing it after the queue is that `served.take()` is called
-  // ONLY from `paintView`, so an ack without a projection leaves `BaseSurface` holding a base that
-  // never refreshes.
+  // WHAT THIS SECTION WAS. `stop-awaiting-the-cycle-safely` would have `POST /app/edit-file` ack on
+  // the vault write and let the cycle run behind it — ~10 s down to ~250 ms on every checkbox and
+  // every line commit. Two arms here measured why it must not ship: `served.take()` was called only
+  // from `paintView`, so an ack without a projection left `BaseSurface` holding a base that never
+  // refreshed; and because a tick does not repaint the painter's source, the SECOND tick inside one
+  // cycle then posted a file that provably lacked the first, in silence.
   //
-  // THIS SECTION IS THAT CLAIM AS AN EXPERIMENT. The answer below is the exact shape an async ack
-  // has — `{ok: true}` with no snapshot in it — and the page is driven through two ordinary ticks.
-  // Nothing here is a proposal; it is the measurement that says the async half must not ship yet.
+  // BOTH ARMS ARE NOW INVERTED, IN PLACE, AGAINST THE SAME FIXTURE AND THE SAME GESTURES. The answer
+  // below is the exact shape the ack has (`worker/src/app.js`: `{ok, accepted: true, path}`, no
+  // snapshot key at all), and the page is driven through two ordinary ticks. Nothing here is a
+  // proposal any more; it is the measurement that says the async half is safe.
+  //
+  // THE MECHANISM IS `accept` (app/index.html) OVER `app/present/accepted.ts`. The 200 on the vault
+  // write is the server saying "this file now says what you sent" — `POST /vault/file` writes the
+  // bytes it is given, verbatim — so that string refreshes the base AND is what the painter walks.
+  // The transport half, the read that collects the cycle's answer, is a separate suite:
+  // tests/app-async-ack.test.mjs.
 
-  test("AN ACK WITH NO PROJECTION LEAVES THE BASE WHERE IT WAS — proven by driving it", async () => {
+  /** The ack, exactly as `worker/src/app.js` builds it — `accepted`, `path`, and NO snapshot key. */
+  const ack = () => ({ ok: true, handle: "luke", source: "server", accepted: true, path: PATH, pending_edits: 0 });
+
+  test("AN ACK REFRESHES THE BASE — the blocker this section measured, closed", async () => {
     land(V1);
-    answers = [{ ok: true, accepted: true, path: PATH }];
+    answers = [ack()];
 
     boxes()[0].checked = true;
     boxes()[0].dispatch("change");
     await settle();
 
     assert.equal(page.__queued().size, 0, "an answer with no projection in it was queued as one");
-    assert.equal(
-      page.__served().markdown,
-      V1,
-      "the base moved without a projection — if this ever passes, re-read section 7",
-    );
-    // AND THE PAGE DOES NOT CLAIM `as of <when>` FOR IT. `sayAsOf` reads
+    // WHAT WENT ON THE WIRE IS WHAT THE BASE NOW HOLDS — not V1, and not a string this page invented
+    // out of the DOM. `posted[0].markdown` is `applyEdit`'s output, the same one the server accepted.
+    assert.equal(page.__served().markdown, posted[0].markdown, "the base did not follow the ack");
+    assert.notEqual(page.__served().markdown, V1, "the base is still the pre-write projection");
+    assert.equal(page.__accepted().sourceFor(PATH), posted[0].markdown);
+    // AND THE PAGE STILL DOES NOT CLAIM `as of <when>` FOR IT. `sayAsOf` reads
     // `data.snapshot.generated_at`; an ack carries no snapshot, so a page that said "as of" here
     // would be claiming WRITTEN when it means ACCEPTED — and would throw doing it.
-    assert.equal(freshness(), "the write landed and the server sent no projection back");
+    assert.equal(freshness(), "the server took your save — the cycle's answer follows");
     assert.doesNotMatch(freshness(), /^as of /);
+    assert.doesNotMatch(freshness(), /written/);
   });
 
-  test("THE FALSIFIER FOR SHIPPING ASYNC TODAY — the second tick discards the first, in silence", async () => {
-    // With the base unrefreshed, `served.read` answers `current` for a save whose base the server
-    // has already moved past. A tick does not repaint the painter's source, so the second edit is
-    // computed against the SAME string the first was — and the whole-file write overwrites it.
+  test("TWO EDITS INSIDE ONE CYCLE CARRY BOTH, WITH ASYNC ON — the acceptance test", async () => {
+    // THE ARM THAT USED TO BE THE FALSIFIER, WORD FOR WORD THE SAME GESTURES. Two ticks, two acks,
+    // no projection between them. It passes for one reason and it is worth naming: the ack refreshes
+    // the painter's SOURCE as well as the base, so the second `applyEdit` is computed on top of the
+    // first — which is exactly what a synchronous write got for free from the projection it returned.
     land(V1);
-    answers = [
-      { ok: true, accepted: true, path: PATH },
-      { ok: true, accepted: true, path: PATH },
-    ];
+    answers = [ack(), ack()];
 
     boxes()[0].checked = true;
     boxes()[0].dispatch("change");
@@ -622,16 +637,77 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
 
     assert.equal(posted.length, 2);
     assert.match(posted[0].markdown, /- \[x\] Draft the launch note/, "the arm did not set up");
-    assert.doesNotMatch(
+    assert.match(
       posted[1].markdown,
       /- \[x\] Draft the launch note/,
-      "the second write carried the first tick — this arm no longer measures the hazard",
+      "THE WHOLE POINT: the second write discarded the first tick",
     );
-    assert.doesNotMatch(
-      freshness(),
-      /out-of-date copy|overwritten|not answered/,
-      "THE WHOLE POINT: the operator lost a tick and the page said nothing about it",
-    );
+    assert.match(posted[1].markdown, /- \[x\] Ring the dentist/, "the second tick is not in the second write");
+    // AND THE SECOND WRITE'S BASE IS THE FIRST WRITE'S FILE, which is what makes the server able to
+    // refuse it if the cycle has moved on. A base of the PRE-WRITE file would be a claim the server
+    // has already left behind.
+    assert.equal(page.__served().markdown, posted[1].markdown);
+  });
+
+  test("AND THE DETECTOR STAYS SILENT ONLY WHEN IT SHOULD — the second tick is genuinely current", async () => {
+    // §4's second question asked of the async path. The base tracks the accepted file, so an honest
+    // second tick reports nothing at all — a detector that cried out on every ordinary gesture would
+    // be a detector nobody reads by the time it matters.
+    land(V1);
+    answers = [ack(), ack()];
+
+    boxes()[0].checked = true;
+    boxes()[0].dispatch("change");
+    await settle();
+    boxes()[1].checked = true;
+    boxes()[1].dispatch("change");
+    await settle();
+    assert.equal(freshness(), "the server took your save — the cycle's answer follows");
+    assert.doesNotMatch(freshness(), /out-of-date copy|overwritten|could not be checked/);
+  });
+
+  test("A QUEUED PROJECTION REFUSES THE ACK'S BASE — §4's one statement is not undone", async () => {
+    // `drainProjection` advances the base to a HELD projection, which is what keeps the detector
+    // firing while the screen waits. An ack landing on top of that must not overwrite it: what this
+    // page is holding in its own hand is a newer word about the file, and a write measured against
+    // the ack's string would read `current` while provably discarding it. Nothing is taken, so the
+    // next write reads `stale` and SAYS so.
+    land(V1);
+    answers = [envelope(BOTH, T2), ack()];
+
+    const input = clickLine(elements, V1, 3);
+    boxes()[0].checked = true;
+    boxes()[0].dispatch("change");
+    await settle();
+    assert.equal(page.__queued().size, 1, "the arm did not set up — nothing was held");
+    assert.equal(page.__served().markdown, BOTH, "the held projection did not move the base");
+
+    boxes()[1].checked = true;
+    boxes()[1].dispatch("change");
+    await settle();
+
+    assert.equal(page.__accepted().sourceFor(PATH), null, "the ack overwrote a held projection's base");
+    assert.equal(page.__served().markdown, BOTH, "the ack overwrote a held projection's base");
+    assert.match(freshness(), /out-of-date copy/, "the second write against a superseded base said nothing");
+    assert.equal(input.value, V1.split("\n")[3], "the open line was re-sourced by an ack");
+  });
+
+  test("AND AN OPEN LINE IS NEVER REPAINTED BY AN ACK — the gate the whole queue exists for", async () => {
+    // The second of `accept`'s two refusals. A repaint rebuilds every row from one string, so running
+    // one while he is typing is the defect §2 measures. Nothing is taken and nothing is painted.
+    land(V1);
+    answers = [ack()];
+
+    const input = clickLine(elements, V1, 3);
+    input.value = "- [ ] Ring the dentist BEFORE FRIDAY [[qntm:122]] #task";
+    boxes()[0].checked = true;
+    boxes()[0].dispatch("change");
+    await settle();
+
+    assert.equal(input.value, "- [ ] Ring the dentist BEFORE FRIDAY [[qntm:122]] #task",
+      "the ack repainted the line he was typing into");
+    assert.equal(page.__accepted().sourceFor(PATH), null, "the ack took a source with a line open");
+    assert.equal(page.__served().markdown, V1, "the ack moved the base with a line open");
   });
 
   test("A SECOND WRITE MADE WHILE THE FIRST IS IN THE AIR IS STILL COUNTED AS ONE", async () => {

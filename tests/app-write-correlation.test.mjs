@@ -649,7 +649,13 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     const posted = d.control.posted[d.control.posted.length - 1];
     assert.deepEqual(
       Object.keys(posted).sort(),
-      ["base", "markdown", "path", "token"],
+      // `ack` IS THE FIFTH FIELD AND IT IS THE ONE THIS BRANCH ADDED — see `writeFile`'s own
+      // paragraph. Like `base` and `token` before it, it is a field a server may ignore: a Worker
+      // that has never read it answers synchronously with its projection in it, which is byte for
+      // byte the answer this page has always handled. Unlike those two it is UNCONDITIONAL, and it
+      // can be: `base` and `token` are absent when the browser has nothing to say, and this one is
+      // never that — "do not make me wait for the cycle" is true of every write this app makes.
+      ["ack", "base", "markdown", "path", "token"],
       "the write path gained or lost a field",
     );
   });
@@ -672,7 +678,10 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
       }
     }
     const posted = d.control.posted[d.control.posted.length - 1];
-    assert.deepEqual(Object.keys(posted).sort(), ["base", "markdown", "path"]);
+    // `ack` SURVIVES THE MISSING CSPRNG AND `token` DOES NOT, which is the whole shape of the two
+    // fields stated side by side: one is a claim about THIS BROWSER'S randomness and is dropped when
+    // there is none, the other is a request about the SERVER'S sequencing and is true either way.
+    assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "markdown", "path"]);
     assert.equal("token" in posted, false, "an empty token reached the wire");
     assert.deepEqual(d.heldTexts(), [TYPED], "the row stopped being held without a token to hold it by");
   });
@@ -729,11 +738,17 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);
   });
 
-  test("THE REGISTER IS REACHED IN EXACTLY FIVE PLACES, and none of them is a write of a file", () => {
+  test("THE REGISTER IS REACHED IN EXACTLY SIX PLACES, and none of them is a write of a file", () => {
+    // SIX RATHER THAN FIVE SINCE THE PICKUP, AND THE SIXTH IS A QUESTION. `writes.waiting(token)` is
+    // asked twice by `collect` — once before the read, so a pickup that is no longer owed costs no
+    // request, and once after it, to tell the schedule whether the answer arrived. It takes a token
+    // and returns a boolean: it cannot open a write, cannot close one, and cannot reach a path, a
+    // markdown or a POST. The name is asserted rather than the count, so a seventh reach has to be
+    // justified here rather than absorbed by a number.
     const reads = codeOf(APP_SOURCE).match(/\bwrites\.[A-Za-z]\w*/g) ?? [];
     assert.deepEqual(
       [...new Set(reads)].sort(),
-      ["writes.arrive", "writes.clear", "writes.giveUp", "writes.open", "writes.outstanding"],
+      ["writes.arrive", "writes.clear", "writes.giveUp", "writes.open", "writes.outstanding", "writes.waiting"],
       "a new way to reach the write register appeared — check it cannot reach a POST",
     );
   });

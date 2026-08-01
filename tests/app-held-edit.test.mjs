@@ -826,7 +826,18 @@ describe("4. NOTHING HELD REACHES A WRITE — the pinned sites, re-counted on th
     // `#viewBody` and a source string. `#heldStrip` is its SIBLING, so no held row can ever be part
     // of the element tree the painter walks or the source string it computes an edit from.
     assert.match(APP_SOURCE, /<article id="viewBody"[\s\S]{0,2000}<section id="heldStrip"/);
-    assert.match(APP_SOURCE, /paint\(body, v\.markdown/, "the painter's body is no longer #viewBody");
+    // THE BODY IS STILL `#viewBody` AND THE SOURCE IS STILL ONE STRING OFF THE WIRE. The second
+    // argument is named `source` since the ack landed, and its ONE definition is asserted below
+    // rather than tolerated: `accepted.sourceFor(v.path)` is a file's markdown the SERVER said it
+    // holds (app/present/accepted.ts), and `v.markdown` is the projection's copy. Neither can be a
+    // held row — the strip is `#viewBody`'s sibling and neither expression can reach it — so the
+    // structural argument this test makes is unchanged and is now pinned at both ends.
+    assert.match(APP_SOURCE, /paint\(body, source, presentation/, "the painter's body is no longer #viewBody");
+    assert.match(
+      APP_SOURCE,
+      /const source = accepted\.sourceFor\(v\.path\) \?\? v\.markdown;/,
+      "the painter's source gained a second definition — check it cannot be a held row",
+    );
   });
 
 });
