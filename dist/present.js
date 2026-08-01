@@ -1393,6 +1393,175 @@ function presentationFromDeclaration(document2) {
   };
 }
 
+// app/present/relative.ts
+function extendsLine(held, arrived) {
+  if (arrived === held) {
+    return true;
+  }
+  if (held === "" || held.trimEnd() !== held) {
+    return false;
+  }
+  return arrived.startsWith(held + " ");
+}
+function boundsOf(places, section) {
+  let first = -1;
+  let last = -1;
+  places.forEach((place, at) => {
+    if (place !== null && place.section === section) {
+      if (first === -1) {
+        first = at;
+      }
+      last = at;
+    }
+  });
+  return first === -1 ? null : { first, last };
+}
+function gapBetween(places, section, from, to) {
+  const found = [];
+  for (let at = Math.max(0, from); at <= Math.min(to, places.length - 1); at += 1) {
+    const place = places[at] ?? null;
+    if (place !== null && place.section === section) {
+      found.push(at);
+    }
+  }
+  return found;
+}
+function printingsOf(places, node) {
+  const found = [];
+  places.forEach((place, at) => {
+    if (place?.node === node) {
+      found.push(at);
+    }
+  });
+  return found;
+}
+function relativeAnchorFor(places, lines, lineIndex) {
+  const place = places[lineIndex] ?? null;
+  if (place === null || place.node !== null) {
+    return null;
+  }
+  const section = place.section;
+  let above = null;
+  let aboveAt = -1;
+  for (let at = lineIndex - 1; at >= 0; at -= 1) {
+    const other = places[at];
+    if (other === null || other === void 0) {
+      continue;
+    }
+    if (other.section !== section) {
+      break;
+    }
+    if (other.node !== null) {
+      above = other.node;
+      aboveAt = at;
+      break;
+    }
+  }
+  let below = null;
+  let belowAt = -1;
+  for (let at = lineIndex + 1; at < places.length; at += 1) {
+    const other = places[at];
+    if (other === null || other === void 0) {
+      continue;
+    }
+    if (other.section !== section) {
+      break;
+    }
+    if (other.node !== null) {
+      below = other.node;
+      belowAt = at;
+      break;
+    }
+  }
+  if (above === null && below === null) {
+    return null;
+  }
+  const bounds = boundsOf(places, section);
+  if (bounds === null) {
+    return null;
+  }
+  const from = above === null ? bounds.first : aboveAt + 1;
+  const to = below === null ? bounds.last : belowAt - 1;
+  const gap = gapBetween(places, section, from, to);
+  const offset = gap.indexOf(lineIndex);
+  if (offset === -1) {
+    return null;
+  }
+  return { above, below, section, gap: gap.length, offset, text: lines[lineIndex] ?? "" };
+}
+function resolveRelativeAnchor(anchor, places, lines) {
+  const bracket = bracketRung(anchor, places, lines);
+  if (bracket.outcome === "found") {
+    return bracket;
+  }
+  return textRung(anchor, places, lines, bracket);
+}
+function bracketRung(anchor, places, lines) {
+  let aboveAt = -1;
+  if (anchor.above !== null) {
+    const printings = printingsOf(places, anchor.above);
+    if (printings.length === 0) {
+      return { outcome: "refused", because: "above-absent" };
+    }
+    if (printings.length > 1) {
+      return { outcome: "refused", because: "above-ambiguous" };
+    }
+    aboveAt = printings[0];
+  }
+  let belowAt = -1;
+  if (anchor.below !== null) {
+    const printings = printingsOf(places, anchor.below);
+    if (printings.length === 0) {
+      return { outcome: "refused", because: "below-absent" };
+    }
+    if (printings.length > 1) {
+      return { outcome: "refused", because: "below-ambiguous" };
+    }
+    belowAt = printings[0];
+  }
+  const aboveSection = aboveAt === -1 ? null : places[aboveAt]?.section ?? null;
+  const belowSection = belowAt === -1 ? null : places[belowAt]?.section ?? null;
+  if (aboveAt !== -1 && belowAt !== -1) {
+    if (belowAt <= aboveAt || aboveSection !== belowSection) {
+      return { outcome: "refused", because: "bracket-crossed" };
+    }
+  }
+  const section = aboveAt !== -1 ? aboveSection : belowSection;
+  const bounds = boundsOf(places, section);
+  if (bounds === null) {
+    return { outcome: "refused", because: "gap-changed" };
+  }
+  const from = aboveAt === -1 ? bounds.first : aboveAt + 1;
+  const to = belowAt === -1 ? bounds.last : belowAt - 1;
+  const gap = gapBetween(places, section, from, to);
+  if (gap.length !== anchor.gap) {
+    return { outcome: "refused", because: "gap-changed" };
+  }
+  const candidate = gap[anchor.offset];
+  if (candidate === void 0) {
+    return { outcome: "refused", because: "gap-changed" };
+  }
+  if (!extendsLine(anchor.text, lines[candidate] ?? "")) {
+    return { outcome: "refused", because: "text-changed" };
+  }
+  return { outcome: "found", lineIndex: candidate, via: "relative" };
+}
+function textRung(anchor, places, lines, refusal) {
+  const candidates = [];
+  places.forEach((place, at) => {
+    if (place !== null && extendsLine(anchor.text, lines[at] ?? "")) {
+      candidates.push(at);
+    }
+  });
+  if (candidates.length === 1) {
+    return { outcome: "found", lineIndex: candidates[0], via: "text" };
+  }
+  if (candidates.length > 1) {
+    return { outcome: "ambiguous", candidates };
+  }
+  return refusal.outcome === "refused" ? refusal : { outcome: "refused", because: "nothing-extends-the-text" };
+}
+
 // app/present/instance.ts
 var HEADING_TOKEN = "\xA7heading";
 function nodeStampOf(line) {
@@ -1451,12 +1620,19 @@ function instanceOf(source, lineIndex, view) {
   }
   return instancesOf(source, view)[lineIndex] ?? null;
 }
+var ANCHOR_TRUST = ["instance", "node", "relative", "text"];
 function instanceAnchorFor(source, lineIndex, view) {
-  const info = instanceOf(source, lineIndex, view);
+  const list = instancesOf(source, view);
+  const info = list[lineIndex] ?? null;
   if (info === null) {
     return null;
   }
-  return { instance: info.instance, node: info.node, takenAt: lineIndex };
+  return {
+    instance: info.instance,
+    node: info.node,
+    takenAt: lineIndex,
+    relative: relativeAnchorFor(list, source.split("\n"), lineIndex)
+  };
 }
 function resolveInstanceAnchor(anchor, source, view) {
   const list = instancesOf(source, view);
@@ -1477,6 +1653,16 @@ function resolveInstanceAnchor(anchor, source, view) {
     if (candidates.length > 1) {
       return { outcome: "ambiguous", candidates };
     }
+  }
+  if (anchor.relative !== null) {
+    const reading = resolveRelativeAnchor(anchor.relative, list, source.split("\n"));
+    if (reading.outcome === "found") {
+      return { outcome: "found", lineIndex: reading.lineIndex, via: reading.via };
+    }
+    if (reading.outcome === "ambiguous") {
+      return { outcome: "ambiguous", candidates: reading.candidates };
+    }
+    return { outcome: "absent", because: reading.because };
   }
   return { outcome: "absent" };
 }
@@ -4537,6 +4723,7 @@ var presentation_default = {
 // app/present/embedded-declaration.ts
 var EMBEDDED_DECLARATION = presentation_default;
 export {
+  ANCHOR_TRUST,
   BaseSurface,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
@@ -4562,6 +4749,7 @@ export {
   clampColumn,
   clampLine,
   classifyLine,
+  extendsLine,
   heldFrom,
   indentedLine,
   instanceAnchorFor,
@@ -4583,9 +4771,11 @@ export {
   readDeclaration,
   readQualificationDeclaration,
   readStructuralDeclaration,
+  relativeAnchorFor,
   resolveInstanceAnchor,
   resolveLineFields,
   resolveLogicalDate,
+  resolveRelativeAnchor,
   resolveWeekEnd,
   sectionAt,
   sectionOrderFor,
