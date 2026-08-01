@@ -49,6 +49,33 @@
  * and `applyEdit` gaining one `delete-span` case — at which point it is a small change, because
  * the offsets are already here and the write path is already one function.
  *
+ * ── AND THE IDENTITY MARK IS READ-ONLY FOR A HARDER REASON THAN THE CHIP'S ──
+ *
+ * The `stamp` key's wired rendition stops PRINTING `[[qntm:3]]`, which makes it the first
+ * rendition whose token is not merely styled but removed from the page. The governing constraint
+ * that admits it is `accept ⊇ emit` read one layer up: a token you stop printing must still be
+ * written back byte for byte, and a dropped `[[qntm:N]]` RE-MINTS THE NODE — the engine's recorded
+ * behaviour for an unrecognised stamp is that its content is absorbed into the node's title, exit
+ * 0, no diagnostic.
+ *
+ * IT IS SAFE BY CONSTRUCTION AND NOT BY CARE, WHICH IS THE ONLY REASON IT SHIPS. Every call into
+ * `applyEdit` below is given the SOURCE STRING this function was handed — `source` for the
+ * checkbox, `fileSource` plus `input.value` for the cursor's line, and `input.value` was seeded
+ * from `lineSource` and never from a rendition. Hiding happens in `renderTokens`, whose output
+ * reaches exactly one place: `element.innerHTML`. Nothing reads `innerHTML` back, no affordance
+ * was added, and `SourceEdit` is unchanged. So there is no path by which a hidden stamp can fail
+ * to be restored — restoration is not an operation this module performs, it is the absence of a
+ * mutation it never makes.
+ *
+ * THE THREE CALL SITES ARE PINNED BY A COUNT, not by this paragraph: tests/app-held-edit.test.mjs
+ * section 4 matches the call syntax across this file and app/index.html and asserts it is five.
+ * That is why the name appears here without its bracket.
+ *
+ * THE FORM THAT WOULD INVERT IT, NAMED SO IT CAN BE REFUSED ON SIGHT: hiding the stamp by
+ * STRIPPING IT FROM `source` before painting. It looks like the same feature, it is one line, and
+ * it is the accident that destroys node identities. tests/present-stamp.test.mjs section 6 is
+ * aimed at exactly that mutation.
+ *
  * ── THE MARKDOWN RENDERER IS INJECTED, ON PURPOSE ──
  *
  * `deps.markdown` is supplied by the caller rather than imported. Two reasons, and the first is
@@ -74,7 +101,7 @@ import { instancesOf } from "./instance.js";
 import type { ModeSurface } from "./motions.js";
 import { openLine } from "./newline.js";
 import type { GlobalRegistration } from "./newline.js";
-import { classifyLine, tagSpans } from "./resolution.js";
+import { classifyLine, stampSpans, tagSpans } from "./resolution.js";
 import type { Rendition } from "./resolution.js";
 import { applyEdit } from "./source.js";
 
@@ -609,6 +636,62 @@ const CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
 const CHIP_CLOSE = "</span>";
 
 /**
+ * THE `wired` RENDITION OF THE IDENTITY STAMP — a small mark where `[[qntm:3]]` was printed.
+ *
+ * ── WHAT THE WIRED FORM IS, AND WHY IT IS A MARK RATHER THAN NOTHING AT ALL ──
+ *
+ * Hiding the stamp entirely was the obvious answer and it is the wrong one, for a reason that is
+ * about what the operator is actually watching. He types a line; the cycle takes it, mints a node,
+ * and prints the line back stamped. The stamp is the ONLY thing on the line that says the model
+ * has it. Hide it completely and a line the model has never seen and a line it has minted a node
+ * for are pixel-identical, so the one question he asks of the page every time he presses Enter —
+ * "has it got this yet" — stops having an answer anywhere on it.
+ *
+ * So the mark is the smallest thing that answers it: one dot, in the place the stamp occupied,
+ * carrying the id in its `title` for a hover. Twelve characters become one, so the tail of the
+ * line stops moving eleven columns when the cycle catches up, and the fact he needs survives.
+ *
+ * AND HIDING ENTIRELY IS STILL ONE CSS RULE AWAY, WITH NOTHING REBUILT. What the painter emits is
+ * a span with a class; whether that span is a dot or `display: none` is a stylesheet decision in
+ * app/index.html, not a rendition decision here. That is the same separation the chip already has
+ * ("this rule only says what a chip looks like once the cascade has said there should be one").
+ *
+ * ── THE ID GOES IN AN ATTRIBUTE AND NOTHING EVER READS IT BACK ──
+ *
+ * `title="qntm:3"` is for a person hovering. It is not a channel: no listener reads it, `applyEdit`
+ * has gained no case, and the restoration of a hidden stamp does not come from the DOM at all — it
+ * comes from the source string, which this painter never mutates. `flows.yaml`'s
+ * `source-never-touches-the-dom` forbidden flow is what keeps that true tomorrow.
+ *
+ * THE INJECTION IS SAFE BY THE GRAMMAR, NOT BY ESCAPING — the same argument the chip makes, and it
+ * has to be made again because this token goes into an ATTRIBUTE rather than into element content.
+ * A qntm id is `[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?` (resolution.ts, cited to
+ * `parse_qntm_id.py`), so it cannot contain `"`, `<`, `>` or `&`; there is no character in a
+ * matched id that could close this attribute or open another element. Fuzzed in
+ * tests/present-stamp.test.mjs rather than assumed.
+ *
+ * ── AND THE MARK IS A CHARACTER, NOT A SIZED BOX, WHICH IS A ROW DECISION AND NOT A TASTE ──
+ *
+ * The first version of this drew an empty `<span>` with a `width` and a `height`. That is a box the
+ * row has to absorb, and `tests/app-view-rows.test.mjs` has already paid for the lesson once: at
+ * the `line-height: 1.45` the CHIP shipped with, a chipped line measured 24.0199px against 23.9986px
+ * for the same line without one, and a line whose wired rendition is taller than its raw form moves
+ * everything below it the moment the cursor lands.
+ *
+ * A span holding ONE CHARACTER has the chip's own answer instead of a new one: its box IS its text's
+ * content area, which the row already contains by construction, so with no padding, no border, no
+ * width and no height there is nothing for the row to absorb. That argument was MEASURED for the
+ * chip; this element reuses it rather than making a fresh, unmeasured claim about `.34em`.
+ */
+const STAMP_MARK_CLASS = "stampmark";
+/** The constant PREFIX of the mark's opening tag — what the survival check below counts. */
+const STAMP_OPEN = `<span class="${STAMP_MARK_CLASS}"`;
+/** The one character the mark is. Not an emoji, not a glyph the marker grammar could ever claim. */
+const STAMP_MARK_GLYPH = "•";
+const stampMark = (id: string): string =>
+  `${STAMP_OPEN} title="qntm:${id}">${STAMP_MARK_GLYPH}</span>`;
+
+/**
  * NORMAL MODE'S SELECTION MARK — one class, on whichever element a WIRED line rendered as, when
  * that line is the vim cursor. Deliberately not the caret's own green: `.viewbody input.rawline`
  * marks INSERT with `caret-color` and a bottom hairline, and the brief is explicit that NORMAL's
@@ -619,7 +702,30 @@ const CHIP_CLOSE = "</span>";
 const VIM_SELECTED_CLASS = "vim-selected";
 
 /**
- * Render `text` with its tags as chips — or with them as characters, if the chip would not survive.
+ * One token's rendition, located: the characters it replaces, and what goes in their place.
+ *
+ * `text` is the SOURCE characters this substitution stands for. It is what makes the fallback
+ * below possible without a second grammar pass, and it is the restoration in the one place a
+ * restoration is ever needed at paint time — see `renderTokens`.
+ */
+interface Injection {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+  readonly html: string;
+}
+
+/**
+ * Render `text` with its tokens rendered — or with them as characters, if the markup would not
+ * survive.
+ *
+ * ── TWO KEYS, ONE MARKDOWN CALL, AND THAT IS NOT AN OPTIMISATION ──
+ *
+ * `tags` and `stamp` are resolved separately and injected together, into the ONE render this line
+ * was always going to make. Rendering twice — chips in one pass, marks in another — would mean
+ * rendering HTML that already contains HTML, which is the painter reading its own output and
+ * deciding again from it. One pass in, one string out, both token families inside whatever
+ * structure markdown-it built.
  *
  * ── WHY THE CHIP IS PUT INTO THE MARKDOWN AND NOT INTO THE DOM ──
  *
@@ -653,26 +759,77 @@ const VIM_SELECTED_CLASS = "vim-selected";
  * chip and one escaped chip would be the worst of both. This check is also what stops the chip
  * from depending on `html: true`: it does not assert the renderer's configuration, it observes
  * what the renderer did with this line.
+ *
+ * ── AND THE FALLBACK MATTERS MORE FOR THE STAMP THAN IT DID FOR THE CHIP ──
+ *
+ * A chip that does not survive shows `&lt;span class="tagchip"&gt;#work` — ugly, and the tag is
+ * still legible inside it. A MARK that did not survive would show
+ * `&lt;span class="stampmark" title="qntm:3"&gt;&lt;/span&gt;` with the stamp's own characters
+ * GONE from the line, replaced by markup about them. That is strictly worse than either end of the
+ * dial, so the all-or-nothing rule is not merely tidy here: it is what keeps the wired end from
+ * having a third, broken outcome. The check counts BOTH families and one shortfall in either takes
+ * the whole line back to its characters.
+ *
+ * ── WHAT IS NOT HERE, AND IS THE POINT ──
+ *
+ * NO SOURCE EDIT. The mark offers nothing, exactly as the chip offers nothing: no listener,
+ * `applyEdit` gained no case, and `SourceEdit` is still the closed union of three. So this
+ * rendition cannot corrupt a file even if every claim above it is wrong — the write path is
+ * handed the source string, never this string.
  */
-function renderTags(text: string, tags: Rendition, render: (markdown: string) => string): string {
-  if (tags === "raw") {
-    return render(text);
+function renderTokens(
+  text: string,
+  tags: Rendition,
+  stamp: Rendition,
+  render: (markdown: string) => string,
+): string {
+  const injections: Injection[] = [];
+  if (stamp === "wired") {
+    // STAMPS FIRST, mirroring `line_parser.parse_line`'s own extraction order (wiki-link before
+    // tag, `line_parser.py:79-89`) — the same order `titleSpans` walks its atoms in. The two
+    // grammars cannot actually overlap (a qntm id body has no `#` and a tag body has no `[`), so
+    // the drop below never fires today; it is here so that a WIDER grammar arriving later cannot
+    // produce two injections claiming one character.
+    for (const span of stampSpans(text)) {
+      injections.push({ start: span.start, end: span.end, text: span.text, html: stampMark(span.id) });
+    }
   }
-  const spans = tagSpans(text);
-  if (spans.length === 0) {
+  if (tags === "wired") {
+    for (const span of tagSpans(text)) {
+      injections.push({
+        start: span.start,
+        end: span.end,
+        text: span.text,
+        html: CHIP_OPEN + span.text + CHIP_CLOSE,
+      });
+    }
+  }
+  if (injections.length === 0) {
     return render(text);
   }
 
+  const claimed: Injection[] = [];
+  for (const injection of injections) {
+    if (!claimed.some((c) => injection.start >= c.start && injection.start < c.end)) {
+      claimed.push(injection);
+    }
+  }
+  claimed.sort((a, b) => a.start - b.start);
+
   let injected = "";
   let at = 0;
-  for (const span of spans) {
-    injected += text.slice(at, span.start) + CHIP_OPEN + span.text + CHIP_CLOSE;
-    at = span.end;
+  for (const injection of claimed) {
+    injected += text.slice(at, injection.start) + injection.html;
+    at = injection.end;
   }
   injected += text.slice(at);
 
   const html = render(injected);
-  return html.split(CHIP_OPEN).length - 1 === spans.length ? html : render(text);
+  const survived = (open: string): number => html.split(open).length - 1;
+  const wanted = (open: string): number => claimed.filter((c) => c.html.startsWith(open)).length;
+  const intact =
+    survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN);
+  return intact ? html : render(text);
 }
 
 /**
@@ -985,8 +1142,11 @@ export function paint(
       // asked on every line the painter reaches, so a declaration that never changes the DOM is
       // still a declaration that was READ — the difference between a key with a reader and a key
       // that happens to agree with the default.
-      span.innerHTML = renderTags(shape.tail, cascade.resolve("tags").rendition, (markdown) =>
-        deps.markdown.renderInline(markdown),
+      span.innerHTML = renderTokens(
+        shape.tail,
+        cascade.resolve("tags").rendition,
+        cascade.resolve("stamp").rendition,
+        (markdown) => deps.markdown.renderInline(markdown),
       );
       // THE TEXT IS THE CURSOR TARGET AND THE BOX IS THE TOGGLE. Two affordances on one line,
       // kept apart by which element carries which listener: click the words to read the source,
@@ -1009,8 +1169,11 @@ export function paint(
       // The heading's OWN `#`es are not tags and cannot be: `classifyLine` has already taken them
       // off, and the grammar would refuse them anyway (`#` then a space is not a tag body). What
       // is left is the heading's text, which may carry tags like any other line.
-      el.innerHTML = renderTags(shape.text, cascade.resolve("tags").rendition, (markdown) =>
-        deps.markdown.renderInline(markdown),
+      el.innerHTML = renderTokens(
+        shape.text,
+        cascade.resolve("tags").rendition,
+        cascade.resolve("stamp").rendition,
+        (markdown) => deps.markdown.renderInline(markdown),
       );
       focusable(el, index);
       stampInstance(el, index);
@@ -1030,8 +1193,11 @@ export function paint(
     // not a task and lands here. It is also the branch where the renderer sometimes refuses the
     // chip — four spaces of indent is an indented code block to markdown-it — which is what
     // renderTags's all-or-nothing fallback is for.
-    div.innerHTML = renderTags(shape.source, cascade.resolve("tags").rendition, (markdown) =>
-      deps.markdown.render(markdown),
+    div.innerHTML = renderTokens(
+      shape.source,
+      cascade.resolve("tags").rendition,
+      cascade.resolve("stamp").rendition,
+      (markdown) => deps.markdown.render(markdown),
     );
     focusable(div, index);
     stampInstance(div, index);

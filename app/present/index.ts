@@ -25,6 +25,7 @@ export {
   classifyLine,
   markerSpans,
   qntmIdSpans,
+  stampSpans,
   tagSpans,
   titleSpans,
   wikiLinkSpans,
@@ -35,6 +36,7 @@ export type {
   Rendition,
   Resolution,
   ResolutionKey,
+  StampSpan,
   TagSpan,
   WordSpan,
 } from "./resolution.js";
