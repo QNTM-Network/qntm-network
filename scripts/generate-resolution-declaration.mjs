@@ -504,6 +504,439 @@ function readOrderingFieldMarkers(configDir, fields, ledger) {
   return out;
 }
 
+// ── 7. THE SEED: what a NEW LINE under a section is, spelled in the characters the engine prints ─
+//
+// Rungs 1 and 2 of `design-the-rule-mirror.md`'s ladder, and they ship together because §3.3 says
+// they must. The operator's own words: "it gets stamped `task` … then for `personal all` it would
+// get stamped `task` AND `personal`, as we have a default resolution here."
+//
+// ── WHY A DEFAULT CAN BE SEEDED AT ALL, AND WHY THIS IS NOT A NEW AUTHORITY ──
+//
+// A `defaults:` block sets a node FIELD. A field is not text. What makes this publishable is that
+// the ENGINE ITSELF spells a set field back onto the line, every cycle, through
+// `qntm_md.vocabulary.token_resolver.TokenResolver.source_tags_for_node` — "Render: field + value
+// -> canonical token -> text", the render-direction inverse of ingest tokenization. Read the
+// operator's own `personal/all.md` and every line carries `#task #personal`; read `inbox.md` and
+// every line carries `#task`. Those characters are the engine's, not a person's.
+//
+// So this table is the same inverse, generated once from the same vocabulary files, and the seed
+// is the string the engine would print for a node of that section's resolved type carrying that
+// section's declared defaults. `tests/fixtures/resolution-agreement.json` measures it against
+// `source_tags_for_node` itself, per section, so a mis-read vocabulary does not survive `npm test`.
+//
+// ── WHAT THAT SETTLES ABOUT `INPUT WINS`, WHICH IS THE SHARPEST QUESTION HERE ──
+//
+// A value the browser writes into the source is ingested as AUTHORED and outranks the rule that
+// produced it (`io/applier.py`'s `_merge_registration_defaults`: the SECTION layer fills only a
+// field the line does not already carry). So seeding is not free — it converts a DERIVED value
+// into an AUTHORED one.
+//
+// It costs nothing HERE, and the reason is exactly the one above: the engine performs that same
+// conversion itself, one cycle later, when it prints the tag back. `#personal` on a line in
+// `personal/all.md` is already an authored domain token by the time the operator next sees the
+// file. Seeding reaches the SAME fixed point one cycle earlier; it does not create one.
+//
+// A field with NO token is therefore never seeded — not as a limitation but as the same rule read
+// the other way. `project` (60 sections) has no tag in the vocabulary, so the engine never prints
+// it either; a browser that wrote `project` into the line would be inventing a spelling the engine
+// does not use and freezing a value the engine goes on deciding invisibly. Every such field is
+// recorded in `dropped`, per section, with the field named.
+//
+// ── AND WHY THE TYPE TAG IS REFUSED IN SOME SECTIONS: §3.3, DERIVED RATHER THAN NAMED ──
+//
+// `design-the-rule-mirror.md` §3.3 measured that in 13 of 186 sections the registration answer is
+// WRONG by the end of the cycle: the view declares `default_node_type: routine`, a bare capture
+// carries no cadence, and `routine-without-cadence-becomes-task` retypes it inside the SAME pass
+// that minted it. A seed that wrote `#routine` there would be confidently wrong within seconds.
+//
+// NO CODE HERE NAMES `routine`, that rule, or any section. `readRetypeRefusals` reads
+// `config/rules/*.yaml`, finds every rule carrying a `set_node_type` action, and normalises its
+// `for_each` pattern and its `when:` into a CLOSED grammar — a `root.find` over node fields with
+// no traversal step, and a `when:` of `null` / `not` / literal `eq`. A rule that normalises and
+// whose `when:` is TRUE for the bare capture that section would mint refuses that section's type
+// tag. A rule that does NOT normalise is recorded in `dropped` and evaluated by nobody.
+//
+// THE BOUNDARY, STATED: a rule whose pattern TRAVERSES (four of the nine) binds through a related
+// node this generator does not read, so it is out of the grammar rather than assumed harmless.
+// The corroboration is `design-the-rule-mirror.md` §3.2's own [OBS] sweep — the engine's real rule
+// pass, run over all 186 sections, found the union of rules a bare capture reaches is exactly TWO,
+// and no traversing rule among them. The boundary is stated and backed by that measurement, never
+// by this generator's silence.
+
+const CAPTURE_FIELDS_NOTE =
+  "a new line carries its resolved node type, the schema's declared field defaults and its " +
+  "section's own 'defaults:' block, and nothing else";
+
+/**
+ * `field_types.<f>.default` — what a field holds on a node nobody has typed a value for.
+ *
+ * NOT A DROP when the mapping is absent: a config that declares no field defaults has none, and
+ * `{}` is that config's own answer rather than a declaration this reader discarded. The positive
+ * control against a silent `{}` on a config that DOES declare them is
+ * `tests/present-newline.test.mjs`'s assertion that 13 of the operator's 186 sections refuse their
+ * type tag — a count that collapses to 0 the moment this returns nothing it should have returned.
+ */
+function readFieldDefaults(configDir) {
+  const schema = readYaml(join(configDir, "schema.yaml"));
+  const fieldTypes = schema?.field_types;
+  if (!fieldTypes || typeof fieldTypes !== "object" || Array.isArray(fieldTypes)) return {};
+  const out = {};
+  for (const [field, definition] of Object.entries(fieldTypes)) {
+    if (definition && typeof definition === "object" && isScalar(definition.default)) {
+      if (definition.default !== null) out[field] = definition.default;
+    }
+  }
+  return out;
+}
+
+/**
+ * The vocabulary, read in the RENDER direction: `field + value -> the one token that spells it`.
+ *
+ * Mirrors `source_tags_for_node`'s two halves — one type tag, then one field tag per field-target
+ * token whose value is set — including its ORDER, which is the vocabulary's own declaration order
+ * and is why `fieldOrder` is an array rather than the object's key set. Files are walked sorted by
+ * name, families in declaration order, entries in list order, and the FIRST token to claim a
+ * (field, value) pair keeps it, the same way the engine's own render index resolves a duplicate.
+ *
+ * Two kinds of row are excluded, both because the ENGINE refuses them and not because this reader
+ * finds them awkward: `render_only: true` (a derived display value the engine never reads back
+ * from that glyph) and a non-scalar or absent `value:` (nothing fixed to key by). Markers are not
+ * read here at all — `source_markers_for_node` is a separate emission, no section default names a
+ * marker field, and a seeded `🆕` would be the browser claiming a stamp only a rule can make.
+ */
+function readSpelling(configDir, ledger) {
+  const dir = join(configDir, "vocabulary");
+  if (!existsSync(dir)) throw new GenerationError(`${dir} does not exist`);
+  const typeTokens = {};
+  const fieldOrder = [];
+  const fieldTokens = {};
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort()) {
+    const document = readYaml(join(dir, file));
+    // DROP PATH 14. A whole vocabulary file, and every spelling in it.
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      ledger.drop(
+        `vocabulary/${file}`,
+        "the file did not parse into a mapping of family -> token list, so no field it spells " +
+          "can be seeded into a new line",
+      );
+      continue;
+    }
+    for (const [familyName, family] of Object.entries(document)) {
+      // DROP PATH 15. A family declared as something other than a list of entries.
+      if (!Array.isArray(family)) {
+        ledger.drop(
+          `vocabulary/${file}#${familyName}`,
+          `the '${familyName}:' family is not a list of token entries, so no field it spells can ` +
+            "be seeded into a new line",
+        );
+        continue;
+      }
+      for (const entry of family) {
+        if (!entry || typeof entry !== "object" || !isNonEmptyString(entry.token)) continue;
+        if (isNonEmptyString(entry.node_type)) {
+          if (typeTokens[entry.node_type] === undefined) typeTokens[entry.node_type] = entry.token;
+          continue;
+        }
+        // NOT A DROP: an entry declaring neither `node_type:` nor `field:` — an edge tag, a
+        // deletion gesture, a structural token — spells no field, so nothing was discarded.
+        // `generate-qualification-declaration.mjs`'s own token loop states the same for the same
+        // rows: a ledger that listed every token on a different axis would be noise.
+        if (!isNonEmptyString(entry.field)) continue;
+        // DROP PATH 16. A tag the engine itself never ingests back from its own glyph. Seeding one
+        // would write characters the next cycle refuses to read — the opposite of a round trip.
+        if (entry.render_only === true) {
+          ledger.drop(
+            `vocabulary token '${entry.token}'`,
+            `spells '${entry.field}' but is 'render_only: true', so the engine never reads that ` +
+              "field back from that glyph and a seeded line would not round-trip",
+          );
+          continue;
+        }
+        if (!isScalar(entry.value) || entry.value === null) continue;
+        if (fieldTokens[entry.field] === undefined) {
+          fieldTokens[entry.field] = {};
+          fieldOrder.push(entry.field);
+        }
+        const key = String(entry.value);
+        if (fieldTokens[entry.field][key] === undefined) fieldTokens[entry.field][key] = entry.token;
+      }
+    }
+  }
+  if (Object.keys(typeTokens).length === 0) {
+    throw new GenerationError(
+      "no vocabulary token declares a 'node_type:' — the type tag is half of what the engine " +
+        "prints on every line it renders, so an empty map would make every seed a silent guess",
+    );
+  }
+  return { typeTokens, fieldOrder, fieldTokens };
+}
+
+/** `$current.node.fields.X` -> `X`, and nothing else is a field reference this reader accepts. */
+const FIELD_REF = /^\$current\.node\.fields\.([A-Za-z_][A-Za-z0-9_]*)$/;
+
+class WhenRefusal extends Error {}
+
+/**
+ * One `when:` clause, normalised into a predicate over a bare capture's own fields, or refused.
+ *
+ * Three forms, and they are the three the operator's own retype rules use. `null` asks whether a
+ * field is unset — the form that makes §3.3's retype fire on a line nobody has typed a cadence
+ * into. `not` inverts. `eq` over two literals is a constant. Anything reaching outside the node's
+ * own field map — an edge, the clock, a cycle variable — throws, and its rule is recorded rather
+ * than evaluated.
+ */
+function evaluateWhen(when, fields) {
+  if (when === null || when === undefined) return true;
+  if (!when || typeof when !== "object" || Array.isArray(when)) {
+    throw new WhenRefusal(`'when:' is ${Array.isArray(when) ? "a list" : typeof when}, not a clause`);
+  }
+  const keys = Object.keys(when);
+  if (keys.length !== 1) throw new WhenRefusal(`'when:' carries ${keys.length} operators`);
+  const [operator] = keys;
+  const operand = when[operator];
+  if (operator === "not") {
+    const list = Array.isArray(operand) ? operand : [operand];
+    if (list.length !== 1) throw new WhenRefusal("'not:' is not a single clause");
+    return !evaluateWhen(list[0], fields);
+  }
+  if (operator === "null") {
+    const list = Array.isArray(operand) ? operand : [operand];
+    if (list.length !== 1 || typeof list[0] !== "string") {
+      throw new WhenRefusal("'null:' is not a single reference");
+    }
+    const match = FIELD_REF.exec(list[0]);
+    if (match === null) throw new WhenRefusal(`'null:' reads ${list[0]}, not one of the node's fields`);
+    return fields[match[1]] === undefined || fields[match[1]] === null;
+  }
+  if (operator === "eq") {
+    if (!Array.isArray(operand) || operand.length !== 2 || !operand.every(isScalar)) {
+      throw new WhenRefusal("'eq:' is not two literal scalars");
+    }
+    if (operand.some((v) => typeof v === "string" && v.startsWith("$"))) {
+      throw new WhenRefusal("'eq:' reads a cycle variable");
+    }
+    return operand[0] === operand[1];
+  }
+  throw new WhenRefusal(`operator '${operator}'`);
+}
+
+/**
+ * Every rule that retypes, reduced to `(pattern find, when)` — or recorded and left unevaluated.
+ *
+ * A rule qualifies only when the WHOLE of it normalises: its `for_each` names a pattern, that
+ * pattern's `root.find` is a mapping of node fields with no `$` in it, it declares no traversal
+ * step, and its `when:` reduces through `evaluateWhen` above. This is the qualification
+ * generator's own posture, applied to a second language.
+ */
+function readRetypeRules(configDir, ledger) {
+  const patternsDir = join(configDir, "patterns");
+  const rulesDir = join(configDir, "rules");
+  // NOT A DROP: a config with no `rules/` directory declares no rules, so there is no retype to
+  // evaluate and nothing was discarded. The positive control against this returning `[]` on a
+  // config that DOES declare retypes is the 13-section count asserted in
+  // `tests/present-newline.test.mjs` — see `readFieldDefaults`'s own note.
+  if (!existsSync(rulesDir) || !existsSync(patternsDir)) return [];
+
+  const patterns = new Map();
+  for (const file of readdirSync(patternsDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    const document = readYaml(join(patternsDir, file));
+    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+    for (const [name, config] of Object.entries(document)) {
+      if (!patterns.has(name)) patterns.set(name, config);
+    }
+  }
+
+  const out = [];
+  for (const file of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    let document;
+    try {
+      document = readYaml(join(rulesDir, file));
+    } catch (error) {
+      // DROP PATH 17a. A rules file this reader cannot parse. Every retype it declares goes
+      // unevaluated, so every section whose type it would have refused is seeded as if the rule
+      // did not exist — the one silence in this whole table that could be confidently wrong.
+      ledger.drop(`rules/${file}`, `it did not parse (${error.message}), so any retype rule it declares was not evaluated`);
+      continue;
+    }
+    if (!Array.isArray(document)) continue;
+    for (const rule of document) {
+      if (!rule || typeof rule !== "object") continue;
+      const actions = Array.isArray(rule.actions) ? rule.actions : [];
+      const retype = actions.find(
+        (a) => a && typeof a === "object" && a.verb === "set_node_type" && isNonEmptyString(a.node_type),
+      );
+      if (retype === undefined) continue;
+      const id = isNonEmptyString(rule.id) ? rule.id : `${file} (unnamed rule)`;
+      const what = `rule '${id}'`;
+      const patternName = (rule.for_each && typeof rule.for_each === "object")
+        ? rule.for_each.pattern
+        : undefined;
+      if (!isNonEmptyString(patternName) || !patterns.has(patternName)) {
+        // DROP PATH 17. A retype rule this generator cannot bind to any node type.
+        ledger.drop(
+          what,
+          "it retypes a node but names no pattern this generator could read, so whether it " +
+            "retypes a new line was not evaluated",
+        );
+        continue;
+      }
+      const pattern = patterns.get(patternName);
+      const find = (pattern && typeof pattern === "object" && pattern.root && typeof pattern.root === "object")
+        ? pattern.root.find
+        : undefined;
+      if (!find || typeof find !== "object" || Array.isArray(find)) {
+        ledger.drop(what, `its pattern '${patternName}' declares no readable 'root.find'`);
+        continue;
+      }
+      const steps = Array.isArray(pattern.steps) ? pattern.steps : [];
+      if (steps.length > 0) {
+        // DROP PATH 18. THE BOUNDARY, RECORDED. A traversing pattern binds through a related node
+        // this generator does not read. `design-the-rule-mirror.md` §3.2's engine-run sweep found
+        // no traversing rule reaches a bare capture in any of the operator's 186 sections; that is
+        // the corroboration, and it is a measurement rather than this generator's silence.
+        ledger.drop(
+          what,
+          `its pattern '${patternName}' traverses the graph (${steps.length} step(s)), which this ` +
+            "generator does not read, so whether it retypes a new line was not evaluated",
+        );
+        continue;
+      }
+      if (!Object.values(find).every((v) => isScalar(v) && !(typeof v === "string" && v.startsWith("$")))) {
+        ledger.drop(what, `its pattern '${patternName}' matches on something other than literal fields`);
+        continue;
+      }
+      out.push({ id, find, when: rule.when, becomes: retype.node_type, what });
+    }
+  }
+  return out;
+}
+
+/**
+ * The seed for one section: the tokens the engine would print for the node it would mint here.
+ *
+ * `fields` is the bare capture — resolved node type, the schema's declared field defaults, and the
+ * section's own `defaults:`. Returns the token list, and drops a reason for every declared fact it
+ * could not spell.
+ */
+function seedTokens(what, nodeType, defaults, fieldDefaults, spelling, retypeRules, ledger) {
+  const fields = { node_type: nodeType, ...fieldDefaults, ...defaults };
+  const tokens = [];
+
+  let retypedBy = null;
+  for (const rule of retypeRules) {
+    // NOT A DROP: loop control. A rule that retypes TO the type this section already resolves
+    // changes nothing about this line, so it is not a retype here at all.
+    if (rule.becomes === nodeType) continue;
+    const binds = Object.entries(rule.find).every(([field, value]) =>
+      field === "node_type" ? value === nodeType : (fields[field] ?? null) === value,
+    );
+    // NOT A DROP: loop control. The rule's own pattern does not select this section's capture, so
+    // there is no declaration of the operator's being discarded — the rule simply does not apply.
+    if (!binds) continue;
+    let fires;
+    try {
+      fires = evaluateWhen(rule.when, fields);
+    } catch (error) {
+      if (!(error instanceof WhenRefusal)) throw error;
+      ledger.drop(rule.what, `${error.message}, so whether it retypes a new line was not evaluated`);
+      continue;
+    }
+    if (fires) retypedBy = rule;
+  }
+
+  const typeToken = spelling.typeTokens[nodeType];
+  if (retypedBy !== null) {
+    // DROP PATH 19. design-the-rule-mirror.md §3.3, derived rather than named: the registration
+    // answer is contradicted by a rule inside the same pass that minted the line.
+    ledger.drop(
+      what,
+      `its type tag is not seeded — rule '${retypedBy.id}' retypes a '${nodeType}' to ` +
+        `'${retypedBy.becomes}' for a line whose fields it matches, and ${CAPTURE_FIELDS_NOTE}`,
+    );
+  } else if (typeToken === undefined) {
+    // DROP PATH 20. A resolved node type no vocabulary tag spells. The engine prints no type tag
+    // for it either, so the absence is agreement, and it is still worth stating.
+    ledger.drop(what, `no vocabulary tag spells the node type '${nodeType}', so none is seeded`);
+  } else {
+    tokens.push(typeToken);
+  }
+
+  for (const field of spelling.fieldOrder) {
+    if (!Object.prototype.hasOwnProperty.call(defaults, field)) continue;
+    const token = spelling.fieldTokens[field]?.[String(defaults[field])];
+    if (token !== undefined) tokens.push(token);
+  }
+  for (const [field, value] of Object.entries(defaults)) {
+    if (spelling.fieldTokens[field]?.[String(value)] !== undefined) continue;
+    // DROP PATH 21. A declared default no vocabulary tag spells. The engine does not print it
+    // either, so seeding one would invent a spelling and freeze a value the engine goes on
+    // deciding — see this section's header on `INPUT WINS`.
+    ledger.drop(
+      `${what} default '${field}'`,
+      `no vocabulary tag spells ${field}=${JSON.stringify(value)}, so it cannot be written into a ` +
+        "line the operator types (the engine prints no tag for it either)",
+    );
+  }
+  return tokens;
+}
+
+/**
+ * `view -> section -> {nodeType, defaults?, tokens}` for EVERY section of every view sheet.
+ *
+ * NOT gated on the section's qualification, and that is the whole reason this table exists rather
+ * than a widening of `qualification.sections`. That table is the MEMBERSHIP half and drops a
+ * section whose predicate would not normalise — 137 of 186, and `all-personal.tasks`, the
+ * operator's own worked example, is one of them (`all-personal-nodes` compares `available_date`
+ * against the clock). What a new line BECOMES does not depend on what already belongs, so gating
+ * one on the other would refuse his headline case for a reason that has nothing to do with it.
+ * Same precedent, same file: `ordering` above republishes `name:` for the identical reason.
+ */
+function readSectionRegistration(configDir, viewFiles, registration, ledger) {
+  const fieldDefaults = readFieldDefaults(configDir);
+  const spelling = readSpelling(configDir, ledger);
+  const retypeRules = readRetypeRules(configDir, ledger);
+  const out = {};
+  for (const [file, view] of viewFiles) {
+    const viewNodeType = isNonEmptyString(view.default_node_type)
+      ? view.default_node_type
+      : registration.defaultNodeType;
+    const sections = {};
+    for (const [index, section] of view.sections.entries()) {
+      if (!section || typeof section !== "object" || !isNonEmptyString(section.id)) {
+        // DROP PATH 22. Recorded by `readOrdering` too, for its own key; joined, never overwritten.
+        ledger.drop(
+          `views/${file}#${index}`,
+          `section at index ${index} of view '${view.viewId}' has no readable 'id:', so what a ` +
+            "new line under it becomes could not be published under any key",
+        );
+        continue;
+      }
+      const what = `section '${view.viewId}.${section.id}'`;
+      const nodeType = isNonEmptyString(section.default_node_type)
+        ? section.default_node_type
+        : viewNodeType;
+      const defaults = {};
+      if (section.defaults && typeof section.defaults === "object" && !Array.isArray(section.defaults)) {
+        for (const [field, value] of Object.entries(section.defaults)) {
+          if (!isScalar(value)) {
+            throw new GenerationError(
+              `${file}: section '${section.id}' defaults.${field} is not a scalar — this ` +
+                "generator does not know what a new line under it resolves to, and refuses to guess",
+            );
+          }
+          defaults[field] = value;
+        }
+      }
+      const entry = { nodeType };
+      if (Object.keys(defaults).length > 0) entry.defaults = defaults;
+      entry.tokens = seedTokens(what, nodeType, defaults, fieldDefaults, spelling, retypeRules, ledger);
+      sections[section.id] = entry;
+    }
+    if (Object.keys(sections).length > 0) out[view.viewId] = sections;
+  }
+  return out;
+}
+
 // ── assemble ─────────────────────────────────────────────────────────────────────────────────
 
 export function generateResolution(configDir, ledger = new Ledger()) {
@@ -513,6 +946,7 @@ export function generateResolution(configDir, ledger = new Ledger()) {
   const ordering = readOrdering(viewFiles, ledger);
   const orderingFields = readOrderingFieldMarkers(configDir, orderingFieldNames(ordering), ledger);
   const chromeShapes = readChromeShapes(configDir, candidates, ledger);
+  const sectionRegistration = readSectionRegistration(configDir, viewFiles, registration, ledger);
   return {
     registration,
     lineGrammars: readLineGrammars(configDir),
@@ -520,6 +954,7 @@ export function generateResolution(configDir, ledger = new Ledger()) {
     orderingFields,
     dayBoundary: readDayBoundary(configDir),
     chromeShapes,
+    sectionRegistration,
     // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
     dropped: ledger.toJSON(),
   };

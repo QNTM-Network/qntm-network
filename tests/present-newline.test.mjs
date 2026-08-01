@@ -247,13 +247,13 @@ describe("3. the new line is what the cascade says, and the cascade says which r
 
   test("the rung that answered is reported, and it is the most specific one that could", () => {
     // LINE — the line directly above.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4), { text: "- [ ] ", level: "LINE" });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4), { text: "- [ ] ", level: "LINE", tokens: [] });
     // STRUCTURAL_NODE — the section's own lines, reached by looking DOWN, because a line opened
     // directly under a heading has nothing above it inside its own section.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 3), { text: "- [ ] ", level: "STRUCTURAL_NODE" });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 3), { text: "- [ ] ", level: "STRUCTURAL_NODE", tokens: [] });
     // VIEW — the `## Notes` section has no node lines at all, so the answer comes from across a
     // heading. `## Notes` is at index 6; a line opened at 7 sits inside it.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 7), { text: "- [ ] ", level: "VIEW" });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 7), { text: "- [ ] ", level: "VIEW", tokens: [] });
     // GLOBAL — nothing in the view has ever been printed as a node, so nothing is resolved.
     assert.equal(seedFor(EMPTY_VIEW, 1), null);
   });
@@ -261,7 +261,7 @@ describe("3. the new line is what the cascade says, and the cascade says which r
   test("the indent is inherited from the line above and from nowhere else", () => {
     // Enter at the end of a nested child makes its SIBLING. A section-level or view-level answer
     // carries no indent, because a stranger's nesting is not a fact about this line.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 5), { text: "  - [ ] ", level: "LINE" });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 5), { text: "  - [ ] ", level: "LINE", tokens: [] });
     assert.equal(seedFor("## a\n\n## b\n  - [ ] deep\n", 1)?.text, "- [ ] ");
   });
 
@@ -524,6 +524,7 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
     assert.deepEqual(seedFor(EMPTY_SECTIONED_VIEW, 1, declared("high-priority", "task")), {
       text: "- [ ] ",
       level: "GLOBAL",
+      tokens: [],
     });
   });
 
@@ -534,6 +535,7 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
     assert.deepEqual(seedFor(EMPTY_SECTIONED_VIEW, 1, declared("high-priority", "person")), {
       text: "- ",
       level: "GLOBAL",
+      tokens: [],
     });
   });
 
@@ -546,6 +548,7 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
     assert.deepEqual(seedFor(CONTRADICTING_VIEW, 3, declared("high-priority", "person")), {
       text: "- ",
       level: "GLOBAL",
+      tokens: [],
     });
   });
 
@@ -584,7 +587,7 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
     // one section away. `CHECKBOX_VIEW` prints checkbox lines, so LINE/STRUCTURAL_NODE/VIEW answer
     // long before the GLOBAL rung is even reached, whatever `declared` claims.
     const misleading = { view: "daily-work", sectionOrder: {}, sections: {}, chromeShapes: {} };
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4, misleading), { text: "- [ ] ", level: "LINE" });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4, misleading), { text: "- [ ] ", level: "LINE", tokens: [] });
   });
 
   test("openLine threads `declared` through exactly the same way it threads everything else", () => {

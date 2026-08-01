@@ -134,6 +134,30 @@ export interface DayBoundary {
 /** The render-form family a resolved node type carries — the two shapes `newline.ts` can seed. */
 export type ChromeShape = "checkbox" | "plain_line";
 
+/**
+ * WHAT A NEW LINE UNDER ONE SECTION BECOMES — rungs 1 and 2 of `design-the-rule-mirror.md`.
+ *
+ * `nodeType` is the registration answer, cascaded STRUCTURAL_NODE -> VIEW -> GLOBAL by the
+ * generator. `defaults` is the section's own `defaults:` block, verbatim. `tokens` is the pair of
+ * facts turned into CHARACTERS: the tokens the ENGINE ITSELF prints for a node of that type
+ * carrying those defaults (`TokenResolver.source_tags_for_node`), in the engine's own order.
+ *
+ * `tokens` is NOT derivable from the other two by this module, and must never be re-derived here.
+ * It is the answer to three questions the browser cannot ask — which vocabulary tag spells a
+ * (field, value) pair, in what order the engine emits them, and whether a rule retypes the line
+ * inside the pass that mints it — and every one of those is a config read that happens once, in
+ * `scripts/generate-resolution-declaration.mjs`, with each refusal recorded in `dropped`.
+ *
+ * A field in `defaults` with no token in `tokens` is a field the engine prints no tag for either;
+ * see that generator's own header for why seeding one anyway would freeze a value the engine goes
+ * on deciding. An EMPTY `tokens` is therefore an answer ("nothing is spelled here"), never a gap.
+ */
+export interface SectionRegistration {
+  readonly nodeType: string;
+  readonly defaults: Readonly<Record<string, string | number | boolean | null>> | undefined;
+  readonly tokens: readonly string[];
+}
+
 /** The whole published table. A lookup, not a resolver. */
 export interface ConfigResolutionTable {
   readonly registration: RegistrationTable | undefined;
@@ -149,6 +173,17 @@ export interface ConfigResolutionTable {
    * declares and every shape `newline.ts` knows how to seed. A type absent here is a type whose
    * chrome this app does not know how to produce — see this module's header. */
   readonly chromeShapes: Readonly<Record<string, ChromeShape>>;
+  /**
+   * `view -> section -> what a new line under it becomes`, for EVERY section of every view sheet.
+   *
+   * NOT a second copy of `qualification.sections[view][section].{nodeType,defaults}`, and the
+   * difference is coverage, not shape: that table is the MEMBERSHIP half and carries only the 49
+   * sections whose predicate normalised. `all-personal.tasks` — the operator's own worked example
+   * — is not one of them, because `all-personal-nodes` compares `available_date` against the
+   * clock. What a new line BECOMES does not depend on what already belongs there, so this table is
+   * ungated. `ordering.name` above republishes a fact for the identical reason.
+   */
+  readonly sectionRegistration: Readonly<Record<string, Readonly<Record<string, SectionRegistration>>>>;
   /**
    * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. The two comments
    * above ("a field absent here has no known marker", "a type absent here is one whose chrome this
@@ -175,8 +210,10 @@ const TOP_KEYS = [
   "orderingFields",
   "dayBoundary",
   "chromeShapes",
+  "sectionRegistration",
   "dropped",
 ] as const;
+const SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
 const SECTION_ORDERING_KEYS = ["ordering", "orderingMode", "name"] as const;
@@ -193,8 +230,95 @@ const EMPTY: ConfigResolutionTable = {
   orderingFields: {},
   dayBoundary: undefined,
   chromeShapes: {},
+  sectionRegistration: {},
   dropped: {},
 };
+
+const isScalarOrNull = (value: unknown): value is string | number | boolean | null =>
+  value === null || ["string", "number", "boolean"].includes(typeof value);
+
+/**
+ * One section's registration answer, or nothing.
+ *
+ * ALL THREE FIELDS OR NONE, unlike `SectionOrdering`'s tolerant read of its optional `name`. Each
+ * one here changes what the operator's line SAYS: a `nodeType` without its `tokens` would seed no
+ * characters at all, and `tokens` without a `nodeType` would spell a type nothing published. A
+ * half-read entry is a half-seeded line, so the whole entry is dropped and the section behaves
+ * exactly as it did before this key existed.
+ */
+function readSectionRegistrationEntry(
+  path: string,
+  value: unknown,
+  problems: string[],
+): SectionRegistration | undefined {
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — what a new line here becomes stays unknown`);
+    return undefined;
+  }
+  for (const key of Object.keys(value)) {
+    if (!(SECTION_REGISTRATION_KEYS as readonly string[]).includes(key)) {
+      problems.push(
+        `'${path}.${key}' is not a recognised key — the keys are ${SECTION_REGISTRATION_KEYS.join(", ")}`,
+      );
+    }
+  }
+  const { nodeType, defaults, tokens } = value;
+  if (typeof nodeType !== "string" || nodeType === "") {
+    problems.push(`'${path}.nodeType' is ${JSON.stringify(nodeType)}, not a node type`);
+    return undefined;
+  }
+  if (!Array.isArray(tokens) || !tokens.every((t) => typeof t === "string" && t !== "")) {
+    problems.push(
+      `'${path}.tokens' is ${JSON.stringify(tokens)}, not an array of non-empty strings — ` +
+        "nothing is seeded here rather than part of a line",
+    );
+    return undefined;
+  }
+  let read: Record<string, string | number | boolean | null> | undefined;
+  if (defaults !== undefined) {
+    if (!isPlainObject(defaults)) {
+      problems.push(`'${path}.defaults' is ${shapeOf(defaults)}, not an object`);
+      return undefined;
+    }
+    read = {};
+    for (const [field, fieldValue] of Object.entries(defaults)) {
+      if (!isScalarOrNull(fieldValue)) {
+        problems.push(`'${path}.defaults.${field}' is ${shapeOf(fieldValue)}, not a scalar`);
+        return undefined;
+      }
+      read[field] = fieldValue;
+    }
+  }
+  return { nodeType, defaults: read, tokens: tokens as readonly string[] };
+}
+
+function readSectionRegistration(
+  value: unknown,
+  problems: string[],
+): Record<string, Record<string, SectionRegistration>> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.sectionRegistration' is ${shapeOf(value)}, not an object — no new ` +
+        "line is seeded with what it becomes",
+    );
+    return {};
+  }
+  const out: Record<string, Record<string, SectionRegistration>> = {};
+  for (const [viewId, sectionsValue] of Object.entries(value)) {
+    const viewPath = `${RESOLUTION_TABLE_KEY}.sectionRegistration.${viewId}`;
+    if (!isPlainObject(sectionsValue)) {
+      problems.push(`'${viewPath}' is ${shapeOf(sectionsValue)}, not an object`);
+      continue;
+    }
+    const sections: Record<string, SectionRegistration> = {};
+    for (const [sectionId, raw] of Object.entries(sectionsValue)) {
+      const read = readSectionRegistrationEntry(`${viewPath}.${sectionId}`, raw, problems);
+      if (read !== undefined) sections[sectionId] = read;
+    }
+    if (Object.keys(sections).length > 0) out[viewId] = sections;
+  }
+  return out;
+}
 
 /** `what -> why`, validated the same way every other string map in this reader is. */
 function readDropped(value: unknown, problems: string[]): Record<string, string> {
@@ -554,6 +678,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
         "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : undefined,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
+      sectionRegistration:
+        "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
     problems,

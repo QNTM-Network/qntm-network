@@ -1085,6 +1085,11 @@ function globalRegistrationFor(viewId) {
     sectionOrder: qualification.sectionOrder,
     sections: qualification.sections,
     chromeShapes: resolution.chromeShapes,
+    // RUNGS 1 AND 2 (design-the-rule-mirror.md): what a new line under this section BECOMES, as
+    // the characters the engine itself prints for it. `newline.ts` reads `.tokens` to seed them
+    // and `.nodeType` only as the last-resort chrome source for the 137 sections
+    // `qualification.sections` drops. See that module's header.
+    sectionRegistration: resolution.sectionRegistration,
   };
 }
 function loadPresentation() {

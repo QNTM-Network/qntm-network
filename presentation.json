@@ -2092,6 +2092,2100 @@
       "tv_show": "checkbox",
       "writer": "checkbox"
     },
-    "dropped": {}
+    "sectionRegistration": {
+      "admin": {
+        "to-do": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#task",
+            "#admin"
+          ]
+        },
+        "done": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#task",
+            "#admin"
+          ]
+        }
+      },
+      "albums": {
+        "not-listened": {
+          "nodeType": "album",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#album",
+            "#arts"
+          ]
+        },
+        "listened": {
+          "nodeType": "album",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#album",
+            "#arts"
+          ]
+        }
+      },
+      "all-arts": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#task",
+            "#arts"
+          ]
+        }
+      },
+      "all-home": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "home"
+          },
+          "tokens": [
+            "#task",
+            "#home"
+          ]
+        }
+      },
+      "all-personal": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "all-program": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        }
+      },
+      "all-social": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "social"
+          },
+          "tokens": [
+            "#task",
+            "#social"
+          ]
+        }
+      },
+      "all-spirit": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        }
+      },
+      "all-work": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        }
+      },
+      "backlog": {
+        "unscoped": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "stage": "unscoped"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "diagnose-ready": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "stage": "diagnose_ready"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "scoped": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "stage": "scoped"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "in-progress": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "stage": "in_progress"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "passing": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "stage": "passing"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "retired": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "stage": "retired"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "blogs": {
+        "to-check": {
+          "nodeType": "blog",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#blog",
+            "#arts"
+          ]
+        },
+        "checked": {
+          "nodeType": "blog",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#blog",
+            "#arts"
+          ]
+        }
+      },
+      "books": {
+        "to-read": {
+          "nodeType": "book",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#book",
+            "#arts"
+          ]
+        },
+        "read": {
+          "nodeType": "book",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#book",
+            "#arts"
+          ]
+        }
+      },
+      "daily-personal": {
+        "high-priority": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "due-soon": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "waiting": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "routine-drift": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "capture": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "orphans": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "backlog": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "done": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "daily-work": {
+        "in-progress": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "urgent": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "due-today": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "waiting": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "capture": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        }
+      },
+      "ego-ideal": {
+        "developing": {
+          "nodeType": "attribute",
+          "defaults": {
+            "domain": "character"
+          },
+          "tokens": [
+            "#attribute",
+            "#character"
+          ]
+        },
+        "embodied": {
+          "nodeType": "attribute",
+          "defaults": {
+            "domain": "character"
+          },
+          "tokens": [
+            "#attribute",
+            "#character"
+          ]
+        }
+      },
+      "everything-personal": {
+        "everything": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "everything-work": {
+        "everything": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        }
+      },
+      "films": {
+        "to-watch": {
+          "nodeType": "film",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#film",
+            "#arts"
+          ]
+        },
+        "watched": {
+          "nodeType": "film",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#film",
+            "#arts"
+          ]
+        }
+      },
+      "flowtrace-capabilities": {
+        "unscoped": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "unscoped"
+          },
+          "tokens": [
+            "#task",
+            "#unscoped",
+            "#dev"
+          ]
+        },
+        "diagnose-ready": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "diagnose_ready"
+          },
+          "tokens": [
+            "#task",
+            "#diagnose-ready",
+            "#dev"
+          ]
+        },
+        "scoped": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "scoped"
+          },
+          "tokens": [
+            "#task",
+            "#cap-scoped",
+            "#dev"
+          ]
+        },
+        "in-progress": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "in_progress"
+          },
+          "tokens": [
+            "#task",
+            "#in-progress",
+            "#dev"
+          ]
+        },
+        "passing": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "passing"
+          },
+          "tokens": [
+            "#task",
+            "#passing",
+            "#dev"
+          ]
+        },
+        "retired": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "retired"
+          },
+          "tokens": [
+            "#task",
+            "#retired",
+            "#dev"
+          ]
+        }
+      },
+      "flowtrace-classes": {
+        "exists": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "exists"
+          },
+          "tokens": [
+            "#task",
+            "#class-exists",
+            "#dev"
+          ]
+        },
+        "concept": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "concept"
+          },
+          "tokens": [
+            "#task",
+            "#class-concept",
+            "#dev"
+          ]
+        },
+        "extracted": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "extracted"
+          },
+          "tokens": [
+            "#task",
+            "#class-extracted",
+            "#dev"
+          ]
+        },
+        "subsumed": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "subsumed"
+          },
+          "tokens": [
+            "#task",
+            "#class-subsumed",
+            "#dev"
+          ]
+        }
+      },
+      "flowtrace-packages": {
+        "exists": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "exists"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-exists"
+          ]
+        },
+        "concept": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "concept"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-concept"
+          ]
+        },
+        "extracted": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "extracted"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-extracted"
+          ]
+        },
+        "subsumed": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "subsumed"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-subsumed"
+          ]
+        }
+      },
+      "flowtrace-principles": {
+        "held": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "held"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#held"
+          ]
+        },
+        "held-weak": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "held_weak"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#held-weak"
+          ]
+        },
+        "violated": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "violated"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#violated"
+          ]
+        },
+        "unverifiable": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "unverifiable"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#unverifiable"
+          ]
+        },
+        "un-anchored": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "un_anchored"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#un-anchored"
+          ]
+        }
+      },
+      "flowtrace-queue": {
+        "queue": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "stage": "unscoped"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "flowtrace-sinks": {
+        "sinks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "free-trial-dojo": {
+        "fragments": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dojo",
+            "project": "free-trial-dojo"
+          },
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "god-box": {
+        "not-discussed": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit",
+            "god_box": "surrendered"
+          },
+          "tokens": [
+            "#task",
+            "#spirit",
+            "#God"
+          ]
+        },
+        "discussed": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit",
+            "god_box": "surrendered"
+          },
+          "tokens": [
+            "#task",
+            "#spirit",
+            "#God"
+          ]
+        }
+      },
+      "groups": {
+        "groups": {
+          "nodeType": "group",
+          "defaults": {
+            "domain": "social"
+          },
+          "tokens": [
+            "#group",
+            "#social"
+          ]
+        }
+      },
+      "habit-dojo": {
+        "classification": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dojo",
+            "project": "habit-dojo"
+          },
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "habits-admin": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#task",
+            "#admin"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#task",
+            "#admin"
+          ]
+        }
+      },
+      "habits-life-admin": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "life-admin"
+          },
+          "tokens": [
+            "#task",
+            "#life-admin"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "life-admin"
+          },
+          "tokens": [
+            "#task",
+            "#life-admin"
+          ]
+        }
+      },
+      "habits-personal": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "habits-program": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        }
+      },
+      "habits-spirit": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        }
+      },
+      "habits-work": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        }
+      },
+      "habits": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "admin-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#task",
+            "#admin"
+          ]
+        },
+        "life-admin-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "life-admin"
+          },
+          "tokens": [
+            "#task",
+            "#life-admin"
+          ]
+        },
+        "work-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "personal-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "program-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        },
+        "spirit-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        }
+      },
+      "inbox": {
+        "inbox-tagged": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "domain-empty": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "metrics-personal": {
+        "personal-accuracy-1d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "personal-accuracy-3d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "personal-accuracy-7d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "personal-age-of-intent": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "personal-coverage": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "metrics-program": {
+        "program-accuracy-1d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "program-accuracy-3d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "program-accuracy-7d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "program-age-of-intent": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "program-coverage": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "metrics-work": {
+        "work-accuracy-1d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "work-accuracy-3d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "work-accuracy-7d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "work-age-of-intent": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "work-coverage": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "metrics": {
+        "overall-accuracy-1d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "overall-accuracy-3d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "overall-accuracy-7d": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "overall-age-of-intent": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "overall-coverage": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "operator-flowtrace": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "waiting-for": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "operator-qntm-network": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-network"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-network"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "waiting-for": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-network"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "operator-qntm": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "waiting-for": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "operator-trace-orchestration": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        },
+        "waiting-for": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "outcomes-personal": {
+        "childless-outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "outcomes-program": {
+        "childless-outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        }
+      },
+      "outcomes-spirit": {
+        "childless-outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        }
+      },
+      "outcomes": {
+        "childless-outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        }
+      },
+      "people": {
+        "people": {
+          "nodeType": "person",
+          "defaults": {
+            "domain": "social"
+          },
+          "tokens": [
+            "#person",
+            "#social"
+          ]
+        }
+      },
+      "qntm-capabilities": {
+        "unscoped": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "unscoped"
+          },
+          "tokens": [
+            "#task",
+            "#unscoped",
+            "#dev"
+          ]
+        },
+        "diagnose-ready": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "diagnose_ready"
+          },
+          "tokens": [
+            "#task",
+            "#diagnose-ready",
+            "#dev"
+          ]
+        },
+        "scoped": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "scoped"
+          },
+          "tokens": [
+            "#task",
+            "#cap-scoped",
+            "#dev"
+          ]
+        },
+        "in-progress": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "in_progress"
+          },
+          "tokens": [
+            "#task",
+            "#in-progress",
+            "#dev"
+          ]
+        },
+        "passing": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "passing"
+          },
+          "tokens": [
+            "#task",
+            "#passing",
+            "#dev"
+          ]
+        },
+        "retired": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "retired"
+          },
+          "tokens": [
+            "#task",
+            "#retired",
+            "#dev"
+          ]
+        }
+      },
+      "qntm-classes": {
+        "exists": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "exists"
+          },
+          "tokens": [
+            "#task",
+            "#class-exists",
+            "#dev"
+          ]
+        },
+        "concept": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "concept"
+          },
+          "tokens": [
+            "#task",
+            "#class-concept",
+            "#dev"
+          ]
+        },
+        "extracted": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "extracted"
+          },
+          "tokens": [
+            "#task",
+            "#class-extracted",
+            "#dev"
+          ]
+        },
+        "subsumed": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "subsumed"
+          },
+          "tokens": [
+            "#task",
+            "#class-subsumed",
+            "#dev"
+          ]
+        }
+      },
+      "qntm-packages": {
+        "exists": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "exists"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-exists"
+          ]
+        },
+        "concept": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "concept"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-concept"
+          ]
+        },
+        "extracted": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "extracted"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-extracted"
+          ]
+        },
+        "subsumed": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "subsumed"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#package-subsumed"
+          ]
+        }
+      },
+      "qntm-principles": {
+        "held": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "held"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#held"
+          ]
+        },
+        "held-weak": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "held_weak"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#held-weak"
+          ]
+        },
+        "violated": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "violated"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#violated"
+          ]
+        },
+        "unverifiable": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "unverifiable"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#unverifiable"
+          ]
+        },
+        "un-anchored": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "un_anchored"
+          },
+          "tokens": [
+            "#task",
+            "#dev",
+            "#un-anchored"
+          ]
+        }
+      },
+      "qntm-queue": {
+        "queue": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "stage": "unscoped"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "qntm-sinks": {
+        "sinks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "routine-cascade-dojo": {
+        "governed": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "dojo",
+            "project": "routine-cascade-dojo"
+          },
+          "tokens": []
+        }
+      },
+      "routines-admin": {
+        "admin-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#admin"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
+      "routines-life-admin": {
+        "life-admin-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "life-admin"
+          },
+          "tokens": [
+            "#life-admin"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
+      "routines-personal": {
+        "personal-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#personal"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
+      "routines-program": {
+        "program-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#program"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
+      "routines-spirit": {
+        "spirit-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#spirit"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
+      "routines-work": {
+        "work-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#work"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
+      "routines": {
+        "admin-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "admin"
+          },
+          "tokens": [
+            "#task",
+            "#admin"
+          ]
+        },
+        "life-admin-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "life-admin"
+          },
+          "tokens": [
+            "#task",
+            "#life-admin"
+          ]
+        },
+        "work-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "personal-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "program-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "program"
+          },
+          "tokens": [
+            "#task",
+            "#program"
+          ]
+        },
+        "spirit-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "spirit"
+          },
+          "tokens": [
+            "#task",
+            "#spirit"
+          ]
+        }
+      },
+      "termination-dojo": {
+        "fragments": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dojo",
+            "project": "termination-dojo"
+          },
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "test-scratchpad": {
+        "scratchpad-targets": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "this-week": {
+        "overdue": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "due-this-week": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "available-overdue": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "available-this-week": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "trace-orchestration-queue": {
+        "queue": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration",
+            "stage": "unscoped"
+          },
+          "tokens": [
+            "#task",
+            "#dev"
+          ]
+        }
+      },
+      "tv": {
+        "to-watch": {
+          "nodeType": "tv_show",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#tv",
+            "#arts"
+          ]
+        },
+        "watched": {
+          "nodeType": "tv_show",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#tv",
+            "#arts"
+          ]
+        }
+      },
+      "unlocks-dojo": {
+        "chain": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "dojo",
+            "project": "dojo"
+          },
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
+      "waiting-for-personal": {
+        "personal-waiting-for": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "personal-blocked": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        },
+        "personal-held": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
+          },
+          "tokens": [
+            "#task",
+            "#personal"
+          ]
+        }
+      },
+      "waiting-for-work": {
+        "waiting-for": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "blocked": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        },
+        "held": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#task",
+            "#work"
+          ]
+        }
+      },
+      "writers": {
+        "to-check": {
+          "nodeType": "writer",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#writer",
+            "#arts"
+          ]
+        },
+        "checked": {
+          "nodeType": "writer",
+          "defaults": {
+            "domain": "arts"
+          },
+          "tokens": [
+            "#writer",
+            "#arts"
+          ]
+        }
+      }
+    },
+    "dropped": {
+      "rule 'auto-habit-without-routine-children-reverts-to-task'": "its pattern 'auto-habits-without-routine-children' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'auto-outcome-without-open-children-reverts-to-task'": "its pattern 'auto-outcomes-without-open-children' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'outcome-with-routine-child-becomes-habit'": "its pattern 'outcomes-with-routine-child' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'task-with-open-part-of-child-becomes-outcome'": "its pattern 'tasks-with-open-part-of-child' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'task-with-open-waiting-for-child-becomes-outcome'": "its pattern 'tasks-with-open-waiting-for-child' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'task-with-routine-child-becomes-habit'": "its pattern 'tasks-with-routine-child' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "section 'backlog.diagnose-ready' default 'stage'": "no vocabulary tag spells stage=\"diagnose_ready\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'backlog.in-progress' default 'stage'": "no vocabulary tag spells stage=\"in_progress\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'backlog.passing' default 'stage'": "no vocabulary tag spells stage=\"passing\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'backlog.retired' default 'stage'": "no vocabulary tag spells stage=\"retired\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'backlog.scoped' default 'stage'": "no vocabulary tag spells stage=\"scoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'backlog.unscoped' default 'stage'": "no vocabulary tag spells stage=\"unscoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-capabilities.diagnose-ready' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-capabilities.in-progress' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-capabilities.passing' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-capabilities.retired' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-capabilities.scoped' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-capabilities.unscoped' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-classes.concept' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-classes.exists' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-classes.extracted' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-classes.subsumed' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-packages.concept' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-packages.exists' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-packages.extracted' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-packages.subsumed' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-principles.held' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-principles.held-weak' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-principles.un-anchored' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-principles.unverifiable' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-principles.violated' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-queue.queue' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-queue.queue' default 'stage'": "no vocabulary tag spells stage=\"unscoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'flowtrace-sinks.sinks' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'free-trial-dojo.fragments' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'free-trial-dojo.fragments' default 'project'": "no vocabulary tag spells project=\"free-trial-dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'habit-dojo.classification' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'habit-dojo.classification' default 'project'": "no vocabulary tag spells project=\"habit-dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-flowtrace.outcomes' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-flowtrace.tasks' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-flowtrace.waiting-for' default 'project'": "no vocabulary tag spells project=\"flow-trace\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-qntm-network.outcomes' default 'project'": "no vocabulary tag spells project=\"qntm-network\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-qntm-network.tasks' default 'project'": "no vocabulary tag spells project=\"qntm-network\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-qntm-network.waiting-for' default 'project'": "no vocabulary tag spells project=\"qntm-network\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-qntm.outcomes' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-qntm.tasks' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-qntm.waiting-for' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-trace-orchestration.outcomes' default 'project'": "no vocabulary tag spells project=\"trace-orchestration\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-trace-orchestration.tasks' default 'project'": "no vocabulary tag spells project=\"trace-orchestration\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'operator-trace-orchestration.waiting-for' default 'project'": "no vocabulary tag spells project=\"trace-orchestration\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-capabilities.diagnose-ready' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-capabilities.in-progress' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-capabilities.passing' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-capabilities.retired' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-capabilities.scoped' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-capabilities.unscoped' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-classes.concept' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-classes.exists' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-classes.extracted' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-classes.subsumed' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-packages.concept' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-packages.exists' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-packages.extracted' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-packages.subsumed' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-principles.held' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-principles.held-weak' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-principles.un-anchored' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-principles.unverifiable' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-principles.violated' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-queue.queue' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-queue.queue' default 'stage'": "no vocabulary tag spells stage=\"unscoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'qntm-sinks.sinks' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'routine-cascade-dojo.governed'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routine-cascade-dojo.governed' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'routine-cascade-dojo.governed' default 'project'": "no vocabulary tag spells project=\"routine-cascade-dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'routines-admin.admin-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-admin.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-life-admin.life-admin-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-life-admin.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-personal.personal-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-personal.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-program.program-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-program.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-spirit.spirit-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-spirit.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-work.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-work.work-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'termination-dojo.fragments' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'termination-dojo.fragments' default 'project'": "no vocabulary tag spells project=\"termination-dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'trace-orchestration-queue.queue' default 'project'": "no vocabulary tag spells project=\"trace-orchestration\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'trace-orchestration-queue.queue' default 'stage'": "no vocabulary tag spells stage=\"unscoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'unlocks-dojo.chain' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "section 'unlocks-dojo.chain' default 'project'": "no vocabulary tag spells project=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
+      "vocabulary token '☑️'": "spells 'done_task_count' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip",
+      "vocabulary token '🎯'": "spells 'par' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip"
+    }
   }
 }
