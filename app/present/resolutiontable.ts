@@ -149,6 +149,14 @@ export interface ConfigResolutionTable {
    * declares and every shape `newline.ts` knows how to seed. A type absent here is a type whose
    * chrome this app does not know how to produce — see this module's header. */
   readonly chromeShapes: Readonly<Record<string, ChromeShape>>;
+  /**
+   * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. The two comments
+   * above ("a field absent here has no known marker", "a type absent here is one whose chrome this
+   * app does not know how to produce") described a refusal the operator had no way to see: absence
+   * carried the meaning, and absence looks exactly like nothing-to-say. `dropped` gives each
+   * absence its reason. Not read to decide anything. See `scripts/ledger.mjs`.
+   */
+  readonly dropped: Readonly<Record<string, string>>;
 }
 
 /** Mirrors `StructuralReading` / `QualificationReading`: the value, plus what was wrong with it. */
@@ -167,6 +175,7 @@ const TOP_KEYS = [
   "orderingFields",
   "dayBoundary",
   "chromeShapes",
+  "dropped",
 ] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
@@ -184,7 +193,28 @@ const EMPTY: ConfigResolutionTable = {
   orderingFields: {},
   dayBoundary: undefined,
   chromeShapes: {},
+  dropped: {},
 };
+
+/** `what -> why`, validated the same way every other string map in this reader is. */
+function readDropped(value: unknown, problems: string[]): Record<string, string> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.dropped' is ${shapeOf(value)}, not an object — what the ` +
+        "generator refused to publish stays unknown",
+    );
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [what, why] of Object.entries(value)) {
+    if (typeof why !== "string") {
+      problems.push(`'${RESOLUTION_TABLE_KEY}.dropped.${what}' is ${shapeOf(why)}, not a reason`);
+      continue;
+    }
+    out[what] = why;
+  }
+  return out;
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -524,6 +554,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
         "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : undefined,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
+      dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
     problems,
   };

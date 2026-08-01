@@ -79,6 +79,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
+import { Ledger, reportDropped } from "./ledger.mjs";
 
 export { DEFAULT_CONFIG_DIR };
 
@@ -123,13 +124,23 @@ function readStructuralNodeTypes(configDir) {
 
 // ── 2. patterns/*.yaml -> one merged pattern map ──────────────────────────────────────────────
 
-function readPatterns(configDir) {
+function readPatterns(configDir, ledger) {
   const dir = join(configDir, "patterns");
   if (!existsSync(dir)) throw new GenerationError(`${dir} does not exist`);
   const merged = new Map();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort()) {
     const document = readYaml(join(dir, file));
-    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      // DROP PATH 1. Every pattern this file defines vanishes with it, and a section naming one of
+      // them then throws "names a pattern that no file in patterns/ defines" — a true message
+      // pointing at the wrong file. Recorded here so the real cause is named at the real place.
+      ledger.drop(
+        `patterns/${file}`,
+        "the file did not parse into a mapping of pattern name -> definition, so every pattern " +
+          "it defines was skipped",
+      );
+      continue;
+    }
     for (const [name, config] of Object.entries(document)) {
       if (merged.has(name)) {
         throw new GenerationError(
@@ -296,7 +307,7 @@ export function normalisePattern(config) {
 
 // ── 4. views/*.yaml -> sections, with the registration cascade resolved ────────────────────────
 
-function readViews(configDir) {
+function readViews(configDir, ledger) {
   const dir = join(configDir, "views");
   if (!existsSync(dir)) throw new GenerationError(`${dir} does not exist`);
   const files = readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort();
@@ -318,20 +329,63 @@ function readViews(configDir) {
   for (const file of files) {
     if (file === "default_registration.yaml") continue;
     const document = readYaml(join(dir, file));
-    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+    // DROP PATHS 2-4. Each drops a WHOLE VIEW — every section it declares, out of both `sections`
+    // and `sectionOrder`. `sectionOrder` is what L3 ADDRESSING indexes positionally, so a view
+    // missing from it is a view whose every line is addressed by falling through to nothing.
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      ledger.drop(`views/${file}`, "the file did not parse into a mapping, so the whole view was skipped");
+      continue;
+    }
     const entries = Object.entries(document);
-    if (entries.length !== 1) continue;
+    if (entries.length !== 1) {
+      ledger.drop(
+        `views/${file}`,
+        `the file declares ${entries.length} top-level keys (${Object.keys(document).join(", ")}) ` +
+          "and this generator reads a view sheet as exactly one; the whole view was skipped",
+      );
+      continue;
+    }
     const [viewId, view] = entries[0];
-    if (!view || typeof view !== "object" || !Array.isArray(view.sections)) continue;
+    if (!view || typeof view !== "object" || !Array.isArray(view.sections)) {
+      ledger.drop(
+        `views/${file}`,
+        `view '${viewId}' declares no 'sections:' list, so the whole view was skipped`,
+      );
+      continue;
+    }
 
     const viewNodeType =
       typeof view.default_node_type === "string" ? view.default_node_type : globalNodeType;
     const sections = {};
     const order = [];
-    for (const section of view.sections) {
-      if (!section || typeof section !== "object") continue;
+    for (const [index, section] of view.sections.entries()) {
+      // DROP PATHS 5-6. A section dropped here is dropped from `sectionOrder` TOO, and that is the
+      // one this file's own comments say must be impossible: `app/present/address.ts` counts
+      // headings positionally and indexes `sectionOrder`, but the ENGINE still emits a heading for
+      // a section this generator could not read. One missing entry therefore shifts every
+      // subsequent section's ordinal and misaddresses every line under it — silently, and with
+      // confident wrong answers rather than abstentions. Neither path fires on the operator's
+      // config today (measured 2026-08-01: 186 of 186 sections carry both keys); they are recorded
+      // rather than merely guarded so that the day one does, the record names the heading.
+      if (!section || typeof section !== "object") {
+        ledger.drop(
+          `views/${file}#${index}`,
+          `section at index ${index} of view '${viewId}' is not a mapping — it is missing from ` +
+            "sectionOrder, which shifts the positional ordinal of every section after it",
+        );
+        continue;
+      }
       const { id, qualification, defaults, name } = section;
-      if (typeof id !== "string" || typeof qualification !== "string") continue;
+      if (typeof id !== "string" || typeof qualification !== "string") {
+        ledger.drop(
+          `views/${file}#${index}`,
+          `section ${typeof id === "string" ? `'${id}'` : `at index ${index}`} of view ` +
+            `'${viewId}' declares no ${typeof id === "string" ? "'qualification:'" : "'id:'"} — ` +
+            "it is missing from sectionOrder, which shifts the positional ordinal of every " +
+            "section after it",
+        );
+        continue;
+      }
       const entry = { qualification, nodeType: viewNodeType };
       // THE OPERATOR'S OWN WORDS FOR THE SECTION, when the config declares one (185 of 186 do).
       // step 4 (design-the-resolution-architecture.md) needs a name to say — "this will leave
@@ -376,7 +430,7 @@ function readViews(configDir) {
  * FIXED value. Collected across all families rather than from three known filenames, so a new
  * family that starts setting one of these fields is picked up with no edit here.
  */
-function readTokens(configDir) {
+function readTokens(configDir, ledger) {
   const dir = join(configDir, "vocabulary");
   if (!existsSync(dir)) throw new GenerationError(`${dir} does not exist`);
   const tokens = {};
@@ -384,19 +438,93 @@ function readTokens(configDir) {
 
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort()) {
     const document = readYaml(join(dir, file));
-    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
-    for (const family of Object.values(document)) {
-      if (!Array.isArray(family)) continue;
-      for (const entry of family) {
-        if (!entry || typeof entry !== "object" || typeof entry.token !== "string") continue;
+    // DROP PATH 7. A whole vocabulary file, and every token in it.
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      ledger.drop(
+        `vocabulary/${file}`,
+        "the file did not parse into a mapping of family -> token list, so every token it " +
+          "declares was skipped",
+      );
+      continue;
+    }
+    for (const [familyName, family] of Object.entries(document)) {
+      // DROP PATH 8. A family declared as a mapping rather than a list.
+      if (!Array.isArray(family)) {
+        ledger.drop(
+          `vocabulary/${file}#${familyName}`,
+          `the '${familyName}:' family is not a list of token entries, so every token in it was ` +
+            "skipped",
+        );
+        continue;
+      }
+      for (const [index, entry] of family.entries()) {
+        // DROP PATH 9. An entry with no `token:` — there is nothing to key it by.
+        if (!entry || typeof entry !== "object" || typeof entry.token !== "string") {
+          ledger.drop(
+            `vocabulary/${file}#${familyName}[${index}]`,
+            "the entry declares no 'token:' string, so nothing could be keyed by it",
+          );
+          continue;
+        }
+        const what = `vocabulary token '${entry.token}'`;
         if (typeof entry.node_type === "string") {
           tokens.node_type[entry.token] = entry.node_type;
           continue;
         }
-        if (typeof entry.field !== "string" || !RESOLVABLE_FIELDS.includes(entry.field)) continue;
-        if (entry.render_only === true) continue;
-        if (!isScalar(entry.value) || entry.value === null) continue;
-        tokens[entry.field][entry.token] = entry.value;
+        // DROP PATH 10 — THE ONE design-the-rule-mirror.md §9.3 names, and the largest of the
+        // sixteen: measured against the operator's live config on 2026-08-01, 73 of his tokens
+        // set a field outside the three the app can resolve for a line being typed, and every one
+        // of them left this loop with no `refused` entry, no warning and no exit code. Recorded
+        // now, per token, keyed by the token he typed — so `#p1 -> priority: high`, added
+        // tomorrow, is named in `dropped` rather than vanishing.
+        if (typeof entry.field === "string") {
+          if (!RESOLVABLE_FIELDS.includes(entry.field)) {
+            ledger.drop(
+              what,
+              `sets '${entry.field}', which is not one of the fields the app can resolve for a ` +
+                `line being typed (${RESOLVABLE_FIELDS.join(", ")})`,
+            );
+            continue;
+          }
+          // DROP PATH 11. A resolvable field, set by a marker the engine itself refuses to ingest
+          // from that glyph. Deliberate, and now stated rather than assumed.
+          if (entry.render_only === true) {
+            ledger.drop(
+              what,
+              `sets '${entry.field}' but is 'render_only: true' — a derived display value the ` +
+                "engine never reads back from that glyph",
+            );
+            continue;
+          }
+          // DROP PATH 12. A resolvable field set to something that is not a fixed scalar.
+          if (!isScalar(entry.value) || entry.value === null) {
+            ledger.drop(
+              what,
+              `sets '${entry.field}' to ${JSON.stringify(entry.value ?? null)}, which is not a ` +
+                "fixed scalar this generator can publish as token -> value",
+            );
+            continue;
+          }
+          tokens[entry.field][entry.token] = entry.value;
+          continue;
+        }
+        // DROP PATH 13. A token that sets a field through a DIFFERENT key. `parametric_field:`
+        // (4 tokens today, e.g. `#every-{n}{unit}` -> cadence) is a field declaration this loop
+        // never even looks at, so an AST scan for `entry.field` would report it as "not a field
+        // declaration" and move on. Named here because the operator wrote a field name and the
+        // app says nothing about it, which is the same silence whichever key spells it.
+        if (entry.parametric_field && typeof entry.parametric_field === "object") {
+          const field = entry.parametric_field.field;
+          ledger.drop(
+            what,
+            `sets '${typeof field === "string" ? field : "an unnamed field"}' through ` +
+              "'parametric_field:', a shape this generator does not read at all",
+          );
+          continue;
+        }
+        // Everything else — an edge tag, a deletion gesture, a structural token — declares no
+        // field at all. There is nothing dropped, so nothing is recorded: a ledger that listed
+        // every token on a different axis would be noise, and noise is what gets ignored.
       }
     }
   }
@@ -413,11 +541,11 @@ function readTokens(configDir) {
 
 // ── assemble ─────────────────────────────────────────────────────────────────────────────────
 
-export function generateQualification(configDir) {
+export function generateQualification(configDir, ledger = new Ledger()) {
   const structuralTypes = readStructuralNodeTypes(configDir);
-  const rawPatterns = readPatterns(configDir);
-  const { views, globalNodeType, sectionOrder } = readViews(configDir);
-  const tokens = readTokens(configDir);
+  const rawPatterns = readPatterns(configDir, ledger);
+  const { views, globalNodeType, sectionOrder } = readViews(configDir, ledger);
+  const tokens = readTokens(configDir, ledger);
 
   const referenced = new Set();
   for (const sections of Object.values(views)) {
@@ -452,7 +580,18 @@ export function generateQualification(configDir) {
   for (const [viewId, viewSections] of Object.entries(views)) {
     const kept = {};
     for (const [sectionId, section] of Object.entries(viewSections)) {
-      if (section.qualification in predicates) kept[sectionId] = section;
+      if (section.qualification in predicates) {
+        kept[sectionId] = section;
+        continue;
+      }
+      // DROP PATH 14. The section is IN `sectionOrder` (so addressing is unharmed) but out of
+      // `sections`, so the app abstains for every line under it. `refused` already records WHY the
+      // pattern would not normalise; what it never recorded is HOW MANY of the operator's own
+      // headings that costs him. design-the-rule-mirror.md §9.2 measured 137 of 186 and could only
+      // do so by running a script. It is now a fact the declaration states about itself.
+      // The REASON is not restated here: it is `refused['<qualification>']`, one copy, and a
+      // second copy of it in 137 entries would be 137 chances for the two to disagree.
+      ledger.drop(`section '${viewId}.${sectionId}'`, `qualification refused: ${section.qualification}`);
     }
     if (Object.keys(kept).length > 0) sections[viewId] = kept;
   }
@@ -468,6 +607,10 @@ export function generateQualification(configDir) {
     // `readViews` for why this must never be re-derived from `sections`' own keys.
     sectionOrder,
     refused,
+    // EVERY DECLARATION THIS GENERATOR READ AND DID NOT PUBLISH, with its reason. `refused` above
+    // is ONE kind of that — a pattern that would not normalise. `dropped` is all the others, and
+    // before it existed not one of them was recorded anywhere. See `scripts/ledger.mjs`.
+    dropped: ledger.toJSON(),
   };
 }
 
@@ -491,7 +634,8 @@ async function main() {
     process.exit(3);
   }
 
-  const qualification = generateQualification(args.configDir);
+  const ledger = new Ledger();
+  const qualification = generateQualification(args.configDir, ledger);
   const presentationPath = join(REPO_ROOT, "presentation.json");
   const current = JSON.parse(readFileSync(presentationPath, "utf8"));
 
@@ -501,6 +645,17 @@ async function main() {
       return;
     }
     console.error("presentation.json's 'qualification' key is STALE relative to the monorepo config.");
+    // WHICH declaration went stale, when the answer is a drop. A `dropped` map that gained or lost
+    // an entry means a config change either stopped reaching the browser or started reaching it,
+    // and that is the sentence the operator needs — not "something differs".
+    const before = current.qualification?.dropped ?? {};
+    const after = qualification.dropped;
+    for (const key of Object.keys(after)) {
+      if (!(key in before)) console.error(`  NEWLY DROPPED  ${key}: ${after[key]}`);
+    }
+    for (const key of Object.keys(before)) {
+      if (!(key in after)) console.error(`  NO LONGER DROPPED  ${key}`);
+    }
     process.exit(1);
   }
 
@@ -515,6 +670,7 @@ async function main() {
     `wrote qualification declaration to ${presentationPath}\n` +
       `  ${decidable} patterns published, ${refusedCount} refused, ${sectionCount} sections covered`,
   );
+  reportDropped("qualification", ledger);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -189,10 +189,34 @@ function titleSpans(line) {
 var STRUCTURAL_KEY = "structural";
 var EDGE_SOURCES = ["self", "position"];
 var EDGE_DIRECTIONS = ["incoming", "outgoing"];
-var STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections"];
+var STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections", "dropped"];
 var INDENT_KEYS = ["edgeType", "edgeSource"];
 var SECTION_LANGUAGE_KEYS = ["edgeTypes", "edgeDirection"];
-var EMPTY = { indent: void 0, edgeCardinality: {}, sections: {} };
+var EMPTY = {
+  indent: void 0,
+  edgeCardinality: {},
+  sections: {},
+  dropped: {}
+};
+function readDropped(value, problems) {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${STRUCTURAL_KEY}.dropped' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 what the generator refused to publish stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [what, why] of Object.entries(value)) {
+    if (typeof why !== "string") {
+      problems.push(
+        `'${STRUCTURAL_KEY}.dropped.${what}' is ${Array.isArray(why) ? "an array" : typeof why}, not a reason`
+      );
+      continue;
+    }
+    out[what] = why;
+  }
+  return out;
+}
 function isPlainObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -337,7 +361,8 @@ function readStructuralDeclaration(document2) {
   const indent = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
   const edgeCardinality = "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
   const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
-  return { structural: { indent, edgeCardinality, sections }, problems };
+  const dropped = "dropped" in raw ? readDropped(raw.dropped, problems) : {};
+  return { structural: { indent, edgeCardinality, sections, dropped }, problems };
 }
 
 // app/present/qualification.ts
@@ -349,7 +374,8 @@ var TOP_KEYS = [
   "predicates",
   "sections",
   "sectionOrder",
-  "refused"
+  "refused",
+  "dropped"
 ];
 var SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"];
 var EMPTY2 = {
@@ -359,7 +385,8 @@ var EMPTY2 = {
   predicates: {},
   sections: {},
   sectionOrder: {},
-  refused: {}
+  refused: {},
+  dropped: {}
 };
 function isPlainObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -587,15 +614,15 @@ function readSectionOrder(value, problems) {
   }
   return out;
 }
-function readRefused(value, problems) {
+function readReasons(key, value, problems) {
   if (!isPlainObject2(value)) {
-    problems.push(`'${QUALIFICATION_KEY}.refused' is ${shapeOf(value)}, not an object`);
+    problems.push(`'${QUALIFICATION_KEY}.${key}' is ${shapeOf(value)}, not an object`);
     return {};
   }
   const out = {};
   for (const [name, reason] of Object.entries(value)) {
     if (typeof reason !== "string") {
-      problems.push(`'${QUALIFICATION_KEY}.refused.${name}' is ${shapeOf(reason)}, not a string`);
+      problems.push(`'${QUALIFICATION_KEY}.${key}.${name}' is ${shapeOf(reason)}, not a string`);
       continue;
     }
     out[name] = reason;
@@ -647,7 +674,8 @@ function readQualificationDeclaration(document2) {
       predicates,
       sections: "sections" in raw ? readSections2(raw.sections, predicates, problems) : {},
       sectionOrder: "sectionOrder" in raw ? readSectionOrder(raw.sectionOrder, problems) : {},
-      refused: "refused" in raw ? readRefused(raw.refused, problems) : {}
+      refused: "refused" in raw ? readReasons("refused", raw.refused, problems) : {},
+      dropped: "dropped" in raw ? readReasons("dropped", raw.dropped, problems) : {}
     },
     problems
   };
@@ -661,7 +689,8 @@ var TOP_KEYS2 = [
   "ordering",
   "orderingFields",
   "dayBoundary",
-  "chromeShapes"
+  "chromeShapes",
+  "dropped"
 ];
 var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
 var ORDERING_KEY_KEYS = ["field", "direction"];
@@ -677,8 +706,26 @@ var EMPTY3 = {
   ordering: {},
   orderingFields: {},
   dayBoundary: void 0,
-  chromeShapes: {}
+  chromeShapes: {},
+  dropped: {}
 };
+function readDropped2(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.dropped' is ${shapeOf2(value)}, not an object \u2014 what the generator refused to publish stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [what, why] of Object.entries(value)) {
+    if (typeof why !== "string") {
+      problems.push(`'${RESOLUTION_TABLE_KEY}.dropped.${what}' is ${shapeOf2(why)}, not a reason`);
+      continue;
+    }
+    out[what] = why;
+  }
+  return out;
+}
 function isPlainObject3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -966,7 +1013,8 @@ function readConfigResolutionDeclaration(document2) {
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
       orderingFields: "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0,
-      chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {}
+      chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
+      dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}
     },
     problems
   };
@@ -3038,7 +3086,8 @@ var presentation_default = {
           edgeDirection: "incoming"
         }
       }
-    }
+    },
+    dropped: {}
   },
   qualification: {
     defaultNodeType: "task",
@@ -4715,6 +4764,222 @@ var presentation_default = {
       "waiting-tasks": "step 0: traverses (exists+parents)",
       "waiting-work-tasks": "step 0: traverses (children+exists)",
       "work-habits": "step 0: traverses (children+exists)"
+    },
+    dropped: {
+      "section 'all-personal.tasks'": "qualification refused: all-personal-nodes",
+      "section 'all-work.tasks'": "qualification refused: all-work-nodes",
+      "section 'backlog.diagnose-ready'": "qualification refused: dev-tickets-diagnose-ready",
+      "section 'backlog.in-progress'": "qualification refused: dev-tickets-in-progress",
+      "section 'backlog.passing'": "qualification refused: dev-tickets-passing",
+      "section 'backlog.retired'": "qualification refused: dev-tickets-retired",
+      "section 'backlog.scoped'": "qualification refused: dev-tickets-scoped",
+      "section 'backlog.unscoped'": "qualification refused: dev-tickets-unscoped",
+      "section 'daily-personal.capture'": "qualification refused: captured-today",
+      "section 'daily-personal.due-soon'": "qualification refused: due-soon-tasks",
+      "section 'daily-personal.high-priority'": "qualification refused: high-priority-tasks",
+      "section 'daily-personal.orphans'": "qualification refused: orphan-outcomes",
+      "section 'daily-personal.waiting'": "qualification refused: waiting-tasks",
+      "section 'daily-work.capture'": "qualification refused: captured-today",
+      "section 'daily-work.due-today'": "qualification refused: due-soon-tasks",
+      "section 'daily-work.urgent'": "qualification refused: high-priority-tasks",
+      "section 'daily-work.waiting'": "qualification refused: waiting-tasks",
+      "section 'flowtrace-capabilities.diagnose-ready'": "qualification refused: flowtrace-capabilities-diagnose-ready",
+      "section 'flowtrace-capabilities.in-progress'": "qualification refused: flowtrace-capabilities-in-progress",
+      "section 'flowtrace-capabilities.passing'": "qualification refused: flowtrace-capabilities-passing",
+      "section 'flowtrace-capabilities.retired'": "qualification refused: flowtrace-capabilities-retired",
+      "section 'flowtrace-capabilities.scoped'": "qualification refused: flowtrace-capabilities-scoped",
+      "section 'flowtrace-capabilities.unscoped'": "qualification refused: flowtrace-capabilities-unscoped",
+      "section 'flowtrace-classes.concept'": "qualification refused: flowtrace-classes-concept",
+      "section 'flowtrace-classes.exists'": "qualification refused: flowtrace-classes-exists",
+      "section 'flowtrace-classes.extracted'": "qualification refused: flowtrace-classes-extracted",
+      "section 'flowtrace-classes.subsumed'": "qualification refused: flowtrace-classes-subsumed",
+      "section 'flowtrace-packages.concept'": "qualification refused: flowtrace-packages-concept",
+      "section 'flowtrace-packages.exists'": "qualification refused: flowtrace-packages-exists",
+      "section 'flowtrace-packages.extracted'": "qualification refused: flowtrace-packages-extracted",
+      "section 'flowtrace-packages.subsumed'": "qualification refused: flowtrace-packages-subsumed",
+      "section 'flowtrace-principles.held'": "qualification refused: flowtrace-principles-held",
+      "section 'flowtrace-principles.held-weak'": "qualification refused: flowtrace-principles-held-weak",
+      "section 'flowtrace-principles.un-anchored'": "qualification refused: flowtrace-principles-un-anchored",
+      "section 'flowtrace-principles.unverifiable'": "qualification refused: flowtrace-principles-unverifiable",
+      "section 'flowtrace-principles.violated'": "qualification refused: flowtrace-principles-violated",
+      "section 'flowtrace-queue.queue'": "qualification refused: flowtrace-queue-items",
+      "section 'flowtrace-sinks.sinks'": "qualification refused: flowtrace-sinks-all",
+      "section 'free-trial-dojo.fragments'": "qualification refused: free-trial-dojo-heads",
+      "section 'god-box.discussed'": "qualification refused: god-box-discussed",
+      "section 'god-box.not-discussed'": "qualification refused: god-box-not-discussed",
+      "section 'habit-dojo.classification'": "qualification refused: habit-dojo-heads",
+      "section 'habits-admin.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-admin.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits-life-admin.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-life-admin.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits-personal.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-personal.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits-program.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-program.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits-spirit.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-spirit.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits-work.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-work.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits.admin-habits'": "qualification refused: admin-habits",
+      "section 'habits.life-admin-habits'": "qualification refused: life-admin-habits",
+      "section 'habits.personal-habits'": "qualification refused: personal-habits",
+      "section 'habits.program-habits'": "qualification refused: program-habits",
+      "section 'habits.spirit-habits'": "qualification refused: spirit-habits",
+      "section 'habits.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits.work-habits'": "qualification refused: work-habits",
+      "section 'metrics-personal.personal-accuracy-1d'": "qualification refused: accuracy-carrier-personal-1d",
+      "section 'metrics-personal.personal-accuracy-3d'": "qualification refused: accuracy-carrier-personal-3d",
+      "section 'metrics-personal.personal-accuracy-7d'": "qualification refused: accuracy-carrier-personal-7d",
+      "section 'metrics-personal.personal-age-of-intent'": "qualification refused: age-intent-carrier-personal",
+      "section 'metrics-personal.personal-coverage'": "qualification refused: coverage-carrier-personal",
+      "section 'metrics-program.program-accuracy-1d'": "qualification refused: accuracy-carrier-program-1d",
+      "section 'metrics-program.program-accuracy-3d'": "qualification refused: accuracy-carrier-program-3d",
+      "section 'metrics-program.program-accuracy-7d'": "qualification refused: accuracy-carrier-program-7d",
+      "section 'metrics-program.program-age-of-intent'": "qualification refused: age-intent-carrier-program",
+      "section 'metrics-program.program-coverage'": "qualification refused: coverage-carrier-program",
+      "section 'metrics-work.work-accuracy-1d'": "qualification refused: accuracy-carrier-work-1d",
+      "section 'metrics-work.work-accuracy-3d'": "qualification refused: accuracy-carrier-work-3d",
+      "section 'metrics-work.work-accuracy-7d'": "qualification refused: accuracy-carrier-work-7d",
+      "section 'metrics-work.work-age-of-intent'": "qualification refused: age-intent-carrier-work",
+      "section 'metrics-work.work-coverage'": "qualification refused: coverage-carrier-work",
+      "section 'metrics.overall-accuracy-1d'": "qualification refused: accuracy-carrier-overall-1d",
+      "section 'metrics.overall-accuracy-3d'": "qualification refused: accuracy-carrier-overall-3d",
+      "section 'metrics.overall-accuracy-7d'": "qualification refused: accuracy-carrier-overall-7d",
+      "section 'metrics.overall-age-of-intent'": "qualification refused: age-intent-carrier-overall",
+      "section 'metrics.overall-coverage'": "qualification refused: coverage-carrier-overall",
+      "section 'operator-flowtrace.outcomes'": "qualification refused: operator-flowtrace-outcomes-open",
+      "section 'operator-flowtrace.tasks'": "qualification refused: operator-flowtrace-tasks-open",
+      "section 'operator-flowtrace.waiting-for'": "qualification refused: operator-flowtrace-waited-on",
+      "section 'operator-qntm-network.outcomes'": "qualification refused: operator-qntm-network-outcomes-open",
+      "section 'operator-qntm-network.tasks'": "qualification refused: operator-qntm-network-tasks-open",
+      "section 'operator-qntm-network.waiting-for'": "qualification refused: operator-qntm-network-waited-on",
+      "section 'operator-qntm.outcomes'": "qualification refused: operator-qntm-outcomes-open",
+      "section 'operator-qntm.tasks'": "qualification refused: operator-qntm-tasks-open",
+      "section 'operator-qntm.waiting-for'": "qualification refused: operator-qntm-waited-on",
+      "section 'operator-trace-orchestration.outcomes'": "qualification refused: operator-trace-orchestration-outcomes-open",
+      "section 'operator-trace-orchestration.tasks'": "qualification refused: operator-trace-orchestration-tasks-open",
+      "section 'operator-trace-orchestration.waiting-for'": "qualification refused: operator-trace-orchestration-waited-on",
+      "section 'outcomes-personal.childless-outcomes'": "qualification refused: inverse-orphans",
+      "section 'outcomes-personal.outcomes'": "qualification refused: outcomes-with-children",
+      "section 'outcomes-program.childless-outcomes'": "qualification refused: inverse-orphans",
+      "section 'outcomes-program.outcomes'": "qualification refused: outcomes-with-children",
+      "section 'outcomes-spirit.childless-outcomes'": "qualification refused: inverse-orphans",
+      "section 'outcomes-spirit.outcomes'": "qualification refused: outcomes-with-children",
+      "section 'outcomes.childless-outcomes'": "qualification refused: inverse-orphans",
+      "section 'outcomes.outcomes'": "qualification refused: outcomes-with-children",
+      "section 'qntm-capabilities.diagnose-ready'": "qualification refused: qntm-capabilities-diagnose-ready",
+      "section 'qntm-capabilities.in-progress'": "qualification refused: qntm-capabilities-in-progress",
+      "section 'qntm-capabilities.passing'": "qualification refused: qntm-capabilities-passing",
+      "section 'qntm-capabilities.retired'": "qualification refused: qntm-capabilities-retired",
+      "section 'qntm-capabilities.scoped'": "qualification refused: qntm-capabilities-scoped",
+      "section 'qntm-capabilities.unscoped'": "qualification refused: qntm-capabilities-unscoped",
+      "section 'qntm-classes.concept'": "qualification refused: qntm-classes-concept",
+      "section 'qntm-classes.exists'": "qualification refused: qntm-classes-exists",
+      "section 'qntm-classes.extracted'": "qualification refused: qntm-classes-extracted",
+      "section 'qntm-classes.subsumed'": "qualification refused: qntm-classes-subsumed",
+      "section 'qntm-packages.concept'": "qualification refused: qntm-packages-concept",
+      "section 'qntm-packages.exists'": "qualification refused: qntm-packages-exists",
+      "section 'qntm-packages.extracted'": "qualification refused: qntm-packages-extracted",
+      "section 'qntm-packages.subsumed'": "qualification refused: qntm-packages-subsumed",
+      "section 'qntm-principles.held'": "qualification refused: qntm-principles-held",
+      "section 'qntm-principles.held-weak'": "qualification refused: qntm-principles-held-weak",
+      "section 'qntm-principles.un-anchored'": "qualification refused: qntm-principles-un-anchored",
+      "section 'qntm-principles.unverifiable'": "qualification refused: qntm-principles-unverifiable",
+      "section 'qntm-principles.violated'": "qualification refused: qntm-principles-violated",
+      "section 'qntm-queue.queue'": "qualification refused: qntm-queue-items",
+      "section 'qntm-sinks.sinks'": "qualification refused: qntm-sinks-all",
+      "section 'routine-cascade-dojo.governed'": "qualification refused: routine-cascade-dojo-heads",
+      "section 'termination-dojo.fragments'": "qualification refused: termination-dojo-heads",
+      "section 'test-scratchpad.scratchpad-targets'": "qualification refused: scratchpad-targets",
+      "section 'this-week.available-overdue'": "qualification refused: available-overdue",
+      "section 'this-week.available-this-week'": "qualification refused: available-this-week",
+      "section 'this-week.due-this-week'": "qualification refused: due-this-week",
+      "section 'this-week.overdue'": "qualification refused: overdue",
+      "section 'trace-orchestration-queue.queue'": "qualification refused: trace-orchestration-queue-items",
+      "section 'unlocks-dojo.chain'": "qualification refused: unlocks-dojo-heads",
+      "section 'waiting-for-personal.personal-blocked'": "qualification refused: waiting-personal-tasks",
+      "section 'waiting-for-personal.personal-held'": "qualification refused: tasks-held-by-requires-personal",
+      "section 'waiting-for-personal.personal-waiting-for'": "qualification refused: personal-tasks-waited-on-by-someone",
+      "section 'waiting-for-work.blocked'": "qualification refused: waiting-work-tasks",
+      "section 'waiting-for-work.held'": "qualification refused: tasks-held-by-requires-work",
+      "section 'waiting-for-work.waiting-for'": "qualification refused: tasks-waited-on-by-someone",
+      "vocabulary token '#God'": "sets 'god_box', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#action'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#animation'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#biography'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#cap-scoped'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#chore'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#class-concept'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#class-exists'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#class-extracted'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#class-subsumed'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#comedy'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#crime'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#daily'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#diagnose-ready'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#docs'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#documentary'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#drama'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-friday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-monday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-month-end'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-saturday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-sunday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-thursday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-tuesday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-wednesday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-{dom}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
+      "vocabulary token '#every-{n}{unit}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
+      "vocabulary token '#every-{weekdays}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
+      "vocabulary token '#fantasy'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#feat'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#fix'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#foundational'": "sets 'tier', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#free-trial'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#functional'": "sets 'tier', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#held'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#held-weak'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#history'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#horror'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#in-progress'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#monthly'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#nonfiction'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#onboarding'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#package-concept'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#package-exists'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#package-extracted'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#package-subsumed'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#passing'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#perf'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#refactor'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#retired'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#romance'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#scifi'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#scope-{area}'": "sets 'scope' through 'parametric_field:', a shape this generator does not read at all",
+      "vocabulary token '#spike'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#termination'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#test'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#thriller'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#un-anchored'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#unscoped'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#unverifiable'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#violated'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#weekdays'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#weekends'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#weekly'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u23EB'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u2611\uFE0F'": "sets 'done_task_count', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u26D4'": "sets 'blocked_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u2705'": "sets 'completed_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F195}'": "sets 'created_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F3AF}'": "sets 'par', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F3F3}\uFE0F'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F4A4}'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F4C5}'": "sets 'due_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F4CC}'": "sets 'lead_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F522}'": "sets 'queue_position', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F53D}'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '\u{1F6EB}'": "sets 'available_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)"
     }
   },
   resolution: {
@@ -4848,7 +5113,8 @@ var presentation_default = {
       task: "checkbox",
       tv_show: "checkbox",
       writer: "checkbox"
-    }
+    },
+    dropped: {}
   }
 };
 
