@@ -388,13 +388,21 @@ expected_flows:
   # supplied AND every earlier rung found nothing: `seedFor` names the `(view, section)` a bare new
   # line sits in the SAME way `membershipFor`'s caller does (L3 ADDRESSING, step 2), never by
   # re-deriving the ordinal itself.
+  # WIDENED 2026-08-01 (`a-new-line-acquires-its-node-type-and-its-defaults`): this edge no longer
+  # fires only after the three PRINTED rungs have all found nothing. The section is named ONCE, up
+  # front, whenever a declaration is supplied, because the DECLARED TOKENS are a fact about the
+  # section the line is ACTUALLY in while the CHROME may have been copied from a neighbour across a
+  # heading (the VIEW rung). Resolving it twice would be two chances for one seed to describe two
+  # different sections. The walk order above is unchanged; only how often this call is reached is.
   - id: newline-addresses-the-declared-section
     from: app/present/newline
     to:   app/present/address
     callee: sectionAt
     event: app.addresses-the-declared-section
     class: presentation-resolution
-    gates_capabilities: [new-line-seed-reads-the-declaration]
+    gates_capabilities:
+      - new-line-seed-reads-the-declaration
+      - a-new-line-acquires-its-node-type-and-its-defaults
 
   # WHERE THE ROW GOES. Asked once per line of the view, because the row for a line being made sits
   # AT an index and every line from there down keeps the index it already had — the source is not

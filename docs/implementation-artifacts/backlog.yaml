@@ -2677,3 +2677,64 @@ backlog:
     running app. `app/present/qualification.ts`'s `dropped` is parsed and, like `refused` beside
     it, read to decide nothing. That is design-the-rule-mirror.md row 6 and it is still open.
   state: passing
+- id: apply-the-registration-defaults-to-the-line-as-it-is-typed
+  title: >-
+    [feat] [app] Rungs 1 and 2 of the operator's own ladder, together. On Enter, seed the new line
+    with its node type AND its section's declared defaults, resolved through the cascade, for any
+    section that declares them and with no code naming any particular one.
+  driving_capability: a-new-line-acquires-its-node-type-and-its-defaults
+  kind: capability
+  record: >-
+    2026-08-01 — SHIPPED. His own words are the specification: "it gets stamped task. That's what
+    the evidence would be for inbox. Then for personal all it would get stamped task and personal,
+    as we have a default resolution here."
+    THE ANSWER, IN HIS OWN VIEW. `personal/all` was `- [ ] ` and is now
+    `- [ ] #task #personal `. `inbox` was `- [ ] ` and is now `- [ ] #task `. `spirit/God Box` is
+    `- [ ] #task #spirit #God `. `routines/personal` is `- [ ] #personal ` — the type tag refused,
+    for the reason below.
+    WHY A DEFAULT CAN BE WRITTEN INTO A LINE AT ALL. A `defaults:` block sets a FIELD, and a field
+    is not text. What makes it seedable is that the ENGINE ITSELF spells a set field back onto the
+    line every cycle, through `TokenResolver.source_tags_for_node` — "Render: field + value ->
+    canonical token -> text". His own personal/all.md already carries `#task #personal` on every
+    line, printed by the engine, not by a person.
+    `INPUT WINS`, AND IT IS THE SHARPEST QUESTION IN THE WHOLE ROW. A value the browser writes into
+    the source is ingested as AUTHORED and outranks the rule that produced it, so seeding converts
+    a DERIVED value into an AUTHORED one. It costs nothing here because the engine performs that
+    same conversion itself one cycle later, when it prints the tag back — seeding reaches the same
+    fixed point one cycle earlier rather than creating one. A field the engine prints NO tag for is
+    never seeded, and that is the same rule read the other way: `project` (60 sections),
+    `principle_state`, `stage`, and every other unspellable default is recorded in `dropped` with
+    the field named. Of the 8 fields across the 153 sections that declare defaults, 5 are spellable
+    (`domain`, `cap_state`, `class_state`, `package_state`, `god_box`) and 3 are not.
+    THE 13 SECTIONS design-the-rule-mirror.md §3.3 MEASURED, DERIVED RATHER THAN NAMED. In 13 of
+    186 sections a rule retypes the capture inside the same pass that minted it. No code names
+    `routine`, that rule, or any section: the generator reads config/rules/*.yaml, normalises each
+    `set_node_type` rule's pattern and `when:` into a closed grammar (a root.find over node fields
+    with no traversal step; a `when:` of null / not / literal eq), and refuses the type tag for any
+    section whose bare capture the rule would fire on. It lands on exactly 13. APPLYING THE
+    DEFAULTS DOES NOT FIX THOSE SECTIONS, measured rather than assumed: the rule fires on the
+    ABSENCE of `cadence` and not one of the 13 declares a `defaults:` block supplying it. So they
+    seed their FIELD tags and withhold their TYPE tag, which is the honest half of the answer.
+    THE BOUNDARY, STATED. A retype rule whose pattern TRAVERSES (four of the nine) binds through a
+    related node the generator does not read, and is recorded in `dropped` as unevaluated rather
+    than assumed harmless. The corroboration is the design's own engine-run sweep: the union of
+    rules a bare capture reaches across all 186 sections is exactly two, and no traversing rule
+    among them.
+    THE AGREEMENT, GENERATED NOT TRANSCRIBED. `scripts/resolution-agreement.py` gained a seeds arm
+    calling the engine's own `source_tags_for_node` over the BUNDLE's own section list — 186 cases,
+    no sampling, and it covers `all-personal.tasks`, which the qualification-gated arm cannot.
+    Result: 173 identical, 13 type-tag-withheld (each with its reason checked in `dropped`), 0
+    disagreements.
+    A DEFECT THE ROUND TRIP FOUND, and it is why the round trip was written. A seeded line with no
+    title was POSTED. A tag is not a title: the engine excises every resolved tag span and
+    normalises what is left, so `- [ ] #task #personal ` reaches the mint with an EMPTY title and
+    gets the fate `carriesContent`'s own header measured — a node called nothing, reprinted into
+    every view that qualifies it, forever. `carriesContent` now takes the tags off before asking.
+    This was always true of a line the operator typed one tag into; seeding made it reachable by
+    default.
+    WHAT THIS ROW DID NOT DO, NAMED. It does not seed MARKERS (`🆕`, `📅`) — no section default
+    names a marker field, and a seeded stamp would be the browser claiming something only a rule
+    can make; `carriesContent` correspondingly still counts a marker-only line as content, stated
+    at the site. It does not surface the `dropped` record in the running app, which stays
+    design-the-rule-mirror.md row 6. It does not touch rung 3.
+  state: passing
