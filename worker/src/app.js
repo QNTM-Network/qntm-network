@@ -223,9 +223,39 @@ async function editPost(request, env, origin, session) {
   return json({ ok: true, pending_edits: await pendingCount(env, session.user_id) }, 200, origin);
 }
 
-// POST /app/edit-file (session) — the web write path. The browser sends {path, markdown} for one
-// view; we write it on the hosted model, run a cycle, and return the fresh projection. The operator
-// token stays server-side; the browser only ever holds its passkey session.
+// POST /app/edit-file (session) — the web write path. The browser sends {path, markdown, base} for
+// one view; we write it on the hosted model, run a cycle, and return the fresh projection. The
+// operator token stays server-side; the browser only ever holds its passkey session.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PRECONDITION, AND THE ONE THING THIS WORKER MUST NEVER DO WITH IT
+// (design-the-resolution-architecture.md step 13; backlog `the-write-is-refused-server-side`)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// `base` is `sha256-<hex>` of exactly the bytes the browser's edit was computed against
+// (app/present/base.ts `baseOf`). It says ONE thing: "I believe this file currently says X". It
+// is the whole of optimistic concurrency control on this path, because every save posts the WHOLE
+// FILE and whoever receives it overwrites what they are sent.
+//
+// THIS WORKER FORWARDS THE CLAIM. IT DOES NOT ADJUDICATE IT — and that is a decision, not an
+// omission. To refuse, something must know what the file says NOW. `server/app.py` offers
+// `POST /vault/file` (an unconditional write) and `GET /graph` (the whole 77-view envelope) and
+// nothing else; there is no per-file read. So the only refusal this Worker could build alone is
+// READ-THEN-WRITE, and check-then-act has a race of its own: between the read and the write, a
+// cycle can rewrite the file and the write clobbers it anyway. The row already judges that weaker,
+// and there is a second, larger reason recorded on the row: a refusal is only safe once the
+// BROWSER can hold a refused edit's characters, and today it can only keep them on screen. A
+// refusal fires on an ordinary gesture (a second edit inside one ~14 s cycle), so switching one on
+// before the holding half exists would trade a silent loss of the ENGINE'S output for a visible
+// loss of the OPERATOR'S typing. That is the worse trade.
+//
+// SO EXACTLY ONE EXPRESSION BELOW CAN REFUSE A WRITE: `w.status === 409`, the graph server's own
+// answer. This Worker compares no strings and computes no digests, so it cannot invent a mismatch,
+// and a `base` it cannot understand is still just a string it hands on. WHEN `base` IS ABSENT IT
+// IS NOT FORWARDED AT ALL — absent, never empty and never null — so a caller that predates this
+// change sends a request byte-for-byte identical to the one it sent before, and gets today's
+// unconditional write. Everything else fails OPEN: a graph server that never learns to refuse
+// never refuses, and this path behaves exactly as it did.
 async function editFile(request, env, origin, session) {
   // The write half of the tenancy boundary, and the one that must REFUSE rather than degrade.
   // `POST /vault/file` on the hosted model writes into the operator's live vault at a path this
@@ -249,13 +279,43 @@ async function editFile(request, env, origin, session) {
     return json({ ok: false, error: "path and markdown required" }, 422, origin);
   }
 
+  // THE CLAIM, CARRIED ONLY WHEN THERE IS ONE. A non-string, an empty string or a missing field
+  // are all the same thing here — this write makes no claim — and the difference between "no
+  // claim" and "a claim I cannot read" is the receiver's to draw, not this Worker's, which is
+  // exactly why nothing is substituted for an absent one.
+  const write = { path, markdown: body.markdown };
+  if (typeof body?.base === "string" && body.base !== "") write.base = body.base;
+
   const auth = { Authorization: `Bearer ${env.SERVER_TOKEN}` };
   // 1. overwrite the single view on the hosted model
   const w = await fetch(`${env.GRAPH_SERVER_URL}/vault/file`, {
     method: "POST",
     headers: { ...auth, "Content-Type": "application/json" },
-    body: JSON.stringify({ path, markdown: body.markdown }),
+    body: JSON.stringify(write),
   });
+  // 1a. THE REFUSAL, AND IT IS THE GRAPH SERVER'S, NOT THIS WORKER'S. 409 means the precondition
+  // did not hold and NOTHING WAS WRITTEN — so the cycle below is skipped, because a cycle after a
+  // refused write would tell the browser its edit had been ingested. `current` is what the file
+  // says instead, passed through verbatim when the server sends it and `null` when it does not;
+  // nothing here reconstructs it. Distinguishable from the 502 immediately after it on purpose:
+  // "your edit is stale" and "the write failed" are different events and the page answers them
+  // differently. NOTE: no deployed graph server answers 409 today, so this branch is unreachable
+  // in production until the monorepo change on the row lands — it is complete, tested against a
+  // fixture, and inert.
+  if (w.status === 409) {
+    const refusal = await w.json().catch(() => ({}));
+    return json(
+      {
+        ok: false,
+        error: "stale base — the file changed since this edit was computed, so nothing was written",
+        refused: "stale-base",
+        path,
+        current: typeof refusal?.current === "string" ? refusal.current : null,
+      },
+      409,
+      origin
+    );
+  }
   if (!w.ok) return json({ ok: false, error: "write failed" }, 502, origin);
   // 2. cycle (ingest the edit + re-project) — this is the ~14s step
   const c = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });

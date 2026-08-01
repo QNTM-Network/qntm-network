@@ -1337,6 +1337,21 @@ function takeNotes() {
   return notes.map((note) => ` · ${note}`).join("");
 }
 
+/**
+ * THE SAME, FOR A WRITE THE SERVER REFUSED — with this app's own guess about that write DROPPED.
+ *
+ * `writeNote` is what the client concluded from the only evidence it had (`BASE_REFUSALS`), and on
+ * a 409 the server has just answered the identical question with better evidence. Saying both puts
+ * two sentences about ONE save on one line that contradict each other in their second half —
+ * "nothing was written" beside "whatever changed in it since is overwritten". The server's word
+ * wins; it is dropped rather than left armed, so it cannot surface against the NEXT save either.
+ * `cursorNote` is about a different fact (where the cursor went) and is carried as usual.
+ */
+function refusalNote() {
+  writeNote = "";
+  return takeNotes();
+}
+
 function paintView(id) {
   // A PROJECTION ARRIVING IS NOT THE SAME EVENT AS A VIEW CHANGE, and this one boolean is the whole
   // of the difference. Both come through this function — it is the only place a view is chosen or
@@ -1565,6 +1580,27 @@ const BASE_REFUSALS = {
 };
 
 /**
+ * AND WHAT HE IS TOLD WHEN THE SERVER REFUSES IT — design doc step 13, the other end of the same
+ * event. A 409 from `POST /app/edit-file` says the precondition this save carried did not hold and
+ * NOTHING WAS WRITTEN.
+ *
+ * THE SAME VOCABULARY, NOT A SECOND ONE. `BASE_REFUSALS.stale` above is this app's own guess at
+ * the same fact from the only evidence it has; a 409 is that fact with a better source of truth
+ * behind it, so the first clause is word for word the same and only the consequence changes —
+ * `is overwritten` becomes `nothing was written`. A reader who has seen one has read the other.
+ *
+ * THE SECOND CLAUSE IS THE ONE THAT MATTERS TO HIM, AND IT DIFFERS BY GESTURE because what happens
+ * to his work differs by gesture. A refused LINE COMMIT keeps his characters where they are — on
+ * the line, on the screen — because destroying them is the one outcome worse than the clobber this
+ * whole row exists to stop. A refused TICK has no characters to keep: the box goes back to what the
+ * server has, which is the truth, and a second click sends it again.
+ */
+const WRITE_REFUSED =
+  "this save was computed from an out-of-date copy of this file — the server refused it and nothing was written";
+const REFUSED_KEEPING_TYPING = WRITE_REFUSED + " · what you typed is still on this line";
+const REFUSED_REVERTING_BOX = WRITE_REFUSED + " · the box is back as the server has it";
+
+/**
  * AFTER THIS COMMIT, DOES THE LINE STILL BELONG IN THE SECTION IT IS IN — design doc step 4, L6
  * PROJECTION. Tonight's proven-but-invisible layers (L3 `sectionAt`, L5 `membershipFor`) SAID from
  * here for the first time. Returns the sentence to show, or `""` when nothing is said.
@@ -1755,7 +1791,14 @@ async function toggleTask(view, toggle) {
     row.classList.toggle("done", box.checked);
     row.classList.remove("syncing");
     box.disabled = false;
-    $("freshness").textContent = "sync failed: " + e.message + takeNotes();
+    // A REFUSAL IS NOT A FAILURE, and the box has already been put back above — which for this
+    // gesture is the whole of "nothing is lost": a tick is one glyph the server does not have, and
+    // showing it ticked would be the lie. See `refusalNote` for why the client's own guess at the
+    // same event is dropped rather than said twice.
+    $("freshness").textContent =
+      e?.status === 409
+        ? REFUSED_REVERTING_BOX + refusalNote()
+        : "sync failed: " + e.message + takeNotes();
   }
 }
 
@@ -1781,6 +1824,24 @@ async function commitLine(view, commit) {
     paintView(currentViewId);
     sayAsOf(data);
   } catch (e) {
+    // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ──
+    //
+    // 409 means the server DECLINED this write and the vault is untouched — and the painter is
+    // holding his edited source, so the page is showing the characters he typed. NOT REPAINTING IS
+    // THE WHOLE OF THE ANSWER: the repaint below is what would destroy them. It leaves the screen
+    // showing a line the vault does not have, which is a real cost and is why the sentence says so
+    // in as many words. It is the cheaper cost by a distance — the clobber this row exists to stop
+    // loses work nobody typed, and a refusal that answered it by deleting work he DID type would be
+    // strictly worse than the defect.
+    //
+    // WHAT THIS IS NOT: it is not the edit being HELD. His characters live in the DOM and in the
+    // painter's source, which the next projection to arrive replaces — see backlog row
+    // `a-refused-edit-is-held-unanchored`, which is the piece that survives a repaint and offers
+    // the edit back. Until it lands, a refused edit is safe on screen and nowhere else.
+    if (e?.status === 409) {
+      $("freshness").textContent = REFUSED_KEEPING_TYPING + refusalNote();
+      return;
+    }
     // The painter has already repainted this view from the edited source, so the page is showing
     // the edit; what failed is the write. Repaint from the LAST KNOWN SERVER STATE so the screen
     // stops claiming something the vault does not have.
