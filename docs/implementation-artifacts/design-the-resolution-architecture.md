@@ -192,6 +192,58 @@ detail; the two things this step does NOT do — publish `pull_context`, and wir
 facts into a consumer (steps 6/7/8's own job) — are filed as `widen-resolution-table-to-pull-context`
 and `wire-config-resolution-table-into-steps-6-7-8` (backlog.yaml), not silently left out.
 
+**STATUS, UPDATED 2026-08-01 (fourth pass) — STEP 6 IS DONE, one agent, one worktree
+(`feat/seed-is-a-read`), against `origin/main` @ `26f20d9`.** The three-pass SEARCH is gone from
+the GLOBAL rung; the refusal it replaces is not gone, it fires less often, for four NAMED reasons
+instead of unconditionally — see `newline.ts`'s own rewritten header for exactly which. **The
+minting default is read from `qualification.sections[view][section].nodeType`** (already published,
+already GLOBAL→VIEW cascaded, already `membership.ts`'s own field) — **never** `resolution.
+registration.baseNodeType` (the REVERT target), which this step's implementation does not import
+into `newline.ts` at all, closing off the substitution §5.5 warns against by construction rather
+than by discipline. **One fact was missing that step 5's own table did not anticipate needing, found
+while building this step rather than assumed away**: a node type NAME does not say whether `- [ ] `
+or `- ` is safe for it, only its declared `render.shape` does. `resolution.chromeShapes` (this
+step's one addition to `resolutiontable.ts`/`generate-resolution-declaration.mjs`, generated from
+`schema.yaml`, restricted to the 11 node types that actually appear as a `default_node_type`
+candidate anywhere in this config and to the two shapes `newline.ts` can seed) supplies it. Measured
+2026-08-01: 9 of the 11 candidates are `checkbox`, 2 are `plain_line` (`person`, `group` — the
+operator's own trap case, the one this document's header on `newline.ts` already measured crashing a
+cycle). The rung report survives — `GLOBAL` is now a real fourth rung in the same ordered walk
+(LINE → STRUCTURAL_NODE → VIEW → GLOBAL), consulted only once every PRINTED line has answered
+nothing, never ahead of them; a test hands `seedFor` a `declared` table that actively disagrees with
+real printed evidence and asserts the printed evidence still wins. The falsifier ran two ways:
+(a) as the design document states it — `scripts/resolution-agreement.py`, extended, compares every
+published `chromeShapes` candidate against the engine's own `qntm_md.grammar.node_type_form.
+node_type_forms` (the function the renderer itself builds its dispatch table from), 0 disagreements,
+a positive control (at least one candidate reads `plain_line`) run before trusting that; since every
+one of the config's 72 views resolves to one of the 11 published candidates by construction, this is
+"asserted over all 72 views" by coverage of the candidate space, not a sample of the views. (b) proof
+standard #2's strongest form — `tests/present-newline.test.mjs` §7 seeds correctly from an EMPTY view
+(three headings, nothing printed) for both a checkbox and a plain-line declared type from the *same*
+source string, and from a view whose only body content is a PROSE line that carries no bullet (not
+evidence either way, but exactly the kind of text a naive "peek at the page" implementation could be
+fooled by). Proof standard #4's config-change falsifier also ran: a scratch copy of `schema.yaml`
+has `person`'s declared shape flipped from `plain_line` to `checkbox`, and separately has its whole
+`render:` block removed, and the published `chromeShapes.person` follows both mutations (the second
+proving the generator mirrors the engine's own "undeclared renders as checkbox" default, not only
+its declared-shape branch). Every existing `newline.ts` test — 31 of them, sections 1-6 — passed
+UNMODIFIED: the new `declared` parameter on `seedFor`/`openLine` is optional and additive, so a
+caller that never mentions it gets exactly the previous behaviour. `npm run check`: 804 tests /
+159 suites / 0 fail before this step (this agent's own re-run, matching the recorded baseline
+exactly, measured on a clean tree via `git checkout --` rather than `git stash`); 822 / 161 / 0 fail
+after (+18/+2, 0 regressions). Capability `new-line-seed-reads-the-declaration` (capabilities.yaml)
+carries the full detail; this step also wired `paint.ts`'s `PaintDeps.declared` and
+`app/index.html`'s `globalRegistrationFor`/vim `o`/`O` call site so the capability is live in the
+app, not only callable — proven by `tests/app-vim-wiring.test.mjs`'s existing "o / O" cases against
+the lifted page script, since node cannot import the HTML page itself (the same invisibility
+`section-membership-is-said-in-the-freshness-line`'s own caller has). **What this step does NOT do**:
+seed a `stat_line` or `heading`-shaped type (none of the operator's 11 candidates are either today,
+so this is a real but currently empty gap) and steps 7/8's own work (ordering preview, the day
+boundary) — filed as `widen-chrome-shapes-beyond-checkbox-and-plain-line` and the now-narrowed
+`wire-config-resolution-table-into-steps-6-7-8` (backlog.yaml), not silently left out. **Not
+verified**: no browser, no passkey session, no live server, no cycle — the app wiring was
+typechecked and exercised through the lifted-page test harness, never watched render in a real tab.
+
 | # | step | layer | size | needs | falsifier, in one line | status |
 |---|---|---|---|---|---|---|
 | 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown | **DONE** |
@@ -199,7 +251,7 @@ and `wire-config-resolution-table-into-steps-6-7-8` (backlog.yaml), not silently
 | 3 | wire `readQualificationDeclaration` into the app's one reader | L2 | **h** | — | `presentationFromDeclaration(...).qualification.predicates` has 43 entries | **DONE** |
 | 4 | **SAY the membership answer** — tonight's work becomes visible | L6 | **½** | 2, 3 | the freshness line shows nothing for all five `Abstention` values | **DONE** |
 | 5 | publish the config-only resolution table (registration + defaults + clock) | L2 | **½** | 1 | generator `--check` + per-section agreement with `ResolutionCascade.resolve` | **DONE** |
-| 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line | — |
+| 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line | **DONE** |
 | 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections | — |
 | 8 | the day boundary — 04:00, Europe/London, week starts Monday | L2+L5 | **h** | 5 | 03:59 returns yesterday's date; 04:01 returns today's | — |
 | 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator | — |
@@ -899,6 +951,37 @@ opens no line at all — because both available guesses cost the operator someth
 chrome matches the `render.shape` the engine would print for that view's resolved
 `default_node_type` — asserted over all 72 views. If the table is wrong for one view, that view's
 row fails by name.
+
+**SHIPPED, WITH ONE FACT ADDED BEYOND STEP 5'S TABLE, ARGUED RATHER THAN SILENTLY WIDENED.** The
+"What" above under-specified the change: knowing `default_node_type` (a name) is not enough to
+answer safely, because `- [ ] ` and `- ` are not interchangeable and the name alone does not say
+which is correct — `person` and `task` are both names. Only the type's declared `render.shape`
+settles it, and step 5's table did not carry it. This step adds ONE more fact, `resolution.
+chromeShapes` — generated from `schema.yaml`, restricted to the 11 node types that actually appear
+as a `default_node_type` candidate anywhere in this config and to the two shapes `newline.ts` can
+seed (`checkbox`, `plain_line` — never `stat_line`/`heading`, left unpublished so the rung refuses
+for them rather than guess). The seed's type itself comes from `qualification.sections[view]
+[section].nodeType` (already published at step 3, already GLOBAL→VIEW cascaded) — **never**
+`resolution.registration.baseNodeType`, which `newline.ts` does not import; §5.5's trap is avoided
+by the implementation not having the means to make the substitution, not merely by a comment saying
+not to. The falsifier ran exactly as worded, in two arms: (a) `scripts/resolution-agreement.py`
+compares every published `chromeShapes` candidate against the engine's own `qntm_md.grammar.
+node_type_form.node_type_forms`, 0 disagreements, covering all 72 views by construction (every
+view's resolved type is one of the 11 candidates); (b) `tests/present-newline.test.mjs` §7 proves
+the stronger form proof standard #2 asked for — an EMPTY view seeds correctly from the declaration
+alone, for both a checkbox and a plain-line declared type off the identical source string, and a
+view whose only content is non-evidence prose still seeds from the declaration rather than the text.
+The refusal survives, walked as a fourth rung after LINE/STRUCTURAL_NODE/VIEW, never ahead of them —
+proven by a test where a `declared` table disagreeing with real printed evidence loses to the
+printed evidence. All 31 of `newline.ts`'s existing tests (sections 1-6) passed unmodified: the new
+`declared` parameter is optional and additive. `npm run check`: 804 tests / 159 suites / 0 fail
+before this step (this agent's own re-run, matching the recorded baseline exactly); 822 / 161 / 0
+fail after (+18/+2, 0 regressions). Capability `new-line-seed-reads-the-declaration`
+(capabilities.yaml) carries the full record, including the live app wiring
+(`paint.ts`'s `PaintDeps.declared`, `app/index.html`'s `globalRegistrationFor`) and what this step
+did NOT do — seed a `stat_line`/`heading` type (none of the 11 candidates are either today) and
+steps 7/8's own work — filed as `widen-chrome-shapes-beyond-checkbox-and-plain-line` and the
+narrowed `wire-config-resolution-table-into-steps-6-7-8` (backlog.yaml).
 
 ---
 

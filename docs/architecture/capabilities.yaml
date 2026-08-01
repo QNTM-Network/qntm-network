@@ -1769,3 +1769,103 @@ capabilities:
     sequence reads it yet — publishing it before step 6/7/8 land would be exactly the "declared,
     unread" pattern this whole arc exists to remove, one level up from where it removed it before.
   status: working
+- id: new-line-seed-reads-the-declaration
+  intent: >-
+    PRESSING ENTER (OR VIM'S `o`/`O`) ON A VIEW THAT HAS PRINTED NO NODE LINE ANYWHERE CAN NOW OPEN
+    A LINE, INSTEAD OF ALWAYS REFUSING — design-the-resolution-architecture.md step 6, "the seed
+    becomes a read, not a search." `newline.ts`'s GLOBAL rung used to return `null` unconditionally
+    (`section-membership-is-read-not-guessed`'s sibling refusal, one layer down): both literal
+    guesses cost the operator something, and one of them — measured against a hermetic copy of the
+    engine's starter bundle — aborts the WHOLE CYCLE. THAT REFUSAL SURVIVES THIS STEP UNCHANGED; IT
+    JUST FIRES LESS OFTEN, because a caller can now supply a `GlobalRegistration` built from two
+    already-published declaration axes.
+    TWO NAMES, USED FOR TWO DIFFERENT THINGS, NEITHER SUBSTITUTED FOR THE OTHER. The seed's node
+    type comes from `qualification.sections[view][section].nodeType` — the MINTING default, already
+    cascaded GLOBAL -> VIEW by the generator, already `membership.ts`'s own field
+    (`section-membership-is-read-not-guessed`). `resolution.registration.baseNodeType` (the REVERT
+    target, `config-resolution-table-is-published`) is NEVER read by this rung — using it here would
+    be exactly the trap §5.5 names: a bare new line is being MINTED, not reverted, and the two
+    values only agree today because they share one config key.
+    THE FACT THAT WAS MISSING, FOUND WHILE BUILDING THIS STEP RATHER THAN ASSUMED AWAY: a node type
+    NAME does not say whether `- [ ] ` or `- ` is safe for it — `person` and `task` are both names,
+    and only the type's declared `render.shape` (schema.yaml) tells them apart. `resolution.
+    chromeShapes` (this step's one addition to the config-only resolution table, `resolutiontable.
+    ts`/`generate-resolution-declaration.mjs`) publishes it, restricted to the node types that
+    actually appear as a `default_node_type` candidate anywhere in this config (11, measured
+    2026-08-01: 9 checkbox, 2 plain_line — `person` and `group`, the operator's own trap case) and
+    restricted to the two shapes `newline.ts` knows how to seed (`checkbox`, `plain_line` — never
+    `stat_line`/`heading`, left unpublished on purpose, the same "declared but not readable" refusal
+    posture as an unaddressable line or an unpublished section).
+    THE RUNG REPORT SURVIVES, AND THE DECLARATION IS A FOURTH RUNG IN THE SAME WALK, NOT A
+    SHORTCUT. `seedFor` still walks LINE, then STRUCTURAL_NODE (up then down), then VIEW, then —
+    ONLY once every PRINTED line has answered nothing — the declaration. Most-specific-PRINTED-
+    evidence still wins outright over a config default, unchanged from before this step; proven
+    directly by a test that hands `seedFor` a `declared` table that DISAGREES with a real printed
+    checkbox line and asserts the printed evidence still answers.
+    THE REFUSAL FIRES FOR FOUR NAMED REASONS NOW, NOT ZERO: no `GlobalRegistration` was supplied at
+    all (a caller with no declaration, or every test written before this step, unmodified); `sectionAt`
+    cannot name a `(view, section)` for the line (above the first heading, an unaddressable view);
+    the named section is absent from `qualification.sections[view]` — REAL AND MEASURED, not
+    hypothetical: `daily-work` still refuses on 4 of its 5 sections and `daily-personal` on 5 of its
+    8, the operator's own two daily surfaces, because the published predicate table is a proper
+    subset (`section-addressing-reads-the-full-declared-order`'s own trap, one layer up); or the
+    resolved type is absent from `chromeShapes` (a `stat_line`/`heading` type, or a name outside the
+    published candidates). Every one of the four is a NAMED refusal a test drives, not an unhandled
+    case that happens to return `null`.
+    PROVEN AGAINST THE FALSIFIER THE DESIGN DOCUMENT ITSELF STATES: "the seed's chrome matches the
+    render.shape the engine would print for that view's resolved default_node_type." `scripts/
+    resolution-agreement.py` (extended this step) compares every published `chromeShapes` candidate
+    against the engine's OWN `qntm_md.grammar.node_type_form.node_type_forms` — the function the
+    RENDERER itself composes its dispatch table from — over a plain YAML parse of `schema.yaml`,
+    never re-deriving the engine's own default (an undeclared `render:` block reads as `checkbox`,
+    asserted rather than assumed). `tests/resolution-agreement.test.mjs` asserts 0 disagreements
+    across all 11 candidates, with a positive control (at least one candidate's engine-read shape is
+    `plain_line`) run before the "0 disagreements" is trusted. Since every one of the config's 72
+    views resolves to one of these 11 candidates by construction (the GLOBAL value or a view's own
+    override — no third source), this covers every view the falsifier names, not a sample of them.
+    THE CONFIG-CHANGE FALSIFIER (proof standard #4): `tests/present-resolution.test.mjs` section 4
+    mutates a SCRATCH COPY of `schema.yaml` two ways — flips `person`'s declared `shape:` from
+    `plain_line` to `checkbox`, and separately removes its `render:` block entirely — and asserts
+    the published `chromeShapes.person` follows each mutation (to `checkbox` both times: the second
+    mutation proves the generator's undeclared-defaults-to-checkbox rule, not only its declared-shape
+    reading). `person`'s render block is not the only `shape: plain_line` in the file (`mandate`,
+    `phase` and others declare one too), so the mutation targets the sequence unique to `person` — a
+    uniqueness check runs before the mutation is trusted, the same discipline the direction/
+    ordering_mode falsifiers in the same file already use.
+    THE SEED NO LONGER DEPENDS ON RENDERED TEXT, PROVEN THE STRONGEST WAY THE BRIEF ASKED FOR:
+    `tests/present-newline.test.mjs` section 7 seeds correctly from an EMPTY view (three headings,
+    nothing printed under any of them) for both a checkbox type and a plain-line type from the SAME
+    source string — the two-word difference between them is the declaration, nothing on the page —
+    and separately seeds correctly from a view whose only non-heading content is a PROSE line that
+    contradicts nothing (no bullet, so it is not evidence either way) but could mislead an
+    implementation that peeked at raw text instead of reading the declaration.
+    EXISTING TESTS PASS UNMODIFIED. Every test written before this step calls `seedFor`/`openLine`
+    with no `declared` argument (or `undefined`) and gets the exact previous behaviour — the new
+    parameter is additive, never a required one, which is what makes "804 tests before, N after,
+    0 regressions" provable rather than asserted.
+    NOT VERIFIED. No browser, no passkey session, no live server, no cycle. The wiring into
+    `app/index.html` (`globalRegistrationFor`, `paint`'s `declared` field, the vim `o`/`O` call site)
+    was typechecked and exercised by `tests/app-vim-wiring.test.mjs`'s existing "o / O open a new
+    line" cases (which pass a real, if often-refusing, `qualification`/`resolution` pair through the
+    lifted page script) but was never watched render in an actual browser tab.
+  tier: functional
+  rooting: >-
+    PARTIALLY OBSERVABLE, THE SAME SHAPE `a-new-line-is-resolved-not-guessed` ALREADY HAS ONE LAYER
+    UP. The new edge `app/present/newline -> app/present/address` (`sectionAt`, flows.yaml's
+    `newline-addresses-the-declared-section`) is reachable from `tests/present-newline.test.mjs`
+    section 7 (a real, standalone call through `dist/present.js`) and from
+    `tests/app-vim-wiring.test.mjs`'s `o`/`O` cases via the lifted page script — `flow-trace verify .`
+    is the instrument that says whether either counts as OBSERVED under this tool's current capture
+    rules; see this document's own header for the two known capture gaps (probe-anchor
+    cross-module suppression, last-edge truncation) that make "declared but reported UNVERIFIABLE"
+    a possible, non-alarming outcome here exactly as it already is for the three sibling edges this
+    one sits beside (`paint-resolves-what-a-new-line-is` and friends).
+    THE app/index.html HALF IS INVISIBLE BY CONSTRUCTION, THE SAME REASON `section-membership-is-
+    said-in-the-freshness-line`'s AND `a-write-refuses-a-stale-base`'s OWN CALLERS ARE: node cannot
+    import an HTML document, so the edge from `paintView`'s `paint(...)` call and the vim keydown
+    handler's `openLine(...)` call, both now carrying `globalRegistrationFor(v.id)`, is real and
+    unobservable by flow-trace by construction. `tests/app-vim-wiring.test.mjs`'s existing "o / O
+    open a new line through the real page's own wiring" cases are the proof instead, driving the
+    page's own lifted script exactly as `section-membership-is-said-in-the-freshness-line`'s rooting
+    already established as this project's pattern for a page-level caller.
+  status: working

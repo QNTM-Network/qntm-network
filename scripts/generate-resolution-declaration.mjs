@@ -35,6 +35,27 @@
  *     stops qualifying, not what a NEW line becomes, and there is no browser-side "existing row"
  *     concept yet for it to inform.
  *   dayBoundary — `day_boundary.yaml`'s 3 keys, verbatim.
+ *   chromeShapes — design-the-resolution-architecture.md step 6's own gap, found while building it
+ *     rather than assumed away: knowing a section's resolved node TYPE is not enough to seed a new
+ *     line safely, because `- [ ] ` (a checkbox) and `- ` (a bare bullet) are not interchangeable —
+ *     `newline.ts`'s header measured that typing a checkbox into `person` (fields `[title,
+ *     qntm_id]`, no `status`) aborts the WHOLE CYCLE, and a bare bullet under a checkbox-shaped
+ *     default is refused at the applier's form gate and vanishes. Both guesses cost the operator
+ *     something, which is exactly why the GLOBAL rung refused rather than pick one. The type name
+ *     alone cannot settle it; `node_types.<t>.render.shape` (schema.yaml) can, and does, one shot
+ *     the same way the engine itself decides it (`qntm_md.grammar.node_type_form.node_type_forms`
+ *     — an UNDECLARED `render:` block defaults to checkbox, per that module's own docstring, which
+ *     is why an absent shape publishes as `"checkbox"` here rather than being omitted).
+ *     RESTRICTED TO CANDIDATES, NOT THE WHOLE SCHEMA — the same "a smaller table that is exact and
+ *     consumed beats a complete one nobody reads" rule step 5 already states. Only node types that
+ *     actually appear as a `default_node_type` somewhere in this config (the GLOBAL value, or a
+ *     view's own override) are looked up; a type this table has no reader that could ever ask about
+ *     is not published just because schema.yaml declares it. RESTRICTED TO TWO SHAPES, NOT ALL OF
+ *     THEM — only `checkbox` and `plain_line` are forms `newline.ts` knows how to seed (`- [ ] ` and
+ *     `- `); a type whose render shape is `stat_line` or `heading` is left OUT of this table on
+ *     purpose, so the GLOBAL rung refuses for it rather than guess a chrome form nothing here has
+ *     confirmed — the same refusal posture as an unpublished section, stated once rather than
+ *     re-decided at the call site.
  *
  * `pull_context` (77 sections) is DELIBERATELY NOT published here. It is "predicate exact, answer
  * runtime" (`research-the-resolution-universe.md` §6.2) — the config says which edge and which
@@ -179,7 +200,59 @@ function readDayBoundary(configDir) {
   return { timezone, dayStartHour, weekStartsOn };
 }
 
-// ── 4. views/*.yaml -> read once, shared by readRegistration's guard and readOrdering ─────────
+// ── 4. schema.yaml -> node type -> chrome shape, for every default_node_type candidate ─────────
+
+// The only two forms `app/present/newline.ts` knows how to seed. A type whose declared shape is
+// anything else (`stat_line`, `heading`) is left OUT of the published map — see this file's own
+// header for why that is a refusal and not an omission.
+const SEEDABLE_SHAPES = new Set(["checkbox", "plain_line"]);
+
+function collectDefaultNodeTypeCandidates(registration, viewFiles) {
+  const types = new Set([registration.defaultNodeType]);
+  for (const [, view] of viewFiles) {
+    if (typeof view.default_node_type === "string") types.add(view.default_node_type);
+  }
+  return [...types].sort();
+}
+
+function readChromeShapes(configDir, candidates) {
+  const path = join(configDir, "schema.yaml");
+  if (!existsSync(path)) throw new GenerationError(`${path} does not exist`);
+  const schema = readYaml(path);
+  const nodeTypes = schema?.node_types;
+  if (!nodeTypes || typeof nodeTypes !== "object") {
+    throw new GenerationError(`${path}: no 'node_types:' mapping`);
+  }
+  const out = {};
+  for (const name of candidates) {
+    const definition = nodeTypes[name];
+    if (!definition || typeof definition !== "object") {
+      throw new GenerationError(
+        `${path}: node type '${name}' is declared as a default_node_type somewhere in views/ ` +
+          "but is not declared in schema.yaml — refusing to publish a shape for a type that does " +
+          "not exist.",
+      );
+    }
+    // No 'render:' block renders as checkbox — schema.yaml's own documented default (:596-597,
+    // "A type with no render: block renders as checkbox"), and the same rule
+    // qntm_md.grammar.node_type_form.node_type_forms encodes on the engine side (an undeclared
+    // shape is treated as checkbox-carrying, the conservative direction on both the render side
+    // and the admission-gate side). Read here, never assumed independently of that citation.
+    const render = definition.render;
+    const shape = render && typeof render === "object" && typeof render.shape === "string"
+      ? render.shape
+      : "checkbox";
+    if (SEEDABLE_SHAPES.has(shape)) {
+      out[name] = shape;
+    }
+    // A shape this generator does not recognise (stat_line, heading, or a future addition) is
+    // left unpublished on purpose — see this file's header. Not an error: schema.yaml is free to
+    // declare shapes newline.ts does not yet seed.
+  }
+  return out;
+}
+
+// ── 5. views/*.yaml -> read once, shared by readRegistration's guard and readOrdering ─────────
 
 function readViewFiles(configDir) {
   const dir = join(configDir, "views");
@@ -255,11 +328,14 @@ function readOrdering(viewFiles) {
 
 export function generateResolution(configDir) {
   const viewFiles = readViewFiles(configDir);
+  const registration = readRegistration(configDir, viewFiles);
+  const candidates = collectDefaultNodeTypeCandidates(registration, viewFiles);
   return {
-    registration: readRegistration(configDir, viewFiles),
+    registration,
     lineGrammars: readLineGrammars(configDir),
     ordering: readOrdering(viewFiles),
     dayBoundary: readDayBoundary(configDir),
+    chromeShapes: readChromeShapes(configDir, candidates),
   };
 }
 
@@ -305,7 +381,8 @@ async function main() {
     `wrote resolution declaration to ${presentationPath}\n` +
       `  registration: ${JSON.stringify(resolution.registration)}\n` +
       `  ${Object.keys(resolution.lineGrammars).length} line grammars, ` +
-      `${orderingSections} ordering sections, day boundary ${resolution.dayBoundary.timezone}`,
+      `${orderingSections} ordering sections, day boundary ${resolution.dayBoundary.timezone}\n` +
+      `  chrome shapes: ${JSON.stringify(resolution.chromeShapes)}`,
   );
 }
 

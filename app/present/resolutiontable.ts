@@ -31,14 +31,25 @@
  *
  *   `resolution.dayBoundary` — the day boundary's 3 keys, verbatim.
  *
- * ── NO CONSUMER TODAY, STATED RATHER THAN HIDDEN ──
+ *   `resolution.chromeShapes` — step 6's own addition, found while building it: `node_type` alone
+ *   does not tell a caller how to SEED a bare new line, because `- [ ] ` and `- ` are not
+ *   interchangeable chrome (`newline.ts`'s header measures what each wrong guess costs — one
+ *   aborts the whole cycle). `node_types.<t>.render.shape` (schema.yaml) settles it, restricted to
+ *   the node types that actually appear as a `default_node_type` candidate somewhere in this
+ *   config, and restricted to the two shapes `newline.ts` knows how to seed (`checkbox`,
+ *   `plain_line` — never `stat_line`/`heading`, which are left unpublished on purpose). See
+ *   `scripts/generate-resolution-declaration.mjs`'s own header for the full account, including the
+ *   engine function (`qntm_md.grammar.node_type_form.node_type_forms`) this mirrors.
  *
- * `app/` computes no dates, previews no ordering, and gates no line on its grammar. This table is
- * published because the next three steps in the SAME sequence each name it as their one
- * dependency — step 6 (the new-line seed, needs 5), step 7 (ordering preview, needs 5 and 8) and
- * step 8 (the day boundary, needs 5) — the same posture step 1 took towards step 2. An unread
+ * ── ONE CONSUMER NOW, TWO STILL WAITING, STATED RATHER THAN HIDDEN ──
+ *
+ * `app/present/newline.ts`'s GLOBAL rung reads `qualification.sections[view][section].nodeType`
+ * (the per-section MINTING default, already published) joined against `chromeShapes` above (design
+ * step 6) — the first production consumer of this module. `app/` still previews no ordering and
+ * gates no line on its grammar; step 7 (needs 5 and 8) and step 8 (needs 5) are the two dependents
+ * still waiting, the same posture step 1 took towards step 2 before step 2 shipped. An unread
  * declaration is a bug when nothing is EVER going to read it; it is a precondition when the next
- * three items on the same plan each say they will.
+ * items on the same plan say they will, and now one of them does.
  *
  * ── WHY THIS IS A THIRD READER, NOT A WIDER `qualification` OR `structural` ──
  *
@@ -86,6 +97,9 @@ export interface DayBoundary {
   readonly weekStartsOn: string;
 }
 
+/** The render-form family a resolved node type carries — the two shapes `newline.ts` can seed. */
+export type ChromeShape = "checkbox" | "plain_line";
+
 /** The whole published table. A lookup, not a resolver. */
 export interface ConfigResolutionTable {
   readonly registration: RegistrationTable | undefined;
@@ -93,6 +107,10 @@ export interface ConfigResolutionTable {
   readonly lineGrammars: Readonly<Record<string, readonly string[]>>;
   readonly ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>;
   readonly dayBoundary: DayBoundary | undefined;
+  /** node type -> its render-form family, for every `default_node_type` candidate this config
+   * declares and every shape `newline.ts` knows how to seed. A type absent here is a type whose
+   * chrome this app does not know how to produce — see this module's header. */
+  readonly chromeShapes: Readonly<Record<string, ChromeShape>>;
 }
 
 /** Mirrors `StructuralReading` / `QualificationReading`: the value, plus what was wrong with it. */
@@ -104,18 +122,20 @@ export interface ConfigResolutionReading {
 /** The top-level key this module owns. `declaration.ts` knows its name only to skip it. */
 export const RESOLUTION_TABLE_KEY = "resolution";
 
-const TOP_KEYS = ["registration", "lineGrammars", "ordering", "dayBoundary"] as const;
+const TOP_KEYS = ["registration", "lineGrammars", "ordering", "dayBoundary", "chromeShapes"] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
 const SECTION_ORDERING_KEYS = ["ordering", "orderingMode"] as const;
 const DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"] as const;
 const DIRECTIONS = ["asc", "desc"] as const;
+const CHROME_SHAPES = ["checkbox", "plain_line"] as const;
 
 const EMPTY: ConfigResolutionTable = {
   registration: undefined,
   lineGrammars: {},
   ordering: {},
   dayBoundary: undefined,
+  chromeShapes: {},
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -335,6 +355,28 @@ function readDayBoundary(value: unknown, problems: string[]): DayBoundary | unde
   };
 }
 
+function readChromeShapes(value: unknown, problems: string[]): Record<string, ChromeShape> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.chromeShapes' is ${shapeOf(value)}, not an object — every node ` +
+        "type's chrome shape stays unknown",
+    );
+    return {};
+  }
+  const out: Record<string, ChromeShape> = {};
+  for (const [nodeType, shape] of Object.entries(value)) {
+    if (!(CHROME_SHAPES as readonly string[]).includes(shape as string)) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.chromeShapes.${nodeType}' is ${JSON.stringify(shape)}, not one ` +
+          `of ${CHROME_SHAPES.join(", ")} — this node type's chrome shape stays unknown`,
+      );
+      continue;
+    }
+    out[nodeType] = shape as ChromeShape;
+  }
+  return out;
+}
+
 /**
  * Read the `resolution` key of a served presentation declaration.
  *
@@ -373,6 +415,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       lineGrammars: "lineGrammars" in raw ? readLineGrammars(raw.lineGrammars, problems) : {},
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
       dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : undefined,
+      chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
     },
     problems,
   };

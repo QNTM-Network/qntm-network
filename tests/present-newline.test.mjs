@@ -34,6 +34,7 @@ import {
   paint,
   applyEdit,
   seedFor,
+  openLine,
   carriesContent,
   chromeOf,
   DraftSurface,
@@ -491,5 +492,121 @@ describe("6. what was deliberately NOT shipped", () => {
     input.dispatch("keydown", makeEvent({ key: "Enter" }));
     assert.equal(v.draft.draft, null, "a committed line opened another one behind the POST");
     assert.equal(posted(v).length, 1);
+  });
+});
+
+describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architecture.md step 6", () => {
+  // Three headings, nothing printed under any of them — the exact shape EMPTY_VIEW already used,
+  // renamed so `lineIndex` can point INSIDE a section's body rather than at a heading line itself.
+  const EMPTY_SECTIONED_VIEW = "## high-priority\n\n## capture\n\n## backlog\n";
+  // Same three headings, but "high-priority" now carries a PROSE line — not a bullet, so `chromeOf`
+  // still finds no evidence in it, but it is exactly the kind of content a naive "peek at the text"
+  // implementation could be fooled by. Section 3 below reads its own declared answer regardless.
+  const CONTRADICTING_VIEW =
+    "## high-priority\n\nsome prose that looks like nothing in particular\n\n## capture\n";
+
+  const CHROME_SHAPES = { task: "checkbox", person: "plain_line" };
+
+  /** A `GlobalRegistration` naming exactly one section of `daily-work`, the way `address.ts` and
+   * `qualification.ts` publish it for real — `sections` carries ONLY the named section, mirroring
+   * the operator's own `daily-work` (1 of 5 published) rather than a toy where every section answers. */
+  function declared(sectionId, nodeType, chromeShapes = CHROME_SHAPES) {
+    return {
+      view: "daily-work",
+      sectionOrder: { "daily-work": ["high-priority", "capture", "backlog"] },
+      sections: { "daily-work": { [sectionId]: { nodeType } } },
+      chromeShapes,
+    };
+  }
+
+  test("a checkbox-shaped declared type seeds a checkbox, from an empty view", () => {
+    // Line 1 is the blank line directly under `## high-priority` — the FIRST heading, ordinal 0.
+    assert.deepEqual(seedFor(EMPTY_SECTIONED_VIEW, 1, declared("high-priority", "task")), {
+      text: "- [ ] ",
+      level: "GLOBAL",
+    });
+  });
+
+  test("a plain-line declared type seeds a bare bullet, from the SAME empty view", () => {
+    // Same source, same line, same section — only the declared node type differs. THE HEADLINE OF
+    // THIS STEP: two views that print nothing still seed differently, because the DECLARATION says
+    // so, not because anything was found on the page.
+    assert.deepEqual(seedFor(EMPTY_SECTIONED_VIEW, 1, declared("high-priority", "person")), {
+      text: "- ",
+      level: "GLOBAL",
+    });
+  });
+
+  test("printed text that contradicts the declaration is not consulted — the declaration wins", () => {
+    // The whole point of proof standard #2: the ONLY node-adjacent-looking content in this view is
+    // a prose line with no bullet, which `chromeOf` refuses as evidence (section 3 above already
+    // proves that in isolation). The GLOBAL rung is reached exactly as it is for an empty view, and
+    // answers from `declared` alone. Line 3 is the blank line after the prose, still inside
+    // "high-priority" (ordinal 0 — the prose line carries no heading of its own).
+    assert.deepEqual(seedFor(CONTRADICTING_VIEW, 3, declared("high-priority", "person")), {
+      text: "- ",
+      level: "GLOBAL",
+    });
+  });
+
+  test("NO declared registration is the exact previous behaviour — the negative control", () => {
+    // A caller that never mentions `GlobalRegistration` gets `null`, precisely as before this step.
+    // This is what proves the new parameter is additive: every one of sections 1-6 above calls
+    // `seedFor`/`openLine` with no fourth/fifth argument and none of them changed.
+    assert.equal(seedFor(EMPTY_SECTIONED_VIEW, 1), null);
+    assert.equal(seedFor(EMPTY_SECTIONED_VIEW, 1, undefined), null);
+  });
+
+  test("the refusal survives: the named section is not in the declared table", () => {
+    // `declared("high-priority", ...)` only names "high-priority" — asking about "capture" (ordinal
+    // 1) is exactly `daily-work`'s own real shape (1 of 5 sections published) and must still refuse,
+    // never fall back to a neighbour's answer.
+    const withOnlyHighPriority = declared("high-priority", "task");
+    const captureLineIndex = 3; // the blank line under `## capture`
+    assert.equal(seedFor(EMPTY_SECTIONED_VIEW, captureLineIndex, withOnlyHighPriority), null);
+  });
+
+  test("the refusal survives: the resolved type has no known chrome shape", () => {
+    // A type the config uses as a default_node_type but whose render shape is `stat_line` or
+    // `heading` (or simply a typo) is absent from `chromeShapes` on purpose — see resolutiontable.ts
+    // and the generator's own header. `seedFor` must not guess a chrome form for it.
+    assert.equal(seedFor(EMPTY_SECTIONED_VIEW, 1, declared("high-priority", "metric", {})), null);
+  });
+
+  test("the refusal survives: lineIndex cannot be addressed at all (above the first heading)", () => {
+    // `sectionAt` returns `null` above the file's first heading — `declared` cannot rescue a
+    // position L3 ADDRESSING itself refuses to name.
+    assert.equal(seedFor("prose with no heading above it\n", 0, declared("high-priority", "task")), null);
+  });
+
+  test("printed evidence still wins outright over the declaration — the walk order is unchanged", () => {
+    // A `declared` table that says "person" (plain-line) must not override real printed evidence
+    // one section away. `CHECKBOX_VIEW` prints checkbox lines, so LINE/STRUCTURAL_NODE/VIEW answer
+    // long before the GLOBAL rung is even reached, whatever `declared` claims.
+    const misleading = { view: "daily-work", sectionOrder: {}, sections: {}, chromeShapes: {} };
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4, misleading), { text: "- [ ] ", level: "LINE" });
+  });
+
+  test("openLine threads `declared` through exactly the same way it threads everything else", () => {
+    const draft = new DraftSurface();
+    const declined = [];
+    const opened = openLine(
+      EMPTY_SECTIONED_VIEW,
+      1,
+      draft,
+      (at) => declined.push(at),
+      declared("high-priority", "task"),
+    );
+    assert.equal(opened, true, "openLine did not open the declared seed");
+    assert.equal(draft.draft.seed, "- [ ] ");
+    assert.deepEqual(declined, []);
+  });
+
+  test("openLine with no declared registration still declines, exactly as before", () => {
+    const draft = new DraftSurface();
+    const declined = [];
+    const opened = openLine(EMPTY_SECTIONED_VIEW, 1, draft, (at) => declined.push(at));
+    assert.equal(opened, false);
+    assert.deepEqual(declined, [1]);
   });
 });

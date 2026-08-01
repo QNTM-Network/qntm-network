@@ -650,17 +650,19 @@ function readQualificationDeclaration(document2) {
 
 // app/present/resolutiontable.ts
 var RESOLUTION_TABLE_KEY = "resolution";
-var TOP_KEYS2 = ["registration", "lineGrammars", "ordering", "dayBoundary"];
+var TOP_KEYS2 = ["registration", "lineGrammars", "ordering", "dayBoundary", "chromeShapes"];
 var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
 var ORDERING_KEY_KEYS = ["field", "direction"];
 var SECTION_ORDERING_KEYS = ["ordering", "orderingMode"];
 var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
 var DIRECTIONS = ["asc", "desc"];
+var CHROME_SHAPES = ["checkbox", "plain_line"];
 var EMPTY3 = {
   registration: void 0,
   lineGrammars: {},
   ordering: {},
-  dayBoundary: void 0
+  dayBoundary: void 0,
+  chromeShapes: {}
 };
 function isPlainObject3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -854,6 +856,25 @@ function readDayBoundary(value, problems) {
     weekStartsOn
   };
 }
+function readChromeShapes(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.chromeShapes' is ${shapeOf2(value)}, not an object \u2014 every node type's chrome shape stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [nodeType, shape] of Object.entries(value)) {
+    if (!CHROME_SHAPES.includes(shape)) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.chromeShapes.${nodeType}' is ${JSON.stringify(shape)}, not one of ${CHROME_SHAPES.join(", ")} \u2014 this node type's chrome shape stays unknown`
+      );
+      continue;
+    }
+    out[nodeType] = shape;
+  }
+  return out;
+}
 function readConfigResolutionDeclaration(document2) {
   if (!isPlainObject3(document2)) {
     return { resolution: EMPTY3, problems: [] };
@@ -881,7 +902,8 @@ function readConfigResolutionDeclaration(document2) {
       registration: "registration" in raw ? readRegistration(raw.registration, problems) : void 0,
       lineGrammars: "lineGrammars" in raw ? readLineGrammars(raw.lineGrammars, problems) : {},
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
-      dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0
+      dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0,
+      chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {}
     },
     problems
   };
@@ -1851,7 +1873,7 @@ var DraftSurface = class {
 };
 
 // app/present/newline.ts
-function seedFor(source, lineIndex) {
+function seedFor(source, lineIndex, declared) {
   const lines = source.split("\n");
   if (!Number.isInteger(lineIndex) || lineIndex < 0 || lineIndex > lines.length) {
     return null;
@@ -1882,10 +1904,18 @@ function seedFor(source, lineIndex) {
       return { text: chrome.trimStart(), level: "VIEW" };
     }
   }
+  if (declared !== void 0) {
+    const sectionId = sectionAt(source, lineIndex, declared.view, declared.sectionOrder);
+    const nodeType = sectionId === null ? void 0 : declared.sections[declared.view]?.[sectionId]?.nodeType;
+    const shape = nodeType === void 0 ? void 0 : declared.chromeShapes[nodeType];
+    if (shape !== void 0) {
+      return { text: shape === "checkbox" ? "- [ ] " : "- ", level: "GLOBAL" };
+    }
+  }
   return null;
 }
-function openLine(from, lineIndex, draft, onDeclined) {
-  const seed = seedFor(from, lineIndex);
+function openLine(from, lineIndex, draft, onDeclined, declared) {
+  const seed = seedFor(from, lineIndex, declared);
   if (seed === null) {
     onDeclined?.(lineIndex);
     return false;
@@ -2147,7 +2177,7 @@ function paint(body, source, context, deps) {
     if (draft === void 0 || focus === void 0) {
       return false;
     }
-    return openLine(from, lineIndex, draft, deps.onNewLineDeclined);
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared);
   };
   const raw = (lineSource, lineIndex) => {
     if (focus === void 0) {
@@ -4118,6 +4148,19 @@ var presentation_default = {
       timezone: "Europe/London",
       dayStartHour: 4,
       weekStartsOn: "monday"
+    },
+    chromeShapes: {
+      album: "checkbox",
+      attribute: "checkbox",
+      blog: "checkbox",
+      book: "checkbox",
+      film: "checkbox",
+      group: "plain_line",
+      person: "plain_line",
+      routine: "checkbox",
+      task: "checkbox",
+      tv_show: "checkbox",
+      writer: "checkbox"
     }
   }
 };
