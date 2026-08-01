@@ -2910,13 +2910,23 @@ backlog:
   title: >-
     [haven] [OBSERVED 2026-08-01] FALSE POSITIVES IN THE HELD STRIP. Rows appear on the recovery
     strip for edits that were not lost. Reported from the same browser run; filed, not diagnosed.
-  kind: null
-  state: unscoped
+  driving_capability: the-browser-recognises-its-own-write
+  kind: capability
+  state: passing
   record: >-
     RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. A recovery surface that cries wolf
     is a recovery surface he stops reading, which is the failure mode `a-vanished-or-refused-edit-is-held`
-    is least able to afford. `paintView`'s `absent` branch and `commitLine`'s 409 branch are the two
-    places a row is born; which of them is firing without cause is the diagnosis.
+    is least able to afford. THREE OF FIVE HELD ROWS WERE LINES THAT SAVED PERFECTLY.
+    DIAGNOSED AND FIXED THE SAME DAY. It is `paintView`'s `absent` branch, and it is firing for a
+    reason no change to that branch could remove: the cycle REWRITES the line it ingests — the
+    identity stamp, the defaults, the marker — and the only signal the page had for "is this line
+    back" was its TEXT (`HeldSurface.settle`). Text matching cannot find a line the cycle rewrote.
+    TEXT IS NOT IDENTITY. A TOKEN IS. `the-browser-recognises-its-own-write` is what shipped: one
+    opaque token per write, echoed by the server as `writes: {path: [token, ...]}`, matched per path
+    against a register of this browser's outstanding writes. A held row whose write the server
+    acknowledged is not held at all. Proved by tests/app-write-correlation.test.mjs §2, which
+    reproduces the exact false-positive shape — the line committed, the cycle stamping and MOVING it
+    so no text comparison can find it — and asserts the strip is empty and hidden.
 - id: the-new-line-seed-resolves-from-the-neighbour
   title: >-
     [haven] [OBSERVED 2026-08-01] THE SEED FOR A NEW LINE RESOLVES FROM THE NEIGHBOURING LINE RATHER

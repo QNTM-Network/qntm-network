@@ -930,6 +930,41 @@ forbidden_flows:
       POST body contains any of the held characters — plus the structural claim that `#heldStrip` is
       a SIBLING of `#viewBody`, so the painter is handed a body it cannot walk out of.
 
+  # Added 2026-08-01 with write correlation (`the-browser-recognises-its-own-write`). The same
+  # rule a fifth time, on the module that holds the operator's own write handles.
+
+  - id: correlation-never-touches-the-dom
+    from: app/present/correlation
+    to:   app/present/paint
+    reason: >
+      THIS MODULE HOLDS THE HANDLES TO THE OPERATOR'S OUTSTANDING WRITES, and the one thing it
+      decides — "did MY write land" — is the thing a held row is released on. So a call into the
+      painter would be this module reading the rendered document to answer a question about the
+      wire, which is the inversion `held.ts` and `base.ts` already refuse for their own facts and
+      the one the presentation cascade was built to end. The register is arithmetic over strings
+      and must stay so: a token is either in the echo under its own path or it is not, and there is
+      no state of the screen that can make that more or less true.
+
+      IT IS ALSO THE MODULE MOST LIKELY TO BE "HELPED" INTO REACHING FOR A CLOCK, which the tool
+      cannot see — a write that has been outstanding "too long" is the obvious way to expire one,
+      and it is the wrong way: it would make the give-up rule depend on a machine's idea of time
+      rather than on what the server actually said. The rule is instead "three arrivals that named
+      this file without naming this token", which is exact, deterministic and drivable without a
+      browser. tests/app-write-correlation.test.mjs §1 proves the absence directly, by making
+      `document`, `fetch` and `Date.now` all throw for the whole of a drive.
+
+  - id: correlation-never-reaches-the-edit-path
+    from: app/present/correlation
+    to:   app/present/source
+    reason: >
+      `correlation.ts` holds TOKENS — opaque handles to writes that have already left — and
+      `source.ts` decides what is written. A call from here into the edit constructor would let the
+      module that knows which writes are outstanding also compute a new one, which is how "the
+      browser recognising its own write" would become "the browser reissuing it". Nothing in this
+      bundle can turn a write token into a position in a file, and that is the property that keeps
+      the release safe: a token can be recognised and reported and nothing else. The module imports
+      nothing at all, which makes the rule structural rather than a promise a caller has to keep.
+
   # ── AND THE HELD SURFACE DECLARES NO `expected_flows` EITHER, FOR THE MEASURED REASON ─────
   #
   # `app/present/held.ts` gets no `expected_flows` entry and NO SCENARIO IS WRITTEN, which is a
@@ -1073,3 +1108,23 @@ forbidden_flows:
   # `tests/app-enter-opens-a-line.test.mjs` — the intended end-state asserted at the value level,
   # a proof that no affordance left on screen writes a superseded file, and three mutation arms
   # (both faults, each fault alone) cut into a copy of dist/present.js.
+
+  # ── AND WRITE CORRELATION DECLARES NO `expected_flows` EITHER, FOR THE SAME MEASURED REASON ──
+  #
+  # `app/present/correlation.ts` gets no `expected_flows` entry and NO SCENARIO IS WRITTEN. The
+  # measurement is the one `held.ts` and `base.ts` above already record, and it holds here for the
+  # same three reasons:
+  #
+  #   * It imports nothing, so it makes no outgoing call there could be an edge for.
+  #   * Nothing under `app/present/` imports it. `held.ts` deliberately does not — the release
+  #     takes plain strings, so the surface that holds the operator's characters cannot reach the
+  #     surface that holds his write handles, and the two facts stay separable.
+  #   * Its only caller is `app/index.html`, which the capture filter names and node cannot import,
+  #     because capture is a module-load hook and an HTML document is not a module.
+  #
+  # SO A SCENARIO WOULD OBSERVE ZERO FLOWS while still spending the observer's budget, which
+  # `.flow-trace.yaml` measures as costing the OTHER scenarios their last edges. The structural
+  # claims that would have lived in one — it imports nothing; it touches no DOM, no fetch and no
+  # clock; it names no edit constructor and no markdown — are proven in
+  # tests/app-write-correlation.test.mjs sections 1 and 4 instead, under `node --test`, where that
+  # config says there is no budget. This paragraph is the declaration that the gap is known.
