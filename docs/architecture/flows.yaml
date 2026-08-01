@@ -681,6 +681,54 @@ forbidden_flows:
       making `Date.now` throw for the whole of a drive. A base with an age invites a rule about how
       old is too old; the surface holds the STRING, so the answer is exact and no timer is needed.
 
+  # Added 2026-08-01 with the held edit (`a-vanished-or-refused-edit-is-held-unanchored`). The same
+  # rule a fourth time, and this module has the sharpest reason of the four for needing it.
+
+  - id: held-never-touches-the-dom
+    from: app/present/held
+    to:   app/present/paint
+    reason: >
+      A HELD ROW IS THE ONE THING ON THIS PAGE THAT LOOKS MOST LIKE A LINE AND IS MOST DANGEROUS TO
+      TREAT AS ONE. It holds characters no file owns — a region of the screen the source string does
+      not own, the same shape `DraftSurface` already has and for the mirrored reason. `draft.ts`'s
+      own entry above says that surface is "the module most likely to be helped into touching the
+      page, because what it describes IS a row on the page". This one is worse: what it describes is
+      a row that USED to be in a file, so a future change reaching into the painter to "put it back
+      where it was" would be doing exactly the thing design-the-edit-is-a-safe-haven.md §6.4 refuses
+      — re-inserting into a view the cycle deliberately removed the line from, which the next cycle
+      removes again, or which mints a fresh node if the old one is gone.
+
+      THE MODULE IS BUILT SO IT CANNOT. It imports nothing, and its record carries NO LINE INDEX —
+      an index is what `applyEdit` takes, so a record with one is a record a later change could
+      post. A call into the painter would be the first step in getting one back, by reading the
+      rendered document for the position a row used to hold. The app posts the WHOLE FILE, so that
+      would not corrupt one line; it would rewrite a view.
+
+      Paired with a runtime falsifier rather than left as a static rule: tests/app-held-edit.test.mjs
+      holds a row, drives a tick and a line commit through the real gestures, and asserts neither
+      POST body contains any of the held characters — plus the structural claim that `#heldStrip` is
+      a SIBLING of `#viewBody`, so the painter is handed a body it cannot walk out of.
+
+  # ── AND THE HELD SURFACE DECLARES NO `expected_flows` EITHER, FOR THE MEASURED REASON ─────
+  #
+  # `app/present/held.ts` gets no `expected_flows` entry and NO SCENARIO IS WRITTEN, which is a
+  # measurement rather than an oversight — the same one `base.ts` records immediately below.
+  #
+  #   * It imports nothing, so it makes no outgoing call there could be an edge for.
+  #   * Nothing under `app/present/` imports it. The painter must not (see the forbidden flow
+  #     above), and `focus.ts`/`draft.ts` deliberately do not — a held row outlives the cursor by
+  #     construction, which is exactly why it is not a field on either of them.
+  #   * Its only caller is `app/index.html`, which the capture filter names and node cannot import,
+  #     because capture is a module-load hook and an HTML document is not a module.
+  #
+  # SO A SCENARIO WOULD OBSERVE ZERO FLOWS while still spending the observer's budget, which
+  # `.flow-trace.yaml` measures as costing the OTHER scenarios their last edges. The structural
+  # claims that would have lived in one — it imports nothing; it touches no DOM, no fetch and no
+  # clock; it carries no line index; it names no edit constructor — are proven in
+  # tests/app-held-edit.test.mjs section 0 instead, under `node --test`, where that config says
+  # there is no budget. This paragraph is the declaration that the gap is known, and it is the
+  # answer to "add a scenario or say plainly none covers this": NONE COVERS THIS.
+
   # ── WHAT THE WRITE PATH'S NEW HALF DOES *NOT* DECLARE, SAID RATHER THAN LEFT IMPLIED ──────
   #
   # `app/present/base.ts` gets no `expected_flows` entry, and that is a measurement rather than an

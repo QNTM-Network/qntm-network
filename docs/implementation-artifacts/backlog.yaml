@@ -1309,7 +1309,33 @@ backlog:
     is FOR, which did not exist as a fixture before.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
-  state: diagnose-ready
+  record: >-
+    2026-08-01 — SHIPPED, AND NOT ALONE. This row and `a-refused-edit-is-held-unanchored` were
+    filed separately and are ONE MECHANISM, so they were built as one piece and are recorded as
+    one: characters the source string does not own. To the person typing there is no difference
+    between a line the cycle removed and a write the server declined; there is one surface, one
+    strip on the page, one release rule and one sentence pattern for both.
+    WHAT SHIPPED. `app/present/held.ts` — pure, imports nothing, the same lifecycle `draft.ts`
+    already ships for the opposite end of the same gesture. `paintView` releases first
+    (`held.settle`) and holds second, taking the vanished line's anchor BEFORE the seeding replaces
+    it, exactly as this row's own note required. The held row is painted into `#heldStrip`, a
+    SIBLING of `#viewBody`, so the painter is handed a body it cannot walk out of.
+    OPEN DECISION 1 IS UNTOUCHED AND THE REFUSAL TO SPECIFY IT IS KEPT. A held row carries NO LINE
+    INDEX — an index is what `applyEdit` takes — so nothing here can re-insert a line into a view
+    the cycle removed it from. There is no "put it back" button and the reason is stated in the
+    page rather than left implied. What replaces it is that RETYPING is the recovery path and needs
+    no button: the retyped line commits through the ordinary write path and `settle` releases the
+    held row when the projection carries the characters back.
+    WHAT HE SEES. One row under the reading column, holding the characters, naming the file and
+    saying what happened, plus the existing freshness sentence with one clause added — "the line
+    you were on is not in this view any more — what was on it is held below".
+    EVIDENCE. tests/app-held-edit.test.mjs, 38 arms, all fixtures. Both `absent` causes step 12
+    handed over are driven separately and the replay harness now reports the hold for each.
+    Mutation-proven twice: neuter the one holding expression and the survival assertion goes red;
+    neuter the release and the clearance assertion goes red. Write-adjacent counts re-measured and
+    unmoved. No browser, no live server, no cycle, no real POST.
+    CAPABILITY a-vanished-or-refused-edit-is-held-unanchored.
+  state: passing
 - id: the-write-is-refused-server-side
   title: >-
     [haven] [5] [HALF A DAY] THE HONEST ABORT — the app cannot make its own write safe alone, and
@@ -1401,8 +1427,11 @@ backlog:
     can land before or after and neither repository breaks.
     DO NOT USE `snapshot.version` - it is per-SNAPSHOT, not per-file, so it moves when any of 77
     views moves. The content hash is per-file by construction.
-    Needs nothing. BLOCKED FROM BEING SAFE TO SWITCH ON by `a-refused-edit-is-held-unanchored` -
-    build this, but read that row before deciding whether the browser is ready for what it does.
+    Needs nothing. WAS BLOCKED FROM BEING SAFE TO SWITCH ON by `a-refused-edit-is-held-unanchored`,
+    AND THAT BLOCK IS LIFTED as of 2026-08-01 - the browser now holds a refused edit's characters as
+    a row no file owns, surviving the repaint that used to erase them. Read that row's record before
+    enabling this one, and note what is still NOT proven: the end-to-end path has never run against
+    a live server, so the first real 409 will be the first time the two halves meet.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
@@ -1437,7 +1466,23 @@ backlog:
     needs nothing.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
-  state: diagnose-ready
+  record: >-
+    2026-08-01 — SHIPPED AS ONE PIECE WITH `the-vanished-line-is-parked-not-dropped`, whose record
+    carries the full account. This row's own half: `commitLine`'s 409 branch now holds
+    `commit.text` plus the `base` the declined write was computed against, so the characters
+    survive the NEXT projection rather than only the current screen. The sentence gained its second
+    half — "what you typed is still on this line, and held below" — and both halves are true at
+    once, which is the point: the first describes the screen and survives only because this branch
+    does not repaint, and the second describes the copy that survives the arrival after it.
+    THIS ROW WAS THE GATE ON SWITCHING THE REFUSAL ON, AND THE GATE IS NOW OPEN. What remains is
+    `vault-file-accepts-a-precondition` in the other repository, plus the operator's own decision
+    to enable it. Nothing in this repository changes when he does.
+    UNANCHORED IS STILL THE LOAD-BEARING WORD. The anchor is carried for RECOGNITION only; the held
+    record has no line index, so there is nothing to re-insert anywhere and no fourth `SourceEdit`
+    kind was needed.
+    EVIDENCE. tests/app-held-edit.test.mjs §2d and §4b, plus the two mutation proofs. All fixtures.
+    CAPABILITY a-vanished-or-refused-edit-is-held-unanchored.
+  state: passing
 - id: stop-awaiting-the-cycle-safely
   title: >-
     [haven] [6] [HALF A DAY] STOP AWAITING THE ENGINE CYCLE IN POST /app/edit-file — ack on the
