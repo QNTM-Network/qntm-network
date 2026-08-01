@@ -1869,3 +1869,84 @@ capabilities:
     page's own lifted script exactly as `section-membership-is-said-in-the-freshness-line`'s rooting
     already established as this project's pattern for a page-level caller.
   status: working
+- id: ordering-position-is-said-in-the-freshness-line
+  intent: >-
+    AFTER A COMMITTED EDIT, THE OPERATOR IS TOLD WHEN A LINE HE JUST CHANGED WILL SORT TO A
+    DIFFERENT POSITION WITHIN ITS SECTION — design-the-resolution-architecture.md step 7, L5
+    EVALUATION. `app/present/ordering.ts`'s `orderingFor`, called from `app/index.html`'s new
+    `orderingNoteFor` (`commitLine`, beside step 4's `membershipNoteFor`), for the 9 sections (of
+    186) that declare an `ordering:`.
+    THE STEP-8 DEPENDENCY, MEASURED AND REFUTED. The design document's own build-order table lists
+    step 7 as needing "5, and 8 for the dated half". Measured directly against the operator's real
+    9 orderings: seven sort on an ABSOLUTE field (`due_date`/`available_date`/`queue_position`),
+    none against `$cycle_today`, and two (`daily-work`/`daily-personal` "capture") use
+    `orderingMode: insertion_order`, which has no field at all. Comparing two already-placed rows'
+    field values never needs "today" — only MEMBERSHIP (which section a row is in) is clock-bound,
+    and that is a different, already-built layer (`section-membership-is-read-not-guessed`) this
+    step does not touch. So step 8 is NOT a dependency of step 7, and this step was built without it
+    — `tests/present-ordering.test.mjs` §5 poisons `Date.now` across every real section and none
+    reaches it.
+    WHAT THE BROWSER CAN KNOW, MEASURED RATHER THAN ASSUMED, AND WHY THE ANSWER IS NARROWER THAN
+    "COMPARE EVERY PRINTED ROW". Two facts had to be published that were not: `resolution.
+    orderingFields` (field name -> the trailing-token marker `config/vocabulary/markers.yaml`
+    declares — `📅`/`🛫`/`🔢` — restricted to the 3 fields the 9 orderings actually use, excluding
+    fixed-`value:` and `render_only` markers on purpose) and each section's own `name` (none of the
+    9 sections is published in `qualification.sections` — measured 2026-08-01, all 9 traverse an
+    edge, consult the clock, or range over an unresolvable field — so there is no other source to
+    join a display name from). A REAL MEASUREMENT AGAINST `~/qntm/this_week.md` THEN FORCED A SECOND,
+    LARGER REFUSAL. `apps/qntm-md/src/qntm_md/render/section_builder.py:337-341`
+    (`_order_children`) sorts `ordering:` only within same-parent siblings and places every
+    ANCESTOR/context row ahead of every qualifying row at each tree level, unconditionally — so a
+    flat, whole-section rank is the wrong model the instant a section prints any nested row.
+    Measured directly: `available-overdue`'s real content prints its EARLIEST `available_date`
+    LAST, after two `#outcome` ancestor roots. `orderingFor` therefore refuses outright
+    (`nested-section`) the instant ANY line in the section's printed range carries indentation —
+    proven against the SAME real content that broke the naive assumption
+    (`tests/present-ordering.test.mjs` §1b), not merely reasoned about.
+    MEASURED RESULT: 2 of the 9 declared sections are genuinely FLAT in today's real content and
+    preview live (`flowtrace-queue`/`trace-orchestration-queue`'s "Queue"); `qntm-queue`'s own
+    "Queue" turned out to interleave an occasional prose "#summary" child and refuses for the same
+    reason the four `this-week` sections do; the two `insertion_order` sections have no field to
+    preview at all. A smaller, honestly-scoped capability rather than an unsound wide one.
+    FIVE NAMED ABSTENTIONS, EACH A REFUSAL RATHER THAN A GUESS: `no-section-declaration` (177 of 186
+    sections, always), `insertion-order` (no field to compare), `field-not-published`,
+    `nested-section` (measured above), `no-value` (either side of the edit lacks the marker — the
+    same symmetry `membershipFor`'s own abstentions already establish). Among sibling rows that DO
+    carry the marker, one lacking it (a DONE item whose `🔢` the operator's real `flow-trace/
+    queue.md` shows removed once it left the active queue) is excluded from the ranked set, not
+    guessed at — proven against that exact real trap.
+    ONLY A CHANGE IS SAID, MATCHING RULE 4. `orderingFor` ranks the edited line among its
+    marker-bearing siblings BEFORE and AFTER; only a differing rank produces `moved: true`, and the
+    freshness line stays silent for every unchanged answer — proven for direction (ascending vs
+    descending flip the SAME edit's outcome, `tests/present-ordering.test.mjs` §4) and for an edit
+    to an unrelated field.
+    BOTH PREDICTIONS SHARE ONE SLOT. `commitLine` computes `membershipNoteFor` AND
+    `orderingNoteFor` and joins whichever fired with " · " before calling `writeFile`, which itself
+    changes only its parameter's NAME (`membershipNote` -> `note`) — no new call site, no signature
+    growth beyond that rename. `tests/app-ordering-note.test.mjs` §2 drives one edit that fires both
+    through the real `commitLine` and reads the freshness line before the write settles.
+    NOTHING LOCAL REACHES A WRITE, RE-MEASURED. The same four pinned counts
+    `section-membership-is-said-in-the-freshness-line` established (`graphData` 5, `applyEdit` 5,
+    `writeFile` 2 callers, `.markdown` never assigned) are unchanged by this step and re-verified by
+    `tests/app-ordering-note.test.mjs` §4, which also proves `orderingNoteFor`/`ordering.ts` import
+    nothing from `source.ts`.
+  tier: functional
+  rooting: >-
+    isolated inside `app/index.html`, the SAME posture `section-membership-is-said-in-the-
+    freshness-line` already has: `orderingNoteFor` lives in a file node cannot import, so flow-trace
+    cannot see the edge from `commitLine` to `sectionAt`/`orderingFor`. `ordering.ts`'s own edge to
+    `resolution.ts` (`ordering-classifies-the-line`, flows.yaml) IS observable and is exercised by
+    `tests/present-ordering.test.mjs`, run standalone through `dist/present.js`.
+    `tests/app-ordering-note.test.mjs` is the page-level proof, driving `app/index.html`'s own
+    lifted script through `tests/fixtures/app-html-page.mjs`, which gained one new export
+    (`__orderingNoteFor`) for exactly this, the same reason `__membershipNoteFor` was exported.
+    NOT VERIFIED: no browser, no passkey session, no live server, no cycle. The `nested-section`
+    refusal's own citation (`section_builder.py:337-341`) was read, not executed — no cycle was run
+    to watch the engine actually render `available-overdue` and confirm the printed order this
+    step measured from the static file; the static measurement (`~/qntm/this_week.md` as it stood
+    2026-08-01) is what `tests/present-ordering.test.mjs` §1b pins, and a future cycle changing that
+    file's content could not silently invalidate the refusal — the refusal is unconditional on
+    indentation, not on the specific dates measured — but it COULD make the measured "does NOT
+    match ascending" positive control (§1b) start passing, which that test's own comment flags as
+    the signal to re-examine (not blindly narrow) the `nested-section` rule.
+  status: working

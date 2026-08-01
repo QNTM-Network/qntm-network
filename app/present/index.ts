@@ -71,10 +71,15 @@ export type {
   ConfigResolutionReading,
   ConfigResolutionTable,
   DayBoundary,
+  OrderingFieldKind,
+  OrderingFieldMarker,
   OrderingKey,
   RegistrationTable,
   SectionOrdering,
 } from "./resolutiontable.js";
+
+export { markerValue, orderingFor } from "./ordering.js";
+export type { OrderingAbstention, OrderingAnswer, OrderingReading } from "./ordering.js";
 
 export {
   RESOLVABLE_FIELDS,

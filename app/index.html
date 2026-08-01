@@ -881,6 +881,7 @@ import {
   EMBEDDED_DECLARATION,
   sectionAt,
   membershipFor,
+  orderingFor,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -1612,6 +1613,45 @@ function membershipNoteFor(view, commit) {
 }
 
 /**
+ * AFTER THIS COMMIT, WILL THE LINE SORT TO A DIFFERENT POSITION WITHIN ITS SECTION — design doc
+ * step 7, L5 EVALUATION. Same posture as `membershipNoteFor` above, and deliberately a SEPARATE
+ * function rather than a branch inside it: `app/present/ordering.ts` answers a different question
+ * (rank among siblings, never "does it belong") from a different published table
+ * (`resolution.ordering`/`resolution.orderingFields`, not `qualification`), and keeping the two
+ * apart is what lets `tests/app-membership-note.test.mjs`'s own pinned-count proof extend to this
+ * function unmodified — see `tests/app-ordering-note.test.mjs` for the restated version.
+ *
+ * ONLY THE NINE SECTIONS THAT DECLARE AN `ordering:` SAY ANYTHING — the other 177 abstain
+ * `no-section-declaration` inside `orderingFor` itself, silence by construction rather than a
+ * branch here. "Say it, never move it" applies exactly as it does to membership: this function
+ * returns a sentence for the freshness line, and nothing it calls touches `viewBody` or
+ * `paint.ts`'s row order — `orderingFor` is PURE and produces no `Contribution`, no `SourceEdit`.
+ */
+function orderingNoteFor(view, commit) {
+  if (resolution === undefined || qualification === undefined || commit.kind !== "set-line") {
+    return "";
+  }
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, qualification.sectionOrder);
+  if (sectionId === null) {
+    return "";
+  }
+  const reading = orderingFor(
+    view.id,
+    sectionId,
+    commit.source,
+    commit.lineIndex,
+    commit.text,
+    resolution.ordering,
+    resolution.orderingFields,
+  );
+  if (reading.kind !== "answer" || !reading.answer.moved) {
+    return "";
+  }
+  const sectionName = resolution.ordering[view.id]?.[sectionId]?.name ?? sectionId;
+  return `this line will move within ${sectionName}`;
+}
+
+/**
  * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
  *
  * `source` is the string the edit was computed against, handed up by the painter (`paint.ts`'s
@@ -1638,23 +1678,27 @@ function membershipNoteFor(view, commit) {
  * place a write can be refused safely, because it is the only place that knows what the file says;
  * see design-the-edit-is-a-safe-haven.md §8 for the two sentences that half needs.
  *
- * ── `membershipNote`, THE FOURTH THING, AND WHY IT IS NOT LIKE THE OTHER THREE ──
+ * ── `note`, THE FOURTH THING, AND WHY IT IS NOT LIKE THE OTHER THREE ──
  *
  * A PREDICTION, NOT A DIVERGENCE — so it is said ONCE, here, beside "syncing…", and never carried
  * the way `writeNote` is. `writeNote` survives to `sayAsOf` because the fact it reports (the base
- * was stale) is still true when the cycle answers. A membership prediction is not: this app has not
- * built the machinery (design doc steps 11/12, the envelope carrying the cycle's own resolved
- * section) to CONFIRM it against what the cycle actually did, so holding it past this one line would
- * let it stand as if confirmed when it is not — "a stale prediction is worse than none". Letting it
- * lapse the instant the next freshness-line write happens (the cycle's answer, or a failure) is the
- * honest middle: neither manufacturing a confirmation this app cannot make, nor leaving an unconfirmed
- * guess on screen indefinitely.
+ * was stale) is still true when the cycle answers. A prediction is not: this app has not built the
+ * machinery (design doc steps 11/12, the envelope carrying the cycle's own resolved section) to
+ * CONFIRM one against what the cycle actually did, so holding it past this one line would let it
+ * stand as if confirmed when it is not — "a stale prediction is worse than none". Letting it lapse
+ * the instant the next freshness-line write happens (the cycle's answer, or a failure) is the
+ * honest middle: neither manufacturing a confirmation this app cannot make, nor leaving an
+ * unconfirmed guess on screen indefinitely. TWO PREDICTIONS SHARE THIS ONE SLOT, NOT TWO —
+ * `commitLine` computes `membershipNoteFor` and `orderingNoteFor` separately (different questions,
+ * different published tables) and joins whichever of them said something into one string before
+ * calling here, so this function's own shape — one note, said once, never carried — stays exactly
+ * as small as step 4 left it.
  */
-async function writeFile(view, markdown, source, membershipNote = "") {
+async function writeFile(view, markdown, source, note = "") {
   const reading = served.read(view.path, source);
-  const note = BASE_REFUSALS[reading.outcome] ?? "";
-  writeNote = note;
-  const syncingNotes = [note, membershipNote].filter((n) => n !== "");
+  const baseNote = BASE_REFUSALS[reading.outcome] ?? "";
+  writeNote = baseNote;
+  const syncingNotes = [baseNote, note].filter((n) => n !== "");
   $("freshness").textContent = "syncing…" + syncingNotes.map((n) => ` · ${n}`).join("");
   // SYNCHRONOUS, AND app/present/base.ts's OWN HEADER SAYS WHY IT HAD TO BE: an `await` here would
   // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
@@ -1674,7 +1718,7 @@ async function writeFile(view, markdown, source, membershipNote = "") {
     // freshness line one statement after its `await` returns, so without this the note set when the
     // SECOND save left would be consumed by the FIRST save's answer and gone by the time the second
     // one landed. Measured: the two-ticks-in-one-cycle arm reported nothing at all.
-    writeNote = note;
+    writeNote = baseNote;
   }
 }
 
@@ -1715,11 +1759,14 @@ async function toggleTask(view, toggle) {
 // line was left unchanged, or the text was not one line — and a refusal is not a POST.
 async function commitLine(view, commit) {
   if (commit.markdown === null) return;
-  // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's own
-  // header for what is said, when, and why only the LEAVING transition is said at all.
-  const membershipNote = membershipNoteFor(view, commit);
+  // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's and
+  // orderingNoteFor's own headers for what each says, when, and why only the LEAVING transition
+  // and a RANK CHANGE (never an unchanged answer) are said at all. Joined into one string here,
+  // never inside writeFile — see that function's own header for why one slot holds both.
+  const notes = [membershipNoteFor(view, commit), orderingNoteFor(view, commit)].filter((n) => n !== "");
+  const note = notes.join(" · ");
   try {
-    const data = await writeFile(view, commit.markdown, commit.source, membershipNote);
+    const data = await writeFile(view, commit.markdown, commit.source, note);
     graphData = data;
     paintView(currentViewId);
     sayAsOf(data);

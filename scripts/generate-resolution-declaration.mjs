@@ -27,13 +27,25 @@
  *     ever stops being true, rather than silently ignoring a VIEW/STRUCTURAL_NODE override.
  *   lineGrammars — `line_grammars.yaml`'s `grammars:` map (2 grammars, which shapes each admits).
  *   ordering — the 9 sections (7 `ordering:`, 2 `ordering_mode:`) that say anything about row
- *     order, published exactly as declared. NOT `persist_placing` (design §5.8): that is the
+ *     order, published exactly as declared, PLUS the section's own `name:` (design-the-resolution-
+ *     architecture.md step 7's own gap, found the same way step 6 found chromeShapes: a name to
+ *     SAY, "this line will move within Due This Week" rather than "…within due-this-week", and
+ *     `qualification.sections` cannot supply it — measured 2026-08-01, none of these 9 sections'
+ *     predicates survive that generator's own normalisation, so there is no other published name
+ *     to join against). NOT `persist_placing` (design §5.8): that is the
  *     engine's own still-open fold of `ordering_mode` + `pin_after_qualification_drops` into one
  *     knob, unresolved, and reproducing the fold here would be a second interpreter of a decision
  *     the engine has not finished making. `pin_after_qualification_drops` (14 sections) is left
  *     out for the same reason — it decides whether an EXISTING placed row keeps its slot after it
  *     stops qualifying, not what a NEW line becomes, and there is no browser-side "existing row"
  *     concept yet for it to inform.
+ *   orderingFields — step 7's other gap: an ordering `field` name (`due_date`) says nothing about
+ *     how its VALUE is spelled on a printed line. `config/vocabulary/markers.yaml`'s own
+ *     `token`/`extraction_hint` pair is the SAME map the engine's own `parse_marker.py` reads; this
+ *     publishes it restricted to the fields `ordering` above actually names, and further restricted
+ *     to markers that are a magnitude an edit can change (`extraction_hint`, not a fixed `value:`)
+ *     and are not `render_only` (a derived display value the engine itself never ingests from that
+ *     glyph — see `readOrderingFieldMarkers`'s own header for the two named exclusions).
  *   dayBoundary — `day_boundary.yaml`'s 3 keys, verbatim.
  *   chromeShapes — design-the-resolution-architecture.md step 6's own gap, found while building it
  *     rather than assumed away: knowing a section's resolved node TYPE is not enough to seed a new
@@ -317,10 +329,79 @@ function readOrdering(viewFiles) {
     for (const section of view.sections) {
       if (!section || typeof section !== "object" || typeof section.id !== "string") continue;
       const fields = readOrderingFields(section, `${file}: section '${section.id}'`);
-      if (Object.keys(fields).length > 0) sections[section.id] = fields;
+      if (Object.keys(fields).length === 0) continue;
+      // THE OPERATOR'S OWN WORDS FOR THE SECTION, same reasoning
+      // generate-qualification-declaration.mjs already states for its own `name`: step 7 needs a
+      // name to say ("this line will move within Due This Week" reads off THIS, never off the id
+      // it is keyed by) and, unlike `qualification.sections`, NONE of the 9 ordering sections
+      // survive that generator's normalisation (measured 2026-08-01: all 9 traverse an edge,
+      // consult the clock, or range over a field it cannot resolve), so there is no other
+      // published source this table could join against for a display name.
+      if (typeof section.name === "string" && section.name !== "") fields.name = section.name;
+      sections[section.id] = fields;
     }
     if (Object.keys(sections).length > 0) out[view.viewId] = sections;
   }
+  return out;
+}
+
+// ── 6. vocabulary/markers.yaml -> ordering field name -> its trailing-token marker ─────────────
+//
+// A section's `ordering:` names a FIELD ("due_date", "queue_position"); it says nothing about how
+// that field's VALUE is spelled on a printed line, because the config does not need to say that —
+// the engine parses it from `config/vocabulary/markers.yaml`'s own `token`/`extraction_hint` pair
+// (`parse_marker.py:98-99`: the first whitespace-separated run after a value-bearing marker glyph
+// IS its value). `app/present/ordering.ts` needs the SAME map to preview a position from the
+// characters the operator is about to leave on the line, so it is published here, restricted to
+// the fields the OPERATOR'S ORDERING TABLE ACTUALLY NAMES — not the other nine marker rows
+// `markers.yaml` declares, which have no ordering reader and would be a fact with no consumer.
+//
+// TWO KINDS OF ROW ARE LEFT OUT, ON PURPOSE, NOT BY OMISSION:
+//   * a `value:` row (`priority`, `blocked_state`, …) — a fixed-vocabulary marker, not a magnitude;
+//     nothing about "the first one wins" needs measuring, so there is nothing to extract.
+//   * a `render_only: true` row — markers.yaml's own comments name two (`done_task_count`, `par`):
+//     "a DERIVED view, not authority… edits to it are ignored; it re-renders the true count." A
+//     table that told the operator his edit would move a row by a field the engine itself refuses
+//     to ingest from that glyph would be worse than silence.
+// Neither case currently arises for `due_date`/`available_date`/`queue_position` (measured against
+// the shipped config: all three are `extraction_hint`, none is `render_only`), but the guard is a
+// property of the READER, not an assumption about today's file, so a future ordering key that
+// pointed at a render-only or fixed-value marker refuses here rather than publishing a lie.
+const EXTRACTION_KINDS = { trailing_date: "date", trailing_int: "int", trailing_float: "float" };
+
+function orderingFieldNames(ordering) {
+  const names = new Set();
+  for (const sections of Object.values(ordering)) {
+    for (const section of Object.values(sections)) {
+      for (const key of section.ordering ?? []) names.add(key.field);
+    }
+  }
+  return names;
+}
+
+function readOrderingFieldMarkers(configDir, fields) {
+  if (fields.size === 0) return {};
+  const path = join(configDir, "vocabulary", "markers.yaml");
+  if (!existsSync(path)) throw new GenerationError(`${path} does not exist`);
+  const markers = readYaml(path)?.markers;
+  if (!Array.isArray(markers)) {
+    throw new GenerationError(`${path}: no 'markers:' list`);
+  }
+  const out = {};
+  for (const entry of markers) {
+    if (!entry || typeof entry !== "object") continue;
+    const { token, field, extraction_hint: hint, render_only: renderOnly } = entry;
+    if (typeof field !== "string" || !fields.has(field)) continue;
+    if (renderOnly === true) continue; // a derived display value; edits to it are not ingested
+    const kind = EXTRACTION_KINDS[hint];
+    if (kind === undefined) continue; // a fixed-`value:` marker, or an unrecognised hint
+    if (!isNonEmptyString(token)) continue;
+    out[field] = { token, kind };
+  }
+  // A field the ordering table names but this file did not find a usable marker for is left OUT,
+  // never thrown — the same "unpublished is the refusal" posture `readChromeShapes` already takes
+  // for a node type outside its two seedable shapes. `app/present/ordering.ts` reads the absence
+  // as a reason to stay silent about that field, not as a generation failure.
   return out;
 }
 
@@ -330,10 +411,12 @@ export function generateResolution(configDir) {
   const viewFiles = readViewFiles(configDir);
   const registration = readRegistration(configDir, viewFiles);
   const candidates = collectDefaultNodeTypeCandidates(registration, viewFiles);
+  const ordering = readOrdering(viewFiles);
   return {
     registration,
     lineGrammars: readLineGrammars(configDir),
-    ordering: readOrdering(viewFiles),
+    ordering,
+    orderingFields: readOrderingFieldMarkers(configDir, orderingFieldNames(ordering)),
     dayBoundary: readDayBoundary(configDir),
     chromeShapes: readChromeShapes(configDir, candidates),
   };
@@ -382,6 +465,7 @@ async function main() {
       `  registration: ${JSON.stringify(resolution.registration)}\n` +
       `  ${Object.keys(resolution.lineGrammars).length} line grammars, ` +
       `${orderingSections} ordering sections, day boundary ${resolution.dayBoundary.timezone}\n` +
+      `  ordering field markers: ${JSON.stringify(resolution.orderingFields)}\n` +
       `  chrome shapes: ${JSON.stringify(resolution.chromeShapes)}`,
   );
 }

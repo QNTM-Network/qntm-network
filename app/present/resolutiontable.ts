@@ -27,7 +27,20 @@
  *   `resolution.lineGrammars` — `line_grammars.yaml`'s two grammars, verbatim.
  *
  *   `resolution.ordering` — the 9 sections (of 186) that declare an `ordering:` list or an
- *   `ordering_mode:`, keyed `view -> section -> { ordering?, orderingMode? }`.
+ *   `ordering_mode:`, keyed `view -> section -> { ordering?, orderingMode?, name? }`. `name` is
+ *   step 7's own addition (design-the-resolution-architecture.md) — the operator's own words for
+ *   the section, the same reason `qualification.sections[view][section].name` exists, published a
+ *   second time here because NONE of these 9 sections' predicates survive
+ *   `generate-qualification-declaration.mjs`'s own normalisation (measured 2026-08-01: all 9
+ *   traverse an edge, consult the clock, or range over a field the app cannot resolve), so that
+ *   table has no entry for any of them to join against.
+ *
+ *   `resolution.orderingFields` — step 7's other addition: an ordering `field` name says nothing
+ *   about how its value is spelled on a printed line. Keyed `field -> { token, kind }`, mirroring
+ *   `config/vocabulary/markers.yaml`'s own `token`/`extraction_hint` pair, restricted to the fields
+ *   `ordering` above actually names and to markers whose value is a magnitude an edit can change
+ *   (never a fixed `value:` marker, never `render_only`) — see
+ *   `scripts/generate-resolution-declaration.mjs`'s own header for the two named exclusions.
  *
  *   `resolution.dayBoundary` — the day boundary's 3 keys, verbatim.
  *
@@ -41,15 +54,17 @@
  *   `scripts/generate-resolution-declaration.mjs`'s own header for the full account, including the
  *   engine function (`qntm_md.grammar.node_type_form.node_type_forms`) this mirrors.
  *
- * ── ONE CONSUMER NOW, TWO STILL WAITING, STATED RATHER THAN HIDDEN ──
+ * ── TWO CONSUMERS NOW, ONE STILL WAITING, STATED RATHER THAN HIDDEN ──
  *
  * `app/present/newline.ts`'s GLOBAL rung reads `qualification.sections[view][section].nodeType`
  * (the per-section MINTING default, already published) joined against `chromeShapes` above (design
- * step 6) — the first production consumer of this module. `app/` still previews no ordering and
- * gates no line on its grammar; step 7 (needs 5 and 8) and step 8 (needs 5) are the two dependents
- * still waiting, the same posture step 1 took towards step 2 before step 2 shipped. An unread
- * declaration is a bug when nothing is EVER going to read it; it is a precondition when the next
- * items on the same plan say they will, and now one of them does.
+ * step 6). `app/present/ordering.ts` reads `ordering` and `orderingFields` above (design step 7) to
+ * preview a row's position within its section. **Step 8's dependency, measured rather than
+ * assumed: NONE of the 9 declared orderings compares a field against the clock** — all seven
+ * field-keyed sections sort on an absolute value (`due_date`, `available_date`, `queue_position`),
+ * never a `$cycle_today`-relative one, and the two `insertion_order` sections have no field to
+ * compare at all. So step 7 does not, in fact, need step 8 — see `ordering.ts`'s own header for
+ * the full measurement. Step 8 (the day boundary itself) is still unread by anything under `app/`.
  *
  * ── WHY THIS IS A THIRD READER, NOT A WIDER `qualification` OR `structural` ──
  *
@@ -84,10 +99,22 @@ export interface OrderingKey {
   readonly direction: "asc" | "desc";
 }
 
-/** What one section says about its own row order — one or both may be present. */
+/** What one section says about its own row order — one or both of `ordering`/`orderingMode` may
+ * be present. `name` is the operator's own words for the section — see this module's header for
+ * why it rides here rather than being joined from `qualification.sections`. */
 export interface SectionOrdering {
   readonly ordering: readonly OrderingKey[] | undefined;
   readonly orderingMode: string | undefined;
+  readonly name: string | undefined;
+}
+
+/** How an ordering field's value is spelled on a printed line — `markers.yaml`'s own shape. */
+export type OrderingFieldKind = "date" | "int" | "float";
+
+/** One field's trailing-token marker: the glyph, and the shape its value must have. */
+export interface OrderingFieldMarker {
+  readonly token: string;
+  readonly kind: OrderingFieldKind;
 }
 
 /** `day_boundary.yaml`'s 3 keys, verbatim. */
@@ -106,6 +133,10 @@ export interface ConfigResolutionTable {
   /** grammar name -> the shape names it admits. */
   readonly lineGrammars: Readonly<Record<string, readonly string[]>>;
   readonly ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>;
+  /** ordering field name -> its trailing-token marker. A field named by `ordering` above but
+   * absent here has no known marker (a fixed-`value:` marker, a `render_only` one, or none at
+   * all) — see this module's header for why that is a refusal, never a guess. */
+  readonly orderingFields: Readonly<Record<string, OrderingFieldMarker>>;
   readonly dayBoundary: DayBoundary | undefined;
   /** node type -> its render-form family, for every `default_node_type` candidate this config
    * declares and every shape `newline.ts` knows how to seed. A type absent here is a type whose
@@ -122,10 +153,19 @@ export interface ConfigResolutionReading {
 /** The top-level key this module owns. `declaration.ts` knows its name only to skip it. */
 export const RESOLUTION_TABLE_KEY = "resolution";
 
-const TOP_KEYS = ["registration", "lineGrammars", "ordering", "dayBoundary", "chromeShapes"] as const;
+const TOP_KEYS = [
+  "registration",
+  "lineGrammars",
+  "ordering",
+  "orderingFields",
+  "dayBoundary",
+  "chromeShapes",
+] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
-const SECTION_ORDERING_KEYS = ["ordering", "orderingMode"] as const;
+const SECTION_ORDERING_KEYS = ["ordering", "orderingMode", "name"] as const;
+const ORDERING_FIELD_MARKER_KEYS = ["token", "kind"] as const;
+const ORDERING_FIELD_KINDS = ["date", "int", "float"] as const;
 const DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"] as const;
 const DIRECTIONS = ["asc", "desc"] as const;
 const CHROME_SHAPES = ["checkbox", "plain_line"] as const;
@@ -134,6 +174,7 @@ const EMPTY: ConfigResolutionTable = {
   registration: undefined,
   lineGrammars: {},
   ordering: {},
+  orderingFields: {},
   dayBoundary: undefined,
   chromeShapes: {},
 };
@@ -281,7 +322,15 @@ function readSectionOrdering(
     problems.push(`'${path}' declares neither 'ordering' nor 'orderingMode' — nothing to publish`);
     return undefined;
   }
-  return { ordering, orderingMode };
+  let name: string | undefined;
+  if (value.name !== undefined) {
+    if (typeof value.name !== "string" || value.name === "") {
+      problems.push(`'${path}.name' is ${JSON.stringify(value.name)}, not a non-empty string`);
+      return undefined;
+    }
+    name = value.name;
+  }
+  return { ordering, orderingMode, name };
 }
 
 function readOrdering(
@@ -308,6 +357,56 @@ function readOrdering(
       if (read !== undefined) sections[sectionId] = read;
     }
     if (Object.keys(sections).length > 0) out[viewId] = sections;
+  }
+  return out;
+}
+
+function readOrderingFieldMarker(
+  path: string,
+  value: unknown,
+  problems: string[],
+): OrderingFieldMarker | undefined {
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — this field's marker is unknown`);
+    return undefined;
+  }
+  for (const key of Object.keys(value)) {
+    if (!(ORDERING_FIELD_MARKER_KEYS as readonly string[]).includes(key)) {
+      problems.push(
+        `'${path}.${key}' is not a recognised key — the keys are ` +
+          `${ORDERING_FIELD_MARKER_KEYS.join(", ")}`,
+      );
+    }
+  }
+  const { token, kind } = value;
+  if (typeof token !== "string" || token === "") {
+    problems.push(`'${path}.token' is ${JSON.stringify(token)}, not a non-empty string`);
+    return undefined;
+  }
+  if (!(ORDERING_FIELD_KINDS as readonly string[]).includes(kind as string)) {
+    problems.push(
+      `'${path}.kind' is ${JSON.stringify(kind)}, not one of ${ORDERING_FIELD_KINDS.join(", ")}`,
+    );
+    return undefined;
+  }
+  return { token, kind: kind as OrderingFieldKind };
+}
+
+function readOrderingFieldMarkers(
+  value: unknown,
+  problems: string[],
+): Record<string, OrderingFieldMarker> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.orderingFields' is ${shapeOf(value)}, not an object — every ` +
+        "field's marker stays unknown",
+    );
+    return {};
+  }
+  const out: Record<string, OrderingFieldMarker> = {};
+  for (const [field, raw] of Object.entries(value)) {
+    const read = readOrderingFieldMarker(`${RESOLUTION_TABLE_KEY}.orderingFields.${field}`, raw, problems);
+    if (read !== undefined) out[field] = read;
   }
   return out;
 }
@@ -414,6 +513,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       registration: "registration" in raw ? readRegistration(raw.registration, problems) : undefined,
       lineGrammars: "lineGrammars" in raw ? readLineGrammars(raw.lineGrammars, problems) : {},
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
+      orderingFields:
+        "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : undefined,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
     },

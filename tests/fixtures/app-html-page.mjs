@@ -133,6 +133,9 @@ export { sayAsOf as __sayAsOf };
 // silence" wants to drive THIS ONE COMPUTATION directly, without also entangling \`served\`'s base
 // reading (a separate, separately-tested fact — tests/present-base.test.mjs) into every assertion.
 export { membershipNoteFor as __membershipNoteFor };
+// THE ORDERING NOTE (design-the-resolution-architecture.md step 7). Same reasoning as
+// __membershipNoteFor immediately above — its own separate computation, exported on its own.
+export { orderingNoteFor as __orderingNoteFor };
 `;
 
   const file = join(workDir, "page.mjs");
