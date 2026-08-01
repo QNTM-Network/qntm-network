@@ -719,3 +719,24 @@ forbidden_flows:
   # participates in — `app/index.html`'s `loadPresentation` calling `presentationFromDeclaration`
   # with this constant — was already undeclared before this change (that caller is the page, same
   # invisibility as everywhere else in this note) and stays undeclared for the same reason.
+
+  # ── STEP 13, AND IT DECLARES NOTHING HERE EITHER — SAID, NOT LEFT IMPLIED ────────────────
+  #
+  # `the-write-is-refused-server-side` (design-the-resolution-architecture.md step 13) changed two
+  # files: `worker/src/app.js` and `app/index.html`. NEITHER IS OBSERVABLE, and the two reasons are
+  # different, so both are written down.
+  #
+  #   * `worker/src/app.js` is outside `modules.include` altogether — this repo's filter is
+  #     `include: [app]`. The Worker is a Cloudflare runtime module, not part of the application
+  #     stratum flow-trace is pointed at, and widening the filter to reach it would pull the whole
+  #     auth surface in with it for one edge.
+  #   * `app/index.html` is inside the prefix and invisible anyway, for the reason the block above
+  #     records: capture is a node module-load hook and node cannot import an HTML document.
+  #
+  # SO THERE IS NO SCENARIO FOR THIS ROW AND NO `expected_flows` ENTRY, and writing one would be
+  # declaring a shape nothing can check. What replaced it is a STRUCTURAL assertion under
+  # `node --test` — tests/app-stale-write-refusal.test.mjs, "EXACTLY ONE EXPRESSION IN THE WORKER
+  # CAN REFUSE A WRITE" — which reads worker/src/app.js as text, strips its comments, and asserts
+  # that `409` occurs exactly twice in the executable code and that no digest is computed anywhere
+  # in it. That is the claim a flow declaration could not have made in any case: this row's whole
+  # safety argument is about what the Worker DOES NOT DO, and flow-trace measures edges that exist.

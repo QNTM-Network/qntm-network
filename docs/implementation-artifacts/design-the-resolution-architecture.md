@@ -490,7 +490,38 @@ sections of one view today — stated plainly in both the test file and the capa
 | 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin | **DONE (other repo, PR #59)** |
 | 11 | carry section identity + resolved registration in the ENVELOPE | L1 | **½** | 2 | envelope section order == generator section order, all 72 views | **DONE — narrowed, see status block** |
 | 12 | the projection-replay convergence test | **L7** | **½** | 4, 11 | it IS the falsifier — it fails when a prediction and a cycle disagree | **DONE — measures a real, unconfirmable divergence, see status block** |
-| 13 | the server refuses a stale write (other repo) | L7 | **½** | — | a POST carrying a stale `sha256-…` is rejected, not applied | — |
+| 13 | the server refuses a stale write (other repo) | L7 | **½** | — | a POST carrying a stale `sha256-…` is rejected, not applied | **DONE — the half that lives here; the graph server cannot refuse, see status block** |
+
+**THE SEQUENCE IS COMPLETE.** All thirteen steps are landed. Three of them are landed NARROWER than
+they were written, and each says so in its own status block: step 7 needed one dependency rather
+than two, step 8 has no runtime consumer, step 11 carries section identity but not resolved
+registration. Step 13 is the fourth and the largest narrowing, and the reason is not this
+repository's.
+
+**Step 13's status, and the answer to the question the step asked first.** **The Worker cannot
+refuse a stale write safely on its own.** `server/app.py` (read read-only, 2026-08-01, c0d77b7)
+offers `POST /vault/file` — an unconditional `write_text` with no comparison in it — and
+`GET /graph`, the whole 77-view envelope. There is no per-file read and no precondition, so the
+only refusal buildable here alone is read-then-write, which the backlog row already judges weaker.
+**A second reason decided it and was not on the row:** a refusal is only safe once the browser can
+hold a refused edit's characters, and a stale base is an **ordinary** event on this path — a second
+edit inside one ~14 s cycle produces one. A live refusal would therefore fire during normal use and
+trade a silent loss of the engine's output for a visible loss of the operator's typing, which is the
+worse trade.
+
+**So what landed is the half that lives here, complete and inert.** `POST /app/edit-file` forwards
+`base` when there is one and not at all when there is not; a 409 from the graph server becomes a 409
+to the browser carrying `{refused, path, current}` with no cycle behind it; the page answers a 409
+without repainting, so a refused line commit keeps his characters on screen. Exactly one expression
+can refuse a write — `w.status === 409` — and the Worker computes no digest and compares no string.
+Everything else fails open. 20 tests, mutation-proven six ways, every request a fixture. **The 409
+branch is unreachable in production until the monorepo change lands.**
+
+**What remains, filed rather than half-built.** `vault-file-accepts-a-precondition` (the ~one-hour
+change to `server/app.py`, specified line by line, including the detail a reimplementation gets
+wrong: the comparison is against the **served string** via `_read_text`, not against the bytes on
+disk) and `a-refused-edit-is-held-unanchored` (the surface that lets a refused edit survive a
+repaint — which **gates** switching the refusal on, rather than following it).
 
 **A browser-side rule evaluator is still refused**, for two independent reasons **[REPO]**
 (`research-the-rule-closure.md` §10; `research-the-resolution-universe.md` §5.3). It is not in the
@@ -1345,6 +1376,14 @@ refuses on mismatch. `base.ts` already sends it.
 
 **Falsifier.** A POST carrying a stale base is rejected with a distinguishable status, and the client
 reports it rather than losing the operator's characters.
+
+**LANDED 2026-08-01, AND NARROWER THAN THIS PARAGRAPH.** The sentence above says "the server
+compares", and the server does not — `POST /vault/file` is an unconditional `write_text`. What
+landed is the Worker's half plus the client's answer: `base` is forwarded, a 409 becomes a 409 with
+the current content and no cycle, and a refused line commit keeps the operator's characters on
+screen rather than repainting them away. The falsifier is met **against a fixture**, not against a
+running server. See the step table's status block above for the whole account, and backlog rows
+`vault-file-accepts-a-precondition` and `a-refused-edit-is-held-unanchored` for what remains.
 
 ---
 
