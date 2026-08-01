@@ -965,6 +965,54 @@ forbidden_flows:
       the release safe: a token can be recognised and reported and nothing else. The module imports
       nothing at all, which makes the rule structural rather than a promise a caller has to keep.
 
+  - id: pickup-never-reaches-the-edit-path
+    from: app/present/pickup
+    to:   app/present/source
+    reason: >
+      `pickup.ts` decides WHEN to go and collect the answer to a write and how many times to try;
+      `source.ts` decides what is written. A call from here into the edit constructor would let the
+      module that knows a write is outstanding also compute a second one, which is how "collect the
+      answer" would become "send it again" — and a retry that reissues a WHOLE-FILE write is the
+      clobber every surface around it exists to stop. Nothing in this module can turn a path and a
+      delay into a change to a file, and it imports nothing at all, which makes the rule structural
+      rather than a promise a caller has to keep.
+
+  - id: pickup-never-fetches
+    from: app/present/pickup
+    to:   app/present/base
+    reason: >
+      THE POLICY AND THE REQUEST ARE TWO THINGS AND ONLY ONE OF THEM IS THIS MODULE'S. It answers
+      "is a read owed for this path, and how long should the caller wait" — arithmetic over a list
+      of delays — and holds no timer, makes no request, and reads no envelope. `base.ts` is named
+      here as the nearest thing in this bundle to the wire's own facts; the rule it stands for is
+      wider and is asserted directly in tests/app-async-ack.test.mjs §1, which drives the whole
+      schedule with `document`, `fetch` and every clock absent. IT IS THE MODULE MOST LIKELY TO BE
+      "HELPED" INTO HOLDING ITS OWN `setTimeout`, and that would be the end of it being drivable:
+      the first wait is ten seconds, and a suite that could only wait ten seconds could prove
+      neither that a read fires nor — the property that matters — that the series STOPS.
+
+  - id: accepted-never-reaches-the-edit-path
+    from: app/present/accepted
+    to:   app/present/source
+    reason: >
+      `accepted.ts` holds ONE FILE'S markdown, as the server said it stands after taking a write.
+      `source.ts` computes changes to a file. A call from here into the edit constructor would let
+      the module holding "what the server has" also compute what to send it, and the string that
+      came back out would be indistinguishable from the server's own word — which is the whole basis
+      on which this surface is allowed to refresh the base at all. The module imports nothing, so
+      the rule is structural.
+
+  - id: accepted-never-paints
+    from: app/present/accepted
+    to:   app/present/paint
+    reason: >
+      WHAT THE PAINTER WALKS AND WHETHER IT MAY WALK IT ARE TWO DECISIONS. This surface answers the
+      first — one string, for one path — and the second depends on whether a line is open, which is
+      a fact about an `<input>` element and belongs to the page (`accept` in app/index.html). A call
+      from here into the painter would fold them together and let an accepted write repaint a line
+      the operator is typing into, which is the exact defect `a-projection-arriving-mid-edit-is-held`
+      was built to end, reached from the one direction the queue does not guard.
+
   # ── AND THE HELD SURFACE DECLARES NO `expected_flows` EITHER, FOR THE MEASURED REASON ─────
   #
   # `app/present/held.ts` gets no `expected_flows` entry and NO SCENARIO IS WRITTEN, which is a
@@ -1128,3 +1176,27 @@ forbidden_flows:
   # clock; it names no edit constructor and no markdown — are proven in
   # tests/app-write-correlation.test.mjs sections 1 and 4 instead, under `node --test`, where that
   # config says there is no budget. This paragraph is the declaration that the gap is known.
+
+  # ── AND THE PICKUP AND THE ACCEPTED SOURCE DECLARE NO `expected_flows` EITHER ──────────────
+  #
+  # `app/present/pickup.ts` and `app/present/accepted.ts` get no `expected_flows` entry and NO
+  # SCENARIO IS WRITTEN. The measurement is the one `held.ts`, `base.ts` and `correlation.ts` above
+  # already record, and it holds here for the same three reasons:
+  #
+  #   * Both import nothing, so neither makes an outgoing call there could be an edge for.
+  #   * Nothing under `app/present/` imports either. `pickup.ts` deliberately does not reach
+  #     `correlation.ts` — the schedule is TOLD whether the answer arrived, so the policy that
+  #     decides when to read cannot also decide whether a write landed, and the two stay separable.
+  #   * The only caller of both is `app/index.html`, which the capture filter names and node cannot
+  #     import, because capture is a module-load hook and an HTML document is not a module.
+  #
+  # SO A SCENARIO WOULD OBSERVE ZERO FLOWS while still spending the observer's budget. The
+  # structural claims that would have lived in one — they import nothing; they touch no DOM, no
+  # fetch and no clock; neither names an edit constructor — are proven in
+  # tests/app-async-ack.test.mjs §1 instead, under `node --test`, where that config says there is
+  # no budget. This paragraph is the declaration that the gap is known.
+  #
+  # AND `worker/src/app.js` REMAINS OUTSIDE THIS FILE ENTIRELY, which the `ack` branch does not
+  # change. `.flow-trace.yaml`'s JS capture is a node module-load hook and the Worker's modules are
+  # loaded by workerd, not by node; the one thing in this repository that imports them is the test
+  # suite. `declare-the-hosted-application` is the row that owns that gap and it is unmoved.

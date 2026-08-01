@@ -3248,3 +3248,84 @@ capabilities:
     NOT VERIFIED IN A BROWSER. No browser is available in this environment - no passkey session, no
     live graph server, no engine cycle, no real POST, and no run against the deployed Worker.
   status: 'working'
+- id: a-write-does-not-wait-for-the-cycle
+  intent: >-
+    THE WRITE IS ANSWERED WHEN THE VAULT HAS IT, AND THE ENGINE'S ANSWER IS COLLECTED SEPARATELY.
+    WHAT IT COST BEFORE. `POST /app/edit-file` wrote the file and then awaited the engine cycle, so
+    every checkbox and every line commit cost the ~10 s the cycle takes, on a screen that said
+    `syncing...`. That is item #1 of research-state-and-speed.md's ranked list, worth ~10 s -> ~250
+    ms, and it was blocked for two years' worth of reasons that all reduce to one: the projection
+    came back ON the write, so a write that stopped waiting had no answer at all.
+    THE ANSWER ARRIVES ON ITS OWN, WHICH IS THE OTHER HALF OF THIS ROW AND WAS ITS BLOCKER. Until
+    now the complete set of things that install a projection was boot, the re-read button, and THE
+    RETURN OF A WRITE. All three are the browser asking, and only the third fires on an ordinary
+    gesture. A PICKUP is that third one rebuilt as a SEPARATE read: the write says accepted, and a
+    moment later the page collects what the cycle made of it, through the same door every other
+    arrival goes through - correlated, coalesced by `generated_at`, and HELD if a line is open.
+    IT IS NOT A POLL, AND THE DISTINCTION IS THE OPERATOR'S MONEY RATHER THAN A PREFERENCE. The
+    graph server is a Fly machine with `auto_stop_machines = stop` and `min_machines_running = 0`
+    - it sleeps when idle and a cold wake is 4,278 ms of a dedicated core he pays for. A browser
+    timer that re-read every N seconds would wake it every N seconds for as long as a tab is open,
+    which at 30 s is 2,880 wakes a day of a machine nobody is using. Three properties keep this
+    from being that. CAUSED - nothing is ever read except after a write HE made, so an idle page
+    reaches the graph server exactly zero times. BOUNDED - a write buys at most three reads over
+    ~40 s and the series then ENDS and says so; it never re-arms itself. INSIDE THE WAKE THE WRITE
+    ALREADY PAID FOR - the machine is awake and running the cycle for the whole of that window, so
+    the marginal cost of every pickup is zero cold wakes.
+    ACCEPTED IS NOT WRITTEN AND THE FRESHNESS LINE NOW HAS BOTH WORDS. A 200 on the vault write
+    says the server took the bytes. `as of <when>` is a claim about a PROJECTION and belongs to the
+    projection when it lands, so an ack says `the server took your save - the cycle's answer
+    follows` and nothing stronger. When the series ends without an answer it says so, and points at
+    the one control that can ask again.
+    TWO EDITS INSIDE ONE CYCLE STILL CARRY BOTH, WHICH IS THE CASE ASYNC WAS REFUSED OVER. A
+    synchronous write got that for free: its projection came back and the painter re-walked the
+    file, so the second edit was computed on top of the first. An ack has no projection, so the
+    string the painter walks comes from the ack itself - `POST /vault/file` writes the bytes it is
+    sent and answers 200 when it did, so after an ack THE FILE SAYS WHAT WAS POSTED. That same one
+    string refreshes the base, which is what stops the stale-write detector going blind.
+    THE DETECTOR IS NOT WEAKENED AND TWO NAMED REFUSALS ARE WHY. An ack whose path already has a
+    projection QUEUED takes nothing - what the page holds in its own hand is a newer word about the
+    file, and overwriting the base with the ack's string would undo the one statement that keeps
+    the detector honest while the screen waits. An ack that arrives while a LINE IS OPEN takes
+    nothing either, because the repaint rebuilds every row from one string. Both leave the next
+    write reading `stale`, which is the safe direction.
+  rooting: >-
+    TWO NEW MODULES, BOTH PURE AND BOTH IMPORTING NOTHING. `app/present/pickup.ts` holds the POLICY
+    - how long to wait, how many times, one outstanding read per path, and the bound is a private
+    copy so a caller cannot lengthen it. It holds no timer: `setTimeout` is the page's, because the
+    first wait is ten seconds and a suite that could only wait ten seconds could prove neither that
+    a read fires nor that the series stops. It does not decide whether the answer ARRIVED either -
+    it is told, because that is a fact about `correlation.ts`'s register and a second weaker copy of
+    a judgement that already exists is how two answers drift apart.
+    `app/present/accepted.ts` holds ONE FILE'S markdown, as the server said it stands after taking
+    a write. It has no views, no graph, no locations and no `generated_at`, so there is nothing in
+    it that could reach `graphData`, and it is never offered to `ProjectionQueue`. A projection for
+    the path drops it unconditionally - the engine is entitled to rewrite what it ingested, so
+    where the two disagree the arriving one is right.
+    `worker/src/app.js` TAKES `ack: true` AND ANSWERS ON THE VAULT WRITE, running the cycle in
+    `ctx.waitUntil`. `handleApp` and the router now take the ExecutionContext the runtime has always
+    handed them. FOUR INDEPENDENT FALLS BACK TO TODAY'S BEHAVIOUR, which is the whole shipping
+    condition - a browser that does not send the field, `ack: false`, a truthy value that is not
+    `true`, and a runtime that hands over no `ctx`. A 409 and a 502 are both answered BEFORE the
+    branch, so accepted-but-not-written is not a state that exists. The field is the Worker's own
+    and is never forwarded to the graph server.
+    THE PINNED WRITE-ADJACENT COUNTS, RE-ASSERTED AT THE VALUE LEVEL. `graphData` is assigned in
+    four places and every one from an envelope off the wire; `writeFile(` occurs 3 times;
+    `applyEdit(` reaches 5 sites outside its own module; `.markdown` is never assigned anywhere
+    under `app/`; the held surface is reached from exactly six named expressions. TWO MOVED AND
+    BOTH ARE JUSTIFIED IN THE SUITES THAT PIN THEM. The POST body gains `ack` - unconditional
+    rather than absent-when-empty, because `do not make me wait` is true of every write this app
+    makes, and it is still a field a server may ignore. The write register gains a sixth reach,
+    `writes.waiting` - a token in, a boolean out, no path, no markdown and no way to a POST.
+    ENFORCEMENT IS `tests/app-async-ack.test.mjs` (31 arms in 5 documented sections, 2 of them
+    mutation proofs) plus the rewritten section 7 of `tests/app-projection-queue.test.mjs`, whose
+    two arms WERE this row's blocker and are now its acceptance, inverted in place against the same
+    fixture and the same gestures. Measured: breaking `accepted.take` turns 5 arms red across the
+    two suites.
+    NOT VERIFIED IN A BROWSER. No browser is available in this environment - no passkey session, no
+    live graph server, no engine cycle, no real POST, and no run against the deployed Worker.
+    `ctx.waitUntil` is a recorder and the graph server is a fixture. NOTHING MEASURES LATENCY: the
+    ~10 s -> ~250 ms is a claim about a network no arm touches. What is measured is the SHAPE -
+    which requests are made, in which order, carrying what, and what the page does with the answers.
+  status: 'working'
+
