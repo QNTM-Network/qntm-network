@@ -18,7 +18,7 @@
  * cycle's real output, or — since no cycle runs anywhere near this repo — a fixture built the way
  * a real cycle transforms a real line), and report what converged.
  *
- * ── THE FIVE THINGS THE HARNESS MUST BE ABLE TO SAY, AND WHERE EACH ONE COMES FROM ──
+ * ── THE SEVEN THINGS THE HARNESS MUST BE ABLE TO SAY, AND WHERE EACH ONE COMES FROM ──
  *
  * Every fact below is derived from an ALREADY-BUILT, ALREADY-TESTED pure function
  * (`app/present/instance.ts`, `membership.ts`, `ordering.ts`, `address.ts`, `base.ts`) — this
@@ -79,6 +79,17 @@
  *    what happened to a ROW, and every one of them goes `unknown` for exactly the arrivals that
  *    cost him work — `absent` is where the harness ran out of things to say, and this is what it
  *    can say instead.
+ *
+ * 7. DRAFT — WOULD A LINE HE HAS OPEN AND HAS NOT COMMITTED SURVIVE THIS ARRIVAL, and where would
+ *    it land? Added with `a-line-being-made-survives-a-projection-too`. The other six all describe
+ *    a line that IS in a source string, at one end or the other; this one describes the row that is
+ *    in NEITHER — not in `before` (nothing is written until it settles) and not in `after` (the
+ *    cycle never saw it). It is the last state the operator's own gesture passes through that the
+ *    harness could not report on.
+ *
+ *    SAME POSTURE AS EVERY POINT ABOVE: the decision is `app/present/draft.ts`'s own `placeDraft`,
+ *    called with the facts this harness already has, and no new judgement is added here. Supply
+ *    `drafting: { lineIndex, seed, typed }` to ask; omit it and `draft` is `null`.
  */
 
 import {
@@ -89,6 +100,8 @@ import {
   instancesOf,
   membershipFor,
   orderingFor,
+  placeDraft,
+  placeFor,
   resolveInstanceAnchor,
   sectionAt,
   sectionOrderFor,
@@ -280,6 +293,30 @@ function heldFor(view, before, gesture, anchor, reading) {
 }
 
 /**
+ * WHAT WOULD HAPPEN TO A ROW HE HAS OPEN AND HAS NOT COMMITTED. See this file's header, point 7.
+ * `null` when the fixture names no `drafting`, which is every fixture written before this existed.
+ *
+ * THE PLACE IS TAKEN AGAINST `before` AND THE PLACEMENT RESOLVED AGAINST `after`, which is exactly
+ * the pairing the page makes: `openLine` takes the place off the string the row's index means, and
+ * `paintView` resolves it against the string that has just replaced it. Taking it against
+ * `localAfter` instead would be describing a row opened into a file the operator's own gesture had
+ * already changed — a different fixture, and not the one this field is for.
+ */
+function draftFor(view, before, after, drafting) {
+  if (drafting === undefined || drafting === null) {
+    return null;
+  }
+  const seed = drafting.seed ?? "";
+  const draft = {
+    lineIndex: drafting.lineIndex,
+    seed,
+    typed: drafting.typed ?? seed,
+    place: placeFor(before, drafting.lineIndex, view.id),
+  };
+  return { draft, placement: placeDraft(draft, before, after, view.id) };
+}
+
+/**
  * Replay ONE gesture-then-projection cycle and report what converged.
  *
  * `view`: `{ id, path }`.
@@ -294,8 +331,10 @@ function heldFor(view, before, gesture, anchor, reading) {
  *   projections come from" in the step's own brief names.
  * `qualification`, `resolution`: the same declaration tables `app/index.html` reads once at load —
  *   real, taken from the shipped `presentation.json` unless a fixture overrides them.
+ * `drafting`: `{ lineIndex, seed, typed? }` — a row he has OPEN and has not committed, at the index
+ *   it would occupy in `before`. Omit it and the `draft` reading is `null`. See point 7.
  */
-export function replay({ view, before, editBase, gesture, after, qualification, resolution }) {
+export function replay({ view, before, editBase, gesture, after, qualification, resolution, drafting }) {
   const base = editBase ?? before;
   const localAfter = localAfterFor(before, gesture);
   const lineIndex = gesture.lineIndex ?? null;
@@ -347,5 +386,7 @@ export function replay({ view, before, editBase, gesture, after, qualification, 
 
   const held = heldFor(view, before, gesture, anchor, cursor);
 
-  return { cursor, membership, ordering, preserved, base: baseReading, anchor, sectionId, held };
+  const draft = draftFor(view, before, after, drafting);
+
+  return { cursor, membership, ordering, preserved, base: baseReading, anchor, sectionId, held, draft };
 }

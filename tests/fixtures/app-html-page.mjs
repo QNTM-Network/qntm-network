@@ -154,6 +154,11 @@ export { orderingNoteFor as __orderingNoteFor };
 export const __held = () => held;
 export { paintHeldRows as __paintHeldRows };
 export const __sentEdit = () => sentEdit;
+// THE LINE BEING MADE (app/present/draft.ts). A getter, the same reason \`__held\` and \`__served\`
+// are: a suite reads the row the page is holding NOW, and \`draftLine\` is a module-scoped const
+// whose CONTENTS change under it. It is the only way to tell "the row survived and was re-placed"
+// apart from "the row was destroyed and a new one opened", which are the same screen.
+export const __draft = () => draftLine;
 `;
 
   const file = join(workDir, "page.mjs");
