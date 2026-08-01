@@ -1692,12 +1692,29 @@ function paintHeldRows() {
  * row and this names it, in the one line this page already uses to say what just happened. The
  * `ambiguous` sentence is unchanged, because nothing is held for it — the line is still in the
  * file, printed more than once (see `paintView`).
+ *
+ * ── ONE `found` NOW SPEAKS, AND EXACTLY ONE — `widen-instance-identity-past-the-first-stamp` ──
+ *
+ * `resolveInstanceAnchor` grades a restore by `ANCHOR_TRUST` (app/present/instance.ts), and two of
+ * the four rungs are new: `relative` (the line the operator was authoring, found because its
+ * NEIGHBOURHOOD held and its characters confirmed it) and `text` (found because exactly one line in
+ * the view still carries his characters, the neighbourhood having moved). A weaker claim must say
+ * it is weaker, and this is where the page says things.
+ *
+ * ONLY `text` SPEAKS, AND THE SPLIT IS A DECISION RATHER THAN AN OVERSIGHT. On `relative` the
+ * position AND the characters agree, which is as much as an `instance` match asserts, and it is the
+ * ORDINARY outcome of typing a line — narrating it would put a sentence in the freshness line on
+ * every single capture, in the one line this page keeps for events that actually happened. On
+ * `text` the neighbourhood the line was written into is gone and only the characters answered: the
+ * cursor is somewhere he did not put it, for a reason he cannot see, and that IS an event.
  */
 function reportCursorReading(reading) {
   if (reading.outcome === "absent") {
     cursorNote = "the line you were on is not in this view any more — what was on it is held below";
   } else if (reading.outcome === "ambiguous") {
     cursorNote = "this view prints that line more than once, so the cursor was not moved";
+  } else if (reading.outcome === "found" && reading.via === "text") {
+    cursorNote = "the cycle moved the line you were writing — the cursor followed it by what you typed";
   }
 }
 

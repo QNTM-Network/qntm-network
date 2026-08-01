@@ -783,7 +783,24 @@ backlog:
     the surface exists; stage 3 builds the first piece of it. Single user; signups,
     accounts and isolation are explicitly OUT of scope and their absence is a decision.
     NO FALSIFIER IS POSSIBLE TODAY and none is claimed — declared so the distance is
-    in the queue instead of in a conversation.'
+    in the queue instead of in a conversation.
+    CLOSER, 2026-08-01, BY EXACTLY ONE BLOCKER AND NOT MORE. Until this date the act of
+    authoring destroyed the cursor''s hold on the line being authored: the cycle stamped
+    the line, the anchor could no longer find it, and the operator was left mid-sentence
+    with the cursor somewhere else. `a-line-being-authored-keeps-its-cursor-through-the-
+    first-stamp` (capabilities.yaml) closes that. WHAT IS STILL IN THE WAY, and none of
+    it is smaller than the thing just closed: (1) a projection can still only arrive
+    because the browser asked for it — `the-projection-arrives-without-being-asked-for`
+    is open, so the cursor recovery this row now has is exercised on a poll the operator
+    triggered rather than on the world moving under him; (2) `paintView` still calls
+    `draftLine.drop()` unconditionally on arrival, so a line he has OPENED but not yet
+    committed is still destroyed — `a-line-being-made-survives-a-projection-too`, which
+    now has an anchor to be re-anchored WITH and is otherwise unchanged; (3) the server
+    still accepts a stale write — `the-write-is-refused-server-side` shipped the Worker
+    half but the refusal is not switched on, which is the operator''s decision and needs
+    the other repository; (4) a capture into a section with NO stamped line in it is
+    still refused, deliberately — see `the-relative-anchor-has-no-landmark-in-an-empty-
+    section`.'
   driving_capability: a-human-authors-in-the-browser
   kind: capability
   state: diagnose-ready
@@ -1538,7 +1555,48 @@ backlog:
     RELATIVE ("after the node qntm:122"), read off the line above it when it was opened. One field
     on `Draft`. Needs 3 and 7, and genuinely worthless before 7: until a projection can arrive
     unbidden, `drop()` is correct and this row would be a change with no observable effect.
+    HALF OF THIS ROW LANDED 2026-08-01 AND HALF DID NOT, and the split is worth stating exactly.
+    THE ANCHOR EXISTS NOW — `app/present/relative.ts` builds precisely the RELATIVE anchor this row
+    names, and it is a construct rather than "one field on `Draft`": a bracket (nearest stamped node
+    above AND below), a gap count, an offset, and the characters, because "after the node qntm:122"
+    alone cannot tell two lines opened one after another apart and says nothing at all about a line
+    opened at the TOP of a section, which is where a real capture lands in the operator's own inbox.
+    WHAT IS STILL OPEN IS THE `drop()` CALL ITSELF. `app/index.html`'s `paintView` still drops the
+    draft unconditionally on a projection arrival, and this row's reasoning about why that is wrong
+    is untouched. What has changed is that the hard part is no longer missing: a dropped draft could
+    now be re-anchored, where before there was nothing to re-anchor it to. The row is still gated on
+    7 (`the-world-moves-around-you`) for the same reason it always was — until a projection can
+    arrive unbidden, `drop()` is correct and changing it would have no observable effect.
   driving_capability: the-edit-is-a-safe-haven
+  kind: capability
+  state: diagnose-ready
+- id: the-relative-anchor-has-no-landmark-in-an-empty-section
+  title: >-
+    [present] [HALF A DAY] `app/present/relative.ts` REFUSES to take an anchor at all when nothing
+    in the line's section carries a `[[qntm:N]]` — there is no landmark that outlives the cycle, so
+    a bracket of two nulls would be the whole file wearing a bracket's clothes. That refusal is
+    correct as written and it is also a real remaining hole in the apex capability: the operator's
+    FIRST capture into a section is exactly the case with no stamped neighbour, and it is the case
+    where losing the cursor costs the most, because there is nothing else on screen to land on.
+    `tests/present-relative.test.mjs` section 1 asserts the refusal directly, and
+    `tests/present-replay.test.mjs` section 1's marquee fixture is one instance of it — though that
+    fixture is NOT evidence for this row, because its line genuinely leaves the view and no anchor
+    of any kind could bring it back.
+    THREE CANDIDATE LANDMARKS, NONE COSTED, AND EACH HAS A DIFFERENT OWNER. (a) THE SECTION ITSELF —
+    "the Kth line in section ordinal N" is already derivable in the browser, and it survives the
+    stamp, but it does NOT survive the cycle inserting anything above the line, which is what a
+    cycle does to a section it has just started filling. (b) THE NEIGHBOURING SECTION'S nearest
+    stamped node — widens the bracket across a heading, which `relative.ts` currently refuses as
+    `bracket-crossed` on purpose, and would need an argument that a heading is not a real boundary
+    for this one purpose. (c) THE ENGINE MINTS THE ID BEFORE THE WRITE — the operator's own edit
+    would carry a node from the start and none of this would be needed; that is an ENGINE question
+    and belongs in the other repository, and it is the only one of the three that removes the
+    problem rather than routing around it.
+    NOT SIZED AND DELIBERATELY NOT GUESSED AT HERE. Whichever lands, the rule this module already
+    keeps must survive it: a landmark that can put the cursor on a line the operator did not write
+    is worse than a refusal, and the TEXT rung already catches the sub-case where the characters
+    alone can answer.
+  driving_capability: a-line-being-authored-keeps-its-cursor-through-the-first-stamp
   kind: capability
   state: diagnose-ready
 - id: correct-the-dangerous-sentence-in-app-source
@@ -2434,6 +2492,22 @@ backlog:
     whether a prefix match is SAFE (a title that happens to be a prefix of an unrelated line's title,
     in the same section, is a real ambiguity a text-prefix tier would have to refuse rather than
     guess through) is an open question this row states rather than resolves.
-  driving_capability: projection-replay-convergence-is-measured
+    CLOSED 2026-08-01, AND THE OPEN QUESTION ABOVE WAS ANSWERED RATHER THAN ASSUMED AWAY. The third
+    tier this row sketched — "was the anchor's own instance a PREFIX of a newly-stamped line's text"
+    — was built, and it is the WEAKER of the two rungs `app/present/relative.ts` adds, not the only
+    one. The row's own doubt was right: a text-prefix tier alone would guess, so it is reached only
+    after a BRACKET rung (nearest stamped node above and below, plus a gap count and an offset) has
+    refused, and it refuses rather than picks when more than one line in the view extends the
+    characters. Neither rung is taken for a line that already carries a stamp, so the two-tier
+    contract this row was careful about is not widened for any line that used it: `instance.ts`'s
+    first two tiers are byte-identical, and both existing suites
+    (`tests/present-instance.test.mjs`, `tests/present-anchor.test.mjs`) pass unmodified. See
+    capability `a-line-being-authored-keeps-its-cursor-through-the-first-stamp`.
+  driving_capability: a-line-being-authored-keeps-its-cursor-through-the-first-stamp
   kind: capability
-  state: diagnose-ready
+  record: >-
+    app/present/relative.ts; ANCHOR_TRUST + the third and fourth rungs in app/present/instance.ts;
+    tests/present-relative.test.mjs (34 arms, 4 mutation proofs); tests/present-replay.test.mjs
+    section 1b (the measured line itself, replayed); tests/app-held-edit.test.mjs sections 2f/2g
+    (both rungs through the real page); tests/flow_scenarios/instance_anchor.ts.
+  state: passing

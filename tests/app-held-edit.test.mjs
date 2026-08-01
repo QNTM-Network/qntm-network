@@ -298,6 +298,40 @@ const TYPED = "- [ ] Ring the dentist #work";
 /** What a real cycle does with it: mints the node, and the line leaves this view (replay §1). */
 const STAMPED_ELSEWHERE = ["# This Week", "", "## Overdue", ""].join("\n");
 
+/**
+ * §2f — THE SAME AUTHORING SHAPE AS §2b, EXCEPT THE LINE STAYS IN THE VIEW. `BARE` above has no
+ * stamped line in its section at all, so it is the case the relative anchor REFUSES (there is no
+ * landmark that outlives the cycle — app/present/relative.ts). This one has `qntm:122` under it,
+ * which is what the operator's own inbox actually looks like when he captures into it.
+ */
+const BARE_WITH_NEIGHBOUR = [
+  "# This Week",
+  "",
+  "## Overdue",
+  "- [ ] Ring the dentist",
+  "- [ ] Water the plants [[qntm:122]] #task",
+  "",
+].join("\n");
+const AUTHORED = 3;
+/** What a real cycle does when the line STAYS: mints the node and appends its tokens after his. */
+const STAMPED_IN_PLACE = [
+  "# This Week",
+  "",
+  "## Overdue",
+  "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+  "- [ ] Water the plants [[qntm:122]] #task",
+  "",
+].join("\n");
+/** The same arrival, with the cycle having RE-SORTED his line above the heading's other item. */
+const STAMPED_AND_RESORTED = [
+  "# This Week",
+  "",
+  "## Overdue",
+  "- [ ] Water the plants [[qntm:122]] #task",
+  "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+  "",
+].join("\n");
+
 /** §3 — the same characters coming BACK, with the cycle's own tokens appended. */
 const CAME_BACK = ["# This Week", "", "## Overdue", `${TYPED} [[qntm:2604]] #task 🆕 2026-08-01`, ""].join("\n");
 
@@ -498,6 +532,39 @@ describe("2. THE FOUR WAYS A LINE GOES ABSENT — his characters survive every o
     assert.equal(rows[0].node, null, "this arm is not the §2a shape — the node tier never ran");
     assert.deepEqual(d.heldTexts(), [TYPED]);
   });
+
+  test(
+    "2f. THE FIRST STAMP OF AUTHORING, WHEN THE LINE STAYS — the cursor holds and NOTHING is held. " +
+      "This is `author-in-the-browser-not-in-obsidian`'s own blocker, through the real page.",
+    () => {
+      d.land(BARE_WITH_NEIGHBOUR);
+      d.setFocus(AUTHORED, BARE_WITH_NEIGHBOUR);
+      const anchor = page.__focusAnchor();
+      assert.equal(anchor.node, null, "the line he is authoring still has no node — nothing about that changed");
+      assert.equal(anchor.relative.below, "qntm:122", "and it now carries where it SAT");
+
+      d.land(STAMPED_IN_PLACE);
+
+      assert.equal(page.__focusIndex(), AUTHORED, "the cursor left the line he was writing");
+      assert.equal(page.__held().count, 0, "nothing was lost, so nothing should be held");
+      assert.match(d.freshness(), /^as of .* · 0 queued$/, "a restore this certain needs no sentence");
+    },
+  );
+
+  test(
+    "2g. THE SAME, WITH THE CYCLE RE-SORTING IT — the cursor follows by the characters, and the " +
+      "page SAYS the claim was weaker, because the line is somewhere he did not put it",
+    () => {
+      d.land(BARE_WITH_NEIGHBOUR);
+      d.setFocus(AUTHORED, BARE_WITH_NEIGHBOUR);
+
+      d.land(STAMPED_AND_RESORTED);
+
+      assert.equal(page.__focusIndex(), 4, "the cursor did not follow the line the cycle moved");
+      assert.equal(page.__held().count, 0);
+      assert.match(d.freshness(), /the cycle moved the line you were writing/);
+    },
+  );
 
   test("2c. MOVED OUT OF THE VIEW — the same safe answer, and the browser cannot tell it from 2a", () => {
     d.land(V1);

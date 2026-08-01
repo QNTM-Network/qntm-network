@@ -2468,3 +2468,126 @@ capabilities:
     `flag-one-markdown-implementation-is-now-three` and a change of its own. See docs/architecture/
     flows.yaml for the matching `forbidden_flows` entry and for why no scenario is written.
   status: working
+
+- id: a-line-being-authored-keeps-its-cursor-through-the-first-stamp
+  intent: >-
+    THE APEX CAPABILITY'S OWN BLOCKER, CLOSED. `author-in-the-browser-not-in-obsidian` means the
+    operator types a line into the browser and the cycle takes it into the graph. Until this row,
+    the second half destroyed the first: the moment the cycle stamped the line he was writing, the
+    cursor stopped being able to find it. `design-presentation-instance-identity.md` §3.2 measured
+    it on a real line as he typed it — `- [ ] Lesley pay tenner`, resolved against the projection
+    that came back, outcome `absent` — and `tests/present-replay.test.mjs` §1 reproduced it as a
+    measurement and generalised it past any one view.
+    WHY IT FOLLOWED FROM THE DESIGN RATHER THAN FROM A DEFECT. `membershipFor` (membership.ts)
+    answers only when a line carries no `[[qntm:N]]` — it predicts ONLY for a line being typed. So
+    at the instant a prediction matters, `instanceAnchorFor` gives that line's anchor `node: null`,
+    because there is no node yet. The cycle then stamps the line. The NODE tier of the two-tier walk
+    has nothing to search with; the INSTANCE tier fails because an unstamped line's identity IS its
+    own exact characters and the stamp changed them. Both tiers are structurally unavailable at
+    once, which is why the reading was `absent` — unconfirmable, not wrong.
+    WHAT WAS BUILT — A SECOND CONSTRUCT, NOT A WIDER INSTANCE FORMAT. `app/present/relative.ts`, the
+    row the design named and refused to fold in: "a relative anchor is an id expressed as a position
+    between two instances … but it is a second thing to build, not a consequence of the first." An
+    instance id is a claim about ONE row; this is a claim about a NEIGHBOURHOOD, and widening the
+    instance format would have made every stamped line's id depend on lines it has nothing to do
+    with. So: a separate module, a separate type, a separate proof — and ONE walk, because the rung
+    ORDER is a fact that must live in one place.
+    THE ANCHOR IS A BRACKET, A GAP COUNT, AN OFFSET AND THE CHARACTERS. `above` is the nearest
+    stamped node above within the section (or null, in which case the bracket's top is the section's
+    own first line); `below` the same downward; `gap` is how many non-blank lines stood between them;
+    `offset` is which of those the line was; `text` is what he typed. The bracket names a CANDIDATE
+    and the characters CONFIRM it — the arrived line must EXTEND the remembered text, which is the
+    one real shape every stamped line in `~/qntm/inbox.md` shows (the title first, the cycle's tokens
+    appended after, never a rewritten prefix). "After node 122" alone was the other candidate and was
+    rejected on evidence rather than taste: it cannot tell two lines opened one after another apart,
+    and it says nothing about a line opened at the TOP of a section, which is where a new capture
+    actually lands in the operator's own inbox.
+    WHAT IT CANNOT SURVIVE, NAMED RATHER THAN DISCOVERED LATER. The cycle moving the line OUT of its
+    bracket (inbox prints newest first, so a capture typed at the bottom is re-sorted to the top);
+    the cycle inserting another line INTO the bracket; a bracketing node leaving the view; a
+    bracketing node printing twice. Each is a named refusal with its own reason, and each is a test.
+    A SECOND, WEAKER RUNG CATCHES THE FIRST OF THOSE, AND SAYS THAT IT IS WEAKER. `text` — exactly
+    one line in the whole view still extends the remembered characters. It is the retired
+    `anchor.ts`'s own floor, revived with two changes that make it safer than it was: an EXTENSION
+    relation rather than exact equality (so it survives the stamp, which is the point), and more than
+    one match is `ambiguous` rather than a pick. It exists because the re-sort case is not a corner
+    case — it is what the operator's real inbox does to every capture typed below the first item.
+    `held.settle` already stakes his characters on this same predicate, view-wide, to RELEASE a held
+    row, which is the strictly more dangerous of the two decisions.
+    THE ORDER IS OWNED IN ONE TUPLE. `ANCHOR_TRUST = [instance, node, relative, text]`
+    (`app/present/instance.ts`), revived under the name the retired `anchor.ts` used. `relative` sits
+    AFTER `node` because a node id is a fact the engine mints and preserves while a neighbourhood is
+    an inference from two other lines holding still, which nothing promises — and the question is
+    moot by construction as well as by argument, because a relative anchor is only ever taken for a
+    line with NO node. The engine's own `levels.py` records what an order re-expressed per site cost
+    this project once already, and `tests/present-relative.test.mjs` §4 asserts the walk against the
+    tuple rather than against prose.
+    NO EXISTING RUNG IS WEAKENED, AND THIS IS PROVED STRUCTURALLY RATHER THAN ASSERTED. A relative
+    anchor is `null` for every line carrying a stamp, so for every stamped line in the operator's
+    vault the walk is byte-identical to what it was. For an UNSTAMPED line the walk could previously
+    return only `found`/`via:"instance"` or `absent` (`ambiguous` requires a node to search with), so
+    the new rungs run ONLY on the path that already returned `absent`. Nothing that answered before
+    answers differently now.
+    A HEADING IS EXCLUDED, AND THE EXCLUSION WAS FOUND BY A TEST RATHER THAN FORESEEN. A heading
+    carries no stamp, so it reached the same path an authored line does, and the first version of the
+    module gave it a bracket — and with it the TEXT rung, which compares characters. `~/qntm/
+    metrics.md` prints its five headings as `## <name> <emoji> <ratio>` and the ratio changes every
+    cycle. A heading identified by its characters is precisely the defect `instance.ts` exists to
+    remove, and its answer (a heading's token is a CONSTANT) is already strictly better than anything
+    a neighbourhood could say.
+    THE PAGE SAYS THE WEAKER CLAIM, AND SAYS ONLY THAT ONE. `reportCursorReading` narrates a `text`
+    restore ("the cycle moved the line you were writing — the cursor followed it by what you typed")
+    and stays silent on `relative`. The split is a decision: on `relative` the position AND the
+    characters agree, which is as much as an `instance` match asserts, and it is the ORDINARY outcome
+    of typing a line — narrating it would put a sentence in the freshness line on every capture, in
+    the one line the page keeps for events that actually happened.
+    EVIDENCE TIER — OBSERVED, NODE-TEST ONLY, FIXTURES THROUGHOUT. `tests/present-relative.test.mjs`,
+    34 arms across five sections: what the anchor is and all five cases where it refuses to be taken;
+    the stamp survived over real `~/qntm/inbox.md` content; one test per named refusal plus the
+    ambiguous case; the rung order against `ANCHOR_TRUST`, including a case where all four rungs are
+    exercised in order; and four MUTATION PROOFS which each delete one guard from a copy of the
+    shipped `dist/present.js`, load it from a `data:` URL, and show the cursor land on a line the
+    operator never wrote. `tests/present-replay.test.mjs` §1b replays the measured blocker itself —
+    the exact `- [ ] Lesley pay tenner` line — with the AFTER being the real inbox file and the
+    BEFORE being that file with the one line he typed removed. `tests/app-held-edit.test.mjs`
+    §2f/§2g drive both new rungs through the real `app/index.html`, asserting that the cursor moves,
+    that nothing is held, and that the freshness line speaks for one rung and not the other.
+    ONE EXISTING ASSERTION CHANGED, AND IT IS NAMED IN THE TEST ITSELF. `tests/present-replay.test.mjs`
+    §1's brand-new-capture case asserted `cursor.outcome === "absent"` and `preserved === "unknown"`.
+    Those were the MEASUREMENT OF THE DEFECT, recorded so it could not be forgotten, not a statement
+    of intent — and a test whose expected values were the defect is the one kind that must change
+    when the defect is fixed. The fixture did not move: same before, same gesture, same after, only
+    the answer. Its sibling — the case where the line LEAVES THE VIEW ENTIRELY — is unchanged and
+    still asserts `absent`, which is what stops this from being a test rewritten to fit an
+    implementation.
+    THE HARNESS'S OWN MEMBERSHIP GROUND TRUTH WAS CORRECTED, and the correction is a generalisation
+    rather than a rewrite. `actualMembership` read `via === "instance"` as "the row stayed in its
+    section", which was sound for a two-rung walk (an instance string ENCODES the section, and the
+    only other way to be found was the node tier, which fires only when the instance changed). It is
+    not sound for a four-rung one: a stamp changes an unstamped line's instance for a reason that has
+    nothing to do with its section, so every closed first-stamp report would have read as a spurious
+    `leaves`. It now compares the section ORDINAL directly — the same fact, read where it lives — and
+    for a `via:"instance"` match the two ordinals are equal by construction, so every reading it gave
+    before is unchanged. `tests/present-replay.test.mjs` §1b's third test is what this unlocks: a
+    membership prediction on an authored line now reports `converged: true` where it reported `null`.
+    WHAT IS NOT VERIFIED, SAID PLAINLY. No browser was opened. No passkey session, no live graph
+    server, no engine cycle, no real POST, no `graph-sync`. Every projection is a fixture and every
+    stamp is hand-written the way the operator's own real lines show one. `flow-trace verify .` was
+    NOT RUN — the tool is not installed in this worktree — so the four `expected_flows` entries this
+    row adds are declared from the scenario's own drive rather than from an observed capture, and
+    `tests/flow_scenarios/instance_anchor.ts` was run standalone under node instead (it passes).
+  tier: functional
+  rooting: >-
+    ROOTED, AND THE ROOTING IS THE POINT. `app/present/relative.ts` imports NOTHING — the same
+    structural property `held.ts` has, arrived at from the opposite end: `held.ts` carries no line
+    index because an index is what `applyEdit` takes, and this module's whole OUTPUT is an index, so
+    the separation has to be that it can never reach the thing an index would be handed to. The
+    dependency runs one way only: `instance.ts` imports `relative.ts` and never the reverse, which is
+    what lets the rung ORDER live in `instance.ts` alone instead of being split across two modules.
+    `docs/architecture/flows.yaml` declares the two edges plus the two `instance.ts` -> `resolution.ts`
+    edges that were previously undeclared, and two `forbidden_flows` entries (never `source.ts`,
+    never `paint.ts`). `tests/flow_scenarios/instance_anchor.ts` observes all four and additionally
+    closes the gap `tests/flow_scenarios/vim_gestures.ts` recorded in as many words — "`instance.ts`
+    is sibling-owned and still in flight, so it is deliberately left unscenario'd here … a real gap
+    today, not an oversight".
+  status: working
