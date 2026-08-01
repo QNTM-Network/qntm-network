@@ -103,7 +103,19 @@ describe("1. the committed declaration moves exactly one key and no other", () =
     }
   });
 
-  test("with `tags` taken back to the default, the served file paints today's DOM exactly", () => {
+  test("with the TOKEN keys taken back to their defaults, the served file paints today's DOM exactly", () => {
+    // ── AND IT MOVED AGAIN WHEN `stamp` SHIPPED, FOR EXACTLY THE SAME REASON ──
+    //
+    // presentation.json now declares TWO keys against a non-default value: `tags: wired` and
+    // `stamp: wired`. Both are TOKEN keys — they change a run of characters inside a line rather
+    // than the element the line IS — and both are the instance's decision rather than the floor.
+    // So the assertion is not "one key" any more; it is "the token keys and nothing else", which
+    // is the guarantee that was always underneath it. Every LINE key (checkbox, heading, prose)
+    // must still be today's behaviour restated as a declaration, and this is what proves it.
+    //
+    // It is expressed as a LIST rather than as a spread of DEFAULT so that a future key silently
+    // joining the served file cannot be absorbed: a key that is neither in this list nor at its
+    // default will move the DOM and fail here, which is what makes the list a decision.
     // ── THIS ASSERTION CHANGED AT STAGE 8, AND THE CHANGE IS THE POINT OF THAT STAGE ──
     //
     // It used to read "the painted DOM under it is identical to the painted DOM with no
@@ -117,16 +129,42 @@ describe("1. the committed declaration moves exactly one key and no other", () =
     // every other decision the app makes is still the decision it made before any of this existed.
     // So it is asserted as a difference of exactly one key rather than abandoned: take `tags` back
     // to its default and the two paints must be byte for byte the same tree.
-    const declared = presentationFromDeclaration({ ...SERVED, tags: DEFAULT.tags }).context;
+    const TOKEN_KEYS = ["tags", "stamp"];
+    const floored = { ...SERVED };
+    for (const key of TOKEN_KEYS) {
+      floored[key] = DEFAULT[key];
+    }
+    const declared = presentationFromDeclaration(floored).context;
     assert.equal(
       serialize(painted(VIEW_MARKDOWN, declared)),
       serialize(painted(VIEW_MARKDOWN, new PresentationContext())),
-      "the shipped declaration moves something OTHER than `tags` — every key but that one is " +
-        "supposed to be today's behaviour restated as a declaration",
+      `the shipped declaration moves something OTHER than ${TOKEN_KEYS.join(" and ")} — every ` +
+        "other key is supposed to be today's behaviour restated as a declaration",
     );
   });
 
-  test("and as shipped it does move the DOM, because `tags` is doing something", () => {
+  test("and each token key moves the DOM ON ITS OWN, so neither is inert", () => {
+    // THE OTHER HALF, AND NOW IT IS PER KEY. Asserting only that the whole declaration moves the
+    // DOM would go green with `stamp: wired` doing nothing at all, because `tags: wired` already
+    // moves it — one live key would mask a dead one, which is the exact bug the GLOBAL level
+    // exists to detect. So each is flipped ALONE against the served file and must move it alone.
+    const silent = serialize(painted(VIEW_MARKDOWN, new PresentationContext()));
+    for (const key of ["tags", "stamp"]) {
+      const only = { ...SERVED };
+      for (const other of RESOLUTION_KEYS) {
+        if (other !== key) {
+          only[other] = DEFAULT[other];
+        }
+      }
+      assert.notEqual(
+        serialize(painted(VIEW_MARKDOWN, presentationFromDeclaration(only).context)),
+        silent,
+        `'${key}: ${SERVED[key]}' paints the same DOM as no declaration at all — it is inert`,
+      );
+    }
+  });
+
+  test("and as shipped it does move the DOM, because the token keys are doing something", () => {
     // The other half, and the one that would catch an inert declaration: a key declared against
     // its non-default value has to show up on the page.
     assert.notEqual(

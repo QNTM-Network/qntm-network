@@ -364,6 +364,60 @@ capabilities:
     lifted script, now via `__applyPresentation` (the exact function `loadPresentation` calls)
     rather than a stubbed `fetch`, because there is nothing left on a wire to stub. Nothing about
     WHICH rendition wins, or that an unrecognised key is reported rather than guessed, moved.
+    ── UPDATE 2026-08-01, THE SECOND TOKEN RENDITION SHIPPED — `stamp`. FIVE KEYS NOW — checkbox,
+    heading, prose, tags, stamp — and this one is the first whose wired rendition REMOVES source
+    characters from the page rather than styling them. `[[qntm:3]]` becomes one small mark carrying
+    the id in a `title`, so a line stops gaining twelve characters when the cycle catches up.
+    IT IS NOT THE DESIGN'S `links` KEY AND IT IS DELIBERATELY NARROWER, WHICH IS THE WHOLE
+    BOUNDARY. `app/present/resolution.stampSpans` mirrors the engine's IDENTITY grammar
+    (`apps/qntm-md/src/qntm_md/io/parser/parse_qntm_id.py:20-23`) and never the wider wiki-link
+    grammar (`parse_wiki_link.py:26`) that `titleSpans` uses for word motions. The asymmetry is the
+    argument, and it runs in opposite directions for the two callers: over-application is SAFE for
+    a word motion (a target one word further on than expected) and UNSAFE for a rendition (it would
+    hide `[[JB to send over Sarasin]]`, which is four words the operator typed into
+    `~/qntm/habits.md` and reads). So the skip stays wide and the hiding stays narrow. `links`,
+    meaning a rendition of the title form, is still unshipped and still has no reader.
+    THE FLOOR IS `raw`, AND HERE THAT IS A SAFETY DECISION RATHER THAN ONLY AN ARCHITECTURAL ONE.
+    `DEFAULT.stamp` is `raw`, so a declaration that fails to load, or a key misspelled, falls back
+    to SHOWING the stamp. The failure direction of a rendition that hides an identity must be "it
+    becomes visible again", never "it becomes invisible".
+    WHY A MARK RATHER THAN NOTHING AT ALL. Hidden entirely, a line the model has never seen and a
+    line it has minted a node for are pixel-identical, so "has it got this yet" — the one question
+    the operator asks of the page every time he presses Enter — stops having an answer on it. One
+    character answers it instead of twelve. Hiding completely is one CSS rule away
+    (`display: none` on `.viewbody .stampmark`), with nothing rebuilt.
+    IT IS SAFE BY CONSTRUCTION AND NOT BY CARE. `accept ⊇ emit` read one layer up says a token you
+    stop printing must still be written back byte for byte, and a dropped `[[qntm:N]]` RE-MINTS THE
+    NODE (the engine absorbs an unrecognised stamp's content into the node's title, exit 0, no
+    diagnostic — seven identities lost that way on 2026-07-31). What makes it safe is that hiding
+    happens in the painter's `renderTokens`, whose output reaches exactly one place —
+    `element.innerHTML` — while every write is computed from the SOURCE STRING the painter was
+    handed and never mutates it. No source edit was added, `SourceEdit` is still the closed union
+    of three, and the cursor takes the line raw on every key so the characters are always reachable.
+    WHAT IS PROVEN, and by what. `tests/present-stamp.test.mjs` (51) — the grammar against the
+    engine's citation over named cases plus an 88-case sweep; the round trip over the operator's
+    REAL lines, both as literal copies and as a read-only sweep of the LIVE vault; the string the
+    write path is handed is the source byte for byte; ticking every box changes exactly one glyph
+    and keeps every stamp in the file in order; editing a title keeps that line's own stamp; a
+    title-form wiki-link is never hidden while word motions still skip it; every key raw under the
+    cursor; the id cannot carry a character that would close its own attribute (fuzzed).
+    `flow-trace verify .` exits 0 at 58 PASS / 0 FAIL with the new edge OBSERVED
+    (app/present/paint → app/present/resolution.stampSpans, count 1). The golden master did not
+    move. MUTATION-PROVEN THREE WAYS, each red with its own message, each restored - the source
+    stripped before painting (89 of 1,118 red across the suite, including the headline assertion),
+    the hiding grammar widened to the wiki-link form (5 red, one of them a real vault line
+    `#unlocks [[Cluster B]]`), and the all-or-nothing fallback removed (5 red).
+    WHAT IS MEASURED AND IS NOT 100%, STATED HERE RATHER THAN LEFT TO A READER TO DISCOVER. Of
+    2,496 stamps in the live vault on 2026-08-01, 2,390 hide and 106 stay printed. Every one of
+    the 106 is a PROSE line indented 4, 8 or 12 spaces — its glyph is `[>]` or another spelling
+    outside `TASK`'s `( |x|X)`, so `classifyLine` calls it prose, prose is block-rendered WITH its
+    indent, and markdown-it reads four leading spaces as a code block and escapes the markup. The
+    all-or-nothing fallback then correctly restores the whole line. THIS IS THE TAG CHIP'S OWN
+    FALLBACK, INHERITED UNCHANGED - those same 106 lines already show their tags as characters
+    rather than as chips, measured both ways. A nested `- [ ]` line hides correctly, because the
+    checkbox branch renders only its tail, inline, with no indent. The invariant the tests hold is
+    therefore ALL-OR-NOTHING rather than "always hidden" - never a stamp that is neither shown nor
+    marked. Filed as `an-indented-prose-line-cannot-carry-a-token-rendition`.
   tier: foundational
   status: undeclared
 - id: the-focused-line-shows-its-source

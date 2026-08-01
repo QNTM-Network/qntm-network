@@ -492,6 +492,52 @@ describe("one row geometry, two renditions", () => {
     }
   });
 
+  test("the identity mark is held to the chip's rule, not to a second opinion", () => {
+    // THE THIRD WAY IN, and the one that arrives on EVERY node line rather than only on tagged
+    // ones — the engine stamps every node it prints, so a mark that cost the row a fraction of a
+    // pixel would accumulate down every view in the vault, not only down a view full of tags.
+    //
+    // It is the SAME SHAPE as the chip (an atomic inline inside a line) so it is held to the SAME
+    // assertions, with one extra: the chip may have padding and a border because it is a pill, and
+    // the mark may have NEITHER, because it is one character and its box must be that character's
+    // content area and nothing more. That is what lets it reuse the chip's measured 23.9986px
+    // argument instead of making a fresh unmeasured claim about a dot of some chosen size.
+    const MARK = ".viewbody .stampmark";
+    assert.ok(rulesFor(MARK).length > 0, "the identity mark has no rule at all");
+
+    // Atomic, for the chip's own reason: a `line-through` on `.task.done span` propagates to every
+    // descendant and only an ATOMIC inline is exempt.
+    assert.equal(declared(MARK, "display"), "inline-block");
+    assert.ok(
+      rulesFor(".viewbody .task.done span .stampmark").length > 0,
+      "the mark is atomic for the sake of a rule that no longer exists — remove one, remove both",
+    );
+
+    const lineHeight = declared(MARK, "line-height");
+    assert.match(String(lineHeight), /^[\d.]+$/, `${MARK} line-height must be a unitless number`);
+    assert.ok(Number(lineHeight) <= 1, `${MARK} line-height is ${lineHeight}, which can outgrow the row`);
+
+    // AND NO BOX OF ITS OWN, AT ALL. `padding` and `border` join the chip's list here: an atomic
+    // inline counts them, and the mark's whole row-safety argument is that it counts nothing but
+    // its own character.
+    for (const property of [
+      "margin", "margin-top", "margin-bottom", "height", "min-height",
+      "width", "min-width", "padding", "border",
+    ]) {
+      assert.equal(declared(MARK, property), undefined, `${MARK} sets ${property}, which the row cannot absorb`);
+    }
+
+    // A glyph SMALLER than the text it sits in is fine and a LARGER one is not: font-size scales
+    // the content box an atomic inline has to fit, so this is the one property that could make the
+    // mark outgrow the row while declaring no box at all.
+    const fontSize = declared(MARK, "font-size");
+    if (fontSize !== undefined) {
+      const em = /^([\d.]+)em$/.exec(String(fontSize));
+      assert.ok(em !== null, `${MARK} font-size is ${fontSize} — it must be relative to the row's own text`);
+      assert.ok(Number(em[1]) <= 1, `${MARK} font-size is ${fontSize}, which is larger than the line it sits in`);
+    }
+  });
+
   test("the block cursor is a colour and nothing else — it cannot move a line it sits in", () => {
     // NORMAL's cursor is a background swap on ONE character. A readonly `<input>` would have got a
     // native caret for free, and was refused because WebKit and Firefox paint none in one (see
@@ -570,9 +616,14 @@ describe("one row geometry, two renditions", () => {
     // NORMAL mode's block cursor (app/present/paint.ts's `normalLine`). It declares `background`
     // and `color` and nothing else — no padding, no border, no box at all — so unlike the chip it
     // cannot make its line taller even in principle. The test below holds it to that.
+    // `stampmark` is a TOKEN too, and the third of that shape: the `wired` rendition of the
+    // presentation cascade's `stamp` key, an inline span INSIDE a line standing where the engine
+    // printed `[[qntm:3]]` (app/present/paint.ts's `stampMark`). It holds ONE CHARACTER and
+    // declares no box of its own, so it is held to the chip's own rule by the test below — the
+    // same rule, not a second opinion.
     const LINES = ["task", "done", "syncing", "rawline", "vim-selected"];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
-    const TOKENS = ["tagchip", "vim-block"];
+    const TOKENS = ["tagchip", "vim-block", "stampmark"];
     const known = new Set([...LINES, ...TRAILING, ...TOKENS]);
 
     const strays = new Set();

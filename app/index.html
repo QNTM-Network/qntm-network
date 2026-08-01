@@ -728,6 +728,43 @@
   /* A completed line strikes its text through. The chip is not the text — it is a token beside it,
      and a struck-through pill reads as a rendering fault rather than as "this is done". */
   .viewbody .task.done span .tagchip { text-decoration: none; }
+
+  /* THE IDENTITY MARK — the `wired` rendition of the presentation cascade's `stamp` key. Where the
+     engine printed `[[qntm:3]]`, the app draws one dot, and the id is on the element's `title` for
+     a hover. Whether a stamp IS a mark is not decided here — that is presentation.json and
+     app/present/. This rule only says what the mark looks like once the cascade has said there
+     should be one.
+
+     WHY A DOT AND NOT `display: none`. A line the model has never seen and a line it has minted a
+     node for would otherwise be pixel-identical, and "has it got this yet" is the one question the
+     operator asks of the page every time he presses Enter. The dot answers it in one character
+     instead of twelve, so the tail of the line stops moving when the cycle catches up.
+     TO HIDE IT COMPLETELY, set `display: none` on this rule. Nothing else changes and nothing is
+     rebuilt — the painter still emits the span, the cascade still resolves the key, and the
+     characters still come back the moment the cursor lands on the line.
+
+     THE GREEN IS THE DECLARED ONE, at a lower alpha than the chip's: `var(--green)` at 55%.
+     Dimmer because the mark is the machine's fact about the line, not the operator's — it should
+     be findable and never louder than his own words.
+
+     `inline-block` AND `line-height: 1` FOR EXACTLY THE TWO REASONS THE CHIP ABOVE STATES, and no
+     third reason of its own. `inline-block` makes it atomic, which is what exempts it from the
+     `line-through` a completed line propagates. `line-height: 1` keeps its box inside the row's.
+     WHAT IT DELIBERATELY DOES NOT SET is `width`, `height`, `padding` or `border`: it holds ONE
+     CHARACTER, so its box IS that character's content area, which the row already contains by
+     construction. That is the chip's own measured argument reused rather than a fresh unmeasured
+     claim about a dot of some chosen size — and it is why this rule needs no browser measurement
+     where the chip's did. `font-size` shrinks the glyph only; at or below 1em with a unitless
+     line-height of 1 the box cannot exceed the row. */
+  .viewbody .stampmark {
+    display: inline-block;
+    color: rgba(63,240,127,.55);
+    font-size: .8em;
+    line-height: 1;
+  }
+  /* Same reason as the chip: an atomic inline is already exempt from an ancestor's line-through,
+     and a struck-through dot would read as a rendering fault rather than as "this is done". */
+  .viewbody .task.done span .stampmark { text-decoration: none; }
 </style>
 </head>
 <body>

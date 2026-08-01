@@ -54,13 +54,37 @@
  * kept `tags`, `links` and `markers` out of stage 1 admits `prose` here. What still has no key is
  * a BLANK line, and that absence is honest: a blank line has no wired rendition at all (it
  * vanishes), so there is nothing for a cursor to land on and nothing to resolve between.
+ *
+ * ── AND `stamp` ARRIVED FIFTH — WHICH IS NOT THE SPEC'S `links`, AND THE NAME SAYS SO ──
+ *
+ * The spec's fifth key is `links`, and the backlog row for it asks for "a title instead of
+ * `[[qntm:121]]`". This key is NARROWER than that on purpose and is named for what it actually
+ * governs: the IDENTITY STAMP, `[[qntm:N]]`, and nothing else.
+ *
+ * The engine's own line grammar is the WIDER wiki-link form (`parse_wiki_link.py`, cited at
+ * `WIKI_LINK` below), and `~/qntm/habits.md` carries `[[Store all somewhere]]` and
+ * `[[JB to send over Sarasin]]` — bracketed spans with internal whitespace that the operator TYPED
+ * and READS. A key called `links` would be a declaration that covers both forms, and its wired
+ * rendition would therefore hide his own words. So the two grammars are used for opposite purposes
+ * and that asymmetry is the whole boundary:
+ *
+ *   `wikiLinkSpans` — the WIDE form, used by `titleSpans` for word motions. Skipping too much is a
+ *   surprise (a word target one word further on than expected); skipping too little corrupts a
+ *   structural reference. Over-application is the SAFE direction, so the wide grammar wins.
+ *
+ *   `stampSpans` — the NARROW form, used by the `stamp` rendition. Hiding too much removes the
+ *   operator's own content from his page; hiding too little leaves an ugly token visible.
+ *   Under-application is the SAFE direction, so the narrow grammar wins.
+ *
+ * `links`, meaning a rendition of the title form, is still unshipped and still has no reader. It
+ * does not get a key here for the same reason it did not at stage 1.
  */
 
 /** The two ends of the dial. `raw` is the characters; `wired` is the app's rendition of them. */
 export type Rendition = "raw" | "wired";
 
-/** The token families this app shows more than one way. See the notes above on why it is four. */
-export type ResolutionKey = "checkbox" | "heading" | "prose" | "tags";
+/** The token families this app shows more than one way. See the notes above on why it is five. */
+export type ResolutionKey = "checkbox" | "heading" | "prose" | "tags" | "stamp";
 
 /** A complete answer: one rendition per family. */
 export type Resolution = { readonly [K in ResolutionKey]: Rendition };
@@ -74,6 +98,7 @@ export const RESOLUTION_KEYS = [
   "heading",
   "prose",
   "tags",
+  "stamp",
 ] as const satisfies readonly ResolutionKey[];
 
 /**
@@ -93,12 +118,21 @@ export const RESOLUTION_KEYS = [
  * comparison against the original painter (it paints against silence, and silence still means the
  * characters), and it is what makes the chip a DECLARATION rather than a rewrite: delete the key
  * from the served file and the chips are gone, with nothing rebuilt.
+ *
+ * `stamp` IS `raw` HERE FOR THE SAME REASON AND WITH MORE AT STAKE. The floor is what the app did
+ * before the key existed, which is: print `[[qntm:3]]`. That keeps the golden master a real
+ * comparison, and it makes the mark a decision the INSTANCE takes rather than a rewrite of the
+ * painter — but it also means that if the served declaration ever fails to load, or a key is
+ * misspelled, or a future reader goes silent, the app falls back to SHOWING the stamp. The failure
+ * direction of a rendition that hides an identity must be "it becomes visible again", never "it
+ * becomes invisible", and the floor is where that is decided.
  */
 export const DEFAULT: Resolution = Object.freeze({
   checkbox: "wired",
   heading: "wired",
   prose: "wired",
   tags: "raw",
+  stamp: "raw",
 });
 
 /**
@@ -402,17 +436,52 @@ export interface WordSpan {
  * `qntmIdSpans` exists to be TESTED against this citation, the way `tagSpans` is tested against
  * `parse_tag.py`'s. It is not what `titleSpans` uses to build its atoms below — see `wikiLinkSpans`
  * for why the wider grammar is the one this module actually needs.
+ *
+ * IT IS, HOWEVER, EXACTLY WHAT THE `stamp` RENDITION NEEDS, and one grammar serves both callers:
+ * `stampSpans` is the walker and `qntmIdSpans` is a narrowing view of it, so there is one regex,
+ * one loop and one thing to check against the citation. Two functions matching `[[qntm:N]]` with
+ * two regexes would be the "parallel regex" the engine's own tag module forbids by name.
  */
 const QNTM_ID = /\[\[qntm:([A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?)\]\]/gi;
 
-/** Every `[[qntm:ID]]` identity stamp in `text`, in order, with its position. */
-export function qntmIdSpans(text: string): readonly WordSpan[] {
-  const spans: WordSpan[] = [];
+/**
+ * One identity stamp, located in the text it was found in.
+ *
+ * CARRIES THE CHARACTERS AS WELL AS THE OFFSETS, for the same reason `TagSpan` does: a rendition
+ * that knew only "this line is stamped" could not express its restoration as a substring
+ * operation, and the `stamp` key's whole safety argument is that what it stops PRINTING it can
+ * still WRITE BACK verbatim. `text` is the restoration, byte for byte, held beside the place it
+ * came out of.
+ */
+export interface StampSpan {
+  /** Index of the first `[` in the text this was found in. */
+  readonly start: number;
+  /** Index one past the last `]`. */
+  readonly end: number;
+  /** The stamp, INCLUDING both pairs of brackets, verbatim from the source. */
+  readonly text: string;
+  /** The node id inside it — `3` for `[[qntm:3]]`. Never the brackets, never the `qntm:`. */
+  readonly id: string;
+}
+
+/**
+ * Every `[[qntm:ID]]` identity stamp in `text`, in order, with its position and its characters.
+ *
+ * `matchAll` rather than a loop over `exec`, for the reason `tagSpans` states: `QNTM_ID` carries
+ * the global flag and `exec` would carry `lastIndex` from one call into the next.
+ */
+export function stampSpans(text: string): readonly StampSpan[] {
+  const spans: StampSpan[] = [];
   for (const match of text.matchAll(QNTM_ID)) {
     const start = match.index ?? 0;
-    spans.push({ start, end: start + match[0].length });
+    spans.push({ start, end: start + match[0].length, text: match[0], id: match[1] ?? "" });
   }
   return spans;
+}
+
+/** Every `[[qntm:ID]]` identity stamp in `text`, in order, with its position. */
+export function qntmIdSpans(text: string): readonly WordSpan[] {
+  return stampSpans(text).map(({ start, end }) => ({ start, end }));
 }
 
 /**

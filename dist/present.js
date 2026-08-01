@@ -17,13 +17,15 @@ var RESOLUTION_KEYS = [
   "checkbox",
   "heading",
   "prose",
-  "tags"
+  "tags",
+  "stamp"
 ];
 var DEFAULT = Object.freeze({
   checkbox: "wired",
   heading: "wired",
   prose: "wired",
-  tags: "raw"
+  tags: "raw",
+  stamp: "raw"
 });
 var TASK = /^(\s*)- \[( |x|X)\] (.*)$/;
 var HEADING = /^(#{1,6})\s+(.*)$/;
@@ -89,13 +91,16 @@ function tagSpans(text) {
   return spans;
 }
 var QNTM_ID = /\[\[qntm:([A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?)\]\]/gi;
-function qntmIdSpans(text) {
+function stampSpans(text) {
   const spans = [];
   for (const match of text.matchAll(QNTM_ID)) {
     const start = match.index ?? 0;
-    spans.push({ start, end: start + match[0].length });
+    spans.push({ start, end: start + match[0].length, text: match[0], id: match[1] ?? "" });
   }
   return spans;
+}
+function qntmIdSpans(text) {
+  return stampSpans(text).map(({ start, end }) => ({ start, end }));
 }
 var WIKI_LINK = /\[\[([^\]]+)\]\]/g;
 function wikiLinkSpans(text) {
@@ -2746,24 +2751,50 @@ function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
 var TAG_CHIP_CLASS = "tagchip";
 var CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
 var CHIP_CLOSE = "</span>";
+var STAMP_MARK_CLASS = "stampmark";
+var STAMP_OPEN = `<span class="${STAMP_MARK_CLASS}"`;
+var STAMP_MARK_GLYPH = "\u2022";
+var stampMark = (id) => `${STAMP_OPEN} title="qntm:${id}">${STAMP_MARK_GLYPH}</span>`;
 var VIM_SELECTED_CLASS = "vim-selected";
-function renderTags(text, tags, render) {
-  if (tags === "raw") {
+function renderTokens(text, tags, stamp, render) {
+  const injections = [];
+  if (stamp === "wired") {
+    for (const span of stampSpans(text)) {
+      injections.push({ start: span.start, end: span.end, text: span.text, html: stampMark(span.id) });
+    }
+  }
+  if (tags === "wired") {
+    for (const span of tagSpans(text)) {
+      injections.push({
+        start: span.start,
+        end: span.end,
+        text: span.text,
+        html: CHIP_OPEN + span.text + CHIP_CLOSE
+      });
+    }
+  }
+  if (injections.length === 0) {
     return render(text);
   }
-  const spans = tagSpans(text);
-  if (spans.length === 0) {
-    return render(text);
+  const claimed = [];
+  for (const injection of injections) {
+    if (!claimed.some((c) => injection.start >= c.start && injection.start < c.end)) {
+      claimed.push(injection);
+    }
   }
+  claimed.sort((a, b) => a.start - b.start);
   let injected = "";
   let at = 0;
-  for (const span of spans) {
-    injected += text.slice(at, span.start) + CHIP_OPEN + span.text + CHIP_CLOSE;
-    at = span.end;
+  for (const injection of claimed) {
+    injected += text.slice(at, injection.start) + injection.html;
+    at = injection.end;
   }
   injected += text.slice(at);
   const html = render(injected);
-  return html.split(CHIP_OPEN).length - 1 === spans.length ? html : render(text);
+  const survived = (open) => html.split(open).length - 1;
+  const wanted = (open) => claimed.filter((c) => c.html.startsWith(open)).length;
+  const intact = survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN);
+  return intact ? html : render(text);
 }
 function paint(body, source, context, deps) {
   const focus = deps.focus;
@@ -2883,9 +2914,10 @@ function paint(body, source, context, deps) {
         deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
       });
       const span = document.createElement("span");
-      span.innerHTML = renderTags(
+      span.innerHTML = renderTokens(
         shape.tail,
         cascade.resolve("tags").rendition,
+        cascade.resolve("stamp").rendition,
         (markdown) => deps.markdown.renderInline(markdown)
       );
       focusable(span, index);
@@ -2900,9 +2932,10 @@ function paint(body, source, context, deps) {
         return;
       }
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      el.innerHTML = renderTags(
+      el.innerHTML = renderTokens(
         shape.text,
         cascade.resolve("tags").rendition,
+        cascade.resolve("stamp").rendition,
         (markdown) => deps.markdown.renderInline(markdown)
       );
       focusable(el, index);
@@ -2915,9 +2948,10 @@ function paint(body, source, context, deps) {
       return;
     }
     const div = document.createElement("div");
-    div.innerHTML = renderTags(
+    div.innerHTML = renderTokens(
       shape.source,
       cascade.resolve("tags").rendition,
+      cascade.resolve("stamp").rendition,
       (markdown) => deps.markdown.render(markdown)
     );
     focusable(div, index);
@@ -2939,11 +2973,12 @@ function paint(body, source, context, deps) {
 
 // presentation.json
 var presentation_default = {
-  note: "The GLOBAL level of the presentation cascade \u2014 this instance's default rendition for each token family the app can show more than one way. 'wired' is the app's rendition (a checkbox you can click, an <h3>, a rendered sentence, a tag as a chip); 'raw' is the characters, verbatim. GLOBAL is the LEAST specific of the seven levels, so anything a more specific level says beats it \u2014 in particular the cursor: put the cursor on a line and it shows its source characters whatever this file says. A key left out of this file stays silent and falls through to the built-in default; a key MISSPELLED here is reported as a problem rather than ignored, because a declaration nobody reads is the bug this level exists to disprove. 'tags' is the one key whose built-in default is 'raw' and whose value here is 'wired': the floor is what the app did before the key existed, and the chip is a decision this INSTANCE makes. Flip it to 'raw', or delete it, and the chips become characters with nothing rebuilt. Served with the app from the site root and read by app/present/declaration.ts. See docs/implementation-artifacts/design-presentation-cascade.md. 'indentUnit' is the OUTPUT half of the structural language (design-the-structural-language.md section 3): how many leading spaces one nesting level is. It is a citation of apps/qntm-md/src/qntm_md/render/renderer.py lines 947 to 950, transcribed by hand because the engine has no config key of its own yet to generate it from; read by app/present/declaration.ts and app/present/indent.ts. 'structural' is the INGEST half (same design, item 1): what a gesture like indent means, generated from the monorepo's config by scripts/generate-structural-declaration.mjs, never hand-written; read by app/present/structural.ts. Both are read alongside GLOBAL but are not renditions themselves and do not cascade the way checkbox/heading/prose/tags do.",
+  note: "The GLOBAL level of the presentation cascade \u2014 this instance's default rendition for each token family the app can show more than one way. 'wired' is the app's rendition (a checkbox you can click, an <h3>, a rendered sentence, a tag as a chip); 'raw' is the characters, verbatim. GLOBAL is the LEAST specific of the seven levels, so anything a more specific level says beats it \u2014 in particular the cursor: put the cursor on a line and it shows its source characters whatever this file says. A key left out of this file stays silent and falls through to the built-in default; a key MISSPELLED here is reported as a problem rather than ignored, because a declaration nobody reads is the bug this level exists to disprove. 'tags' is the one key whose built-in default is 'raw' and whose value here is 'wired': the floor is what the app did before the key existed, and the chip is a decision this INSTANCE makes. Flip it to 'raw', or delete it, and the chips become characters with nothing rebuilt. Served with the app from the site root and read by app/present/declaration.ts. See docs/implementation-artifacts/design-presentation-cascade.md. 'indentUnit' is the OUTPUT half of the structural language (design-the-structural-language.md section 3): how many leading spaces one nesting level is. It is a citation of apps/qntm-md/src/qntm_md/render/renderer.py lines 947 to 950, transcribed by hand because the engine has no config key of its own yet to generate it from; read by app/present/declaration.ts and app/present/indent.ts. 'structural' is the INGEST half (same design, item 1): what a gesture like indent means, generated from the monorepo's config by scripts/generate-structural-declaration.mjs, never hand-written; read by app/present/structural.ts. Both are read alongside GLOBAL but are not renditions themselves and do not cascade the way checkbox/heading/prose/tags do. 'stamp' is the FIFTH key and the second whose subject is a token rather than a line: the identity stamp the engine prints on every node line, '[[qntm:3]]'. Its wired rendition is a small mark in the stamp's place, carrying the id in a title attribute for a hover, so the line stops gaining twelve characters when the cycle catches up but still says the model has it. It is DELIBERATELY NARROWER than the presentation-cascade design's 'links' key: it matches only the identity form (the engine's parse_qntm_id.py grammar) and never the wider wiki-link form, because a title-form link like '[[JB to send over Sarasin]]' is the operator's own words and hiding it would remove his content. Its built-in default is 'raw' for the same reason 'tags' is, plus one more that matters here: if this file fails to load or this key is misspelled, the app must fall back to SHOWING the stamp, never to hiding it. Whether the mark is a dot or nothing at all is a stylesheet decision in app/index.html, not a decision here.",
   checkbox: "wired",
   heading: "wired",
   prose: "wired",
   tags: "wired",
+  stamp: "wired",
   indentUnit: 4,
   structural: {
     indent: {
@@ -4880,6 +4915,7 @@ export {
   sectionOrderFor,
   sectionOrdinalAt,
   seedFor,
+  stampSpans,
   tagSpans,
   titleSpans,
   todayFor,
