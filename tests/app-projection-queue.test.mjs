@@ -27,6 +27,9 @@
  *   §5  TWO EDITS INSIDE ONE CYCLE. The second edit is made while the first is in flight — the case
  *       that must not lose work — and neither side is lost.
  *   §6  MUTATION PROOFS. Break the coalescing and break the gate; watch the guards go red.
+ *   §7  WHY THE ASYNC HALF IS NOT HERE. `stop-awaiting-the-cycle-safely`'s blocker, DRIVEN: an ack
+ *       carrying no projection leaves `BaseSurface` where it was, and the next tick then discards
+ *       the previous one in silence. Not a proposal — the measurement that says async must wait.
  *
  * ── WHAT THIS SUITE DOES NOT VERIFY ──
  *
@@ -34,7 +37,9 @@
  * Every projection below is a FIXTURE — a second string, hand-built the way a real cycle transforms
  * a real line. The DOM is `installBrowser`'s stub. Nothing here measures latency, and nothing here
  * exercises an ASYNCHRONOUS ack: `POST /app/edit-file` still awaits the cycle, so every arrival
- * below is the return of a write, which is the only way a projection reaches this page today.
+ * below is the return of a write, which is the only way a projection reaches this page today. §7
+ * drives the SHAPE an async ack would have — `{ok: true}` with no snapshot — against the page as it
+ * stands; it does not make the Worker asynchronous and it measures no latency.
  */
 
 import { test, describe, before, beforeEach } from "node:test";
@@ -561,6 +566,72 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     assert.match(last, /Ring the dentist ON MONDAY/, "the first edit was dropped from the second write");
     assert.match(last, /Water the plants THIS EVENING/, "the second edit was not written");
     assert.equal(page.__queued().size, 0, "a projection was still held after everything settled");
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+  // 7. WHY THE ASYNC HALF IS NOT IN THIS BRANCH — the blocker, DRIVEN rather than argued
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+  //
+  // `stop-awaiting-the-cycle-safely` would have `POST /app/edit-file` ack on the vault write and let
+  // the cycle run behind it — ~10 s down to ~250 ms on every checkbox and every line commit. The
+  // design's own sharper reason for sequencing it after the queue is that `served.take()` is called
+  // ONLY from `paintView`, so an ack without a projection leaves `BaseSurface` holding a base that
+  // never refreshes.
+  //
+  // THIS SECTION IS THAT CLAIM AS AN EXPERIMENT. The answer below is the exact shape an async ack
+  // has — `{ok: true}` with no snapshot in it — and the page is driven through two ordinary ticks.
+  // Nothing here is a proposal; it is the measurement that says the async half must not ship yet.
+
+  test("AN ACK WITH NO PROJECTION LEAVES THE BASE WHERE IT WAS — proven by driving it", async () => {
+    land(V1);
+    answers = [{ ok: true, accepted: true, path: PATH }];
+
+    boxes()[0].checked = true;
+    boxes()[0].dispatch("change");
+    await settle();
+
+    assert.equal(page.__queued().size, 0, "an answer with no projection in it was queued as one");
+    assert.equal(
+      page.__served().markdown,
+      V1,
+      "the base moved without a projection — if this ever passes, re-read section 7",
+    );
+    // AND THE PAGE DOES NOT CLAIM `as of <when>` FOR IT. `sayAsOf` reads
+    // `data.snapshot.generated_at`; an ack carries no snapshot, so a page that said "as of" here
+    // would be claiming WRITTEN when it means ACCEPTED — and would throw doing it.
+    assert.equal(freshness(), "the write landed and the server sent no projection back");
+    assert.doesNotMatch(freshness(), /^as of /);
+  });
+
+  test("THE FALSIFIER FOR SHIPPING ASYNC TODAY — the second tick discards the first, in silence", async () => {
+    // With the base unrefreshed, `served.read` answers `current` for a save whose base the server
+    // has already moved past. A tick does not repaint the painter's source, so the second edit is
+    // computed against the SAME string the first was — and the whole-file write overwrites it.
+    land(V1);
+    answers = [
+      { ok: true, accepted: true, path: PATH },
+      { ok: true, accepted: true, path: PATH },
+    ];
+
+    boxes()[0].checked = true;
+    boxes()[0].dispatch("change");
+    await settle();
+    boxes()[1].checked = true;
+    boxes()[1].dispatch("change");
+    await settle();
+
+    assert.equal(posted.length, 2);
+    assert.match(posted[0].markdown, /- \[x\] Draft the launch note/, "the arm did not set up");
+    assert.doesNotMatch(
+      posted[1].markdown,
+      /- \[x\] Draft the launch note/,
+      "the second write carried the first tick — this arm no longer measures the hazard",
+    );
+    assert.doesNotMatch(
+      freshness(),
+      /out-of-date copy|overwritten|not answered/,
+      "THE WHOLE POINT: the operator lost a tick and the page said nothing about it",
+    );
   });
 
   test("A SECOND WRITE MADE WHILE THE FIRST IS IN THE AIR IS STILL COUNTED AS ONE", async () => {

@@ -1639,6 +1639,11 @@ backlog:
     reads `data.snapshot.generated_at`, and an async ack carries no snapshot. The honest sentence is
     about acceptance; the `as of` line belongs to the projection when it lands. It must not claim
     written when it means accepted.
+    THE BLOCKER IS NOW MEASURED RATHER THAN REASONED. `tests/app-projection-queue.test.mjs` section 7
+    drives the SHAPE an async ack has — `{ok: true}` with no snapshot — through the page as it stands.
+    Two arms, both passing, both of which must go RED before this row can close: the base is still the
+    pre-write projection after the ack, and a second tick then posts a file that provably lacks the
+    first tick while the freshness line says nothing at all. That second arm is this row's falsifier.
   driving_capability: the-edit-is-a-safe-haven
   kind: capability
   state: diagnose-ready
