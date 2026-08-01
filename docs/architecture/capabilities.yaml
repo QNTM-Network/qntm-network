@@ -2075,3 +2075,87 @@ capabilities:
     theoretical divergence window this arc does not close and no test in this repo can, without a
     live comparison against a running server.
   status: working
+- id: section-order-prefers-the-served-envelope
+  intent: >-
+    design-the-resolution-architecture.md STEP 11, "carry section identity in the envelope" —
+    NARROWED, ON EVIDENCE, TO WHAT A SERVER THAT NEVER RUNS THE RENDERER CAN ACTUALLY PUBLISH.
+    THE THREE QUESTIONS THE STEP'S OWN BRIEF ASKED, ANSWERED IN ORDER.
+    (1) WHERE CAN THE SERVER GET SECTION IDENTITY? `server/app.py` (monorepo, read-only) reads
+    view CONFIG and RAW MARKDOWN; `GET /graph` never calls `run_cycle`, and `POST /cycle`'s own
+    `RenderedLineRecord` — `(sheet_id, section_id, node_id)`, the fact that WOULD answer "which
+    section is line N in" directly — is computed every cycle and discarded before `_envelope()`
+    builds its response (`server/app.py:188-197`; design doc §5.9). So the server can emit the
+    DECLARED SECTION ORDER per view — the same list step 1's generator already reads off the
+    identical config, cheaply: no renderer, no database read, no migration, an extension of
+    `_read_views`'s existing regex-style parse (`_parse_view_meta`) to also capture the ordered
+    `sections:` id list. It CANNOT emit a PER-LINE section without capturing `RenderedLineRecord`
+    before it is discarded, which is an engine/server change together, an arc not an afternoon —
+    filed, not attempted (`carry-declared-section-order-in-the-server-envelope`, backlog.yaml).
+    (2) IS THIS THE R2 THAT WAS REJECTED? NO RECORD OF SUCH A REJECTION WAS FOUND, MEASURED
+    RATHER THAN TAKEN ON TRUST. `design-presentation-instance-identity.md` §2.3(c) and §7 assess
+    the SAME idea (server-carried, ordinal-keyed section identity) as CHEAP and RECOMMEND it —
+    "no engine change, no database read, no schema migration" — and `backlog.yaml`'s own
+    `carry-presentation-through-the-snapshot-envelope` records it OPEN (`state: diagnose-ready`),
+    never rejected. What steps 1-10 changed is the CALCULUS, not the verdict: `sectionAt` (step 2)
+    now gives the declared order a concrete, tested consumer it did not have when R2 was scoped,
+    and `server/app.py`'s own docstring names a REAL staleness gap this closes — `POST /config`
+    updates `/data/config` "without a redeploy" of the static bundle that bakes `presentation.json`
+    — so a live config edit can silently outrun the shipped declaration today, with nothing to
+    detect it. WORTH BUILDING, at the NARROW slice this capability ships; the WIDER ambition (a
+    live-preferring `default_node_type` too) is a natural follow-on, not built here, because that
+    fact is already served statically via `qualification.sections[view][section].nodeType` and
+    widening it is a separate, smaller-value slice of the same shape — noted, not shipped, to
+    avoid manufacturing scope this half-day did not need.
+    (3) WHAT CONSUMES IT? `app/present/address.ts`'s new `sectionOrderFor(view, declared)` —
+    prefers a served `view.sections` array over the static declaration, WHOLESALE per view, never
+    merged element-by-element (a partial merge would silently misalign every ordinal past the
+    first divergence). Wired into BOTH of `app/index.html`'s live call sites,
+    `membershipNoteFor` and `orderingNoteFor`, ahead of `sectionAt` — the same two functions
+    `section-membership-is-said-in-the-freshness-line` and
+    `ordering-position-is-said-in-the-freshness-line` already wired `sectionAt` into. `sectionAt`
+    ITSELF IS UNTOUCHED: `sectionOrderFor` only produces the same `Record<string, readonly
+    string[]>` shape its `sectionOrder` parameter already accepted, so this is a call-site change,
+    never a change to L3 ADDRESSING's own logic.
+    ADDITIVE BY CONSTRUCTION, NOT BY CONVENTION. `server/app.py`'s served view is `{id, path,
+    title, domain, markdown}` today — no `sections` key at all — so `view.sections` reads
+    `undefined` for every real view and `sectionOrderFor` returns `declared` UNCHANGED, BY
+    REFERENCE, not a copy: "a client that ignores the new field behaves exactly as today" holds
+    because there is, today, nothing being ignored. Proven over the full 72-view sweep
+    (`tests/present-address.test.mjs` §5): routing every real heading through
+    `sectionOrderFor(todaysShapedView, declared)` agrees with routing it through `declared`
+    directly, on every one.
+    THE DESIGN DOCUMENT'S OWN FALSIFIER ("the envelope's section order for every view equals the
+    generator's, for all 72"), SIMULATED, BECAUSE THE SERVER IS NOT RUN HERE — stated plainly
+    rather than glossed. `tests/present-address.test.mjs` §6 builds an INDEPENDENT scanner
+    (`scanDeclaredSectionOrder`, a flat regex walk over `sections:`/`- id:` lines, deliberately
+    NOT the generator's own `parseYamlSubset`) standing in for what a widened `_read_views` would
+    publish, and asserts it agrees with the generator's `sectionOrder` for every one of the
+    operator's real views — plus a POSITIVE CONTROL (a scratch reorder moves the scanner's answer)
+    proving the comparison is not vacuously equal. §7 proves NO FORK: a served order that
+    disagrees with the declared one wins WHOLESALE at its own view, and never bleeds into another
+    view's entry.
+    STEPS 9 AND 10 (engine-side, other repo, could not be closed by their own agents in this file)
+    — CONFIRMED LANDED, MEASURED RATHER THAN TRUSTED. This repo's local trunk clone was briefly
+    stale; after `git fetch origin main`, both PRs are on `origin/main`: #58 (`fbfe3dd`, `pull_context`
+    named a cascade key, `qntm_md/resolution/pull_context.py`) and #59 (`15b6d5b`,
+    `render/domain_filter.py`'s `filter` renamed `apply_domain_filter` at all three production call
+    sites). Both falsifiers re-checked directly against `origin/main`: `"ancestors"` no longer
+    appears as a terminal default outside a `Literal[...]`/allow-list, and `render/__init__.py`'s
+    `__all__` shadows no builtin. Marked DONE in the design document's step table by this PR.
+  tier: functional
+  rooting: >-
+    `app/present/address.ts`'s `sectionOrderFor` imports NOTHING new — the module's only import
+    stays `classifyLine` from `resolution.ts`, the edge `address-classifies-the-line` (flows.yaml)
+    already declares — so no new flow edge exists to add. `app/index.html`'s two calls into it are
+    real and unobservable by flow-trace's node capture for the same reason
+    `section-membership-is-said-in-the-freshness-line`'s own rooting already gives: the caller is
+    the page, which node cannot import. `flow-trace verify .` re-run after this change: exit 0,
+    39 PASS / 0 FAIL, 7 scenarios, 0 coverage_untraced. See `flows.yaml`'s own comment on this step
+    for the "no new edge, on purpose" account.
+    NOT VERIFIED: no browser, no passkey session, no live server was contacted, no `/config` push
+    was made, no cycle ran. `server/app.py` was read only, via `git -C`/absolute paths against the
+    monorepo checkout, never edited or run. The byte-identity proof is a SIMULATION of what a
+    widened server would publish, over the SAME real config both the generator and the independent
+    scanner read — not a comparison against a running server's actual HTTP response, which this
+    repo cannot make (the server-side half is filed, not built: see intent).
+  status: working

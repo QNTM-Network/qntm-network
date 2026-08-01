@@ -369,6 +369,53 @@ generated instants, not exhaustively; a future IANA tzdata update landing asynch
 browser's ICU build vs. the server's system package is a theoretical divergence this arc does not
 close and no local test can, without a live comparison against a running server.
 
+**STATUS, UPDATED 2026-08-01 (seventh pass) — STEPS 9 AND 10 CONFIRMED DONE (other repo, PRs #58
+and #59), STEP 11 IS DONE, NARROWED ON EVIDENCE, one agent, one worktree (`feat/section-envelope`),
+against `origin/main` @ `467626b`.** Steps 9 and 10 land in `apps/qntm-md` (this repo's PR could not
+touch that file), and this PR's own read of the trunk found them missing at first — a stale local
+clone, corrected by `git fetch origin main`, after which both falsifiers were re-checked directly
+against `origin/main` and both hold: `"ancestors"` no longer a terminal default outside a
+`Literal[...]`/allow-list (PR #58, `fbfe3dd`, `qntm_md/resolution/pull_context.py`), and
+`render/__init__.py`'s `__all__` shadows no builtin (PR #59, `15b6d5b`, `apply_domain_filter`).
+**STEP 11'S OWN THREE QUESTIONS, ANSWERED BEFORE ANY CODE WAS WRITTEN.** (1) Where can the server
+get section identity: only the DECLARED ORDER, never a per-line section — `server/app.py`'s
+`GET /graph` never runs the renderer, and `RenderedLineRecord` (the fact that would answer
+per-line) is computed every cycle and discarded before `_envelope()` is built (§5.9). The order
+costs a regex extension of `_read_views`'s existing parse; the per-line form costs an engine change
+to `line_cache` or to what `POST /cycle` returns before it discards the record — an arc, filed as
+`carry-per-line-section-identity-in-the-server-envelope` (backlog.yaml), not attempted. (2) Is this
+the rejected R2: **no record of an R2 rejection was found**, measured by reading
+`design-presentation-instance-identity.md` §2.3(c)/§7 directly rather than trusting the brief's own
+framing — that document assessed the SAME idea as CHEAP and RECOMMENDED it, and
+`backlog.yaml`'s `carry-presentation-through-the-snapshot-envelope` records it OPEN, never
+rejected. Worth building, at the narrow slice this step ships — see capability
+`section-order-prefers-the-served-envelope` (capabilities.yaml) for the full account of what
+changed the calculus (a concrete consumer from step 2, and a real staleness gap
+`server/app.py`'s own docstring names for `POST /config`). (3) What consumes it:
+`app/present/address.ts`'s new `sectionOrderFor(view, declared)`, wired into both of
+`app/index.html`'s live call sites (`membershipNoteFor`, `orderingNoteFor`), ahead of `sectionAt`,
+which is itself untouched. **THE SERVER HALF IS NOT BUILT — filed in two pieces, by cost, not one**:
+`carry-declared-section-order-in-the-server-envelope` (cheap, a regex extension) and
+`carry-per-line-section-identity-in-the-server-envelope` (an arc, needs `RenderedLineRecord`
+captured before it is discarded). **PROOF.** The design document's own falsifier ("envelope section
+order == generator section order, all 72") is SIMULATED, since the server is not run here: an
+INDEPENDENT scanner (`tests/present-address.test.mjs` §6, deliberately not the generator's own
+`parseYamlSubset`) agrees with the generator's `sectionOrder` over the real config, with a positive
+control proving the comparison is not vacuous. §5 proves proof standard #3 — ignoring the field
+(today's only real shape) reproduces today's behaviour exactly, over the full 72-view sweep. §7
+proves no fork — a disagreeing served order wins wholesale at its own view, never merged
+element-by-element. `npm run check`: 891 tests / 179 suites / 0 fail before this step (this agent's
+own re-run, in a second, properly-located `git worktree`, matching the recorded baseline exactly —
+the same comparison run from a `/tmp`-nested worktree first showed 22 spurious skips, an artefact
+of `DEFAULT_CONFIG_DIR`'s relative path to the monorepo not resolving from that location, corrected
+by relocating the baseline worktree rather than trusting the first, wrong number); 898 / 182 / 0
+fail after (+7/+3, 0 regressions). `flow-trace verify .` re-run after this step: exit 0, 39 PASS /
+0 FAIL, 7 scenarios, 0 coverage_untraced — it did NOT time out this run. Capability
+`section-order-prefers-the-served-envelope` (capabilities.yaml) carries the full record. **Not
+verified**: no browser, no passkey session, no live server, no cycle, no `/config` push —
+`server/app.py` was read only, never run; the byte-identity proof compares two independent
+READS of the same real config, not a running server's actual HTTP response.
+
 | # | step | layer | size | needs | falsifier, in one line | status |
 |---|---|---|---|---|---|---|
 | 1 | publish the ORDERED section id list per view | L2 | **h** | — | per view, list length == heading count in the served markdown | **DONE** |
@@ -379,9 +426,9 @@ close and no local test can, without a live comparison against a running server.
 | 6 | the new-line seed becomes a READ, not a search of the projection | L4 | **h** | 5 | `seedFor` returns non-null on a view with no printed node line | **DONE** |
 | 7 | ordering preview | L5 | **h** | 5, 8 | browser sort == served row order, for `this-week`'s four sections | **DONE — needs 5 only, see status block** |
 | 8 | the day boundary — 04:00, Europe/London, week starts Monday | L2+L5 | **h** | 5 | 03:59 returns yesterday's date; 04:01 returns today's | **DONE — no runtime consumer, see status block** |
-| 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator | — |
-| 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin | — |
-| 11 | carry section identity + resolved registration in the ENVELOPE | L1 | **½** | 2 | envelope section order == generator section order, all 72 views | — |
+| 9 | name `pull_context` as a cascade key **in the engine** | L4 | **h** | — | `"ancestors"` appears at most once in `src/` outside a type and a validator | **DONE (other repo, PR #58)** |
+| 10 | rename the domain filter; decide its unused `override` | L5 | **h** | — | `render/__init__.py` exports no name that shadows a builtin | **DONE (other repo, PR #59)** |
+| 11 | carry section identity + resolved registration in the ENVELOPE | L1 | **½** | 2 | envelope section order == generator section order, all 72 views | **DONE — narrowed, see status block** |
 | 12 | the projection-replay convergence test | **L7** | **½** | 4, 11 | it IS the falsifier — it fails when a prediction and a cycle disagree | — |
 | 13 | the server refuses a stale write (other repo) | L7 | **½** | — | a POST carrying a stale `sha256-…` is rejected, not applied | — |
 

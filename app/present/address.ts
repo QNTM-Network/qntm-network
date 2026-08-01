@@ -3,6 +3,11 @@
  * SECTION ID. PURE: no DOM, no fetch, no clock, no config file read here — the id list arrives as
  * a parameter, already validated by `qualification.ts`.
  *
+ * `sectionOrderFor`, below `sectionAt`, is step 11 (design-the-resolution-architecture.md) narrowed
+ * to what a server that never runs the renderer can actually publish — see its own header for why
+ * that is the declared section ORDER and not a per-line section, and what would need to change,
+ * elsewhere, for the stronger form.
+ *
  * `docs/implementation-artifacts/design-the-resolution-architecture.md` names this layer directly
  * (§3.1): the cascade cannot select a `STRUCTURAL_NODE` contribution without knowing WHICH
  * structural node it is resolving at, and nothing did that job — `instance.ts`, `boundary.ts` and
@@ -98,4 +103,51 @@ export function sectionAt(
     return null;
   }
   return order[ordinal] ?? null;
+}
+
+/**
+ * ── STEP 11, NARROWED TO WHAT THE SERVER CAN ACTUALLY EMIT ──
+ * (design-the-resolution-architecture.md step 11: "carry section identity in the envelope")
+ *
+ * `server/app.py`'s `_envelope()` (monorepo, read read-only — `server/app.py:149-197`) reads each
+ * view's CONFIG and its RAW MARKDOWN; it never runs the renderer. GET /graph does not call
+ * `run_cycle`, and even POST /cycle's own `RenderedLineRecord` — the fact that WOULD answer
+ * "which section is line N in" directly — is computed and discarded before `_envelope()` builds its
+ * response (design-the-resolution-architecture.md §5.9). So the server can publish the DECLARED
+ * section order per view (the same list step 1's generator already reads off the identical config,
+ * `view.sections[].id`, in file order) — cheaply, no renderer, no database read, no migration — and
+ * CANNOT publish a per-line section without a change to the engine/server pairing that captures
+ * `RenderedLineRecord` before it is thrown away, which is a change this repo cannot make (filed:
+ * `carry-declared-section-order-in-the-server-envelope`, backlog.yaml). `sectionOrdinalAt` above —
+ * counting headings to find WHICH ordinal a line sits at — is therefore still necessary after step
+ * 11 lands server-side; nothing about that walk goes away. What step 11 can change is the SOURCE of
+ * the ordinal->id table `sectionAt` indexes: today it is always the declaration baked into
+ * `dist/present.js` at build time; once the server carries it, it can be the LIVE config instead,
+ * closing a real staleness gap `server/app.py`'s own docstring names — `POST /config` updates
+ * `/data/config` "without a redeploy" of the static app bundle that bakes the declaration.
+ *
+ * `sectionOrderFor` is the one place a caller prefers the live-served order over the static one.
+ * `sectionAt` ITSELF IS UNTOUCHED — this function only produces the same `Record<string, readonly
+ * string[]>` shape `sectionAt`'s `sectionOrder` parameter already accepts, so wiring this in is a
+ * change at the CALL SITE, never inside `sectionAt`'s own logic.
+ *
+ * PER VIEW, WHOLESALE, NEVER MERGED ELEMENT-BY-ELEMENT. A served view's own `sections` array, when
+ * present, REPLACES that view's declared order entirely — mixing the two lists index-by-index would
+ * silently misalign every ordinal after the first point they disagree, which is a worse failure
+ * than either list alone.
+ *
+ * ADDITIVE BY CONSTRUCTION, NOT BY CONVENTION: `server/app.py`'s served view is `{id, path, title,
+ * domain, markdown}` today, with no `sections` key at all, so `view.sections` reads `undefined` for
+ * every real view and this function returns `declared` UNCHANGED (same reference, not a copy) —
+ * "a client that ignores the new field behaves exactly as today" holds because there is, today,
+ * nothing to ignore.
+ */
+export function sectionOrderFor(
+  view: { readonly id: string; readonly sections?: readonly string[] },
+  declared: Readonly<Record<string, readonly string[]>>,
+): Readonly<Record<string, readonly string[]>> {
+  if (view.sections === undefined) {
+    return declared;
+  }
+  return { ...declared, [view.id]: view.sections };
 }

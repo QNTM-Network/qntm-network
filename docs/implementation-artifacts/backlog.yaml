@@ -693,7 +693,21 @@ backlog:
     the served section field must be the 0-based ORDINAL POSITION of the section in the view''s
     declared sections: list, never the config''s own id: string (inbox.yaml declares id: inbox-tagged,
     id: domain-empty; a client holding only markdown can count headings but cannot read those
-    strings). tests/present-instance.test.mjs section 2 proves the ordinal parity this rests on.'
+    strings). tests/present-instance.test.mjs section 2 proves the ordinal parity this rests on.
+
+    AMENDED 2026-08-01, AFTER design-the-resolution-architecture.md step 11 shipped its narrow
+    client-side slice (capability section-order-prefers-the-served-envelope, capabilities.yaml).
+    THE APP-SIDE HALF OF WHAT THIS ROW STILL NEEDS IS NOW SHIPPED: app/present/address.ts exports
+    sectionOrderFor(view, declared), which prefers a served view.sections array over the static
+    declaration, wholesale per view, and returns the static declaration unchanged when the field is
+    absent (every real view today). Wired into both live call sites in app/index.html. WHAT REMAINS
+    IS THE SERVER-SIDE HALF NAMED IN THE PARAGRAPH ABOVE, STILL NOT BUILT, NOW FILED IN TWO PIECES
+    RATHER THAN ONE, BECAUSE THEY COST DIFFERENTLY: the cheap section-order-only slice is filed as
+    carry-declared-section-order-in-the-server-envelope (this file); the harder per-line slice,
+    which needs RenderedLineRecord captured before POST /cycle discards it (an engine and server
+    change together), is filed separately as
+    carry-per-line-section-identity-in-the-server-envelope (this file). Neither filing was
+    attempted here — the app repo cannot change the server.'
   driving_capability: presentation-is-resolved-not-chosen
   kind: capability
   state: diagnose-ready
@@ -2173,4 +2187,69 @@ backlog:
     Worth doing once a caller actually needs the 7 currently-refusing sections previewed — the
     operator's own daily-used surfaces (`this-week`) are among them, so this is a real, likely-soon
     gap, not a speculative one.
+  state: diagnose-ready
+
+- id: carry-declared-section-order-in-the-server-envelope
+  title: >-
+    [present] [monorepo change, filed not attempted] `server/app.py`'s `_read_views()`/`_envelope()`
+    do not publish a view's declared section order — widen them to, closing a real staleness gap
+    between live-pushed config and the statically-baked `presentation.json`.
+  driving_capability: section-order-prefers-the-served-envelope
+  record: >-
+    NOT SHIPPED — filed rather than attempted, because the app repo cannot change the server. THE
+    PRECISE CHANGE: `server/app.py`'s `_read_views()` (currently `server/app.py:149-173`, read-only
+    in the monorepo) parses each view's top-level `id`/`path`/`domain` by regex
+    (`_parse_view_meta`). Extend it to also capture the view's declared `sections:` list, in file
+    order, as an array of `id` strings — the SAME fact `scripts/generate-qualification-
+    declaration.mjs`'s `readViews` already extracts client-side at build time, over the identical
+    config, so the parsing shape to mirror already exists and is proven correct (step 1's own
+    falsifier, 72 of 72 views, 186 of 186 sections). Add the result as a `sections` key on each
+    view dict `_read_views` returns, so `_envelope()`'s `views[]` becomes `{id, path, title, domain,
+    markdown, sections}` — additive, one new key, no change to any existing key. NO RENDERER RUN,
+    NO DATABASE READ, NO MIGRATION: this is a second parse of the same YAML `_parse_view_meta`
+    already opens, not a call into `run_cycle` or the compiled bundle. WHY IT IS WORTH DOING, NAMED
+    RATHER THAN ASSUMED: `server/app.py`'s own docstring for `POST /config` states config "flows
+    like DATA … a view/rule change takes effect on the next cycle without a redeploy" of the static
+    app bundle that bakes `presentation.json` at BUILD time — so a live config edit (a renamed or
+    reordered section) can silently outrun the shipped declaration, with nothing today to detect
+    it. `app/present/address.ts`'s `sectionOrderFor` (this PR) is the consumer already wired and
+    waiting: the moment this field ships, `membershipNoteFor`/`orderingNoteFor` in `app/index.html`
+    prefer it automatically, with no further app-side change. THE FALSIFIER, INHERITED FROM THE
+    DESIGN DOCUMENT'S OWN STEP 11: assert the envelope's `sections` for every view equals the
+    generator's `sectionOrder`, for all 72 — `tests/present-address.test.mjs` §6 already runs this
+    comparison in simulation, against an independent scanner standing in for this exact change;
+    the server-side implementation should be checked against that same test's expectations, or a
+    Python-side sibling of it, once built.
+  state: diagnose-ready
+
+- id: carry-per-line-section-identity-in-the-server-envelope
+  title: >-
+    [present] [monorepo change, filed not attempted, AN ARC] The stronger form of step 11 — a
+    per-LINE section, replacing the browser's own heading-count walk entirely — needs
+    `RenderedLineRecord` captured before the cycle discards it, not a config parse.
+  driving_capability: section-order-prefers-the-served-envelope
+  record: >-
+    NOT SHIPPED, AND NOT THE SAME COST AS THE SIBLING ROW ABOVE — named separately because
+    conflating the two would understate this one. `RenderedLineRecord` (`(sheet_id, section_id,
+    node_id)` per printed line) is the fact that WOULD let the browser read a line's section
+    directly rather than counting headings to find an ordinal — but the engine computes it fresh
+    every cycle inside `run_cycle` and discards it before `line_cache` persists
+    (design-the-resolution-architecture.md §5.9; `design-presentation-instance-identity.md` §0.4).
+    `server/app.py`'s `GET /graph` never calls `run_cycle` at all (`_envelope()` only reads config,
+    raw markdown and the persisted graph blob), so there is no per-request opportunity to produce
+    it; `POST /cycle` does call `run_cycle`, but its own response is built from `_envelope()` too,
+    AFTER the record that would answer this is already gone. Closing this needs either (a) a
+    `line_cache` schema change to persist `(section_id, node_id)` alongside what it already stores
+    — an ENGINE change to a table on the operator's LIVE database, a migration, not an afternoon
+    (the same cost `design-presentation-instance-identity.md` §2.3(b) already priced for the
+    equivalent instance-identity question and rejected in favour of re-deriving instead) — or (b)
+    threading `RenderedLineRecord` out of `run_cycle`'s return value into `POST /cycle`'s own
+    response before it is thrown away, which only helps the ONE request that triggers a cycle, not
+    `GET /graph`'s far more common read. NEITHER IS THIS REPO'S TO BUILD. What this PR ships instead
+    — the declared section ORDER, not a per-line fact — is deliberately the cheaper half: it lets
+    `sectionAt`'s own heading-counting walk keep running exactly as it does today, and only changes
+    where the ORDINAL-TO-ID TABLE it indexes comes from. Worth doing only if the ordinal/heading-
+    count approach is ever measured to disagree with the engine in a real view — no such
+    disagreement is on record; `tests/present-address.test.mjs` §4 sweeps all 72 real views and
+    finds none.
   state: diagnose-ready

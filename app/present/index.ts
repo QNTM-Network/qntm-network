@@ -52,7 +52,7 @@ export type {
   StructuralReading,
 } from "./structural.js";
 
-export { sectionAt, sectionOrdinalAt } from "./address.js";
+export { sectionAt, sectionOrderFor, sectionOrdinalAt } from "./address.js";
 
 export { QUALIFICATION_KEY, readQualificationDeclaration } from "./qualification.js";
 export type {
