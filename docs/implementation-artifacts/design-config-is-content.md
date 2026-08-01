@@ -28,14 +28,16 @@ declared (`docs/architecture/architecture.yaml:135`, `one-implementation-per-con
 browser, because the browser must never be the authority on what a config means. The Worker is
 already JavaScript, already has `nodejs_compat` switched on (`worker/wrangler.toml:9-10`) **[OBS]**,
 and — the measurement that decides it — **the three compilers are already 92 % portable code**: of
-2,581 lines, **under 200 touch the filesystem or the command line** **[OBS]**. The YAML reader
-(`scripts/yaml-subset.mjs`, 354 lines) and the refusal ledger (`scripts/ledger.mjs`, 117 lines) have
+**2,568 lines** across the three compilers and their two helpers, **under 200 touch the filesystem
+or the command line** **[OBS]**. The YAML reader (`scripts/yaml-subset.mjs`, 354 lines) and the
+refusal ledger (`scripts/ledger.mjs`, 117 lines) have
 **zero imports of anything** and would run in a Worker today, unchanged **[OBS]**. The work is not a
 port. It is a refactor: **turn `compile(directory)` into `compile(files)`, and give it three callers
 instead of one.**
 
-**But the compile is not what is broken, and this is the part to hold on to.** The compile already
-runs on a laptop in about a second. What is broken is **one line in one file**:
+**But the compile is not what is broken, and this is the part to hold on to.** **[OBS] I timed it:
+all three compilers, over the operator's real 276-file config, take 0.27 s wall and 0.22 s of CPU**
+(`time node scripts/checkdeclarations.mjs`, §11). What is broken is **one line in one file**:
 `app/present/embedded-declaration.ts:45` imports `presentation.json` **into the JavaScript bundle at
 build time**. That single import is what turns "the user changed their config" into "somebody must
 rebuild and redeploy the app". Undoing it is the cheapest step in this document and the one
@@ -93,7 +95,8 @@ import presentationJson from "../../presentation.json" with { type: "json" };
 That import landed on 2026-07-31 in `f7a769b`, *"perf(app): bundle vendor libs, inline the
 declaration, and cache the preflight"*. It was a good decision and its own header says exactly why:
 it removed a **serial** network round trip (~110 ms) in front of the request that actually matters,
-for a document that was then **1,244 bytes** (`embedded-declaration.ts:5-13`) **[REPO]**.
+for a document its header sizes at **1,244 bytes** (`embedded-declaration.ts:5-13`) **[REPO]** — and
+which git records as **3,303 bytes** on disk at that commit **[OBS]**. Either number makes the point.
 
 **The premise has expired, and it is measurable.** **[OBS]** `presentation.json` at that commit was
 **3,303 bytes**. Today it is **138,806 bytes** — **42 times larger, in eight days**:
@@ -230,13 +233,13 @@ compile that depends on a filesystem cannot take its input from an HTTP body.**
 filename to text.** The three entry points are already exported —
 `generateStructural` (`generate-structural-declaration.mjs:267`), `generateQualification` (`:548`),
 `generateResolution` (`:942`) — and each already accepts an injected `Ledger`, so the shape of
-"inject a dependency" is established in the file. **Under 200 of 2,581 lines is the whole delta.**
+"inject a dependency" is established in the file. **Under 200 of 2,568 lines is the whole delta.**
 
 ### 2.2 The four candidates, priced
 
 **(a) The graph server, in Python. Refuse.**
 
-**Cost: rewrite 2,581 lines of JavaScript as Python, then keep the two in agreement forever.**
+**Cost: rewrite 2,568 lines of JavaScript as Python, then keep the two in agreement forever.**
 
 **[OBS]** `docs/architecture/architecture.yaml:135-147` declares `one-implementation-per-concern`,
 and its stated rule is the argument: *"Two implementations of one contract diverge, silently, and the
@@ -887,11 +890,11 @@ deliberately rather than grown by accident.**
    are called front-running and they have three answers. Config front-runs its own text and its own
    verdict; it never front-runs its consequences (§3).
 
-3. **"The compile is the hard part."** **Refuted.** The compile runs in about a second and is 92 %
-   portable. **The hard parts are the fetch, the version, and the per-user store.** The question was
+3. **"The compile is the hard part."** **Refuted, and measured.** All three compilers run over his
+   real config in **0.27 s wall / 0.22 s CPU** **[OBS]**, and 92 % of the code is portable. **The hard parts are the fetch, the version, and the per-user store.** The question was
    aimed at the compiler; the blocker is one `import` statement.
 
-4. **"Moving to the Worker is a port."** **Refuted by measurement.** Under 200 of 2,581 lines are
+4. **"Moving to the Worker is a port."** **Refuted by measurement.** Under 200 of 2,568 lines are
    node-bound; `yaml-subset.mjs` and `ledger.mjs` need no change at all; and `nodejs_compat` is
    already on (§2.1).
 
@@ -927,9 +930,11 @@ deliberately rather than grown by accident.**
 ## 10. What is unverified
 
 * **[UNVERIFIED]** Whether a Cloudflare Worker's CPU-time limit accommodates compiling a config
-  substantially larger than the operator's. His 276 files compile in about a second on a laptop;
-  a Worker is not a laptop. **Settled by** running the pure compile from step 3 against a synthetic
-  config an order of magnitude larger and measuring. **[REA] This is the one measurement that could
+  substantially larger than the operator's. **[OBS]** His 276 files cost **0.22 s of CPU**, which
+  sits inside a paid Worker's budget with room to spare and outside a free-tier request's. What is
+  unmeasured is how that scales: the qualification generator normalises 138 patterns and the
+  resolution generator reads 43 rule files, and neither cost is obviously linear. **Settled by**
+  running the pure compile from step 3 against a synthetic config an order of magnitude larger. **[REA] This is the one measurement that could
   send Q1 back to the graph server, and it should be taken before step 4, not after.**
 * **[UNVERIFIED]** Whether `_load_with_fallback`'s `BundleCache` retains enough to reconstruct a
   previous config tree, or only enough to reuse a parsed bundle for one cycle. My reading is the
@@ -964,6 +969,9 @@ node -e 'const j=require("./presentation.json");
 # published vs refused sections
 node -e 'const q=require("./presentation.json").qualification;
   console.log(Object.keys(q.sections).length, Object.keys(q.refused).length)'   # 27 / 116
+
+# the compile, timed over the operator's real 276-file config (read-only; --check writes nothing)
+time node scripts/checkdeclarations.mjs      # 0.273 s wall, 0.22 s user CPU, exit 0
 
 # the node surface of the compilers
 grep -c "readFileSync\|readdirSync\|existsSync\|writeFileSync" scripts/yaml-subset.mjs   # 0
