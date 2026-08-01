@@ -28,6 +28,8 @@ import { readStructuralDeclaration } from "./structural.js";
 import type { StructuralLanguage } from "./structural.js";
 import { readQualificationDeclaration } from "./qualification.js";
 import type { QualificationLanguage } from "./qualification.js";
+import { readConfigResolutionDeclaration } from "./resolutiontable.js";
+import type { ConfigResolutionTable } from "./resolutiontable.js";
 import type { Contribution } from "./resolution.js";
 
 export class PresentationContext {
@@ -96,6 +98,11 @@ export interface DeclaredPresentation {
    * against it. Was read only by tests until this wiring; see this field's own history for why "a
    * declaration that exists and does not reach" is this system's highest-frequency bug. */
   readonly qualification: QualificationLanguage;
+  /** The CONFIG-ONLY RESOLUTION TABLE — registration's two names, ordering, line grammars, the
+   * day boundary. See `resolutiontable.ts`'s header for what it deliberately does not carry
+   * (defaults and the per-view minting default, already published on `qualification` above) and
+   * why none of it has a production consumer yet. */
+  readonly resolution: ConfigResolutionTable;
   readonly problems: readonly string[];
 }
 
@@ -124,16 +131,30 @@ export interface DeclaredPresentation {
  * third time. Before this, `readQualificationDeclaration` had no production caller at all: only
  * tests called it directly. 20+ KB of predicate table shipped in every build and no running line
  * of code opened it — exactly the failure mode this function's own header names first.
+ *
+ * `resolutiontable.ts`'s reader joins the same way, a fourth axis over the same document
+ * (design-the-resolution-architecture.md step 5). Unlike the other three, nothing under `app/`
+ * calls `presentationFromDeclaration(...).resolution` yet — see that module's own header for why
+ * it is still published: the next three steps of the same sequence each name it as their
+ * dependency, which is a precondition, not the "published, not yet narrated" gap the other axes
+ * started from.
  */
 export function presentationFromDeclaration(document: unknown): DeclaredPresentation {
   const reading = readDeclaration(document);
   const structuralReading = readStructuralDeclaration(document);
   const qualificationReading = readQualificationDeclaration(document);
+  const resolutionReading = readConfigResolutionDeclaration(document);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
     structural: structuralReading.structural,
     qualification: qualificationReading.qualification,
-    problems: [...reading.problems, ...structuralReading.problems, ...qualificationReading.problems],
+    resolution: resolutionReading.resolution,
+    problems: [
+      ...reading.problems,
+      ...structuralReading.problems,
+      ...qualificationReading.problems,
+      ...resolutionReading.problems,
+    ],
   };
 }

@@ -47,12 +47,18 @@
  *   own as unrecognised. `structural.ts`'s own `readStructuralDeclaration` is the one strict
  *   reader for it, called on the same document, and it is exactly as strict as this file is about
  *   its own keys — nothing about widening the grammar loosens either half of it.
+ *
+ * `qualification` (the MEMBERSHIP axis) and `resolution` (the CONFIG-ONLY RESOLUTION TABLE —
+ * registration's two names, ordering, line grammars, the day boundary) are skipped the same way,
+ * for the same reason, by `qualification.ts` and `resolutiontable.ts` respectively — one served
+ * document, four strict readers, each owning one axis and none of the other three's keys.
  */
 
 import { RESOLUTION_KEYS } from "./resolution.js";
 import type { Contribution, Rendition } from "./resolution.js";
 import { STRUCTURAL_KEY } from "./structural.js";
 import { QUALIFICATION_KEY } from "./qualification.js";
+import { RESOLUTION_TABLE_KEY } from "./resolutiontable.js";
 import { INDENT_UNIT } from "./indent.js";
 
 /** The one key of the served document that is prose for a human rather than a declaration. */
@@ -133,6 +139,11 @@ export function readDeclaration(document: unknown): DeclarationReading {
     if (key === QUALIFICATION_KEY) {
       // Nor this one. `qualification.ts` reads and validates it — a third grammar over the same
       // document, on the MEMBERSHIP axis (which section a line belongs in), not the rendition one.
+      continue;
+    }
+    if (key === RESOLUTION_TABLE_KEY) {
+      // Nor this one. `resolutiontable.ts` reads and validates it — a fourth grammar over the
+      // same document, on the CONFIG-ONLY RESOLUTION axis (registration/ordering/day boundary).
       continue;
     }
     if (key === INDENT_UNIT_KEY) {

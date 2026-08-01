@@ -1741,5 +1741,102 @@
       "waiting-work-tasks": "step 0: traverses (children+exists)",
       "work-habits": "step 0: traverses (children+exists)"
     }
+  },
+  "resolution": {
+    "registration": {
+      "defaultNodeType": "task",
+      "baseNodeType": "task",
+      "inputGrammar": "tolerant",
+      "defaultTags": []
+    },
+    "lineGrammars": {
+      "tolerant": [
+        "blank_line",
+        "fenced_code",
+        "heading"
+      ],
+      "checkbox_only": []
+    },
+    "ordering": {
+      "daily-personal": {
+        "capture": {
+          "orderingMode": "insertion_order"
+        }
+      },
+      "daily-work": {
+        "capture": {
+          "orderingMode": "insertion_order"
+        }
+      },
+      "flowtrace-queue": {
+        "queue": {
+          "ordering": [
+            {
+              "field": "queue_position",
+              "direction": "asc"
+            }
+          ]
+        }
+      },
+      "qntm-queue": {
+        "queue": {
+          "ordering": [
+            {
+              "field": "queue_position",
+              "direction": "asc"
+            }
+          ]
+        }
+      },
+      "this-week": {
+        "overdue": {
+          "ordering": [
+            {
+              "field": "due_date",
+              "direction": "asc"
+            }
+          ]
+        },
+        "due-this-week": {
+          "ordering": [
+            {
+              "field": "due_date",
+              "direction": "asc"
+            }
+          ]
+        },
+        "available-overdue": {
+          "ordering": [
+            {
+              "field": "available_date",
+              "direction": "asc"
+            }
+          ]
+        },
+        "available-this-week": {
+          "ordering": [
+            {
+              "field": "available_date",
+              "direction": "asc"
+            }
+          ]
+        }
+      },
+      "trace-orchestration-queue": {
+        "queue": {
+          "ordering": [
+            {
+              "field": "queue_position",
+              "direction": "asc"
+            }
+          ]
+        }
+      }
+    },
+    "dayBoundary": {
+      "timezone": "Europe/London",
+      "dayStartHour": 4,
+      "weekStartsOn": "monday"
+    }
   }
 }
