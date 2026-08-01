@@ -26,8 +26,8 @@ against the measurement, that ordering is not merely convenient. It is the whole
 
 | rung | what it says | what it costs | what it buys |
 |---|---|---|---|
-| **1. registration** | this line is a `task` | **h** — the datum already ships | the stamp on every capture in 72 views |
-| **2. defaults** | …and it is `personal` | **½** — one generator key, one seed call | **153 of 186 sections**, 8 fields, no rule engine at all |
+| **1. registration** | this line is a `task` | **h** — the app already looks the answer up and throws the name away | the stamp on every capture in 72 views |
+| **2. defaults** | …and it is `personal` | **h** for the seed, **½** with its test | **153 of 186 sections**, 8 fields, **no rule engine at all** |
 | **3. the rule pass** | …and `unlocks` released three things | **an arc** | **2 rules on a capture.** Everything else needs a tick |
 
 **[REA] Rungs 1 and 2 together are not a rule mirror. They are the CONFIG cascade, which is a
@@ -52,13 +52,24 @@ browser stops trying to name the node and just says what KIND of thing arrived. 
 be mirrored is **six whole-graph metric aggregates** **[REPO]** and **a within-band file order that
 this document now observes on the capture gesture too** (§6).
 
+**And the acceptance test he set — "it must work for any new config, the way the engine does" — is
+failed today, in one line, for a reason that has nothing to do with rules.** **[OBS]** A vocabulary
+token declaring a field outside `node_type`/`domain`/`status` is skipped by the qualification
+generator with **no `refused` entry, no warning and no exit code**
+(`scripts/generate-qualification-declaration.mjs:396`). And **none of the three generators' `--check`
+modes is wired into CI**, while the staleness tests that would catch it **self-skip precisely in CI**,
+because CI does not clone the monorepo. **[REA] So a mirror can be built on this foundation, but the
+foundation's own generality is currently unchecked — and closing that is `h`, ahead of any rung.**
+That is worth more than the closure count, and §9 is where it is enumerated.
+
 **The first slice, and it is not in `inbox`.** `inbox` declares no section defaults, no ordering, and
 a bare capture there stays in Domain Empty — so after the sibling agent's stamp lands, **a rule
 mirror has essentially nothing left to do in `inbox`, and that is the correct answer, not a
 disappointment.** The value is `personal/all` and the 152 other sections that declare a
-`defaults:` map. **Rung 2 is the first buildable thing, it is half a day, and its falsifier is the
-one that answers his generality question directly: add a `defaults:` key to a new section,
-regenerate, and the seed follows — with no code change.**
+`defaults:` map. **Rung 2 is the first buildable thing, the seed itself is under an hour because the
+data is already published and parsed (§9.1), and its falsifier is the one that answers his
+generality question directly: add a `defaults:` key to a new section, regenerate, and the seed
+follows — with no code change.**
 
 ---
 
@@ -67,8 +78,10 @@ regenerate, and the seed follows — with no code change.**
 Every claim is **[OBS]** (a script I ran, output I read), **[REA]** (reasoned from something
 labelled [OBS], stated as reasoning and never as measurement), **[REPO]** (a claim a document or
 this repo makes that I did not reproduce), or **[UNVERIFIED]** (named, with the experiment that
-would settle it). **Absence is never proven by a grep returning nothing** — §5.2 and §7.3 are where
-it mattered, and both are enumerations.
+would settle it). **Absence is never proven by a grep returning nothing** — §2.3, §5.3 and §9.1 are
+the three places it mattered, and all three are enumerations. §9.1 in particular matches the raw
+string `defaults` across `app/**` rather than the property access, because an AST scan that passed
+its own positive control has already missed three call sites named as strings in this repository.
 
 **A measurement that returns zero is a broken measurement until a positive control passes**
 (`design-the-resolution-architecture.md:1406-1408`). §2.2 states this document's control and why it
@@ -277,21 +290,25 @@ view overrides.**
 
 **Grammar.** `{defaultNodeType: string, views: {<viewId>: string}}`. **[REA]** Under 400 bytes.
 
-**Already shipped.** `presentation.json`'s `qualification` key already carries `defaultNodeType` and
-a per-section `nodeType` — `generate-qualification-declaration.mjs` resolves the same cascade
-(`readViews`, the `viewNodeType` line) because `membership.ts` needed it to decide belonging.
-**[REA] The datum for rung 1 is on the wire today. What is missing is a consumer that SAYS it.**
+**Already shipped, and already CONSUMED.** `presentation.json`'s `qualification` key carries
+`defaultNodeType` and a per-section `nodeType`; `resolution.registration` carries
+`{defaultNodeType: "task", baseNodeType: "task", …}` and `resolution.chromeShapes` covers 11 node
+types. **[OBS]** And `newline.ts:217-226` already reads all of it on every Enter — to decide whether
+the new line opens `- [ ] ` or `- `.
 
-**What proves agreement.** Nothing new is needed for the cascade itself — the generator reads the
-same two files the loader reads. **What is NOT proven, and must be: that the answer survives the
-rule pass.** §3.3 shows it does not, in 13 of 186 sections.
+**[REA] So rung 1 is not "build a mirror". It is "say the word you already looked up."** The app
+resolves `task` on every keystroke and then throws the name away, keeping only the checkbox. His
+sentence — *"it gets stamped task"* — is one variable away.
 
-**Generality.** **Full.** A new view with a new `default_node_type` is picked up by regeneration with
-no code change, because `readViews` iterates `views/*.yaml` and takes whatever it finds. A new
-section-level `default_node_type` would **not** be picked up — the generator does not read that key,
-because no section has ever used it. **[REA] That is a silent gap, not a visible refusal, and it is
-the one place rung 1 fails the acceptance test.** Cost to close: one line in the generator, plus a
-test. **h.**
+**What proves agreement.** Nothing new for the cascade itself — the generator reads the same two
+files the loader reads, and `tests/present-resolution.test.mjs` already sweeps `chromeShapes`
+against the schema. **What is NOT proven, and must be: that the answer survives the rule pass.**
+§3.3 shows it does not, in 13 of 186 sections.
+
+**Generality.** **Full for the view rung.** A new view with a new `default_node_type` is picked up by
+regeneration with no code change. A **section**-level `default_node_type` would not be — and the app
+has already written that gap down itself (`newline.ts:87-97`, §9.5), correctly, in a comment rather
+than in the `refused` map. Cost to close: one generator line plus a test. **h.**
 
 **Cost: h.** **Falsifier:** add `default_node_type: outcome` to one section of a scratch view,
 regenerate, and the app's stamp for a line under that heading reads `outcome`. If it reads the
@@ -329,12 +346,17 @@ already publishes `defaults` for the sections whose qualification survived norma
 it to all 186 sections is bounded by the per-view slice `research-the-resolution-universe.md` §6.1
 measured at 454–1,930 bytes, median 685** **[REPO]**.
 
-**THE GAP, and it is precisely his case.** `membership.ts` reads section defaults to decide whether
-a line still BELONGS in its section. **Deciding belonging is not the same as APPLYING the default to
-the seed.** Whether anything in `app/` applies a section `defaults:` map to the line as it is typed
-is the one question that decides whether rung 2 is a new consumer over shipped data or a new
-generator key as well. **[UNVERIFIED at the time this section was drafted; see §9 for the
-enumeration.]**
+**THE GAP, and it is precisely his case — now enumerated.** `membership.ts` reads section defaults to
+decide whether a line still BELONGS. **Deciding belonging is not the same as APPLYING the default to
+the seed. [OBS] Nothing in `app/` applies it to the seed. §9.1 is the full enumeration: 22
+occurrences of the string `defaults` across `app/**`, exactly one of which applies the map, and it
+builds a hypothetical field set for a predicate that can only become a sentence.** 41 of the 49
+published sections carry a `defaults` map and not one of them ever reaches a line the operator types.
+
+**[REA] That makes rung 2 cheaper than it looks and more valuable than it looks at the same time.**
+The data is published, parsed, validated and in memory; the seed function was scoped to chrome and
+says so at `newline.ts:113`. **Revise the cost: `h` for the seed itself, `½` for the whole rung
+including its agreement test and its refusal wording.**
 
 **What proves agreement.** The worked precedent is exact and it already exists.
 `scripts/qualification-agreement.py` + `tests/qualification-agreement.test.mjs` prove the published
@@ -501,9 +523,12 @@ His second example is the first buildable one. **The slice:**
 > apply it. 153 sections gain a visible answer. `personal/all` says `task` and `personal` the instant
 > Enter is pressed.**
 
-**Size: ½.** **Falsifier, in one line:** add `defaults: {priority: high}` to a section that has none,
-regenerate, type a line under that heading, and it is seeded `high` — with **no code change**. If it
-is not, the rung is wired to the eight fields it happened to see and fails the acceptance test.
+**Size: `h` for the seed, `½` with its agreement test.** **Falsifier, in one line:** add
+`defaults: {priority: high}` to a section that has none, regenerate, type a line under that heading,
+and it is seeded `high` — with **no code change**. If it is not, the rung is wired to the eight
+fields it happened to see and fails the acceptance test. **The negative arm matters as much:** point
+a section's `defaults:` at a field its registered node type cannot hold (§3.4) and the app must say
+so rather than absorb it.
 
 ### 7.3 What `inbox` still gets, for free, from rung 1
 
@@ -524,8 +549,29 @@ test. The question is whether that shape survives the move from a predicate to a
 A predicate agreement test works because the comparison is **total and static**: for every
 (pattern, node) pair, does the published predicate say what `qntm_graph`'s matcher says? The input
 set is enumerable, the output is a boolean, and the engine's answer is obtained by **calling the
-engine**. The qualification work proved its grammar over **2,184 reachable triples and 61 covering
-1,501 real nodes, zero disagreements** **[REPO]**.
+engine** — `qntm_graph.patterns.engine.matches_pattern`
+(`scripts/qualification-agreement.py:55, 130, 187`). The qualification work proved its grammar over
+**61 real triples covering 1,501 nodes plus 2,184 probe triples, zero disagreements** **[OBS]**.
+
+**The load-bearing move is not the sweep. It is one refusal gate**
+(`scripts/qualification-agreement.py:130-138`):
+
+```python
+verdicts = {matches_pattern(graph, node_id, name).matched for node_id in node_ids}
+if len(verdicts) != 1:
+    print(f"REFUSING: pattern {name!r} answers differently for nodes sharing the triple "
+          f"{triple} — it depends on something outside {list(TRIPLE_FIELDS)}, so the "
+          "browser cannot decide it from a line's fields alone")
+    return 2
+```
+
+**[REA] That gate is what converts a sample into a complete truth table over everything the browser
+can distinguish.** It is the reason the qualification grammar can claim agreement rather than
+correlation, and it is the part that has to survive any port to the rule pass.
+
+**[OBS] All three agreement tests run in CI unconditionally**, because they consume a committed
+fixture (`tests/fixtures/qualification-agreement.json`, 34,703 B) and `dist/present.js`, and touch
+neither Python nor the monorepo.
 
 ### 8.2 It scales to rungs 1 and 2 unchanged, and BETTER
 
@@ -550,14 +596,20 @@ all 186 sections**. The moving target has been held still by the gesture, not by
 
 **So the conformance shape for rung 3-restricted-to-captures is constructible:** for every one of
 the 186 sections, mint the section's own capture and assert the browser's predicted post-pass state
-equals the engine's. **That is `scripts/`'s existing agreement-script shape with `sweep.py`'s
-generator in place of the node enumerator** — and it is exactly the script this document ran.
-**Cost: h**, because it already exists as a probe; making it a test is packaging.
+equals the engine's. **That is `scripts/qualification-agreement.py`'s shape with `sweep.py`'s
+generator in place of the node enumerator** — and it is exactly the script this document ran. The
+key is `(view, section)`, which is 186 values and complete by construction, so §8.1's refusal gate
+is satisfied trivially rather than argued. **Cost: h**, because the probe exists; making it a test
+is packaging.
 
-**[REA] What still does not scale is rung 3 for TICKS**, and nothing here changes that. A tick's
-closure is 29 rules, up to 6 rows in view, and includes a six-deep cascade ordered by file position.
-`design-local-behaviour-and-the-queue.md`'s refusal stands there and should not be reopened by this
-document.
+**[REA] What still does not scale is rung 3 for TICKS**, and the reason is the gate, not the effort.
+A rule pass's answer is not a function of a small enumerable key: it is a function of the graph, plus
+prior rule effects, plus the clock. **§8.1's `len(verdicts) != 1` check — the exact assertion that
+certifies "complete input" — would fire on the first rule that reads an edge**, and the generator's
+own census says 27 of 159 qualifications traverse and 8 are clock-dependent
+(`generate-qualification-declaration.mjs:18-22`). The harness transfers. **The completeness argument
+does not.** `design-local-behaviour-and-the-queue.md`'s refusal stands there and should not be
+reopened by this document.
 
 ### 8.4 The refusal must be VISIBLE, and that is the acceptance test
 
@@ -574,19 +626,171 @@ its posture is the right one: a pattern is published only when the WHOLE of it n
 anything else is recorded WITH ITS REASON.** Its own header states the rule: *"a section the browser
 cannot decide is a section the browser says nothing about."*
 
-**[REA] But "the app says nothing" is only honest if the operator can tell the difference between
-'nothing to say' and 'refused to say'.** Whether the running app distinguishes those two is the
-single most important open question for this design, and §9 records what the enumeration found.
+**But "the app says nothing" is only honest if the operator can tell the difference between 'nothing
+to say' and 'refused to say'. [OBS] Today he cannot.** §9.2: `refused` is parsed and never read
+(`qualification.ts:131-132`, *"Never read to decide anything"*); `membershipFor` abstains with a
+reason and the caller discards it; an abstention and an all-is-well produce **byte-identical output**
+(`app/index.html:2035-2041, 2205-2206`). **116 refusals with reasons ship to the browser and reach
+DevTools, not the operator.**
+
+**[OBS] And one class of config change is dropped with no record at all** — a vocabulary token on a
+field outside the three resolvable ones (`generate-qualification-declaration.mjs:396`, §9.3).
+
+**[REA] So the honest scoring of the shipped state against his own three outcomes is: two of the
+three rows are already live, and the dangerous one is live too, in one line.** Fixing it is `h` and
+it belongs ahead of every rung on the ladder, because it is the mechanism the acceptance test rests
+on. A mirror built on a generator that can silently drop a declaration is a mirror whose generality
+cannot be checked, however well the rungs are measured.
 
 ---
 
-## 9. What the enumeration of the app layer found
+## 9. The shipped app layer, enumerated — and the two holes that matter more than the closure count
 
-*(This section records the shipped-app facts the design turns on: whether anything applies section
-defaults to the seed, and whether a refusal is visible. Filled from a full read of
-`app/present/*.ts`, `tests/*-agreement.test.mjs` and `presentation.json`.)*
+### 9.1 Nothing applies a section `defaults:` map to the line as it is typed. Proved by enumeration.
 
-**Pending — see the commit that follows.**
+`seedFor` (`app/present/newline.ts:158-227`) returns exactly two properties or `null`:
+
+```ts
+export interface NewLine {
+  readonly text: string;              // newline.ts:137 — the line's OPENING CHARACTERS
+  readonly level: PresentationLevel;  // newline.ts:140 — which rung answered
+}
+```
+
+`text` is **chrome only** — `- [ ] ` or `- `. The GLOBAL rung is the only one that reads the
+declaration, and it reads it for one purpose (`newline.ts:217-226`): resolve the section, take its
+`nodeType`, look up `chromeShapes[nodeType]`, and emit a box or a bullet. `openLine`
+(`newline.ts:259-274`) adds one further datum — the row's `place`, an instance anchor
+(`app/present/draft.ts:152-159, 236-239`). **That is the complete seeded state. No domain, no tags,
+no node-type field, no status beyond the glyph.**
+
+**[OBS] Every occurrence of the string `defaults` in `app/**` — `grep -rn "defaults" app/` returns
+25, matched as a raw string and not as a property access, so a string-literal reference could not
+hide.** They divide into: prose in module headers; the strict reader's shape validation
+(`qualification.ts:343-357`); a known-key allowlist that names `"defaults"` as a **string literal**
+(`qualification.ts:153`); the store (`:373`); two type declarations; and three uses of the English
+word in unrelated comments (`motions.ts:370`, `word.ts:51`, `indent.ts:116`). **Exactly ONE applies
+the map**, and it is `app/present/membership.ts:186-188`:
+
+```ts
+const fields: Record<string, FieldValue> = { node_type: section.nodeType, domain: null };
+for (const [field, value] of Object.entries(section.defaults ?? {})) fields[field] = value;
+fields["status"] = status;
+```
+
+That builds a **hypothetical** field map, in memory, to evaluate a predicate. Its one caller is
+`membershipFor` (`membership.ts:224`), whose module header says the boundary out loud
+(`membership.ts:50-56`): *"It produces no `Contribution` and no `SourceEdit`… the answer's only
+destination is something shown to the operator."*
+
+**[OBS] 41 of the 49 published sections carry a `defaults` map. Not one of them is ever written into
+a line the operator types.** `newline.ts:113` names the exclusion deliberately: *"this module does
+not need predicates, `defaults:`, ordering or the day boundary."*
+
+**[REA] So rung 2 is not a new generator key at all — the data is published, parsed, validated and
+in memory. It is a ~10-line consumer change in one function, and the reason it has not happened is
+that `newline.ts` was scoped to chrome and said so.** That makes rung 2 cheaper than §4.2 priced it.
+**Revise: h, not ½** — with the ½ going to the agreement test and the refusal wording, not the seed.
+
+### 9.2 A refused section is refused SILENTLY in the running app. This is the dangerous row.
+
+The coordinator asked whether a refused pattern is refused visibly or silently. **[OBS] It is
+silent, at four independent layers, and three of them say so in their own comments.**
+
+1. **The generator drops the section.** `generate-qualification-declaration.mjs:448-458`: *"the app
+   must not hold a section id it can say nothing about, because a present-but-empty entry is
+   indistinguishable from a decidable one that happened to match nothing."*
+2. **`membershipFor` abstains** with a reason: `abstains("no-section-declaration")`
+   (`membership.ts:210-212`). Its header states the scale unprompted (`membership.ts:27-30`): *"the
+   app is silent about every one of them."*
+3. **The caller discards the reason.** `app/index.html:2035-2041` returns `""` when either answer is
+   not an `"answer"`, and `""` is filtered out of the freshness line
+   (`app/index.html:2205-2206`). **An abstention and a "belongs → still belongs, all fine" produce
+   byte-identical output.**
+4. **`refused` is parsed and never consulted.** `app/present/qualification.ts:131-132` declares it
+   `/** pattern name -> why nothing was published for it. Never read to decide anything. */`, and
+   the only three occurrences of `.refused` in `app/**` are the reader validating its shape
+   (`qualification.ts:441, 447, 518`). **~116 refusal reasons ship in 23,872 bytes and the operator
+   can reach them only through DevTools.**
+
+**[OBS] Coverage: 43 patterns published, 116 refused; 49 of 186 sections, across 27 of 72 views —
+26.3 %.** The refusal reasons are dominated not by traversal but by field reach: **73 of the 116 are
+`unresolvable field(s)`** (title 21, project 13, `cap_state+project` 12, `principle_state+project`
+10, `class_state+project` 8, `package_state+project` 8, stage 6, god_box 2, priority 1), against
+**27 traversal** and **8 clock/comparison**.
+
+**[OBS] Tests assert the silence is intended.** `tests/present-qualification.test.mjs:329-345`
+mutates `domain_empty.yaml` to traverse an edge, regenerates, and asserts the section is
+`undefined` and `because === "no-section-declaration"`. `tests/app-membership-note.test.mjs:272` is
+named *'ABSTENTION 1/5 — "no-section-declaration": an unpublished section says nothing'*. **There is
+no test anywhere that asserts a refusal is surfaced to the operator.** The one test in that
+direction — `tests/present-qualification.test.mjs:92-103`, *"what was refused is recorded with a
+reason, not dropped in silence"* — proves the **artefact** records reasons. It proves nothing about
+the operator ever seeing one.
+
+**[REA] So against his three outcomes, the shipped state is: honest to a reader of
+`presentation.json`, silent to the operator at the keyboard.** That is not the dangerous row yet,
+because the app abstains rather than answering wrongly. But it is one step from it, and the step is
+§9.3.
+
+### 9.3 One class of new config is dropped with NO record at all — the genuinely dangerous row
+
+**[OBS]** `generate-qualification-declaration.mjs:396`:
+
+```js
+if (typeof entry.field !== "string" || !RESOLVABLE_FIELDS.includes(entry.field)) continue;
+```
+
+A vocabulary token that sets a field outside `["node_type", "domain", "status"]` is **skipped with
+no `refused` entry, no warning and no exit code**. If the operator declares `#p1 → priority: high`
+tomorrow, it vanishes from the published grammar and **nothing anywhere says so.**
+
+**[REA] This is exactly the outcome he said must not happen, it exists today, and it is one line to
+fix.** The generator has a `refused` map already; the token loop simply does not use it. Every other
+refusal in that file carries a reason. **h**, and it should go in ahead of anything on the ladder,
+because it is the mechanism the whole acceptance test rests on.
+
+### 9.4 The falsifiers exist and do not run
+
+**[OBS] All three generators have a `--check` mode that exits 1 when the declaration is stale
+(`generate-qualification-declaration.mjs:498-505` and its two twins). None of the three is wired
+into CI** — `grep -rn "generate:qualification\|generate:structural\|generate:resolution" .github/`
+returns nothing; `build.yml` runs typecheck → build → `npm test` → a git-diff gate on `demo/` and
+`dist/` only.
+
+**[OBS] There ARE staleness tests, and they self-skip exactly where staleness matters.**
+`tests/present-qualification.test.mjs:259-271` asserts `SERVED.qualification` equals
+`generateQualification(DEFAULT_CONFIG_DIR)` — guarded by
+`existsSync(DEFAULT_CONFIG_DIR) ? false : "monorepo not checked out"`. CI does not clone the
+monorepo, so the check is skipped in CI and green on the operator's laptop only.
+
+**[REA] So the answer to "how do we know it is generalised" is, today: we know on his laptop, if he
+runs the script.** The three agreement tests DO run in CI unconditionally — they consume committed
+fixtures — but a stale declaration and a stale fixture go stale **together**, so all three stay
+green while both are wrong. **[REA] That is not a defect in the agreement idea; it is a missing wire.
+Moving three `--check` invocations into `build.yml` is `h` and it converts the whole acceptance test
+from a convention into a gate.**
+
+### 9.5 The one gap the app has already named for itself
+
+`newline.ts:87-97` states, unprompted, that **nothing in the 73 view sheets uses a section-level
+`default_node_type:` today** — which §4.1 measured independently as 0 of 186 — and that *"if one
+ever does, a new line in a silent section could take the shape of a section that resolved
+differently."* **[REA] That is the acceptance test's middle row done correctly in prose and not yet
+in code: a known refusal, named at the site, with the consequence spelled out.** Making it a
+`refused` entry rather than a comment is part of the same `h` as §9.3.
+
+### 9.6 Sizes, for the record
+
+**[OBS]** `presentation.json` is **47,676 bytes** on disk. Serialised per key: `qualification`
+**23,872**, `note` 1,887, `resolution` **1,574**, `structural` 720, and five scalars. It is
+**baked into the bundle** (`EMBEDDED_DECLARATION`, `app/index.html:1001-1006`), not fetched. The
+`resolution` key already carries `registration {defaultNodeType: "task", baseNodeType: "task",
+inputGrammar: "tolerant", defaultTags: []}`, a `dayBoundary`, `chromeShapes` for 11 node types,
+`ordering` for 9 sections and 3 `orderingFields`.
+
+**[REA] Three closed grammars cost 26 KB serialised, against 805 KB of graph already on the wire.
+The payload objection to a fourth is not an objection.**
 
 ---
 
@@ -628,15 +832,16 @@ rules is not "the rule engine". It is two rules, and they are the two the measur
 Ranked by value per unit of cost. **Every row leaves the app better than the row before it and does
 not require the next one to be correct.**
 
-| # | rung | size | ships what | why here |
+| # | row | size | ships what | why here |
 |---|---|---|---|---|
-| 1 | **say the node type on a new line** | **h** | the datum already ships in `presentation.json`'s `qualification` key; a consumer says it | His example 1, and `inbox`'s entire available behaviour. Safe in 173 of 186 sections |
-| 2 | **apply the section `defaults:` map to the seed** | **½** | 153 of 186 sections, 8 fields, `personal/all` says `personal` | His example 2. **The first thing that is not already on the wire**, and the rung whose falsifier answers the generality question |
-| 3 | **publish the two capture rules, and their order, as a closed grammar** | **½** | `routine-without-cadence-becomes-task` + `stamp-created-at-on-task` | Without it, rows 1–2 are **confidently wrong** in 13 of 186 sections (§3.3). This is the smallest possible rule mirror and it is 2 of 94 rules |
-| 4 | **the capture agreement test — all 186 sections, no sampling** | **h** | `sweep.py` as a committed test | Makes rows 1–3 falsifiable against the engine forever. It already exists as a probe |
-| 5 | **make refusal visible wherever a section is undecidable** | **h** | one line of app text per undecidable section | §8.4. This is what separates "honest and incomplete" from "silently ignores it" |
-| 6 | **a config-change falsifier in CI for registration + defaults** | **h** | `--check` on the extended generator | The acceptance test, mechanised: a new `defaults:` key that the declaration does not carry fails the build |
-| 7 | **rung 3 for ticks — the unlock family** | **an arc** | 29 of 94 rules, minus 6 aggregates | **Still refused as a general evaluator.** If it is ever done, it is done as a per-gesture closure with a conformance suite, not as an interpreter |
+| 0 | **close the silent-drop path in the token loop** | **h** | one `refused` entry instead of a `continue` (`generate-qualification-declaration.mjs:396`) | **Before any rung.** §9.3. It is the one place his acceptance test fails outright today, and every row below is only checkable once it is shut |
+| 1 | **move the three `--check` invocations into `build.yml`** | **h** | a build that fails when the declaration is stale | §9.4. The falsifiers already exist and do not run; the tests that would catch it self-skip in CI |
+| 2 | **say the node type on a new line** | **h** | the app already resolves it to pick the chrome; keep the name | His example 1, and `inbox`'s entire available behaviour. Safe in 173 of 186 sections |
+| 3 | **apply the section `defaults:` map to the seed** | **h** (seed) / **½** (with its test) | 153 of 186 sections, 8 fields; `personal/all` says `personal` | His example 2. §9.1 shows the data is already published, parsed and in memory — the seed function was scoped to chrome and says so |
+| 4 | **publish the two capture rules, and their order, as a closed grammar** | **½** | `routine-without-cadence-becomes-task` + `stamp-created-at-on-task` | Without it, rows 2–3 are **confidently wrong** in 13 of 186 sections (§3.3). This is the smallest possible rule mirror: 2 of 94 rules |
+| 5 | **the capture agreement test — all 186 sections, no sampling** | **h** | `sweep.py` as a committed test with a generated fixture | Makes rows 2–4 falsifiable against the engine forever. The key is `(view, section)` — complete by construction, so §8.1's refusal gate is satisfied rather than argued |
+| 6 | **make refusal visible where a section is undecidable** | **h** | read the `because` the app already computes and discards | §9.2. This is what separates "honest and incomplete" from "silently ignores it", and 137 of 186 sections are currently in it |
+| 7 | **rung 3 for ticks — the unlock family** | **an arc** | 29 of 94 rules, minus 6 aggregates | **Still refused as a general evaluator.** If it is ever done, it is a per-gesture closure with a conformance suite, not an interpreter |
 
 ---
 
@@ -669,6 +874,23 @@ never need to name the node. **What actually cannot be mirrored is the within-ba
 **6. "Limit the number of rule steps."** **Refuted as a control.** The capture chain is two links and
 needs no limit; the tick cascade is six rules inside ONE priority band and no step limit reaches it.
 Bound by gesture, not by depth (§6).
+
+**7. "A refused pattern is refused visibly — that is what the `refused` map is for."** **Refuted.**
+The `refused` map is honest and it has **no reader in the running app** — the field is declared
+*"Never read to decide anything"* (`qualification.ts:131-132`), the abstention's reason is computed
+and discarded (`app/index.html:2035-2041`), and an abstention is byte-identical to an all-is-well.
+**[OBS]** Two shipped tests assert that silence is the intended behaviour. The honesty is real and it
+lives in the artefact, not in the UI, and **137 of 186 sections are currently inside it.**
+
+**8. "The generators are general — a new config entry flows through."** **Refuted in one place, and
+it is the place that matters.** A vocabulary token on a fourth field is dropped by
+`generate-qualification-declaration.mjs:396` with no `refused` entry, no warning and no exit code
+**[OBS]** — the exact outcome he named as unacceptable. Everything else in the four generators
+either flows through or refuses with a reason.
+
+**9. My own §4.2's cost.** I priced rung 2 at `½` on the assumption that it needed a new generator
+key. **[OBS] The enumeration says the data is already published, parsed, validated and in memory,
+and one function ignores it by design.** The seed itself is `h`.
 
 ---
 
@@ -743,4 +965,17 @@ cp ~/.qntm-md/state.db <scratch>/state-copy.db          # 1,083,658,240 bytes
 #                     class_state 8, package_state 8)
 #                   16 sections reach 0 legitimately (album/blog/book/attribute/film/tv_show/
 #                     writer/group/person — no rule binds those types)
+
+# ── the shipped app layer (§9), read in this worktree at a16fd1e ──────────────────────────
+grep -rn "defaults" app/                  # 25 occurrences; ONE applies the map (membership.ts:187)
+grep -rn "\.refused" app/                 # 3 occurrences, all in qualification.ts's shape reader
+grep -rn "generate:qualification" .github/ # nothing — no --check is wired into CI
+node -e 'const j=require("./presentation.json");for(const k of Object.keys(j))
+         console.log(k, Buffer.byteLength(JSON.stringify(j[k])))'
+#   qualification 23872 | note 1887 | resolution 1574 | structural 720 | file on disk 47676
+node -e 'const j=require("./presentation.json").qualification;
+         console.log(Object.keys(j.predicates).length, Object.keys(j.refused).length,
+           Object.values(j.sections).reduce((n,s)=>n+Object.keys(s).length,0),
+           Object.values(j.sectionOrder).reduce((n,s)=>n+s.length,0))'
+#   43 published | 116 refused | 49 sections covered | 186 sections declared
 ```
