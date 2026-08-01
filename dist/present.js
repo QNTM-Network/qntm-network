@@ -648,6 +648,245 @@ function readQualificationDeclaration(document2) {
   };
 }
 
+// app/present/resolutiontable.ts
+var RESOLUTION_TABLE_KEY = "resolution";
+var TOP_KEYS2 = ["registration", "lineGrammars", "ordering", "dayBoundary"];
+var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
+var ORDERING_KEY_KEYS = ["field", "direction"];
+var SECTION_ORDERING_KEYS = ["ordering", "orderingMode"];
+var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
+var DIRECTIONS = ["asc", "desc"];
+var EMPTY3 = {
+  registration: void 0,
+  lineGrammars: {},
+  ordering: {},
+  dayBoundary: void 0
+};
+function isPlainObject3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+var shapeOf2 = (value) => Array.isArray(value) ? "an array" : typeof value;
+function readRegistration(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.registration' is ${shapeOf2(value)}, not an object \u2014 the registration table stays unknown`
+    );
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!REGISTRATION_KEYS.includes(key)) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.registration.${key}' is not a recognised key and was NOT applied \u2014 the keys are ${REGISTRATION_KEYS.join(", ")}`
+      );
+    }
+  }
+  const { defaultNodeType, baseNodeType, inputGrammar, defaultTags } = value;
+  let ok = true;
+  for (const [name, v] of [
+    ["defaultNodeType", defaultNodeType],
+    ["baseNodeType", baseNodeType],
+    ["inputGrammar", inputGrammar]
+  ]) {
+    if (typeof v !== "string" || v === "") {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.registration.${name}' is ${JSON.stringify(v)}, not a non-empty string`
+      );
+      ok = false;
+    }
+  }
+  if (!Array.isArray(defaultTags) || !defaultTags.every((t) => typeof t === "string")) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.registration.defaultTags' is ${JSON.stringify(defaultTags)}, not an array of strings`
+    );
+    ok = false;
+  }
+  if (!ok) return void 0;
+  return {
+    defaultNodeType,
+    baseNodeType,
+    inputGrammar,
+    defaultTags
+  };
+}
+function readLineGrammars(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.lineGrammars' is ${shapeOf2(value)}, not an object \u2014 every grammar stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [name, shapes] of Object.entries(value)) {
+    if (!Array.isArray(shapes) || !shapes.every((s) => typeof s === "string")) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.lineGrammars.${name}' is ${JSON.stringify(shapes)}, not an array of strings`
+      );
+      continue;
+    }
+    out[name] = shapes;
+  }
+  return out;
+}
+function readOrderingKey(path, value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 this ordering key is unknown`);
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!ORDERING_KEY_KEYS.includes(key)) {
+      problems.push(
+        `'${path}.${key}' is not a recognised key \u2014 the keys are ${ORDERING_KEY_KEYS.join(", ")}`
+      );
+    }
+  }
+  const { field, direction } = value;
+  if (typeof field !== "string" || field === "") {
+    problems.push(`'${path}.field' is ${JSON.stringify(field)}, not a non-empty string`);
+    return void 0;
+  }
+  if (!DIRECTIONS.includes(direction)) {
+    problems.push(
+      `'${path}.direction' is ${JSON.stringify(direction)}, not one of ${DIRECTIONS.join(", ")}`
+    );
+    return void 0;
+  }
+  return { field, direction };
+}
+function readSectionOrdering(path, value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 this section's ordering is unknown`);
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!SECTION_ORDERING_KEYS.includes(key)) {
+      problems.push(
+        `'${path}.${key}' is not a recognised key \u2014 the keys are ${SECTION_ORDERING_KEYS.join(", ")}`
+      );
+    }
+  }
+  let ordering;
+  if (value.ordering !== void 0) {
+    if (!Array.isArray(value.ordering) || value.ordering.length === 0) {
+      problems.push(`'${path}.ordering' is ${JSON.stringify(value.ordering)}, not a non-empty array`);
+      return void 0;
+    }
+    const keys = [];
+    for (const [i, entry] of value.ordering.entries()) {
+      const read = readOrderingKey(`${path}.ordering[${i}]`, entry, problems);
+      if (read === void 0) return void 0;
+      keys.push(read);
+    }
+    ordering = keys;
+  }
+  let orderingMode;
+  if (value.orderingMode !== void 0) {
+    if (typeof value.orderingMode !== "string" || value.orderingMode === "") {
+      problems.push(`'${path}.orderingMode' is ${JSON.stringify(value.orderingMode)}, not a string`);
+      return void 0;
+    }
+    orderingMode = value.orderingMode;
+  }
+  if (ordering === void 0 && orderingMode === void 0) {
+    problems.push(`'${path}' declares neither 'ordering' nor 'orderingMode' \u2014 nothing to publish`);
+    return void 0;
+  }
+  return { ordering, orderingMode };
+}
+function readOrdering(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.ordering' is ${shapeOf2(value)}, not an object \u2014 every section's order stays unknown`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [viewId, sectionsValue] of Object.entries(value)) {
+    const viewPath = `${RESOLUTION_TABLE_KEY}.ordering.${viewId}`;
+    if (!isPlainObject3(sectionsValue)) {
+      problems.push(`'${viewPath}' is ${shapeOf2(sectionsValue)}, not an object`);
+      continue;
+    }
+    const sections = {};
+    for (const [sectionId, raw] of Object.entries(sectionsValue)) {
+      const read = readSectionOrdering(`${viewPath}.${sectionId}`, raw, problems);
+      if (read !== void 0) sections[sectionId] = read;
+    }
+    if (Object.keys(sections).length > 0) out[viewId] = sections;
+  }
+  return out;
+}
+function readDayBoundary(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.dayBoundary' is ${shapeOf2(value)}, not an object \u2014 the day boundary stays unknown`
+    );
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!DAY_BOUNDARY_KEYS.includes(key)) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.dayBoundary.${key}' is not a recognised key \u2014 the keys are ${DAY_BOUNDARY_KEYS.join(", ")}`
+      );
+    }
+  }
+  const { timezone, dayStartHour, weekStartsOn } = value;
+  let ok = true;
+  if (typeof timezone !== "string" || timezone === "") {
+    problems.push(`'${RESOLUTION_TABLE_KEY}.dayBoundary.timezone' is ${JSON.stringify(timezone)}`);
+    ok = false;
+  }
+  if (typeof dayStartHour !== "number" || !Number.isInteger(dayStartHour) || dayStartHour < 0 || dayStartHour > 23) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.dayBoundary.dayStartHour' is ${JSON.stringify(dayStartHour)}, not an integer 0..23`
+    );
+    ok = false;
+  }
+  if (typeof weekStartsOn !== "string" || weekStartsOn === "") {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.dayBoundary.weekStartsOn' is ${JSON.stringify(weekStartsOn)}`
+    );
+    ok = false;
+  }
+  if (!ok) return void 0;
+  return {
+    timezone,
+    dayStartHour,
+    weekStartsOn
+  };
+}
+function readConfigResolutionDeclaration(document2) {
+  if (!isPlainObject3(document2)) {
+    return { resolution: EMPTY3, problems: [] };
+  }
+  if (!(RESOLUTION_TABLE_KEY in document2)) {
+    return { resolution: EMPTY3, problems: [] };
+  }
+  const raw = document2[RESOLUTION_TABLE_KEY];
+  const problems = [];
+  if (!isPlainObject3(raw)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}' is ${shapeOf2(raw)}, not an object \u2014 the whole resolution table stays unknown`
+    );
+    return { resolution: EMPTY3, problems };
+  }
+  for (const key of Object.keys(raw)) {
+    if (!TOP_KEYS2.includes(key)) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.${key}' is not a recognised key and was NOT applied \u2014 the keys are ${TOP_KEYS2.join(", ")}`
+      );
+    }
+  }
+  return {
+    resolution: {
+      registration: "registration" in raw ? readRegistration(raw.registration, problems) : void 0,
+      lineGrammars: "lineGrammars" in raw ? readLineGrammars(raw.lineGrammars, problems) : {},
+      ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
+      dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0
+    },
+    problems
+  };
+}
+
 // app/present/indent.ts
 var INDENT_UNIT = 4;
 var LEADING_WHITESPACE = /^\s*/;
@@ -696,6 +935,9 @@ function readDeclaration(document2) {
       continue;
     }
     if (key === QUALIFICATION_KEY) {
+      continue;
+    }
+    if (key === RESOLUTION_TABLE_KEY) {
       continue;
     }
     if (key === INDENT_UNIT_KEY) {
@@ -870,12 +1112,19 @@ function presentationFromDeclaration(document2) {
   const reading = readDeclaration(document2);
   const structuralReading = readStructuralDeclaration(document2);
   const qualificationReading = readQualificationDeclaration(document2);
+  const resolutionReading = readConfigResolutionDeclaration(document2);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
     structural: structuralReading.structural,
     qualification: qualificationReading.qualification,
-    problems: [...reading.problems, ...structuralReading.problems, ...qualificationReading.problems]
+    resolution: resolutionReading.resolution,
+    problems: [
+      ...reading.problems,
+      ...structuralReading.problems,
+      ...qualificationReading.problems,
+      ...resolutionReading.problems
+    ]
   };
 }
 
@@ -3773,6 +4022,103 @@ var presentation_default = {
       "waiting-work-tasks": "step 0: traverses (children+exists)",
       "work-habits": "step 0: traverses (children+exists)"
     }
+  },
+  resolution: {
+    registration: {
+      defaultNodeType: "task",
+      baseNodeType: "task",
+      inputGrammar: "tolerant",
+      defaultTags: []
+    },
+    lineGrammars: {
+      tolerant: [
+        "blank_line",
+        "fenced_code",
+        "heading"
+      ],
+      checkbox_only: []
+    },
+    ordering: {
+      "daily-personal": {
+        capture: {
+          orderingMode: "insertion_order"
+        }
+      },
+      "daily-work": {
+        capture: {
+          orderingMode: "insertion_order"
+        }
+      },
+      "flowtrace-queue": {
+        queue: {
+          ordering: [
+            {
+              field: "queue_position",
+              direction: "asc"
+            }
+          ]
+        }
+      },
+      "qntm-queue": {
+        queue: {
+          ordering: [
+            {
+              field: "queue_position",
+              direction: "asc"
+            }
+          ]
+        }
+      },
+      "this-week": {
+        overdue: {
+          ordering: [
+            {
+              field: "due_date",
+              direction: "asc"
+            }
+          ]
+        },
+        "due-this-week": {
+          ordering: [
+            {
+              field: "due_date",
+              direction: "asc"
+            }
+          ]
+        },
+        "available-overdue": {
+          ordering: [
+            {
+              field: "available_date",
+              direction: "asc"
+            }
+          ]
+        },
+        "available-this-week": {
+          ordering: [
+            {
+              field: "available_date",
+              direction: "asc"
+            }
+          ]
+        }
+      },
+      "trace-orchestration-queue": {
+        queue: {
+          ordering: [
+            {
+              field: "queue_position",
+              direction: "asc"
+            }
+          ]
+        }
+      }
+    },
+    dayBoundary: {
+      timezone: "Europe/London",
+      dayStartHour: 4,
+      weekStartsOn: "monday"
+    }
   }
 };
 
@@ -3791,6 +4137,7 @@ export {
   PresentationContext,
   QUALIFICATION_KEY,
   RESOLUTION_KEYS,
+  RESOLUTION_TABLE_KEY,
   RESOLVABLE_FIELDS,
   SPECIFICITY,
   STRUCTURAL_KEY,
@@ -3815,6 +4162,7 @@ export {
   paint,
   presentationFromDeclaration,
   qntmIdSpans,
+  readConfigResolutionDeclaration,
   readDeclaration,
   readQualificationDeclaration,
   readStructuralDeclaration,

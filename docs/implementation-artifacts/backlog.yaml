@@ -2031,3 +2031,45 @@ backlog:
     EMPTY by graph-sync's own note, which is a separate and smaller gap. Also worth watching: the
     same file warns the graph is nearing D1's 1MB row cap at 805KB.
   state: diagnose-ready
+
+- id: widen-resolution-table-to-pull-context
+  title: >-
+    [resolution] `pull_context` (77 of 186 sections: 59 `descendants`, 18 `ancestors_and_
+    descendants`) is not on `resolution.ordering`/`resolution.registration` — left out of step 5
+    on purpose, not missed.
+  driving_capability: config-resolution-table-is-published
+  record: >-
+    NOT SHIPPED. The PREDICATE half is exact from config alone — which edge type (`PART_OF` unless
+    a section overrides), which direction — the same shape `structural.ts`'s `edgeCardinality`
+    already publishes for the sibling STRUCTURAL EDGE kind. What makes it a RUNTIME answer rather
+    than a config-only one is the WALK: `research-the-resolution-universe.md` §4.8 measures a
+    maximum subtree depth of 6 in the operator's real graph, so "which rows would this pull in"
+    needs the 460-edge graph blob and a transitive traversal, not a lookup. No step 5 through 13 of
+    design-the-resolution-architecture.md names it as a dependency — steps 6/7/8 need the
+    REGISTRATION/ORDERING/DAY-BOUNDARY facts this row's sibling capability DOES publish, and
+    nothing in the sequence previews membership expansion. Publishing it now would ship a kind
+    with zero reader anywhere in the plan, which is the rule config-resolution-table-is-published
+    states explicitly rather than assumes: "a smaller table that is exact and consumed beats a
+    complete one nobody reads." Worth doing WHEN a step names it — the generator shape (read
+    `structural_edge_types`/`pull_context` off `views/*.yaml`, refuse on an edge type the schema
+    registry does not recognise) is a direct extension of `generate-structural-declaration.mjs`'s
+    existing pattern, so the predicate half is cheap once a consumer exists to justify carrying it.
+  state: diagnose-ready
+
+- id: wire-config-resolution-table-into-steps-6-7-8
+  title: >-
+    [resolution] `resolution.registration/ordering/lineGrammars/dayBoundary` has no production
+    reader in `app/` — the next-line seed does not use `baseNodeType`, no row previews its
+    ordering position, and the app still computes zero dates.
+  driving_capability: config-resolution-table-is-published
+  record: >-
+    NOT SHIPPED, AND DELIBERATELY OUT OF THIS STEP'S SCOPE — the brief for step 5 is "publish",
+    not "consume", and the design document's own sequence gives each consumer its own step:
+    6 (`newline.ts`'s GLOBAL rung reads `registration.baseNodeType`/`defaultNodeType` instead of
+    returning `null`), 7 (ordering preview — a typed row's position follows `resolution.ordering`
+    for the 9 sections that declare one), 8 (the day boundary — routes every date decision through
+    one function reading `resolution.dayBoundary` instead of `new Date()`). Each is sized `h` (step
+    6, 7) or already covered (step 8 is itself `h`) in the design document's own table and each has
+    its own falsifier stated there. This row exists so the gap is a planned next step, not a
+    discovered one.
+  state: diagnose-ready

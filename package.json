@@ -12,7 +12,9 @@
     "generate:structural": "node scripts/generate-structural-declaration.mjs",
     "generate:structural:check": "node scripts/generate-structural-declaration.mjs --check",
     "generate:qualification": "node scripts/generate-qualification-declaration.mjs",
-    "generate:qualification:check": "node scripts/generate-qualification-declaration.mjs --check"
+    "generate:qualification:check": "node scripts/generate-qualification-declaration.mjs --check",
+    "generate:resolution": "node scripts/generate-resolution-declaration.mjs",
+    "generate:resolution:check": "node scripts/generate-resolution-declaration.mjs --check"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

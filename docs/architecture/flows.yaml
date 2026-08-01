@@ -146,6 +146,20 @@ expected_flows:
     class: presentation-resolution
     gates_capabilities: [section-membership-is-read-not-guessed]
 
+  # THE CONFIG-ONLY RESOLUTION TABLE REACHES (added 2026-08-01, design-the-resolution-
+  # architecture.md step 5). Same shape as the three edges above, a fourth axis over the SAME
+  # served document: registration's two names (default_node_type/base_node_type), ordering, line
+  # grammars, the day boundary. Unlike the other three, this edge has no display consumer yet —
+  # see app/present/resolutiontable.ts's own header for why it is published anyway (steps 6, 7
+  # and 8 of the same sequence each name it as their one dependency).
+  - id: context-reads-the-resolution-declaration
+    from: app/present/context
+    to:   app/present/resolutiontable
+    callee: readConfigResolutionDeclaration
+    event: app.reads-the-resolution-declaration
+    class: presentation-resolution
+    gates_capabilities: [config-resolution-table-is-published]
+
   # THE FACTS. The cascade reads each level through the context rather than reaching for a
   # session, a store or a global — which is what lets a test resolve "as if the cursor were here"
   # without a browser, and what stage 3 depends on.

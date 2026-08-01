@@ -65,6 +65,16 @@ export type {
   SectionQualification,
 } from "./qualification.js";
 
+export { RESOLUTION_TABLE_KEY, readConfigResolutionDeclaration } from "./resolutiontable.js";
+export type {
+  ConfigResolutionReading,
+  ConfigResolutionTable,
+  DayBoundary,
+  OrderingKey,
+  RegistrationTable,
+  SectionOrdering,
+} from "./resolutiontable.js";
+
 export {
   RESOLVABLE_FIELDS,
   matchesFindClause,
