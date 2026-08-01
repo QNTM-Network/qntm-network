@@ -427,7 +427,15 @@ describe("7. and it reaches the screen — through app/index.html's own script",
 
     // The failure this also guards against is the refusal being reported into a line that is
     // overwritten one statement later — the same silence, one layer up.
-    assert.match(said, /^as of .* · 0 queued · the line you were on is not in this view any more$/, said);
+    //
+    // THE SENTENCE GAINED ITS SECOND CLAUSE WITH `a-refused-edit-is-held-unanchored`, and it is
+    // still ONE sentence, which is what this arm is about. Where the characters WENT is proven in
+    // tests/app-held-edit.test.mjs; this stays a test of the freshness line's shape.
+    assert.match(
+      said,
+      /^as of .* · 0 queued · the line you were on is not in this view any more — what was on it is held below$/,
+      said,
+    );
   });
 
   test("the sentence describes ONE arrival — the next projection does not repeat it", () => {
