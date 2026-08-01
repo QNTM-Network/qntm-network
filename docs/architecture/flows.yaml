@@ -967,3 +967,25 @@ forbidden_flows:
   # that `409` occurs exactly twice in the executable code and that no digest is computed anywhere
   # in it. That is the claim a flow declaration could not have made in any case: this row's whole
   # safety argument is about what the Worker DOES NOT DO, and flow-trace measures edges that exist.
+
+  # ── THE DROP LEDGER (2026-08-01) — NO EDGE, AND THAT IS THE DECLARATION ────────────────────
+  #
+  # `a-config-declaration-the-app-drops-says-so` adds NO row here, and the absence is stated
+  # rather than left for a reader to notice.
+  #
+  # The mechanism is `scripts/ledger.mjs` and the three generators that thread it — Node modules
+  # under `scripts/`, which `.flow-trace.yaml`'s own filter does not observe (`modules.include:
+  # [app]`). Declaring an edge here for a call flow-trace cannot see would report as "declared but
+  # NOT observed" forever, which is the exact drift this file's header says a declaration must not
+  # manufacture.
+  #
+  # The app-side half genuinely adds no call. `qualification.dropped`, `structural.dropped` and
+  # `resolution.dropped` are three READER fields, validated inside the readers that already own
+  # their keys; no module imports another because of them, and `app/` behaves identically with the
+  # key present or absent. There is no scenario under tests/flow_scenarios/ that covers this work,
+  # and adding one would exercise nothing new.
+  #
+  # WHAT ENFORCES IT INSTEAD, named so the absence is not read as an absence of enforcement:
+  # `tests/declaration-drop.test.mjs` — 27 per-path mutation proofs, the mutation proof that the
+  # guard goes red, 5 arms driving `scripts/checkdeclarations.mjs` as the subprocess build.yml
+  # invokes, and a completeness scanner with two positive controls.

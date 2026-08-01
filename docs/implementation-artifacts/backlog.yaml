@@ -2631,3 +2631,49 @@ backlog:
     section 1b (the measured line itself, replayed); tests/app-held-edit.test.mjs sections 2f/2g
     (both rungs through the real page); tests/flow_scenarios/instance_anchor.ts.
   state: passing
+- id: close-the-silent-drop-path-in-the-generators
+  title: >-
+    [fix] [declarations] Make it impossible for a config declaration to disappear without a
+    record. Audit all three generators (not only generate-qualification-declaration.mjs:396,
+    which the finding names), record every drop with its reason, and wire a staleness gate into
+    build.yml so a drop that appears cannot ship green.
+  driving_capability: a-config-declaration-the-app-drops-says-so
+  kind: capability
+  record: >-
+    2026-08-01 — SHIPPED. design-the-rule-mirror.md's own ranked order puts this at row 0, ahead
+    of every rung of the ladder, because "a mirror built on a generator that can silently drop a
+    declaration is a mirror whose generality cannot be checked, however well the rungs are
+    measured."
+    HOW MANY WAYS COULD A DECLARATION VANISH: sixteen, across all three generators, and the
+    finding named one of them. Qualification 14 (a patterns/ or views/ or vocabulary/ file that
+    does not parse; a view sheet with the wrong number of top-level keys; a view with no sections
+    list; a section that is not a mapping or carries no id/qualification — BOTH of which drop the
+    section from `sectionOrder` and therefore shift the positional ordinal `app/present/address.ts`
+    indexes; a vocabulary family that is not a list; an entry with no token; a token on a
+    non-resolvable field (73 of the operator's own, THE ONE §9.3 NAMES); a render-only token on a
+    resolvable field; a non-scalar value; a token setting a field through `parametric_field:`, a
+    shape the loop never even looks at; and a section whose qualification was refused, 137 of 186).
+    Structural 3 (a view sheet whose top-level key the line scanner cannot see; a view with no
+    `sections:` at the expected indent; and a HALF-declared override — types with no direction or
+    direction with no types — which was dropped whole, so the app silently used the global indent
+    binding under a heading the operator had told to do otherwise). Resolution 6 (three view-file
+    shapes, each of which ALSO disables the registration guard that stops a stale GLOBAL
+    input_grammar shipping; a section with no readable id; a node type whose render shape cannot
+    be seeded; and four ordering-marker paths, one of which — an unrecognised extraction_hint —
+    is the exact twin of the finding's own line in a different generator).
+    WHAT A REFUSAL DOES: recorded in `dropped`, printed to stderr, and gated by `--check`. Never a
+    non-zero exit on generate — a generator that cries wolf gets --force'd, which is the same
+    silence with extra steps.
+    THE TWO SHIPPED TESTS THAT "ASSERT THE SILENCE IS INTENDED" both encode a REAL requirement and
+    NEITHER was weakened. `tests/present-qualification.test.mjs`'s "REFUSAL FOLLOWS THE CONFIG TOO"
+    asserts the generator publishes nothing for a traversing pattern and the app abstains rather
+    than answering from the half it understands — correct, and kept verbatim; two assertions were
+    ADDED beneath it, that the pattern's reason is in `refused` and the heading it costs is named
+    in `dropped`. `tests/app-membership-note.test.mjs`'s 'ABSTENTION 1/5' asserts the note line
+    stays empty for an unpublished section — also correct: a note under 137 of 186 sections would
+    be noise, and surfacing the refusal IN THE UI is design row 6, not this row. Unchanged.
+    WHAT THIS ROW DID NOT DO, NAMED: it does not widen any grammar (137 sections remain refused,
+    by design — the number is now visible, not smaller), and it does not surface the count in the
+    running app. `app/present/qualification.ts`'s `dropped` is parsed and, like `refused` beside
+    it, read to decide nothing. That is design-the-rule-mirror.md row 6 and it is still open.
+  state: passing
