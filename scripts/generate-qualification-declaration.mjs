@@ -330,9 +330,15 @@ function readViews(configDir) {
     const order = [];
     for (const section of view.sections) {
       if (!section || typeof section !== "object") continue;
-      const { id, qualification, defaults } = section;
+      const { id, qualification, defaults, name } = section;
       if (typeof id !== "string" || typeof qualification !== "string") continue;
       const entry = { qualification, nodeType: viewNodeType };
+      // THE OPERATOR'S OWN WORDS FOR THE SECTION, when the config declares one (185 of 186 do).
+      // step 4 (design-the-resolution-architecture.md) needs a name to say — "this will leave
+      // Domain Empty" reads Domain Empty off THIS, never off the id (`domain-empty`) it is keyed
+      // by. Optional: `app/present/membership.ts` falls back to formatting the id when a section
+      // is the one that has none, rather than refusing to answer over a missing decoration.
+      if (typeof name === "string" && name !== "") entry.name = name;
       if (defaults && typeof defaults === "object" && !Array.isArray(defaults)) {
         const fixed = {};
         for (const [field, value] of Object.entries(defaults)) {

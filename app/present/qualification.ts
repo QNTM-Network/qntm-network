@@ -99,6 +99,13 @@ export interface SectionQualification {
   readonly nodeType: string;
   /** The section's own `defaults:` block, if it declares one (`{domain: admin}` and the like). */
   readonly defaults: Readonly<Record<string, FieldValue>> | undefined;
+  /**
+   * THE OPERATOR'S OWN WORDS FOR THIS SECTION — the config's `name:` ("Domain Empty"), never its
+   * `id:` ("domain-empty"). Absent only for the one section of 186 whose config declares no name;
+   * `membershipFor` (`membership.ts`) is what supplies a fallback, because a reader has no config
+   * to fall back against and must not guess one.
+   */
+  readonly name: string | undefined;
 }
 
 /** The whole published table. A lookup, not a resolver. */
@@ -143,7 +150,7 @@ const TOP_KEYS = [
   "sectionOrder",
   "refused",
 ] as const;
-const SECTION_KEYS = ["qualification", "nodeType", "defaults"] as const;
+const SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"] as const;
 
 const EMPTY: QualificationLanguage = {
   defaultNodeType: undefined,
@@ -351,7 +358,19 @@ function readSections(
         }
         if (!ok) continue;
       }
-      sections[sectionId] = { qualification: raw.qualification, nodeType: raw.nodeType, defaults };
+      // A WRONG-SHAPED NAME IS REPORTED AND TREATED AS ABSENT, NOT DROPPED. Unlike `defaults` —
+      // which feeds the registration cascade an `answer` would be wrong without — `name` decorates
+      // an answer that is otherwise complete; dropping the whole section over unreadable prose
+      // would refuse a real answer for a fact nothing downstream depends on to be correct.
+      let name: string | undefined;
+      if (raw.name !== undefined) {
+        if (typeof raw.name === "string" && raw.name !== "") {
+          name = raw.name;
+        } else {
+          problems.push(`'${path}.name' is ${JSON.stringify(raw.name)}, not a name — falling back`);
+        }
+      }
+      sections[sectionId] = { qualification: raw.qualification, nodeType: raw.nodeType, defaults, name };
     }
     if (Object.keys(sections).length > 0) out[viewId] = sections;
   }

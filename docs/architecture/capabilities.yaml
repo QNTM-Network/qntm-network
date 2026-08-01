@@ -1531,6 +1531,82 @@ capabilities:
     keystroke apart in a painter. The computation is proven correct against the engine first, so
     that whoever wires the display (design doc step 4) is arguing about presentation rather than
     about whether the answer is right, or about whether it can even be asked for a real line.
+    FULLY ROOTED AS OF 2026-08-01 — STEP 4 SHIPPED. `membershipFor` now HAS a production caller:
+    `app/index.html`'s `commitLine` computes `membershipNoteFor(view, commit)` on every committed
+    edit and shows the answer in the freshness line — see the new capability
+    `section-membership-is-said-in-the-freshness-line` below for what is shown, when, and why. The
+    caller is `app/index.html`, which the capture filter names and node cannot import (the same
+    invisibility `base.ts`'s own rooting note already records for its one caller), so the edge from
+    the page to `membershipFor`/`sectionAt` is real and unobservable by flow-trace by construction —
+    proven instead by `tests/app-membership-note.test.mjs`, which drives the page's own lifted
+    script. The four declared `section-membership` flows plus `address-classifies-the-line` are
+    still observed only by the two node-observer scenarios named above; step 4 added no new
+    `app/present/*` call edge for flow-trace to see, because the composition it wires lives entirely
+    in the page.
+  status: working
+- id: section-membership-is-said-in-the-freshness-line
+  intent: >-
+    AFTER A COMMITTED EDIT, THE OPERATOR IS TOLD WHEN A LINE HE JUST CHANGED NO LONGER BELONGS IN
+    THE SECTION IT IS IN — design-the-resolution-architecture.md step 4, L6 PROJECTION. His own two
+    cases, driven end to end: a bare line under "Domain Empty", edited but still bare, says nothing.
+    The same line edited to add `#work` says "this line will leave Domain Empty", the instant the
+    write leaves and gone the instant the cycle's own answer lands.
+    THE MESSAGE LIVES IN THE FRESHNESS LINE, NEVER BESIDE THE ROW, AND THAT IS THE WHOLE OF RULE 1.
+    A row that relocates under a live cursor takes away the safe haven an edit in flight is supposed
+    to be, and in a painter "say it will move" and "move it" are one keystroke apart — so this puts
+    them in different FILES. `app/index.html`'s new `membershipNoteFor` reads `qualification`,
+    calls `sectionAt` then `membershipFor`, and returns a sentence or `""`; it never touches
+    `viewBody`, never constructs a DOM element, and is called from `commitLine`, which already writes
+    the freshness line for an unrelated reason (the stale-base report, `a-write-refuses-a-stale-base`).
+    `paint.ts` gained one field on `LineCommit` (`kind: "set-line" | "insert-line"`, a copy of the
+    literal already passed to `applyEdit` at each call site) and NOTHING ELSE — no new decision, no
+    new rendition, no touch to the indent arithmetic the golden master pins.
+    ONLY THE LEAVING TRANSITION IS SAID — "only speak about a change" resolves to ONE direction, not
+    two, because the operator's own example names it: a bare line arriving at "belongs" (typing it
+    for the first time) is silence, a line RETURNING to belonging (deleting `#work`) is silence, and
+    an edit that changes the characters without changing the answer is silence. Proven directly by
+    driving `__membershipNoteFor` (exported from the test fixture for exactly this, the same posture
+    `__writeFile`/`__sayAsOf` already have) through all four combinations plus a returning-transition
+    case built by hand.
+    EVERY REFUSAL PATH PRODUCES SILENCE, ON EITHER SIDE OF THE COMPARISON. `membershipFor`'s five
+    `Abstention` values (no-section-declaration, already-a-node, not-a-declared-checkbox, no-content,
+    ambiguous-token) are each driven as the AFTER answer, one case where the BEFORE side is what
+    abstains, and the whole set costs nothing new — `membershipNoteFor` adds no judgement, an
+    abstention on either side just means there is nothing to compare.
+    AN INSERTED LINE HAS NO "BEFORE", AND THIS IS THE ONE REFUSAL SPECIFIC TO THIS LAYER. `commit.kind
+    !== "set-line"` is refused outright rather than reading `commit.source` at `commit.lineIndex` —
+    for an `insert-line` commit that index is a DIFFERENT, unrelated line about to be pushed down,
+    and comparing it as if it were this line's own history would misattribute one line's membership
+    answer to another. Proven with a fixture built to spring exactly that trap: the same lineIndex
+    that reads as a real "leaving" transition under `set-line` reads as silence under `insert-line`.
+    THE PREDICTION IS NOT CONFIRMED AGAINST THE CYCLE'S OWN ANSWER, AND THIS IS STATED RATHER THAN
+    HIDDEN. This app has not built the envelope machinery (design doc steps 11/12) that would let it
+    compare its prediction against what the cycle actually did. So the note is shown ONCE, beside
+    "syncing…", and lapses the instant the next freshness-line write happens — never carried the way
+    `writeNote`/`cursorNote` are, because a stale, unconfirmed prediction sitting on screen would be
+    worse than the silence it replaced. `writeFile` gained one optional parameter (`membershipNote`,
+    default `""`) and one line folding it into the same array `note` (the base-refusal) already
+    builds — the two notes are independent facts shown in the same sentence, never merged into one.
+    NOTHING LOCAL REACHES A WRITE, MEASURED RATHER THAN ARGUED. `docs/implementation-artifacts/
+    research-the-rule-closure.md` §8 enumerated the write-adjacent sites and proved by counting them
+    that no code path runs from a painted pixel to a POST body — `graphData` assigned in exactly 5
+    places (all from the server's own envelope), `applyEdit` reached from exactly 5 sites outside its
+    own module, `writeFile` with exactly 2 callers, `.markdown` never assigned. All four counts are
+    unchanged by this change and are pinned by `tests/app-membership-note.test.mjs` section 4, which
+    also proves directly that the shown sentence is absent from the posted markdown — a measurement
+    of zero new sites, treated as broken until the positive control (these four counts, passing
+    today) is shown passing, per this session's own house rule.
+  tier: functional
+  rooting: >-
+    isolated inside `app/index.html`, the same posture `a-write-refuses-a-stale-base`'s BASE level
+    and `the-cursor-anchors-to-a-node-not-a-line-number`'s page-level wiring already have: the
+    functions this adds (`membershipNoteFor`, and `writeFile`'s new parameter) live in a file node
+    cannot import, so flow-trace cannot see the edge from `commitLine` to `sectionAt`/`membershipFor`
+    however real it is. `tests/app-membership-note.test.mjs` is the proof instead, driving
+    `app/index.html`'s own lifted script through `tests/fixtures/app-html-page.mjs`, which gained one
+    new export (`__membershipNoteFor`) for exactly this — the same reason `__writeFile`/`__sayAsOf`
+    are exported, so a suite can prove one computation without entangling `served`'s own, separately
+    tested base reading into every assertion.
   status: working
 - id: section-addressing-reads-the-full-declared-order
   intent: >-

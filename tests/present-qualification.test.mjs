@@ -67,6 +67,10 @@ describe("1. the shipped declaration reads cleanly", () => {
     assert.ok(inbox, "the inbox view is absent from the published sections");
     assert.equal(inbox["domain-empty"].qualification, "domain-empty");
     assert.equal(inbox["inbox-tagged"].qualification, "inbox-items");
+    // design-the-resolution-architecture.md step 4 says a section's OWN WORDS, never its id —
+    // published beside the qualification rather than left for a caller to reformat the id itself.
+    assert.equal(inbox["domain-empty"].name, "Domain Empty");
+    assert.equal(inbox["inbox-tagged"].name, "Inbox");
     // No `default_node_type` in inbox.yaml and no section `defaults:` — so both fall through to
     // the GLOBAL registration rung, which is what makes a bare line there a task.
     assert.equal(inbox["domain-empty"].nodeType, qualification.defaultNodeType);

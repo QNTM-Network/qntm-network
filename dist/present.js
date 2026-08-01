@@ -346,7 +346,7 @@ var TOP_KEYS = [
   "sectionOrder",
   "refused"
 ];
-var SECTION_KEYS = ["qualification", "nodeType", "defaults"];
+var SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"];
 var EMPTY2 = {
   defaultNodeType: void 0,
   structuralNodeTypes: [],
@@ -522,7 +522,15 @@ function readSections2(value, predicates, problems) {
         }
         if (!ok) continue;
       }
-      sections[sectionId] = { qualification: raw.qualification, nodeType: raw.nodeType, defaults };
+      let name;
+      if (raw.name !== void 0) {
+        if (typeof raw.name === "string" && raw.name !== "") {
+          name = raw.name;
+        } else {
+          problems.push(`'${path}.name' is ${JSON.stringify(raw.name)}, not a name \u2014 falling back`);
+        }
+      }
+      sections[sectionId] = { qualification: raw.qualification, nodeType: raw.nodeType, defaults, name };
     }
     if (Object.keys(sections).length > 0) out[viewId] = sections;
   }
@@ -746,6 +754,9 @@ function sectionAt(source, lineIndex, view, sectionOrder) {
 // app/present/membership.ts
 var RESOLVABLE_FIELDS = ["node_type", "domain", "status"];
 var abstains = (because) => ({ kind: "abstains", because });
+function titleCaseFromId(id) {
+  return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
 var CHECKBOX = /^\s*- (\[[^\]]\]) (.*)$/;
 function evaluatePredicate(actual, predicate) {
   if ("not" in predicate) return !evaluatePredicate(actual, predicate.not);
@@ -803,7 +814,8 @@ function membershipFor(viewId, sectionId, line, language) {
       view: viewId,
       section: sectionId,
       qualification: section.qualification,
-      fields
+      fields,
+      sectionName: section.name ?? titleCaseFromId(sectionId)
     }
   };
 }
@@ -1754,7 +1766,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     }
     const text = input.value;
     const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "set-line" });
     const next = markdown ?? fileSource;
     const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
     if (wasFocused) {
@@ -1814,7 +1826,7 @@ function draftInput(lineIndex, seed, fileSource, draft, deps, repaint) {
     const text = input.value;
     draft.drop();
     const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "insert-line" });
     returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
@@ -2892,6 +2904,7 @@ var presentation_default = {
         "to-do": {
           qualification: "admin-open",
           nodeType: "task",
+          name: "To Do",
           defaults: {
             domain: "admin"
           }
@@ -2899,6 +2912,7 @@ var presentation_default = {
         done: {
           qualification: "admin-done",
           nodeType: "task",
+          name: "Done",
           defaults: {
             domain: "admin"
           }
@@ -2908,6 +2922,7 @@ var presentation_default = {
         "not-listened": {
           qualification: "albums-not-listened",
           nodeType: "album",
+          name: "Not Listened",
           defaults: {
             domain: "arts"
           }
@@ -2915,6 +2930,7 @@ var presentation_default = {
         listened: {
           qualification: "albums-listened",
           nodeType: "album",
+          name: "Listened",
           defaults: {
             domain: "arts"
           }
@@ -2924,6 +2940,7 @@ var presentation_default = {
         tasks: {
           qualification: "all-arts-nodes",
           nodeType: "task",
+          name: "All Arts",
           defaults: {
             domain: "arts"
           }
@@ -2933,6 +2950,7 @@ var presentation_default = {
         tasks: {
           qualification: "all-home-nodes",
           nodeType: "task",
+          name: "All Home",
           defaults: {
             domain: "home"
           }
@@ -2942,6 +2960,7 @@ var presentation_default = {
         tasks: {
           qualification: "all-program-nodes",
           nodeType: "task",
+          name: "All Program",
           defaults: {
             domain: "program"
           }
@@ -2951,6 +2970,7 @@ var presentation_default = {
         tasks: {
           qualification: "all-social-nodes",
           nodeType: "task",
+          name: "All Social",
           defaults: {
             domain: "social"
           }
@@ -2960,6 +2980,7 @@ var presentation_default = {
         tasks: {
           qualification: "all-spirit-nodes",
           nodeType: "task",
+          name: "All Spirit",
           defaults: {
             domain: "spirit"
           }
@@ -2969,6 +2990,7 @@ var presentation_default = {
         "to-check": {
           qualification: "blogs-open",
           nodeType: "blog",
+          name: "To Check",
           defaults: {
             domain: "arts"
           }
@@ -2976,6 +2998,7 @@ var presentation_default = {
         checked: {
           qualification: "blogs-done",
           nodeType: "blog",
+          name: "Checked",
           defaults: {
             domain: "arts"
           }
@@ -2985,6 +3008,7 @@ var presentation_default = {
         "to-read": {
           qualification: "books-open",
           nodeType: "book",
+          name: "To Read",
           defaults: {
             domain: "arts"
           }
@@ -2992,6 +3016,7 @@ var presentation_default = {
         read: {
           qualification: "books-done",
           nodeType: "book",
+          name: "Read",
           defaults: {
             domain: "arts"
           }
@@ -3001,6 +3026,7 @@ var presentation_default = {
         "routine-drift": {
           qualification: "routine-drift",
           nodeType: "task",
+          name: "Routine Drift",
           defaults: {
             domain: "personal"
           }
@@ -3008,6 +3034,7 @@ var presentation_default = {
         backlog: {
           qualification: "backlog-tasks",
           nodeType: "task",
+          name: "Backlog",
           defaults: {
             domain: "personal"
           }
@@ -3015,6 +3042,7 @@ var presentation_default = {
         done: {
           qualification: "done-tasks",
           nodeType: "task",
+          name: "Done",
           defaults: {
             domain: "personal"
           }
@@ -3024,6 +3052,7 @@ var presentation_default = {
         "in-progress": {
           qualification: "in-progress-tasks",
           nodeType: "task",
+          name: "In Progress",
           defaults: {
             domain: "work"
           }
@@ -3033,6 +3062,7 @@ var presentation_default = {
         developing: {
           qualification: "attributes-developing",
           nodeType: "attribute",
+          name: "Developing",
           defaults: {
             domain: "character"
           }
@@ -3040,6 +3070,7 @@ var presentation_default = {
         embodied: {
           qualification: "attributes-embodied",
           nodeType: "attribute",
+          name: "Embodied",
           defaults: {
             domain: "character"
           }
@@ -3049,6 +3080,7 @@ var presentation_default = {
         everything: {
           qualification: "everything-personal-nodes",
           nodeType: "task",
+          name: "Personal Everything",
           defaults: {
             domain: "personal"
           }
@@ -3058,6 +3090,7 @@ var presentation_default = {
         everything: {
           qualification: "everything-work-nodes",
           nodeType: "task",
+          name: "Work Everything",
           defaults: {
             domain: "work"
           }
@@ -3067,6 +3100,7 @@ var presentation_default = {
         "to-watch": {
           qualification: "films-to-watch",
           nodeType: "film",
+          name: "To Watch",
           defaults: {
             domain: "arts"
           }
@@ -3074,6 +3108,7 @@ var presentation_default = {
         watched: {
           qualification: "films-watched",
           nodeType: "film",
+          name: "Watched",
           defaults: {
             domain: "arts"
           }
@@ -3083,6 +3118,7 @@ var presentation_default = {
         groups: {
           qualification: "social-groups",
           nodeType: "group",
+          name: "Groups",
           defaults: {
             domain: "social"
           }
@@ -3091,17 +3127,20 @@ var presentation_default = {
       inbox: {
         "inbox-tagged": {
           qualification: "inbox-items",
-          nodeType: "task"
+          nodeType: "task",
+          name: "Inbox"
         },
         "domain-empty": {
           qualification: "domain-empty",
-          nodeType: "task"
+          nodeType: "task",
+          name: "Domain Empty"
         }
       },
       people: {
         people: {
           qualification: "social-people",
           nodeType: "person",
+          name: "People",
           defaults: {
             domain: "social"
           }
@@ -3111,84 +3150,97 @@ var presentation_default = {
         "admin-routines": {
           qualification: "admin-routines",
           nodeType: "routine",
+          name: "Admin Routines",
           defaults: {
             domain: "admin"
           }
         },
         upcoming: {
           qualification: "admin-routines-upcoming",
-          nodeType: "routine"
+          nodeType: "routine",
+          name: "Upcoming"
         }
       },
       "routines-life-admin": {
         "life-admin-routines": {
           qualification: "life-admin-routines",
           nodeType: "routine",
+          name: "Life Admin Routines",
           defaults: {
             domain: "life-admin"
           }
         },
         upcoming: {
           qualification: "life-admin-routines-upcoming",
-          nodeType: "routine"
+          nodeType: "routine",
+          name: "Upcoming"
         }
       },
       "routines-personal": {
         "personal-routines": {
           qualification: "personal-routines",
           nodeType: "routine",
+          name: "Personal Routines",
           defaults: {
             domain: "personal"
           }
         },
         upcoming: {
           qualification: "personal-routines-upcoming",
-          nodeType: "routine"
+          nodeType: "routine",
+          name: "Upcoming"
         }
       },
       "routines-program": {
         "program-routines": {
           qualification: "program-routines",
           nodeType: "routine",
+          name: "Program Routines",
           defaults: {
             domain: "program"
           }
         },
         upcoming: {
           qualification: "program-routines-upcoming",
-          nodeType: "routine"
+          nodeType: "routine",
+          name: "Upcoming"
         }
       },
       "routines-spirit": {
         "spirit-routines": {
           qualification: "spirit-routines",
           nodeType: "routine",
+          name: "Spirit Routines",
           defaults: {
             domain: "spirit"
           }
         },
         upcoming: {
           qualification: "spirit-routines-upcoming",
-          nodeType: "routine"
+          nodeType: "routine",
+          name: "Upcoming"
         }
       },
       "routines-work": {
         "work-routines": {
           qualification: "work-routines",
           nodeType: "routine",
+          name: "Work Routines",
           defaults: {
             domain: "work"
           }
         },
         upcoming: {
           qualification: "work-routines-upcoming",
-          nodeType: "routine"
+          nodeType: "routine",
+          name: "Upcoming"
         }
       },
       routines: {
         "admin-routines": {
           qualification: "admin-routines",
           nodeType: "task",
+          name: "Admin Routines",
           defaults: {
             domain: "admin"
           }
@@ -3196,6 +3248,7 @@ var presentation_default = {
         "life-admin-routines": {
           qualification: "life-admin-routines",
           nodeType: "task",
+          name: "Life Admin Routines",
           defaults: {
             domain: "life-admin"
           }
@@ -3203,6 +3256,7 @@ var presentation_default = {
         "work-routines": {
           qualification: "work-routines",
           nodeType: "task",
+          name: "Work Routines",
           defaults: {
             domain: "work"
           }
@@ -3210,6 +3264,7 @@ var presentation_default = {
         "personal-routines": {
           qualification: "personal-routines",
           nodeType: "task",
+          name: "Personal Routines",
           defaults: {
             domain: "personal"
           }
@@ -3217,6 +3272,7 @@ var presentation_default = {
         "program-routines": {
           qualification: "program-routines",
           nodeType: "task",
+          name: "Program Routines",
           defaults: {
             domain: "program"
           }
@@ -3224,6 +3280,7 @@ var presentation_default = {
         "spirit-routines": {
           qualification: "spirit-routines",
           nodeType: "task",
+          name: "Spirit Routines",
           defaults: {
             domain: "spirit"
           }
@@ -3233,6 +3290,7 @@ var presentation_default = {
         "to-watch": {
           qualification: "tv-open",
           nodeType: "tv_show",
+          name: "To Watch",
           defaults: {
             domain: "arts"
           }
@@ -3240,6 +3298,7 @@ var presentation_default = {
         watched: {
           qualification: "tv-done",
           nodeType: "tv_show",
+          name: "Watched",
           defaults: {
             domain: "arts"
           }
@@ -3249,6 +3308,7 @@ var presentation_default = {
         "to-check": {
           qualification: "writers-open",
           nodeType: "writer",
+          name: "To Check",
           defaults: {
             domain: "arts"
           }
@@ -3256,6 +3316,7 @@ var presentation_default = {
         checked: {
           qualification: "writers-done",
           nodeType: "writer",
+          name: "Checked",
           defaults: {
             domain: "arts"
           }

@@ -1892,28 +1892,68 @@ backlog:
     [membership] Wire `membershipFor` to something the operator can SEE. The answer is computed,
     proven against the engine, and displayed nowhere — `app/index.html` does not call it and no
     pixel changes.
-  driving_capability: section-membership-is-read-not-guessed
+  driving_capability: section-membership-is-said-in-the-freshness-line
   record: >-
-    NOT SHIPPED, AND DELIBERATELY — BUT ITS BLOCKING PREREQUISITE IS NOW CLOSED, UPDATED 2026-08-01.
-    Showing the answer is a separate decision from computing it, and the wrong version is worse than
-    nothing: a row that relocates under a live cursor takes away the safe haven an edit in flight is
-    supposed to be. Saying "this will leave Domain Empty" is safe; moving it is not, and in a
-    painter the two are one keystroke apart. Two prerequisites the display needed. FIRST, the app
-    had to know which SECTION the cursor is in BY THE CONFIG'S OWN ID — `instance.ts` already
-    derived a section ORDINAL from heading order, but the declaration is keyed on the config's
-    section `id:` string, and nothing mapped one to the other. THIS IS NOW CLOSED:
-    design-the-resolution-architecture.md steps 1-3 shipped `sectionOrder` (the full declared order,
-    published beside the published-predicate subset — `scripts/generate-qualification-declaration.mjs`),
-    `app/present/address.ts`'s `sectionAt` (the join, proven against the trap where the published
-    subset would have misaddressed daily-work/daily-personal), and wired
-    `readQualificationDeclaration` into `presentationFromDeclaration` so the predicate table has a
-    production reader at all. See capability `section-addressing-reads-the-full-declared-order`.
-    SECOND, the app must know which VIEW it is in as a config id; the snapshot carries `id` per
-    view, so this half was already available. WHAT REMAINS IS PURELY THE DISPLAY DECISION (design
-    doc step 4): call `membershipFor(currentViewId, sectionAt(source, cursorLine, currentViewId,
-    qualification.sectionOrder), line, qualification)` on the cursor's line and paint the answer
-    when it is not an `Abstention` — no new fact is needed, only the wiring and the paint-time
-    decision about what "nothing" looks like for all five refusal values.
+    2026-08-01 — SHIPPED. `app/index.html`'s `commitLine` now calls `membershipNoteFor(view,
+    commit)` on every committed edit — `sectionAt(commit.source, commit.lineIndex, view.id,
+    qualification.sectionOrder)` then `membershipFor(view.id, sectionId, line, qualification)`,
+    once for the line's text a moment ago and once for its committed text — and shows "this line
+    will leave <section name>" in the freshness line when the answer went from belonging to not.
+    His own two cases, proven end to end through the page's own lifted script
+    (tests/app-membership-note.test.mjs): a bare line under "Domain Empty" edited but still bare
+    says nothing; the same line edited to add `#work` says it will leave, the instant the write
+    leaves and gone the instant the cycle's own answer lands.
+    THE DISPLAY DECISION, SETTLED. Not beside the row — in the freshness line, `base.ts`'s own
+    stale-save register, because that keeps "say it" and "move it" (paint.ts's row-building code)
+    in different FILES rather than merely different functions. Only the LEAVING transition is said
+    — a fresh capture arriving at "belongs" and a line RETURNING to belonging are both silence,
+    which is what makes "a message on every keystroke" false rather than merely rare. The note is
+    shown once, beside "syncing…", and is NOT carried the way `writeNote`/`cursorNote` are: this
+    app has not built the machinery (steps 11/12) to confirm a prediction against the cycle's own
+    answer, so letting it lapse is the honest middle between manufacturing a confirmation and
+    leaving an unconfirmed guess on screen.
+    ONE FIELD ADDED, NOTHING ELSE MOVED. `paint.ts`'s `LineCommit` gained `kind: "set-line" |
+    "insert-line"` (a copy of the literal already passed to `applyEdit`) so `membershipNoteFor` can
+    refuse an INSERTED line's "before" outright rather than reading an unrelated line at the same
+    index — the one refusal specific to this layer, proven with a fixture built to spring exactly
+    that trap. No new `Contribution`, no new cascade level, no new `SourceEdit` kind; `writeFile`
+    gained one optional parameter and one line folding it into the note it already builds.
+    NOTHING LOCAL REACHES A WRITE, measured rather than argued: the write-adjacent sites
+    `research-the-rule-closure.md` §8 enumerated (`graphData` 5 assignments, `applyEdit` 5 sites,
+    `writeFile` 2 callers, `.markdown` never assigned) are unchanged in count and pinned by
+    `tests/app-membership-note.test.mjs` section 4, which also proves the shown sentence is absent
+    from the posted markdown directly, on the wire.
+    NOT COVERED, STATED RATHER THAN LEFT IMPLIED: a checkbox toggle — `toggleTask` (a mouse click)
+    and vim's `x` (which reaches `commitLine`, but with a hand-built commit carrying no `kind`, so
+    `membershipNoteFor` refuses it the same way it refuses any commit that is not `"set-line"`) —
+    can also change `status`, which is one of the three resolvable fields, and is not wired to this
+    note at all. See `membership-note-on-a-checkbox-toggle` below.
+  state: passing
+
+- id: membership-note-on-a-checkbox-toggle
+  title: >-
+    [membership] Ticking a box can also change whether a line belongs — `status` is one of the
+    three resolvable fields, and `domain-empty`'s own exclusion is `status: done`. Neither
+    `toggleTask` (mouse) nor vim's `x` (keyboard) is wired to `membershipNoteFor`.
+  driving_capability: section-membership-is-said-in-the-freshness-line
+  record: >-
+    NOT SHIPPED, AND DELIBERATELY DEFERRED RATHER THAN FORGOTTEN. `show-the-membership-answer-in-
+    the-app` wired ONLY `commitLine`'s `set-line` path (a text edit committed through `rawInput`) —
+    ticking a box is a real, common way a line stops belonging to an untriaged section, and it is
+    not narrated at all today. TWO DISTINCT GAPS, NOT ONE. `toggleTask` calls `writeFile` directly
+    with no `LineCommit` in the middle at all, so wiring it needs its own call to
+    `membershipNoteFor` at that site, keyed off `toggle.lineIndex`/`toggle.checked` rather than a
+    before/after TEXT comparison — `status` is the one field a checkbox toggle changes and the
+    text either side of it does not, so the comparison shape used for a typed edit does not
+    directly apply. Vim's `x` reaches `commitLine` but with a HAND-BUILT commit object
+    (`app/index.html`, the `toggle-done` effect) that carries no `source` and, since this row's own
+    change, no `kind` either — `membershipNoteFor` already refuses it safely (silence, not a
+    crash), but giving it a real answer needs the same `source`/`kind` `rawInput`'s own commits
+    carry, which `x`'s hand-built object does not have today for reasons that predate this change
+    (see `commitLine`'s own callers in `app/index.html` for the `toggle-done` and `indent` effects).
+    SIZE, ROUGHLY: under an hour for `toggleTask` (one new call, one existing `CheckboxToggle`
+    already carries `lineIndex`/`checked`/`source`/`row`); the vim `x` half is coupled to whatever
+    fixes `x`'s missing `source` more generally, so it is priced with that gap rather than alone.
   state: diagnose-ready
 
 - id: widen-membership-to-edge-traversing-qualifications

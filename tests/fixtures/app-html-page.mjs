@@ -128,6 +128,11 @@ export const __focusColumn = () => focus.column;
 export function __setFocus(lineIndex, source) { focus.focus(lineIndex, source, 0, currentViewId); }
 export const __focusAnchor = () => focus.anchor;
 export { sayAsOf as __sayAsOf };
+// THE MEMBERSHIP NOTE (design-the-resolution-architecture.md step 4). Exported on its own, the
+// same reason \`__writeFile\` and \`__sayAsOf\` are: a suite proving "every refusal path produces
+// silence" wants to drive THIS ONE COMPUTATION directly, without also entangling \`served\`'s base
+// reading (a separate, separately-tested fact — tests/present-base.test.mjs) into every assertion.
+export { membershipNoteFor as __membershipNoteFor };
 `;
 
   const file = join(workDir, "page.mjs");

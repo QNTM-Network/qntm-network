@@ -879,6 +879,8 @@ import {
   presentationFromDeclaration,
   DEFAULT_INDENT_UNIT,
   EMBEDDED_DECLARATION,
+  sectionAt,
+  membershipFor,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -911,10 +913,9 @@ let structural = undefined;
 // THE MEMBERSHIP AXIS (design-the-resolution-architecture.md, L5 EVALUATION) — which section a
 // declared predicate says a line belongs in, and the full declared section order per view that L3
 // ADDRESSING (app/present/address.ts's sectionAt) indexes. Read and validated here, the same
-// posture as `structural` above: this variable is read by nothing yet — showing the membership
-// answer on screen is a separate, later step (design doc step 4), deliberately not this one. What
-// this wiring changes is that `readQualificationDeclaration` now has a production caller at all;
-// before, only tests called it, and 20+ KB of predicate table shipped on every load unread.
+// posture as `structural` above. STEP 4 GAVE THIS A READER: `membershipNoteFor` below calls
+// `sectionAt`/`membershipFor` against it from `commitLine`, so a committed edit can say whether the
+// line it just changed still belongs in the section it is in.
 let qualification = undefined;
 
 // THE PAGE READS; IT NO LONGER FETCHES. Turning the document into levels is still
@@ -1524,6 +1525,55 @@ const BASE_REFUSALS = {
 };
 
 /**
+ * AFTER THIS COMMIT, DOES THE LINE STILL BELONG IN THE SECTION IT IS IN — design doc step 4, L6
+ * PROJECTION. Tonight's proven-but-invisible layers (L3 `sectionAt`, L5 `membershipFor`) SAID from
+ * here for the first time. Returns the sentence to show, or `""` when nothing is said.
+ *
+ * ── ONLY THE LEAVING TRANSITION IS SAID, AND THAT IS THE WHOLE OF RULE 4 ──
+ *
+ * The operator's own two cases: a bare line under "Domain Empty" belongs and stays — say nothing,
+ * because a message on every keystroke is noise. The same line with `#work` acquires a domain and
+ * leaves — say that. So this compares the line's membership answer BEFORE the commit (its own text
+ * a moment ago, at this same index) against AFTER (`commit.text`), and speaks only when it went
+ * from belonging to not: the transition his own example is about. Belonging -> belonging, absent
+ * -> belonging (a fresh capture that stays), and not-belonging -> belonging are all silence too —
+ * "only speak about a change" names the transition, and the operator's own example is that only
+ * ONE of the two directions is worth narrating: the direction that costs him something if he does
+ * not see it. Confirming the safe direction on every keystroke would be exactly the noise refused.
+ *
+ * ── REFUSE RATHER THAN GUESS, APPLIED TWICE ──
+ *
+ * EITHER SIDE ABSTAINING IS SILENCE. `membershipFor`'s five `Abstention` values already refuse an
+ * unpublished qualification, a stamped line, a non-checkbox line, an empty line and an ambiguous
+ * token; this function adds no judgement on top — an abstention on either side of the comparison
+ * means there is nothing to compare, not that the missing side is assumed to agree or disagree.
+ *
+ * AN INSERTED LINE HAS NO "BEFORE", AND GUESSING ONE WOULD MISATTRIBUTE A DIFFERENT LINE'S
+ * ANSWER. `commit.kind !== "set-line"` (a new row from `draftInput`) is refused outright, never by
+ * reading `commit.source` at `commit.lineIndex` — that index, for an insertion, is the row about
+ * to be pushed down, a different line entirely (see `LineCommit.kind`'s own header in paint.ts).
+ */
+function membershipNoteFor(view, commit) {
+  if (qualification === undefined || commit.kind !== "set-line") {
+    return "";
+  }
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, qualification.sectionOrder);
+  if (sectionId === null) {
+    return "";
+  }
+  const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
+  const before = membershipFor(view.id, sectionId, beforeLine, qualification);
+  const after = membershipFor(view.id, sectionId, commit.text, qualification);
+  if (before.kind !== "answer" || after.kind !== "answer") {
+    return "";
+  }
+  if (before.answer.belongs && !after.answer.belongs) {
+    return `this line will leave ${after.answer.sectionName}`;
+  }
+  return "";
+}
+
+/**
  * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
  *
  * `source` is the string the edit was computed against, handed up by the painter (`paint.ts`'s
@@ -1549,12 +1599,25 @@ const BASE_REFUSALS = {
  * lost to a check whose entire purpose is that nothing is lost silently. The server is the only
  * place a write can be refused safely, because it is the only place that knows what the file says;
  * see design-the-edit-is-a-safe-haven.md §8 for the two sentences that half needs.
+ *
+ * ── `membershipNote`, THE FOURTH THING, AND WHY IT IS NOT LIKE THE OTHER THREE ──
+ *
+ * A PREDICTION, NOT A DIVERGENCE — so it is said ONCE, here, beside "syncing…", and never carried
+ * the way `writeNote` is. `writeNote` survives to `sayAsOf` because the fact it reports (the base
+ * was stale) is still true when the cycle answers. A membership prediction is not: this app has not
+ * built the machinery (design doc steps 11/12, the envelope carrying the cycle's own resolved
+ * section) to CONFIRM it against what the cycle actually did, so holding it past this one line would
+ * let it stand as if confirmed when it is not — "a stale prediction is worse than none". Letting it
+ * lapse the instant the next freshness-line write happens (the cycle's answer, or a failure) is the
+ * honest middle: neither manufacturing a confirmation this app cannot make, nor leaving an unconfirmed
+ * guess on screen indefinitely.
  */
-async function writeFile(view, markdown, source) {
+async function writeFile(view, markdown, source, membershipNote = "") {
   const reading = served.read(view.path, source);
   const note = BASE_REFUSALS[reading.outcome] ?? "";
   writeNote = note;
-  $("freshness").textContent = "syncing…" + (note === "" ? "" : ` · ${note}`);
+  const syncingNotes = [note, membershipNote].filter((n) => n !== "");
+  $("freshness").textContent = "syncing…" + syncingNotes.map((n) => ` · ${n}`).join("");
   // SYNCHRONOUS, AND app/present/base.ts's OWN HEADER SAYS WHY IT HAD TO BE: an `await` here would
   // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
   // implementation detail.
@@ -1614,8 +1677,11 @@ async function toggleTask(view, toggle) {
 // line was left unchanged, or the text was not one line — and a refusal is not a POST.
 async function commitLine(view, commit) {
   if (commit.markdown === null) return;
+  // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's own
+  // header for what is said, when, and why only the LEAVING transition is said at all.
+  const membershipNote = membershipNoteFor(view, commit);
   try {
-    const data = await writeFile(view, commit.markdown, commit.source);
+    const data = await writeFile(view, commit.markdown, commit.source, membershipNote);
     graphData = data;
     paintView(currentViewId);
     sayAsOf(data);
