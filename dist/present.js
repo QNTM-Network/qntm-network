@@ -1480,7 +1480,7 @@ function relativeAnchorFor(places, lines, lineIndex) {
       break;
     }
   }
-  if (above === null && below === null) {
+  if (above === null && below === null && section === null) {
     return null;
   }
   const from = above === null ? bounds.first : aboveAt + 1;
@@ -1529,10 +1529,14 @@ function bracketRung(anchor, places, lines) {
       return { outcome: "refused", because: "bracket-crossed" };
     }
   }
-  const section = aboveAt !== -1 ? aboveSection : belowSection;
+  const bracketed = aboveAt !== -1 || belowAt !== -1;
+  if (!bracketed && anchor.section === null) {
+    return { outcome: "refused", because: "no-landmark" };
+  }
+  const section = bracketed ? aboveAt !== -1 ? aboveSection : belowSection : anchor.section;
   const bounds = boundsOf(places, section);
   if (bounds === null) {
-    return { outcome: "refused", because: "gap-changed" };
+    return { outcome: "refused", because: bracketed ? "gap-changed" : "section-absent" };
   }
   const from = aboveAt === -1 ? bounds.first : aboveAt + 1;
   const to = belowAt === -1 ? bounds.last : belowAt - 1;
