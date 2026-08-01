@@ -3169,3 +3169,82 @@ capabilities:
     guard alone removed (two columns, three boxes for two checkbox lines, and the stale box POSTS the
     file his line is not in).
   status: 'working'
+
+- id: the-browser-recognises-its-own-write
+  intent: >-
+    THE BROWSER CAN TELL THAT ITS OWN WRITE LANDED, AND THE RECOVERY STRIP STOPS LYING TO HIM.
+    THE MEASURED DEFECT. A real browser session on 2026-08-01 found the held strip carrying FIVE
+    rows, THREE of which were lines that had saved perfectly. The cause is in the data rather than in
+    the strip: the cycle REWRITES the line it ingests - it appends the identity stamp, the defaults
+    and the marker - and the only signal the page had for "is this line back" was its TEXT
+    (`HeldSurface.settle`, which matches a whole line or a prefix with a token appended after a
+    space). A line the cycle re-sorted, re-worded or moved into another view reads as "the file does
+    not own these characters", so the row stays up claiming work was lost when none was. A strip full
+    of rows that are not losses is a strip nobody reads, which makes the rows that ARE losses
+    invisible - the exact failure `a-vanished-or-refused-edit-is-held-unanchored` is least able to
+    afford.
+    TEXT IS NOT IDENTITY. A TOKEN IS. The browser mints one opaque token per write and sends it
+    beside `{path, markdown, base}`; the server records it and names it back as
+    `writes: {path: [token, ...]}`; the browser matches the echo and knows ITS write landed rather
+    than that some write did.
+    THE NARROW CLAIM, WHICH IS THE ONLY ONE ANYTHING IS BUILT ON. The echo says "this server accepted
+    a write carrying this token FOR THIS PATH" and no more. It does not say the projection in hand is
+    derived from that write - the ledger holds up to 8 tokens per path for 24 hours, so a token
+    recorded before a LATER write to the same path is still echoed. So the match is per path, and
+    where the difference could matter the answer is to keep the row.
+    WHAT HE SEES. A row whose write the server acknowledged is not held at all, and the freshness
+    line says "the cycle rewrote the line you saved - the server recorded it, so nothing is held".
+    RECORDED, never WRITTEN: a 200 says the server ACCEPTED the save, an echo says it RECORDED it,
+    and neither says the line survived the cycle, because the cycle is entitled to rewrite, move or
+    delete what it ingests. Two sentences carry the distinction and neither claims the stronger fact.
+    ONLY POSITIVE EVIDENCE REMOVES A ROW, AND GIVING UP IS NOT EVIDENCE. A write whose echo never
+    arrives is dropped from the register after three arrivals that NAME its file without naming it -
+    and what is dropped is the register's record and nothing else. The row keeps its token, the strip
+    keeps the row, the characters stay on screen. A vanished echo is never proof a write failed: the
+    server's ledger is capped and aged, so an acknowledgement can legitimately disappear.
+    A SERVER THAT ECHOES NOTHING BEHAVES EXACTLY AS TODAY, AND THAT IS THE CONDITION OF SHIPPING. The
+    server half is merged and NOT DEPLOYED. Three independent statements make it true: `token` is
+    absent from the POST body when none could be minted (`mintWriteToken` returns `null` rather than
+    a weak token when there is no CSPRNG); `readWriteEcho` reports `silent` for an envelope with no
+    `writes` key and `correlate` returns before touching the register; and `HeldSurface.landed([])`
+    is a no-op.
+  rooting: >-
+    ONE NEW MODULE, `app/present/correlation.ts`, and it imports nothing. It holds the mint
+    (`mintWriteToken`, 128 bits from `crypto.getRandomValues`, hex, behind a `w1-` scheme prefix),
+    the reader (`readWriteEcho`, the ONE expression in the repository that knows where the echo lives
+    and what shape it has) and the register (`WriteRegister`, the outstanding writes keyed BY TOKEN).
+    PURE except for the mint, which is the one function that reaches a platform global - the same
+    separation `base.ts` makes between `baseOf` and `BaseSurface`, and for the same reason: the
+    surface stays drivable with the DOM, the network and the clock all made to throw.
+    THE READER IS SMALL AND REPLACEABLE ON PURPOSE. It was written against a placeholder shape while
+    the server half was being built in another repository, and when the real shape landed it was the
+    only thing that changed. It is strict in the posture `declaration.ts`, `structural.ts`,
+    `qualification.ts` and `resolutiontable.ts` all share: silence falls through to the behaviour
+    that existed before it, and a shape it does not recognise is REPORTED to the console and treated
+    as no evidence at all, never guessed.
+    `HeldEdit` GAINS ONE FIELD, `token`, AND `HeldSurface` ONE METHOD, `landed`. The field is `null`
+    for a REFUSED row (a 409 means nothing was written, so no echo can exist for it) and for an
+    UNPLACED one (the row was being made; no write ever carried it). So the release is structurally
+    unable to reach the two causes it must not.
+    THE FOUR PINNED WRITE-ADJACENT COUNTS ARE UNMOVED and are asserted at the VALUE level rather than
+    by number: `graphData` is assigned in four places and every one of them from an envelope off the
+    wire (`data`, `pending.data`, `null`); `writeFile(` occurs 3 times (its declaration plus two
+    callers); `applyEdit(` reaches 5 sites outside its own module (2 in app/index.html, 3 in
+    app/present/paint.ts); `.markdown` is never assigned anywhere under app/. Two more are pinned by
+    this change: the held surface is now reached from exactly six named expressions (the sixth,
+    `held.landed`, is a release and not a way into a write), and the register from exactly five.
+    `worker/src/app.js` FORWARDS `token` TO `POST /vault/file` ON EXACTLY THE TERMS IT ALREADY
+    FORWARDS `base` - absent, never empty and never null - and carries `writes` back through the two
+    places it rebuilds the envelope field by field. CONDITIONALLY, not as `|| {}`: absent and empty
+    are different statements, and only absent is true of the graph server that is actually deployed.
+    An unconditional empty echo would start a grace running and put a sentence on the freshness line
+    for every projection from a server that has never heard of a token.
+    ENFORCEMENT IS `tests/app-write-correlation.test.mjs` - 44 tests in 8 documented sections over
+    the real `app/index.html` module script. Section 2 reproduces the false positive and asserts it
+    is gone; section 3 is the shipping condition, driving identical gestures against an envelope with
+    no `writes` key; section 5 is the mutation proof, breaking the one expression that decides
+    whether the row is held and asserting section 2's own assertion goes red. Independently measured:
+    breaking `HeldSurface.landed` turns 3 of the 44 red.
+    NOT VERIFIED IN A BROWSER. No browser is available in this environment - no passkey session, no
+    live graph server, no engine cycle, no real POST, and no run against the deployed Worker.
+  status: 'working'

@@ -166,6 +166,14 @@ export const __draft = () => draftLine;
 // screen would not be able to tell them apart.
 export const __queued = () => queued;
 export { drainPainted as __drainPainted, aLineIsOpen as __aLineIsOpen };
+// WRITE CORRELATION (app/present/correlation.ts). \`__writes\` is a getter, the same reason
+// \`__queued\`, \`__held\` and \`__served\` are: a suite reads the register the page is holding NOW,
+// and what changes under it is which writes are outstanding. \`__correlate\` is exported so a suite
+// can drive the reader against an arbitrary envelope without also standing up a POST — the same
+// separation \`__membershipNoteFor\` gets, and for the same reason: "what did the echo say" and
+// "what did the write path do about it" are different failures.
+export const __writes = () => writes;
+export { correlate as __correlate };
 `;
 
   const file = join(workDir, "page.mjs");

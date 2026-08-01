@@ -88,6 +88,26 @@ export interface HeldEdit {
   readonly node: string | null;
   /** For a REFUSED row: the base the declined write was computed against. `null` otherwise. */
   readonly base: string | null;
+  /**
+   * THE WRITE THAT CARRIED THESE CHARACTERS, when one did — `correlation.ts`'s opaque per-write
+   * token, or `null` when no write of this app's ever put them on the wire.
+   *
+   * IT IS THE ONLY FIELD ON THIS RECORD THAT CAN RELEASE IT ON EVIDENCE RATHER THAN ON RESEMBLANCE,
+   * and it is `null` for two of the three causes on purpose:
+   *
+   *   VANISHED  carries the token when the row's characters are the ones a commit just posted. That
+   *             is the case the strip was measured getting wrong — three of five rows in a real
+   *             browser run were lines that saved perfectly, and the reason `settle` could not see
+   *             it is that the cycle REWROTE the line, so the text no longer matched.
+   *   REFUSED   `null`. A 409 means NOTHING WAS WRITTEN, so no echo can ever arrive for it, and a
+   *             token here would be a handle for evidence that cannot exist.
+   *   UNPLACED  `null`. The row was being MADE — it was in no file and no write ever carried it.
+   *
+   * IT IS NOT AN IDENTITY AND CANNOT BECOME ONE. `instance` says which LINE; this says which WRITE.
+   * Nothing in this bundle can turn a write token into a position in a file, which is the same
+   * property that keeps `instance` safe here.
+   */
+  readonly token: string | null;
   readonly reason: HeldReason;
 }
 
@@ -205,10 +225,19 @@ export class HeldSurface {
   /**
    * THE FILE TOOK THE CHARACTERS BACK — release every row for `path` that `source` now owns.
    *
-   * This is the automatic release, and it is the ONLY one. A held row that the file now contains
-   * is a second copy of something the source owns, which is the one thing a held row must never
-   * be. Everything else — a repaint, a view change, time passing, another hold — releases nothing:
-   * a row is held until the characters are safe somewhere else or he says he is done with them.
+   * This is the RESEMBLANCE release, and it was the only one until `landed` below joined it. A held
+   * row that the file now contains is a second copy of something the source owns, which is the one
+   * thing a held row must never be. Everything else — a repaint, a view change, time passing,
+   * another hold — releases nothing: a row is held until its characters are demonstrably safe
+   * somewhere else or he says he is done with them.
+   *
+   * TWO RELEASES AND NOT TWO MECHANISMS. Both answer one question — "are these characters somewhere
+   * other than this strip" — from the two kinds of evidence a browser can have. This one reads the
+   * file it was handed and asks whether the characters are in it. `landed` reads the SERVER'S
+   * acknowledgement of the write that carried them. This one is available always and is wrong
+   * whenever the cycle rewrites a line; that one is available only once the server echoes and is
+   * exact when it does. Neither subsumes the other, and removing this one would lose the case where
+   * the operator retypes a line by hand and no write of his is outstanding at all.
    *
    * IT IS ALSO THE RECOVERY PATH, WHICH IS WHY THERE IS NO "PUT IT BACK" BUTTON. He retypes the
    * line himself, the write lands, the next projection carries the characters, and the row that
@@ -220,6 +249,40 @@ export class HeldSurface {
   settle(path: string, source: string): readonly HeldRow[] {
     const lines = source.split("\n");
     const released = this.#rows.filter((row) => row.path === path && sourceOwns(row.text, lines));
+    if (released.length === 0) {
+      return released;
+    }
+    this.#rows = this.#rows.filter((row) => !released.includes(row));
+    return released;
+  }
+
+  /**
+   * THE WRITE DEMONSTRABLY LANDED — release every row the acknowledged writes carried.
+   *
+   * THE SECOND AUTOMATIC RELEASE, AND IT IS A DIFFERENT KIND OF FACT FROM THE FIRST. `settle` above
+   * asks "does the file now PRINT these characters", which is resemblance, and resemblance is
+   * exactly what the cycle destroys: it appends a stamp, applies the defaults, re-sorts the line, or
+   * moves it into another view, and the row goes on claiming characters the vault took. A real
+   * browser run on 2026-08-01 measured three of five held rows in that state — every one of them a
+   * line that saved perfectly, every one of them unreleasable by text.
+   *
+   * `tokens` ARE THE SERVER'S OWN ACKNOWLEDGEMENT (`correlation.ts`), matched against the write each
+   * row carries. That is POSITIVE EVIDENCE — the one thing this module is allowed to release on —
+   * and it says something no comparison of strings can: the file the operator's characters were in
+   * reached the server and the projection in hand is derived from it.
+   *
+   * IT CANNOT RELEASE A ROW THAT CARRIES NO TOKEN, which is every REFUSED row and every UNPLACED
+   * one, and that is the fail-safe direction stated as code rather than as a promise: no token, no
+   * evidence, no release. An empty `tokens` releases nothing, so a server that echoes nothing
+   * leaves this method a no-op and the strip behaving exactly as it did before it existed.
+   *
+   * Returns the rows released, so a caller can say what happened rather than guessing.
+   */
+  landed(tokens: readonly string[]): readonly HeldRow[] {
+    if (tokens.length === 0) {
+      return [];
+    }
+    const released = this.#rows.filter((row) => row.token !== null && tokens.includes(row.token));
     if (released.length === 0) {
       return released;
     }

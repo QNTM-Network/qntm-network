@@ -975,6 +975,9 @@ import {
   HeldSurface,
   heldFrom,
   ProjectionQueue,
+  WriteRegister,
+  mintWriteToken,
+  readWriteEcho,
   FocusSurface,
   ModeSurface,
   clampLine,
@@ -1245,6 +1248,16 @@ const held = new HeldSurface();
 // is editing.
 const queued = new ProjectionQueue();
 
+// THE WRITES THIS BROWSER HAS OUTSTANDING (app/present/correlation.ts). One surface for the page,
+// same reason as the others: a write outlives every repaint between leaving and being acknowledged.
+//
+// IT IS `served`'s PER-WRITE COUNTERPART AND MUST NOT BE MERGED WITH IT. `BaseSurface` counts
+// writes PER PATH — enough to say "an earlier save of this file has not answered yet", which is all
+// its own question needs. This one keys them BY TOKEN, because the question it answers is the one a
+// count cannot: not "is a write of this file in the air" but "did the write I made land". Two ticks
+// inside one cycle are two of the first and two DIFFERENT answers to the second.
+const writes = new WriteRegister();
+
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
 //
@@ -1467,6 +1480,11 @@ let paintedSource = "";
  * cleared whether or not it was used. Nothing posts it, nothing repaints from it, and it holds no
  * markdown — only the one line's characters, so that if the line is gone the held row is the thing
  * HE typed rather than the thing that was there before he typed it.
+ *
+ * IT NOW ALSO CARRIES `token` — the opaque handle that write went out with
+ * (app/present/correlation.ts). It is the ONE field on this record that can tell "the line vanished
+ * because the write never landed" apart from "the line vanished because the cycle rewrote what it
+ * ingested", which is the distinction the recovery strip was measured getting wrong.
  */
 let sentEdit = null;
 
@@ -1492,11 +1510,36 @@ let cursorNote = "";
  */
 let writeNote = "";
 
-/** ` · <note>` for each note that has something to say, consuming them. Empty when neither has. */
+/**
+ * WHAT THE SERVER SAID ABOUT THE WRITE ITSELF, HELD ON THE SAME LEASH AS THE TWO ABOVE.
+ *
+ * The third of three, and the only one that reports somebody else's evidence rather than this
+ * page's own conclusion: `cursorNote` is what `paintView` worked out, `writeNote` is what
+ * `BaseSurface` worked out, and this is what the SERVER said by echoing (or not echoing) the token
+ * a write carried. Empty on every projection from a server that echoes nothing, which is the whole
+ * of "the freshness line reads exactly as it does today" until the other half lands.
+ */
+let landedNote = "";
+
+/**
+ * THE TOKENS A PROJECTION ACKNOWLEDGED, held from the moment it arrives until the paint it causes.
+ *
+ * The same one-turn handoff `sentEdit` above makes, and for the same reason: the two ends of one
+ * event are in two functions. `correlate` finds out WHICH WRITES the server named, and `paintView`
+ * is where that fact decides something — whether the characters of the write it is holding need to
+ * be held at all. A `Set` rather than a list because membership is the only question asked of it.
+ *
+ * CONSUMED, NOT ACCUMULATED. `paintView` empties it whether or not it read anything from it, so an
+ * acknowledgement from two projections ago can never certify a later write.
+ */
+let landedTokens = new Set();
+
+/** ` · <note>` for each note that has something to say, consuming them. Empty when none has. */
 function takeNotes() {
-  const notes = [cursorNote, writeNote].filter((note) => note !== "");
+  const notes = [cursorNote, writeNote, landedNote].filter((note) => note !== "");
   cursorNote = "";
   writeNote = "";
+  landedNote = "";
   return notes.map((note) => ` · ${note}`).join("");
 }
 
@@ -1601,6 +1644,101 @@ function installProjection(pending) {
   sayAsOf(pending.data);
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// WRITE CORRELATION — the browser recognising ITS OWN write in what comes back
+// (app/present/correlation.ts)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// THE MEASURED DEFECT. A real browser run on 2026-08-01 found the recovery strip carrying five
+// rows, THREE of which were lines that had saved perfectly. The cause is not in the strip: the
+// cycle REWRITES the line it ingests — stamp, defaults, marker — and the only signal the page had
+// for "is this line back" was its TEXT (`HeldSurface.settle`). Text matching cannot find a line the
+// cycle rewrote, so the row stayed up saying work was lost when none was.
+//
+// TEXT IS NOT IDENTITY. A TOKEN IS. Each write goes out with one opaque token; a projection that
+// names it back is the server saying "this projection includes your write". That is the only
+// positive evidence this page has ever had for the question, and it is the only thing a held row is
+// released on here.
+//
+// ── WHAT IT SAYS, AND THE STRONGER THING IT DELIBERATELY DOES NOT SAY ──
+//
+// ACCEPTED and RECORDED are two different facts and this page now has words for both. A 200 from
+// `POST /app/edit-file` says the server ACCEPTED the save. An echo says the projection in hand is
+// DERIVED FROM it. Neither says the operator's line survived the cycle, because the cycle is
+// entitled to rewrite, move or delete what it ingests — so nothing below ever says "written".
+
+/**
+ * THE STRONGEST THING AN ECHO SAYS, SAID NO STRONGER THAN THAT. The server's claim is "this server
+ * accepted a write carrying this token for this path" — it does NOT claim the projection in hand is
+ * derived from that write, and it does not claim the operator's line survived the cycle.
+ */
+const WRITE_RECORDED = "the server recorded your save";
+
+/** The server echoes, and it did not name this write. ACCEPTED, not recorded. Never "written". */
+const WRITE_ACCEPTED = "the server took your save — it has not acknowledged it yet";
+
+/**
+ * A PROJECTION ARRIVED — SAY WHICH OF THIS BROWSER'S OUTSTANDING WRITES IT ACKNOWLEDGES.
+ *
+ * ONE CALL PER ENVELOPE, AT THE DOOR, BEFORE ANYTHING DECIDES WHAT TO PAINT. Correlation is a fact
+ * about a WRITE and not about a screen, so it must not wait for the projection to be installable:
+ * a projection held because a line is open still carries the evidence that clears a false held row,
+ * and the strip is outside the reading column precisely so it can be redrawn without one.
+ *
+ * THE ENVELOPE SAYS WHICH FILE EACH TOKEN BELONGS TO — the echo is `{path: [token, …]}` — so this
+ * function needs no path of its own and is not given one. The matching is per path inside the
+ * register, which is the narrowing the server's own claim requires: it acknowledges a write FOR A
+ * PATH, and a token found under another file's key acknowledges another write.
+ *
+ * ── GIVING UP RELEASES NOTHING, AND THAT IS THE WHOLE SAFETY ARGUMENT ──
+ *
+ * A write whose echo never comes cannot be waited on forever, so the register drops it after three
+ * arrivals that named its file without naming it. What is dropped is the REGISTER'S RECORD and
+ * nothing else: the held row keeps its token, the strip keeps the row, and the characters stay on
+ * screen. A vanished echo is never proof a write failed — the server's ledger caps at 8 tokens per
+ * path and ages out at 24 hours, so an acknowledgement can legitimately disappear — and a token
+ * given up too early costs only a held row that stays held, which is the direction this app is
+ * built to fail in. The row can still be released later, by the file taking the characters back
+ * (`settle`) or by the operator dismissing it.
+ *
+ * AN UNREADABLE ECHO IS REPORTED AND TREATED AS NO EVIDENCE AT ALL. `readWriteEcho` is strict on
+ * purpose and this is the one caller of it; a shape it does not recognise goes to the console the
+ * same way a malformed `presentation.json` key does, and NOTHING is released on it. The server half
+ * of this contract is being written in another repository, so the shape drifting is a real event
+ * and a silent "it just stopped working" is the failure worth spending a warning to prevent.
+ */
+function correlate(path, data) {
+  const reading = readWriteEcho(data);
+  if (reading.outcome === "unrecognised") {
+    console.warn("write echo: " + reading.problem);
+  }
+  // SILENT MEANS SILENT — no arrival is recorded against the register at all, so a server that has
+  // never heard of a token neither matches nor expires anything and this whole function is inert.
+  // That is the shipping condition, stated as one branch, and it is the branch production takes
+  // today: the server half is merged and not deployed.
+  if (reading.outcome !== "echo") {
+    return;
+  }
+  const waiting = writes.outstanding(path);
+  const echo = writes.arrive(reading.writes);
+  if (echo.matched.length > 0) {
+    landedNote = WRITE_RECORDED;
+    // THE ROWS ALREADY ON THE STRIP, RELEASED ON THE SERVER'S OWN WORD. This is the path for an
+    // echo that arrives LATER than the write's own answer — a `GET /graph` re-read, say. The row
+    // that would have been held by THIS arrival is handled one step further on, in `paintView`,
+    // which never holds it in the first place.
+    if (held.landed(echo.matched).length > 0) {
+      paintHeldRows();
+    }
+  } else if (waiting > 0) {
+    landedNote = WRITE_ACCEPTED;
+  }
+  // CARRIED TO THE PAINT THIS ARRIVAL CAUSES. See `landedTokens` for the one-turn lifetime.
+  for (const token of echo.matched) {
+    landedTokens.add(token);
+  }
+}
+
 /**
  * A PROJECTION ARRIVED FOR `path`. Queue it, then install it if the screen can take it.
  *
@@ -1613,6 +1751,10 @@ function installProjection(pending) {
  * if they were one thing.
  */
 function arrive(path, data) {
+  // AHEAD OF THE SNAPSHOT GUARD, BECAUSE EVIDENCE IS EVIDENCE. An answer that carries no projection
+  // can still name the write it is the answer TO, and refusing to read it because there is nothing
+  // to paint would throw away the one thing that clears a false held row.
+  correlate(path, data);
   // AN ANSWER WITH NO SNAPSHOT IN IT IS NOT A PROJECTION, AND MUST NOT BECOME ONE BY BEING QUEUED.
   // `POST /app/edit-file` always carries a snapshot when it succeeds (worker/src/app.js builds it),
   // so this is a malformed answer rather than a case — but the queue is drained from a SYNCHRONOUS
@@ -1710,6 +1852,11 @@ function paintView(id, why) {
   // stale one can never be read against a later arrival.
   const sent = sentEdit;
   sentEdit = null;
+  // AND WHAT THE SERVER SAID ABOUT IT, READ AND CLEARED IN THE SAME PLACE FOR THE SAME REASON. Both
+  // describe the moment before this projection; consuming them together is what stops an
+  // acknowledgement of one write ever being read against a different one.
+  const landed = landedTokens;
+  landedTokens = new Set();
   const wasShowing = paintedSource;
   // A PROJECTION ARRIVING IS NOT THE SAME EVENT AS A VIEW CHANGE, and this one boolean is the whole
   // of the difference. Both come through this function — it is the only place a view is chosen or
@@ -1826,6 +1973,10 @@ function paintView(id, why) {
               instance: null,
               node: null,
               base: null,
+              // AND NO WRITE TOKEN EITHER, FOR THE SAME REASON THE OTHER TWO ARE `null`. The row was
+              // being MADE — it is in no file and no write of this app's has ever carried it — so
+              // there is no acknowledgement anywhere that could speak for these characters.
+              token: null,
             }),
           );
           draftNote = "the cycle moved what you were writing beside — the line you were making is held below";
@@ -1861,18 +2012,37 @@ function paintView(id, why) {
     // that is what HE typed, and the line as it stood in the previous projection is what was there
     // BEFORE he typed it, so preferring the older string would hold the wrong thing. Otherwise the
     // line he was parked on, out of the string that was on screen. `heldFrom` refuses an empty one.
-    if (cursorReading.outcome === "absent") {
+    //
+    // ── AND ONE `absent` IS NOW NOT HELD AT ALL, WHICH IS THE DEFECT THIS BRANCH SHIPPED WITH ──
+    //
+    // `mine` is "this projection is the answer to a write I just made". `proved` is the stronger
+    // thing: the server NAMED that write's token in this envelope (`correlate` above), so the file
+    // his characters were in reached the vault. His line is absent from the projection because the
+    // CYCLE REWROTE WHAT IT INGESTED — the stamp, the defaults, the marker — not because anything
+    // was lost, and `HeldSurface.settle` can never see that by comparing text.
+    //
+    // A REAL BROWSER RUN MEASURED THE COST OF NOT KNOWING: five held rows, three of them lines that
+    // saved perfectly. A strip full of rows that are not losses is a strip nobody can read, which
+    // makes the two rows that ARE losses invisible — so this is not tidiness, it is the signal.
+    //
+    // IT IS STILL POSITIVE EVIDENCE ONLY. With no token, no echo, or an echo that did not name this
+    // write, `proved` is false and the row is held exactly as it always was.
+    const mine = sent !== null && sent.view === id;
+    const proved = mine && sent.token !== null && landed.has(sent.token);
+    if (cursorReading.outcome === "absent" && !proved) {
       holdEdit(
         heldFrom("vanished", {
-          text:
-            sent !== null && sent.view === id
-              ? sent.text
-              : (wasShowing.split("\n")[vanishing?.takenAt ?? -1] ?? ""),
+          text: mine ? sent.text : (wasShowing.split("\n")[vanishing?.takenAt ?? -1] ?? ""),
           view: id,
           path: entering.path,
           instance: vanishing?.instance ?? null,
           node: vanishing?.node ?? null,
           base: null,
+          // THE WRITE THAT CARRIED THESE CHARACTERS, so an echo arriving LATER than this projection
+          // can still release the row on the server's own word. `null` when these characters were
+          // not the ones a write of this app's just posted — the cursor was simply parked on a line
+          // the cycle removed, and no acknowledgement exists that could speak for it.
+          token: mine ? sent.token : null,
         }),
       );
     }
@@ -1897,7 +2067,7 @@ function paintView(id, why) {
         id,
       );
     }
-    reportCursorReading(cursorReading);
+    reportCursorReading(cursorReading, proved);
     // THE CURSOR'S OWN SENTENCE WINS AND THIS FILLS THE SILENCE. Both describe this one arrival and
     // there is one slot; when the line he was PARKED on also went, that is the larger event and its
     // sentence already says his characters are held below.
@@ -2049,8 +2219,14 @@ function paintHeldRows() {
  * `text` the neighbourhood the line was written into is gone and only the characters answered: the
  * cursor is somewhere he did not put it, for a reason he cannot see, and that IS an event.
  */
-function reportCursorReading(reading) {
-  if (reading.outcome === "absent") {
+function reportCursorReading(reading, proved = false) {
+  if (reading.outcome === "absent" && proved) {
+    // THE SENTENCE THAT STOPPED LYING. `absent` used to say "held below" unconditionally, and on a
+    // write the server acknowledged that was false in both halves: nothing was lost and nothing is
+    // held. What is true is that the CYCLE rewrote the line, which is an event worth one sentence.
+    // It says RECORDED and not WRITTEN — see `WRITE_RECORDED` for why those are different claims.
+    cursorNote = "the cycle rewrote the line you saved — the server recorded it, so nothing is held";
+  } else if (reading.outcome === "absent") {
     cursorNote = "the line you were on is not in this view any more — what was on it is held below";
   } else if (reading.outcome === "ambiguous") {
     cursorNote = "this view prints that line more than once, so the cursor was not moved";
@@ -2357,7 +2533,7 @@ function orderingNoteFor(view, commit) {
  * calling here, so this function's own shape — one note, said once, never carried — stays exactly
  * as small as step 4 left it.
  */
-async function writeFile(view, markdown, source, note = "") {
+async function writeFile(view, markdown, source, note = "", token = null) {
   const reading = served.read(view.path, source);
   const baseNote = BASE_REFUSALS[reading.outcome] ?? "";
   writeNote = baseNote;
@@ -2367,6 +2543,22 @@ async function writeFile(view, markdown, source, note = "") {
   // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
   // implementation detail.
   const body = { path: view.path, markdown, base: baseOf(source) };
+  // ── THE FIFTH THING: THE WRITE SAYS WHICH WRITE IT IS ──
+  //
+  // `token` IS CARRIED ONLY WHEN THERE IS ONE — absent, never empty and never null — which is
+  // exactly the pattern `worker/src/app.js` already uses for `base`, and it is the whole of the
+  // shipping condition on this line. A browser with no CSPRNG (`mintWriteToken` returns `null`)
+  // posts a body byte-for-byte identical to the one it posted before this change; a server that
+  // ignores the field behaves exactly as it does today; and NOTHING downstream releases a held row,
+  // because there is no token to be echoed back.
+  //
+  // THE REGISTER IS OPENED IN THE SAME STATEMENT THE TOKEN GOES ON THE WIRE, so a token this
+  // browser is waiting for and a token this browser sent cannot come apart. It is opened BEFORE the
+  // POST for the reason `served.open` is: the answer can arrive before the `await` returns.
+  if (token !== null) {
+    body.token = token;
+    writes.open(token, view.path);
+  }
   // COUNTED ACROSS THE AWAIT, so a second save made while this one is in the air is measurable as
   // one — which is the checkbox's own failure mode and is invisible to the string comparison above
   // (a tick does not repaint the painter's source, so the second edit's base looks perfectly
@@ -2398,8 +2590,13 @@ async function toggleTask(view, toggle) {
   row.classList.toggle("done", box.checked);
   row.classList.add("syncing");
   box.disabled = true;
+  // ONE TOKEN PER WRITE, AND A TICK IS A WRITE. It holds no held row of its own — a tick is one
+  // glyph and the box is put back on a failure, so there are no characters to lose — but it is one
+  // of the two writes that can be in the air at once, and the register has to be able to tell its
+  // answer from a line commit's. That is the whole of the two-writes-to-one-path case.
+  const token = mintWriteToken();
   try {
-    const data = await writeFile(view, next, toggle.source);
+    const data = await writeFile(view, next, toggle.source, "", token);
     // OFFERED, NOT INSTALLED. If he opened a line while this tick was in the air, its answer waits
     // — see `arrive` — and the sentence below is what says so. THE ROW IS LEFT MARKED `syncing`
     // in that case, deliberately and without a statement here to do it: the class is dropped by the
@@ -2416,6 +2613,15 @@ async function toggleTask(view, toggle) {
     // gesture is the whole of "nothing is lost": a tick is one glyph the server does not have, and
     // showing it ticked would be the lie. See `refusalNote` for why the client's own guess at the
     // same event is dropped rather than said twice.
+    //
+    // A 409 IS THE ONE ANSWER THAT CLOSES A TOKEN, because it is the one answer that says NOTHING
+    // WAS WRITTEN — so no echo for it can ever arrive and waiting for one is waiting for nothing.
+    // Every other failure leaves the token outstanding on purpose: a request that died on the
+    // network may still have been processed, and a later projection naming it is exactly the
+    // evidence this whole mechanism exists to catch. Closing it releases nothing either way.
+    if (e?.status === 409 && token !== null) {
+      writes.giveUp(token);
+    }
     $("freshness").textContent =
       e?.status === 409
         ? REFUSED_REVERTING_BOX + refusalNote()
@@ -2458,9 +2664,15 @@ async function commitLine(view, commit) {
   // THE CHARACTERS THIS WRITE IS CARRYING, remembered until the projection it causes lands — see
   // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it and the
   // one thing `paintView` cannot recover on its own is what he typed into a line that then vanished.
-  sentEdit = { view: view.id, path: view.path, text: commit.text };
+  //
+  // AND THE HANDLE THAT SAYS WHICH WRITE THESE CHARACTERS WENT OUT ON. Minted here rather than
+  // inside `writeFile` because two things need it and they are on opposite sides of the `await`:
+  // the POST body carries it, and `sentEdit` holds it so `paintView` can ask "did the server name
+  // MY write" when the line turns out to be absent from what came back.
+  const token = mintWriteToken();
+  sentEdit = { view: view.id, path: view.path, text: commit.text, token };
   try {
-    const data = await writeFile(view, commit.markdown, commit.source, note);
+    const data = await writeFile(view, commit.markdown, commit.source, note, token);
     // OFFERED, NOT INSTALLED — the same one statement the checkbox path makes, for the same reason.
     // The commonest shape this catches is his own two-captures-in-a-row gesture: Enter settles this
     // line and opens the next one, so by the time this answer lands there is already a row open,
@@ -2488,6 +2700,13 @@ async function commitLine(view, commit) {
     // holds no line index at all, so there is nothing here that could be re-inserted anywhere.
     sentEdit = null;
     if (e?.status === 409) {
+      // NOTHING WAS WRITTEN, SO THE TOKEN IS CLOSED AND THE ROW CARRIES NONE. See `toggleTask`'s
+      // own 409 branch for why this is the one answer that closes one, and `HeldEdit.token` for why
+      // a refused row must not carry a handle to evidence that cannot exist. The row is held on the
+      // text rule alone, exactly as it was before correlation existed.
+      if (token !== null) {
+        writes.giveUp(token);
+      }
       holdEdit(
         heldFrom("refused", {
           text: commit.text,
@@ -2499,6 +2718,10 @@ async function commitLine(view, commit) {
           // characters were computed against. Read, never posted — `writeFile` is the one place a
           // base reaches the wire and it computes its own from the source it was handed.
           base: baseOf(commit.source),
+          // NO TOKEN ON A REFUSED ROW. The 409 says nothing was written, so no projection can ever
+          // name this write — a token here would be a handle for evidence that cannot exist, and
+          // the one release it could ever produce would be a false one.
+          token: null,
         }),
       );
       $("freshness").textContent = REFUSED_KEEPING_TYPING + refusalNote();
@@ -2609,6 +2832,11 @@ function landOn(views, keep) {
 async function loadGraph(keep = null, why = "chosen") {
   const data = await api("/app/graph", { method: "GET", auth: true });
   graphData = data;
+  // THE READ PATH IS THE OTHER PLACE AN ECHO CAN ARRIVE, and the contract names it: the server
+  // echoes the token in the envelope `GET /graph` later serves. `null` for the path because this
+  // describes the WHOLE GRAPH rather than one file — see `WriteRegister.arrive` for why that
+  // matches every outstanding write and expires none of them.
+  correlate(null, data);
   // Identity lives in the bar now, and showShell() is what reveals it — so `#who` is never
   // hidden on its own account and nothing here has to un-hide it.
   $("who").textContent = data.handle ? "@" + data.handle : "";
@@ -2797,6 +3025,12 @@ function logout() {
   // person at the screen. A row surviving here would show one operator's writing to the next one.
   held.clear();
   paintHeldRows();
+  // AND SO DO THE OUTSTANDING WRITES. A token is a claim about a POST this session made; carrying
+  // one past a sign-out would let a projection served to the NEXT person release a row that no
+  // longer exists — and, worse, would make this page's evidence about "my write" survive a change
+  // of whose write it was. There is nothing to paint: giving up releases nothing, and the strip was
+  // emptied one statement above.
+  writes.clear();
   // AND SO DOES ANYTHING WAITING TO BE SHOWN, for the same reason `served.drop()` is two statements
   // up rather than one: a projection is a copy of the operator's files, and the next person at this
   // browser must not be able to make it appear by pressing a key. It is DROPPED rather than

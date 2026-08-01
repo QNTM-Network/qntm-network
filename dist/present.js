@@ -2586,10 +2586,19 @@ var HeldSurface = class {
   /**
    * THE FILE TOOK THE CHARACTERS BACK — release every row for `path` that `source` now owns.
    *
-   * This is the automatic release, and it is the ONLY one. A held row that the file now contains
-   * is a second copy of something the source owns, which is the one thing a held row must never
-   * be. Everything else — a repaint, a view change, time passing, another hold — releases nothing:
-   * a row is held until the characters are safe somewhere else or he says he is done with them.
+   * This is the RESEMBLANCE release, and it was the only one until `landed` below joined it. A held
+   * row that the file now contains is a second copy of something the source owns, which is the one
+   * thing a held row must never be. Everything else — a repaint, a view change, time passing,
+   * another hold — releases nothing: a row is held until its characters are demonstrably safe
+   * somewhere else or he says he is done with them.
+   *
+   * TWO RELEASES AND NOT TWO MECHANISMS. Both answer one question — "are these characters somewhere
+   * other than this strip" — from the two kinds of evidence a browser can have. This one reads the
+   * file it was handed and asks whether the characters are in it. `landed` reads the SERVER'S
+   * acknowledgement of the write that carried them. This one is available always and is wrong
+   * whenever the cycle rewrites a line; that one is available only once the server echoes and is
+   * exact when it does. Neither subsumes the other, and removing this one would lose the case where
+   * the operator retypes a line by hand and no write of his is outstanding at all.
    *
    * IT IS ALSO THE RECOVERY PATH, WHICH IS WHY THERE IS NO "PUT IT BACK" BUTTON. He retypes the
    * line himself, the write lands, the next projection carries the characters, and the row that
@@ -2601,6 +2610,39 @@ var HeldSurface = class {
   settle(path, source) {
     const lines = source.split("\n");
     const released = this.#rows.filter((row) => row.path === path && sourceOwns(row.text, lines));
+    if (released.length === 0) {
+      return released;
+    }
+    this.#rows = this.#rows.filter((row) => !released.includes(row));
+    return released;
+  }
+  /**
+   * THE WRITE DEMONSTRABLY LANDED — release every row the acknowledged writes carried.
+   *
+   * THE SECOND AUTOMATIC RELEASE, AND IT IS A DIFFERENT KIND OF FACT FROM THE FIRST. `settle` above
+   * asks "does the file now PRINT these characters", which is resemblance, and resemblance is
+   * exactly what the cycle destroys: it appends a stamp, applies the defaults, re-sorts the line, or
+   * moves it into another view, and the row goes on claiming characters the vault took. A real
+   * browser run on 2026-08-01 measured three of five held rows in that state — every one of them a
+   * line that saved perfectly, every one of them unreleasable by text.
+   *
+   * `tokens` ARE THE SERVER'S OWN ACKNOWLEDGEMENT (`correlation.ts`), matched against the write each
+   * row carries. That is POSITIVE EVIDENCE — the one thing this module is allowed to release on —
+   * and it says something no comparison of strings can: the file the operator's characters were in
+   * reached the server and the projection in hand is derived from it.
+   *
+   * IT CANNOT RELEASE A ROW THAT CARRIES NO TOKEN, which is every REFUSED row and every UNPLACED
+   * one, and that is the fail-safe direction stated as code rather than as a promise: no token, no
+   * evidence, no release. An empty `tokens` releases nothing, so a server that echoes nothing
+   * leaves this method a no-op and the strip behaving exactly as it did before it existed.
+   *
+   * Returns the rows released, so a caller can say what happened rather than guessing.
+   */
+  landed(tokens) {
+    if (tokens.length === 0) {
+      return [];
+    }
+    const released = this.#rows.filter((row) => row.token !== null && tokens.includes(row.token));
     if (released.length === 0) {
       return released;
     }
@@ -2676,6 +2718,174 @@ var ProjectionQueue = class {
    */
   clear() {
     this.#pending.clear();
+  }
+};
+
+// app/present/correlation.ts
+var WRITE_ECHO_KEY = "writes";
+function samePath(path) {
+  return path.startsWith("/") ? path.slice(1) : path;
+}
+var TOKEN_PREFIX = "w1-";
+var TOKEN_BYTES = 16;
+function mintWriteToken() {
+  const source = globalThis.crypto;
+  if (source === void 0 || typeof source.getRandomValues !== "function") {
+    return null;
+  }
+  const bytes = source.getRandomValues(new Uint8Array(TOKEN_BYTES));
+  let out = TOKEN_PREFIX;
+  for (const byte of bytes) {
+    out += byte.toString(16).padStart(2, "0");
+  }
+  return out;
+}
+function isToken(value) {
+  return typeof value === "string" && value !== "";
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function readWriteEcho(envelope) {
+  if (!isRecord(envelope)) {
+    return { outcome: "silent" };
+  }
+  const places = [envelope[WRITE_ECHO_KEY]];
+  const snapshot = envelope["snapshot"];
+  if (isRecord(snapshot)) {
+    places.push(snapshot[WRITE_ECHO_KEY]);
+  }
+  const writes = /* @__PURE__ */ new Map();
+  let present = false;
+  for (const place of places) {
+    if (place === void 0) {
+      continue;
+    }
+    present = true;
+    if (!isRecord(place)) {
+      return {
+        outcome: "unrecognised",
+        problem: `'${WRITE_ECHO_KEY}' is ${JSON.stringify(place)}, which is not an object of path-to-tokens \u2014 no write is treated as landed from this projection`
+      };
+    }
+    for (const [path, listed] of Object.entries(place)) {
+      if (!Array.isArray(listed)) {
+        return {
+          outcome: "unrecognised",
+          problem: `'${WRITE_ECHO_KEY}.${path}' is ${JSON.stringify(listed)}, which is not a list of write tokens \u2014 no write is treated as landed from this projection`
+        };
+      }
+      const into = writes.get(samePath(path)) ?? [];
+      for (const one of listed) {
+        if (!isToken(one)) {
+          return {
+            outcome: "unrecognised",
+            problem: `'${WRITE_ECHO_KEY}.${path}' contains ${JSON.stringify(one)}, which is not a write token \u2014 no write is treated as landed from this projection`
+          };
+        }
+        into.push(one);
+      }
+      writes.set(samePath(path), into);
+    }
+  }
+  return present ? { outcome: "echo", writes } : { outcome: "silent" };
+}
+var GRACE = 3;
+var CAPACITY = 64;
+var WriteRegister = class {
+  #open = /* @__PURE__ */ new Map();
+  /** A write left for the server carrying `token`, for `path`. The path is normalised on the way in. */
+  open(token, path) {
+    if (this.#open.has(token)) {
+      return;
+    }
+    if (this.#open.size >= CAPACITY) {
+      const oldest = this.#open.keys().next();
+      if (!oldest.done) {
+        this.#open.delete(oldest.value);
+      }
+    }
+    this.#open.set(token, { path: samePath(path), grace: GRACE });
+  }
+  /**
+   * A PROJECTION ARRIVED. Say which outstanding writes it acknowledges, and which have run out.
+   *
+   * `writes` is the echo read off the envelope — `{path: [token, …]}` — and it is asked about BOTH
+   * halves of the question, which is what makes this narrow rather than convenient.
+   *
+   * ── MATCHING IS PER PATH, BECAUSE THE SERVER'S CLAIM IS PER PATH ──
+   *
+   * The echo says exactly one thing: "this server accepted a write carrying this token FOR THIS
+   * PATH". So a token is matched only when it appears under the path the write that minted it went
+   * to. A token found under some other file's key acknowledges some other write, and the whole
+   * point of a token is that the browser learns MY write landed rather than that some write did —
+   * so this is the one comparison that must not be loosened for convenience.
+   *
+   * A TOKEN IN THE ECHO THAT THIS REGISTER NEVER OPENED IS IGNORED, SILENTLY AND ON PURPOSE. It is
+   * a write some other session made, or one this page made before a reload.
+   *
+   * ── GIVING UP NEEDS THE ARRIVAL TO HAVE SPOKEN ABOUT THE FILE ──
+   *
+   * Grace is spent only when the echo LISTS the write's own path and does not list its token. An
+   * arrival that says nothing about that file had no occasion to acknowledge the write, and reading
+   * evidence out of that silence is exactly what the server's own caps and TTL make wrong.
+   */
+  arrive(writes) {
+    const matched = [];
+    const gaveUp = [];
+    for (const [token, record] of this.#open) {
+      const named = writes.get(record.path);
+      if (named === void 0) {
+        continue;
+      }
+      if (named.includes(token)) {
+        matched.push(token);
+        continue;
+      }
+      record.grace -= 1;
+      if (record.grace <= 0) {
+        gaveUp.push(token);
+      }
+    }
+    for (const token of matched) {
+      this.#open.delete(token);
+    }
+    for (const token of gaveUp) {
+      this.#open.delete(token);
+    }
+    return { matched, gaveUp };
+  }
+  /**
+   * STOP WAITING FOR THIS ONE. The caller knows the write will never be acknowledged — the server
+   * refused it (a 409 means nothing was written, so there is nothing to echo).
+   *
+   * IT RELEASES NOTHING AND PROVES NOTHING. Same as `arrive`'s `gaveUp`: this is the register
+   * forgetting, never the strip letting go. Returns whether the token was outstanding.
+   */
+  giveUp(token) {
+    return this.#open.delete(token);
+  }
+  /** How many writes are outstanding — all of them, or just those for `path`. */
+  outstanding(path = null) {
+    if (path === null) {
+      return this.#open.size;
+    }
+    let count = 0;
+    const wanted = samePath(path);
+    for (const record of this.#open.values()) {
+      if (record.path === wanted) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+  /** Is this token still outstanding? Exported for a test to assert the lifecycle, not for a caller. */
+  waiting(token) {
+    return this.#open.has(token);
+  }
+  /** Forget everything. Sign-out only, for the same reason `HeldSurface.clear` exists. */
+  clear() {
+    this.#open.clear();
   }
 };
 
@@ -7408,6 +7618,8 @@ export {
   RESOLVABLE_FIELDS,
   SPECIFICITY,
   STRUCTURAL_KEY,
+  WRITE_ECHO_KEY,
+  WriteRegister,
   applyEdit,
   baseOf,
   boundaryLine,
@@ -7429,6 +7641,7 @@ export {
   matchesFindClause,
   matchesQualifier,
   membershipFor,
+  mintWriteToken,
   openLine,
   orderingFor,
   paint,
@@ -7440,6 +7653,7 @@ export {
   readDeclaration,
   readQualificationDeclaration,
   readStructuralDeclaration,
+  readWriteEcho,
   relativeAnchorFor,
   resolveInstanceAnchor,
   resolveLineFields,

@@ -116,6 +116,49 @@ async function pendingCount(env, userId) {
   return row?.n || 0;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE WRITE-CORRELATION ECHO — CARRIED THROUGH THIS WORKER, NEVER PRODUCED BY IT
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// The browser mints one opaque token per write (app/present/correlation.ts) and posts it beside
+// `{path, markdown, base}`. The graph server records it and names it back in the projection it
+// serves, as `writes: {path: [token, ...]}` at the TOP of its own envelope, and the browser then
+// knows ITS write landed rather than that some write did.
+//
+// THIS WORKER REBUILDS THE ENVELOPE FIELD BY FIELD IN TWO PLACES, WHICH IS WHY THIS HELPER EXISTS.
+// `graphGet` and `editFile` each construct `snapshot` from a fixed list of keys, so anything the
+// graph server adds is DROPPED by default — a contract landing on the other side of the wire would
+// have been silently swallowed here and read as "the server echoes nothing". MEASURED: without the
+// two spreads below, a graph server emitting `writes` produces a browser envelope with no `writes`
+// in it at all, and every held row goes on being held for want of a field that was on the wire.
+//
+// CARRIED VERBATIM AND ONLY WHEN THERE IS ONE. No shape is asserted here — the browser's own strict
+// reader is the single place the shape is known — and NOTHING IS SUBSTITUTED FOR AN ABSENT ONE. An
+// unconditional `writes: e.writes || {}` would be the wrong default and not a tidier one: it would
+// make every projection from today's DEPLOYED graph server, which knows nothing of any of this,
+// arrive at the browser carrying an empty echo. The browser reads "no key at all" as silence and
+// behaves exactly as it did before correlation existed; it reads "an empty echo" as a server that
+// is answering, which starts a grace running and puts a sentence on the freshness line. Absent and
+// empty are different statements, and only one of them is true of a server that has never heard of
+// a token.
+const WRITE_ECHO_KEY = "writes";
+
+/** The first of `sources` that names the echo at all, or `undefined` when none does. */
+function echoOf(...sources) {
+  for (const source of sources) {
+    if (source !== null && typeof source === "object" && source[WRITE_ECHO_KEY] !== undefined) {
+      return source[WRITE_ECHO_KEY];
+    }
+  }
+  return undefined;
+}
+
+/** `{write_tokens: …}` when there is an echo to carry, and an EMPTY object when there is not. */
+function echoFields(...sources) {
+  const echo = echoOf(...sources);
+  return echo === undefined ? {} : { [WRITE_ECHO_KEY]: echo };
+}
+
 // GET /app/graph (session) — serve the projection. The hosted model (Fly) is the source of
 // truth; the D1 snapshot is a fallback for when the server is unreachable.
 async function graphGet(request, env, origin, session) {
@@ -143,6 +186,10 @@ async function graphGet(request, env, origin, session) {
               views: e.views || [],
               graph: e.graph || {},
               locations: e.locations || {},
+              // The echo, when the graph server names one — see `echoFields`. This is the READ
+              // path the contract names in as many words: "the server echoes it in the envelope
+              // that GET /graph later serves".
+              ...echoFields(e),
             },
             pending_edits: await pendingCount(env, session.user_id),
           },
@@ -223,8 +270,9 @@ async function editPost(request, env, origin, session) {
   return json({ ok: true, pending_edits: await pendingCount(env, session.user_id) }, 200, origin);
 }
 
-// POST /app/edit-file (session) — the web write path. The browser sends {path, markdown, base} for
-// one view; we write it on the hosted model, run a cycle, and return the fresh projection. The
+// POST /app/edit-file (session) — the web write path. The browser sends {path, markdown, base,
+// token} for one view; we write it on the hosted model, run a cycle, and return the fresh
+// projection. `base` and `token` are both OPTIONAL and both forwarded only when present. The
 // operator token stays server-side; the browser only ever holds its passkey session.
 //
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -285,6 +333,20 @@ async function editFile(request, env, origin, session) {
   // exactly why nothing is substituted for an absent one.
   const write = { path, markdown: body.markdown };
   if (typeof body?.base === "string" && body.base !== "") write.base = body.base;
+  // THE CORRELATION TOKEN, FORWARDED ON EXACTLY THE SAME TERMS AS `base` IMMEDIATELY ABOVE, and for
+  // exactly the same reason. `token` is the browser's opaque per-write handle
+  // (app/present/correlation.ts `mintWriteToken`). It says ONE thing: "this POST is mine". The
+  // graph server records it and echoes it in the projection it later serves, and the browser then
+  // knows ITS write landed rather than that some write did — which is what stops the recovery strip
+  // holding lines that saved perfectly (measured: three of five rows in a real browser run).
+  //
+  // THIS WORKER NEITHER MINTS NOR ADJUDICATES ONE. It compares no strings and generates no
+  // randomness, so it cannot invent a token, and a token it cannot understand is still just a
+  // string it hands on. WHEN `token` IS ABSENT IT IS NOT FORWARDED AT ALL — absent, never empty and
+  // never null — so a browser that predates this change sends a request byte-for-byte identical to
+  // the one it sent before, and a graph server that never learns to record one never records one.
+  // Everything on this path fails OPEN, in both directions.
+  if (typeof body?.token === "string" && body.token !== "") write.token = body.token;
 
   const auth = { Authorization: `Bearer ${env.SERVER_TOKEN}` };
   // 1. overwrite the single view on the hosted model
@@ -333,6 +395,10 @@ async function editFile(request, env, origin, session) {
         views: cd.snapshot?.views || [],
         graph: cd.snapshot?.graph || {},
         locations: cd.snapshot?.locations || {},
+        // The echo, when the cycle names one, from either altitude of its own answer — see
+        // `echoFields`. This is the WRITE path's own acknowledgement, and it is the first place an
+        // echoing server can put one: the answer to the very POST that carried the token.
+        ...echoFields(cd.snapshot, cd),
       },
       pending_edits: await pendingCount(env, session.user_id),
     },
