@@ -1042,3 +1042,25 @@ forbidden_flows:
   # `tests/app-escape-discards.test.mjs` — value-level assertions that nothing reached the wire,
   # that the base did not move, and a mutation arm that rewrites `discard();` to `settle();` in a
   # copy of dist/present.js and asserts the emptied line IS posted.
+
+  # ── ENTER OPENS A LINE THAT SURVIVES THE PAINT (2026-08-01) — NO EDGE EITHER ───────────────
+  #
+  # `enter-opens-a-line-that-survives-the-paint` adds NO row to this file, for the same reason
+  # the neighbouring row above it does not, and stated here rather than left to be noticed.
+  #
+  # The whole change is inside one module. `paintGeneration` is a counter in
+  # `app/present/paint.ts`, `superseded` is a closure inside `paint`, and the `focus.blur()` call
+  # is one statement inside `settle` on the `FocusSurface` the painter was already handed. The
+  # painter's imports are byte for byte what they were and no module gained or lost a caller, so
+  # declaring an edge would be manufacturing the drift this file's own header refuses.
+  #
+  # AND THE PROPERTY THIS ROW TURNS ON IS NOT AN EDGE BETWEEN MODULES EITHER. It is that a paint
+  # which another paint has superseded stops appending — a fact about ONE FRAME of one function,
+  # invisible to a tool that measures module edges. A forbidden flow saying "paint does not call
+  # paint" would also be false: `repaint` is `paint`, deliberately, and that recursion is how a
+  # focus change redraws a view.
+  #
+  # WHAT ENFORCES IT INSTEAD, named so the absence is not read as an absence of enforcement:
+  # `tests/app-enter-opens-a-line.test.mjs` — the intended end-state asserted at the value level,
+  # a proof that no affordance left on screen writes a superseded file, and three mutation arms
+  # (both faults, each fault alone) cut into a copy of dist/present.js.

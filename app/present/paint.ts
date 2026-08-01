@@ -295,6 +295,45 @@ const VIM_BLOCK_CLASS = "vim-block";
  */
 type Settlement = "open" | "committed" | "discarded";
 
+/**
+ * WHICH PAINT IS THE CURRENT ONE — a monotonic counter, bumped once by every call to `paint`.
+ *
+ * ── IT IS `DraftSurface.generation`'S MECHANISM, APPLIED TO THE FRAME INSTEAD OF TO THE ROW ──
+ *
+ * Not a third idea. This module already answers "is this element still the thing it was built for"
+ * two ways, and this is the second of them widened by one word:
+ *
+ *   the LATCH (`Settlement` above) refuses BY NAME — this element discarded, so it may not commit.
+ *   the GENERATION (`draft.generation`) refuses A STALE GENERATION — this element's row has been
+ *     dropped or re-placed, so its settlement is not the row's settlement.
+ *
+ * `paint()` needed the second one and did not have it. A paint owns two things for the length of
+ * its frame: the column it is appending to, and the SOURCE STRING every row it builds closes over.
+ * Both stop being true the instant a nested paint runs — and a nested paint is not hypothetical, it
+ * is what `body.innerHTML = ""` and every `element.focus()` in this file can cause, because
+ * removing or blurring a focused `<input>` fires `blur`, `blur` is wired to a settlement, and a
+ * settlement repaints.
+ *
+ * ── WHAT IT PREVENTS, AND IT IS A WRITE AND NOT A GLITCH ──
+ *
+ * A superseded frame that goes on appending puts rows on screen whose `source` — the string handed
+ * to `applyEdit` by their checkbox, and by their line's own settlement — is a copy of the file the
+ * nested paint has already replaced. Measured: a draft row holding characters, settled by a nested
+ * paint into a file with one line MORE, underneath four rows still closing over the file with one
+ * line LESS. Ticking a box on one of those rows POSTS the shorter file, and the write unit is the
+ * WHOLE FILE, so the line he had just created is gone.
+ *
+ * So the rule is: A SUPERSEDED FRAME TOUCHES NOTHING. It does not append, it does not focus, and it
+ * leaves behind no element that could be clicked. The nested paint holds the current source and has
+ * already drawn the whole view; there is nothing the outer frame could add that is not stale by
+ * construction.
+ *
+ * IT IS NOT A RE-ENTRANCY LOCK. Nothing here refuses to paint and no settlement is deferred — the
+ * nested paint runs, in full, and wins. What is refused is the CONTINUATION of a frame whose source
+ * is no longer the page's, which is the same refusal `draft.generation` makes about a row.
+ */
+let paintGeneration = 0;
+
 /** The one character a block cursor shows when the line has none at that column. */
 const EMPTY_CELL = " ";
 
@@ -492,6 +531,32 @@ function rawInput(
     // new line's shape from characters that are no longer there.
     const next = markdown ?? fileSource;
     const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (opened) {
+      // ── BLUR BEFORE THE ROW IS PAINTED, AND THIS IS THE DEFECT THIS LINE EXISTS TO END ────────
+      //
+      // A draft is not a line `FocusSurface` can point at while it exists: `paintDraft` focuses the
+      // row's `<input>` DIRECTLY, with no cascade and no mode check. So a draft and a focused line
+      // are two cursors, and the next paint honours BOTH — it builds an `<input>` for the focused
+      // line and focuses it, then builds the draft and focuses that.
+      //
+      // FOCUSING THE SECOND BLURS THE FIRST, and `blur` is wired to the settlement above. Measured,
+      // deterministically, before this line existed: Enter on an open line ran that settlement
+      // RE-ENTRANTLY inside `paint()`, its own repaint destroyed the draft the same paint had just
+      // built, and the outer frame went on appending rows underneath it — mode NORMAL, no draft, no
+      // `<input>`, THREE COPIES OF THE VIEW on screen. Which is to say the operator pressed Enter,
+      // got no line, and every character he typed next went to vim's NORMAL keymap.
+      //
+      // `o`/`O` HAS ALWAYS DONE THIS. app/index.html's `open` effect runs `focus.blur()` and then
+      // `mode.enterInsert()`, for exactly the reason written out there. Enter mid-edit opens a row
+      // through the SAME `openLine`, and ran only the second of the two. This is not a new rule; it
+      // is the existing rule reaching its second caller.
+      //
+      // IT IS UNCONDITIONAL ON `wasFocused` on purpose. The hazard is "some line is focused while a
+      // draft exists", and whether the focused line is THIS one is not what makes it a hazard —
+      // one `<input>` too many is one focus transfer too many wherever the cursor happens to be.
+      // `draftInput`'s own `returnToVim` hands the cursor back when the row settles or is abandoned.
+      focus.blur();
+    }
     if (wasFocused) {
       if (opened && mode !== undefined) {
         // Enter opened a NEW editable row below — the pre-existing draft affordance, untouched by
@@ -915,6 +980,13 @@ export function paint(
   context: PresentationContext,
   deps: PaintDeps,
 ): void {
+  // WHICH PAINT THIS IS — taken FIRST, before any statement that can hand control to a listener.
+  // See `paintGeneration` for what a superseded frame would otherwise put on the page.
+  paintGeneration += 1;
+  const mine = paintGeneration;
+  /** Has another paint started since this one? Then this frame's `source` is no longer the page's. */
+  const superseded = (): boolean => paintGeneration !== mine;
+
   const focus = deps.focus;
   const draft = deps.draft;
   const mode = deps.mode;
@@ -1035,6 +1107,13 @@ export function paint(
     body.append(input);
     if (focus.isFocused(lineIndex)) {
       (input as HTMLInputElement).focus?.();
+      // FOCUSING BLURS WHATEVER HAD FOCUS, AND A BLUR SETTLES. So this call is one of the three
+      // places in this file where control can leave the frame — see `paintGeneration`. If it did,
+      // the element just appended is already gone from the column a nested paint emptied, and
+      // seeding a caret into it would be seeding a caret into nothing.
+      if (superseded()) {
+        return;
+      }
       // THE CARET SEED, AND THE ONLY PLACE IT IS EMBODIED. `mode.takeCaretHint()` is data
       // motions.ts already decided — `enterInsert(column)` for `i`/Enter and `enterInsert(column+1)`
       // for `a`, both measured in the NORMAL cursor's own column. Turning it into a real selection
@@ -1054,7 +1133,13 @@ export function paint(
     }
   };
 
+  // EMPTYING THE COLUMN REMOVES THE FOCUSED `<input>`, AND REMOVING IT FIRES `blur`. That listener
+  // can settle a row, and a settlement repaints — so this one statement can run a whole paint
+  // before it returns. Everything below it belongs to a frame that may already have been replaced.
   body.innerHTML = "";
+  if (superseded()) {
+    return;
+  }
 
   // THE ROW FOR THE LINE BEING MADE, painted at the index it will occupy. The source is UNCHANGED
   // while it exists, so every line below it keeps the index it already had — which is why the
@@ -1078,6 +1163,12 @@ export function paint(
     );
     body.append(input);
     (input as HTMLInputElement).focus?.();
+    // THE SECOND OF THE THREE PLACES CONTROL CAN LEAVE THE FRAME — see `paintGeneration`, and see
+    // `rawInput`'s `settle` for the `focus.blur()` that stops this transfer from happening at all
+    // on the gesture that used to cause it.
+    if (superseded()) {
+      return;
+    }
     // THE CARET GOES BACK TO THE END OF WHAT HE HAD TYPED, and only for a row that has survived a
     // projection. A row still holding its seed is left exactly as it was — the browser lands the
     // caret at the end of a freshly focused value anyway, and setting it here would change what
@@ -1091,6 +1182,13 @@ export function paint(
   let lastPaintedIndex = -1;
 
   source.split("\n").forEach((line, index) => {
+    // A ROW BUILT BY A SUPERSEDED FRAME CLOSES OVER A SOURCE THE PAGE NO LONGER HAS, and its
+    // affordances POST the whole file. `forEach` cannot be broken out of, so every remaining
+    // iteration returns instead — the same outcome, and no second loop shape to keep in step with
+    // the first. See `paintGeneration`.
+    if (superseded()) {
+      return;
+    }
     if (draft?.isDraftAt(index) === true) {
       paintDraft();
     }
@@ -1261,9 +1359,19 @@ export function paint(
     body.append(div);
   });
 
+  // NOTHING BELOW THIS LINE MAY RUN FOR A FRAME THAT HAS BEEN REPLACED. The trailing draft row and
+  // the click-below-the-last-line target are both elements a person can reach, and both would carry
+  // this frame's `source` into `applyEdit`. See `paintGeneration`.
+  if (superseded()) {
+    return;
+  }
+
   // A DRAFT OPENED PAST THE LAST LINE. `insert-line` accepts `lines.length` because "after the last
   // line" is a real place to put a line, and the loop above can never reach that index.
   paintDraft();
+  if (superseded()) {
+    return;
+  }
 
   // ── THE SPACE BELOW THE LAST LINE, AND WHY IT IS AN ELEMENT RATHER THAN A LISTENER ────────────
   //

@@ -3042,3 +3042,64 @@ capabilities:
     the page posts one file and that file has the stamped line emptied, which is the operator's own
     report made executable.
   status: 'working'
+- id: enter-opens-a-line-that-survives-the-paint
+  tier: 'functional'
+  intent: >-
+    ENTER ON AN OPEN LINE COMMITS IT, OPENS THE NEXT, AND PUTS THE CURSOR IN IT. It destroyed the row
+    it opened instead, and painted the view three times. Measured deterministically on the harness,
+    before the fix: mode NORMAL, no draft, no `<input>`, three copies of the column.
+    TWO FAULTS, SEPARABLE, AND EACH HAS ITS OWN MUTATION ARM.
+    THE TRIGGER IS A MISSING BLUR. `app/present/paint.ts`'s `settle` opened the draft and called
+    `mode.enterInsert()`, leaving `focus.lineIndex` on the line it had just committed. A draft
+    focuses its own `<input>` directly - `paintDraft`, no cascade and no mode check - so the next
+    paint had TWO cursors: it built and focused an `<input>` for the committed line, then built and
+    focused the draft. Focusing the second BLURRED the first, and `blur` is wired to the COMMITTING
+    settlement, which therefore ran RE-ENTRANTLY INSIDE `paint()` and whose own repaint destroyed the
+    draft that same paint had just built. `o`/`O` in `app/index.html` has always run `focus.blur()`
+    before `mode.enterInsert()`, for the reason written out there. Enter mid-edit opens a row through
+    the same `openLine` and ran only the second of the two statements. This is the existing rule
+    reaching its second caller, not a new rule.
+    THE DANGEROUS HALF IS THE STALE SOURCE, AND IT IS A WRITE AND NOT A GLITCH. While a nested paint
+    ran, the outer frame went on appending rows that close over the source string the nested paint
+    had already replaced. Those rows hand that string to `applyEdit` - from their checkbox and from
+    their own settlement - and the write unit is the WHOLE FILE. `paint` now takes a generation and a
+    superseded frame appends nothing, focuses nothing, and leaves behind nothing clickable.
+    IT EXTENDS `DraftSurface.generation` RATHER THAN ADDING A THIRD MECHANISM. This bundle already
+    answers "is this element still the thing it was built for" two ways - the LATCH (`Settlement`,
+    `open`/`committed`/`discarded`) refuses BY NAME, and the GENERATION refuses A STALE GENERATION.
+    The painter needed the second and did not have it, so it now has it, applied to the frame instead
+    of to the row. Nothing is deferred and no paint is refused: the nested paint runs in full and
+    wins, and what is refused is the CONTINUATION of a frame whose source is no longer the page's.
+    ONE CORRECTION TO THE FILED DIAGNOSIS, MEASURED RATHER THAN ARGUED. Through ENTER the nested
+    frames all repaint from the SAME string, so that gesture destroys the row and triples the column
+    but does not itself put a stale file on the wire. The stale WRITE is real one gesture over - a
+    row being made, holding characters, settled by a nested paint into a file with one line MORE,
+    underneath rows still closing over the file with one line LESS. Both are proven.
+    THE CHARACTERS ARE NOT HELD, AND THAT IS THE SAME DECISION THE ESCAPE ROW MADE. `held.ts` is for
+    characters with NOWHERE TO GO. Enter is the operator's own explicit "commit this and give me the
+    next line", and after this fix his characters have somewhere to go on every path - the committed
+    line is posted, and the row he opened is on screen with the cursor in it. Holding on a gesture he
+    initiated deliberately would be the false positive the browser run already reported in that
+    strip. `HeldReason` gains no fourth cause.
+  rooting: >-
+    IT ADDS NO MODULE AND NO EDGE. `paintGeneration` is a module-scoped counter in
+    `app/present/paint.ts` and `superseded` is a closure inside `paint`; the `focus.blur()` call is
+    one statement inside `settle`, on the `FocusSurface` the painter already holds. The painter's
+    imports are byte for byte what they were and no module gained or lost a caller, so
+    `docs/architecture/flows.yaml` gains no row - see the stated absence in that file rather than an
+    edge nothing could observe.
+    ENFORCEMENT IS `tests/app-enter-opens-a-line.test.mjs` - 10 tests in 3 documented sections,
+    driving `app/index.html`'s own lifted script on the three browser facts
+    `tests/app-escape-discards.test.mjs` introduced. Section 1 asserts the intended END STATE, named
+    before it is asserted: one copy of the view (counted by the click-below-the-last-line row, which
+    `paint` appends exactly once per call), the draft present and focused, one `<input>`, mode
+    INSERT. Section 2 asserts that NOTHING WRITES FROM A STALE SOURCE, at the value level - every
+    checkbox on screen is toggled and every posted file still carries his line - with the POST left
+    unresolved on purpose, because a fetch that resolves repaints the column and washes the stale
+    rows away, which would report the defect as fixed because the network tidied up after it.
+    Section 3 is three mutation arms: both faults restored (mode NORMAL, no draft, no `<input>`,
+    three columns - the report to the number), the blur alone restored (the row is still destroyed
+    while the column stays at one copy, which is what makes the two faults separable), and the frame
+    guard alone removed (two columns, three boxes for two checkbox lines, and the stale box POSTS the
+    file his line is not in).
+  status: 'working'
