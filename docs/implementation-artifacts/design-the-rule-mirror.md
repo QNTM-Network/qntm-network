@@ -371,8 +371,9 @@ section is picked up by regeneration with no code change, because the generator 
 `views/*.yaml` and copies whatever scalars it finds under `defaults:`. A new *field* needs no code
 either — the grammar is `{field: scalar}`, not an enumeration of eight known fields.
 
-**Cost: ½.** **Falsifier:** add `defaults: {priority: high}` to a scratch section, regenerate, and a
-line typed under that heading is seeded `high` with no code change. **And the negative arm, which
+**Cost: `h` for the seed, `½` with its agreement test.** **Falsifier:** add
+`defaults: {priority: high}` to a scratch section, regenerate, and a line typed under that heading is
+seeded `high` with no code change. **And the negative arm, which
 matters more:** point a section's `defaults:` at a field the registered node type cannot hold (§3.4)
 and the app must **say so**, not drop it.
 
@@ -581,8 +582,7 @@ is `for every one of 186 sections, does the browser's seed equal the field map
 is a *weaker* test to write than the qualification one and a *stronger* one to hold, because there
 is no node to quantify over.
 
-### 8.3 It does NOT scale to the pass, and `design-local-behaviour-and-the-queue.md` was right about
-why
+### 8.3 It does NOT scale to the pass, and the earlier refusal was right about why
 
 `design-local-behaviour-and-the-queue.md:454-463` refused a rule replay on the ground that its
 equivalent is *"not a golden test but a conformance suite against a moving target — one that would
