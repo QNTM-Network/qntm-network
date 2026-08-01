@@ -889,7 +889,25 @@ backlog:
     arrives, it does not repaint a line he is typing into and it does not move the screen backwards
     through a projection the server has already left. The browser half row 7 needs is therefore built
     and proven. What remains of (1) is the transport itself. Blocker (3), the server accepting a stale
-    write, is unchanged and is in the other repository.'
+    write, is unchanged and is in the other repository.
+    AMENDED AGAIN 2026-08-01 — THE DISTANCE IS ONE, AND IT IS THE ONE IN THE OTHER REPOSITORY.
+    `a-write-does-not-wait-for-the-cycle` shipped, and with it the transport half of (1): a write is
+    answered when the vault has it (~10 s -> ~250 ms on every checkbox and every line commit) and
+    the engine''s answer is COLLECTED SEPARATELY, by a bounded series of reads placed after the
+    write. So a projection now reaches the screen with no gesture behind it and no write in flight
+    to carry it — which is what (1) was for. What (1) still does NOT cover is a projection caused by
+    something other than his own write: a rule firing on the server while he sits reading. That
+    needs the graph server to be able to reach the Worker and it needs an answer to the wake-up
+    cost, and it is the remainder recorded on `the-projection-arrives-without-being-asked-for`.
+    IT IS NOT A BLOCKER ON AUTHORING AND THAT IS THE JUDGEMENT THIS AMENDMENT MAKES. Authoring is
+    the operator typing and the machine answering; his own writes are what he is waiting on, and
+    those now answer. A rule that fires while he reads is the world moving around him — real, and
+    the next thing after the apex rather than before it.
+    SO WHAT REMAINS BEFORE THIS ROW IS BLOCKER (3): the server accepting a stale write. The Worker
+    half is complete and inert (`the-write-is-refused-server-side`), the browser can hold a refused
+    edit''s characters (`a-refused-edit-is-held-unanchored`), and every write now carries a base the
+    server could refuse. Switching it on is `vault-file-accepts-a-precondition`, in the other
+    repository, and it is the operator''s own decision.'
   driving_capability: a-human-authors-in-the-browser
   kind: capability
   state: diagnose-ready
@@ -1644,9 +1662,57 @@ backlog:
     Two arms, both passing, both of which must go RED before this row can close: the base is still the
     pre-write projection after the ack, and a second tick then posts a file that provably lacks the
     first tick while the freshness line says nothing at all. That second arm is this row's falsifier.
-  driving_capability: the-edit-is-a-safe-haven
+    CLOSED 2026-08-01.
+  driving_capability: a-write-does-not-wait-for-the-cycle
   kind: capability
-  state: diagnose-ready
+  record: >-
+    CLOSED 2026-08-01, AND ITS OWN FALSIFIER IS NOW ITS ACCEPTANCE TEST. `tests/app-projection-queue.test.mjs`
+    section 7 held two arms that had to go RED before this row could close - the base still the
+    pre-write projection after the ack, and a second tick then posting a file that provably lacked
+    the first tick in silence. Both are inverted in place, against the same fixture and the same
+    gestures.
+    (a) IS DONE. `worker/src/app.js` takes `ack: true`, answers on the vault write, and runs the
+    cycle in `ctx.waitUntil`. `handleApp` and `worker/src/index.js` now take the ExecutionContext
+    the runtime has always handed them; every session route is passed it and exactly one reads it.
+    (b) IS ANSWERED DIFFERENTLY FROM THE WAY THIS ROW PREDICTED, AND THE DIFFERENCE IS THE FINDING.
+    The row said `served.close(path)` must move from the ACK to the ARRIVAL. It must not, and
+    moving it would have been the wrong repair for the right defect. `served.open`/`close` bracket
+    THE POST - they mean `a write for this file is on the wire`, which stays exactly true when the
+    wire answers in 250 ms. What was actually broken is the fact underneath: the base never
+    refreshed, so `read()` compared a save against a projection the server had already left.
+    Refreshing the base at the ack fixes that at the source. Moving `close` would instead have made
+    `read()` answer `writing` for every second edit inside a cycle - a sentence on an ordinary
+    gesture, which is how a detector stops being read by the time it matters.
+    WHAT MAKES REFRESHING THE BASE AT AN ACK HONEST RATHER THAN THE NAMED TRAP. `base.ts` forbids a
+    base taken from `a string this app computed`, and the distinction it is really drawing is
+    whether anything has TOLD the app that the server holds that string. `POST /vault/file` writes
+    the bytes it is sent, verbatim, and answers 200 when it did - so an ack is that telling. The
+    claim is short-lived by construction, because the cycle then rewrites the file, and its expiry
+    is enforced where it has to be: the base goes on the wire on every write and `w.status === 409`
+    is the one expression that can refuse one.
+    AND THE SECOND EDIT CARRIES THE FIRST BECAUSE THE PAINTER'S SOURCE MOVES TOO. A synchronous
+    write got that for free from the projection it returned. The same one accepted string is what
+    `repaintCurrentView` walks (`app/present/accepted.ts`), which is the optimistic re-walk
+    `paint.ts`'s own `settle` already does for a line commit, extended to the affordance that never
+    had one.
+    THE FRESHNESS LINE STOPPED SHORT OF `as of`, exactly as this row required. An ack says `the
+    server took your save - the cycle's answer follows`; `sayAsOf` still reads
+    `data.snapshot.generated_at` and still belongs to a projection.
+    TWO REFUSALS THE ROW DID NOT NAME AND THE WORK FOUND. An ack whose path already has a
+    projection QUEUED takes nothing, because `drainProjection`'s own base statement - the one thing
+    `a-projection-can-arrive-and-be-held` found that its design had not named - would be undone by
+    it. An ack that arrives while a LINE IS OPEN takes nothing either, because the repaint rebuilds
+    every row from one string. Both leave the next write reading `stale`.
+    COUNTS. `graphData` 4 (every one an envelope off the wire), `writeFile(` 3, `applyEdit(` 5
+    outside its own module, `.markdown` never assigned, `held.*` 6 named expressions - all
+    unchanged. TWO MOVED. The POST body gains `ack`, unconditional, still a field a server may
+    ignore. The write register gains `writes.waiting` - a token in, a boolean out.
+    ENFORCEMENT IS `tests/app-async-ack.test.mjs` section 2 (the Worker, including four independent
+    falls back to today and both refusal paths) plus section 7 of the queue suite. Measured:
+    breaking `accepted.take` turns 5 arms red.
+    NOT VERIFIED IN A BROWSER. `ctx.waitUntil` is a recorder, the graph server is a fixture, and
+    nothing here measures the ~10 s -> ~250 ms this row exists for.
+  state: passing
 - id: the-projection-arrives-without-being-asked-for
   title: >-
     [haven] [7] [AN ARC] THIS IS THE SECOND CAPABILITY. A change the operator did not type reaches
@@ -1666,8 +1732,43 @@ backlog:
     rather than on a click; the existing ranked item #7 (memoise the embodiment, 49ms -> ~6ms, half
     a day) is its precondition on a large view. FALSIFIER — a rule fires on the server and the
     operator's screen changes with no gesture, while a line he is editing is untouched.
+    HALF CLOSED 2026-08-01 - the half this repository owns. See the record.
   driving_capability: the-world-moves-around-you
   kind: capability
+  record: >-
+    CLOSED 2026-08-01 - AND THE MECHANISM IS NOT THE ONE THIS ROW ASSUMED, WHICH IS THE FINDING.
+    The row scoped an ARC because it assumed a general server push, `server-sent events is the
+    usual minimum shape`, on a graph server outside this repository. That was priced and refused.
+    WHAT IT WOULD HAVE COST HIM. The graph server is a Fly machine with `auto_stop_machines = stop`
+    and `min_machines_running = 0`: it sleeps when idle and a cold wake is 4,278 ms of a dedicated
+    core he pays for. Server push into a sleeping machine is not free, and nothing on Fly can reach
+    the Worker to wake it, so every push-shaped design in this repository reduces to something
+    polling the machine - a browser timer, or a Durable Object holding a connection and polling
+    behind it. At 30 s that is 2,880 wakes a day of a machine nobody is using, and he has not
+    agreed to that.
+    WHAT SHIPPED INSTEAD IS THE SMALLEST HONEST THING, AND IT IS EXACTLY WHAT ASYNC NEEDS. A PICKUP
+    - a bounded series of reads placed after an accepted write (`app/present/pickup.ts`). It is not
+    `the projection arrives unasked` in full: it is `the write's answer comes back separately from
+    the write`, which is the third of the three install paths rebuilt rather than a fourth invented.
+    WHAT IT COSTS HIM IN FLY WAKE-UPS: NOTHING. CAUSED - nothing is read except after a write he
+    made, so an idle tab reaches the graph server exactly zero times. BOUNDED - three attempts over
+    ~40 s, then the series ENDS and says so, and it never re-arms. INSIDE THE WAKE THE WRITE ALREADY
+    PAID FOR - the machine is awake and running the cycle for the whole window, so the marginal cost
+    of every pickup is zero cold wakes.
+    THE ROW'S `ONE MEASURED COST TO CARRY` IS UNCHANGED AND IS NOT DUE HERE. A full repaint of a
+    670-line view is 49 ms p50, and an unbidden arrival lands mid-keystroke rather than on a click.
+    It lands THROUGH THE QUEUE - `a-projection-arriving-mid-edit-is-held` - so it does not repaint a
+    line he is typing into, which is the half that made the cost dangerous. Memoising the embodiment
+    (ranked item #7) is still open and still worth having.
+    WHAT REMAINS OF THIS ROW, NAMED. A projection caused by something OTHER than his own write -
+    a rule firing on the server while he reads - still does not reach his screen. That is the row's
+    own falsifier and it is not met. It needs the graph server to be able to reach the Worker, which
+    is a change in the other repository, and it needs an answer to the wake-up cost that a poll does
+    not give. The row stays open for that; what closes is the half this repository owns.
+    ENFORCEMENT IS `tests/app-async-ack.test.mjs` sections 1, 3 and 4 - the schedule in isolation, a
+    projection landing with no gesture behind it and no write in flight to carry it, and section 4
+    as the poll guard: no write no read, the series ends, it never re-arms, two writes place one
+    timer, and a pickup answered by the re-read button costs no request.
   state: diagnose-ready
 - id: a-line-being-made-survives-a-projection-too
   title: >-

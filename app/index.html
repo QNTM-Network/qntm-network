@@ -975,6 +975,8 @@ import {
   HeldSurface,
   heldFrom,
   ProjectionQueue,
+  PickupSchedule,
+  AcceptedSource,
   WriteRegister,
   mintWriteToken,
   readWriteEcho,
@@ -1257,6 +1259,25 @@ const queued = new ProjectionQueue();
 // count cannot: not "is a write of this file in the air" but "did the write I made land". Two ticks
 // inside one cycle are two of the first and two DIFFERENT answers to the second.
 const writes = new WriteRegister();
+
+// THE READS OWED TO WRITES THAT WERE ACCEPTED BUT NOT YET ANSWERED (app/present/pickup.ts). One
+// surface for the page, same reason as the six above — a pickup outlives every repaint between the
+// ack and the projection it collects.
+//
+// IT IS THE ONE SURFACE HERE THAT IS ABOUT TIME RATHER THAN ABOUT A FILE, and it holds no timer of
+// its own: `setTimeout` is the page's, because only the page has one. What the surface holds is the
+// POLICY — how long to wait, how many times, and one outstanding read per path.
+const pickups = new PickupSchedule();
+
+// WHAT THE SERVER SAID IT HOLDS FOR THE FILE ON SCREEN (app/present/accepted.ts). One surface for
+// the page, same reason as the seven above.
+//
+// IT IS `served`'s SOURCE-SIDE TWIN AND THE TWO ARE FED FROM THE SAME ONE STATEMENT. `served` is
+// "what a write may be measured against"; this is "what the next edit is computed on top of". They
+// hold the same string in the one situation either exists for — a write accepted with the cycle
+// still running — and they are separate because their READERS are separate: the base is compared,
+// the source is painted, and merging them would put the painter's string inside the detector.
+const accepted = new AcceptedSource();
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
@@ -1583,6 +1604,25 @@ const ARRIVAL_HELD = "the cycle answered — it lands on this view when the line
 const ARRIVAL_EMPTY = "the write landed and the server sent no projection back";
 
 /**
+ * AND FOR AN ANSWER THAT SAID SO ON PURPOSE — the ack (`worker/src/app.js`, `ack: true`).
+ *
+ * ACCEPTED, NOT WRITTEN, AND THE WORDS ARE THE ONES `WRITE_ACCEPTED` ALREADY CHOSE for the same
+ * distinction one layer down. A 200 on the vault write says the server took the bytes; the cycle
+ * has not run, so nothing here may claim the engine has seen them, and `sayAsOf`'s "as of <when>"
+ * belongs to the projection when it lands rather than to the write that caused it.
+ */
+const ARRIVAL_ACCEPTED = "the server took your save — the cycle's answer follows";
+
+/**
+ * AND WHEN IT NEVER FOLLOWED. The pickup series is bounded (app/present/pickup.ts) precisely so
+ * that this sentence exists: a schedule that retried forever would be a poll, and a schedule that
+ * gave up silently would leave the operator reading a screen one cycle out of date with no way to
+ * know it. The re-read button is one press away and it is HIS, which is the right place for an
+ * unbounded retry to live.
+ */
+const PICKUP_LOST = "the cycle's answer did not arrive — press re-read to ask for it again";
+
+/**
  * WHAT A WRITE'S OWN ANSWER DID, SAID ONCE. Two callers, one sentence each, because the three
  * outcomes of `arrive` are exactly the three things the operator could need to know and two of them
  * used to be unreachable states of the word "syncing…".
@@ -1592,6 +1632,8 @@ function sayArrival(landed) {
     $("freshness").textContent = ARRIVAL_HELD + takeNotes();
   } else if (landed === "ignored") {
     $("freshness").textContent = ARRIVAL_EMPTY + takeNotes();
+  } else if (landed === "accepted") {
+    $("freshness").textContent = ARRIVAL_ACCEPTED + takeNotes();
   }
 }
 
@@ -1750,22 +1792,175 @@ function correlate(path, data) {
  * knows nothing about which of two projections is newer. Neither could be tested without the other
  * if they were one thing.
  */
-function arrive(path, data) {
+function arrive(path, data, write = null) {
   // AHEAD OF THE SNAPSHOT GUARD, BECAUSE EVIDENCE IS EVIDENCE. An answer that carries no projection
   // can still name the write it is the answer TO, and refusing to read it because there is nothing
   // to paint would throw away the one thing that clears a false held row.
   correlate(path, data);
   // AN ANSWER WITH NO SNAPSHOT IN IT IS NOT A PROJECTION, AND MUST NOT BECOME ONE BY BEING QUEUED.
-  // `POST /app/edit-file` always carries a snapshot when it succeeds (worker/src/app.js builds it),
-  // so this is a malformed answer rather than a case — but the queue is drained from a SYNCHRONOUS
-  // keydown handler, outside every `try` a write path has, and an envelope that throws when it is
-  // finally installed would take a keystroke down with it hours after the write that produced it.
-  // Refused at the door instead, where the write path still has a `catch` and a sentence.
+  // The queue is drained from a SYNCHRONOUS keydown handler, outside every `try` a write path has,
+  // and an envelope that throws when it is finally installed would take a keystroke down with it
+  // hours after the write that produced it. Refused at the door instead, where the write path still
+  // has a `catch` and a sentence.
   if (!data?.snapshot) {
+    // ── THE ACK, WHICH IS THE ONE PROJECTIONLESS ANSWER THAT MEANS SOMETHING ───────────────────
+    //
+    // `accepted: true` IS THE SERVER SAYING IT LEFT THE PROJECTION OUT ON PURPOSE — the vault write
+    // succeeded and the cycle is running behind the response (`worker/src/app.js`). ASKED FOR
+    // EXPLICITLY rather than inferred from the absence of a snapshot, for the reason `echoFields`
+    // states on the other side of the wire: absent and empty are different statements, and "the
+    // server sent no projection" and "the server sent a malformed answer" must not become one case.
+    // A page that treated every snapshotless answer as an ack would hold a base and repaint a view
+    // on the strength of an envelope nothing produced.
+    //
+    // AND ONLY WHEN THIS PAGE KNOWS WHAT IT POSTED. `write.markdown` is the string that went on the
+    // wire; without it there is nothing the server's acceptance could be an acceptance OF.
+    if (data?.accepted === true && typeof write?.markdown === "string") {
+      return accept(path, write);
+    }
     return "ignored";
   }
   queued.offer(path, data.snapshot.generated_at ?? null, data);
   return drainProjection(path) ? "installed" : "held";
+}
+
+/**
+ * THE SERVER TOOK THE WRITE AND THE CYCLE IS BEHIND IT — hold what it now says, and place the read
+ * that will collect the answer.
+ *
+ * ── WHY THE ACK IS EVIDENCE ABOUT THE SERVER'S COPY AND NOT A LOCAL GUESS ──
+ *
+ * `POST /vault/file` writes the bytes it is sent, verbatim, and answers 200 when it did. So after an
+ * ack THE FILE ON THE SERVER SAYS WHAT WAS POSTED, and holding that string is reporting the server's
+ * own word rather than hoping. That is the distinction `base.ts`'s named trap actually draws: not
+ * "the app touched this string" but "nothing has told the app that the server has it". A 200 is that
+ * telling. It expires the moment the cycle rewrites the file — which is why the base goes on the
+ * wire on every write and why `w.status === 409` is the one expression that can refuse one.
+ *
+ * ── TWO REFUSALS, AND BOTH FAIL IN THE DIRECTION THE DETECTOR NEEDS ──
+ *
+ *   A PROJECTION IS ALREADY QUEUED for this path. `drainProjection` deliberately advanced the base
+ *     to that held projection — the one statement that keeps the stale-write detector honest while
+ *     the screen waits — and overwriting it with what this write posted would undo exactly that.
+ *     Nothing is taken, so the next write reads `stale` and SAYS so, which is the safe direction.
+ *   A LINE IS OPEN. The repaint below rebuilds every row from one string, so running it while the
+ *     operator is typing is the defect the whole queue exists to refuse. The base is left alone with
+ *     it, for the same reason: taking one without repainting would leave the painter walking a
+ *     string the base no longer describes, and a write measured against that would read `stale`
+ *     while being perfectly current — a false alarm is how a detector stops being read.
+ *
+ * ── THE REPAINT IS WHAT MAKES TWO EDITS INSIDE ONE CYCLE CARRY BOTH ──
+ *
+ * The painter closes every row over the source string that paint was handed (`paint.ts`), so the
+ * second edit is computed on top of the first only if something re-walked the file in between. A
+ * synchronous write got that for free from the projection it returned. An ack has no projection, so
+ * this is where it comes from — the same optimistic re-walk `paint.ts`'s own `settle` already does
+ * for a line commit, extended to the affordance that never had one.
+ */
+function accept(path, write) {
+  // PLACED FIRST AND UNCONDITIONALLY, because the answer is owed whatever the screen is doing. The
+  // two refusals below are about what may be SHOWN and MEASURED now; neither is a reason to stop
+  // collecting the cycle's answer.
+  startPickup(path, write.token ?? null);
+  if (queued.pending(path) !== null || aLineIsOpen()) {
+    return "accepted";
+  }
+  accepted.take(path, write.markdown);
+  served.take(path, write.markdown);
+  if (path === paintedPath()) {
+    repaintCurrentView();
+  }
+  return "accepted";
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE PICKUP — a write's answer, collected separately from the write (app/present/pickup.ts)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// WHAT IT IS FOR. Until now the complete set of things that install a projection was boot, the
+// re-read button, and the RETURN OF A WRITE. The ack removes the third, and these three functions
+// are it rebuilt as a separate read: the write says "accepted", and a moment later the page goes and
+// collects what the cycle made of it. Nothing else in the page changes — the envelope goes through
+// `arrive`, so it is correlated, coalesced by `generated_at`, and held if a line is open, exactly as
+// a write's own answer always was.
+//
+// IT IS NOT A POLL AND THE DISTINCTION IS THE OPERATOR'S MONEY. The graph server is a Fly machine
+// that sleeps when idle and costs 4,278 ms to wake. A timer that re-read every N seconds would wake
+// it every N seconds for as long as a tab is open, whether or not he is using the app. Nothing here
+// is scheduled except by a write HE made; the series is bounded and ends; and the whole window falls
+// inside the wake his own write already paid for, because the cycle is running on that machine for
+// the length of it. An idle tab reaches the graph server exactly zero times.
+
+/** A write was accepted for `path`. Place the read that collects its answer. */
+function startPickup(path, token) {
+  const placed = pickups.schedule(path, token);
+  // `joined` MEANS A TIMER IS ALREADY COUNTING FOR THIS PATH and has adopted this write's token. A
+  // second timer would fetch the same envelope twice.
+  if (placed.outcome === "scheduled") {
+    armPickup(path, placed.delayMs);
+  }
+}
+
+/**
+ * THE ONE `setTimeout` IN THIS WHOLE MECHANISM, and the reason `pickup.ts` holds no clock: a module
+ * that scheduled its own work could not be driven by a test without waiting in real time.
+ */
+function armPickup(path, delayMs) {
+  setTimeout(() => {
+    void collect(path);
+  }, delayMs);
+}
+
+/**
+ * GO AND GET THE ANSWER — one attempt, and then decide whether another is owed.
+ *
+ * WHAT "ANSWERED" MEANS IS THE REGISTER'S, NOT THE SCHEDULE'S. A projection that arrives is not
+ * evidence that THIS write's cycle produced it; a projection that NAMES this write's token is
+ * (`correlation.ts`). So the schedule is told, and it is told the strongest thing this page knows.
+ *
+ * WITH NO TOKEN THE TEST IS WEAKER AND IS NOT PRETENDED OTHERWISE. `mintWriteToken` returns `null`
+ * where there is no CSPRNG, and then the only available answer is "a projection arrived at all",
+ * which can be one the cycle had not yet finished. The cost of being wrong is a screen one cycle out
+ * of date, not a lost edit, and the re-read button corrects it.
+ *
+ * A FAILED READ IS NOT A FAILED WRITE. The envelope is dropped and the series goes on; a dead
+ * network between the ack and the pickup says nothing about the file the server already accepted.
+ */
+async function collect(path) {
+  const going = pickups.attempt(path);
+  if (going.outcome !== "read") {
+    return;
+  }
+  // ALREADY ANSWERED WHILE THE TIMER WAS COUNTING — the re-read button, or a later write's own
+  // projection. Asked BEFORE the fetch, so a pickup that is no longer owed costs no request at all.
+  if (going.token !== null && !writes.waiting(going.token)) {
+    pickups.answered(path, true);
+    return;
+  }
+  let data = null;
+  try {
+    data = await api("/app/graph", { method: "GET", auth: true });
+  } catch {
+    data = null;
+  }
+  let landed = "ignored";
+  if (data !== null) {
+    landed = arrive(path, data);
+    // THE SAME SENTENCE A WRITE'S OWN ANSWER WOULD HAVE WRITTEN, for the outcomes that have one. An
+    // installed projection has already said "as of <when>" through `sayAsOf`; a held one says so
+    // here; and `"ignored"` is deliberately silent on this path, because a READ that carried no
+    // snapshot is an empty graph rather than an accepted write.
+    if (landed === "held") {
+      sayArrival(landed);
+    }
+  }
+  const answered = going.token === null ? landed === "installed" || landed === "held" : !writes.waiting(going.token);
+  const next = pickups.answered(path, answered);
+  if (next.outcome === "again") {
+    armPickup(path, next.delayMs);
+  } else if (next.outcome === "exhausted") {
+    $("freshness").textContent = PICKUP_LOST + takeNotes();
+  }
 }
 
 /**
@@ -1921,6 +2116,13 @@ function paintView(id, why) {
     // pass markdown straight out of an envelope; neither can pass a string this app computed, which
     // is the property the single-site rule was really protecting.
     served.take(entering.path, entering.markdown);
+    // AND THE ACCEPTED SOURCE IS DISCARDED, BECAUSE THE PROJECTION IS THE NEWER TRUTH. What was
+    // accepted is what THIS BROWSER posted; what arrived is what the ENGINE made of it, and the
+    // engine is entitled to rewrite, move or delete what it ingests. Where the two disagree, the
+    // arriving one is right — so the way station is dropped rather than reconciled, in the same
+    // statement the base is replaced, because holding one past the projection that answers it is
+    // exactly the lie `served`'s own "one base, for the file on screen" rule refuses.
+    accepted.drop(entering.path);
     // RELEASE BEFORE HOLDING, AND BEFORE ANYTHING ELSE READS THIS FILE. Any held row whose
     // characters this arriving file now contains stops being held: the source owns them, so a row
     // still claiming them would be a second copy of something the file says — the one thing a held
@@ -2277,6 +2479,18 @@ function repaintCurrentView() {
   // a view change. It is the only thing in this function that is not about `v`.
   paintHeldRows();
   if (!v) return;
+  // ── WHAT THE PAINTER WALKS: THE FILE AS THE SERVER LAST SAID IT STANDS ─────────────────────────
+  //
+  // `v.markdown` is the last PROJECTION's copy. `accepted` is the last thing the server said it
+  // HOLDS for this file (app/present/accepted.ts) — set only by an ack, dropped by the next
+  // projection, and null on every other pass, so this expression is `v.markdown` in every situation
+  // that existed before the ack did.
+  //
+  // IT IS THE SOURCE ONLY, NEVER THE PROJECTION. `graphData` is untouched, `v.markdown` is not
+  // assigned, and nothing here reaches the queue: what changes is which string the rows close over,
+  // which is precisely what decides whether a second edit inside one cycle is computed on top of the
+  // first. See `accept` above for why the ack is the server's word rather than this app's guess.
+  const source = accepted.sourceFor(v.path) ?? v.markdown;
   // Clamp whatever `focus.lineIndex` currently IS — but only if it is a real number. `null` means
   // "no real line should read as focused right now" (set deliberately by `o`/`O`, or by never
   // having painted a view with vim wired at all) and is left alone rather than guessed back to 0.
@@ -2289,13 +2503,13 @@ function repaintCurrentView() {
   // it into whatever characters the line now has.
   if (focus.lineIndex !== null) {
     focus.focus(
-      clampLine(focus.lineIndex, Math.max(0, v.markdown.split("\n").length - 1)),
-      v.markdown,
+      clampLine(focus.lineIndex, Math.max(0, source.split("\n").length - 1)),
+      source,
       focus.column,
       v.id,
     );
   }
-  paint(body, v.markdown, presentation, {
+  paint(body, source, presentation, {
     markdown: md,
     view: v.id,
     focus,
@@ -2542,7 +2756,19 @@ async function writeFile(view, markdown, source, note = "", token = null) {
   // SYNCHRONOUS, AND app/present/base.ts's OWN HEADER SAYS WHY IT HAD TO BE: an `await` here would
   // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
   // implementation detail.
-  const body = { path: view.path, markdown, base: baseOf(source) };
+  // ── THE SIXTH THING: THE WRITE ASKS NOT TO WAIT FOR THE CYCLE ──
+  //
+  // `ack: true` tells `worker/src/app.js` to answer on the vault write and run the ~10 s engine
+  // cycle behind the response — ~10 s down to ~250 ms on every checkbox and every line commit. The
+  // projection is then collected separately, by `startPickup` above.
+  //
+  // IT IS SAFE TO SEND AT ANY SERVER, WHICH IS THE WHOLE OF THE SHIPPING CONDITION. A Worker that
+  // has never heard of the field ignores it and returns the synchronous answer with its projection
+  // in it, and `arrive` takes that path exactly as it always has — the ack branch is reached only by
+  // an answer that says `accepted: true`, which only a Worker that read this field can say. A Worker
+  // that DID read it but was handed no `ctx` also answers synchronously. There is no combination in
+  // which this field makes a write fail, and none in which it makes one silently do less.
+  const body = { path: view.path, markdown, base: baseOf(source), ack: true };
   // ── THE FIFTH THING: THE WRITE SAYS WHICH WRITE IT IS ──
   //
   // `token` IS CARRIED ONLY WHEN THERE IS ONE — absent, never empty and never null — which is
@@ -2597,13 +2823,17 @@ async function toggleTask(view, toggle) {
   const token = mintWriteToken();
   try {
     const data = await writeFile(view, next, toggle.source, "", token);
+    // THE MARKDOWN THAT WENT ON THE WIRE, HANDED TO `arrive` SO AN ACK MEANS SOMETHING. Without it
+    // an accepted write is indistinguishable from an answer that lost its projection: the server's
+    // claim is "this file now says what you sent", and the only copy of "what you sent" is here.
+    // See `accept` for what is done with it and for the two situations in which nothing is.
     // OFFERED, NOT INSTALLED. If he opened a line while this tick was in the air, its answer waits
     // — see `arrive` — and the sentence below is what says so. THE ROW IS LEFT MARKED `syncing`
     // in that case, deliberately and without a statement here to do it: the class is dropped by the
     // repaint on the ordinary path and by the `catch` on a failure, so "still marked" is exactly
     // "this row's answer is not on screen yet", which is the truth. Clearing it here would have
     // been this page inventing a third meaning for a class that already has two.
-    sayArrival(arrive(view.path, data));
+    sayArrival(arrive(view.path, data, { markdown: next, token }));
   } catch (e) {
     box.checked = !box.checked;
     row.classList.toggle("done", box.checked);
@@ -2677,7 +2907,9 @@ async function commitLine(view, commit) {
     // The commonest shape this catches is his own two-captures-in-a-row gesture: Enter settles this
     // line and opens the next one, so by the time this answer lands there is already a row open,
     // and installing it here is exactly what used to destroy that row's characters.
-    sayArrival(arrive(view.path, data));
+    // THE SAME ONE STATEMENT THE CHECKBOX PATH MAKES, carrying the same two facts — see its own
+    // comment. `commit.markdown` is non-null here: a `null` returned above without posting.
+    sayArrival(arrive(view.path, data, { markdown: commit.markdown, token }));
   } catch (e) {
     // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ──
     //
@@ -3036,6 +3268,14 @@ function logout() {
   // browser must not be able to make it appear by pressing a key. It is DROPPED rather than
   // installed on the way out — installing it would paint one operator's vault onto a sign-in screen.
   queued.clear();
+  // AND SO DO THE READS OWED TO WRITES THIS SESSION MADE, AND WHAT THE SERVER SAID IT HELD FOR THEM.
+  // A pickup is a scheduled `GET /app/graph` carrying this session's bearer, and the accepted source
+  // is a copy of one of the operator's files — both are exactly the two things the four releases
+  // above refuse to let survive a change of whose browser this is. `clear()` cannot stop a timer
+  // that is already counting; it does not need to, because `attempt` answers `cancelled` for a path
+  // with no record and `collect` returns before it reads anything.
+  pickups.clear();
+  accepted.clear();
   // A message earned by the LAST person to use this browser is not a greeting for the next one,
   // and neither is an open <input>: the same leak the comment above already refuses.
   mode.enterNormal();
