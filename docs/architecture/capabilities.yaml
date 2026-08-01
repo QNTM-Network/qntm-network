@@ -2997,3 +2997,48 @@ capabilities:
     is the stale-base detector''s own regression guard, in both directions: it fires when a held
     projection has moved the base, and it stays silent on a clean single write.'
   status: 'working'
+- id: escape-discards-and-cannot-write
+  tier: 'functional'
+  intent: >-
+    ESCAPE LEAVES THE LINE EXACTLY AS THE SOURCE HAS IT. The operator pressed Escape on a saved,
+    stamped line in a real browser and the line was erased — the node behind it went from
+    `personal/all`, because blanking a line in a view is a deletion gesture and a node with no
+    printing left is a node the cycle drops. Escape is the reflex every vim user has.
+    IT IS A SEPARATE FUNCTION, AND THAT IS THE WHOLE OF THE GUARANTEE. `app/present/paint.ts`'s
+    `rawInput` settled Escape as `settle(false)` — the same function that reads `input.value`,
+    builds a `SourceEdit` and calls `deps.onLineCommit`, one boolean apart. "Escape posts nothing"
+    was then a property of one branch inside a function that CAN post, and the thing that fires
+    next is `blur`, wired to the COMMITTING settlement, on the same element, from the repaint the
+    discard itself causes. It is now `discard()` — nothing reachable from it reads the element's
+    value, constructs a `SourceEdit`, or reaches `deps.onLineCommit` — and `settle` lost its
+    `commit` parameter in the same change, so no argument turns a write path into a discard path.
+    THE LATCH NAMES THE GESTURE INSTEAD OF COUNTING IT. `settled` was a boolean that said "something
+    already happened here" and could not say what. `Settlement` is `open`/`committed`/`discarded`,
+    because those are different promises and only one is safe to make twice — a row this element
+    DISCARDED may never afterwards become a write, whatever fires next and in whatever order.
+    IT NO LONGER ASKS WHETHER THE LINE STILL HAS THE CURSOR. The old branch did, and that was the
+    one way Escape left the operator worse off than not pressing it — the element latched shut, the
+    mode left in INSERT, an `<input>` on screen holding his characters with every later settlement,
+    Enter included, refused in silence.
+    THE CHARACTERS ARE DROPPED, NOT HELD, AND THAT IS A DECISION. `app/present/held.ts` exists for
+    characters with NOWHERE TO GO — `vanished`, `refused`, `unplaced`, all three events the operator
+    did not ask for. Escape is his own explicit "throw this away" and is what Escape means in the
+    editor this app is being asked to be. Holding on every Escape would put a row on the recovery
+    strip for every abandoned edit, which is a false positive in the surface built to end silent
+    losses. `HeldReason` gains no fourth cause.
+  rooting: >-
+    IT ADDS NO MODULE AND NO EDGE. `discard` is a function inside `app/present/paint.ts`, reachable
+    from one keydown branch and from nothing else; `Settlement` is a type in the same file. The
+    painter's existing imports are unchanged, so `docs/architecture/flows.yaml` gains no row — see
+    the stated absence in that file rather than an edge nothing could observe.
+    ENFORCEMENT IS `tests/app-escape-discards.test.mjs` — 6 tests in 3 documented sections, driving
+    app/index.html's own lifted script with three browser facts the older suites do not model
+    (removing the focused element fires `blur`, focusing an element blurs the one that had focus,
+    and a keydown in an `<input>` bubbles to the document handler). Assertions are at the VALUE
+    level, not by count — `assert.deepEqual(posts, [])` says what was on the wire and
+    `served.read(path, source).outcome` says the file the app holds has not moved. Section 3 is the
+    mutation arm - a copy of `dist/present.js` with `discard();` rewritten to `settle();`, the
+    pre-fix routing restored exactly, and the page's own import pointed at it. With that in place
+    the page posts one file and that file has the stamped line emptied, which is the operator's own
+    report made executable.
+  status: 'working'

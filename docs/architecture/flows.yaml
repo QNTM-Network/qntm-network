@@ -1022,3 +1022,23 @@ forbidden_flows:
   # `tests/declaration-drop.test.mjs` — 27 per-path mutation proofs, the mutation proof that the
   # guard goes red, 5 arms driving `scripts/checkdeclarations.mjs` as the subprocess build.yml
   # invokes, and a completeness scanner with two positive controls.
+  # ── ESCAPE DISCARDS (2026-08-01) — NO EDGE, AND THAT IS THE DECLARATION ────────────────────
+  #
+  # `escape-discards-and-cannot-write` adds NO row to this file, stated here rather than left for
+  # a reader to notice.
+  #
+  # The whole change is inside one module. `discard` is a function in `app/present/paint.ts` and
+  # `Settlement` is a type in the same file; the painter's imports are byte for byte what they
+  # were, and no module gained or lost a caller. There is no edge to declare, so declaring one
+  # would be manufacturing the drift this file's own header refuses.
+  #
+  # AND THE PROPERTY THIS ROW TURNS ON IS NOT AN EDGE BETWEEN MODULES. It is that one function
+  # inside the painter cannot reach another function inside the painter — `discard` reaching
+  # neither `applyEdit` (app/present/source) nor `deps.onLineCommit`. flow-trace measures module
+  # edges, and `paint` imports `source` legitimately for `settle`, so a forbidden flow here would
+  # be false the moment it was written.
+  #
+  # WHAT ENFORCES IT INSTEAD, named so the absence is not read as an absence of enforcement:
+  # `tests/app-escape-discards.test.mjs` — value-level assertions that nothing reached the wire,
+  # that the base did not move, and a mutation arm that rewrites `discard();` to `settle();` in a
+  # copy of dist/present.js and asserts the emptied line IS posted.
