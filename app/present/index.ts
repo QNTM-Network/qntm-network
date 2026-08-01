@@ -141,6 +141,9 @@ export type { HeldEdit, HeldReason, HeldRow } from "./held.js";
 export { ProjectionQueue } from "./queue.js";
 export type { OfferOutcome, PendingProjection } from "./queue.js";
 
+export { mintWriteToken, readWriteEcho, WriteRegister, WRITE_ECHO_KEY } from "./correlation.js";
+export type { EchoReading, WriteEcho } from "./correlation.js";
+
 export { seedFor, openLine } from "./newline.js";
 export type { GlobalRegistration, NewLine } from "./newline.js";
 
