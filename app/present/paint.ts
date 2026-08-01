@@ -277,6 +277,24 @@ function rawText(source: string): HTMLElement {
  */
 const VIM_BLOCK_CLASS = "vim-block";
 
+/**
+ * WHAT BECAME OF ONE OPEN LINE — the latch every `<input>` the painter builds carries.
+ *
+ * `open` — nothing has happened to it yet, and the next settlement decides.
+ * `committed` — its characters were computed into a `SourceEdit` and handed to the caller. Whether
+ *   the caller POSTED is the caller's business; whether this element may be read again is this
+ *   latch's, and the answer is no.
+ * `discarded` — the operator pressed Escape. This element is finished, it produced no edit, and it
+ *   may never produce one. Every later settlement on it — most of all the `blur` fired by the very
+ *   repaint the discard causes, which is wired to the COMMITTING settlement — is refused.
+ *
+ * IT REPLACES A BOOLEAN, AND THE THIRD STATE IS THE POINT. `settled` said "something already
+ * happened here" and could not say WHAT, so "Escape posts nothing" rested on the order two
+ * listeners happened to run in. Naming the gesture makes the refusal a fact about what the operator
+ * asked for.
+ */
+type Settlement = "open" | "committed" | "discarded";
+
 /** The one character a block cursor shows when the line has none at that column. */
 const EMPTY_CELL = " ";
 
@@ -392,37 +410,75 @@ function rawInput(
   input.value = lineSource;
   const mode = deps.mode;
 
-  // ONE SETTLEMENT PER INPUT. Blur can arrive twice (a keypress that commits, then the element
-  // losing focus as the repaint removes it), and a second settlement would compute a second edit
-  // against a source that has already moved — the first shape a double POST takes.
-  let settled = false;
-  const settle = (commit: boolean, openBelow = false): void => {
-    if (settled) {
+  // LEAVING THE LINE, AND THE TWO THINGS IT CAN MEAN. `deps.mode` absent: this is the app as it
+  // was before vim — focus off means off, exactly as `focus.blur()` always did. `deps.mode`
+  // present: vim always has a cursor on SOME line, so leaving edit returns to NORMAL and the
+  // selection stays on this line — `focus.lineIndex` is left untouched. See motions.ts,
+  // `ModeSurface.enterNormal`.
+  const leaveInsert = (): void => {
+    if (mode !== undefined) {
+      mode.enterNormal();
+    } else {
+      focus.blur();
+    }
+  };
+
+  // ONE SETTLEMENT PER INPUT, AND ITS KIND IS RECORDED RATHER THAN ITS FACT.
+  //
+  // Blur can arrive twice (a keypress that settles, then the element losing focus as the repaint
+  // removes it), and a second settlement would compute a second edit against a source that has
+  // already moved — the first shape a double POST takes. That much a boolean already said.
+  //
+  // WHY IT IS NOW THREE STATES AND NOT TWO. `discarded` and `committed` are different promises, and
+  // only one of them is safe to make twice. A row this element DISCARDED must never afterwards
+  // become a write, whatever fires next and in whatever order — and the thing that fires next is
+  // `blur`, which is wired to the COMMITTING settlement, on this same element, from the repaint the
+  // discard itself causes. A boolean said "something already happened here"; this says WHAT, so the
+  // refusal is a fact about the operator's own gesture rather than about which listener ran first.
+  // The draft row paid for the two-state version of this lesson one day earlier — see
+  // `DraftSurface.generation` below, and `draftInput`'s own `stale()`.
+  let settlement: Settlement = "open";
+
+  /**
+   * ESCAPE — THE CURSOR LEAVES AND THE CHARACTERS IT WAS HOLDING ARE DROPPED.
+   *
+   * ── IT IS A SEPARATE FUNCTION, AND THAT IS THE WHOLE OF THE GUARANTEE ──
+   *
+   * This used to be `settle(false)`: the same function, a boolean apart, sharing the statements that
+   * read `input.value`, call `applyEdit` and call `onLineCommit`. "Escape posts nothing" was then a
+   * property of one `if` inside a function that CAN post — true, unenforced, and one reordering away
+   * from being false. It is now a property of the FUNCTION GRAPH: nothing reachable from here reads
+   * the element's value, constructs a `SourceEdit`, or reaches `deps.onLineCommit`. `settle` below
+   * lost its `commit` parameter in the same change, so there is no longer an argument that makes a
+   * write path into a discard path.
+   *
+   * ── IT DOES NOT ASK WHETHER THIS LINE STILL HAS THE CURSOR ──
+   *
+   * The old branch did (`if (wasFocused)`), and that was the one way Escape could leave the operator
+   * worse off than not pressing it: the element was latched shut FIRST and the mode left in INSERT,
+   * so an `<input>` stayed on screen holding his characters with every later settlement — Enter
+   * included — refused in silence. Whether some other line has since taken the cursor is not a fact
+   * about what THIS gesture means. Escape means "leave INSERT and show me the source", and it now
+   * means that unconditionally.
+   */
+  const discard = (): void => {
+    if (settlement !== "open") {
       return;
     }
-    settled = true;
+    settlement = "discarded";
+    leaveInsert();
+    // THE SOURCE THIS PAINT WAS HANDED, VERBATIM — not `input.value`, which is the one string in
+    // scope that the operator's typing can have changed. The line returns to whatever the cascade
+    // resolves it to, out of the file as it stood.
+    repaint(fileSource);
+  };
+
+  const settle = (openBelow = false): void => {
+    if (settlement !== "open") {
+      return;
+    }
+    settlement = "committed";
     const wasFocused = focus.isFocused(lineIndex);
-    // LEAVING THE LINE, AND THE TWO THINGS IT CAN MEAN. `deps.mode` absent: this is the app as it
-    // was before vim — focus off means off, exactly as `focus.blur()` always did. `deps.mode`
-    // present: vim always has a cursor on SOME line, so leaving edit returns to NORMAL and the
-    // selection stays on this line — `focus.lineIndex` is left untouched. See motions.ts,
-    // `ModeSurface.enterNormal`.
-    const leaveInsert = (): void => {
-      if (mode !== undefined) {
-        mode.enterNormal();
-      } else {
-        focus.blur();
-      }
-    };
-    if (!commit) {
-      // Escape: the cursor leaves and the characters it was holding are dropped. Nothing is
-      // computed, nothing is posted, and the line returns to whatever the cascade resolves.
-      if (wasFocused) {
-        leaveInsert();
-        repaint(fileSource);
-      }
-      return;
-    }
     const text = input.value;
     // THE EDIT IS COMPUTED FROM THE SOURCE STRING THIS PAINT WAS GIVEN, plus the characters the
     // person typed. Nothing about the other lines is read back off the page; they come out of
@@ -458,7 +514,7 @@ function rawInput(
     }
   };
 
-  input.addEventListener("blur", () => settle(true));
+  input.addEventListener("blur", () => settle());
   input.addEventListener("keydown", (event) => {
     const key = (event as KeyboardEvent | undefined)?.key;
     if (key === "Enter") {
@@ -474,10 +530,11 @@ function rawInput(
       // minting a second node from the other fragment. Which half keeps the node is a graph
       // decision, and a keystroke with no undo is not where a graph decision belongs. So Enter
       // means one thing everywhere in a line, which is also the simpler thing to learn.
-      settle(true, true);
+      settle(true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
-      settle(false);
+      // THE ONE CALL IN THIS FILE THAT CANNOT REACH A WRITE. See `discard` above.
+      discard();
     }
   });
   return input;

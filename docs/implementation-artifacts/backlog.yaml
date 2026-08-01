@@ -2835,3 +2835,103 @@ backlog:
     which 2 are mutation proofs and 3 drive the falsifier with lines changed above the open line,
     below it, and both.
   state: passing
+- id: escape-must-not-destroy-the-line
+  title: >-
+    [haven] [1] [HALF A DAY] ESCAPE DISCARDS AND CANNOT WRITE. Observed in a real browser
+    2026-08-01 - cursor on a line, press Escape, the line is erased; reproduced twice, the second
+    time destroying a saved line stamped `[[qntm:2614]]`, which then went from `personal/all`.
+    CLOSED 2026-08-01.
+  driving_capability: escape-discards-and-cannot-write
+  kind: capability
+  state: passing
+  record: >-
+    THE SHAPE OF THE DEFECT, WHICH IS THE SAME SHAPE THE DRAFT ROW PAID FOR ONE DAY EARLIER.
+    `paint.ts`'s `rawInput` routed Escape into `settle(false)` - the function that reads
+    `input.value`, calls `applyEdit` and calls `deps.onLineCommit` - and stood one boolean between
+    the operator's discard and a write. The element's own `blur` is wired to that same function
+    with `commit` true, and the repaint the discard causes is what fires it. `DraftSurface.generation`
+    exists because that arrangement failed for the row being made.
+    THE FIX IS STRUCTURAL RATHER THAN DEFENSIVE. `discard()` is a separate function that reaches no
+    edit constructor, `settle` lost its `commit` parameter so no argument can turn one into the
+    other, and the latch became `open`/`committed`/`discarded` so a discarded element is refused by
+    NAME rather than by which listener ran first. The discard also stopped asking `wasFocused` -
+    that check latched the element shut and then left it on screen in INSERT holding his characters
+    with every later settlement refused in silence.
+    WHAT WAS NOT PROVEN, STATED PLAINLY. No browser was available. Eleven gesture sequences were
+    driven through the real lifted page with the three browser facts modelled and NONE of them
+    produced a POST from Escape on the unmodified code, so the exact trigger in the operator's
+    browser is not established. What is established is that the pre-fix routing writes exactly the
+    file he lost (the mutation arm asserts the bytes) and that the write is now unreachable by
+    construction rather than by ordering.
+    COUNTS UNCHANGED. `graphData` 4, `writeFile(` 3, `applyEdit(` 5, `.markdown` never assigned.
+- id: enter-destroys-the-row-it-opens
+  title: >-
+    [haven] [OBSERVED 2026-08-01] ENTER ON AN OPEN LINE DESTROYS THE ROW IT OPENS, AND PAINTS THE
+    VIEW THREE TIMES. Reproduced deterministically in the harness once "focusing an element blurs
+    the one that had focus" is modelled. Found while proving the Escape row; NOT fixed there.
+  kind: null
+  state: diagnose-ready
+  record: >-
+    THE MECHANISM, MEASURED. `settle`'s repaint builds a fresh `<input>` for the line just committed
+    (INSERT plus focused, so the cascade says raw) and focuses it, then `paintDraft` focuses the
+    draft row. The focus transfer blurs the committed line's input; its `blur` runs the COMMITTING
+    settlement re-entrantly, inside `paint()`; that settlement's own repaint empties `#viewBody` and
+    destroys the draft the same paint has just created; and the outer `paint()` frame then goes on
+    appending rows from its own, now stale, source.
+    OBSERVED IMMEDIATELY AFTER ENTER - mode NORMAL, no draft, no `<input>`, and three copies of the
+    view in the column. This is the likeliest engine behind "keys that do nothing" and it is also a
+    live source-clobber route, because a row appended by the outer frame carries a `fileSource` that
+    is no longer what the screen shows, and committing that row posts the stale file.
+- id: a-save-round-trip-clobbers-mid-typing
+  title: >-
+    [haven] [OBSERVED 2026-08-01] A SAVE ROUND TRIP CLOBBERS WHAT HE IS TYPING. Reported from the
+    same browser run that found the Escape defect. Filed so it is not lost; not diagnosed here.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01, alongside the Escape defect. It is
+    not this row's author's work and nothing about it was investigated. `a-projection-arriving-mid-edit-is-held`
+    is the nearest shipped capability and may or may not be the same event; deciding that is the
+    diagnosis this row is waiting for.
+- id: the-held-strip-shows-rows-nothing-was-lost-for
+  title: >-
+    [haven] [OBSERVED 2026-08-01] FALSE POSITIVES IN THE HELD STRIP. Rows appear on the recovery
+    strip for edits that were not lost. Reported from the same browser run; filed, not diagnosed.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. A recovery surface that cries wolf
+    is a recovery surface he stops reading, which is the failure mode `a-vanished-or-refused-edit-is-held`
+    is least able to afford. `paintView`'s `absent` branch and `commitLine`'s 409 branch are the two
+    places a row is born; which of them is firing without cause is the diagnosis.
+- id: the-new-line-seed-resolves-from-the-neighbour
+  title: >-
+    [haven] [OBSERVED 2026-08-01] THE SEED FOR A NEW LINE RESOLVES FROM THE NEIGHBOURING LINE RATHER
+    THAN FROM THE VIEW. Reported from the same browser run; filed, not diagnosed.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. `app/present/newline.ts`'s
+    `seedFor` and the GLOBAL registration it reads are where this lands. Related to, and possibly a
+    regression of, `the-new-line-seed-reads-the-declaration`.
+- id: the-page-clock-goes-stale
+  title: >-
+    [haven] [OBSERVED 2026-08-01] THE PAGE CLOCK GOES STALE - the freshness line keeps saying "as
+    of" a time that has passed. Reported from the same browser run; filed, not diagnosed.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. `sayAsOf` writes the line from the
+    envelope's own `generated_at` and nothing re-renders it as time passes, so a screen left open
+    reports an age rather than a moment. Whether that is the whole of it is the diagnosis.
+- id: keys-that-do-nothing
+  title: >-
+    [haven] [OBSERVED 2026-08-01] KEYS THAT DO NOTHING. Reported from the same browser run; filed,
+    not diagnosed. See `enter-destroys-the-row-it-opens` for one measured mechanism that would
+    present exactly this way.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-01. The document handler refuses every
+    key while `typingIn(e.target)`, and a mode left in INSERT with no `<input>` anywhere makes NORMAL
+    unreachable - two candidate mechanisms, neither confirmed against his session.
