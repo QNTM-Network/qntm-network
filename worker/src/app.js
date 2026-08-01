@@ -122,15 +122,26 @@ async function pendingCount(env, userId) {
 //
 // The browser mints one opaque token per write (app/present/correlation.ts) and posts it beside
 // `{path, markdown, base}`. The graph server records it and names it back in the projection it
-// serves, and the browser then knows ITS write landed rather than that some write did.
+// serves, as `writes: {path: [token, ...]}` at the TOP of its own envelope, and the browser then
+// knows ITS write landed rather than that some write did.
 //
 // THIS WORKER REBUILDS THE ENVELOPE FIELD BY FIELD IN TWO PLACES, WHICH IS WHY THIS HELPER EXISTS.
 // `graphGet` and `editFile` each construct `snapshot` from a fixed list of keys, so anything the
 // graph server adds is DROPPED by default — a contract landing on the other side of the wire would
-// have been silently swallowed here and read as "the server echoes nothing". Carried verbatim: no
-// shape is asserted, nothing is substituted for an absent one, and the browser's own strict reader
-// is the single place the shape is known.
-const WRITE_ECHO_KEY = "write_tokens";
+// have been silently swallowed here and read as "the server echoes nothing". MEASURED: without the
+// two spreads below, a graph server emitting `writes` produces a browser envelope with no `writes`
+// in it at all, and every held row goes on being held for want of a field that was on the wire.
+//
+// CARRIED VERBATIM AND ONLY WHEN THERE IS ONE. No shape is asserted here — the browser's own strict
+// reader is the single place the shape is known — and NOTHING IS SUBSTITUTED FOR AN ABSENT ONE. An
+// unconditional `writes: e.writes || {}` would be the wrong default and not a tidier one: it would
+// make every projection from today's DEPLOYED graph server, which knows nothing of any of this,
+// arrive at the browser carrying an empty echo. The browser reads "no key at all" as silence and
+// behaves exactly as it did before correlation existed; it reads "an empty echo" as a server that
+// is answering, which starts a grace running and puts a sentence on the freshness line. Absent and
+// empty are different statements, and only one of them is true of a server that has never heard of
+// a token.
+const WRITE_ECHO_KEY = "writes";
 
 /** The first of `sources` that names the echo at all, or `undefined` when none does. */
 function echoOf(...sources) {

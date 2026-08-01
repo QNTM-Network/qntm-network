@@ -802,13 +802,19 @@ describe("4. NOTHING HELD REACHES A WRITE — the pinned sites, re-counted on th
     assert.deepEqual(assignments(HELD_TS), []);
   });
 
-  test("THE HELD SURFACE IS REACHED IN EXACTLY FIVE PLACES, and none of them is a write path", () => {
+  test("THE HELD SURFACE IS REACHED IN EXACTLY SIX PLACES, and none of them is a write path", () => {
     // `held.rows` is what a caller would have to reach for to post one. It is read by the painter of
     // the strip and by nothing else; `held.hold` is reached only through `holdEdit`, the one gate.
+    //
+    // SIX RATHER THAN FIVE SINCE WRITE CORRELATION, AND THE SIXTH IS A RELEASE. `held.landed` is the
+    // server's own acknowledgement clearing a row (app/present/correlation.ts) — it takes a list of
+    // TOKENS and returns rows, so like `held.settle` beside it, it is a way OUT of the surface and
+    // not a way from the surface into a write. The name is asserted rather than the count, so a
+    // seventh reach has to be justified here rather than absorbed by a number.
     const reads = APP_CODE.match(/\bheld\.[A-Za-z]\w*/g) ?? [];
     assert.deepEqual(
       [...new Set(reads)].sort(),
-      ["held.clear", "held.discard", "held.hold", "held.rows", "held.settle"],
+      ["held.clear", "held.discard", "held.hold", "held.landed", "held.rows", "held.settle"],
       "a new way to reach the held surface appeared — check it is not a write path",
     );
     assert.equal((APP_CODE.match(/\bheld\.hold\(/g) ?? []).length, 1, "holding must have exactly one gate");

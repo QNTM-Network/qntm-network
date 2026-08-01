@@ -20,18 +20,28 @@
  * lost when none was.
  *
  * TEXT IS NOT IDENTITY. A TOKEN IS. The browser mints one opaque token per write, sends it beside
- * `{path, markdown, base}`, and the server echoes it in the envelope it later serves. A projection
- * carrying the token is the server saying, in one unambiguous string, "this projection includes the
- * write you made". That is POSITIVE EVIDENCE, which is the only kind of evidence this app is
- * allowed to release a held row on.
+ * `{path, markdown, base}`, and the server records it and names it back in the envelope it later
+ * serves. That is POSITIVE EVIDENCE, which is the only kind of evidence this app is allowed to
+ * release a held row on.
  *
- * ── WHAT THIS MODULE DELIBERATELY DOES NOT CLAIM ──
+ * ── THE NARROW CLAIM, WHICH IS THE ONLY ONE ANYTHING HERE IS BUILT ON ──
  *
- * A matched echo says the SERVER RECORDED THE WRITE. It does not say the line the operator typed
- * survived the cycle, and nothing here should ever be read as saying so — the cycle is entitled to
- * rewrite, move or delete what it ingests, and that is a decision about content the vault has
- * already taken, not a loss of the operator's characters. The strip's own claim is "characters no
- * file owns"; once the write landed, a file owned them.
+ * The echo says EXACTLY this and no more:
+ *
+ *     "this server accepted a write carrying this token FOR THIS PATH"
+ *
+ * It does NOT say the projection in hand is derived from that write. The server's ledger holds up
+ * to 8 tokens per path for 24 hours, so a token recorded before a LATER write to the same path is
+ * still echoed; with the stale-base precondition in place a later write must have been computed
+ * against the earlier one's result, but without a `base` it need not have been. The narrow claim is
+ * the one the code is written to: `WriteRegister.arrive` matches a token ONLY under the path its
+ * own write went to, and where the difference could matter the answer is to keep the row.
+ *
+ * IT ALSO DOES NOT SAY THE LINE THE OPERATOR TYPED SURVIVED THE CYCLE, and nothing here should ever
+ * be read as saying so — the cycle is entitled to rewrite, move or delete what it ingests, and that
+ * is a decision about content the vault has already taken, not a loss of the operator's characters.
+ * The strip's own claim is "characters no file owns"; once the write was accepted, a file owned
+ * them.
  *
  * ── WHY IT SITS BESIDE `base.ts` RATHER THAN INSIDE IT ──
  *
@@ -57,27 +67,50 @@
  */
 
 /**
- * The envelope key the echo is read from, at either of two DECLARED locations — see
- * `readWriteEcho`. Exported so a test can name it rather than repeat the string.
+ * The envelope key the echo is read from. Exported so a test can name it rather than repeat it.
+ *
+ * THE SHAPE IS THE SERVER HALF'S, SETTLED 2026-08-01 AND NO LONGER A PLACEHOLDER:
+ *
+ *     "writes": { "this_week.md": ["<token>", "<token>"] }
+ *
+ * `{path: [token, …]}`, oldest first, always present once the server half is deployed, `{}` when
+ * there are none and `{}` again when its own ledger cannot be read. The token is echoed VERBATIM —
+ * not trimmed, not case-folded, not re-encoded — so the comparison below is exact equality and
+ * needs to be nothing cleverer.
  */
-export const WRITE_ECHO_KEY = "write_tokens";
+export const WRITE_ECHO_KEY = "writes";
 
 /**
  * What reading an envelope's echo produced.
  *
- * `silent` — the envelope carries no such key at all. THE SHIPPING CONDITION: a server that has
- *   never heard of a write token produces this on every projection, and every caller below then
+ * `silent` — the envelope carries no such key at all. THE SHIPPING CONDITION: the server half is
+ *   merged and NOT DEPLOYED, so this is what every projection reads as today, and every caller then
  *   behaves exactly as this app behaved before correlation existed.
- * `echo` — the key was present and its shape is one this reader declares. `tokens` may be empty:
- *   a server that knows the field and has nothing to say for this projection is not a problem.
- * `unrecognised` — the key was present and its shape is not one this reader declares. NO TOKEN IS
- *   TAKEN FROM IT, so nothing is released on the strength of a shape nobody agreed. Reported, so a
+ * `echo` — the key was present and its shape is the declared one. `writes` may be empty: a server
+ *   with nothing to say for this projection is not a problem, and neither is one whose ledger it
+ *   could not read.
+ * `unrecognised` — the key was present and its shape is not the declared one. NO TOKEN IS TAKEN
+ *   FROM IT, so nothing is released on the strength of a shape nobody agreed. Reported, so a
  *   contract drift between the two halves is visible rather than silently inert.
  */
 export type EchoReading =
   | { readonly outcome: "silent" }
-  | { readonly outcome: "echo"; readonly tokens: readonly string[] }
+  | { readonly outcome: "echo"; readonly writes: ReadonlyMap<string, readonly string[]> }
   | { readonly outcome: "unrecognised"; readonly problem: string };
+
+/**
+ * A path as this module compares it — the ONE normalisation, declared rather than assumed.
+ *
+ * The server keys its ledger by the path the write's own answer returned, `/`-STRIPPED. The browser
+ * knows a file by the `path` its projection carries (`work/outcomes.md`), which already has no
+ * leading slash. Stripping one from both sides is therefore a no-op in every case measured and the
+ * exact correction in the one case it is not — and it is the ONLY transform applied. No trimming,
+ * no case folding, no separator rewriting: two paths that differ in any other way are two files,
+ * and treating them as one would release a held row against a write of a different file.
+ */
+function samePath(path: string): string {
+  return path.startsWith("/") ? path.slice(1) : path;
+}
 
 /** The token's own name, carried in the string so a later scheme can be told apart from this one. */
 const TOKEN_PREFIX = "w1-";
@@ -132,77 +165,84 @@ function isToken(value: unknown): value is string {
   return typeof value === "string" && value !== "";
 }
 
+/** Is `value` an object this reader may walk the keys of? Not an array, not `null`, not a scalar. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /**
- * THE ONE PLACE THE ECHO'S SHAPE IS KNOWN. Read an envelope for the write tokens it acknowledges.
+ * THE ONE PLACE THE ECHO'S SHAPE IS KNOWN. Read an envelope for the writes it acknowledges.
  *
  * ── THE GRAMMAR, DECLARED RATHER THAN INFERRED ──
  *
- * TWO LOCATIONS, BOTH DECLARED: `envelope.write_tokens` and `envelope.snapshot.write_tokens`. The
- * server half of this contract is being written in another repository AT THE SAME TIME as this
- * half, and the envelope already mixes both altitudes (`handle` and `pending_edits` are top level,
- * `generated_at` and `views` are inside `snapshot`). Declaring both is not guessing: each is read
- * with the same strictness, and a shape at either that this reader does not know is reported. It
- * collapses to whichever one the two halves settle on, and that edit is this function alone.
+ * ONE SHAPE AND NO SECOND: `writes` is an OBJECT whose every value is an ARRAY of non-empty
+ * STRINGS, keyed by path. Anything else at that key — an array, `null`, a number, a value that is
+ * not a list of tokens — is a server saying something this browser cannot read, and the only safe
+ * reading of "I cannot read your answer" is that NO WRITE IS PROVEN. Guessing here would release a
+ * held row on a shape nobody agreed, which loses the operator's characters; that is the one
+ * direction this module must never fail in.
  *
- * THREE SHAPES, AND NO FOURTH:
- *   a STRING          — one token. The commonest shape for the answer to one write.
- *   an ARRAY of them  — several, for a projection that carries more than one write.
- *   `null`            — the server knows the field and has nothing for this projection. An empty
- *                       echo, which is a legal statement and not a malformation.
- * ABSENT is not a shape at all: it is `silent`, and silence is the whole of the shipping condition.
+ * ABSENT IS NOT A SHAPE AT ALL: it is `silent`, and silence is the whole of the shipping condition.
+ * The server half is merged and not deployed, so `silent` is what this reads in production today.
  *
- * NOTHING ELSE. A number, an object, an array with a non-string in it — each is a server saying
- * something this browser cannot read, and the only safe reading of "I cannot read your answer" is
- * that NO WRITE IS PROVEN. Guessing here would release a held row on a shape nobody agreed, which
- * loses the operator's characters; that is the one direction this module must never fail in.
+ * TWO LOCATIONS, BOTH DECLARED, AND THE REASON IS STRUCTURAL RATHER THAN HEDGING. The graph server
+ * puts `writes` at the TOP of its own envelope; `worker/src/app.js` rebuilds that envelope into
+ * `{ok, handle, snapshot: {…}}` and carries `writes` INSIDE `snapshot`, beside `generated_at` and
+ * `views`, because that is where the rest of the graph server's envelope lands. So the key really
+ * does appear at two altitudes depending on which side of the Worker you are reading, and this
+ * reader is on the browser side of both. Each is read with identical strictness and the tokens are
+ * merged per path.
  */
 export function readWriteEcho(envelope: unknown): EchoReading {
-  if (typeof envelope !== "object" || envelope === null || Array.isArray(envelope)) {
+  if (!isRecord(envelope)) {
     return { outcome: "silent" };
   }
-  const record = envelope as Record<string, unknown>;
-  const places: unknown[] = [record[WRITE_ECHO_KEY]];
-  const snapshot = record["snapshot"];
-  if (typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot)) {
-    places.push((snapshot as Record<string, unknown>)[WRITE_ECHO_KEY]);
+  const places: unknown[] = [envelope[WRITE_ECHO_KEY]];
+  const snapshot = envelope["snapshot"];
+  if (isRecord(snapshot)) {
+    places.push(snapshot[WRITE_ECHO_KEY]);
   }
 
-  const tokens: string[] = [];
+  const writes = new Map<string, string[]>();
   let present = false;
   for (const place of places) {
     if (place === undefined) {
       continue;
     }
     present = true;
-    if (place === null) {
-      continue;
+    if (!isRecord(place)) {
+      return {
+        outcome: "unrecognised",
+        problem:
+          `'${WRITE_ECHO_KEY}' is ${JSON.stringify(place)}, which is not an object of ` +
+          "path-to-tokens — no write is treated as landed from this projection",
+      };
     }
-    if (isToken(place)) {
-      tokens.push(place);
-      continue;
-    }
-    if (Array.isArray(place)) {
-      for (const one of place) {
+    for (const [path, listed] of Object.entries(place)) {
+      if (!Array.isArray(listed)) {
+        return {
+          outcome: "unrecognised",
+          problem:
+            `'${WRITE_ECHO_KEY}.${path}' is ${JSON.stringify(listed)}, which is not a list of ` +
+            "write tokens — no write is treated as landed from this projection",
+        };
+      }
+      const into = writes.get(samePath(path)) ?? [];
+      for (const one of listed) {
         if (!isToken(one)) {
           return {
             outcome: "unrecognised",
             problem:
-              `'${WRITE_ECHO_KEY}' contains ${JSON.stringify(one)}, which is not a write token — ` +
-              "no write is treated as landed from this projection",
+              `'${WRITE_ECHO_KEY}.${path}' contains ${JSON.stringify(one)}, which is not a write ` +
+              "token — no write is treated as landed from this projection",
           };
         }
-        tokens.push(one);
+        into.push(one);
       }
-      continue;
+      writes.set(samePath(path), into);
     }
-    return {
-      outcome: "unrecognised",
-      problem:
-        `'${WRITE_ECHO_KEY}' is ${JSON.stringify(place)}, which is not a write token, a list of ` +
-        "write tokens or null — no write is treated as landed from this projection",
-    };
   }
-  return present ? { outcome: "echo", tokens } : { outcome: "silent" };
+  return present ? { outcome: "echo", writes } : { outcome: "silent" };
 }
 
 /**
@@ -218,19 +258,25 @@ export interface WriteEcho {
 }
 
 /**
- * HOW MANY PROJECTIONS FOR A WRITE'S OWN FILE MAY ARRIVE WITHOUT ITS TOKEN BEFORE IT IS DROPPED.
+ * HOW MANY ARRIVALS THAT SPEAK ABOUT A WRITE'S OWN FILE MAY GO BY WITHOUT NAMING IT.
  *
- * TWO, and the number is derived rather than picked. A write's own answer is the FIRST projection
- * for that path — that is where an echoing server puts the acknowledgement — and the second is the
- * grace for the case the design allows explicitly: the echo arriving on a `GET /graph` served
- * later rather than on the write's own answer. A third would be a token kept alive by projections
- * that have already had every opportunity to acknowledge it.
+ * THREE, AND "SPEAK ABOUT" IS THE LOAD-BEARING PART. A projection whose echo does not mention the
+ * path at all counts for nothing here — it had no occasion to acknowledge the write, so treating
+ * its silence as an answer would be reading evidence out of an absence. Only an arrival that lists
+ * that path, and does not list this token among it, spends grace.
  *
- * IT COSTS NOTHING TO BE WRONG ABOUT, WHICH IS WHY IT IS ALLOWED TO BE A SMALL NUMBER AT ALL. Giving
- * up releases NOTHING. A token dropped too early can only mean a held row that stays held — the
- * direction this whole capability fails in on purpose.
+ * THREE RATHER THAN ONE BECAUSE THE SERVER'S LEDGER IS CAPPED AND AGED — 8 tokens per path, 64
+ * paths, a 24-hour TTL — so an echo can legitimately vanish, and a write's acknowledgement can
+ * legitimately arrive on a LATER `GET /graph` rather than on the write's own answer. A number this
+ * side of the caps costs nothing to be wrong about in the safe direction and buys the case the
+ * contract explicitly allows.
+ *
+ * AND BEING WRONG COSTS NOTHING IN THE UNSAFE DIRECTION AT ALL, WHICH IS THE WHOLE REASON A SMALL
+ * NUMBER IS ALLOWED. Giving up releases NOTHING. A vanished echo is never proof the write failed;
+ * a token dropped too early can only mean a held row that stays held — the direction this whole
+ * capability fails in on purpose.
  */
-const GRACE = 2;
+const GRACE = 3;
 
 /**
  * The most writes one session may have outstanding. A backstop rather than a rule: writes are
@@ -264,7 +310,7 @@ const CAPACITY = 64;
 export class WriteRegister {
   #open = new Map<string, { readonly path: string; grace: number }>();
 
-  /** A write left for the server carrying `token`, for `path`. */
+  /** A write left for the server carrying `token`, for `path`. The path is normalised on the way in. */
   open(token: string, path: string): void {
     // Re-opening a token that is already outstanding would restart its grace, so the first record
     // wins. Tokens are minted per write and never reused, so this is a guard rather than a case.
@@ -277,36 +323,47 @@ export class WriteRegister {
         this.#open.delete(oldest.value);
       }
     }
-    this.#open.set(token, { path, grace: GRACE });
+    this.#open.set(token, { path: samePath(path), grace: GRACE });
   }
 
   /**
    * A PROJECTION ARRIVED. Say which outstanding writes it acknowledges, and which have run out.
    *
-   * `path` is the file the projection describes, or `null` for an arrival that describes the whole
-   * graph (a re-read). MATCHING IGNORES THE PATH ENTIRELY — a token identifies one write and needs
-   * no help — and only the GIVING UP is path-aware, so a projection for another file can never
-   * exhaust the grace of a write that is still waiting for its own answer. A `null` path therefore
-   * matches everything and expires nothing, which is the honest reading of "this arrival says
-   * nothing in particular about any one write".
+   * `writes` is the echo read off the envelope — `{path: [token, …]}` — and it is asked about BOTH
+   * halves of the question, which is what makes this narrow rather than convenient.
    *
-   * A TOKEN IN `tokens` THAT THIS REGISTER NEVER OPENED IS IGNORED, SILENTLY AND ON PURPOSE. It is
-   * a write some other session made, or one this page made before a reload. "Some write landed" is
-   * not the question; "MY write landed" is.
+   * ── MATCHING IS PER PATH, BECAUSE THE SERVER'S CLAIM IS PER PATH ──
+   *
+   * The echo says exactly one thing: "this server accepted a write carrying this token FOR THIS
+   * PATH". So a token is matched only when it appears under the path the write that minted it went
+   * to. A token found under some other file's key acknowledges some other write, and the whole
+   * point of a token is that the browser learns MY write landed rather than that some write did —
+   * so this is the one comparison that must not be loosened for convenience.
+   *
+   * A TOKEN IN THE ECHO THAT THIS REGISTER NEVER OPENED IS IGNORED, SILENTLY AND ON PURPOSE. It is
+   * a write some other session made, or one this page made before a reload.
+   *
+   * ── GIVING UP NEEDS THE ARRIVAL TO HAVE SPOKEN ABOUT THE FILE ──
+   *
+   * Grace is spent only when the echo LISTS the write's own path and does not list its token. An
+   * arrival that says nothing about that file had no occasion to acknowledge the write, and reading
+   * evidence out of that silence is exactly what the server's own caps and TTL make wrong.
    */
-  arrive(path: string | null, tokens: readonly string[]): WriteEcho {
+  arrive(writes: ReadonlyMap<string, readonly string[]>): WriteEcho {
     const matched: string[] = [];
     const gaveUp: string[] = [];
     for (const [token, record] of this.#open) {
-      if (tokens.includes(token)) {
+      const named = writes.get(record.path);
+      if (named === undefined) {
+        continue;
+      }
+      if (named.includes(token)) {
         matched.push(token);
         continue;
       }
-      if (path !== null && record.path === path) {
-        record.grace -= 1;
-        if (record.grace <= 0) {
-          gaveUp.push(token);
-        }
+      record.grace -= 1;
+      if (record.grace <= 0) {
+        gaveUp.push(token);
       }
     }
     for (const token of matched) {
@@ -335,8 +392,9 @@ export class WriteRegister {
       return this.#open.size;
     }
     let count = 0;
+    const wanted = samePath(path);
     for (const record of this.#open.values()) {
-      if (record.path === path) {
+      if (record.path === wanted) {
         count += 1;
       }
     }

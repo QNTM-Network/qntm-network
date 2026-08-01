@@ -2722,7 +2722,10 @@ var ProjectionQueue = class {
 };
 
 // app/present/correlation.ts
-var WRITE_ECHO_KEY = "write_tokens";
+var WRITE_ECHO_KEY = "writes";
+function samePath(path) {
+  return path.startsWith("/") ? path.slice(1) : path;
+}
 var TOKEN_PREFIX = "w1-";
 var TOKEN_BYTES = 16;
 function mintWriteToken() {
@@ -2740,54 +2743,58 @@ function mintWriteToken() {
 function isToken(value) {
   return typeof value === "string" && value !== "";
 }
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 function readWriteEcho(envelope) {
-  if (typeof envelope !== "object" || envelope === null || Array.isArray(envelope)) {
+  if (!isRecord(envelope)) {
     return { outcome: "silent" };
   }
-  const record = envelope;
-  const places = [record[WRITE_ECHO_KEY]];
-  const snapshot = record["snapshot"];
-  if (typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot)) {
+  const places = [envelope[WRITE_ECHO_KEY]];
+  const snapshot = envelope["snapshot"];
+  if (isRecord(snapshot)) {
     places.push(snapshot[WRITE_ECHO_KEY]);
   }
-  const tokens = [];
+  const writes = /* @__PURE__ */ new Map();
   let present = false;
   for (const place of places) {
     if (place === void 0) {
       continue;
     }
     present = true;
-    if (place === null) {
-      continue;
+    if (!isRecord(place)) {
+      return {
+        outcome: "unrecognised",
+        problem: `'${WRITE_ECHO_KEY}' is ${JSON.stringify(place)}, which is not an object of path-to-tokens \u2014 no write is treated as landed from this projection`
+      };
     }
-    if (isToken(place)) {
-      tokens.push(place);
-      continue;
-    }
-    if (Array.isArray(place)) {
-      for (const one of place) {
+    for (const [path, listed] of Object.entries(place)) {
+      if (!Array.isArray(listed)) {
+        return {
+          outcome: "unrecognised",
+          problem: `'${WRITE_ECHO_KEY}.${path}' is ${JSON.stringify(listed)}, which is not a list of write tokens \u2014 no write is treated as landed from this projection`
+        };
+      }
+      const into = writes.get(samePath(path)) ?? [];
+      for (const one of listed) {
         if (!isToken(one)) {
           return {
             outcome: "unrecognised",
-            problem: `'${WRITE_ECHO_KEY}' contains ${JSON.stringify(one)}, which is not a write token \u2014 no write is treated as landed from this projection`
+            problem: `'${WRITE_ECHO_KEY}.${path}' contains ${JSON.stringify(one)}, which is not a write token \u2014 no write is treated as landed from this projection`
           };
         }
-        tokens.push(one);
+        into.push(one);
       }
-      continue;
+      writes.set(samePath(path), into);
     }
-    return {
-      outcome: "unrecognised",
-      problem: `'${WRITE_ECHO_KEY}' is ${JSON.stringify(place)}, which is not a write token, a list of write tokens or null \u2014 no write is treated as landed from this projection`
-    };
   }
-  return present ? { outcome: "echo", tokens } : { outcome: "silent" };
+  return present ? { outcome: "echo", writes } : { outcome: "silent" };
 }
-var GRACE = 2;
+var GRACE = 3;
 var CAPACITY = 64;
 var WriteRegister = class {
   #open = /* @__PURE__ */ new Map();
-  /** A write left for the server carrying `token`, for `path`. */
+  /** A write left for the server carrying `token`, for `path`. The path is normalised on the way in. */
   open(token, path) {
     if (this.#open.has(token)) {
       return;
@@ -2798,35 +2805,46 @@ var WriteRegister = class {
         this.#open.delete(oldest.value);
       }
     }
-    this.#open.set(token, { path, grace: GRACE });
+    this.#open.set(token, { path: samePath(path), grace: GRACE });
   }
   /**
    * A PROJECTION ARRIVED. Say which outstanding writes it acknowledges, and which have run out.
    *
-   * `path` is the file the projection describes, or `null` for an arrival that describes the whole
-   * graph (a re-read). MATCHING IGNORES THE PATH ENTIRELY — a token identifies one write and needs
-   * no help — and only the GIVING UP is path-aware, so a projection for another file can never
-   * exhaust the grace of a write that is still waiting for its own answer. A `null` path therefore
-   * matches everything and expires nothing, which is the honest reading of "this arrival says
-   * nothing in particular about any one write".
+   * `writes` is the echo read off the envelope — `{path: [token, …]}` — and it is asked about BOTH
+   * halves of the question, which is what makes this narrow rather than convenient.
    *
-   * A TOKEN IN `tokens` THAT THIS REGISTER NEVER OPENED IS IGNORED, SILENTLY AND ON PURPOSE. It is
-   * a write some other session made, or one this page made before a reload. "Some write landed" is
-   * not the question; "MY write landed" is.
+   * ── MATCHING IS PER PATH, BECAUSE THE SERVER'S CLAIM IS PER PATH ──
+   *
+   * The echo says exactly one thing: "this server accepted a write carrying this token FOR THIS
+   * PATH". So a token is matched only when it appears under the path the write that minted it went
+   * to. A token found under some other file's key acknowledges some other write, and the whole
+   * point of a token is that the browser learns MY write landed rather than that some write did —
+   * so this is the one comparison that must not be loosened for convenience.
+   *
+   * A TOKEN IN THE ECHO THAT THIS REGISTER NEVER OPENED IS IGNORED, SILENTLY AND ON PURPOSE. It is
+   * a write some other session made, or one this page made before a reload.
+   *
+   * ── GIVING UP NEEDS THE ARRIVAL TO HAVE SPOKEN ABOUT THE FILE ──
+   *
+   * Grace is spent only when the echo LISTS the write's own path and does not list its token. An
+   * arrival that says nothing about that file had no occasion to acknowledge the write, and reading
+   * evidence out of that silence is exactly what the server's own caps and TTL make wrong.
    */
-  arrive(path, tokens) {
+  arrive(writes) {
     const matched = [];
     const gaveUp = [];
     for (const [token, record] of this.#open) {
-      if (tokens.includes(token)) {
+      const named = writes.get(record.path);
+      if (named === void 0) {
+        continue;
+      }
+      if (named.includes(token)) {
         matched.push(token);
         continue;
       }
-      if (path !== null && record.path === path) {
-        record.grace -= 1;
-        if (record.grace <= 0) {
-          gaveUp.push(token);
-        }
+      record.grace -= 1;
+      if (record.grace <= 0) {
+        gaveUp.push(token);
       }
     }
     for (const token of matched) {
@@ -2853,8 +2871,9 @@ var WriteRegister = class {
       return this.#open.size;
     }
     let count = 0;
+    const wanted = samePath(path);
     for (const record of this.#open.values()) {
-      if (record.path === path) {
+      if (record.path === wanted) {
         count += 1;
       }
     }

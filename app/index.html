@@ -1667,11 +1667,15 @@ function installProjection(pending) {
 // DERIVED FROM it. Neither says the operator's line survived the cycle, because the cycle is
 // entitled to rewrite, move or delete what it ingests — so nothing below ever says "written".
 
-/** The projection in hand is derived from the write just made. The strongest thing an echo says. */
-const WRITE_RECORDED = "the server recorded your save — this projection carries it";
+/**
+ * THE STRONGEST THING AN ECHO SAYS, SAID NO STRONGER THAN THAT. The server's claim is "this server
+ * accepted a write carrying this token for this path" — it does NOT claim the projection in hand is
+ * derived from that write, and it does not claim the operator's line survived the cycle.
+ */
+const WRITE_RECORDED = "the server recorded your save";
 
-/** The server echoes, and it did not name this write. ACCEPTED, not yet carried. Never "written". */
-const WRITE_ACCEPTED = "the server took your save — this projection does not carry it yet";
+/** The server echoes, and it did not name this write. ACCEPTED, not recorded. Never "written". */
+const WRITE_ACCEPTED = "the server took your save — it has not acknowledged it yet";
 
 /**
  * A PROJECTION ARRIVED — SAY WHICH OF THIS BROWSER'S OUTSTANDING WRITES IT ACKNOWLEDGES.
@@ -1681,17 +1685,21 @@ const WRITE_ACCEPTED = "the server took your save — this projection does not c
  * a projection held because a line is open still carries the evidence that clears a false held row,
  * and the strip is outside the reading column precisely so it can be redrawn without one.
  *
- * `path` IS THE FILE THIS ARRIVAL DESCRIBES, or `null` for a whole-graph re-read. It is used ONLY
- * for the giving-up rule, never for the matching — see `WriteRegister.arrive`.
+ * THE ENVELOPE SAYS WHICH FILE EACH TOKEN BELONGS TO — the echo is `{path: [token, …]}` — so this
+ * function needs no path of its own and is not given one. The matching is per path inside the
+ * register, which is the narrowing the server's own claim requires: it acknowledges a write FOR A
+ * PATH, and a token found under another file's key acknowledges another write.
  *
  * ── GIVING UP RELEASES NOTHING, AND THAT IS THE WHOLE SAFETY ARGUMENT ──
  *
- * A write whose echo never comes cannot be waited on forever, so the register drops it after two
- * projections for its own file. What is dropped is the REGISTER'S RECORD and nothing else: the held
- * row keeps its token, the strip keeps the row, and the characters stay on screen. A token given up
- * too early costs a held row that stays held, which is the direction this app is built to fail in.
- * The row can still be released later — by the file taking the characters back (`settle`), or by
- * the operator dismissing it.
+ * A write whose echo never comes cannot be waited on forever, so the register drops it after three
+ * arrivals that named its file without naming it. What is dropped is the REGISTER'S RECORD and
+ * nothing else: the held row keeps its token, the strip keeps the row, and the characters stay on
+ * screen. A vanished echo is never proof a write failed — the server's ledger caps at 8 tokens per
+ * path and ages out at 24 hours, so an acknowledgement can legitimately disappear — and a token
+ * given up too early costs only a held row that stays held, which is the direction this app is
+ * built to fail in. The row can still be released later, by the file taking the characters back
+ * (`settle`) or by the operator dismissing it.
  *
  * AN UNREADABLE ECHO IS REPORTED AND TREATED AS NO EVIDENCE AT ALL. `readWriteEcho` is strict on
  * purpose and this is the one caller of it; a shape it does not recognise goes to the console the
@@ -1702,16 +1710,17 @@ const WRITE_ACCEPTED = "the server took your save — this projection does not c
 function correlate(path, data) {
   const reading = readWriteEcho(data);
   if (reading.outcome === "unrecognised") {
-    console.warn("/app/edit-file echo: " + reading.problem);
+    console.warn("write echo: " + reading.problem);
   }
   // SILENT MEANS SILENT — no arrival is recorded against the register at all, so a server that has
   // never heard of a token neither matches nor expires anything and this whole function is inert.
-  // That is the shipping condition, stated as one branch.
+  // That is the shipping condition, stated as one branch, and it is the branch production takes
+  // today: the server half is merged and not deployed.
   if (reading.outcome !== "echo") {
     return;
   }
   const waiting = writes.outstanding(path);
-  const echo = writes.arrive(path, reading.tokens);
+  const echo = writes.arrive(reading.writes);
   if (echo.matched.length > 0) {
     landedNote = WRITE_RECORDED;
     // THE ROWS ALREADY ON THE STRIP, RELEASED ON THE SERVER'S OWN WORD. This is the path for an
