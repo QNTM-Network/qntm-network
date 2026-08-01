@@ -2613,6 +2613,69 @@ function keyOf(edit) {
   return `${edit.view} ${edit.instance ?? edit.text}`;
 }
 
+// app/present/queue.ts
+function isNewer(arriving, held) {
+  if (arriving === null || held === null) {
+    return true;
+  }
+  const a = Date.parse(arriving);
+  const b = Date.parse(held);
+  if (Number.isNaN(a) || Number.isNaN(b)) {
+    return true;
+  }
+  return a > b;
+}
+var ProjectionQueue = class {
+  #pending = /* @__PURE__ */ new Map();
+  /**
+   * A PROJECTION ARRIVED FOR `path`. Hold it, unless what is already held is at least as new.
+   *
+   * It does not install anything and it cannot: installing is a repaint, a repaint needs a DOM, and
+   * this module has none. The caller drains.
+   */
+  offer(path, generatedAt, data) {
+    const held = this.#pending.get(path);
+    if (held === void 0) {
+      this.#pending.set(path, { path, generatedAt, data });
+      return { outcome: "queued" };
+    }
+    if (!isNewer(generatedAt, held.generatedAt)) {
+      return { outcome: "stale" };
+    }
+    this.#pending.set(path, { path, generatedAt, data });
+    return { outcome: "superseded" };
+  }
+  /** What is waiting for `path`, without taking it. `null` when nothing is. */
+  pending(path) {
+    return this.#pending.get(path) ?? null;
+  }
+  /** Take what is waiting for `path` and stop holding it. `null` when nothing is. */
+  take(path) {
+    const held = this.#pending.get(path);
+    if (held === void 0) {
+      return null;
+    }
+    this.#pending.delete(path);
+    return held;
+  }
+  /** Stop holding anything for `path`, applied or not. */
+  drop(path) {
+    this.#pending.delete(path);
+  }
+  /** How many paths have something waiting. One per file, so this is also "how many files". */
+  get size() {
+    return this.#pending.size;
+  }
+  /**
+   * Forget everything, for the same reason `BaseSurface.drop` exists: the graph went away (a
+   * sign-out) and a projection held for a session that has ended is a projection for a file this
+   * page may no longer read.
+   */
+  clear() {
+    this.#pending.clear();
+  }
+};
+
 // app/present/newline.ts
 function seedFor(source, lineIndex, declared) {
   const lines = source.split("\n");
@@ -7309,6 +7372,7 @@ export {
   ModeSurface,
   PresentationCascade,
   PresentationContext,
+  ProjectionQueue,
   QUALIFICATION_KEY,
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,

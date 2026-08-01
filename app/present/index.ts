@@ -138,6 +138,9 @@ export type { Draft, DraftPlace, DraftPlacement } from "./draft.js";
 export { HeldSurface, heldFrom, keyOf } from "./held.js";
 export type { HeldEdit, HeldReason, HeldRow } from "./held.js";
 
+export { ProjectionQueue } from "./queue.js";
+export type { OfferOutcome, PendingProjection } from "./queue.js";
+
 export { seedFor, openLine } from "./newline.js";
 export type { GlobalRegistration, NewLine } from "./newline.js";
 

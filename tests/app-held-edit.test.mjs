@@ -771,9 +771,14 @@ describe("4. NOTHING HELD REACHES A WRITE — the pinned sites, re-counted on th
   // body" BY COUNTING these sites. This change adds a whole new REGION of the screen, so re-counting
   // them here is the measurement that the region added no path. Every number is unchanged.
 
-  test("`graphData` is STILL assigned in exactly five places", () => {
+  // FOUR RATHER THAN FIVE SINCE 2026-08-01, AND THE MOVE IS NOT THIS SUITE'S. The behavioural
+  // queue folded `toggleTask`'s and `commitLine`'s identical assign-paint-say into one
+  // `installProjection`, because "install this projection" and "hold it, a line is open" is one
+  // decision that must not be made twice. See tests/app-membership-note.test.mjs §4 for the full
+  // account and for the value-level assertion that replaced what the count was doing.
+  test("`graphData` is STILL assigned in exactly four places", () => {
     const sites = APP_SOURCE.match(/\bgraphData\s*=(?!=)/g) ?? [];
-    assert.equal(sites.length, 5, "holding an edit must not add a client-computed graphData write");
+    assert.equal(sites.length, 4, "holding an edit must not add a client-computed graphData write");
   });
 
   test("`writeFile` STILL has exactly two callers — toggleTask and commitLine", () => {

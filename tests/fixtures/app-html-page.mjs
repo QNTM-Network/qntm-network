@@ -159,6 +159,13 @@ export const __sentEdit = () => sentEdit;
 // whose CONTENTS change under it. It is the only way to tell "the row survived and was re-placed"
 // apart from "the row was destroyed and a new one opened", which are the same screen.
 export const __draft = () => draftLine;
+// THE BEHAVIOURAL QUEUE (app/present/queue.ts). A getter, the same reason \`__draft\`, \`__held\` and
+// \`__served\` are: a suite reads what the page is holding NOW. \`__drainPainted\` and
+// \`__aLineIsOpen\` are exported so a suite can drive the two halves of the gate separately — "is
+// something waiting" and "may it go on" are different failures and a test that could only see the
+// screen would not be able to tell them apart.
+export const __queued = () => queued;
+export { drainPainted as __drainPainted, aLineIsOpen as __aLineIsOpen };
 `;
 
   const file = join(workDir, "page.mjs");
