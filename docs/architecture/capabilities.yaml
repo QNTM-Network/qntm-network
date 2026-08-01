@@ -2870,13 +2870,18 @@ capabilities:
     nothing because THE ENGINE PERFORMS THAT SAME CONVERSION ITSELF, one cycle later, when it prints
     the tag back. Seeding reaches the same fixed point one cycle earlier; it does not create one.
     A FIELD THE ENGINE PRINTS NO TAG FOR IS NEVER SEEDED, and that is the same rule read the other
-    way rather than a shortfall. Of the 8 fields across the 153 sections that declare defaults, 5
-    are spellable (`domain`, `cap_state`, `class_state`, `package_state`, `god_box`) and 3 are not
-    (`project` — 60 sections — `principle_state`, `stage`). Every unspellable one is recorded in
-    `resolution.dropped`, per section, with the field named: a browser that wrote `project` into the
-    line would invent a spelling the engine does not use AND freeze a value the engine goes on
-    deciding invisibly. A `render_only` token (`☑️`, `🎯`) is excluded for the sibling reason — the
-    engine never reads that field back from that glyph, so a seeded one would not round-trip.
+    way rather than a shortfall. THE CENSUS, MEASURED AND PINNED BY A TEST rather than summarised:
+    153 sections declare a `defaults:` block over 8 fields — domain 153, project 60, cap_state 12,
+    principle_state 10, stage 9, class_state 8, package_state 8, god_box 2. SPELLABILITY IS PER
+    (FIELD, VALUE), NOT PER FIELD, and that distinction is the finding. 188 of the 262 declared
+    defaults are spelled (domain 148, cap_state 12, principle_state 10, class_state 8,
+    package_state 8, god_box 2); 74 are not (project 60, stage 9, and domain 5 — the five sections
+    declaring `domain: dojo`, a value no tag spells even though the FIELD is spelled everywhere
+    else). Every one of the 74 is recorded in `resolution.dropped`, per section, with the field
+    named: a browser that wrote `project` into the line would invent a spelling the engine does not
+    use AND freeze a value the engine goes on deciding invisibly. A `render_only` token
+    (`☑️`, `🎯`) is excluded for the sibling reason — the engine never reads that field back from
+    that glyph, so a seeded one would not round-trip.
     THE 13 SECTIONS §3.3 MEASURED, DERIVED RATHER THAN NAMED. In 13 of 186 sections the view
     declares `default_node_type: routine`, a bare capture carries no cadence, and a rule retypes it
     to `task` inside the SAME pass that minted it — so a seed that wrote `#routine` would be

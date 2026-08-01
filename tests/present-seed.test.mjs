@@ -535,22 +535,53 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
     }
   });
 
-  test("A FIELD NO TAG SPELLS IS NEVER SEEDED, and every one of them is on the record", () => {
-    // `project` is the big one — 60 sections declare it and the engine prints no tag for it, so a
-    // browser that wrote it would invent a spelling AND freeze a value the engine goes on deciding.
-    let unspellable = 0;
+  test("THE CENSUS — which of the 8 declared default fields print, and what happens to the rest", () => {
+    // THE MEASUREMENT THE DESIGN ASKED FOR, pinned so the capability record cannot drift from it.
+    // SPELLABILITY IS PER (FIELD, VALUE), NOT PER FIELD — `domain` is spelled 148 times and refused
+    // 5, because those 5 sections declare `domain: dojo` and no tag spells that value. A per-field
+    // summary would have hidden exactly that, which is why this asserts both halves.
+    const declared = {};
+    const spelled = {};
+    const unspelled = {};
+    let sectionsWithDefaults = 0;
     for (const [viewId, sections] of Object.entries(RESOLUTION.sectionRegistration)) {
       for (const [sectionId, entry] of Object.entries(sections)) {
+        if (entry.defaults !== undefined) sectionsWithDefaults += 1;
         for (const field of Object.keys(entry.defaults ?? {})) {
+          declared[field] = (declared[field] ?? 0) + 1;
           const what = `section '${viewId}.${sectionId}' default '${field}'`;
           if (what in RESOLUTION.dropped) {
-            unspellable += 1;
             assert.match(RESOLUTION.dropped[what], /no vocabulary tag spells/);
+            unspelled[field] = (unspelled[field] ?? 0) + 1;
+          } else {
+            spelled[field] = (spelled[field] ?? 0) + 1;
           }
         }
       }
     }
-    assert.ok(unspellable > 50, `only ${unspellable} unspellable defaults recorded — expected the 60+ 'project' ones`);
+    assert.equal(sectionsWithDefaults, 153, "the 153-section figure moved");
+    assert.deepEqual(declared, {
+      domain: 153,
+      project: 60,
+      cap_state: 12,
+      principle_state: 10,
+      stage: 9,
+      class_state: 8,
+      package_state: 8,
+      god_box: 2,
+    }, "the 8 declared default fields, and their counts, moved");
+    assert.deepEqual(spelled, {
+      domain: 148,
+      cap_state: 12,
+      principle_state: 10,
+      class_state: 8,
+      package_state: 8,
+      god_box: 2,
+    }, "what the engine prints a tag for moved");
+    // WHAT HAPPENS TO THE REST: nothing is seeded, and every one carries a reason. `project` is the
+    // big one — 60 sections declare it, the engine prints no tag for it either, and a browser that
+    // wrote it would invent a spelling AND freeze a value the engine goes on deciding invisibly.
+    assert.deepEqual(unspelled, { project: 60, stage: 9, domain: 5 }, "what is refused moved");
   });
 });
 

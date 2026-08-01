@@ -2704,8 +2704,11 @@ backlog:
     fixed point one cycle earlier rather than creating one. A field the engine prints NO tag for is
     never seeded, and that is the same rule read the other way: `project` (60 sections),
     `principle_state`, `stage`, and every other unspellable default is recorded in `dropped` with
-    the field named. Of the 8 fields across the 153 sections that declare defaults, 5 are spellable
-    (`domain`, `cap_state`, `class_state`, `package_state`, `god_box`) and 3 are not.
+    the field named. THE CENSUS: 153 sections, 8 fields, 262 declared defaults, of which 188 are
+    spelled (domain 148, cap_state 12, principle_state 10, class_state 8, package_state 8,
+    god_box 2) and 74 are not (project 60, stage 9, domain 5). SPELLABILITY IS PER (FIELD, VALUE):
+    the five refused `domain` defaults are the sections declaring `domain: dojo`, a value no tag
+    spells even though the field is spelled everywhere else.
     THE 13 SECTIONS design-the-rule-mirror.md §3.3 MEASURED, DERIVED RATHER THAN NAMED. In 13 of
     186 sections a rule retypes the capture inside the same pass that minted it. No code names
     `routine`, that rule, or any section: the generator reads config/rules/*.yaml, normalises each
