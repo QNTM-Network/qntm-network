@@ -134,6 +134,7 @@ function readRegistration(configDir, viewFiles) {
   // `default_tags:` must fail this generator loudly, not silently keep shipping the stale GLOBAL
   // value — the same posture `readViews` below takes for `default_node_type` (which DOES vary).
   for (const [file, view] of viewFiles) {
+    // NOT A DROP: default_registration.yaml IS the global declaration this guard compares against.
     if (file === "default_registration.yaml") continue;
     if ("input_grammar" in view) {
       throw new GenerationError(
@@ -148,6 +149,7 @@ function readRegistration(configDir, viewFiles) {
       );
     }
     for (const section of Array.isArray(view.sections) ? view.sections : []) {
+      // NOT A DROP: a non-mapping section cannot declare input_grammar or default_tags, so nothing is lost.
       if (!section || typeof section !== "object") continue;
       if ("input_grammar" in section || "default_tags" in section) {
         throw new GenerationError(
@@ -257,6 +259,7 @@ function readChromeShapes(configDir, candidates, ledger) {
       : "checkbox";
     if (SEEDABLE_SHAPES.has(shape)) {
       out[name] = shape;
+      // NOT A DROP: this is the KEEP branch.
       continue;
     }
     // DROP PATH 8. A shape this generator does not recognise (stat_line, heading, or a future
@@ -281,6 +284,7 @@ function readViewFiles(configDir, ledger) {
   const files = readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort();
   const out = [];
   for (const file of files) {
+    // NOT A DROP: default_registration.yaml is read separately, by readRegistration.
     if (file === "default_registration.yaml") continue;
     const document = readYaml(join(dir, file));
     // DROP PATHS 4-6, AND THEY COST MORE HERE THAN ANYWHERE ELSE. A view that falls out of this
@@ -435,11 +439,13 @@ function readOrderingFieldMarkers(configDir, fields, ledger) {
   }
   const out = {};
   for (const entry of markers) {
+    // NOT A DROP: a non-mapping marker declares no field. If it was the only marker for a named ordering field, DROP PATH 13 below records that field as unmarked.
     if (!entry || typeof entry !== "object") continue;
     const { token, field, extraction_hint: hint, render_only: renderOnly } = entry;
     // A marker for a field no section's `ordering:` names is not a drop — this table is
     // deliberately restricted to the fields the operator's own ordering table asks about, and a
     // marker outside that set was never a candidate for publication.
+    // NOT A DROP: this table is restricted to the fields the operator's own ordering declares; a marker outside that set was never a candidate.
     if (typeof field !== "string" || !fields.has(field)) continue;
     const what = `ordering field '${field}'`;
     // DROP PATH 9. Documented, deliberate — and until now unrecorded.

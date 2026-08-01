@@ -1,0 +1,8 @@
+structural_tokens:
+  - token: positional_binding
+    structural_token:
+      kind: positional_bindings
+      indent:
+        edge_type: PART_OF
+        edge_source: self
+      bindings: []

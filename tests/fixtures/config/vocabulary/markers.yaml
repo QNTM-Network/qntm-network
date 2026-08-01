@@ -1,0 +1,4 @@
+markers:
+  - token: "📅"
+    field: due_date
+    extraction_hint: trailing_date

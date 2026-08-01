@@ -1,0 +1,17 @@
+# Two patterns, chosen to put one section on each side of the generator's own refusal boundary.
+
+# PUBLISHABLE: node fields only, and only fields the app can resolve for a line being typed.
+local-tasks:
+  root:
+    find:
+      node_type: task
+      status: open
+
+# REFUSED: an edge-traversing step is not decidable from a line's own fields.
+traversing-tasks:
+  root:
+    find:
+      node_type: task
+  steps:
+    - parents: { edge_type: PART_OF }
+      exists: true

@@ -84,9 +84,11 @@ function readIndentBinding(configDir) {
   let edgeSource = null;
   for (let i = indentLine + 1; i < lines.length; i += 1) {
     const line = lines[i];
+    // NOT A DROP: a blank line or a comment.
     if (!nonBlank(line)) continue;
     if (indentOf(line) <= baseIndent) break; // dedented back to indent:'s own sibling (bindings:)
     const m = line.match(/^\s*(edge_type|edge_source):\s*(\S+?)\s*(#.*)?$/);
+    // NOT A DROP: a line inside indent: that is neither key. If either is missing the function THROWS below.
     if (!m) continue;
     const value = m[2].replace(/^["']|["']$/g, "");
     if (m[1] === "edge_type") edgeType = value;
@@ -120,12 +122,14 @@ function readEdgeCardinalityRegistry(configDir) {
   let current = null;
   for (let i = start + 1; i < lines.length; i += 1) {
     const line = lines[i];
+    // NOT A DROP: a blank line or a comment.
     if (!nonBlank(line)) continue;
     const depth = indentOf(line);
     if (depth === 0) break; // next top-level key — edge_types: block is over
     const nameMatch = depth === 2 && line.match(/^\s{2}([A-Za-z0-9_]+):\s*$/);
     if (nameMatch) {
       current = nameMatch[1];
+      // NOT A DROP: loop control — the edge type name was just captured.
       continue;
     }
     if (current !== null && depth >= 4) {
@@ -215,6 +219,7 @@ function readViewSections(viewsDir, ledger) {
     };
     for (let i = sectionsLine + 1; i < lines.length; i += 1) {
       const line = lines[i];
+      // NOT A DROP: a blank line or a comment.
       if (!nonBlank(line)) continue;
       const depth = indentOf(line);
       if (depth < 4) break; // dedented out of the sections: list entirely
@@ -223,11 +228,14 @@ function readViewSections(viewsDir, ledger) {
         flush();
         sectionId = idMatch[1];
         sectionIndent = depth;
+        // NOT A DROP: loop control — the section id was just captured.
         continue;
       }
+      // NOT A DROP: lines before the first section id; nothing is open to lose.
       if (sectionId === null) continue;
       if (depth <= sectionIndent) {
         flush();
+        // NOT A DROP: flush() ran first, and flush() is what records a half-declared override.
         continue; // a non-id list item at the same depth — not a shape this scanner expects; skip
       }
       const typesMatch = line.match(/^\s*structural_edge_types:\s*(.+?)\s*$/);
@@ -240,6 +248,7 @@ function readViewSections(viewsDir, ledger) {
           );
         }
         edgeTypes = parsed;
+        // NOT A DROP: loop control — edgeTypes was just captured.
         continue;
       }
       const dirMatch = line.match(/^\s*structural_edge_direction:\s*(\S+)\s*$/);

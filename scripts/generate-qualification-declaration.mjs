@@ -172,7 +172,9 @@ function applyStructuralExclusionDefaults(config, structuralTypes) {
   const already = new Set();
   if (Array.isArray(config.steps)) {
     for (const step of config.steps) {
+      // NOT A DROP: scanning steps the pattern ALREADY has, to avoid re-adding an exclusion. A malformed step is refused with a reason by normaliseStep below.
       if (!step || typeof step !== "object") continue;
+      // NOT A DROP: same scan, same downstream refusal.
       if (!Array.isArray(step.not)) continue;
       for (const sub of step.not) {
         const findNodes = sub && typeof sub === "object" ? sub.find_nodes : null;
@@ -236,6 +238,7 @@ function normaliseFind(find, where) {
         refuse(`${where}.node_type: not a string or list`);
       }
       nodeType = [...list].sort();
+      // NOT A DROP: loop control — node_type was just read into `nodeType`.
       continue;
     }
     fields[key] = normalisePredicate(value, key);
@@ -327,6 +330,7 @@ function readViews(configDir, ledger) {
   const views = {};
   const sectionOrder = {};
   for (const file of files) {
+    // NOT A DROP: default_registration.yaml is not a view sheet; it is read above, for the GLOBAL rung.
     if (file === "default_registration.yaml") continue;
     const document = readYaml(join(dir, file));
     // DROP PATHS 2-4. Each drops a WHOLE VIEW — every section it declares, out of both `sections`
@@ -582,6 +586,7 @@ export function generateQualification(configDir, ledger = new Ledger()) {
     for (const [sectionId, section] of Object.entries(viewSections)) {
       if (section.qualification in predicates) {
         kept[sectionId] = section;
+        // NOT A DROP: this is the KEEP branch.
         continue;
       }
       // DROP PATH 14. The section is IN `sectionOrder` (so addressing is unharmed) but out of

@@ -1,0 +1,10 @@
+# Two, not one: the generator refuses to publish an EMPTY map for a resolvable field ("an empty
+# map would make every answer a silent guess"), so a fixture with one status token could not be
+# used to exercise the render-only drop path without tripping that unrelated refusal instead.
+status_tags:
+  - token: "#done"
+    field: status
+    value: done
+  - token: "#open"
+    field: status
+    value: open
