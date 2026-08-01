@@ -26,20 +26,28 @@
  * been asked to make before.
  *
  * 1. CURSOR — did it land on the same line, and by which rung? `resolveInstanceAnchor`'s own
- *    `InstanceReading`: `found`/`via:"instance"` (same printing), `found`/`via:"node"` (same node,
- *    different section — the printing moved), `ambiguous`, or `absent`.
+ *    `InstanceReading`, graded by `ANCHOR_TRUST` (instance.ts) — `instance` (the same printing),
+ *    `node` (the same node, printed somewhere else), `relative` (the neighbourhood held and the
+ *    characters confirmed it — app/present/relative.ts) or `text` (the neighbourhood did not hold,
+ *    but exactly one line still carries his characters); or `ambiguous`, or `absent`.
+ *
+ *    THE LAST TWO ARRIVED WITH `widen-instance-identity-past-the-first-stamp`, and they are what
+ *    turned §1's marquee finding from a measurement into a closed row: a line being AUTHORED has no
+ *    node to search with and its characters change the instant the cycle stamps it, so the first two
+ *    rungs are structurally unavailable at once. See `tests/present-replay.test.mjs` §1b.
  *
  * 2. MEMBERSHIP — right, wrong, or abstained? THE GROUND TRUTH IS THE CURSOR, NOT A SECOND CALL TO
  *    `membershipFor` ON THE ARRIVED LINE, and that is the harness's one real design decision, spelled
  *    out because it is not obvious. Once a line is stamped, `membershipFor` abstains for it BY
  *    DESIGN (`already-a-node` — it only answers for a line being typed), so re-asking it about the
- *    ARRIVED text usually reproduces this SAME abstention and proves nothing. But `instance.ts`'s own
- *    format — `${view}/${section}/${token}` — already encodes the section the printing sits in, so
- *    the two-tier walk's OWN OUTCOME already says whether the row is in the section it was predicted
- *    to stay in (`via:"instance"`, same instance string, same section) or a different one
- *    (`via:"node"`, found only because the instance changed). That is membership's actual answer,
- *    read off the SAME reconciliation the cursor already does, not a second resolver run against a
- *    string the row's own module abstains on.
+ *    ARRIVED text usually reproduces this SAME abstention and proves nothing. What the harness reads
+ *    instead is the SECTION ORDINAL the reconciliation landed in, against the one the anchored line
+ *    sat in — the same fact `instance.ts` counts by heading position and never by a heading's
+ *    characters. That is membership's actual answer, read off the SAME reconciliation the cursor
+ *    already does, not a second resolver run against a string the row's own module abstains on.
+ *
+ *    IT USED TO READ `via === "instance"` AS THAT FACT, and `actualMembership`'s own JSDoc records
+ *    why that proxy stopped being sound the moment a third rung existed.
  *
  * 3. ORDERING — right, wrong, or abstained? Compares the PREDICTED post-edit rank (`orderingFor`
  *    called at commit time, its own `afterRank`) against the ACTUAL rank the resolved line holds
@@ -78,6 +86,7 @@ import {
   BaseSurface,
   heldFrom,
   instanceAnchorFor,
+  instancesOf,
   membershipFor,
   orderingFor,
   resolveInstanceAnchor,
@@ -152,12 +161,32 @@ function predictedMembership(view, sectionId, before, gesture, qualification) {
 /**
  * The cursor's OWN reading is membership's ground truth — see this file's header for why a second
  * call to `membershipFor` on the arrived text is not used instead.
+ *
+ * ── IT COMPARES THE SECTION DIRECTLY NOW, AND `via` IS NO LONGER A PROXY FOR IT ──
+ *
+ * As merged, this function read `via === "instance"` as "same section" and everything else as
+ * "moved". That was sound while the walk had exactly two rungs: an instance string ENCODES the
+ * section, so an instance match could only mean the section held, and the only other way to be
+ * found was the node tier, which fires only when the instance changed.
+ *
+ * `widen-instance-identity-past-the-first-stamp` added two more rungs (`relative`, `text` —
+ * app/present/relative.ts), and for both of them the instance string changes for a reason that has
+ * nothing to do with the section: THE CYCLE STAMPED THE LINE, so an unstamped line's own characters
+ * — which are its whole identity — are not what they were. Reading that as "the row left its
+ * section" would have made every closed first-stamp report a spurious `leaves`, which is exactly
+ * the false answer the two-rung version was careful not to give.
+ *
+ * So the fact is now read where it actually lives: the section ORDINAL of the anchored line before,
+ * against the section ordinal of the row that was found. That is a GENERALISATION rather than a
+ * replacement — for a `via:"instance"` match the two ordinals are equal by construction, so every
+ * reading this function gave before it is unchanged.
  */
-function actualMembership(reading) {
-  if (reading.outcome === "found") {
-    return { kind: reading.via === "instance" ? "stays" : "leaves" };
+function actualMembership(reading, view, after, sectionBefore) {
+  if (reading.outcome !== "found") {
+    return { kind: "unknown", outcome: reading.outcome };
   }
-  return { kind: "unknown", outcome: reading.outcome };
+  const sectionAfter = instancesOf(after, view)[reading.lineIndex]?.section ?? null;
+  return { kind: sectionAfter === sectionBefore ? "stays" : "leaves" };
 }
 
 function predictedOrdering(view, sectionId, before, gesture, resolution) {
@@ -294,7 +323,11 @@ export function replay({ view, before, editBase, gesture, after, qualification, 
 
   const cursor = resolveInstanceAnchor(anchor, after, view.id);
 
-  membership.actual = actualMembership(cursor);
+  // The section the anchored line sat in, read the same way `instance.ts` counts one — by ordinal,
+  // never by the heading's characters. `actualMembership` compares this against where the row was
+  // found; see its own JSDoc for why `via` is no longer the proxy for it.
+  const sectionOrdinalBefore = instancesOf(localAfter, view.id)[lineIndex]?.section ?? null;
+  membership.actual = actualMembership(cursor, view.id, after, sectionOrdinalBefore);
   membership.converged =
     membership.predicted.kind === "abstain" || membership.actual.kind === "unknown"
       ? null

@@ -130,8 +130,7 @@ export type RelativeRefusal =
   | "below-ambiguous"
   | "bracket-crossed"
   | "gap-changed"
-  | "text-changed"
-  | "nothing-extends-the-text";
+  | "text-changed";
 
 /**
  * WHERE THE LINE SAT, expressed against things that outlive it. See the module header for the
@@ -235,15 +234,27 @@ function printingsOf(places: readonly (LinePlace | null)[], node: string): reado
  *   * the line is blank or out of range — it has no identity anywhere in this bundle;
  *   * the line ALREADY CARRIES A STAMP — the node tier owns it and a second, weaker claim about
  *     the same line could only ever disagree with a stronger one (see the module header);
+ *   * the line is the HEADING THAT OPENS ITS SECTION — see below;
  *   * NOTHING IN ITS SECTION CARRIES A STAMP — an empty section, or a section holding only lines
  *     the cycle has never seen. There is nothing to be relative TO, and a bracket of two nulls is
  *     the whole file wearing a bracket's clothes.
  *
- * The third case is the one worth stating plainly, because it is the operator's own first capture
+ * THE HEADING EXCLUSION IS THE ONE THAT NEEDED ARGUING, AND IT WAS FOUND BY A TEST RATHER THAN
+ * FORESEEN. A heading carries no stamp, so it reaches this function by the same path an authored
+ * line does — and it would be given a bracket, and with it the TEXT rung, which compares
+ * CHARACTERS. `~/qntm/metrics.md` prints its five headings as `## <name> <emoji> <ratio>` and the
+ * ratio changes every cycle. A heading identified by its characters is precisely the defect
+ * `instance.ts` exists to remove, and its answer — a heading's identity token is a CONSTANT,
+ * because exactly one heading exists per section ordinal by construction — is already strictly
+ * better than anything a neighbourhood could say. So a heading is excluded, and the fact is
+ * derived rather than passed in: the line that OPENS a section is that section's heading
+ * (`instance.ts` attributes a heading's own record to the section it opens), which is a fact
+ * already encoded in the ordinals this function receives.
+ *
+ * The LAST case is the one worth stating plainly, because it is the operator's own first capture
  * into an empty section: this construct REFUSES it, and the honest reason is that a section with no
- * stamped line in it offers no landmark that outlives the cycle. The TEXT rung still answers there
- * — `resolveRelativeAnchor` never runs without an anchor, so `instance.ts`'s walk falls to `absent`
- * and the characters are held (`held.ts`), which is what already happens today.
+ * stamped line in it offers no landmark that outlives the cycle. `instance.ts`'s walk then falls to
+ * `absent` and the characters are held (`held.ts`), which is what already happens today.
  */
 export function relativeAnchorFor(
   places: readonly (LinePlace | null)[],
@@ -255,6 +266,17 @@ export function relativeAnchorFor(
     return null;
   }
   const section: number | null = place.section;
+
+  const bounds = boundsOf(places, section);
+  if (bounds === null) {
+    return null;
+  }
+  // THE LINE THAT OPENS A SECTION IS THAT SECTION'S HEADING, and a heading is excluded — see the
+  // JSDoc above for the argument. `section === null` is the region above the first heading, which
+  // has no heading to open it, so the first line there is an ordinary line.
+  if (section !== null && bounds.first === lineIndex) {
+    return null;
+  }
 
   // UP, stopping where the section stops. A blank is stepped over (it has no section to compare);
   // the heading that OPENS this section belongs to it (instance.ts's own attribution), so the scan
@@ -297,10 +319,6 @@ export function relativeAnchorFor(
     return null;
   }
 
-  const bounds = boundsOf(places, section);
-  if (bounds === null) {
-    return null;
-  }
   const from = above === null ? bounds.first : aboveAt + 1;
   const to = below === null ? bounds.last : belowAt - 1;
   const gap = gapBetween(places, section, from, to);
@@ -327,7 +345,7 @@ export function resolveRelativeAnchor(
   lines: readonly string[],
 ): RelativeReading {
   const bracket = bracketRung(anchor, places, lines);
-  if (bracket.outcome === "found") {
+  if (bracket.outcome !== "refused") {
     return bracket;
   }
   return textRung(anchor, places, lines, bracket);
@@ -404,14 +422,18 @@ function bracketRung(
  * operator's characters. See the module header for why this exists and what it is NOT allowed to do
  * (pick, when more than one matches).
  *
- * `refusal` is the BRACKET's own reason, carried through when this rung finds nothing either — the
- * caller learns why the strong claim failed rather than only that the weak one did.
+ * `refusal` is the BRACKET's own reason, and it is what this rung returns when it finds nothing
+ * either — so the caller always learns why the STRONG claim failed, never only that the weak one
+ * did. There is deliberately no separate "nothing extends the text" reason: the bracket has already
+ * said something more specific in every case that reaches here (`text-changed` when the slot was
+ * right and the characters were not, one of the six others when the neighbourhood itself moved), and
+ * a second name for the same event is a name that will one day disagree with the first.
  */
 function textRung(
   anchor: RelativeAnchor,
   places: readonly (LinePlace | null)[],
   lines: readonly string[],
-  refusal: RelativeReading,
+  refusal: Extract<RelativeReading, { outcome: "refused" }>,
 ): RelativeReading {
   const candidates: number[] = [];
   places.forEach((place, at) => {
@@ -425,5 +447,5 @@ function textRung(
   if (candidates.length > 1) {
     return { outcome: "ambiguous", candidates };
   }
-  return refusal.outcome === "refused" ? refusal : { outcome: "refused", because: "nothing-extends-the-text" };
+  return refusal;
 }

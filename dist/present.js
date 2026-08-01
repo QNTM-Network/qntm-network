@@ -1441,6 +1441,13 @@ function relativeAnchorFor(places, lines, lineIndex) {
     return null;
   }
   const section = place.section;
+  const bounds = boundsOf(places, section);
+  if (bounds === null) {
+    return null;
+  }
+  if (section !== null && bounds.first === lineIndex) {
+    return null;
+  }
   let above = null;
   let aboveAt = -1;
   for (let at = lineIndex - 1; at >= 0; at -= 1) {
@@ -1476,10 +1483,6 @@ function relativeAnchorFor(places, lines, lineIndex) {
   if (above === null && below === null) {
     return null;
   }
-  const bounds = boundsOf(places, section);
-  if (bounds === null) {
-    return null;
-  }
   const from = above === null ? bounds.first : aboveAt + 1;
   const to = below === null ? bounds.last : belowAt - 1;
   const gap = gapBetween(places, section, from, to);
@@ -1491,7 +1494,7 @@ function relativeAnchorFor(places, lines, lineIndex) {
 }
 function resolveRelativeAnchor(anchor, places, lines) {
   const bracket = bracketRung(anchor, places, lines);
-  if (bracket.outcome === "found") {
+  if (bracket.outcome !== "refused") {
     return bracket;
   }
   return textRung(anchor, places, lines, bracket);
@@ -1559,7 +1562,7 @@ function textRung(anchor, places, lines, refusal) {
   if (candidates.length > 1) {
     return { outcome: "ambiguous", candidates };
   }
-  return refusal.outcome === "refused" ? refusal : { outcome: "refused", because: "nothing-extends-the-text" };
+  return refusal;
 }
 
 // app/present/instance.ts

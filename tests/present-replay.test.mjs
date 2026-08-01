@@ -175,40 +175,66 @@ describe("1. THE MARQUEE FINDING — membership prediction vs. the first stamp",
     },
   );
 
-  test("the same mechanism, for a BRAND NEW capture (openLine's own case, not an existing line's edit)", () => {
-    const before = REAL_INBOX;
-    // A brand-new bare line, inserted where the operator opened one under "## Domain Empty"
-    // (index 2, right after the heading, ahead of the three existing stamped items).
-    const gesture = { kind: "insert-line", lineIndex: 2, text: "- [ ] Ring the dentist" };
-    // AFTER: the cycle mints qntm:2604 (the real file's highest id is 2603; this is the next
-    // plausible one, a fixture's own choice, never observed) and stamps it with the same
-    // `#task 🆕 <date>` shape every real line in this file already carries, dated today.
-    const after = [
-      "## Inbox",
-      "## Domain Empty",
-      "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
-      "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
-      "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
-      "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
-    ].join("\n");
+  test(
+    "the same mechanism, for a BRAND NEW capture (openLine's own case, not an existing line's " +
+      "edit) — THIS ASSERTION WAS CHANGED BY `widen-instance-identity-past-the-first-stamp`, and " +
+      "the change is the point: it used to assert `absent` and now asserts a confirmed restore",
+    () => {
+      // ── WHY THIS TEST'S EXPECTED VALUES CHANGED, SAID PLAINLY ──
+      //
+      // As merged, this test asserted `cursor.outcome === "absent"` and `preserved === "unknown"`.
+      // Those were not assertions about what SHOULD happen; they were the measurement of the
+      // blocker, recorded so it could not be forgotten. `app/present/relative.ts` closes exactly
+      // this case, so the measurement changes — and a test whose expected values were the DEFECT
+      // is the one kind of test that must change when the defect is fixed. Nothing about the
+      // fixture moved: the same before, the same gesture, the same after. Only the answer.
+      //
+      // The sibling test above it — the one where the line LEAVES THE VIEW ENTIRELY — is
+      // UNCHANGED and still asserts `absent`, which is what stops this change from being a test
+      // rewritten to fit an implementation.
+      const before = REAL_INBOX;
+      // A brand-new bare line, inserted where the operator opened one under "## Domain Empty"
+      // (index 2, right after the heading, ahead of the three existing stamped items).
+      const gesture = { kind: "insert-line", lineIndex: 2, text: "- [ ] Ring the dentist" };
+      // AFTER: the cycle mints qntm:2604 (the real file's highest id is 2603; this is the next
+      // plausible one, a fixture's own choice, never observed) and stamps it with the same
+      // `#task 🆕 <date>` shape every real line in this file already carries, dated today.
+      const after = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Ring the dentist [[qntm:2604]] #task 🆕 2026-08-01",
+        "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31",
+        "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+        "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+      ].join("\n");
 
-    const result = replay({
-      view: INBOX_VIEW,
-      before,
-      gesture,
-      after,
-      qualification: QUALIFICATION,
-      resolution: RESOLUTION,
-    });
+      const result = replay({
+        view: INBOX_VIEW,
+        before,
+        gesture,
+        after,
+        qualification: QUALIFICATION,
+        resolution: RESOLUTION,
+      });
 
-    // No membership NOTE fires for an insert (membershipNoteFor's own `commit.kind !== "set-line"`
-    // guard) — predicted is correctly "abstain" here, distinguishing this case from the one above:
-    // this test is about the CURSOR alone, not a membership prediction.
-    assert.equal(result.membership.predicted.kind, "abstain");
-    assert.equal(result.cursor.outcome, "absent");
-    assert.equal(result.anchor.node, null);
-    assert.equal(result.preserved, "unknown", "cannot check what survived a row that cannot be found");
-  });
+      // No membership NOTE fires for an insert (membershipNoteFor's own `commit.kind !== "set-line"`
+      // guard) — predicted is correctly "abstain" here, distinguishing this case from the one above:
+      // this test is about the CURSOR alone, not a membership prediction.
+      assert.equal(result.membership.predicted.kind, "abstain");
+
+      // THE ROOT CAUSE IS UNCHANGED — the anchor still has no node, and the first two tiers of the
+      // walk still cannot answer. What changed is that there is now a THIRD thing to ask.
+      assert.equal(result.anchor.node, null, "the line still has no node — nothing about that is fixed");
+      assert.notEqual(result.anchor.relative, null, "but it does now carry where it SAT");
+      assert.equal(result.anchor.relative.below, "qntm:2603", "bracketed from below by the item it was typed above");
+
+      assert.equal(result.cursor.outcome, "found");
+      assert.equal(result.cursor.via, "relative", "the bracket held and the characters confirmed it");
+      assert.equal(result.cursor.lineIndex, 2);
+      assert.equal(result.preserved, true, "and now the harness CAN check what survived — it did");
+      assert.equal(result.held, null, "a row that was found is a row the file owns; holding it would double it");
+    },
+  );
 
   test(
     "WHAT THIS GENERALISES TO, STATED RATHER THAN LEFT IMPLICIT: `membershipFor` answers only when " +
@@ -221,6 +247,97 @@ describe("1. THE MARQUEE FINDING — membership prediction vs. the first stamp",
       // membershipFor's OWN first check is exactly the guard this finding turns on.
       const line = "- [ ] Ring the dentist #work";
       assert.doesNotMatch(line, /\[\[qntm:\d+\]\]/, "a line membershipFor will answer for carries no stamp");
+    },
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 1b. THE MEASURED BLOCKER ITSELF, CLOSED — `- [ ] Lesley pay tenner`, the exact line
+//     `design-presentation-instance-identity.md` §3.2 anchored on as the operator typed it and
+//     resolved against the projection that came back:
+//
+//       inbox line 2, stamp=null, section="## Domain Empty"  ->  {"outcome":"absent"}
+//
+//     This is the one fixture in this file whose AFTER is not constructed at all: the after IS
+//     `REAL_INBOX`, the literal copy of `~/qntm/inbox.md` read read-only on 2026-08-01. The
+//     BEFORE is that same file with the one line he typed removed — which is what it said the
+//     moment before he typed it.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("1b. THE MEASURED BLOCKER — his own line, reproduced first, then closed", () => {
+  /** `~/qntm/inbox.md` the moment before `- [ ] Lesley pay tenner` was typed into it. */
+  const BEFORE_HE_TYPED = [
+    "## Inbox",
+    "## Domain Empty",
+    "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+    "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+  ].join("\n");
+  const GESTURE = { kind: "insert-line", lineIndex: 2, text: "- [ ] Lesley pay tenner" };
+
+  test("REPRODUCED — the two tiers that existed before this row still cannot answer", () => {
+    const result = replay({
+      view: INBOX_VIEW,
+      before: BEFORE_HE_TYPED,
+      gesture: GESTURE,
+      after: REAL_INBOX,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+    });
+
+    // TIER 1, INSTANCE. An unstamped line's identity IS its own characters, and the cycle appended
+    // to them — so the instance the anchor was taken with is not in the projection.
+    assert.equal(result.anchor.instance, "inbox/1/- [ ] Lesley pay tenner");
+    const arrived = REAL_INBOX.split("\n")[2];
+    assert.notEqual(arrived, "- [ ] Lesley pay tenner", "the stamp changed the characters — tier 1 cannot match");
+
+    // TIER 2, NODE. There is nothing to search with, and that follows from `membershipFor`'s own
+    // precondition rather than from this fixture: it answers only for a line carrying no stamp.
+    assert.equal(result.anchor.node, null);
+  });
+
+  test("CLOSED — the cursor holds, by the bracket, and his characters survive", () => {
+    const result = replay({
+      view: INBOX_VIEW,
+      before: BEFORE_HE_TYPED,
+      gesture: GESTURE,
+      after: REAL_INBOX,
+      qualification: QUALIFICATION,
+      resolution: RESOLUTION,
+    });
+
+    assert.equal(result.cursor.outcome, "found", "the measured `absent` is gone");
+    assert.equal(result.cursor.via, "relative");
+    assert.equal(result.cursor.lineIndex, 2, "the same row, in the file the vault really holds");
+    assert.equal(result.preserved, true, "and the cycle appended to what he typed rather than replacing it");
+    assert.equal(result.held, null, "nothing needs holding — the file owns the characters");
+  });
+
+  test(
+    "AND THE COMPARISON THAT COULD NOT BE MADE CAN NOW BE MADE — `membership.actual` was `unknown` " +
+      "for every arrival of this shape, because the ROW could not be found. It can be found now.",
+    () => {
+      // The same gesture as a `set-line`, which is the shape `membershipNoteFor` actually predicts
+      // for. His line stays in Domain Empty (no `#work`), the cycle stamps it, and the harness's
+      // ground truth — the cursor's own reading — now says `stays` instead of `unknown`.
+      const before = [
+        "## Inbox",
+        "## Domain Empty",
+        "- [ ] Lesley pay tennr",
+        "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
+        "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
+      ].join("\n");
+      const result = replay({
+        view: INBOX_VIEW,
+        before,
+        gesture: { kind: "set-line", lineIndex: 2, text: "- [ ] Lesley pay tenner" },
+        after: REAL_INBOX,
+        qualification: QUALIFICATION,
+        resolution: RESOLUTION,
+      });
+
+      assert.equal(result.membership.predicted.kind, "stays", "a real prediction, not an abstention");
+      assert.equal(result.membership.actual.kind, "stays", "was `unknown` before this row — the row was unfindable");
+      assert.equal(result.membership.converged, true, "was `null` before this row — nothing to compare against");
     },
   );
 });
