@@ -38,7 +38,9 @@ This document is a **HORIZONTAL** and **TIME** pin. It is **not** a vertical one
   give the claim a queue address it did not have an hour ago.
 * **VERTICAL — NOT moved, and stated plainly.** This document adds no code, changes no
   `enforcement_depth`, and proves no capability. Measured over the 121 capabilities in
-  `apps/qntm-md/docs/architecture/capabilities.yaml` (the trunk clone, read-only, verified in §1.1):
+  `apps/qntm-md/docs/architecture/capabilities.yaml` (the trunk clone, read-only, verified in §11
+  [CORRECTED — §12.6: this cited "§1.1", a subsection that does not exist in this document; §1 has
+  no subsections, and the reproduction command for these exact numbers is in §11]):
   75 sit at depth 1, `horizontal_completeness.rooted` is `False` for 116 of 121, 67 are `thin`. **A
   document with no scenario behind it does not change one of those numbers.** Three of today's
   backlog rows are filed `unscoped` or `diagnose-ready` — queue position, not code. If this document
@@ -59,12 +61,14 @@ Obsidian's markdown are three targets sharing one semantics, compiled once. **Ge
 is already load-bearing** — three independent readers on the browser side and three independent
 generators on the compile side already refuse, by name, anything outside a closed `eq`/`not` predicate
 grammar (§3.1) — **but the "operator set" the brief asks about is not a place. It is a property that
-six independently-authored surfaces currently hold in agreement, proven by test, never by a shared
-type.** That is not a defect this document is reporting as broken; every one of the six surfaces
-refuses loudly and is proven against the engine (`tests/qualification-agreement.test.mjs`,
-`scripts/resolution-agreement.py` and siblings — **[REPO]** `design-the-resolution-architecture.md`
-§8.1–8.2). It is a finding about where the highest-leverage design surface in the system currently
-lives: nowhere named, six places at once, held together by tests rather than by a declaration. The
+~~six~~ **seven** independently-authored surfaces currently hold in agreement, proven by test, never
+by a shared type [CORRECTED — §12.1: this paragraph said six; §3.1's own table, three sections
+later in this same document, lists seven].** That is not a defect this document is reporting as
+broken; every one of the seven surfaces refuses loudly and is proven against the engine
+(`tests/qualification-agreement.test.mjs`, `scripts/resolution-agreement.py` and siblings —
+**[REPO]** `design-the-resolution-architecture.md` §8.1–8.2). It is a finding about where the
+highest-leverage design surface in the system currently lives: nowhere named, seven places at once,
+held together by tests rather than by a declaration. The
 three shapes — TABLE, EXPRESSION, PROGRAM — are a new name for a distinction `research-the-resolution-
 universe.md` §6.2 and `roadmap-the-road-ahead.md` §4 already measured from two different directions
 and never merged into one taxonomy (§4). The PROGRAM band's own execution model is not what this
@@ -213,18 +217,21 @@ every closure number in the corpus is a floor over one config.
 
 **Expressibility — [REPO], and this is the one this document can ground furthest, because §3 answers
 where the operator set actually lives.** The two syntactic and semantic refusal surfaces this document
-found (§3.1) are the concrete form of "extend the set": widening what compiles is, today, six separate
-edits to six separate files, each with its own test, none importing from a shared enumeration.
+found (§3.1) are the concrete form of "extend the set": widening what compiles is, today, seven
+separate edits to seven separate files, each with its own test, none importing from a shared
+enumeration [CORRECTED — §12.1].
 
 ---
 
 ## 3. Where the operator set actually lives today — from the code, not from this brief
 
 **Answer, in one sentence: it is implicit, and it is not implicit in one place — it is scattered
-across six independently-maintained surfaces that agree by test, not by a shared type.** This is the
-finding the brief asked for by name, and it is the one genuinely new measurement in this document.
+across ~~six~~ **seven** independently-maintained surfaces that agree by test, not by a shared type
+[CORRECTED — §12.1].** This is the finding the brief asked for by name, and it is the one genuinely
+new measurement in this document.
 
-### 3.1 Six surfaces, none importing from a common enumeration
+### 3.1 ~~Six~~ **Seven** surfaces, none importing from a common enumeration [CORRECTED — §12.1: this
+heading undercounted its own table by one row, the RENDITION vocabulary, before this correction]
 
 **[OBS] Verified directly in this worktree at `18a9402`, not taken from a report.**
 
@@ -235,7 +242,7 @@ finding the brief asked for by name, and it is the one genuinely new measurement
 | the RESOLVABLE fields a line's own tokens may set | `["node_type", "domain", "status"]` | `scripts/generate-qualification-declaration.mjs:96` |
 | the STRUCTURAL edge vocabulary (browser) | `EdgeSource = "self" \| "position"`, `EdgeDirection = "incoming" \| "outgoing"` | `app/present/structural.ts:77`, `:80`, keyed at `:118` |
 | the RESOLUTION table vocabulary (browser) | `OrderingFieldKind = "date" \| "int" \| "float"`, `ChromeShape = "checkbox" \| "plain_line"` | `app/present/resolutiontable.ts:119`, `:135`, keyed at `:204` |
-| the RENDITION vocabulary (browser) | `RESOLUTION_KEYS`, closed to output facts only | `app/present/resolution.ts:96` |
+| the RENDITION vocabulary (browser) | `RESOLUTION_KEYS`, closed to output facts only | ~~`app/present/resolution.ts:96`~~ **`app/present/rendition.ts:96`** [CORRECTED — §12.1: the module was renamed `242afa9` the same day this document merged; `resolution.ts` no longer exists] |
 | the YAML SYNTAX subset the parser accepts | tabs, anchors/aliases, block scalars, `---`, merge keys, explicit keys all THROW | `scripts/yaml-subset.mjs:18-21` |
 
 **[REA] Two things to hold about that table, and neither is a criticism of the code.** First, the
@@ -247,7 +254,7 @@ own comment states exactly why the grammar is closed to `eq`/`not` and not wider
 comparisons exist in the engine and are deliberately NOT here… admitting the operator would only widen
 this type without widening what can be answered."* **That sentence is the operator-set discipline the
 brief describes, already written into the type it constrains — it is just not written into one type
-that governs all six surfaces.**
+that governs all seven surfaces.**
 
 **[REA] The syntax refusal list and the predicate refusal list are drawn from two independent design
 decisions, and this document checked rather than assumed they line up.** `yaml-subset.mjs`'s refusals
@@ -266,21 +273,43 @@ the whole grammar, and even that is an artefact assembled from four independentl
 readers (`declaration.ts`, `qualification.ts`, `structural.ts`, `resolutiontable.ts`), none of which
 imports a shared list of what "the operator set" contains. `RESOLVABLE_FIELDS`
 (`generate-qualification-declaration.mjs:96`) is the single closest thing to a real enumeration in the
-whole codebase, and it closes exactly one axis (which node fields a typed token may set) — it is
+whole codebase, and it closes exactly one axis (which node fields a typed token may set) — ~~it is
 exported from a `.mjs` Node script and is structurally unreachable from the browser's TypeScript at
-compile time, so even that one list cannot be the operator set's address.
+compile time, so even that one list cannot be the operator set's address.~~
+
+**[CORRECTED — §12.2] The claim above is false, and the true shape is worse, not better, for this
+section's own thesis.** `RESOLVABLE_FIELDS` is not unreachable from the browser. It has a browser
+twin, `app/present/membership.ts:76` (`export const RESOLVABLE_FIELDS = ["node_type", "domain",
+"status"] as const;`), and a third copy again, `scripts/qualification-agreement.py:62`. Three
+independently hand-typed lists holding the identical three strings is a worse version of the
+fragmentation this section is diagnosing, not a narrower one: an unreachable list is a list nobody
+can accidentally disagree with; three reachable, hand-synced lists are three places a silent edit to
+one can drift from the other two, exactly the failure `§2.2` closed for the token loop's drop path.
+
+This has since been **partly resolved, in `8024b44`**, after this document's own base commit —
+`scripts/generate-qualification-declaration.mjs`'s `RESOLVABLE_FIELDS` (`:96`) is now the one
+hand-authored source; `scripts/generate-operator-set.mjs` writes the other two copies from it, and
+`tests/operator-set-agreement.test.mjs` §"0.5" asserts neither generated file goes stale. The
+agreement test is not made redundant by the generation — it still catches three real cases: the
+compiler's list changing without a regeneration, a generated file hand-edited after the fact, and
+`docs/architecture/operator-set.json`'s own independently hand-typed list drifting from the
+generator's output. **So the sharper reading holds even after the fix**: three unwitnessed,
+hand-synced lists were exactly the shape of risk this document's compiler thesis is about, and one
+axis of it — the RESOLVABLE fields, not the other six surfaces — is now generated rather than
+merely tested. §3's "held together by tests rather than by a declaration" (§1) is, for this one
+surface only, now "held together by generation, checked by tests."
 
 **[REA] This is the sentence the brief asked this document to find, stated plainly: there is no single
 place that enumerates what config can express. It is implicit, correct by convergent design and by
-test, and addressable only by reading six files and confirming they still agree — which is exactly the
-condition `design-the-resolution-architecture.md` §2.3 already named for the resolution cascade itself
-(*"twelve resolvers would put twelve copies of the walk in the codebase"*) and refused to build. The
-operator set has the same shape as the cascade did before that document's L4 layer named it: real,
-correct, tested, and not yet a place.** Naming it does not mean collapsing six typed grammars into one
-untyped union — `qualification.ts:60-68`'s own argument against widening its own type is a reason to
-keep the axes separate. It means a single index that says which six files together constitute "the
-operator set," so a widening decision is made once, against a visible list, rather than independently
-in six pull requests that happen to agree.
+test, and addressable only by reading seven files and confirming they still agree — which is exactly
+the condition `design-the-resolution-architecture.md` §2.3 already named for the resolution cascade
+itself (*"twelve resolvers would put twelve copies of the walk in the codebase"*) and refused to
+build. The operator set has the same shape as the cascade did before that document's L4 layer named
+it: real, correct, tested, and not yet a place.** Naming it does not mean collapsing seven typed
+grammars into one untyped union — `qualification.ts:60-68`'s own argument against widening its own
+type is a reason to keep the axes separate. It means a single index that says which seven files
+together constitute "the operator set," so a widening decision is made once, against a visible list,
+rather than independently in seven pull requests that happen to agree.
 
 ---
 
@@ -415,11 +444,11 @@ without the roadmap in hand should not read either section as a bound.
    cost the two cheapest resolution kinds never incur, because neither needs the line to have a name
    yet (§2.5).
 4. **The implied premise that "the operator set" is a gap this document should propose filling.**
-   **Half-refuted.** It is a real gap — no single address exists (§3) — but the six surfaces that
-   stand in for it today are not a mess to be cleaned up; they are a federated architecture stated as
-   deliberate in `declaration.ts:32-54`'s own header, for a reason (`qualification.ts:69`'s own
-   comment) that argues against a wider, shared type. The fix this document recommends (§9) is an
-   index over the six, not a merge of the six.
+   **Half-refuted.** It is a real gap — no single address exists (§3) — but the seven surfaces
+   [CORRECTED — §12.1] that stand in for it today are not a mess to be cleaned up; they are a
+   federated architecture stated as deliberate in `declaration.ts:32-54`'s own header, for a reason
+   (`qualification.ts:69`'s own comment) that argues against a wider, shared type. The fix this
+   document recommends (§9) is an index over the seven, not a merge of the seven.
 
 ---
 
@@ -431,7 +460,7 @@ the file's first 3,231 lines against the pre-branch copy after the three new row
 
 | id | kind | state | what it is |
 |---|---|---|---|
-| `the-operator-set-has-no-single-address` | capability | unscoped | §3's finding — an index over the six surfaces, not a merge of them; scoping which surfaces belong on the list is a design pass |
+| `the-operator-set-has-no-single-address` | capability | unscoped | §3's finding — an index over the seven surfaces [CORRECTED — §12.1], not a merge of them; scoping which surfaces belong on the list is a design pass |
 | `the-reachability-set-is-proven-not-compiled` | capability | diagnose-ready | §2.4 — turn `design-the-rule-mirror.md`'s and `research-the-resolution-universe.md`'s one-off sweeps into a generator output with a `--check` gate |
 | `a-never-seen-config-passes-the-acceptance-test` | capability | unscoped | §6 — the operator's own acceptance test; unscoped because the synthetic config's contents are a design decision, and running it needs a sandbox this branch cannot touch |
 
@@ -439,11 +468,18 @@ the file's first 3,231 lines against the pre-branch copy after the three new row
 
 ## 10. What is unverified
 
-* **[UNVERIFIED]** Whether the six surfaces in §3.1 are the complete list. This document found them by
-  reading the four strict readers' own headers and the three generators' shared imports; a seventh
-  surface could exist unread. **Settled by** the same enumeration discipline `research-the-resolution-
-  universe.md` §6.3 used for `graphData`: grep every occurrence of a closed-union type export under
-  `app/present/` and `scripts/`, not just the ones this document happened to open.
+* **[UNVERIFIED, corrected — §12.1]** Whether the surfaces in §3.1 are the complete list. This bullet
+  originally read "six surfaces… a seventh surface could exist unread" — but the seventh (RENDITION,
+  `app/present/rendition.ts`, then `resolution.ts`) was never unread; it was already the table's own
+  seventh row. The genuinely open question, restated: whether an **eighth** surface exists unread.
+  §12.5 records that a later correction pass, checking a separate claim about these four grammars,
+  found direct evidence of at least one candidate — independently re-typed literal vocabulary in the
+  compiler scripts for two of the four — that this document's four-strict-readers survey did not
+  catch, because that survey looked at `app/present/` and the generators' shared imports, not at
+  inline literal comparisons inside generator function bodies. **Settled by** the same enumeration
+  discipline `research-the-resolution-universe.md` §6.3 used for `graphData`: grep every occurrence of
+  a closed-union type export **and every inline literal-string admission gate** under `app/present/`
+  and `scripts/`, not just the ones this document happened to open.
 * **[UNVERIFIED]** Whether a `--check` gate for the reachability sweep (§2.4, backlog row 2) is
   half a day or an arc. Neither merged document prices turning a research rig into a shipped generator
   output; `design-the-rule-mirror.md` §11 row 5 prices the capture-only agreement test at `h`, which is
@@ -489,4 +525,204 @@ print(sum(1 for c in caps if isinstance(c.get('horizontal_completeness'), dict)
 # no git stash, no merge. ~/qntm and ~/.qntm-md were never opened. The trunk clone at
 # /Users/lukeannison/projects/qntm-network/qntm was read only, via absolute paths, never
 # written and never `cd`-ed into.
+
+# reproducing §3.1's RENDITION row today (post-`242afa9`) needs the renamed path:
+grep -n "export const RESOLUTION_KEYS" app/present/rendition.ts   # not app/present/resolution.ts
+```
+
+---
+
+## 12. Corrections, made in public, on `docs/correct-the-compiler-pin` — what was claimed, what is
+     true, and what changed it
+
+**The house pattern, `roadmap-the-road-ahead.md` §6.3: state the claim, state the fact, name what
+changed it, and leave the wrong sentence visible rather than rewritten as if it had always been
+right.** This section is a TIME-axis pin only — it re-reads §§1–11 above against the code as it
+stands today, on this branch, and corrects five claims reported by later agents. Two of the five did
+not hold up and are refuted here rather than applied; one further, unprompted finding is added at
+§12.6. **No application source changes. No capability row in `docs/architecture/capabilities.yaml`
+is touched** — this repo's copy holds 49 rows (37 `working`, 12 `undeclared`; 35 carry no
+`enforcement_depth`, 12 at depth 1, one at 3, one at 5; 35 carry no `confidence`, 12 `thin`, 2
+`held` — **[OBS]**, reproduced at the end of this section), and none of them names the operator-set
+finding this correction touches. **This correction pass invents no row for it.**
+
+### 12.1 The document undercounted its own table by one — six stated, seven listed [HELD]
+
+**Claimed**, in four places (§1, §3, §3.1's own heading, §8 item 4): "six … surfaces." **True**: §3.1's
+table, in the same document, has always listed seven rows — the MEMBERSHIP predicate grammar
+(browser and compiler, two rows), the RESOLVABLE fields, the STRUCTURAL edge vocabulary, the
+RESOLUTION table vocabulary, **the RENDITION vocabulary**, and the YAML syntax subset. The seventh
+row was never missing; it was miscounted in every sentence that summarised the table, including the
+table's own heading three lines above the table itself. **What changed it**: nothing needed to
+change in the code to find this — reading §3.1 against its own prose was sufficient, and every
+occurrence has been corrected in place above, with the original number struck through rather than
+deleted.
+
+**A second, compounding error travelled with the miscount.** The RENDITION row's citation,
+`app/present/resolution.ts:96`, was correct when this document merged (base `18a9402`) and became
+stale the same day: `242afa9` (*"refactor(app): rename app/present/resolution.ts to rendition.ts"*,
+executing `design-pin-the-terms.md` §7) moved the file. `app/present/resolution.ts` does not exist
+in this worktree; `find app -iname "*resolution.ts*"` returns nothing. `RESOLUTION_KEYS` is
+unmoved — same symbol, same line (`:96`) — only the file name changed, which is exactly the citation
+hazard `roadmap-the-road-ahead.md` §6.3 already named for `app/index.html`'s line numbers, now a
+second instance of it, for a file name instead of a line number. Corrected in the table (§3.1) with
+the old path struck through, and a corrected reproduction command appended above.
+
+**This propagated into the backlog row this document itself filed.** `the-operator-set-has-no-single-
+address` (§9, and `docs/implementation-artifacts/backlog.yaml`) named six surfaces in its title and
+omitted the RENDITION vocabulary entirely — not merely miscounted but the wrong entry list. Corrected
+on this branch; see the backlog diff.
+
+### 12.2 The RESOLVABLE_FIELDS unreachability claim was false, and the true shape sharpens the
+     document's own thesis [HELD, sharpened, and partly resolved since]
+
+**Claimed**, §3.2: `RESOLVABLE_FIELDS` "is exported from a `.mjs` Node script and is structurally
+unreachable from the browser's TypeScript at compile time." **False, verified by opening both other
+files.** `app/present/membership.ts:76` declares its own `RESOLVABLE_FIELDS = ["node_type", "domain",
+"status"] as const;` — a browser twin, not an absence. `scripts/qualification-agreement.py:62`
+carries a third copy again, `TRIPLE_FIELDS`, the same three strings. Three independently hand-typed
+lists is not a narrower problem than one unreachable list; it is the worse version of the same
+problem §3 spends its whole length describing — a silent edit to one of the three has nowhere to be
+caught except a human noticing.
+
+**And it is now partly resolved**, in `8024b44` (*"generate RESOLVABLE_FIELDS in membership.ts and
+qualification-agreement.py from the compiler's copy"*), which post-dates this document's own base.
+`scripts/generate-qualification-declaration.mjs`'s `RESOLVABLE_FIELDS` (`:96`) is now the one
+hand-authored source; `scripts/generate-operator-set.mjs` writes the other two from it, and
+`tests/operator-set-agreement.test.mjs`'s "0.5" suite fails if either generated copy goes stale — no
+monorepo needed to catch it, `npm test` is enough. The agreement test is not made redundant by the
+generation: it still catches three real, distinct cases, verified by reading the test file directly —
+the compiler's list changing without a regeneration, a generated file hand-edited after the fact, and
+`docs/architecture/operator-set.json`'s own independently hand-typed `values` list drifting from the
+generator's output. Corrected in place, §3.2, with the false sentence struck through rather than
+deleted.
+
+### 12.3 The reported "per-file table sums to 21, not 20" error is not in this document — REFUTED as
+     filed, real elsewhere [NOT HELD, as reported]
+
+**Reported**, against this document: "its per-file table sums to 21, not the 20 stated." **Checked
+directly: this document contains no per-file blast-radius table, and never states a total of 20.**
+`grep -n "20\|21\|22"` against the full text of `design-the-compiler-and-the-bands.md` turns up
+nothing matching that claim; the file's only "21" is an unrelated count in §2.4 (a 12-node-per-view
+rule-reachability sample). **This part of the report is refuted, as an error IN THIS document. I am
+not correcting it here, because there is nothing here to correct.**
+
+**The underlying arithmetic error is real, but it lives in a sibling document.**
+`design-pin-the-terms.md` §6.2 states *"20 import-specifier sites across 15 `app/present/*.ts`
+files"* and gives a per-file breakdown immediately after it. Summed by hand: cascade(2) + focus(2) +
+word(2) + membership(1) + correlation(1) + source(1) + ordering(1) + newline(1) + indent(1) +
+context(1) + paint(2) + index(2) + declaration(2) + boundary(1) + address(1) = **21**, not 20 — the
+same discrepancy the report described, one document over. That document's own §7.1 repeats the wrong
+"20" total. Neither has been corrected on `main` as of this branch.
+
+**The report's second half — "the true blast radius, measured during the rename, was 22 import
+lines across 16 files… a single NUL byte made plain grep skip it silently… gone (`6834d88`), and a CI
+guard now catches its class" — is independently verified, true, and also not a claim this document
+makes.** `242afa9`'s own commit body and PR #76's description (`gh pr view 76`) confirm it precisely:
+`app/present/instance.ts` was the 16th file and 22nd import site, missed by `design-pin-the-terms.md`
+§6.2's survey and caught only because `npm run typecheck` failed after the mechanical rename pass —
+"`tsc` doesn't care what `grep` sees," in the PR's own words. `6834d88`'s commit body confirms the
+root cause precisely as reported: a real `0x00` byte at offset 12718, present since the file's first
+commit (`a3f2d8c`, PR #27), made `file(1)` classify the file as `data` and made a plain `grep`
+(without `-a`) silently skip it — "no error, no 'binary file matches', a miss indistinguishable from
+a genuine no-match." `tests/no-nul-bytes.test.mjs`, added in the same commit, is the CI guard,
+wired into `build.yml` on every push and pull request.
+
+**Because this document does not carry the error, this document does not carry the fix.** Both facts
+above are recorded here, verified, so the finding is not lost — but correcting `design-pin-the-terms.
+md` is a change to a different document than the one this branch was scoped to correct, and is left
+to whoever next touches that file, or a follow-up branch.
+
+### 12.4 `resolutiontable.ts` was not renamed, and this document never said it was — verified, no
+     correction needed [HELD, and already correct]
+
+**Reported as a thing to check**: whether this document implies `resolutiontable.ts` was renamed or
+should have been. **Checked**: every citation to `resolutiontable.ts` in this document (§3.1's table
+row, §3.2's list of four strict readers, the §11 reproduction block) names it under its own,
+unchanged name, at line numbers unaffected by `242afa9`. Nothing in this document states or implies a
+rename. `design-pin-the-terms.md` §6.1/§7.1 records the actual decision directly: `resolutiontable.ts`
+already reads three of the twelve resolution kinds, correctly, and "is NOT renamed." **No correction
+made — the report's premise ("if the document implies otherwise") does not obtain.**
+
+### 12.5 "The other four grammars live in one file, imported not retyped" — REFUTED for two of the
+     four, on direct inspection of the compiler scripts [NOT HELD, as reported]
+
+**Reported**: structural edges, ordering/chrome, rendition and the YAML subset each live in one file
+and are imported rather than retyped, closing the question of whether the RESOLVABLE_FIELDS hand-sync
+(§12.2) was the only instance of its class among the seven surfaces.
+
+**Checked against the code directly, surface by surface:**
+
+* **RENDITION** (`RESOLUTION_KEYS`) — **holds.** `grep -rn "RESOLUTION_KEYS"` under `app/` and
+  `scripts/` finds the declaration in `rendition.ts:96` and import sites only (`focus.ts`,
+  `declaration.ts`, `index.ts`); no second, independently-typed copy of the five-key list exists
+  anywhere in the compiler scripts.
+* **YAML syntax subset** — **holds.** `yaml-subset.mjs` is imported by
+  `generate-qualification-declaration.mjs` and `generate-resolution-declaration.mjs`; neither
+  reimplements the refusal list. No second parser or refusal table was found.
+* **STRUCTURAL edge vocabulary — does not hold.** `structural.ts:77,80` types `EdgeSource = "self" |
+  "position"` and `EdgeDirection = "incoming" | "outgoing"` for the browser reader. But
+  `scripts/generate-structural-declaration.mjs:103` independently checks
+  `edgeSource !== "self" && edgeSource !== "position"`, and `:287` independently checks
+  `lang.edgeDirection !== "incoming" && lang.edgeDirection !== "outgoing"` — the same two closed
+  vocabularies, hand-typed a second time, on the compile side, as literal string comparisons rather
+  than an exported type. Nothing tests that these two independent expressions of "self/position" and
+  "incoming/outgoing" stay in agreement if one is ever widened without the other.
+* **ORDERING/CHROME vocabulary — does not hold.** `resolutiontable.ts:135` types `ChromeShape =
+  "checkbox" | "plain_line"`. `scripts/generate-resolution-declaration.mjs:223` independently
+  declares `const SEEDABLE_SHAPES = new Set(["checkbox", "plain_line"]);` — the identical two-value
+  set, hand-typed a second time. No agreement test was found covering this pair either.
+
+**So the claim is half right and half wrong, and the wrong half matters.** Two of the four
+(RENDITION, YAML subset) are genuinely single-address. The other two (STRUCTURAL, ORDERING/CHROME)
+have the same two-independently-typed-copies shape §3.1 already counts twice for the MEMBERSHIP
+predicate grammar (browser row + compiler row) — meaning, by this document's own counting rule for
+MEMBERSHIP, STRUCTURAL and ORDERING/CHROME arguably earn a compiler-side row each too, which §3.1's
+table does not currently carry. **This is not added to §3.1 here** — doing so on the strength of two
+`grep` calls, without the same care §3.1's original seven rows received (citations with enclosing
+function names, cross-checked against tests), would repeat exactly the mistake this whole section is
+correcting, at one remove. **The correction actually made is narrower and honest about its own
+limit**: the reported claim ("hand-sync class had exactly one instance, not five") is refuted, the
+§10 UNVERIFIED item about completeness is reworded (above) to point at this finding instead of
+closing it, and a fresh, careful survey of all seven surfaces' compile-side twins is left as future
+work, not asserted here.
+
+### 12.6 One further error, found unprompted while verifying the others: a citation to a subsection
+     that does not exist [NEW]
+
+§0's VERTICAL-axis paragraph cited its own capabilities.yaml numbers as "verified in §1.1." **This
+document has no §1.1** — §1 ("The answer, in one paragraph") has no subsections; the only place the
+121/75/67/116 figures are actually reproduced is the Python block in §11. Corrected in place, §0,
+with the wrong citation struck through.
+
+### Reproduction for §12
+
+```
+git -C . rev-parse HEAD                                    # docs/correct-the-compiler-pin, off 8024b44
+find app -iname "*resolution.ts*"                           # (nothing — renamed 242afa9)
+grep -n "RESOLVABLE_FIELDS" app/present/membership.ts        # :76, the browser twin
+grep -n "RESOLVABLE_FIELDS\|TRIPLE_FIELDS" scripts/qualification-agreement.py   # :62, the third copy
+git show --stat 8024b44                                     # generates the two copies from the compiler's
+sed -n '186,210p' tests/operator-set-agreement.test.mjs      # the "0.5" stale-copy suite
+git show 242afa9 -- app/present/instance.ts                  # the 16th file, already fixed in the rename commit
+git show 6834d88 | head -40                                  # the NUL byte, offset 12718, and its guard
+grep -n "20\|21\|22" docs/implementation-artifacts/design-the-compiler-and-the-bands.md   # no per-file table here
+grep -n '"self"\|"position"' scripts/generate-structural-declaration.mjs      # :103, independent of structural.ts
+grep -n "SEEDABLE_SHAPES" scripts/generate-resolution-declaration.mjs           # :223, independent of resolutiontable.ts
+python3 -c "
+import yaml
+d = yaml.safe_load(open('docs/architecture/capabilities.yaml'))   # THIS repo's copy, 49 rows, not the trunk clone's 121
+caps = d['capabilities']
+print(len(caps))                                                       # 49
+from collections import Counter
+print(Counter(c.get('status') for c in caps))                          # working: 37, undeclared: 12
+print(sum(1 for c in caps if c.get('enforcement_depth') is None))      # 35
+print(Counter(c.get('enforcement_depth') for c in caps))               # {None:35, 1:12, 3:1, 5:1}
+print(sum(1 for c in caps if c.get('confidence') is None))             # 35
+print(Counter(c.get('confidence') for c in caps))                      # {None:35, thin:12, held:2}
+"
+
+# NOT RUN: no cycle, no graph-sync, no long verb, no POST, no git stash, no merge.
+# app/ was read, never written. design-pin-the-terms.md's own "20"/"15" error (§12.3) was
+# found but not corrected — out of this branch's named scope.
 ```
