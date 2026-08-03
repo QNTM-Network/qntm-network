@@ -581,7 +581,7 @@ const envelope = (markdown, at, writes = undefined) => ({
  * that this substitution is possible (app/present/pickup.ts).
  */
 async function standUpPage(label, mutate) {
-  const { elements } = installBrowser();
+  const { elements, document } = installBrowser();
   const timers = [];
   globalThis.setTimeout = (fn, ms) => {
     timers.push({ fn, ms });
@@ -626,6 +626,7 @@ async function standUpPage(label, mutate) {
   return {
     page,
     elements,
+    document,
     control,
     timers,
     /** Run every timer placed so far, oldest first, and let the microtasks drain. */
@@ -653,7 +654,13 @@ async function standUpPage(label, mutate) {
 
 const settle = () => new Promise((r) => setImmediate(r));
 
-/** Open a line for typing through the page's own click wiring. */
+/**
+ * Open a line for typing through the page's own click wiring.
+ *
+ * A CLICK NO LONGER ARMS INSERT ON ITS OWN — it only positions the cursor, in NORMAL. This helper's
+ * job is "get me a typing box", not "prove what a bare click does" (present-focus.test.mjs and
+ * app-vim-wiring.test.mjs own that), so it presses `i` itself, same as the operator would.
+ */
 function clickLine(d, source, lineIndex) {
   const before = source
     .split("\n")
@@ -664,8 +671,9 @@ function clickLine(d, source, lineIndex) {
   const target = [row, ...walk(row)].find((el) => el.listeners?.has("click"));
   assert.ok(target, `source line ${lineIndex} is painted with nothing a cursor can reach`);
   target.dispatch("click", makeEvent());
+  d.document.dispatch("keydown", makeEvent({ key: "i" }));
   const input = d.inputs()[0];
-  assert.ok(input, "clicking the line did not open it for typing");
+  assert.ok(input, "clicking the line, then pressing i, did not open it for typing");
   return input;
 }
 

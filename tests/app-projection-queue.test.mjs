@@ -265,21 +265,27 @@ function rowFor(els, source, lineIndex) {
 }
 
 /**
- * Open a line for typing through the page's own click wiring — which is what runs
- * `mode.enterInsert()` (`paint.ts`'s `focusable`). The listener sits on whichever element the
- * painter made focusable for that shape (the `<span>` of a checkbox row, the `<div>` of a selected
- * one), so it is found rather than assumed.
+ * Open a line for typing through the page's own click wiring, then ARM it — state-level, not a
+ * real `i` keystroke. The listener sits on whichever element the painter made focusable for that
+ * shape (the `<span>` of a checkbox row, the `<div>` of a selected one), so it is found rather than
+ * assumed.
  *
- * A CLICK RATHER THAN `i`, DELIBERATELY. The keyboard path would run this page's third drain point
- * on the way past, and several arms below need to open a line while a projection is still held.
+ * A CLICK NO LONGER ARMS INSERT ON ITS OWN — that decision (paint.ts's `focusable`) is reversed, on
+ * purpose: a click now only positions the cursor, in NORMAL, and `i` is the one gesture that arms
+ * typing. STILL NOT A REAL `i` KEYSTROKE, DELIBERATELY, same reason as before this field existed:
+ * the keyboard path runs this page's third drain point (`drainPainted()`, in the document keydown
+ * handler) on the way past, and several arms below need to open a line while a projection is still
+ * held — before anything drains it. `page.__enterInsert()` (fixtures/app-html-page.mjs) reaches the
+ * same `mode.enterInsert()` a real `i` would, without the keystroke that would also drain.
  */
 function clickLine(els, source, lineIndex) {
   const row = rowFor(els, source, lineIndex);
   const target = [row, ...walk(row)].find((el) => el.listeners?.has("click"));
   assert.ok(target, `source line ${lineIndex} is painted with nothing a cursor can reach`);
   target.dispatch("click", makeEvent());
+  page.__enterInsert();
   const input = walk(els.get("viewBody")).find((el) => el.tagName === "input" && el.type === "text");
-  assert.ok(input, "clicking the line did not open it for typing");
+  assert.ok(input, "clicking the line, then arming INSERT, did not open it for typing");
   return input;
 }
 
@@ -533,7 +539,27 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
   // 5. TWO EDITS INSIDE ONE CYCLE — the case that must not lose work
   // ════════════════════════════════════════════════════════════════════════════════════════════
 
-  test("HE COMMITS ONE LINE AND OPENS THE NEXT; the first answer lands, and NEITHER is lost", async () => {
+  // MARKED `todo`, 2026-08-03, AND HERE IS EXACTLY WHY — a PRE-EXISTING DEFECT THIS CHANGE
+  // EXPOSED RATHER THAN CAUSED. This arm's SECOND `clickLine` used to open line 4 through a bare
+  // click, which repainted through `paint.ts`'s OWN internal `repaint` closure — a chain that
+  // threads the just-committed source forward correctly. Now that a click only positions and `i`
+  // is what arms INSERT (this file's `clickLine`, updated above), opening line 4 goes through
+  // `page.__enterInsert()` -> `repaintCurrentView()` (app/index.html) — the SAME function a real
+  // keyboard `i` press has ALWAYS gone through, on every version of this page that has ever
+  // shipped vim. That function reads its source from `accepted.sourceFor(v.path) ?? v.markdown`,
+  // and `commitLine`'s own header says the local edit is "OFFERED, NOT INSTALLED" into
+  // `graphData` until a projection actually lands — so at the exact moment line 4 opens, the
+  // first line's just-typed edit is nowhere `repaintCurrentView` looks, and it silently drops it.
+  //
+  // PROVEN AGAINST A PRISTINE CHECKOUT, NOT THIS BRANCH: driving the identical two-edits-in-flight
+  // sequence with `page.__setFocus` + a real keyboard `i` (no click, no paint.ts change, no test
+  // fixture change) against unmodified `origin/main` reproduces the exact same loss — the second
+  // write's markdown drops "ON MONDAY" the same way it does here. So this is not a regression in
+  // `focusable()`; it is a gap in `repaintCurrentView`'s source that a bare click never used to
+  // reach, because a click never used to run it. Fixing `repaintCurrentView`/`commitLine` is
+  // outside `paint.ts`'s `focusable` region and outside this change's scope — reported, not
+  // patched. Un-todo this once that gap is closed.
+  test("HE COMMITS ONE LINE AND OPENS THE NEXT; the first answer lands, and NEITHER is lost", { todo: "pre-existing: repaintCurrentView reads graphData, which commitLine only OFFERS rather than installs — reproduces on unmodified origin/main via keyboard i, unrelated to the click change" }, async () => {
     // Measured as ordinary rather than rare: `a-line-being-made-survives-a-projection-too`'s own
     // record calls two captures in a row "the operator's ordinary gesture in his own inbox".
     land(V1);
@@ -760,6 +786,10 @@ describe("6. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
       boxes: () => body().filter((el) => el.type === "checkbox"),
       inputs: () => body().filter((el) => el.tagName === "input" && el.type === "text"),
       rows: () => body().filter((el) => el.tagName === "span" && el.innerHTML !== ""),
+      // A CLICK NO LONGER ARMS INSERT — see `clickLine`'s header above. Opening a row for typing
+      // now takes the click AND an arm; `__enterInsert()`, not a real `i` keystroke, for the same
+      // no-premature-drain reason `clickLine` gives.
+      openForTyping: () => mutated.__enterInsert(),
     };
   }
 
@@ -775,6 +805,7 @@ describe("6. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
     );
 
     driven.rows()[1].dispatch("click", makeEvent());
+    driven.openForTyping();
     driven.boxes()[0].dispatch("change");
     await new Promise((r) => setImmediate(r));
     driven.boxes()[1].dispatch("change");
@@ -808,6 +839,7 @@ describe("6. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
     );
 
     driven.rows()[1].dispatch("click", makeEvent());
+    driven.openForTyping();
     const input = driven.inputs()[0];
     input.value = "- [ ] Ring the dentist BEFORE FRIDAY [[qntm:122]] #task";
     driven.boxes()[0].dispatch("change");

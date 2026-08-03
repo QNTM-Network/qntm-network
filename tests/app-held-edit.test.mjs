@@ -399,10 +399,16 @@ function makeDriver(page, browser, control) {
     page.paintView("this-week");
   };
 
-  /** Type `text` into the first task line and blur — one committed line edit through the real path. */
+  /**
+   * Type `text` into the first task line and blur — one committed line edit through the real path.
+   *
+   * A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+   * `i` that arms it for typing.
+   */
   async function typeAndCommit(before, text) {
     open(before);
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = openInput();
     input.value = text;
     input.dispatch("blur");

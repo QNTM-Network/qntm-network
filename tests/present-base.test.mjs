@@ -327,7 +327,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
 
   test("ARM 1 — the world moved under an open line, and the save says so", async () => {
     open(V1);
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     assert.equal(input.value, V1.split("\n")[3], "the cursor did not reach the source");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
@@ -351,7 +354,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
 
   test("ARM 1 — and the base on the wire is the copy it was computed from, not the one on screen", async () => {
     open(V1);
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     land(V2);
@@ -368,7 +374,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
 
   test("ARM 1 — THE WRITE STILL GOES, AND STILL CLOBBERS. This row reports; it does not prevent", async () => {
     open(V1);
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     land(V2);
@@ -389,7 +398,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // is not a check, and the failure mode of a too-eager detector is a sentence on every save,
     // which is the same as no sentence within a day.
     open(V1);
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     posted = null;
@@ -406,7 +418,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
 
   test("the sentence describes ONE save — the next one does not repeat it", async () => {
     open(V1);
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const first = walk(elements.get("viewBody")).find((el) => el.type === "text");
     first.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     land(V2);
@@ -417,7 +432,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // The answer to that save re-painted the view from what the server returned, so the next edit
     // is computed against a served copy again.
     park(posted.body.markdown);
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const second = walk(elements.get("viewBody")).find((el) => el.type === "text");
     second.value = "- [ ] Draft the launch note tomorrow [[qntm:121]] #task";
     second.dispatch("blur");
