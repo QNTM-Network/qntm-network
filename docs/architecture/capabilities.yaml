@@ -1431,6 +1431,32 @@ capabilities:
     and a runtime (or the operator's config) that could not be compared on this runner raises a
     named `::warning::` and step summary rather than either — a green build here never collapses
     "agreed" and "did not look" into the same tick.
+    ── UPDATE 2026-08-03, THE COMPILED DECLARATION NOW CARRIES A CONTENT-HASH VERSION, AND THE
+    ROUTE'S ANSWER IS A RECEIPT — `design-the-runtime-compile.md` §8 steps A and E/F. `compile
+    (files)` now returns a THIRD field, `version` — `sha256-<hex>` of the canonical (key-sorted)
+    JSON of its own `{declaration, dropped}` OUTPUT (`scripts/declaration-version.mjs`), never the
+    submitted input files and never a compiler-version tag: the key's one job is to name a byte
+    string for §4.2's cache-forever, immutable-per-version URL, and hashing the bytes being named
+    is the only way "same key ⇔ same bytes" holds by construction. DETERMINISM PROVEN BY MUTATION,
+    NOT ASSUMED: two identical POSTs to `POST /config/compile/structural` receive the identical
+    version; flipping `structural_edge_direction: outgoing` to `incoming` — a single valid field, a
+    config that still compiles — receives a different one (`tests/worker-config-compile.test.mjs`
+    §5). THE ROUTE'S ANSWER IS NOW A RECEIPT, WITH FIELD NAMES THAT SAY WHAT IT DOES NOT PROMISE.
+    `worker/src/config.js`'s `receipt()` follows the hard precedent `the-browser-recognises-its-
+    own-write` already found on the markdown write path (a 200 that echoed a write's own token was
+    still a line a cycle went on to destroy — "RECORDED, never WRITTEN, and neither says the line
+    survived the cycle"): `compiled` is the only fact this route can vouch for; `stored` is always
+    `false` (nothing here persists anything, ever); `engineAccepted` is always `null`, deliberately
+    not `false` (Gate 2 was never asked, and `false` would misreport a refusal that never happened).
+    ISOLATE CONFORMANCE RE-CHECKED WITH THE NEW FIELD, NOT ASSUMED TO STILL HOLD: `scripts/check-
+    isolate-conformance.mjs` now imports `worker/src/config.js`'s own EXPORTED `receipt()` to build
+    its Node-side comparison object, rather than a second, hand-copied shape that could silently
+    drift from what the route actually answers with — run locally against `wrangler dev` (never
+    deployed) over the synthetic fixture, the refusal mutation, and the operator's real config, all
+    three routes: 9/9 cases agreed, byte for byte, receipt included. `presentation.json` UNCHANGED
+    — the CLI shells destructure only `{declaration, dropped}` from `compile()`'s return, so
+    `version` never reaches a committed file; sha256
+    `e4867b5e72f2266fe9784af6842a7099ed9ddf2b716360b3ca0a18c62d14a6d1`, verified, not trusted.
   tier: functional
   rooting: >-
     isolated for now, same family as `presentation-is-resolved-not-chosen` was at migration stage 2:
@@ -1662,6 +1688,20 @@ capabilities:
     them has been unscanned by that sweep since it merged. This pass adds both `compile-
     qualification.mjs` and `compile-structural.mjs` to the scanned list, closing the gap for both
     generators rather than only the one this pass touches.
+    ── UPDATE 2026-08-03, THE COMPILED DECLARATION NOW CARRIES A CONTENT-HASH VERSION, AND THE
+    ROUTE'S ANSWER IS A RECEIPT — the same move `structural-language-is-published-not-guessed`
+    already recorded in full, `design-the-runtime-compile.md` §8 steps A and E/F, extended to this
+    generator. `compile(files)` returns a THIRD field, `version` — `sha256-<hex>` of the canonical
+    JSON of its own `{declaration, dropped}` output. DETERMINISM PROVEN BY MUTATION AGAINST THIS
+    ROUTE SPECIFICALLY: two identical POSTs to `POST /config/compile/qualification` receive the
+    identical version; changing `patterns/basic.yaml`'s `status: open` to `status: done` — a valid
+    field, a config that still compiles — receives a different one (`tests/worker-config-compile.
+    test.mjs` §5). The route's answer carries the same `receipt` shape (`compiled`, `version`,
+    `stored: false`, `engineAccepted: null`) the structural row's own UPDATE argues in full — see
+    that row for the position on what is hashed and why, and for the write-receipt precedent
+    (`the-browser-recognises-its-own-write`) this follows. ISOLATE CONFORMANCE re-checked with the
+    new field, all three routes together: 9/9 cases agreed locally against `wrangler dev`, never
+    deployed. `presentation.json` unchanged by this route either — verified, same sha256.
   tier: functional
   rooting: >-
     PARTIALLY ROOTED AS OF 2026-08-01, CORRECTING THE CLAIM THIS FIELD MADE THE DAY BEFORE. It used
@@ -2050,6 +2090,20 @@ capabilities:
     mutation. `app/present/ordering.ts` and the operator's own acceptance test (`91930f3`) both
     read this generator's published output and neither was touched by this port — the byte-identity
     proof above is the reason that is safe to say rather than merely hoped.
+    ── UPDATE 2026-08-03, THE COMPILED DECLARATION NOW CARRIES A CONTENT-HASH VERSION, AND THE
+    ROUTE'S ANSWER IS A RECEIPT — the same move `structural-language-is-published-not-guessed` and
+    `section-membership-is-read-not-guessed` already recorded, `design-the-runtime-compile.md` §8
+    steps A and E/F, completing the arc: all three generators now mint a version and answer with a
+    receipt. `compile(files)` returns a THIRD field, `version` — `sha256-<hex>` of the canonical
+    JSON of its own `{declaration, dropped}` output. DETERMINISM PROVEN BY MUTATION AGAINST THIS
+    ROUTE SPECIFICALLY: two identical POSTs to `POST /config/compile/resolution` receive the
+    identical version; changing the "open" section's `direction: asc` to `direction: desc` — a
+    valid field, a config that still compiles — receives a different one (`tests/worker-config-
+    compile.test.mjs` §5). The route's answer carries the same `receipt` shape (`compiled`,
+    `version`, `stored: false`, `engineAccepted: null`) the structural row's own UPDATE argues in
+    full. ISOLATE CONFORMANCE re-checked with the new field, all three routes together: 9/9 cases
+    agreed locally against `wrangler dev`, never deployed, including the operator's own real
+    config. `presentation.json` unchanged by this route either — verified, same sha256.
   tier: functional
   rooting: >-
     PUBLISHED AND WIRED, NOT YET CONSUMED — AND THIS IS A DIFFERENT STATEMENT FROM WHAT THE OTHER
