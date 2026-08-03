@@ -3188,9 +3188,31 @@ backlog:
     FALSIFIER - drive one line in a section whose qualification is refused and one line in a section
     that publishes cleanly and does not move; assert the two produce different output. Today they do
     not. Needs row 1.
-  driving_capability: an-abstention-is-visible-to-the-operator
-  kind: capability
-  state: diagnose-ready
+  driving_capability: membership-abstention-is-visible
+  record: >-
+    2026-08-03 (`feat/abstention-is-visible`) — SHIPPED FOR MEMBERSHIP, ORDERING DEFERRED. The
+    register chosen is a SECOND DOM sink, `#membershipBadge`, not a fifth freshness clause — the
+    "message on every keystroke is noise" refusal this row's own title cites governs the SENTENCE,
+    not a level indicator overwritten in place, the same shape `.vim-badge` already uses for
+    NORMAL/INSERT. `membershipDiagnosticFor` reads the SAME `membershipReadingFor` evaluation
+    `membershipNoteFor` already used, factored out without changing that function's return value
+    (`tests/app-membership-note.test.mjs` passes unmodified), so the two registers cannot drift
+    about what was decided. THE FALSIFIER, PROVEN: `tests/app-membership-diagnostic.test.mjs` §1
+    drives an unpublished section (abstains `no-section-declaration`) and a published, unchanged
+    section (`membership: decided`) to different text directly; §2 proves the same pair through the
+    real `commitLine` against the actual `#membershipBadge` node; §4 is a mutation proof — collapse
+    the abstains branch's text onto the answer branch's and the falsifier goes red. THE REGISTER
+    SERVES BOTH READERS WITH ONE TEXT — the raw `Abstention` reason token, the same precedent
+    `todayNoteFor`'s `console.warn` already set, read by the operator and by an agent driving the
+    generality test (`design-the-compiler-and-the-bands.md` §6) alike; no separate machine-readable
+    encoding was added because none was needed. NOT COVERED, STATED RATHER THAN LEFT IMPLIED:
+    ordering's own abstention (`orderingNoteFor` abstains `no-section-declaration` for 177 of 186
+    sections) is exactly as invisible today as membership's was before this row, and extending the
+    same pattern to it is the obvious next slice, deliberately left undone here rather than rushed.
+    See the new capability row `membership-abstention-is-visible` in `capabilities.yaml` for the
+    full record, including the axis this row moves (HORIZONTAL — completeness of an already-rooted
+    capability's reporting surface, not a new depth of enforcement).
+  state: passing
 - id: an-engine-correction-is-a-visible-event
   title: >-
     [road] [3] [AN ARC, AND IT SPLITS] THREE SEPARATE PROBLEMS ARE ONE PROBLEM - a row moving to its

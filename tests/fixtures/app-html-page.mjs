@@ -161,6 +161,14 @@ export { sayAsOf as __sayAsOf };
 // silence" wants to drive THIS ONE COMPUTATION directly, without also entangling \`served\`'s base
 // reading (a separate, separately-tested fact — tests/present-base.test.mjs) into every assertion.
 export { membershipNoteFor as __membershipNoteFor };
+// THE ABSTENTION REGISTER (docs/implementation-artifacts/roadmap-the-road-ahead.md step 2).
+// \`__membershipDiagnosticFor\` is exported on its own, same reasoning as \`__membershipNoteFor\`
+// above: a suite proving "abstains" and "answer" produce different text wants to drive THIS
+// COMPUTATION directly. \`__updateMembershipBadge\` is exported separately so a suite can also
+// prove the DOM SINK itself (\`#membershipBadge\`) rather than only the pure function's return
+// value — see that function's own header for why it is kept this small.
+export { membershipDiagnosticFor as __membershipDiagnosticFor };
+export { updateMembershipBadge as __updateMembershipBadge };
 // THE ORDERING NOTE (design-the-resolution-architecture.md step 7). Same reasoning as
 // __membershipNoteFor immediately above — its own separate computation, exported on its own.
 export { orderingNoteFor as __orderingNoteFor };
