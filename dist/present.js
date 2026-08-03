@@ -2737,17 +2737,19 @@ var PickupSchedule = class {
    * A WRITE WAS ACCEPTED FOR `path` — its answer is owed, so place a read.
    *
    * `token` is the write's own handle (`correlation.ts`'s `mintWriteToken`) or `null` when the
-   * browser could not mint one. It is held OPAQUELY and only handed back at `attempt` time; nothing
-   * here compares it to anything.
+   * browser could not mint one. `since` is the `generated_at` the page was holding as this write
+   * left. BOTH are held OPAQUELY and only handed back at `attempt` time; nothing here compares
+   * either of them to anything.
    */
-  schedule(path, token = null) {
+  schedule(path, token = null, since = null) {
     const held = this.#waiting.get(path);
     if (held !== void 0) {
       held.token = token;
+      held.since = since;
       held.attempt = 0;
       return { outcome: "joined", attempt: 0 };
     }
-    this.#waiting.set(path, { token, attempt: 0 });
+    this.#waiting.set(path, { token, since, attempt: 0 });
     return { outcome: "scheduled", delayMs: this.#delayFor(0), attempt: 0 };
   }
   /**
@@ -2763,7 +2765,7 @@ var PickupSchedule = class {
       return { outcome: "cancelled" };
     }
     held.attempt += 1;
-    return { outcome: "read", attempt: held.attempt, token: held.token };
+    return { outcome: "read", attempt: held.attempt, token: held.token, since: held.since };
   }
   /**
    * THE ATTEMPT ANSWERED. `satisfied` is the PAGE'S judgement that the write this pickup was
@@ -2794,6 +2796,10 @@ var PickupSchedule = class {
   /** The write a pickup for `path` is collecting the answer to, or `null` when there is none. */
   token(path) {
     return this.#waiting.get(path)?.token ?? null;
+  }
+  /** The stamp a pickup for `path` is waiting to see passed, or `null` when there is none. */
+  since(path) {
+    return this.#waiting.get(path)?.since ?? null;
   }
   /** Is a pickup outstanding for `path`? */
   waiting(path) {
