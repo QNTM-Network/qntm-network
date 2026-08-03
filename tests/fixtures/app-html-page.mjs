@@ -164,6 +164,11 @@ export { membershipNoteFor as __membershipNoteFor };
 // THE ORDERING NOTE (design-the-resolution-architecture.md step 7). Same reasoning as
 // __membershipNoteFor immediately above — its own separate computation, exported on its own.
 export { orderingNoteFor as __orderingNoteFor };
+// THE TODAY NOTE (design-the-resolution-architecture.md step 8's call site). Same reasoning as
+// __membershipNoteFor and __orderingNoteFor above — its own separate computation, exported on its
+// own so a suite can drive \`todayFor\`'s wiring directly, with an arbitrary instant, without also
+// standing up a whole projection arrival.
+export { todayNoteFor as __todayNoteFor };
 // HELD — characters no file owns (app/present/held.ts). A getter, the same reason \`__served\` is
 // one: a suite reads what the page is holding NOW. \`__paintHeldRows\` is exported so a suite can
 // assert the strip redraws itself without also driving a whole repaint, and \`__sentEdit\` so the
