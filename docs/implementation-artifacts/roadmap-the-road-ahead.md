@@ -406,3 +406,21 @@ Stated so the gaps are in the queue instead of in a conversation.
   document does not re-rank them.
 * **Anything about the graph server.** `design-config-is-content.md` §7 step 7 is the only step
   needing a repository this one cannot change, and it is unchanged by this plan.
+
+---
+
+## 9. The rows
+
+**One row per step, filed on this branch in `docs/implementation-artifacts/backlog.yaml`, so the
+order lives in the queue and not only in this document.**
+
+| # | row id | state |
+|---|---|---|
+| 1 | `the-declaration-is-fetched-not-baked` | `diagnose-ready` — in flight |
+| 2 | `an-abstention-is-visible-to-the-operator` | `diagnose-ready` |
+| 3 | `an-engine-correction-is-a-visible-event` | `diagnose-ready` |
+| 4 | `config-compiles-without-a-build` | `diagnose-ready` |
+| 5 | `config-is-per-user-not-per-server` | `unscoped`, deliberately — §5 risk 1 |
+
+Row 5 is `unscoped` for the same reason `declare-the-hosted-application` is: scoping it means
+deciding which capabilities it splits into, and that is a design pass rather than a row.
