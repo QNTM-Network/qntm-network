@@ -3301,22 +3301,27 @@ backlog:
     `escape-discards-typed-text` because the two were observed together and may share one cause.
 - id: the-operator-set-has-no-single-address
   title: >-
-    [pin] [HORIZONTAL] THE OPERATOR SET IS IMPLICIT, HELD BY AGREEMENT ACROSS SIX SURFACES, NOT
-    DECLARED IN ONE. `design-the-compiler-and-the-bands.md` section 3 enumerates them:
-    `app/present/qualification.ts`'s `FieldPredicate` (eq/not), `scripts/generate-qualification-
-    declaration.mjs`'s `normalisePredicate` (the same two operators, re-derived independently),
-    `RESOLVABLE_FIELDS` (node_type/domain/status), `app/present/structural.ts`'s `EdgeSource`/
-    `EdgeDirection`, `app/present/resolutiontable.ts`'s `OrderingFieldKind`/`ChromeShape`, and
-    `scripts/yaml-subset.mjs`'s syntax refusal list. NONE IMPORTS FROM A SHARED ENUMERATION - they
-    agree today because `tests/qualification-agreement.test.mjs` and its siblings prove agreement
-    against the engine, not because a type constrains all six. THE FIX IS NOT A MERGE - 
-    `app/present/declaration.ts:32-54`'s own header states the federation is deliberate, and
-    `qualification.ts:69`'s own comment argues against widening its own type. THE FIX IS AN INDEX -
-    one file naming which six surfaces together constitute the operator set, so a widening decision
-    (a new predicate operator, a new resolvable field) is made once, against a visible list, instead
-    of independently in six pull requests that happen to agree. UNSCOPED ON PURPOSE - deciding which
-    surfaces belong on the list, and whether a seventh exists unread, is a design pass (`design-the-
-    compiler-and-the-bands.md` section 10's own first unverified item), not a row.
+    [pin] [HORIZONTAL] THE OPERATOR SET IS IMPLICIT, HELD BY AGREEMENT ACROSS SEVEN SURFACES, NOT
+    DECLARED IN ONE. [CORRECTED 2026-08-03, docs/correct-the-compiler-pin: this row originally said
+    SIX and omitted the seventh entirely; design-the-compiler-and-the-bands.md section 3.1's own
+    table always listed seven — see that document's section 12.1.] `design-the-compiler-and-the-
+    bands.md` section 3 enumerates them: `app/present/qualification.ts`'s `FieldPredicate` (eq/not),
+    `scripts/generate-qualification-declaration.mjs`'s `normalisePredicate` (the same two operators,
+    re-derived independently), `RESOLVABLE_FIELDS` (node_type/domain/status), `app/present/
+    structural.ts`'s `EdgeSource`/`EdgeDirection`, `app/present/resolutiontable.ts`'s
+    `OrderingFieldKind`/`ChromeShape`, `app/present/rendition.ts`'s `RESOLUTION_KEYS` (renamed from
+    `resolution.ts` in `242afa9`, same day this row was filed), and `scripts/yaml-subset.mjs`'s
+    syntax refusal list. NONE IMPORTS FROM A SHARED ENUMERATION - they agree today because
+    `tests/qualification-agreement.test.mjs` and its siblings prove agreement against the engine, not
+    because a type constrains all seven. THE FIX IS NOT A MERGE - `app/present/declaration.ts:32-54`'s
+    own header states the federation is deliberate, and `qualification.ts:69`'s own comment argues
+    against widening its own type. THE FIX IS AN INDEX - one file naming which seven surfaces
+    together constitute the operator set, so a widening decision (a new predicate operator, a new
+    resolvable field) is made once, against a visible list, instead of independently in seven pull
+    requests that happen to agree. UNSCOPED ON PURPOSE - deciding which surfaces belong on the list,
+    and whether an EIGHTH exists unread, is a design pass (`design-the-compiler-and-the-bands.md`
+    section 10's own first unverified item, corrected in section 12.5 to note that a compiler-side
+    twin for the STRUCTURAL and ORDERING/CHROME vocabularies is a live candidate), not a row.
   kind: capability
   state: unscoped
 - id: the-reachability-set-is-proven-not-compiled
