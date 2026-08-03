@@ -102,13 +102,18 @@ export function extractPageScript(workDir, mutate = (source) => source) {
   // additive — they read and write what is already there and change no behaviour.
   source += `
 export { paintView, toggleTask, commitLine, loadPresentation };
-// THE DECLARATION, DRIVEN DIRECTLY. \`loadPresentation\` now reads a bundled constant — see
-// app/present/embedded-declaration.ts — so there is no fetch left for a suite to stub. A test that
-// wants to drive a DIFFERENT document than the one actually shipping (to prove the reader is wired,
-// the same falsifier migration stage 2 always asserted) calls this instead, which is the exact
-// application logic \`loadPresentation\` itself calls, against an arbitrary document rather than the
-// embedded one.
+// THE DECLARATION, DRIVEN DIRECTLY. \`loadPresentation\` IS A FETCH AGAIN — it reads
+// \`/presentation.json\` off the wire, so it is ASYNC and a suite that calls it must await it and
+// must answer that request (see \`withDeclaration\` in this file). This export is the other half: a
+// test that wants to drive a DIFFERENT document than the one actually shipping (to prove the reader
+// is wired, the same falsifier migration stage 2 always asserted), or to RESET the page to the real
+// one between tests, calls this — the exact application logic \`loadPresentation\` itself calls,
+// against an arbitrary document rather than a fetched one.
 export { applyPresentation as __applyPresentation };
+// THE URL, EXPORTED SO A SUITE CANNOT DISAGREE WITH THE PAGE ABOUT IT. A fetch stub keyed on a
+// hand-written "/presentation.json" would go on passing after the page moved the document — this
+// reads the page's own constant.
+export const __declarationUrl = () => DECLARATION_URL;
 // THE BASE. \`served\` is the page's own BaseSurface (app/present/base.ts) — a getter, like the vim
 // pair below, so a suite reads what the page is holding NOW rather than a snapshot from import
 // time. \`writeFile\` is exported for the one thing a driven affordance cannot show: that the write
@@ -406,6 +411,54 @@ export function walk(element, out = []) {
   }
   return out;
 }
+
+/**
+ * `presentation.json` as it ships, read off disk — the document `/presentation.json` really serves.
+ *
+ * IT IS READ, NOT IMPORTED, AND THAT IS THE POINT OF THE WHOLE CHANGE THIS FIXTURE NOW SUPPORTS.
+ * `app/present/embedded-declaration.ts` imported this file into `dist/present.js` at build time;
+ * that module is deleted (design-config-is-content.md step 2) and the bundle no longer carries a
+ * copy. A suite wanting the real declaration reads the real file, exactly as the page now fetches
+ * the real URL.
+ */
+export const SERVED_DECLARATION = JSON.parse(
+  readFileSync(join(REPO, "presentation.json"), "utf8"),
+);
+
+/**
+ * Wrap a fetch stub so the DECLARATION request is answered and everything else falls through.
+ *
+ * WHY EVERY PAGE SUITE NEEDS THIS NOW. `loadPresentation()` is a fetch again, and the stubs these
+ * suites install are written for the page's POST paths — they read `init.body` and would throw on
+ * a bodyless GET. Rather than teach a dozen stubs about a request they do not care about, this
+ * answers the declaration and hands everything else to the stub unchanged.
+ *
+ * `declaration` DEFAULTS TO WHAT ACTUALLY SHIPS. A suite proving the app runs on a document that
+ * was never in the bundle passes its own instead — which is the same wire the real page reads, not
+ * a back door around it.
+ */
+export function withDeclaration(stub, declaration = SERVED_DECLARATION) {
+  return async (url, init) => {
+    if (String(url) === DECLARATION_URL) {
+      return { ok: true, status: 200, json: async () => declaration };
+    }
+    return stub(url, init);
+  };
+}
+
+/**
+ * The page's own declaration URL, read out of `app/index.html` rather than restated here.
+ *
+ * A CONSTANT COPIED INTO A FIXTURE IS A CONSTANT THAT CAN DISAGREE WITH THE PAGE — and a fetch stub
+ * keyed on the stale one would answer nothing, the page would fall back to its defaults, and the
+ * suites would go quietly wrong rather than red. This refuses to load instead.
+ */
+export const DECLARATION_URL = (() => {
+  const html = readFileSync(join(REPO, "app", "index.html"), "utf8");
+  const match = /const DECLARATION_URL = "([^"]+)";/.exec(html);
+  assert.ok(match, "app/index.html no longer declares DECLARATION_URL");
+  return match[1];
+})();
 
 /**
  * Import the lifted page once, with a fetch stub installed. Returns the module.

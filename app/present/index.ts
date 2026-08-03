@@ -169,4 +169,19 @@ export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 export { paint } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";
 
-export { EMBEDDED_DECLARATION } from "./embedded-declaration.js";
+// THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
+//
+// `app/present/embedded-declaration.ts` used to `import presentationJson from
+// "../../presentation.json"`, which put 138,806 bytes of the OPERATOR'S CONFIGURATION inside this
+// bundle at build time. That welded two documents with opposite change rates together: the bundle
+// changes when the app changes, the declaration changes when the config changes — and because
+// dist/present.js is a committed artifact CI refuses to ship stale
+// (.github/workflows/build.yml, "fail if a committed bundle is stale"), a config change could not
+// reach a browser without somebody rebuilding and committing this file. That is what "the user
+// changed their config, so somebody must redeploy the app" was made of.
+//
+// The page fetches `/presentation.json` at run time instead (app/index.html, `loadPresentation`).
+// Nothing in app/present/ fetches anything: these modules stay PURE, and the edge that reads the
+// wire is the page, which is where every other read already lives.
+//
+// docs/implementation-artifacts/design-config-is-content.md step 2.

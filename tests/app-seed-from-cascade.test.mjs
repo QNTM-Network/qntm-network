@@ -54,7 +54,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeEvent, makeWorkDir, walk, withDeclaration } from "./fixtures/app-html-page.mjs";
 import {
   seedFor,
   sectionAt,
@@ -130,13 +130,15 @@ describe("1. `o` ON THE TRAILING BLANK LINE — the browser's own observation, d
 
   before(async () => {
     ({ elements, document: doc } = installBrowser());
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+    globalThis.fetch = withDeclaration(async () => ({ ok: true, json: async () => ({ ok: true }) }));
     page = await importPage(WORK);
-    // THE DECLARATION HAS TO BE LOADED, and this is the page's own loader reading the page's own
-    // embedded constant — not a fixture. Without it `globalRegistrationFor` returns `undefined`,
+    // THE DECLARATION HAS TO BE LOADED, and this is the page's own loader — not a fixture. It is
+    // AWAITED now, and the stub above answers the request: the declaration is FETCHED from
+    // `/presentation.json` rather than read from a constant baked into dist/present.js
+    // (design-config-is-content.md step 2). Without it `globalRegistrationFor` returns `undefined`,
     // `seedFor` gets no declaration, and every assertion below would measure the chrome-only seed
     // that shipped before the tokens existed at all.
-    page.loadPresentation();
+    await page.loadPresentation();
   });
 
   const view = (id, path, title, markdown) => ({ id, path, title, domain: "all", markdown });
@@ -573,9 +575,12 @@ describe("6. THE MUTATION PROOF — a guard that cannot go red is decoration", (
   async function withMutatedBundle(module, mutate, use) {
     const scratch = mkdtempSync(join(tmpdir(), "seed-from-cascade-mutant-"));
     try {
-      // THE COPY KEEPS THE REPO'S OWN SHAPE — `<root>/app/present/` beside `<root>/presentation.json`
-      // — because `embedded-declaration.ts` imports the declaration at `../../presentation.json`.
-      // A flat copy would fail to bundle, and a bundle that never built could not prove anything.
+      // THE COPY KEEPS THE REPO'S OWN SHAPE — `<root>/app/present/` beside `<root>/presentation.json`.
+      // It USED to be forced: `embedded-declaration.ts` imported the declaration at
+      // `../../presentation.json`, so a flat copy would not bundle. That module is deleted and the
+      // bundle imports no JSON at all now (design-config-is-content.md step 2), so the shape is
+      // kept because a mutant that differs from the repo in TWO ways proves less than one that
+      // differs in one — not because the bundler still requires it.
       const present = join(scratch, "app", "present");
       cpSync(join(REPO, "app", "present"), present, { recursive: true });
       cpSync(join(REPO, "presentation.json"), join(scratch, "presentation.json"));

@@ -50,7 +50,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeEvent, makeWorkDir, walk, withDeclaration, SERVED_DECLARATION } from "./fixtures/app-html-page.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-membership-note");
@@ -78,7 +78,7 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
 
   before(async () => {
     ({ elements } = installBrowser());
-    globalThis.fetch = async (url, init) => {
+    globalThis.fetch = withDeclaration(async (url, init) => {
       const body = JSON.parse(init.body);
       posted = { url, body };
       return {
@@ -90,8 +90,14 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
           snapshot: { generated_at: "2026-08-01T12:00:00Z", views: [{ ...VIEW, markdown: body.markdown }] },
         }),
       };
-    };
+    });
     page = await importPage(WORK);
+    // THE REAL LOADER, ONCE, OVER THE REAL WIRE. `loadPresentation` fetches `/presentation.json`
+    // now (design-config-is-content.md step 2) — `withDeclaration` above is what answers it. Every
+    // test below re-applies the same document through `paintFresh`, which is a RESET rather than a
+    // repetition: two tests in this file drive a FAKE declaration through `__applyPresentation`,
+    // and the page's declaration state is module-scoped and shared.
+    await page.loadPresentation();
   });
 
   const freshness = () => elements.get("freshness").textContent;
@@ -105,7 +111,12 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
    * `park` are named for.
    */
   function paintFresh() {
-    page.loadPresentation();
+    // THE RESET IS THE APPLICATION, NOT THE FETCH. This used to be `page.loadPresentation()`, which
+    // read a constant baked into the bundle and was synchronous. It is a fetch now, and a fetch in
+    // a synchronous helper called by fourteen tests would be fourteen awaits for a document already
+    // proven to arrive (the `before` above does that, over the wire, once). `__applyPresentation`
+    // is the exact function `loadPresentation` itself calls once the bytes are in hand.
+    page.__applyPresentation(SERVED_DECLARATION);
     page.__setGraphData({ snapshot: { generated_at: "2026-08-01T12:00:00Z", views: [VIEW] } });
     page.__setFocus(0, VIEW.markdown);
     page.paintView("inbox");
@@ -420,7 +431,7 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
   test("the sentence shown is absent from the write it describes — proven on the wire, not inferred", async () => {
     const { elements } = installBrowser();
     let posted = null;
-    globalThis.fetch = async (url, init) => {
+    globalThis.fetch = withDeclaration(async (url, init) => {
       posted = JSON.parse(init.body);
       return {
         ok: true,
@@ -434,9 +445,9 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
           },
         }),
       };
-    };
+    });
     const page = await importPage(WORK);
-    page.loadPresentation();
+    await page.loadPresentation();
     page.__setGraphData({ snapshot: { generated_at: "2026-08-01T12:00:00Z", views: [VIEW] } });
     page.__setFocus(0, VIEW.markdown);
     page.paintView("inbox");

@@ -21,17 +21,23 @@
  * compared, paint for paint, against a context with no declaration at all. Stage 2's promise is
  * that the default value is today's behaviour, so nothing moves until someone flips it.
  *
- * SECTION 4 NO LONGER STUBS `fetch`. `loadPresentation()` reads a bundled constant now
- * (app/present/embedded-declaration.ts, §2.5 of the research doc) — there is nothing left on the
- * wire to intercept. A suite that wants to drive a document OTHER than the one actually shipping
- * calls `__applyPresentation`, the exact function `loadPresentation` itself calls. What section 4
- * used to prove by stubbing a 404 (a fetch that cannot be read leaves the page exactly where it
- * was) is no longer a reachable failure mode — a malformed presentation.json fails the BUILD, not
- * the page — so that test is replaced by a stronger one: `EMBEDDED_DECLARATION`, the constant
- * baked into dist/present.js, is asserted identical to `presentation.json` read fresh off disk.
- * That is the drift guard for the trap this change was warned about: the page's copy and the
- * generated file cannot read differently without this failing, in `npm test`, with no build step
- * or CI diff required to see it.
+ * ── THE DECLARATION IS FETCHED AGAIN, AND TWO SECTIONS RECORD THE REVERSAL ──
+ *
+ * This header used to say "SECTION 4 NO LONGER STUBS `fetch` — `loadPresentation()` reads a bundled
+ * constant now, there is nothing left on the wire to intercept". That decision is reversed
+ * (docs/implementation-artifacts/design-config-is-content.md step 2): baking `presentation.json`
+ * into dist/present.js welded a 138 KB CONFIG document to a committed APP artifact CI refuses to
+ * ship stale, so a config change could not reach a browser without an app rebuild.
+ *
+ *   SECTION 0 IS AMENDED IN PLACE, NOT DELETED. It asserted that the baked copy could not drift
+ *   from the served file. There is no baked copy to drift, so it now asserts THAT — the bundle
+ *   contains no copy of the declaration, proven against the operator's own instance strings, and
+ *   dist/present.js exports no `EMBEDDED_DECLARATION`. The old assertion's job (the page's copy and
+ *   the generated file cannot read differently) is discharged by there being one document.
+ *
+ *   SECTION 5 IS NEW, and it is the falsifier the step is worth having: the page runs on a
+ *   declaration that WAS NEVER IN THE BUNDLE, fetched off a stubbed wire, with a mutation proof —
+ *   and it survives a declaration that never arrives.
  */
 
 import { test, describe, before } from "node:test";
@@ -43,11 +49,14 @@ import MarkdownIt from "markdown-it";
 import { makeDocument, makeBody, walk, serialize, VIEW_MARKDOWN } from "./fixtures/dom-stub.mjs";
 import {
   REPO,
+  DECLARATION_URL,
+  assertMutated,
   importPage,
   installBrowser,
   makeEvent,
   makeWorkDir,
   walk as walkPage,
+  withDeclaration,
 } from "./fixtures/app-html-page.mjs";
 import {
   paint,
@@ -57,7 +66,6 @@ import {
   PresentationCascade,
   PresentationContext,
   RESOLUTION_KEYS,
-  EMBEDDED_DECLARATION,
 } from "../dist/present.js";
 
 const md = new MarkdownIt("commonmark").enable("table");
@@ -71,19 +79,60 @@ function painted(markdown, context) {
 
 const SERVED = JSON.parse(readFileSync(join(REPO, "presentation.json"), "utf8"));
 
-describe("0. the embedded copy cannot drift from the served file", () => {
-  test("EMBEDDED_DECLARATION (baked into dist/present.js) is presentation.json, read fresh", () => {
-    // THE DRIFT GUARD. app/present/embedded-declaration.ts IMPORTS presentation.json rather than
-    // copying it, and dist/present.js is a committed artifact CI already refuses to ship stale
-    // (.github/workflows/build.yml) — so this can only fail if dist/present.js was committed
-    // without running `npm run build` after presentation.json changed. That is exactly the
-    // failure this test exists to catch directly, in `npm test`, rather than only in CI's
-    // build-then-diff step.
+describe("0. the bundle carries no copy of the declaration", () => {
+  // ── AMENDED IN PLACE, BECAUSE THE DECISION IT ENCODED IS REVERSED ────────────────────────────
+  //
+  // This section was "the embedded copy cannot drift from the served file", and its one test
+  // asserted `EMBEDDED_DECLARATION` (the constant baked into dist/present.js by
+  // app/present/embedded-declaration.ts) deep-equalled `presentation.json` read off disk. It was a
+  // correct guard for a decision this branch undoes: the import made a CONFIG change also a change
+  // to a committed APP artifact, and CI's "fail if a committed bundle is stale" step then demanded
+  // a rebuild before a config change could ship. See design-config-is-content.md step 2.
+  //
+  // It is kept, pointed the other way, because "no copy" is the property that now has to hold and
+  // nothing else asserts it. Deleting the section would leave the un-baking unguarded: someone
+  // could re-add the import tomorrow, every other test in this repo would stay green, and the
+  // rebuild lock would be back with nothing saying so.
+
+  const BUNDLE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
+
+  test("dist/present.js exports no EMBEDDED_DECLARATION", async () => {
+    const bundle = await import("../dist/present.js");
+    assert.ok(
+      !("EMBEDDED_DECLARATION" in bundle),
+      "dist/present.js exports EMBEDDED_DECLARATION again — the declaration is baked back into " +
+        "the bundle, and a config change needs a rebuild once more",
+    );
+  });
+
+  test("none of the operator's own config strings appear in the bundle", () => {
+    // THE PROBES ARE INSTANCE DATA, NOT SCHEMA, and that is what makes their absence mean
+    // something. Every one of these is a section id out of the operator's own 72 views, drawn from
+    // the served declaration itself rather than typed here — they cannot appear in a bundle built
+    // from app/present/*.ts unless the declaration is inside it. All six were present in
+    // dist/present.js before this change and none is present after.
+    const ids = [...new Set(Object.values(SERVED.qualification.sectionOrder).flat())]
+      .filter((id) => id.length >= 14)
+      .sort();
+    assert.ok(ids.length >= 6, "too few instance-specific probes to prove anything");
+    const found = ids.filter((id) => BUNDLE.includes(id));
     assert.deepEqual(
-      EMBEDDED_DECLARATION,
-      SERVED,
-      "dist/present.js's embedded declaration has drifted from presentation.json — run " +
-        "'npm run build' and commit the result",
+      found,
+      [],
+      "the bundle contains the operator's own config strings — the declaration is baked in",
+    );
+  });
+
+  test("the bundle is smaller than the declaration it used to carry", () => {
+    // THE COARSE PROOF, AND THE ONE A READER CAN CHECK WITH `ls`. A file cannot contain a copy of a
+    // document larger than itself. dist/present.js was 264,251 bytes with the declaration inside it
+    // and is 128,488 without; presentation.json is 138,878. The relation is not a size budget — it
+    // is the arithmetic of the thing being absent.
+    const declaration = readFileSync(join(REPO, "presentation.json"), "utf8");
+    assert.ok(
+      BUNDLE.length < declaration.length,
+      `dist/present.js (${BUNDLE.length} bytes) is no longer smaller than presentation.json ` +
+        `(${declaration.length} bytes) — check whether the declaration went back into the bundle`,
     );
   });
 });
@@ -369,12 +418,21 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     page.__setFocus(2, VIEW.markdown);
   });
 
-  test("loadPresentation() — no argument, the real path — reads what actually ships", () => {
-    // THE UNSTUBBED CALL. Every test above drives `__applyPresentation` against a document it
-    // supplies, which proves the reader is wired but never calls the function the page actually
-    // calls at boot. This one does: `page.loadPresentation()` with nothing swapped in, against the
-    // real embedded presentation.json (checkbox/heading/prose/tags all "wired" — see that file).
-    page.loadPresentation();
+  test("loadPresentation() — the real path — reads what actually ships", async () => {
+    // THE REAL CALL. Every test above drives `__applyPresentation` against a document it supplies,
+    // which proves the reader is wired but never calls the function the page actually calls at
+    // boot. This one does — and it is AWAITED and STUBBED now, because that function fetches
+    // `/presentation.json` instead of reading a constant out of the bundle. What is served is
+    // `presentation.json` off disk: the real file, at the real URL, through the real loader.
+    const saved = globalThis.fetch;
+    globalThis.fetch = withDeclaration(async () => {
+      throw new Error("nothing but the declaration is requested here");
+    });
+    try {
+      await page.loadPresentation();
+    } finally {
+      globalThis.fetch = saved;
+    }
     page.__setFocus(2, VIEW.markdown);
     page.paintView("this-week");
     const body = walkPage(elements.get("viewBody"));
@@ -392,5 +450,221 @@ describe("4. the page itself reads it — the half that catches an unwired reade
       console.warn = warn;
     }
     assert.match(said.join(" "), /'chekbox' is not a resolution key/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 5. THE STEP-2 FALSIFIER — the app answers from a document that was never in the bundle
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Section 4 proves the page's READER is wired, by handing it a document directly. This section
+// proves the page's WIRE is wired: the bytes arrive over `fetch`, from a URL, and they decide the
+// paint. That is the difference between "the declaration can be swapped" and "a config change can
+// reach a browser with nothing rebuilt", which is the whole of design-config-is-content.md step 2.
+//
+// "NEVER IN THE BUNDLE" IS ASSERTED LITERALLY, NOT ARGUED. The served document carries a marker
+// string, and the test first proves that string appears in NEITHER dist/present.js NOR
+// presentation.json. When the page then quotes the marker back, the only place it can have come
+// from is the wire.
+
+describe("5. the page runs on a declaration that was never in the bundle", () => {
+  const WORK = makeWorkDir("present-global-fetched");
+  const VIEW = {
+    id: "this-week",
+    path: "work/outcomes.md",
+    title: "This Week",
+    markdown: ["## Overdue", "- [ ] Draft [[qntm:121]] #task", "prose"].join("\n"),
+  };
+
+  // THE MARKER. An unrecognised key, so `applyPresentation` reports it by name — the page's own
+  // existing behaviour (section 4's last test), used here as an echo of the bytes it read.
+  const MARKER = "never-in-the-bundle-1f4c9a";
+
+  /** A declaration that does not exist anywhere on disk, carrying the marker. */
+  const fetched = (extra) => ({ ...extra, [MARKER]: "raw" });
+
+  let page;
+  let elements;
+
+  before(async () => {
+    ({ elements } = installBrowser());
+    page = await importPage(WORK);
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+  });
+
+  /** Serve `declaration` at the page's own declaration URL, run the page's own loader. */
+  async function served(declaration, target = page) {
+    const saved = globalThis.fetch;
+    const asked = [];
+    globalThis.fetch = async (url, init) => {
+      asked.push(String(url));
+      if (String(url) !== DECLARATION_URL) throw new Error("unexpected request: " + url);
+      return { ok: true, status: 200, json: async () => declaration };
+    };
+    try {
+      await target.loadPresentation();
+    } finally {
+      globalThis.fetch = saved;
+    }
+    return asked;
+  }
+
+  /** Paint the view with the cursor parked on line 2 — section 4's own convention, same reason. */
+  function paintedNow(target = page) {
+    target.__setFocus(2, VIEW.markdown);
+    target.paintView("this-week");
+    return walkPage(elements.get("viewBody"));
+  }
+
+  test("the marker is in neither shipped artifact — so an echo of it can only be the wire", () => {
+    assert.ok(!readFileSync(join(REPO, "dist", "present.js"), "utf8").includes(MARKER));
+    assert.ok(!readFileSync(join(REPO, "presentation.json"), "utf8").includes(MARKER));
+  });
+
+  test("the page requests the declaration, at the page's own URL", async () => {
+    const asked = await served(fetched({ checkbox: "wired", heading: "wired", tags: "wired" }));
+    assert.deepEqual(asked, [DECLARATION_URL], "the page did not fetch the declaration");
+  });
+
+  test("the fetched document decides the painted DOM — chips and headings both ways", async () => {
+    await served(fetched({ checkbox: "wired", heading: "wired", tags: "wired" }));
+    const wired = paintedNow();
+    assert.equal(wired.filter((el) => el.type === "checkbox").length, 1);
+    assert.ok(wired.some((el) => el.tagName === "h3"));
+    assert.equal(wired.filter((el) => String(el.innerHTML).includes("tagchip")).length, 1);
+
+    await served(fetched({ checkbox: "raw", heading: "raw", tags: "raw" }));
+    const raw = paintedNow();
+    assert.equal(
+      raw.filter((el) => el.type === "checkbox").length,
+      0,
+      "the page painted a checkbox against a FETCHED declaration that said raw — the wire is not " +
+        "wired, which is the single failure step 2 exists to detect",
+    );
+    assert.ok(!raw.some((el) => el.tagName === "h3"));
+    assert.ok(raw.some((el) => el.value === "- [ ] Draft [[qntm:121]] #task"));
+  });
+
+  test("the page quotes the marker back — the bytes came from the wire, nowhere else", async () => {
+    const said = [];
+    const warn = console.warn;
+    console.warn = (message) => said.push(message);
+    try {
+      await served(fetched({ checkbox: "wired" }));
+    } finally {
+      console.warn = warn;
+    }
+    assert.match(said.join(" "), new RegExp(`'${MARKER}' is not a resolution key`));
+  });
+
+  // ── WHAT HAPPENS WHEN IT DOES NOT ARRIVE ─────────────────────────────────────────────────────
+  //
+  // The un-baking reopens a failure the inline had closed, and the design named the price: "a slow,
+  // missing or broken presentation.json costs nothing but a warning". These three are that promise,
+  // asserted. NO BAKED COPY IS KEPT AS A FALLBACK — the fallback is the built-in DEFAULT, because a
+  // baked copy would put presentation.json back in the bundle's input graph and CI's staleness gate
+  // would demand a rebuild for a config change all over again.
+
+  test("a declaration that never arrives does not stop the page — the founding rule survives", async () => {
+    // A COLD PAGE, NOT THIS SUITE'S. A failed fetch leaves whatever was applied before it, so
+    // asserting on a page four tests have already fed a declaration would prove nothing about a
+    // BOOT whose declaration never arrived. A second module instance has never had one.
+    const cold = await importPage(makeWorkDir("present-global-cold"));
+    cold.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    const saved = globalThis.fetch;
+    globalThis.fetch = async () => { throw new TypeError("Failed to fetch"); };
+    const said = [];
+    const warn = console.warn;
+    console.warn = (message) => said.push(message);
+    try {
+      await cold.loadPresentation();
+    } finally {
+      globalThis.fetch = saved;
+      console.warn = warn;
+    }
+    assert.match(said.join(" "), /could not be read/);
+
+    // THE FOUNDING RULE, WITH NO DECLARATION AT ALL: cursor on a line, that line shows its raw
+    // source. It survives because it is the painter's rule and not the declaration's — which is
+    // exactly why "the fetch failed" is allowed to be a warning rather than a broken page.
+    cold.__setFocus(1, VIEW.markdown);
+    cold.paintView("this-week");
+    const body = walkPage(elements.get("viewBody"));
+    const cursorLine = body.find((el) => String(el.className).includes("rawline"));
+    assert.ok(cursorLine, "no line was showing its source — the founding rule did not survive");
+    const characters = walkPage(cursorLine).map((el) => el.textContent).join("");
+    assert.equal(characters, "- [ ] Draft [[qntm:121]] #task");
+    // AND THE REST OF THE VIEW IS STILL RENDERED — the built-in defaults are today's behaviour,
+    // so a missing declaration costs the two keys the instance moved, not the page.
+    assert.ok(body.some((el) => el.tagName === "h3"), "nothing rendered — the page fell over");
+  });
+
+  test("a 404 is the same case, and is not mistaken for a document", async () => {
+    const saved = globalThis.fetch;
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 404,
+      json: async () => { throw new Error("not JSON"); },
+    });
+    const said = [];
+    const warn = console.warn;
+    console.warn = (message) => said.push(message);
+    try {
+      await page.loadPresentation();
+    } finally {
+      globalThis.fetch = saved;
+      console.warn = warn;
+    }
+    assert.match(said.join(" "), /could not be read \(request failed \(404\)/);
+  });
+
+  test("a fetch that never answers is ABANDONED, not waited on forever", async () => {
+    // THE BOUND, PROVEN RATHER THAN READ. The page's own timeout is five seconds, which no test
+    // should sit through — so the page is re-imported with that ONE constant rewritten to 5 ms and
+    // nothing else changed. What is under test is the page's real AbortController wiring: the stub
+    // below never resolves on its own and answers only to the signal the page passes it.
+    const work = makeWorkDir("present-global-timeout");
+    const quick = await importPage(work, (source) =>
+      assertMutated(source, "const DECLARATION_TIMEOUT_MS = 5000;", "const DECLARATION_TIMEOUT_MS = 5;"),
+    );
+    const saved = globalThis.fetch;
+    globalThis.fetch = (url, init) =>
+      new Promise((_, reject) => {
+        init.signal.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    const said = [];
+    const warn = console.warn;
+    console.warn = (message) => said.push(message);
+    try {
+      // If the bound is not real this never returns and the runner kills the suite on its timeout.
+      await quick.loadPresentation();
+    } finally {
+      globalThis.fetch = saved;
+      console.warn = warn;
+    }
+    assert.match(said.join(" "), /could not be read/);
+  });
+
+  // ── THE MUTATION PROOF ───────────────────────────────────────────────────────────────────────
+
+  test("MUTATION: a page that ignores the fetched bytes fails this section", async () => {
+    // BREAK THE ONE LINE THAT MAKES THE WIRE MATTER — the page still fetches, still parses, and
+    // then applies an empty document instead of what arrived. Every assertion above about the
+    // fetched document deciding the paint must go red against this page, or they were proving
+    // something the page does for another reason.
+    const work = makeWorkDir("present-global-mutant");
+    const mutant = await importPage(work, (source) =>
+      assertMutated(source, "applyPresentation(await response.json());", "await response.json();\n    applyPresentation({});"),
+    );
+    mutant.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+
+    await served(fetched({ checkbox: "raw", heading: "raw", tags: "raw" }), mutant);
+    const painted = paintedNow(mutant);
+    assert.equal(
+      painted.filter((el) => el.type === "checkbox").length,
+      1,
+      "the MUTATED page followed the fetched declaration — the mutation did not land, so the " +
+        "green above proves nothing",
+    );
   });
 });
