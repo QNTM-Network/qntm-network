@@ -58,6 +58,7 @@
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { Ledger } from "./ledger.mjs";
+import { versionKey } from "./declaration-version.mjs";
 
 export class GenerationError extends Error {}
 
@@ -796,17 +797,22 @@ export function compile(files, ledger = new Ledger()) {
   const chromeShapes = readChromeShapes(candidates, ledger);
   const sectionRegistration = readSectionRegistration(viewFiles, registration, ledger);
 
+  const declaration = {
+    registration,
+    lineGrammars: readLineGrammars(),
+    ordering,
+    orderingFields,
+    dayBoundary: readDayBoundary(),
+    chromeShapes,
+    sectionRegistration,
+  };
+  // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
+  const dropped = ledger.toJSON();
   return {
-    declaration: {
-      registration,
-      lineGrammars: readLineGrammars(),
-      ordering,
-      orderingFields,
-      dayBoundary: readDayBoundary(),
-      chromeShapes,
-      sectionRegistration,
-    },
-    // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
-    dropped: ledger.toJSON(),
+    declaration,
+    dropped,
+    // `design-the-runtime-compile.md` §8 step A — deterministic, content-derived, never a clock or
+    // a counter. See `declaration-version.mjs` for what is hashed and why.
+    version: versionKey({ declaration, dropped }),
   };
 }

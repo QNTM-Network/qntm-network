@@ -51,6 +51,7 @@
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { Ledger } from "./ledger.mjs";
+import { versionKey } from "./declaration-version.mjs";
 
 export class GenerationError extends Error {}
 class Refusal extends Error {}
@@ -576,20 +577,25 @@ export function compile(files, ledger = new Ledger()) {
     if (Object.keys(kept).length > 0) sections[viewId] = kept;
   }
 
+  const declaration = {
+    defaultNodeType: globalNodeType,
+    structuralNodeTypes: structuralTypes,
+    tokens,
+    predicates,
+    sections,
+    // The FULL declared order, per view — every section id, including the ones dropped from
+    // `sections` above because their qualification was refused.
+    sectionOrder,
+    refused,
+  };
+  // EVERY DECLARATION THIS GENERATOR READ AND DID NOT PUBLISH, with its reason. `refused` above
+  // is ONE kind of that — a pattern that would not normalise. `dropped` is all the others.
+  const dropped = ledger.toJSON();
   return {
-    declaration: {
-      defaultNodeType: globalNodeType,
-      structuralNodeTypes: structuralTypes,
-      tokens,
-      predicates,
-      sections,
-      // The FULL declared order, per view — every section id, including the ones dropped from
-      // `sections` above because their qualification was refused.
-      sectionOrder,
-      refused,
-    },
-    // EVERY DECLARATION THIS GENERATOR READ AND DID NOT PUBLISH, with its reason. `refused` above
-    // is ONE kind of that — a pattern that would not normalise. `dropped` is all the others.
-    dropped: ledger.toJSON(),
+    declaration,
+    dropped,
+    // `design-the-runtime-compile.md` §8 step A — deterministic, content-derived, never a clock or
+    // a counter. See `declaration-version.mjs` for what is hashed and why.
+    version: versionKey({ declaration, dropped }),
   };
 }
