@@ -350,11 +350,17 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
       .filter((el) => el.tagName === "input")
       .map((el) => el.value);
 
-  /** Open the first task's line for typing, whatever the view is currently showing. */
+  /**
+   * Open the first task's line for typing, whatever the view is currently showing.
+   *
+   * A CLICK NO LONGER ARMS INSERT ON ITS OWN — paint.ts's `focusable` only positions the cursor
+   * now; `i` (here, `page.__enterInsert()`, the state-level equivalent) is what arms typing.
+   */
   function openTheLine() {
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    assert.ok(input, "clicking the line did not open it for typing");
+    assert.ok(input, "clicking the line, then arming INSERT, did not open it for typing");
     return input;
   }
 
@@ -398,10 +404,16 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     page.__held().clear();
   });
 
-  /** Open the first task's line, type `TYPED` into it, and blur — one committed line edit. */
+  /**
+   * Open the first task's line, type `TYPED` into it, and blur — one committed line edit.
+   *
+   * A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+   * `i` that arms it for typing, same as `openTheLine` above.
+   */
   function typeAndCommit() {
     open(V1);
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     assert.equal(input.value, V1.split("\n")[3], "the cursor did not reach the source");
     input.value = TYPED;
@@ -576,6 +588,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
 
     open(V1);
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = TYPED;
     land(MOVED_ON); // the world moves under the open line — the client detects it by itself
@@ -590,6 +603,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     refuseWith = { status: 409, body: { ok: false, error: "stale base", refused: "stale-base" } };
     open(V1);
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const first = walk(elements.get("viewBody")).find((el) => el.type === "text");
     first.value = TYPED;
     land(MOVED_ON);
@@ -600,6 +614,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     refuseWith = null;
     open(V1);
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const second = walk(elements.get("viewBody")).find((el) => el.type === "text");
     second.value = "- [ ] Draft the launch note NEXT WEEK [[qntm:121]] #task";
     second.dispatch("blur");

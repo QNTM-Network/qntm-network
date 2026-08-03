@@ -1038,10 +1038,13 @@ export function paint(
       // the line the person just clicked came out of; `deps.view` is the same id `data-instance`
       // above is computed from, so the anchor and the row's own key agree.
       focus.focus(lineIndex, source, 0, deps.view);
-      // A CLICK HAS ALWAYS MEANT "EDIT THIS LINE", and vim does not take that away — it only adds
-      // a keyboard path that does not need one. `mode` absent: no-op, exactly as before this
-      // field existed.
-      mode?.enterInsert();
+      // A CLICK POSITIONS. IT DOES NOT ARM. Before vim, clicking was the only way to reach a line
+      // at all, so it had to do both jobs. Now `i`/`a`/`o`/`O` exist — see motions.ts's
+      // `handleKey` — so a click can go back to meaning only "the cursor is here", which is what
+      // it means in every editor the operator uses. The old dual meaning was a hazard, not a
+      // convenience: a gesture made only to move focus (a browser agent's stray click, a person
+      // scanning a line) could arm INSERT and turn the operator's next keystroke into a character
+      // typed straight into his file. Leaving the line in NORMAL after a click closes that gap.
       repaint(source);
     });
   };

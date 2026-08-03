@@ -272,7 +272,10 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     posted = null;
 
     const body = elements.get("viewBody");
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
+    page.__enterInsert();
     const editable = walk(body).find((el) => el.type === "text");
     assert.equal(editable.value, VIEW.markdown.split("\n")[3], "the cursor did not reach the source");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #home 🆕 2026-07-29";
@@ -297,7 +300,10 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     posted = null;
 
     const body = elements.get("viewBody");
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
+    page.__enterInsert();
     for (const el of walk(body)) {
       if (String(el.innerHTML).includes("tagchip")) {
         el.innerHTML = '<span class="tagchip">#WRECKED</span>';
@@ -336,7 +342,10 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
     paintParked();
     const body = elements.get("viewBody");
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
+    page.__enterInsert();
 
     const editable = walk(body).filter((el) => el.type === "text");
     assert.equal(editable.length, 1, "the page has no focus surface — clicking a line did nothing");
@@ -353,7 +362,10 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     paintParked();
     const body = elements.get("viewBody");
     posted = null;
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
+    page.__enterInsert();
     walk(body).find((el) => el.type === "text").dispatch("blur");
     await new Promise((r) => setImmediate(r));
 
@@ -381,7 +393,10 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     paintParked();
     const body = elements.get("viewBody");
     posted = null;
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
+    page.__enterInsert();
     const editable = walk(body).find((el) => el.type === "text");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04";
     editable.dispatch("blur");
@@ -409,7 +424,10 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     paintParked();
     const body = elements.get("viewBody");
     posted = null;
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
+    page.__enterInsert();
     for (const el of walk(body)) {
       if (el.tagName === "span") el.innerHTML = "<b>WRECKED</b>";
       if (el.tagName === "h2" || el.tagName === "div") el.innerHTML = "WRECKED";

@@ -3445,7 +3445,6 @@ function paint(body, source, context, deps) {
       event?.preventDefault?.();
       event?.stopPropagation?.();
       focus.focus(lineIndex, source, 0, deps.view);
-      mode?.enterInsert();
       repaint(source);
     });
   };

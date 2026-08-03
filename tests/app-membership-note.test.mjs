@@ -117,7 +117,10 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
 
   test('a bare line edited but STILL bare says nothing — "it belongs, so it stays"', async () => {
     paintFresh();
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     assert.equal(input.value, "- [ ] Ring the dentist", "the cursor did not reach the real capture");
     input.value = "- [ ] Ring the dentist today";
@@ -136,7 +139,10 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
 
   test('the SAME line, edited to add #work, says "this line will leave Domain Empty"', async () => {
     paintFresh();
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Ring the dentist #work";
     posted = null;
@@ -171,7 +177,10 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     // other way is not a check. This edit changes the FILE (so it really does post) without
     // changing the MEMBERSHIP ANSWER either side of it.
     paintFresh();
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Ring the dentist tomorrow";
     posted = null;
@@ -433,7 +442,10 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
     page.paintView("inbox");
     const taskText = () =>
       walk(elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Ring the dentist #work";
     input.dispatch("blur");

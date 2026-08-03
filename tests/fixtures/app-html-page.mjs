@@ -130,6 +130,18 @@ export const __drawerIsOpen = () => drawerIsOpen;
 export const __vimMode = () => mode.mode;
 export const __focusIndex = () => focus.lineIndex;
 export const __focusColumn = () => focus.column;
+// ARMED, NOT PRESSED. A click positions the cursor and stays in NORMAL — paint.ts's \`focusable\`
+// no longer calls \`mode.enterInsert()\` on click, only \`i\`/\`a\`/\`o\`/\`O\` do, and those reach
+// \`mode\` through the page's own document-level keydown handler, which ALSO runs
+// \`drainPainted()\` on every keystroke (the third drain point, see that handler's own comment)
+// and then \`repaintCurrentView()\`, which is what actually swaps the block-cursor line for the
+// typeable \`<input>\` — \`mode.enterInsert()\` alone only flips a flag. A suite proving something
+// about a HELD projection's timing needs a line open for typing WITHOUT running that drain
+// early — the same reason this suite's \`clickLine\` used to reach INSERT through a bare click,
+// before this field existed. This hook is the state-level replacement: it does what the keydown
+// handler's "enter-insert" branch does (arm, then repaint) without the keystroke that would also
+// drain.
+export function __enterInsert() { mode.enterInsert(); repaintCurrentView(); }
 // THE ANCHOR. \`__setFocus\` is how a suite puts the cursor somewhere WITH the source it belongs to
 // AND the view it belongs to — \`currentViewId\`, the same id \`paintView\`'s own \`focus.focus\`/
 // \`focus.reanchor\` calls already namespace the anchor by, so a test that calls this after

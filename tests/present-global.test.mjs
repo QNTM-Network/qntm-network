@@ -346,7 +346,10 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     // the focus surface depends on.
     pagePaints({ checkbox: "wired", tags: "wired" });
     const body = elements.get("viewBody");
+    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+    // `i` that arms it for typing.
     walkPage(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
+    page.__enterInsert();
     const editable = walkPage(body).filter((el) => el.type === "text");
     assert.equal(editable.length, 1, "clicking a chipped line did not reach its source");
     assert.equal(editable[0].value, VIEW.markdown.split("\n")[1]);

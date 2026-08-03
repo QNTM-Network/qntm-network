@@ -393,9 +393,14 @@ function makeDriver(page, browser, control) {
     page.paintView("this-week");
   };
 
+  /**
+   * A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
+   * `i` that arms it for typing.
+   */
   async function typeAndCommit(before, text) {
     open(before);
     taskText().dispatch("click", makeEvent());
+    page.__enterInsert();
     const input = openInput();
     input.value = text;
     input.dispatch("blur");

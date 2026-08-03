@@ -20,8 +20,19 @@
 
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
+import {
+  assertMutated,
+  importPage,
+  installBrowser,
+  makeEvent,
+  makeWorkDir,
+  REPO,
+  walk,
+} from "./fixtures/app-html-page.mjs";
 
 const WORK = makeWorkDir("app-vim-wiring");
 
@@ -53,6 +64,20 @@ const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.
 const selected = (body) =>
   walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("vim-selected"));
 const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
+
+/**
+ * THE ELEMENT `focusable` WIRED FOR `lineIndex`, however that row is currently shaped — the
+ * `<span>` of a checkbox row, the `<div>` of the already-selected one. `VIEW.markdown` has no
+ * blank lines, so the painted row and the source line share one index; a suite whose fixture did
+ * would need `app-projection-queue.test.mjs`'s `rowFor` instead.
+ */
+function clickTarget(body, lineIndex) {
+  const row = body.children[lineIndex];
+  assert.ok(row, `no painted row for line ${lineIndex}`);
+  const target = [row, ...walk(row)].find((el) => el.listeners?.has("click"));
+  assert.ok(target, `line ${lineIndex} is painted with nothing a cursor can reach`);
+  return target;
+}
 
 /**
  * `paintView`, then a deterministic starting line — `gg` rather than an assumption of `0`.
@@ -101,6 +126,31 @@ describe("vim, wired through app/index.html's own script", () => {
     const line = inputs(elements.get("viewBody"))[0];
     assert.ok(line, "i did not open an editable line through the page's own wiring");
     assert.equal(line.value, VIEW.markdown.split("\n")[1]);
+  });
+
+  test("a click positions the cursor and stays in NORMAL — it does not open INSERT", () => {
+    // THE REVERSED DECISION, ASSERTED DIRECTLY. A click used to both move the cursor AND open
+    // the line for typing (`mode?.enterInsert()`, inside paint.ts's `focusable`, on every
+    // click). It no longer does either half but the first: `i` is the one gesture that arms
+    // INSERT now, matching what `i` has always meant everywhere else in vim.
+    paintFresh();
+    const body = elements.get("viewBody");
+    clickTarget(body, 1).dispatch("click", makeEvent());
+
+    assert.equal(page.__vimMode(), "NORMAL", "a click armed INSERT on its own");
+    assert.equal(inputs(body).length, 0, "a click opened an editable line on its own");
+    assert.equal(page.__focusIndex(), 1, "the click did not move the cursor to the line clicked");
+    // THE FOUNDING RULE SURVIVES: cursor on a line shows its SOURCE. `selected` is `normalLine`'s
+    // own mark (paint.ts) — the block-cursor rendering NORMAL always uses for the focused line,
+    // clicked or not.
+    assert.equal(selected(body).length, 1, "the clicked line does not show its raw source");
+
+    // `i` IS STILL THE KEYBOARD PATH IN, exactly as it is for a line reached by `j`/`gg`/`G`.
+    press("i");
+    assert.equal(page.__vimMode(), "INSERT");
+    const line = inputs(body)[0];
+    assert.ok(line, "i after a click did not open an editable line");
+    assert.equal(line.value, VIEW.markdown.split("\n")[1], "i opened the wrong line, or the wrong text");
   });
 
   test("Escape on the open line returns to NORMAL without posting, and keeps the selection", () => {
@@ -575,5 +625,60 @@ describe("a projection arriving does not take the column away", () => {
     arrive(STAMPED.split("\n").map((l, i) => (i === 1 ? l + " 📅 2026-08-01" : l)).join("\n"));
     assert.equal(page.__focusColumn(), column, "a longer line moved a column that still fits it");
     page.__setGraphData({ snapshot: { generated_at: "2026-07-31T00:00:00Z", views: [VIEW] } });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// MUTATION PROOF — put `mode.enterInsert()` back on click, and the new NORMAL assertion goes red.
+//
+// THE SEAM IS THE BUNDLE, NOT THE PAGE — the same seam tests/app-enter-opens-a-line.test.mjs cuts
+// and its header explains why: the gesture under test lives in `app/present/paint.ts`, which the
+// page imports as `/dist/present.js`. A mutated COPY of the bundle is written beside the lifted
+// page and the page's own import is pointed at it, so the code under test is still the real
+// `focusable`, plus exactly the one line this suite is proving is load-bearing.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+function mutating(...pairs) {
+  return (workDir) => {
+    let mutated = readFileSync(join(REPO, "dist", "present.js"), "utf8");
+    for (const [pattern, replacement] of pairs) {
+      mutated = assertMutated(mutated, pattern, replacement);
+    }
+    const file = join(workDir, "present.mutated.js");
+    writeFileSync(file, mutated);
+    const url = pathToFileURL(file).href;
+    const was = pathToFileURL(join(REPO, "dist", "present.js")).href;
+    return (source) => assertMutated(source, JSON.stringify(was), JSON.stringify(url));
+  };
+}
+
+/**
+ * THE OLD LINE, PUT BACK. `focusable`'s click handler as it read before this change: focus, THEN
+ * arm INSERT, THEN repaint — all three inside one click.
+ */
+const CLICK_ARMS_INSERT = [
+  "      focus.focus(lineIndex, source, 0, deps.view);\n      repaint(source);",
+  "      focus.focus(lineIndex, source, 0, deps.view);\n      mode?.enterInsert();\n      repaint(source);",
+];
+const withClickArmingInsert = mutating(CLICK_ARMS_INSERT);
+
+describe("MUTATION PROOF — a bare click that still arms INSERT is exactly the defect this change ends", () => {
+  test("with mode.enterInsert() restored to the click handler, a bare click reaches INSERT with no i", async () => {
+    const workDir = makeWorkDir("app-vim-wiring-mutant-click-arms-insert");
+    const mutant = await importPage(workDir, withClickArmingInsert(workDir));
+    mutant.__setGraphData({ snapshot: { generated_at: "2026-07-31T00:00:00Z", views: [VIEW] } });
+    mutant.paintView("this-week");
+    // `gg`, the same deterministic start `paintFresh` uses, through the mutant's own wiring.
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+
+    const body = elements.get("viewBody");
+    clickTarget(body, 1).dispatch("click", makeEvent());
+
+    // THIS IS THE PRECISE ASSERTION THE REAL SUITE'S NORMAL-STAYS-NORMAL TEST MAKES, INVERTED:
+    // with the old line restored, a bare click reaches INSERT on its own — proving that
+    // assertion is not vacuous, and would have caught the mutant this change reverses.
+    assert.equal(mutant.__vimMode(), "INSERT", "the mutant did not reproduce the old click behaviour");
+    assert.ok(inputs(body)[0], "the mutant's click did not open an editable line");
   });
 });
