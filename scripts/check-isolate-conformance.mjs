@@ -1,17 +1,20 @@
 /**
  * check-isolate-conformance — does the REAL Cloudflare Worker isolate (`workerd`, spawned by
  * `wrangler dev`, never deployed) produce byte-identical output to the same `compile()` call in
- * Node, for the structural declaration?
+ * Node, for EVERY generator that has a Worker route?
  *
- * `5d4f1b5` (PR #84) measured this BY HAND, once: a synthetic fixture, the operator's real
- * 276-file config, and a mutation that triggers a refusal — all three byte-identical, the refusal
- * wording word for word. No automated test spawned `workerd` to re-check it. This script re-runs
- * that exact method — same three cases, same route, same fixture — on every push, because a fact
- * nothing re-checks is not a fact this system trusts; see
+ * `5d4f1b5` (PR #84) measured this BY HAND, once, for the structural declaration: a synthetic
+ * fixture, the operator's real 276-file config, and a mutation that triggers a refusal — all three
+ * byte-identical, the refusal wording word for word. No automated test spawned `workerd` to
+ * re-check it. This script re-ran that exact method — same three cases, same route, same fixture —
+ * on every push (`6394420`); this pass extends it to the QUALIFICATION route the same generator's
+ * own pure-function port (`compile-qualification.mjs`) added
+ * (`design-the-runtime-compile.md` step C), running the SAME three cases against it. See
  * `docs/implementation-artifacts/design-the-runtime-compile.md` §6.3, §10.
  *
- * ── THREE OUTCOMES, ONE EXIT CODE APIECE — `scripts/checkdeclarations.mjs`'s convention, reused
- *    rather than reinvented, because `build.yml` already knows how to report it distinctly ──
+ * ── THREE OUTCOMES, ONE EXIT CODE APIECE, ACROSS ALL GENERATORS TOGETHER — `scripts/
+ *    checkdeclarations.mjs`'s convention, reused rather than reinvented, because `build.yml`
+ *    already knows how to report it distinctly ──
  *
  *   exit 0  COMPARED, AGREED. Every case that could run, ran, and Node/Worker matched byte for
  *           byte (refusal wording included).
@@ -50,21 +53,90 @@ import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { REPO_ROOT, DEFAULT_CONFIG_DIR } from "./monorepo-config.mjs";
 import {
-  compile,
+  compile as compileStructural,
   STRUCTURAL_TOKENS_KEY,
-  SCHEMA_KEY,
-  VIEWS_PREFIX,
+  SCHEMA_KEY as STRUCTURAL_SCHEMA_KEY,
+  VIEWS_PREFIX as STRUCTURAL_VIEWS_PREFIX,
 } from "./compile-structural.mjs";
+import {
+  compile as compileQualification,
+  SCHEMA_KEY as QUALIFICATION_SCHEMA_KEY,
+  PATTERNS_PREFIX,
+  VIEWS_PREFIX as QUALIFICATION_VIEWS_PREFIX,
+  VOCABULARY_PREFIX,
+} from "./compile-qualification.mjs";
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
 const FIXTURE_CONFIG = join(REPO_ROOT, "tests", "fixtures", "config");
-const ROUTE_PATH = "/config/compile/structural";
 
-// The anchor `tests/worker-config-compile.test.mjs` already mutates for its own committed
-// refusal proof — reused here rather than a second, independently-drifting copy of the same
-// sentence.
-const MUTATION_ANCHOR = "structural_edge_types: [UNLOCKS]";
-const MUTATION_REPLACEMENT = "structural_edge_types: [MADE_UP_EDGE_TYPE]";
+/** Read a directory's `*.yaml` files, sorted, into `files[prefix + name] = contents`. The one
+ * mechanical step every generator's own fs shell repeats — restated here, not imported, because
+ * this script deliberately stays a peer of those shells, not a dependent of them. */
+function readYamlDir(dir, prefix, files) {
+  for (const f of readdirSync(dir).filter((f) => f.endsWith(".yaml")).sort()) {
+    files[`${prefix}${f}`] = readFileSync(join(dir, f), "utf8");
+  }
+}
+
+/** One entry per generator with a Worker Gate-1 route. Adding a third generator (resolution) is
+ * one more entry here, not a change to the loop below. */
+const GENERATORS = [
+  {
+    name: "structural",
+    routePath: "/config/compile/structural",
+    compile: compileStructural,
+    // Read a config directory into exactly the files map `compile()` recognises, sorted the same
+    // way `generate-structural-declaration.mjs`'s own fs shell reads it.
+    readConfigTree(configDir) {
+      const files = {};
+      const tokensPath = join(configDir, "vocabulary", "structural_tokens.yaml");
+      if (existsSync(tokensPath)) files[STRUCTURAL_TOKENS_KEY] = readFileSync(tokensPath, "utf8");
+      const schemaPath = join(configDir, "schema.yaml");
+      if (existsSync(schemaPath)) files[STRUCTURAL_SCHEMA_KEY] = readFileSync(schemaPath, "utf8");
+      readYamlDir(join(configDir, "views"), STRUCTURAL_VIEWS_PREFIX, files);
+      return files;
+    },
+    // The anchor `tests/worker-config-compile.test.mjs` already mutates for its own committed
+    // refusal proof — reused here rather than a second, independently-drifting copy of the same
+    // sentence.
+    mutate(files) {
+      const anchor = "structural_edge_types: [UNLOCKS]";
+      if (!files["views/main.yaml"] || !files["views/main.yaml"].includes(anchor)) {
+        throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
+      }
+      files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "structural_edge_types: [MADE_UP_EDGE_TYPE]");
+    },
+  },
+  {
+    name: "qualification",
+    routePath: "/config/compile/qualification",
+    compile: compileQualification,
+    // Read a config directory into exactly the files map `compile()` recognises, sorted the same
+    // way `generate-qualification-declaration.mjs`'s own fs shell reads it.
+    readConfigTree(configDir) {
+      const files = {};
+      const schemaPath = join(configDir, "schema.yaml");
+      if (existsSync(schemaPath)) files[QUALIFICATION_SCHEMA_KEY] = readFileSync(schemaPath, "utf8");
+      readYamlDir(join(configDir, "patterns"), PATTERNS_PREFIX, files);
+      readYamlDir(join(configDir, "views"), QUALIFICATION_VIEWS_PREFIX, files);
+      readYamlDir(join(configDir, "vocabulary"), VOCABULARY_PREFIX, files);
+      return files;
+    },
+    // The anchor `tests/worker-config-compile.test.mjs` already mutates for its own committed
+    // refusal proof — reused here rather than a second, independently-drifting copy of the same
+    // sentence. Unlike structural's, this is a config-integrity refusal (a section names a pattern
+    // no file in patterns/ defines) rather than an unknown-edge-type refusal, because qualification
+    // has no equivalent single-token edge-vocabulary check — the section/pattern join is the
+    // analogous hard failure `compile()` cannot recover from.
+    mutate(files) {
+      const anchor = "qualification: local-tasks";
+      if (!files["views/main.yaml"] || !files["views/main.yaml"].includes(anchor)) {
+        throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
+      }
+      files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "qualification: does-not-exist");
+    },
+  },
+];
 
 function parseArgs(argv) {
   const args = { port: 18787, bootTimeoutMs: 60_000, configDir: DEFAULT_CONFIG_DIR };
@@ -77,27 +149,11 @@ function parseArgs(argv) {
   return args;
 }
 
-/** Read a config directory into exactly the files map `compile()` recognises, sorted the same
- * way `generate-structural-declaration.mjs`'s own fs shell reads it — one convention, two
- * readers, restated here rather than imported because that shell is Node-only by design and this
- * script deliberately stays a peer of it, not a dependent. */
-function readConfigTree(configDir) {
-  const files = {};
-  const tokensPath = join(configDir, "vocabulary", "structural_tokens.yaml");
-  if (existsSync(tokensPath)) files[STRUCTURAL_TOKENS_KEY] = readFileSync(tokensPath, "utf8");
-  const schemaPath = join(configDir, "schema.yaml");
-  if (existsSync(schemaPath)) files[SCHEMA_KEY] = readFileSync(schemaPath, "utf8");
-  const viewsDir = join(configDir, "views");
-  for (const f of readdirSync(viewsDir).filter((f) => f.endsWith(".yaml")).sort()) {
-    files[`${VIEWS_PREFIX}${f}`] = readFileSync(join(viewsDir, f), "utf8");
-  }
-  return files;
-}
-
-/** POST a files map at the real, running Worker isolate. Never throws on a non-2xx status — a
- * refusal is data, not an exception, exactly as `worker/src/config.js` itself treats it. */
-async function postToWorker(baseUrl, files) {
-  const response = await fetch(`${baseUrl}${ROUTE_PATH}`, {
+/** POST a files map at the real, running Worker isolate, at ONE generator's own route path.
+ * Never throws on a non-2xx status — a refusal is data, not an exception, exactly as
+ * `worker/src/config.js` itself treats it. */
+async function postToWorker(baseUrl, routePath, files) {
+  const response = await fetch(`${baseUrl}${routePath}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ files }),
@@ -105,11 +161,11 @@ async function postToWorker(baseUrl, files) {
   return { status: response.status, body: await response.json() };
 }
 
-/** Run `compile()` directly in THIS process (Node's V8) and normalise its outcome to the same
- * shape `postToWorker` returns, so the two can be diffed with one function. */
-function compileInNode(files) {
+/** Run ONE generator's `compile()` directly in THIS process (Node's V8) and normalise its outcome
+ * to the same shape `postToWorker` returns, so the two can be diffed with one function. */
+function compileInNode(compileFn, files) {
   try {
-    const { declaration, dropped } = compile(files);
+    const { declaration, dropped } = compileFn(files);
     return { status: 200, body: { ok: true, declaration, dropped } };
   } catch (error) {
     return { status: 422, body: { ok: false, refused: true, error: String(error?.message || error) } };
@@ -216,47 +272,48 @@ async function main() {
   }
 
   try {
-    // CASE 1 — the synthetic fixture, always available, committed to this repo.
-    {
-      const files = readConfigTree(FIXTURE_CONFIG);
-      const nodeResult = compileInNode(files);
-      const workerResult = await postToWorker(worker.baseUrl, files);
-      const cmp = compareOutcomes(nodeResult, workerResult);
-      results.push({ name: "synthetic fixture", compared: true, agree: cmp.agree, detail: cmp });
-    }
+    for (const generator of GENERATORS) {
+      const label = (caseName) => `${generator.name}: ${caseName}`;
 
-    // CASE 2 — the mutation proof: one edge type reference `schema.yaml` never declared. Both
-    // runtimes must refuse, with the identical sentence — the refusal wording is a product
-    // surface (design-the-runtime-compile.md §5.1), not an error path, and matters as much as the
-    // success case.
-    {
-      const files = readConfigTree(FIXTURE_CONFIG);
-      if (!files["views/main.yaml"] || !files["views/main.yaml"].includes(MUTATION_ANCHOR)) {
-        throw new Error(`mutation anchor "${MUTATION_ANCHOR}" not found in the fixture — fixture changed under this script.`);
+      // CASE 1 — the synthetic fixture, always available, committed to this repo.
+      {
+        const files = generator.readConfigTree(FIXTURE_CONFIG);
+        const nodeResult = compileInNode(generator.compile, files);
+        const workerResult = await postToWorker(worker.baseUrl, generator.routePath, files);
+        const cmp = compareOutcomes(nodeResult, workerResult);
+        results.push({ name: label("synthetic fixture"), compared: true, agree: cmp.agree, detail: cmp });
       }
-      files["views/main.yaml"] = files["views/main.yaml"].replace(MUTATION_ANCHOR, MUTATION_REPLACEMENT);
-      const nodeResult = compileInNode(files);
-      const workerResult = await postToWorker(worker.baseUrl, files);
-      const cmp = compareOutcomes(nodeResult, workerResult);
-      results.push({ name: "mutation (refusal wording)", compared: true, agree: cmp.agree, detail: cmp });
-      if (nodeResult.status !== 422) {
-        throw new Error("mutation proof is broken: the mutated fixture did not refuse in Node at all.");
-      }
-    }
 
-    // CASE 3 — the operator's real 276-file config. Only if this runner has it checked out.
-    if (monorepoAvailable) {
-      const files = readConfigTree(args.configDir);
-      const nodeResult = compileInNode(files);
-      const workerResult = await postToWorker(worker.baseUrl, files);
-      const cmp = compareOutcomes(nodeResult, workerResult);
-      results.push({ name: "operator's real config", compared: true, agree: cmp.agree, detail: cmp });
-    } else {
-      results.push({
-        name: "operator's real config",
-        compared: false,
-        reason: `monorepo not checked out at ${args.configDir}`,
-      });
+      // CASE 2 — the mutation proof: one config change that must trigger an identical, named
+      // refusal on both sides. Both runtimes must refuse, with the identical sentence — the
+      // refusal wording is a product surface (design-the-runtime-compile.md §5.1), not an error
+      // path, and matters as much as the success case.
+      {
+        const files = generator.readConfigTree(FIXTURE_CONFIG);
+        generator.mutate(files);
+        const nodeResult = compileInNode(generator.compile, files);
+        const workerResult = await postToWorker(worker.baseUrl, generator.routePath, files);
+        const cmp = compareOutcomes(nodeResult, workerResult);
+        results.push({ name: label("mutation (refusal wording)"), compared: true, agree: cmp.agree, detail: cmp });
+        if (nodeResult.status !== 422) {
+          throw new Error(`${generator.name}: mutation proof is broken — the mutated fixture did not refuse in Node at all.`);
+        }
+      }
+
+      // CASE 3 — the operator's real config. Only if this runner has it checked out.
+      if (monorepoAvailable) {
+        const files = generator.readConfigTree(args.configDir);
+        const nodeResult = compileInNode(generator.compile, files);
+        const workerResult = await postToWorker(worker.baseUrl, generator.routePath, files);
+        const cmp = compareOutcomes(nodeResult, workerResult);
+        results.push({ name: label("operator's real config"), compared: true, agree: cmp.agree, detail: cmp });
+      } else {
+        results.push({
+          name: label("operator's real config"),
+          compared: false,
+          reason: `monorepo not checked out at ${args.configDir}`,
+        });
+      }
     }
   } finally {
     stopWorker(worker.child);

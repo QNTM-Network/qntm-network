@@ -1,42 +1,50 @@
-// Gate 1 only — `design-the-runtime-compile.md` step B's second half.
+// Gate 1 only — `design-the-runtime-compile.md` step B's second half, extended by step C to a
+// second generator.
 //
 // POST /config/compile/structural
+// POST /config/compile/qualification
 //
-// Accepts a submitted config file map, compiles it with the SAME `compile(files)` this repo's
-// CLI already calls (`scripts/generate-structural-declaration.mjs`), and answers with either the
-// compiled declaration or a named refusal. Nothing here is stored, nothing is forwarded to the
-// graph server, and no version is minted — those are Gate 2 and the two-consumer write path
-// (`design-the-runtime-compile.md` §3, steps G-H), explicitly not this route's job. This is the
-// first observable proof that the compiler this repo already has runs, unmodified, in the
-// Cloudflare Worker isolate it is designed to eventually run in for real.
+// Accepts a submitted config file map, compiles it with the SAME `compile(files)` this repo's CLI
+// already calls (`scripts/generate-structural-declaration.mjs` /
+// `scripts/generate-qualification-declaration.mjs`), and answers with either the compiled
+// declaration or a named refusal. Nothing here is stored, nothing is forwarded to the graph
+// server, and no version is minted — those are Gate 2 and the two-consumer write path
+// (`design-the-runtime-compile.md` §3, steps G-H), explicitly not this route's job.
 //
-// UNAUTHENTICATED, DELIBERATELY, FOR NOW. Every other `/app/*` route requires a session because it
-// reads or writes a person's own data. This route touches no storage and names no user — it is a
-// pure function of the bytes in the request body, so a session buys nothing but friction against
-// the one thing this slice exists to prove: that a bad config, POSTed to a real endpoint, comes
-// back refused with the same wording the CLI already gives. The two-consumer write path (§3 of the
-// design document) is where a real identity and Gate 2 both belong, and it is not built here.
+// UNAUTHENTICATED, DELIBERATELY, FOR NOW — same reasoning as the structural route, restated
+// because it still applies to the qualification one: this route touches no storage and names no
+// user, so a session buys nothing but friction against the one thing this slice exists to prove.
+// The two-consumer write path (§3 of the design document) is where a real identity and Gate 2 both
+// belong, and it is not built here.
 
 import { json } from "./util.js";
-// FROM `compile-structural.mjs`, NOT `generate-structural-declaration.mjs` — importing `compile`
-// from the latter drags in `node:fs` and `monorepo-config.mjs`'s module-level
-// `fileURLToPath(import.meta.url)`, which crashed this Worker at load (verified against the real
-// local `wrangler dev` runtime, not assumed). `compile-structural.mjs`'s own header has the full
-// story. This import's module graph is exactly `compile-structural.mjs` + `ledger.mjs` — nothing
-// Node-specific.
-import { compile } from "../../scripts/compile-structural.mjs";
+// FROM `compile-structural.mjs` / `compile-qualification.mjs`, NOT the `generate-*-
+// declaration.mjs` CLI files — importing `compile` from either CLI file drags in `node:fs` and
+// `monorepo-config.mjs`'s module-level `fileURLToPath(import.meta.url)`, which crashed this Worker
+// at load the first time this was tried (verified against the real local `wrangler dev` runtime,
+// not assumed — see `compile-structural.mjs`'s header for the exact error). Both compile modules'
+// import graphs are exactly themselves plus `ledger.mjs` (and, for qualification,
+// `yaml-subset.mjs`) — nothing Node-specific.
+import { compile as compileStructural } from "../../scripts/compile-structural.mjs";
+import { compile as compileQualification } from "../../scripts/compile-qualification.mjs";
 
-const ROUTE = "POST /config/compile/structural";
+// One route entry per generator: the URL suffix, and the pure `compile` it calls. Adding a third
+// generator (resolution, step C's remaining half) is one more entry here, not a new function.
+const ROUTES = new Map([
+  ["POST /config/compile/structural", compileStructural],
+  ["POST /config/compile/qualification", compileQualification],
+]);
 
 /**
  * @param {Request} request
  * @param {URL} url
  * @param {string} origin
- * @returns {Promise<Response|null>} null if this request is not this route's.
+ * @returns {Promise<Response|null>} null if this request is not one of this file's routes.
  */
 export async function handleConfig(request, url, origin) {
   const key = `${request.method} ${url.pathname}`;
-  if (key !== ROUTE) return null;
+  const compile = ROUTES.get(key);
+  if (!compile) return null;
 
   let body;
   try {
@@ -55,10 +63,11 @@ export async function handleConfig(request, url, origin) {
     }
   }
 
-  // GATE 1. `compile` is the exact function `scripts/generate-structural-declaration.mjs`'s own
-  // CLI shell calls — one implementation, two callers, per `design-config-is-content.md` §2.2(b).
-  // A thrown GenerationError IS a refusal: named, specific, the same sentence a human running the
-  // CLI against the same bad input would see on stderr. Nothing is caught and reworded.
+  // GATE 1. `compile` is the exact function the matching generator's own CLI shell calls — one
+  // implementation, two callers, per `design-config-is-content.md` §2.2(b). A thrown
+  // GenerationError (or Refusal, for qualification's own pattern normaliser) IS a refusal: named,
+  // specific, the same sentence a human running the CLI against the same bad input would see on
+  // stderr. Nothing is caught and reworded.
   let compiled;
   try {
     compiled = compile(files);

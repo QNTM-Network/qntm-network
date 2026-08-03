@@ -1,16 +1,18 @@
 # Isolate conformance — does the real Cloudflare Worker isolate agree with Node, byte for byte?
 #
-# `5d4f1b5` (PR #84) measured this BY HAND, once: a synthetic fixture, the operator's real
-# 276-file config, and a mutation that triggers a refusal — all three byte-identical between
-# Node's V8 and `workerd`, the refusal wording word for word. No test in this repo spawned the
-# Worker runtime to re-check it. `scripts/check-isolate-conformance.mjs` re-runs the same three
-# cases on every push — a fact nothing re-checks is not a fact this system trusts.
+# `5d4f1b5` (PR #84) measured this BY HAND, once, for the structural declaration: a synthetic
+# fixture, the operator's real 276-file config, and a mutation that triggers a refusal — all three
+# byte-identical between Node's V8 and `workerd`, the refusal wording word for word. No test in
+# this repo spawned the Worker runtime to re-check it. `scripts/check-isolate-conformance.mjs`
+# re-runs the same three cases on every push — a fact nothing re-checks is not a fact this system
+# trusts — and now covers the QUALIFICATION declaration too (`compile-qualification.mjs`,
+# `design-the-runtime-compile.md` step C), the same three cases against its own route.
 #
 # NO PATH FILTER, DELIBERATELY. The premise this guards spans two directories that change
-# independently (`scripts/compile-structural.mjs`, `worker/src/config.js`) — gating on
-# `worker/**` alone (the way `worker.yml` does, for its own, different reason) would let a
-# `scripts/` change land with the isolate side never re-checked. `build.yml` takes the same
-# no-filter posture for the same reason.
+# independently (`scripts/compile-*.mjs`, `worker/src/config.js`) — gating on `worker/**` alone
+# (the way `worker.yml` does, for its own, different reason) would let a `scripts/` change land
+# with the isolate side never re-checked. `build.yml` takes the same no-filter posture for the
+# same reason.
 #
 # THREE OUTCOMES, not two — the check itself explains each in full; this job only turns the exit
 # code into the distinct GitHub-native signal `build.yml`'s own `checkdeclarations.mjs` step
@@ -25,11 +27,12 @@
 #           log and summary say, explicitly, which cases were and were not.
 #
 # JOB TIME, MEASURED: `npm ci` in worker/ (wrangler + the ~117 MB workerd binary, warm npm cache)
-# ~7s; the check itself (boot `wrangler dev`, run and compare all three cases, tear down) ~2s.
-# Checkout + setup-node overhead aside, this job's own work is under 15s. It runs in its own job,
-# in parallel with `build` and `worker` (GitHub-hosted runners, not the monorepo's single-executor
-# self-hosted box), so it adds a parallel ~15s job to the workflow, not serial time to either
-# existing job.
+# ~7s; the check itself (boot `wrangler dev`, run and compare all six cases — three per generator,
+# two generators — tear down) ~2.5s, re-measured after the qualification route was added (was ~2s
+# for three cases). Checkout + setup-node overhead aside, this job's own work is under 15s. It runs
+# in its own job, in parallel with `build` and `worker` (GitHub-hosted runners, not the monorepo's
+# single-executor self-hosted box), so it adds a parallel ~15s job to the workflow, not serial time
+# to either existing job.
 
 name: isolate-conformance
 

@@ -34,7 +34,11 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { generateQualification, DEFAULT_CONFIG_DIR } from "../scripts/generate-qualification-declaration.mjs";
+import {
+  generateQualification,
+  readConfigTree as readQualificationConfigTree,
+  DEFAULT_CONFIG_DIR,
+} from "../scripts/generate-qualification-declaration.mjs";
 import { generateStructural } from "../scripts/generate-structural-declaration.mjs";
 import { generateResolution } from "../scripts/generate-resolution-declaration.mjs";
 import { checkDeclarations } from "../scripts/checkdeclarations.mjs";
@@ -378,46 +382,59 @@ describe("2. THE MUTATION PROOF — re-introduce a silent drop and a test goes r
    *
    *   if (typeof entry.field !== "string" || !RESOLVABLE_FIELDS.includes(entry.field)) continue;
    *
-   * — by patching the generator's SOURCE into a temp copy and importing that copy. Nothing on
-   * disk in this repo is modified; the mutant is a sibling module in a temp dir that imports this
-   * repo's real `yaml-subset.mjs`, `monorepo-config.mjs` and `ledger.mjs` by absolute path.
+   * — by patching the PARSING logic's own source into a temp copy and importing that copy.
+   * Nothing on disk in this repo is modified. Since `5d4f1b5`-shaped port (this generator's own,
+   * `compile-qualification.mjs`) split the token loop OUT of `generate-qualification-
+   * declaration.mjs` and into `compile-qualification.mjs`, the mutant targets THAT file — the
+   * mutant is a sibling module in a temp dir that imports this repo's real `yaml-subset.mjs` and
+   * `ledger.mjs` by absolute path. The file-reading half (`readConfigTree`, unaffected by this
+   * mutation) is never mutated: it is imported for real from `generate-qualification-
+   * declaration.mjs` and combined with the mutant `compile`, the same way the real
+   * `generateQualification` combines them.
    */
-  const withMutantGenerator = async (patch, use) => {
+  const withMutantCompile = async (patch, use) => {
     const scratch = mkdtempSync(join(tmpdir(), "mutant-generator-"));
     try {
-      const source = readFileSync(join(REPO, "scripts", "generate-qualification-declaration.mjs"), "utf8");
+      const source = readFileSync(join(REPO, "scripts", "compile-qualification.mjs"), "utf8");
       const mutated = patch(source);
       assert.notEqual(mutated, source, "the mutation's own patch did not apply");
       const rewritten = mutated
         .replaceAll('from "./yaml-subset.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "yaml-subset.mjs"))}`)
-        .replaceAll('from "./monorepo-config.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "monorepo-config.mjs"))}`)
         .replaceAll('from "./ledger.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "ledger.mjs"))}`);
-      const path = join(scratch, "mutant.mjs");
+      const path = join(scratch, "mutant-compile.mjs");
       writeFileSync(path, rewritten);
+      const mutant = await import(`file://${path}`);
       // AWAITED INSIDE THE try, never returned as a pending promise: the `finally` below removes
-      // the directory the mutant module lives in, and an un-awaited import would race it.
-      return await use(path);
+      // the directory the mutant module lives in, and an un-awaited use would race it. `use`
+      // itself is synchronous everywhere it is called below (it only drives synchronous file
+      // reads and the mutant's own synchronous `compile`), so this await settles immediately.
+      return await use(mutant);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
   };
 
+  /** Combine a mutant `compile` with the REAL, unmutated `readConfigTree` — the same shell shape
+   * `generateQualification` itself uses — to produce its equivalent over a config directory. */
+  function generateWithMutantCompile(mutant, configDir) {
+    const files = readQualificationConfigTree(configDir);
+    const { declaration, dropped } = mutant.compile(files, new Ledger());
+    return { ...declaration, dropped };
+  }
+
   test("CONTROL: the mutant harness reproduces the real generator when it patches nothing real", async () => {
     // A mutation experiment whose harness is untested proves nothing about the mutation. The
     // control changes a comment only, and the output must be byte-identical to the real one.
     const real = JSON.stringify(generateQualification(FIXTURE_CONFIG));
-    const same = await withMutantGenerator(
+    const same = await withMutantCompile(
       (s) => s.replace("// ── assemble", "// ── assemble (harness control)"),
-      async (path) => {
-        const mutant = await import(`file://${path}`);
-        return JSON.stringify(mutant.generateQualification(FIXTURE_CONFIG));
-      },
+      (mutant) => JSON.stringify(generateWithMutantCompile(mutant, FIXTURE_CONFIG)),
     );
     assert.equal(same, real, "the mutant harness does not reproduce the real generator");
   });
 
   test("MUTANT: restore the silent `continue` at the token loop and the DROP 10 assertion goes RED", async () => {
-    const droppedByMutant = await withMutantGenerator(
+    const droppedByMutant = await withMutantCompile(
       (source) => {
         // Replace the whole recorded branch with the single line it replaced.
         const start = source.indexOf('        if (typeof entry.field === "string") {');
@@ -434,14 +451,12 @@ describe("2. THE MUTATION PROOF — re-introduce a silent drop and a test goes r
           source.slice(end)
         );
       },
-      async (path) => {
-        const mutant = await import(`file://${path}`);
-        return withMutatedConfig(
+      (mutant) =>
+        withMutatedConfig(
           FIXTURE_CONFIG,
           (c) => put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
-          (configDir) => mutant.generateQualification(configDir).dropped,
-        );
-      },
+          (configDir) => generateWithMutantCompile(mutant, configDir).dropped,
+        ),
     );
 
     // THE RED. Under the mutant, `#p1` is dropped and NOTHING says so — which is exactly the
@@ -779,7 +794,7 @@ describe("7. THE COMPLETENESS SCANNER — no path may leave a declaration withou
    * WHY A SCANNER AND NOT A GREP. Sections 1 and 2 prove each drop path I FOUND. They cannot prove
    * I found them all, and "grep returned nothing" is not a proof of absence — this repository has
    * already had an AST scan pass its own positive control and still miss three call sites named as
-   * strings. So this scans the RAW SOURCE TEXT of the three generators (never an AST, so a shape
+   * strings. So this scans the RAW SOURCE TEXT of the five files below (never an AST, so a shape
    * spelled as a string cannot hide from it) and requires every `continue;` to carry exactly one
    * of two verdicts:
    *
@@ -789,11 +804,23 @@ describe("7. THE COMPLETENESS SCANNER — no path may leave a declaration withou
    *
    * A new `continue` added later carries neither and turns this red. That is the point: the guard
    * is against the NEXT silent drop, not only the sixteen already closed.
+   *
+   * FIVE FILES, NOT THREE — A GAP THIS PASS CLOSED. The structural port (`5d4f1b5`) split
+   * `generate-structural-declaration.mjs`'s parsing logic (and its `continue`s) into
+   * `compile-structural.mjs`, and this generator's own port did the same into
+   * `compile-qualification.mjs` — in both cases the `continue`s MOVED, and until now this list
+   * did not move with them, so every `continue` in `compile-structural.mjs` has been unscanned by
+   * this sweep since `5d4f1b5` merged, silently. Adding both compile modules here closes that gap
+   * for real rather than leaving it as a second, undetected instance of the exact defect this
+   * whole section exists to catch. `generate-resolution-declaration.mjs` is still a single file —
+   * step C's remaining generator, not yet split — so it is unaffected and stays as it was.
    */
   const GENERATORS = [
     "scripts/generate-qualification-declaration.mjs",
     "scripts/generate-structural-declaration.mjs",
     "scripts/generate-resolution-declaration.mjs",
+    "scripts/compile-qualification.mjs",
+    "scripts/compile-structural.mjs",
   ];
   const WINDOW = 12;
 

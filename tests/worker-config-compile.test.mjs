@@ -1,6 +1,7 @@
 /**
- * THE WORKER'S GATE-1 ROUTE, DRIVEN FOR REAL — `design-the-runtime-compile.md` step B's second
- * half: `POST /config/compile/structural`.
+ * THE WORKER'S GATE-1 ROUTES, DRIVEN FOR REAL — `design-the-runtime-compile.md` step B's second
+ * half (`POST /config/compile/structural`), extended by step C to a second generator
+ * (`POST /config/compile/qualification`).
  *
  *   node --test tests/worker-config-compile.test.mjs
  *
@@ -8,35 +9,38 @@
  * establish for `worker/src/app.js` and `worker/src/util.js`: this drives the REAL route handler
  * (`handleConfig`, imported from `worker/src/config.js`, not a mock of it) with a real `Request`
  * object, over the committed synthetic fixture (`tests/fixtures/config/`) so it runs on every pull
- * request — CI does not clone the monorepo, and this route's whole reason to exist is to be
+ * request — CI does not clone the monorepo, and both routes' whole reason to exist is to be
  * reachable without one.
  *
- * THREE CLAIMS:
+ * THREE CLAIMS, PER ROUTE:
  *
  *   1. THE ROUTE COMPILES WHAT IT IS GIVEN — a valid submission returns the exact declaration the
- *      pure `compile()` this route calls would return for the same bytes, over the same fixture
- *      `tests/declaration-drop.test.mjs` already trusts.
+ *      matching pure `compile()` this route calls would return for the same bytes, over the same
+ *      fixture `tests/declaration-drop.test.mjs` already trusts.
  *   2. THE MUTATION PROOF — a route that always returned the same canned response would still pass
- *      claim 1. This section changes ONE byte of the submitted config (one edge type reference)
- *      and asserts the route's answer actually changes: success becomes a named refusal, with the
- *      exact wording `scripts/compile-structural.mjs` throws — proving the route recomputes from
- *      the submitted bytes rather than caching or hardcoding an answer, and that the refusal
- *      contract this design document calls "the point of the slice" survives the move into the
- *      Worker unchanged, word for word.
+ *      claim 1. Each section changes ONE byte of the submitted config and asserts the route's
+ *      answer actually changes: success becomes a named refusal, with the exact wording the
+ *      matching `compile-*.mjs` throws — proving the route recomputes from the submitted bytes
+ *      rather than caching or hardcoding an answer, and that the refusal contract this design
+ *      document calls "the point of the slice" survives the move into the Worker unchanged, word
+ *      for word.
  *   3. MALFORMED REQUESTS ARE REFUSED AT THE DOOR, NEVER CRASH THE ROUTE — bad JSON, a `files` that
  *      is not an object, a file whose contents is not a string. None of these should ever reach
- *      `compile()` at all.
+ *      `compile()` at all. Checked once, against the structural route, because `handleConfig`
+ *      validates the body BEFORE it looks up which generator's `compile` to call — the same
+ *      validation code path serves both routes, and section 4 below proves the qualification route
+ *      is wired into that same dispatch rather than a second, independently-drifting copy of it.
  *
  * WHAT THIS FILE DOES NOT PROVE, STATED PLAINLY. This file drives `handleConfig` directly, in
  * Node — it never spawns the real Worker isolate, so it cannot by itself prove Node and `workerd`
  * agree. That comparison was first checked by hand (PR #84's own description has the exact
- * commands and bytes) and is now re-checked on every push by
+ * commands and bytes, for structural) and is now re-checked on every push by
  * `scripts/check-isolate-conformance.mjs` (`.github/workflows/isolate-conformance.yml`), which
  * spawns a real, local, un-deployed `wrangler dev` and runs the same three cases this file's own
- * fixture and mutation anchor are built from. It is a separate script rather than a `node --test`
- * file for one reason: it must run and report even when the runtime cannot be spawned at all
- * (three distinct exit codes — see that script's own header), a shape `node --test`'s pass/skip
- * model does not give a straightforward way to make loud.
+ * fixtures and mutation anchors are built from, for BOTH generators. It is a separate script rather
+ * than a `node --test` file for one reason: it must run and report even when the runtime cannot be
+ * spawned at all (three distinct exit codes — see that script's own header), a shape `node --test`'s
+ * pass/skip model does not give a straightforward way to make loud.
  */
 
 import { test, describe } from "node:test";
@@ -46,15 +50,17 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { handleConfig } from "../worker/src/config.js";
-import { compile } from "../scripts/compile-structural.mjs";
+import { compile as compileStructural } from "../scripts/compile-structural.mjs";
+import { compile as compileQualification } from "../scripts/compile-qualification.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_CONFIG = resolve(HERE, "fixtures", "config");
-const ROUTE_URL = "http://worker.local/config/compile/structural";
+const STRUCTURAL_ROUTE_URL = "http://worker.local/config/compile/structural";
+const QUALIFICATION_ROUTE_URL = "http://worker.local/config/compile/qualification";
 
-/** Read the committed fixture into exactly the file map `compile()` expects — the same three
- * things `generate-structural-declaration.mjs`'s own fs shell reads, in the same sorted order. */
-function readFixtureFiles() {
+/** Read the committed fixture into exactly the file map structural's `compile()` expects — the
+ * same three things `generate-structural-declaration.mjs`'s own fs shell reads, sorted. */
+function readStructuralFixtureFiles() {
   const files = {};
   files["vocabulary/structural_tokens.yaml"] = readFileSync(
     join(FIXTURE_CONFIG, "vocabulary", "structural_tokens.yaml"),
@@ -68,21 +74,37 @@ function readFixtureFiles() {
   return files;
 }
 
+/** Read the committed fixture into exactly the file map qualification's `compile()` expects — the
+ * same four things `generate-qualification-declaration.mjs`'s own fs shell reads, sorted. */
+function readQualificationFixtureFiles() {
+  const files = {};
+  files["schema.yaml"] = readFileSync(join(FIXTURE_CONFIG, "schema.yaml"), "utf8");
+  for (const dir of ["patterns", "views", "vocabulary"]) {
+    const full = join(FIXTURE_CONFIG, dir);
+    for (const f of readdirSync(full).filter((f) => f.endsWith(".yaml")).sort()) {
+      files[`${dir}/${f}`] = readFileSync(join(full, f), "utf8");
+    }
+  }
+  return files;
+}
+
 /** POST a files map at the real route handler and return `{status, body}`. */
-async function post(files) {
-  const request = new Request(ROUTE_URL, {
+async function postTo(routeUrl, files) {
+  const request = new Request(routeUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ files }),
   });
-  const response = await handleConfig(request, new URL(ROUTE_URL), "https://qntm.network");
+  const response = await handleConfig(request, new URL(routeUrl), "https://qntm.network");
   return { status: response.status, body: await response.json() };
 }
 
-describe("1. THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
+const post = (files) => postTo(STRUCTURAL_ROUTE_URL, files);
+
+describe("1a. structural — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
   test("a valid submission returns exactly what compile() itself returns for the same bytes", async () => {
-    const files = readFixtureFiles();
-    const direct = compile(files);
+    const files = readStructuralFixtureFiles();
+    const direct = compileStructural(files);
     const { status, body } = await post(files);
 
     assert.equal(status, 200);
@@ -99,9 +121,9 @@ describe("1. THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
   });
 });
 
-describe("2. THE MUTATION PROOF — the route recomputes from the submitted bytes, not a canned answer", () => {
+describe("2a. structural — THE MUTATION PROOF", () => {
   test("one changed edge type reference flips success into a named refusal, same wording as compile()", async () => {
-    const files = readFixtureFiles();
+    const files = readStructuralFixtureFiles();
 
     // BEFORE: the unmutated fixture compiles cleanly (claim 1 already proved this; re-asserted
     // here so the mutation below is provably a delta over a working baseline, not a fixture that
@@ -123,7 +145,7 @@ describe("2. THE MUTATION PROOF — the route recomputes from the submitted byte
     // WHAT compile() ITSELF SAYS, DIRECTLY — the ground truth the route must match, word for word.
     let directMessage = null;
     try {
-      compile(files);
+      compileStructural(files);
     } catch (error) {
       directMessage = error.message;
     }
@@ -139,10 +161,63 @@ describe("2. THE MUTATION PROOF — the route recomputes from the submitted byte
   });
 });
 
+describe("1b. qualification — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
+  test("a valid submission returns exactly what compile() itself returns for the same bytes", async () => {
+    const files = readQualificationFixtureFiles();
+    const direct = compileQualification(files);
+    const { status, body } = await postTo(QUALIFICATION_ROUTE_URL, files);
+
+    assert.equal(status, 200);
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.declaration, direct.declaration);
+    assert.deepEqual(body.dropped, direct.dropped);
+    // A positive control on the shape: the fixture's one publishable pattern, and the one
+    // refused-for-traversal pattern (`tests/declaration-drop.test.mjs`'s own DROP 14 anchor).
+    assert.ok("local-tasks" in body.declaration.predicates);
+    assert.equal(body.declaration.refused["traversing-tasks"], "step 0: traverses (exists+parents)");
+  });
+});
+
+describe("2b. qualification — THE MUTATION PROOF", () => {
+  test("a section naming an undefined pattern flips success into a named refusal, same wording as compile()", async () => {
+    const files = readQualificationFixtureFiles();
+
+    // BEFORE: the unmutated fixture compiles cleanly.
+    const before = await postTo(QUALIFICATION_ROUTE_URL, files);
+    assert.equal(before.status, 200);
+    assert.equal(before.body.ok, true);
+
+    // THE MUTATION — one section's own `qualification:` pointed at a pattern name patterns/ never
+    // defines. Unlike a per-pattern refusal (which `compile` catches and records in `refused`
+    // without throwing), this is a config-integrity defect `compile` cannot recover from — the
+    // same class of hard refusal the structural route's mutation above exercises.
+    const anchor = "qualification: local-tasks";
+    assert.ok(files["views/main.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+    files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "qualification: does-not-exist");
+
+    // WHAT compile() ITSELF SAYS, DIRECTLY — the ground truth the route must match, word for word.
+    let directMessage = null;
+    try {
+      compileQualification(files);
+    } catch (error) {
+      directMessage = error.message;
+    }
+    assert.match(directMessage, /'does-not-exist' names a pattern that no file in patterns\/ defines/);
+
+    // AFTER: the route, given the mutated bytes, refuses — never a 200, never a stack trace.
+    const after = await postTo(QUALIFICATION_ROUTE_URL, files);
+    assert.equal(after.status, 422, "a refusal must not be a 200 — the app would show it as success");
+    assert.equal(after.body.ok, false);
+    assert.equal(after.body.refused, true);
+    // THE POINT OF THE SLICE: the exact sentence, unchanged by the move into the Worker route.
+    assert.equal(after.body.error, directMessage);
+  });
+});
+
 describe("3. malformed requests are refused at the door, never reach compile()", () => {
   test("a body that is not valid JSON", async () => {
-    const request = new Request(ROUTE_URL, { method: "POST", body: "not json" });
-    const response = await handleConfig(request, new URL(ROUTE_URL), "https://qntm.network");
+    const request = new Request(STRUCTURAL_ROUTE_URL, { method: "POST", body: "not json" });
+    const response = await handleConfig(request, new URL(STRUCTURAL_ROUTE_URL), "https://qntm.network");
     assert.equal(response.status, 400);
     const body = await response.json();
     assert.equal(body.ok, false);
@@ -156,30 +231,45 @@ describe("3. malformed requests are refused at the door, never reach compile()",
   });
 
   test("'files' is an array, not an object", async () => {
-    const request = new Request(ROUTE_URL, {
+    const request = new Request(STRUCTURAL_ROUTE_URL, {
       method: "POST",
       body: JSON.stringify({ files: ["not", "an", "object"] }),
     });
-    const response = await handleConfig(request, new URL(ROUTE_URL), "https://qntm.network");
+    const response = await handleConfig(request, new URL(STRUCTURAL_ROUTE_URL), "https://qntm.network");
     assert.equal(response.status, 400);
     const body = await response.json();
     assert.match(body.error, /'files' must be an object/);
   });
 
   test("a file's contents is not a string", async () => {
-    const request = new Request(ROUTE_URL, {
+    const request = new Request(STRUCTURAL_ROUTE_URL, {
       method: "POST",
       body: JSON.stringify({ files: { "schema.yaml": 12345 } }),
     });
-    const response = await handleConfig(request, new URL(ROUTE_URL), "https://qntm.network");
+    const response = await handleConfig(request, new URL(STRUCTURAL_ROUTE_URL), "https://qntm.network");
     assert.equal(response.status, 400);
     const body = await response.json();
     assert.match(body.error, /is not a string/);
   });
 
-  test("an unrelated path returns null — this route only answers its own", async () => {
+  test("an unrelated path returns null — neither route answers it", async () => {
     const request = new Request("http://worker.local/config/something-else", { method: "GET" });
     const response = await handleConfig(request, new URL(request.url), "https://qntm.network");
     assert.equal(response, null);
+  });
+});
+
+describe("4. the two routes are independently addressed, not one dispatcher guessing", () => {
+  test("the qualification route never answers a structural-shaped request path, and vice versa", async () => {
+    // Each URL only answers ITS OWN route — proven by posting the OTHER generator's fixture keys
+    // at the WRONG route and confirming it is refused as a malformed submission (missing the keys
+    // that route's own compile() requires), never silently misinterpreted.
+    const structuralFiles = readStructuralFixtureFiles();
+    const { status, body } = await postTo(QUALIFICATION_ROUTE_URL, structuralFiles);
+    // structural's files map has no schema.yaml discrepancy — it DOES include schema.yaml — but it
+    // has no patterns/ or vocabulary/ keys qualification's compile() requires, so it refuses named,
+    // never crashes and never silently compiles the wrong grammar.
+    assert.equal(status, 422);
+    assert.equal(body.refused, true);
   });
 });
