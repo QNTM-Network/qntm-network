@@ -3142,3 +3142,120 @@ backlog:
     asserts §6's silence assertion goes red. §4's structural pin was strengthened rather than moved:
     it used to assert the strip comes AFTER the column, which is a layout fact; it now asserts
     `#viewBody` is written empty and closed, which is the containment the argument actually needs.
+- id: the-declaration-is-fetched-not-baked
+  title: >-
+    [road] [1] [UNDER AN HOUR] THE ONE LINE THAT MAKES A CONFIG CHANGE A REDEPLOY.
+    `app/present/embedded-declaration.ts:45` imports `presentation.json` into the JavaScript bundle
+    at build time, and `app/index.html:1121-1122` shows the consequence - `loadPresentation()` calls
+    `applyPresentation(EMBEDDED_DECLARATION)` and reaches no network. esbuild inlines 138,878 bytes
+    of configuration into a 264,403-byte bundle, so changing config means regenerate, rebuild,
+    commit the rebuilt bundle, push, and wait for Pages. EVERYTHING ELSE IN THE ROADMAP WAITS ON
+    THIS, not because it is hard but because until it lands no later step can be demonstrated to
+    anyone who is not the operator. THE ONE DECISION INSIDE THE HOUR - `design-config-is-content.md`
+    section 7 step 2 prices the un-bake at half a day BECAUSE it includes a version key that makes
+    the declaration immutably cacheable, so the round trip costs once per config change rather than
+    once per load. The hour buys the fetch; the version key is a separate decision and should be
+    read before choosing. WHAT IT REOPENS - a declaration that cannot be read becomes a runtime case
+    again, and the machinery for it is already correct - `globalRegistrationFor` returns `undefined`
+    when either axis is missing and the rung refuses rather than guessing.
+    FALSIFIER - serve a modified declaration; assert the app's answers change with no rebuild and no
+    deploy.
+  driving_capability: the-declaration-is-fetched-not-baked
+  kind: capability
+  state: diagnose-ready
+  record: >-
+    2026-08-03 - IN FLIGHT. An agent is implementing this in parallel with the roadmap that records
+    it. Scoped in `docs/implementation-artifacts/roadmap-the-road-ahead.md` section 2 step 1 and
+    verified there at `2e9561a`.
+- id: an-abstention-is-visible-to-the-operator
+  title: >-
+    [road] [2] [HALF A DAY] "I DO NOT KNOW" AND "YES, THIS BELONGS" ARE BYTE-IDENTICAL TODAY.
+    `membershipNoteFor` (`app/index.html:3005-3029`) returns the empty string BOTH for an abstention
+    (`:3022-3024`) and for a confident answer that nothing changed (`:3028`); `orderingNoteFor`
+    (`:3046-3071`) does the same at `:3066-3068` and `:3070`. `app/index.html:3269` filters the empty
+    string out and `:3121` writes the survivors into the freshness line. So a refusal and an
+    all-is-well produce the same bytes. THIS IS A PREREQUISITE, NOT A POLISH ITEM - front-running is
+    a claim about prediction, and a prediction indistinguishable from silence cannot be scored by a
+    test or by a person driving the browser. Every roadmap step after this one produces predictions.
+    HALF A DAY AND NOT AN HOUR, AND THE EXTRA HALF IS THE SURFACE.
+    `design-the-rule-mirror.md` section 11 row 6 prices the MECHANISM at under an hour and that is
+    right - the `because` value is already computed and already discarded, and 116 refusals with
+    reasons already reach DevTools rather than the operator. But `membershipNoteFor`'s own header
+    refuses to speak on the safe transition because "a message on every keystroke is noise", and 137
+    of 186 sections are inside the refusal, so routing abstentions into the freshness line
+    reintroduces exactly that noise. THE ABSTENTION NEEDS A REGISTER OF ITS OWN and choosing it is
+    the half-day. The held-edit strip is a precedent and is NOT yet evaluated.
+    FALSIFIER - drive one line in a section whose qualification is refused and one line in a section
+    that publishes cleanly and does not move; assert the two produce different output. Today they do
+    not. Needs row 1.
+  driving_capability: an-abstention-is-visible-to-the-operator
+  kind: capability
+  state: diagnose-ready
+- id: an-engine-correction-is-a-visible-event
+  title: >-
+    [road] [3] [AN ARC, AND IT SPLITS] THREE SEPARATE PROBLEMS ARE ONE PROBLEM - a row moving to its
+    sorted position, a node type being corrected, and a rule cascading are all the SAME event: the
+    engine overruling what the browser showed. Built separately they become three motions by three
+    people, because nothing in the repository says they are one thing.
+    THE FORCING MEASUREMENT - `design-the-rule-mirror.md` sections 0 and 3.3:
+    `routine-without-cadence-becomes-task` (`config/rules/cadence_auto_routine.yaml:58-71`) retypes a
+    bare capture from `routine` to `task` INSIDE THE SAME PASS THAT MINTED IT, so in 13 of 186
+    sections the browser's registration answer is wrong by the end of the cycle. A browser that
+    stamps `routine` and is contradicted ten seconds later MUST NOT SWAP THE WORD SILENTLY - a
+    silent swap asserts the first answer then withdraws it without admitting it existed. The motion
+    is the admission, not decoration.
+    THE OPERATOR'S OWN WORDS FOR THE REGISTER - "not clunky but intentional, moving deliberately in
+    the background".
+    IT SPLITS INTO TWO PIECES THAT CAN LAND APART. (a) THE EVENT MUST EXIST BEFORE IT CAN BE SHOWN,
+    HALF A DAY - `design-the-rule-mirror.md` section 11 row 4: publish the two capture rules and
+    their order as a closed grammar (2 of 94 rules), or the browser does not know a correction is
+    coming and the settle has nothing to animate. (b) ONE LANGUAGE FOR IT, AN ARC - a single settle
+    affordance owned by the painter and used by all three occasions, timing and register decided
+    once. NOT A RULE EVALUATOR - row 4 of that document is a published grammar with a generated
+    fixture, never an interpreter. Timing and easing are deliberately undecided here. Needs row 2.
+  driving_capability: an-engine-correction-is-a-visible-event
+  kind: capability
+  state: diagnose-ready
+- id: config-compiles-without-a-build
+  title: >-
+    [road] [4] [AN ARC] THE RUNTIME EVALUATOR - move the compile into the Cloudflare Worker.
+    DECIDED AND PRICED ALREADY in `design-config-is-content.md`; this row exists to place it in the
+    order and must not re-derive it. Not the graph server, because that is the same compiler a
+    second time in a second language against `one-implementation-per-concern`
+    (`docs/architecture/architecture.yaml:135`). Not the browser, because the browser must never be
+    the authority on what a config means. The measurement that decides it - the three compilers are
+    already 92% portable, under 200 of 2,568 lines touch the filesystem or the command line.
+    THE SUB-ORDER IS THAT DOCUMENT'S SECTION 7 STEPS 3 AND 4 - the compile becomes a pure function of
+    file contents FIRST, then the Worker compiles on a config write and stores the result per user.
+    WHAT IT COMMITS US TO - a third caller of one compiler, and therefore a conformance assertion
+    that Worker and CLI produce byte-identical objects, `dropped` included (section 7 step 4, second
+    falsifier). Also a storage answer: the Worker has ONE D1 binding, no KV, no Durable Objects, and
+    R2 is not enabled on the account.
+    WHAT IT DELIVERS, STATED HONESTLY - the OPERATOR'S config becomes live-editable. It does not make
+    a USER'S config exist; that is row 5 and it is larger.
+    FALSIFIER - write a config adding one vocabulary token; the next fetch of the declaration
+    contains it, with no build, no commit and no deploy. Needs row 1.
+  driving_capability: config-compiles-without-a-build
+  kind: capability
+  state: diagnose-ready
+- id: config-is-per-user-not-per-server
+  title: >-
+    [road] [5] [AN ARC, AND LARGER THAN ROW 4] SINGLE-TENANT BY CONSTRUCTION, AND INVISIBLE BECAUSE
+    THERE IS EXACTLY ONE USER. `design-config-is-content.md` section 8.1: one tracked
+    `presentation.json`, one committed bundle, one push, one config directory on one server
+    (`server/app.py:43`, `/data/config`). The Worker already keys graph snapshots by `user_id`; THE
+    CONFIG PATH HAS NO USER DIMENSION ANYWHERE. The declaration must stop being a build artifact and
+    become per-user state; the config must stop being a directory and become per-user data.
+    AND THE STRONGEST PROTECTION ON THE CONFIG PATH IS ONE A USER CANNOT HAVE - `graph-sync.mjs`
+    GUARD 2 refuses any config that does not hash blob-for-blob identical to the config at the
+    `deployed` git tag, because config/engine skew broke the vault three times. IT IS MADE OF GIT. A
+    user has no git, so a user has no guard. The replacement is the dry-load gate
+    (`design-config-is-content.md` section 4.3 gate 2, section 7 step 7) and it must land BEFORE any
+    user may write config - which moves that gate from "nice, later" to a precondition.
+    UNSCOPED ON PURPOSE, the same reason `declare-the-hosted-application` is: scoping it means
+    deciding which capabilities it splits into, and that is a design pass rather than a row. Section
+    8 of that document enumerates EIGHT places the design assumes his instance - cite it, do not
+    re-derive it, and do not summarise it into a sentence that makes it sound smaller. Every closure
+    number in this repository is a floor; sampling can only undercount. Needs row 4.
+  kind: capability
+  state: unscoped
