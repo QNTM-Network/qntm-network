@@ -9,14 +9,26 @@
  * and three stale citations before anyone noticed. This script is what keeps the structural
  * declaration from becoming a second copy of that mistake.
  *
- * It reads THREE files, read-only, from the monorepo (never writes there, never runs a cycle,
+ * ── THE PURE/SHELL SPLIT — `design-the-runtime-compile.md` step B ──
+ *
+ * `compile(files)` below is a PURE FUNCTION over an in-memory map of path -> contents. It touches
+ * no filesystem and no command line, so it is the same code whether the caller is this file's own
+ * CLI shell (reading the operator's laptop) or a Cloudflare Worker route (reading bytes a browser
+ * POSTed) — `design-config-is-content.md`'s own finding that this generator is portable, made
+ * concrete. `generateStructural(configDir, ledger)` is the thin shell below `compile`: it reads
+ * exactly the three things this script has always read — `vocabulary/structural_tokens.yaml`,
+ * `schema.yaml`, every `views/*.yaml`, sorted — into that map and hands it to `compile`. Nothing
+ * about WHAT is read or the ORDER it is read in changed; only WHERE the reading happens moved, out
+ * of the part that has to run in two places.
+ *
+ * It reads THREE things, read-only, from the monorepo (never writes there, never runs a cycle,
  * never touches the vault):
  *
- *   config/vocabulary/structural_tokens.yaml   the GLOBAL indent binding (edge type + direction)
- *   config/schema.yaml                          edge_types -> cardinality, for the types that
- *                                                actually appear elsewhere in the declaration
- *   config/views/*.yaml                         every section's own structural_edge_types /
- *                                                structural_edge_direction override, if it has one
+ *   vocabulary/structural_tokens.yaml   the GLOBAL indent binding (edge type + direction)
+ *   schema.yaml                          edge_types -> cardinality, for the types that
+ *                                         actually appear elsewhere in the declaration
+ *   views/*.yaml                         every section's own structural_edge_types /
+ *                                         structural_edge_direction override, if it has one
  *
  * ── WHY A HAND-ROLLED SCANNER, NOT A YAML LIBRARY ──
  *
@@ -67,17 +79,22 @@ class GenerationError extends Error {}
 const nonBlank = (line) => line.trim() !== "" && !line.trim().startsWith("#");
 const indentOf = (line) => line.length - line.trimStart().length;
 
-// ── 1. structural_tokens.yaml -> the GLOBAL indent binding ─────────────────────────────────────
+// The two fixed keys `compile`'s file map carries, plus the `views/` prefix every section-override
+// file lives under. Named once so the pure function and the fs shell agree on the exact same
+// strings without restating them.
+const STRUCTURAL_TOKENS_KEY = "vocabulary/structural_tokens.yaml";
+const SCHEMA_KEY = "schema.yaml";
+const VIEWS_PREFIX = "views/";
 
-function readIndentBinding(configDir) {
-  const path = join(configDir, "vocabulary", "structural_tokens.yaml");
-  if (!existsSync(path)) {
-    throw new GenerationError(`${path} does not exist`);
-  }
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+// ── 1. structural_tokens.yaml content -> the GLOBAL indent binding ─────────────────────────────
+// `label` is the file map key, used only for error text — no absolute path reaches a thrown
+// message any more, which is a small side effect of going pure rather than a goal of it.
+
+function parseIndentBinding(content, label) {
+  const lines = content.split(/\r?\n/);
   const indentLine = lines.findIndex((l) => l.trim() === "indent:");
   if (indentLine === -1) {
-    throw new GenerationError(`${path}: no 'indent:' key found under positional_bindings`);
+    throw new GenerationError(`${label}: no 'indent:' key found under positional_bindings`);
   }
   const baseIndent = indentOf(lines[indentLine]);
   let edgeType = null;
@@ -96,27 +113,23 @@ function readIndentBinding(configDir) {
   }
   if (edgeType === null || edgeSource === null) {
     throw new GenerationError(
-      `${path}: 'indent:' block did not yield both edge_type and edge_source ` +
+      `${label}: 'indent:' block did not yield both edge_type and edge_source ` +
         `(got edge_type=${edgeType}, edge_source=${edgeSource})`,
     );
   }
   if (edgeSource !== "self" && edgeSource !== "position") {
-    throw new GenerationError(`${path}: indent.edge_source='${edgeSource}' is not self/position`);
+    throw new GenerationError(`${label}: indent.edge_source='${edgeSource}' is not self/position`);
   }
   return { edgeType, edgeSource };
 }
 
-// ── 2. schema.yaml -> edge_types: { NAME: { cardinality } } ────────────────────────────────────
+// ── 2. schema.yaml content -> edge_types: { NAME: { cardinality } } ────────────────────────────
 
-function readEdgeCardinalityRegistry(configDir) {
-  const path = join(configDir, "schema.yaml");
-  if (!existsSync(path)) {
-    throw new GenerationError(`${path} does not exist`);
-  }
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+function parseEdgeCardinalityRegistry(content, label) {
+  const lines = content.split(/\r?\n/);
   const start = lines.findIndex((l) => l.trim() === "edge_types:" && indentOf(l) === 0);
   if (start === -1) {
-    throw new GenerationError(`${path}: no top-level 'edge_types:' key`);
+    throw new GenerationError(`${label}: no top-level 'edge_types:' key`);
   }
   const registry = new Map();
   let current = null;
@@ -138,12 +151,12 @@ function readEdgeCardinalityRegistry(configDir) {
     }
   }
   if (registry.size === 0) {
-    throw new GenerationError(`${path}: 'edge_types:' block yielded no entries`);
+    throw new GenerationError(`${label}: 'edge_types:' block yielded no entries`);
   }
   return registry;
 }
 
-// ── 3. views/*.yaml -> { viewId: { sectionId: { edgeTypes, edgeDirection } } } ──────────────────
+// ── 3. views/*.yaml contents -> { viewId: { sectionId: { edgeTypes, edgeDirection } } } ─────────
 
 function parseFlowList(raw) {
   const m = raw.match(/^\[(.*)\]$/);
@@ -154,12 +167,17 @@ function parseFlowList(raw) {
     .filter((s) => s.length > 0);
 }
 
-function readViewSections(viewsDir, ledger) {
-  const files = readdirSync(viewsDir).filter((f) => f.endsWith(".yaml")).sort();
+/**
+ * @param {Array<[string, string]>} viewEntries `[key, content]` pairs, ALREADY SORTED by key —
+ *   the caller's job (both `compile` and the fs shell sort explicitly; see each call site), not
+ *   this function's, so there is exactly one place order is decided.
+ * @param {Ledger} ledger
+ */
+function parseViewSections(viewEntries, ledger) {
   const byView = {};
-  for (const file of files) {
-    const path = join(viewsDir, file);
-    const lines = readFileSync(path, "utf8").split(/\r?\n/);
+  for (const [key, content] of viewEntries) {
+    const file = key.startsWith(VIEWS_PREFIX) ? key.slice(VIEWS_PREFIX.length) : key;
+    const lines = content.split(/\r?\n/);
     const viewLine = lines.findIndex((l) => /^[A-Za-z0-9_-]+:\s*$/.test(l) && indentOf(l) === 0);
     // DROP PATH 1. "Skip, don't fabricate" was right and incomplete: not fabricating is only half
     // of it, because a view sheet whose top-level key this line scanner cannot see takes every
@@ -243,7 +261,7 @@ function readViewSections(viewsDir, ledger) {
         const parsed = parseFlowList(typesMatch[1]);
         if (parsed === null) {
           throw new GenerationError(
-            `${path}: section '${sectionId}' has structural_edge_types in a shape this ` +
+            `views/${file}: section '${sectionId}' has structural_edge_types in a shape this ` +
               `generator does not understand: '${typesMatch[1]}' (expected '[A, B]')`,
           );
         }
@@ -262,12 +280,48 @@ function readViewSections(viewsDir, ledger) {
   return byView;
 }
 
-// ── assemble ─────────────────────────────────────────────────────────────────────────────────
+// ── the pure compile — `design-the-runtime-compile.md` step B's own contract ───────────────────
 
-export function generateStructural(configDir, ledger = new Ledger()) {
-  const indent = readIndentBinding(configDir);
-  const cardinalityRegistry = readEdgeCardinalityRegistry(configDir);
-  const sections = readViewSections(join(configDir, "views"), ledger);
+/**
+ * Compile the structural declaration from an in-memory config tree. PURE: no filesystem, no
+ * command line, no clock, no randomness. The same function runs identically in this file's CLI
+ * shell (below) and in the Worker's Gate-1 route — see `worker/src/config.js`.
+ *
+ * @param {Record<string, string> | Map<string, string>} files path -> file contents. Recognised
+ *   keys: `"vocabulary/structural_tokens.yaml"`, `"schema.yaml"`, and every `"views/<name>.yaml"`.
+ *   Paths use `/` regardless of platform — this is a logical tree, not a filesystem one.
+ * @param {Ledger} ledger
+ * @returns {{declaration: object, dropped: object}}
+ */
+export function compile(files, ledger = new Ledger()) {
+  const isMap = files instanceof Map;
+  const has = (key) => (isMap ? files.has(key) : Object.prototype.hasOwnProperty.call(files, key));
+  const get = (key) => (isMap ? files.get(key) : files[key]);
+  const allKeys = () => (isMap ? [...files.keys()] : Object.keys(files));
+
+  if (!has(STRUCTURAL_TOKENS_KEY)) {
+    throw new GenerationError(`${STRUCTURAL_TOKENS_KEY} does not exist`);
+  }
+  const indent = parseIndentBinding(get(STRUCTURAL_TOKENS_KEY), STRUCTURAL_TOKENS_KEY);
+
+  if (!has(SCHEMA_KEY)) {
+    throw new GenerationError(`${SCHEMA_KEY} does not exist`);
+  }
+  const cardinalityRegistry = parseEdgeCardinalityRegistry(get(SCHEMA_KEY), SCHEMA_KEY);
+
+  // SORTED EXPLICITLY. A files map — an object or a Map built from a POSTed JSON body, or from a
+  // directory read — carries no directory-walk order of its own once it is in memory, and an
+  // unordered iteration here is exactly the silent nondeterminism `design-the-runtime-compile.md`
+  // §6 warns a `compile(files)` refactor could introduce. This is the one sort site the pure
+  // function owns; the fs shell below sorts too, independently, so the two never rely on each
+  // other to have already done it.
+  const viewKeys = allKeys()
+    .filter((k) => k.startsWith(VIEWS_PREFIX) && k.endsWith(".yaml"))
+    .sort();
+  const sections = parseViewSections(
+    viewKeys.map((k) => [k, get(k)]),
+    ledger,
+  );
 
   // Only sections declaring exactly one edge type produce an ingest-usable override — a
   // multi-type declaration is interpret-ambiguous for authoring (applier.py's own
@@ -319,12 +373,56 @@ export function generateStructural(configDir, ledger = new Ledger()) {
   }
 
   return {
-    indent: { edgeType: indent.edgeType, edgeSource: indent.edgeSource },
-    edgeCardinality,
-    sections,
+    declaration: {
+      indent: { edgeType: indent.edgeType, edgeSource: indent.edgeSource },
+      edgeCardinality,
+      sections,
+    },
     // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
     dropped: ledger.toJSON(),
   };
+}
+
+// ── the fs shell — reads the operator's laptop into a files map, then calls the pure compile ───
+
+/**
+ * Read exactly the files `compile` recognises out of a real config directory, in the same sorted
+ * order `compile` itself would apply if handed an unordered map — stated once, here, rather than
+ * trusted to happen twice. Views directory absence is NOT guarded: `readdirSync` throws its own
+ * ENOENT, unchanged from this script's behaviour before the split.
+ *
+ * @param {string} configDir
+ * @returns {Record<string, string>}
+ */
+function readConfigTree(configDir) {
+  const files = {};
+
+  const tokensPath = join(configDir, "vocabulary", "structural_tokens.yaml");
+  if (existsSync(tokensPath)) files[STRUCTURAL_TOKENS_KEY] = readFileSync(tokensPath, "utf8");
+
+  const schemaPath = join(configDir, "schema.yaml");
+  if (existsSync(schemaPath)) files[SCHEMA_KEY] = readFileSync(schemaPath, "utf8");
+
+  const viewsDir = join(configDir, "views");
+  const viewFiles = readdirSync(viewsDir).filter((f) => f.endsWith(".yaml")).sort();
+  for (const f of viewFiles) {
+    files[`${VIEWS_PREFIX}${f}`] = readFileSync(join(viewsDir, f), "utf8");
+  }
+
+  return files;
+}
+
+/**
+ * Unchanged external contract: same two arguments, same merged return shape
+ * (`{indent, edgeCardinality, sections, dropped}`) every existing caller —
+ * `scripts/checkdeclarations.mjs`, `tests/present-structural.test.mjs`,
+ * `tests/declaration-drop.test.mjs` — already depends on. Internally this is now a files-map
+ * build plus a call to the pure `compile`, not its own parse.
+ */
+export function generateStructural(configDir, ledger = new Ledger()) {
+  const files = readConfigTree(configDir);
+  const { declaration, dropped } = compile(files, ledger);
+  return { ...declaration, dropped };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────
