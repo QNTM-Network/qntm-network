@@ -1006,7 +1006,6 @@ import {
   PresentationContext,
   presentationFromDeclaration,
   DEFAULT_INDENT_UNIT,
-  EMBEDDED_DECLARATION,
   sectionAt,
   sectionOrderFor,
   membershipFor,
@@ -1056,25 +1055,29 @@ let qualification = undefined;
 // has printed no node line, instead of refusing outright.
 let resolution = undefined;
 
-// THE PAGE READS; IT NO LONGER FETCHES. Turning the document into levels is still
+// THE PAGE FETCHES; IT DOES NOT HOLD A COPY. Turning the document into levels is still
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
 // declaration read inside this file is a declaration whose reader nothing can observe, because
-// node cannot import an HTML document and the JS capture is a module-load hook.
+// node cannot import an HTML document and the JS capture is a module-load hook. What lives here is
+// the WIRE half only: the request, and what to do when it does not arrive.
 //
-// `EMBEDDED_DECLARATION` (app/present/embedded-declaration.ts) is `presentation.json`'s content,
-// baked into dist/present.js at build time — see that file's own header for how this cannot drift
-// from the served file. THIS REMOVES A SERIAL ROUND TRIP (§2.5): `enterGraph()` used to
-// `await loadPresentation()` before `await loadGraph()`, on purpose, so the first paint would not
-// change under the reader a moment later — that ordering is unchanged below, it simply no longer
-// costs a network request to keep.
+// THE BAKED COPY IS GONE, AND ITS ABSENCE IS THE WHOLE CHANGE. `EMBEDDED_DECLARATION`
+// (app/present/embedded-declaration.ts, deleted with this) was `presentation.json` imported into
+// dist/present.js at build time. It saved a ~110 ms round trip for a document that was 3,303 bytes
+// when that decision was made and is 138,806 bytes eight days later — and it made a CONFIG change
+// unshippable without an APP rebuild, because dist/present.js is a committed artifact CI refuses to
+// ship stale (.github/workflows/build.yml). Fetching it back is
+// docs/implementation-artifacts/design-config-is-content.md step 2, and it is what lets a changed
+// declaration reach a browser with nothing rebuilt.
 //
-// A DECLARATION THAT "CANNOT BE READ" IS NO LONGER A CASE THIS FUNCTION HANDLES. Migration stage
-// 2's promise was "a slow, missing or broken presentation.json costs nothing but a warning" — sound
-// for a FETCH, which can fail in ways a build cannot: a malformed presentation.json now fails
-// `npm run build` (esbuild's JSON loader throws on invalid JSON) and CI's own staleness gate
-// refuses to ship a dist/present.js built from anything else. What survives, exactly as before, is
-// a document that PARSES but says something the reader does not recognise — applyPresentation
-// reports that the same way it always did.
+// A DECLARATION THAT CANNOT BE READ IS A CASE THIS FUNCTION HANDLES AGAIN, exactly as migration
+// stage 2 wrote it: "a slow, missing or broken presentation.json costs nothing but a warning". See
+// `loadPresentation` below for what "costs nothing" means precisely — every level falls through to
+// the built-in DEFAULT, which is the behaviour this page had before there was a cascade at all, and
+// every rung that needs a declaration refuses rather than guessing
+// (`globalRegistrationFor` returns `undefined`). What survives unchanged is a document that PARSES
+// but says something the reader does not recognise — applyPresentation reports that as it always
+// did.
 function applyPresentation(document) {
   // ONE READ. `presentationFromDeclaration` reads the rendition axis, the indent unit and the
   // structural (ingest) axis off the SAME document — two grammars over one channel, never two
@@ -1118,8 +1121,69 @@ function globalRegistrationFor(viewId) {
     sectionRegistration: resolution.sectionRegistration,
   };
 }
-function loadPresentation() {
-  applyPresentation(EMBEDDED_DECLARATION);
+/**
+ * WHERE THE DECLARATION COMES FROM, AND WHY IT IS THIS ROUTE.
+ *
+ * `/presentation.json` is served TODAY, at the site root, by the same GitHub Pages origin that
+ * serves this page — `access-control-allow-origin: *`, an ETag, `max-age=600` (verified by a
+ * read-only GET against qntm.network, 2026-08-03). NO NEW ENDPOINT ANYWHERE: the graph server's
+ * routes are `/health`, `/graph`, `/vault`, `/config`, `/vault/file`, `/cycle`, and `/config` is
+ * WRITE-ONLY — it accepts a config tarball and never serves one back. The Worker has no
+ * declaration route either. So the existing route is this one.
+ *
+ * WHAT THIS DOES NOT YET REACH, STATED PLAINLY SO NOBODY READS MORE INTO IT. A config change still
+ * has to be compiled by this repo's three generators and published to this origin; what it no
+ * longer needs is `npm run build` and a re-committed bundle. The declaration coming from a SERVER
+ * that compiled it — config-as-content in full — is steps 3 and 4 of
+ * design-config-is-content.md, and this line is the seam they will land on: only the URL changes.
+ */
+const DECLARATION_URL = "/presentation.json";
+
+/**
+ * HOW LONG THE PAGE WILL WAIT FOR IT BEFORE PAINTING WITHOUT IT.
+ *
+ * A fetch has one failure the baked import did not: it can neither succeed nor fail. Without a
+ * bound, a declaration request that hangs is a page that never paints — a strictly worse outcome
+ * than a page that paints with the built-in defaults, because the reader can still read, still
+ * move the cursor, and still see the source of the line they are on. Five seconds is chosen against
+ * the measured cold load (~6 s, dominated by the graph read across the Worker and the Fly server):
+ * a declaration slower than that was never going to arrive in time to decide the first paint.
+ */
+const DECLARATION_TIMEOUT_MS = 5000;
+
+/**
+ * Read the declaration and apply it. NEVER THROWS AND NEVER HANGS — the two properties the caller
+ * depends on, because it is awaited in front of the first paint.
+ *
+ * `cache: "no-cache"` IS THE HALF OF "NO REBUILD" THE FETCH ITSELF HAS TO SUPPLY. The declaration
+ * carries no version yet (design-config-is-content.md step 1), so it cannot be given an immutable
+ * URL; served with `max-age=600`, a plain fetch would hand back a cached copy for ten minutes after
+ * a config change and the change would look like it had not landed. `no-cache` revalidates against
+ * the ETag every time: a 304 and no body when nothing changed, the new bytes when something did.
+ * When step 1 lands, this becomes a versioned URL and the round trip is paid once per config change
+ * instead of once per load — which is the better answer this reverses the inline for.
+ */
+async function loadPresentation() {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), DECLARATION_TIMEOUT_MS);
+  try {
+    const response = await fetch(DECLARATION_URL, { signal: control.signal, cache: "no-cache" });
+    if (!response.ok) {
+      throw new Error("request failed (" + response.status + ")");
+    }
+    applyPresentation(await response.json());
+  } catch (e) {
+    // THE WARNING IS THE WHOLE RESPONSE, AND THAT IS A DECISION. Nothing on screen says the
+    // declaration is missing, so what the reader sees is a page whose tags are characters rather
+    // than chips and whose local answers abstain — legible, editable, and quieter than it should
+    // be. Telling them is design-config-is-content.md's §5 receipt work, not this step's.
+    console.warn(
+      "presentation.json could not be read (" + (e?.message ?? e) + ") — every key falls " +
+        "through to its built-in default and every rung that needs a declaration abstains",
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const API = location.hostname === "localhost" || location.hostname === "127.0.0.1"
@@ -3425,12 +3489,19 @@ async function enterGraph() {
   $("app").classList.add("hidden");
   showShell(true);
   $("graph").classList.remove("hidden");
-  // The declaration before the paint, so the first view a person sees is already resolved
-  // against it. NO LONGER A ROUND TRIP TO SEQUENCE (§2.5): the declaration is already in the
-  // bundle, so resolving it costs a synchronous read rather than a second `await` — the ordering
-  // that used to need "sequential rather than parallel" is now just "before", for free.
-  loadPresentation();
-  await loadGraph();
+  // THE TWO READS LEAVE TOGETHER; THE DECLARATION IS STILL APPLIED BEFORE THE PAINT.
+  //
+  // The ordering that matters has always been "the declaration before the PAINT", so the first
+  // view a person sees is already resolved against it — never "the declaration before the graph
+  // REQUEST". Starting the graph read here, before the await, is what keeps the declaration off the
+  // critical path now that it is a round trip again: the reader waits for the SLOWER of the two
+  // rather than for their sum, and the declaration (138 KB, same origin, a static file on the CDN
+  // that already served this page) is not the slower one against a graph read that crosses the
+  // Worker and the Fly server. The bundle it left is 138 KB lighter, and that download sits in
+  // front of everything here.
+  const graph = readGraph();
+  await loadPresentation();
+  await loadGraph(null, "chosen", graph);
 }
 
 /**
@@ -3450,15 +3521,38 @@ function landOn(views, keep) {
 }
 
 /**
+ * Start the graph read, without waiting for it.
+ *
+ * SEPARATED FROM `loadGraph` SO ONE CALLER CAN START IT EARLY — `enterGraph`, which has a
+ * declaration fetch to run alongside it. Everything else calls `loadGraph` and never sees this.
+ *
+ * THE EMPTY `catch` IS NOT A SWALLOW, AND IT IS NOT OPTIONAL. A promise that rejects while nothing
+ * is awaiting it is reported as an unhandled rejection, even when a handler attaches a moment
+ * later — and a moment later is exactly when `loadGraph` attaches one, because the declaration is
+ * being awaited in between. `.catch()` returns a SECOND promise and changes nothing about the one
+ * returned here: it still rejects, and `loadGraph`'s own `await` still throws the same error to the
+ * same boot handler, which is the code path that tells a 401 from a tunnel.
+ */
+function readGraph() {
+  const pending = api("/app/graph", { method: "GET", auth: true });
+  pending.catch(() => {});
+  return pending;
+}
+
+/**
  * Read the graph and paint where it lands.
  *
  * `why` IS PASSED THROUGH RATHER THAN DERIVED FROM `keep`, and the two really are different facts:
  * the sign-in path reads with no `keep` and the re-read button reads with one, but a future caller
  * could do either for either reason. The caller that knows why it is reading says so. The default
  * is `"chosen"`, so a boot — where nothing can be open yet — behaves exactly as it always did.
+ *
+ * `pending` IS AN ALREADY-STARTED READ, and the default is to start one here — so every caller that
+ * does not have one behaves exactly as it always did. `refresh()` is such a caller: a re-read has
+ * nothing to run in parallel with, because the declaration is already applied by then.
  */
-async function loadGraph(keep = null, why = "chosen") {
-  const data = await api("/app/graph", { method: "GET", auth: true });
+async function loadGraph(keep = null, why = "chosen", pending = null) {
+  const data = await (pending ?? readGraph());
   graphData = data;
   // THE READ PATH IS THE OTHER PLACE AN ECHO CAN ARRIVE, and the contract names it: the server
   // echoes the token in the envelope `GET /graph` later serves. `null` for the path because this
