@@ -9,14 +9,33 @@
  * and three stale citations before anyone noticed. This script is what keeps the structural
  * declaration from becoming a second copy of that mistake.
  *
- * It reads THREE files, read-only, from the monorepo (never writes there, never runs a cycle,
+ * ── THE PURE/SHELL SPLIT — `design-the-runtime-compile.md` step B ──
+ *
+ * `compile(files)` is a PURE FUNCTION over an in-memory map of path -> contents. It touches no
+ * filesystem and no command line, so it is the same code whether the caller is this file's own
+ * CLI shell (reading the operator's laptop) or a Cloudflare Worker route (reading bytes a browser
+ * POSTed) — `design-config-is-content.md`'s own finding that this generator is portable, made
+ * concrete. It now lives in its own file, `scripts/compile-structural.mjs` — split out from THIS
+ * file after "the function is pure" turned out not to imply "the file is safe to import in a
+ * Worker": this file's CLI-only imports (`node:fs`, `scripts/monorepo-config.mjs`, and that
+ * module's own module-level `fileURLToPath(import.meta.url)`) crashed the Worker at module load
+ * the moment anything imported `compile` from here, before any code ran. See
+ * `compile-structural.mjs`'s own header for the exact error and the reasoning; the short version
+ * is in `worker/src/config.js`'s Gate-1 route now importing `compile` from THAT file, never this
+ * one. `generateStructural(configDir, ledger)` below is the thin shell: it reads exactly the three
+ * things this script has always read — `vocabulary/structural_tokens.yaml`, `schema.yaml`, every
+ * `views/*.yaml`, sorted — into a files map and hands it to the imported `compile`. Nothing about
+ * WHAT is read or the ORDER it is read in changed; only WHERE the reading happens, and which file
+ * the parsing logic lives in, moved.
+ *
+ * It reads THREE things, read-only, from the monorepo (never writes there, never runs a cycle,
  * never touches the vault):
  *
- *   config/vocabulary/structural_tokens.yaml   the GLOBAL indent binding (edge type + direction)
- *   config/schema.yaml                          edge_types -> cardinality, for the types that
- *                                                actually appear elsewhere in the declaration
- *   config/views/*.yaml                         every section's own structural_edge_types /
- *                                                structural_edge_direction override, if it has one
+ *   vocabulary/structural_tokens.yaml   the GLOBAL indent binding (edge type + direction)
+ *   schema.yaml                          edge_types -> cardinality, for the types that
+ *                                         actually appear elsewhere in the declaration
+ *   views/*.yaml                         every section's own structural_edge_types /
+ *                                         structural_edge_direction override, if it has one
  *
  * ── WHY A HAND-ROLLED SCANNER, NOT A YAML LIBRARY ──
  *
@@ -57,274 +76,65 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
 import { Ledger, reportDropped } from "./ledger.mjs";
+import {
+  compile,
+  GenerationError,
+  STRUCTURAL_TOKENS_KEY,
+  SCHEMA_KEY,
+  VIEWS_PREFIX,
+} from "./compile-structural.mjs";
 
 // Re-exported, not restated: `tests/present-structural.test.mjs` imports it from here, and
 // `scripts/monorepo-config.mjs` is now the one place the path to the monorepo is written down.
 export { DEFAULT_CONFIG_DIR };
 
-class GenerationError extends Error {}
+// Re-exported so anything that imported `compile` from THIS file before the split (nothing did,
+// within this repo, as of this session) keeps working — but see `compile-structural.mjs`'s header
+// for why a Worker route must import `compile` from THAT file, never from here: importing it from
+// here drags in `node:fs` and `monorepo-config.mjs`'s module-level `fileURLToPath` call, which
+// crashes the Worker at load, before any code runs.
+export { compile };
 
-const nonBlank = (line) => line.trim() !== "" && !line.trim().startsWith("#");
-const indentOf = (line) => line.length - line.trimStart().length;
+// ── the fs shell — reads the operator's laptop into a files map, then calls the pure compile ───
 
-// ── 1. structural_tokens.yaml -> the GLOBAL indent binding ─────────────────────────────────────
+/**
+ * Read exactly the files `compile` recognises out of a real config directory, in the same sorted
+ * order `compile` itself would apply if handed an unordered map — stated once, here, rather than
+ * trusted to happen twice. Views directory absence is NOT guarded: `readdirSync` throws its own
+ * ENOENT, unchanged from this script's behaviour before the split.
+ *
+ * @param {string} configDir
+ * @returns {Record<string, string>}
+ */
+function readConfigTree(configDir) {
+  const files = {};
 
-function readIndentBinding(configDir) {
-  const path = join(configDir, "vocabulary", "structural_tokens.yaml");
-  if (!existsSync(path)) {
-    throw new GenerationError(`${path} does not exist`);
+  const tokensPath = join(configDir, "vocabulary", "structural_tokens.yaml");
+  if (existsSync(tokensPath)) files[STRUCTURAL_TOKENS_KEY] = readFileSync(tokensPath, "utf8");
+
+  const schemaPath = join(configDir, "schema.yaml");
+  if (existsSync(schemaPath)) files[SCHEMA_KEY] = readFileSync(schemaPath, "utf8");
+
+  const viewsDir = join(configDir, "views");
+  const viewFiles = readdirSync(viewsDir).filter((f) => f.endsWith(".yaml")).sort();
+  for (const f of viewFiles) {
+    files[`${VIEWS_PREFIX}${f}`] = readFileSync(join(viewsDir, f), "utf8");
   }
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
-  const indentLine = lines.findIndex((l) => l.trim() === "indent:");
-  if (indentLine === -1) {
-    throw new GenerationError(`${path}: no 'indent:' key found under positional_bindings`);
-  }
-  const baseIndent = indentOf(lines[indentLine]);
-  let edgeType = null;
-  let edgeSource = null;
-  for (let i = indentLine + 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    // NOT A DROP: a blank line or a comment.
-    if (!nonBlank(line)) continue;
-    if (indentOf(line) <= baseIndent) break; // dedented back to indent:'s own sibling (bindings:)
-    const m = line.match(/^\s*(edge_type|edge_source):\s*(\S+?)\s*(#.*)?$/);
-    // NOT A DROP: a line inside indent: that is neither key. If either is missing the function THROWS below.
-    if (!m) continue;
-    const value = m[2].replace(/^["']|["']$/g, "");
-    if (m[1] === "edge_type") edgeType = value;
-    else edgeSource = value;
-  }
-  if (edgeType === null || edgeSource === null) {
-    throw new GenerationError(
-      `${path}: 'indent:' block did not yield both edge_type and edge_source ` +
-        `(got edge_type=${edgeType}, edge_source=${edgeSource})`,
-    );
-  }
-  if (edgeSource !== "self" && edgeSource !== "position") {
-    throw new GenerationError(`${path}: indent.edge_source='${edgeSource}' is not self/position`);
-  }
-  return { edgeType, edgeSource };
+
+  return files;
 }
 
-// ── 2. schema.yaml -> edge_types: { NAME: { cardinality } } ────────────────────────────────────
-
-function readEdgeCardinalityRegistry(configDir) {
-  const path = join(configDir, "schema.yaml");
-  if (!existsSync(path)) {
-    throw new GenerationError(`${path} does not exist`);
-  }
-  const lines = readFileSync(path, "utf8").split(/\r?\n/);
-  const start = lines.findIndex((l) => l.trim() === "edge_types:" && indentOf(l) === 0);
-  if (start === -1) {
-    throw new GenerationError(`${path}: no top-level 'edge_types:' key`);
-  }
-  const registry = new Map();
-  let current = null;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    // NOT A DROP: a blank line or a comment.
-    if (!nonBlank(line)) continue;
-    const depth = indentOf(line);
-    if (depth === 0) break; // next top-level key — edge_types: block is over
-    const nameMatch = depth === 2 && line.match(/^\s{2}([A-Za-z0-9_]+):\s*$/);
-    if (nameMatch) {
-      current = nameMatch[1];
-      // NOT A DROP: loop control — the edge type name was just captured.
-      continue;
-    }
-    if (current !== null && depth >= 4) {
-      const cardMatch = line.match(/^\s*cardinality:\s*(\S+)\s*$/);
-      if (cardMatch) registry.set(current, cardMatch[1]);
-    }
-  }
-  if (registry.size === 0) {
-    throw new GenerationError(`${path}: 'edge_types:' block yielded no entries`);
-  }
-  return registry;
-}
-
-// ── 3. views/*.yaml -> { viewId: { sectionId: { edgeTypes, edgeDirection } } } ──────────────────
-
-function parseFlowList(raw) {
-  const m = raw.match(/^\[(.*)\]$/);
-  if (!m) return null;
-  return m[1]
-    .split(",")
-    .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-    .filter((s) => s.length > 0);
-}
-
-function readViewSections(viewsDir, ledger) {
-  const files = readdirSync(viewsDir).filter((f) => f.endsWith(".yaml")).sort();
-  const byView = {};
-  for (const file of files) {
-    const path = join(viewsDir, file);
-    const lines = readFileSync(path, "utf8").split(/\r?\n/);
-    const viewLine = lines.findIndex((l) => /^[A-Za-z0-9_-]+:\s*$/.test(l) && indentOf(l) === 0);
-    // DROP PATH 1. "Skip, don't fabricate" was right and incomplete: not fabricating is only half
-    // of it, because a view sheet whose top-level key this line scanner cannot see takes every
-    // structural override it declares with it, and nothing said so.
-    if (viewLine === -1) {
-      ledger.drop(
-        `views/${file}`,
-        "no top-level view key this scanner recognises, so any structural_edge_types / " +
-          "structural_edge_direction override in the file was skipped",
-      );
-      continue;
-    }
-    const viewId = lines[viewLine].trim().replace(/:\s*$/, "");
-    const sectionsLine = lines.findIndex(
-      (l, i) => i > viewLine && l.trim() === "sections:" && indentOf(l) === 2,
-    );
-    // DROP PATH 2. A view with no `sections:` at indent 2. `default_registration.yaml` is the one
-    // file in the operator's config that legitimately has none, and it is excluded by name rather
-    // than by silence, so every OTHER file reaching this line is a real drop.
-    if (sectionsLine === -1) {
-      if (file !== "default_registration.yaml") {
-        ledger.drop(
-          `views/${file}`,
-          `view '${viewId}' has no 'sections:' key at the indent this scanner reads, so any ` +
-            "structural override it declares was skipped",
-        );
-      }
-      continue;
-    }
-
-    const sections = {};
-    let sectionId = null;
-    let sectionIndent = null;
-    let edgeTypes = null;
-    let edgeDirection = null;
-    const flush = () => {
-      if (sectionId !== null && edgeTypes !== null && edgeDirection !== null) {
-        sections[sectionId] = { edgeTypes, edgeDirection };
-      } else if (sectionId !== null && (edgeTypes !== null || edgeDirection !== null)) {
-        // DROP PATH 3, AND THE WORST OF THE THREE. A section declaring ONE HALF of the structural
-        // override — the edge types without a direction, or a direction with no types — was
-        // dropped entirely. The operator's half-written declaration then behaves exactly like no
-        // declaration at all, so the app silently uses the GLOBAL indent binding under a heading
-        // he has explicitly told to do something else.
-        ledger.drop(
-          `section '${viewId}.${sectionId}'`,
-          edgeTypes === null
-            ? "declares structural_edge_direction with no structural_edge_types, so the whole " +
-              "override was skipped and the app falls back to the global indent binding"
-            : "declares structural_edge_types with no structural_edge_direction, so the whole " +
-              "override was skipped and the app falls back to the global indent binding",
-        );
-      }
-      sectionId = null;
-      edgeTypes = null;
-      edgeDirection = null;
-    };
-    for (let i = sectionsLine + 1; i < lines.length; i += 1) {
-      const line = lines[i];
-      // NOT A DROP: a blank line or a comment.
-      if (!nonBlank(line)) continue;
-      const depth = indentOf(line);
-      if (depth < 4) break; // dedented out of the sections: list entirely
-      const idMatch = depth === 4 && line.match(/^\s{4}-\s*id:\s*(\S+)\s*$/);
-      if (idMatch) {
-        flush();
-        sectionId = idMatch[1];
-        sectionIndent = depth;
-        // NOT A DROP: loop control — the section id was just captured.
-        continue;
-      }
-      // NOT A DROP: lines before the first section id; nothing is open to lose.
-      if (sectionId === null) continue;
-      if (depth <= sectionIndent) {
-        flush();
-        // NOT A DROP: flush() ran first, and flush() is what records a half-declared override.
-        continue; // a non-id list item at the same depth — not a shape this scanner expects; skip
-      }
-      const typesMatch = line.match(/^\s*structural_edge_types:\s*(.+?)\s*$/);
-      if (typesMatch) {
-        const parsed = parseFlowList(typesMatch[1]);
-        if (parsed === null) {
-          throw new GenerationError(
-            `${path}: section '${sectionId}' has structural_edge_types in a shape this ` +
-              `generator does not understand: '${typesMatch[1]}' (expected '[A, B]')`,
-          );
-        }
-        edgeTypes = parsed;
-        // NOT A DROP: loop control — edgeTypes was just captured.
-        continue;
-      }
-      const dirMatch = line.match(/^\s*structural_edge_direction:\s*(\S+)\s*$/);
-      if (dirMatch) {
-        edgeDirection = dirMatch[1].replace(/^["']|["']$/g, "");
-      }
-    }
-    flush();
-    if (Object.keys(sections).length > 0) byView[viewId] = sections;
-  }
-  return byView;
-}
-
-// ── assemble ─────────────────────────────────────────────────────────────────────────────────
-
+/**
+ * Unchanged external contract: same two arguments, same merged return shape
+ * (`{indent, edgeCardinality, sections, dropped}`) every existing caller —
+ * `scripts/checkdeclarations.mjs`, `tests/present-structural.test.mjs`,
+ * `tests/declaration-drop.test.mjs` — already depends on. Internally this is now a files-map
+ * build plus a call to the pure `compile`, not its own parse.
+ */
 export function generateStructural(configDir, ledger = new Ledger()) {
-  const indent = readIndentBinding(configDir);
-  const cardinalityRegistry = readEdgeCardinalityRegistry(configDir);
-  const sections = readViewSections(join(configDir, "views"), ledger);
-
-  // Only sections declaring exactly one edge type produce an ingest-usable override — a
-  // multi-type declaration is interpret-ambiguous for authoring (applier.py's own
-  // _section_indent_binding resolves it to (True, None), i.e. "structural ingest stays silent
-  // there"). None exist in the operator's live config today; this is a shape guard, not dead
-  // code, so a future multi-type section is REPORTED by refusal rather than mis-published as a
-  // single-type override.
-  for (const [viewId, viewSections] of Object.entries(sections)) {
-    for (const [sectionId, lang] of Object.entries(viewSections)) {
-      if (lang.edgeTypes.length !== 1) {
-        throw new GenerationError(
-          `${viewId}.${sectionId} declares ${lang.edgeTypes.length} structural_edge_types ` +
-            `(${lang.edgeTypes.join(", ")}) — ambiguous for ingest per applier.py's own rule; ` +
-            "this generator does not know how to publish it and refuses rather than guess.",
-        );
-      }
-      if (lang.edgeDirection !== "incoming" && lang.edgeDirection !== "outgoing") {
-        throw new GenerationError(
-          `${viewId}.${sectionId}.structural_edge_direction='${lang.edgeDirection}' is not ` +
-            "incoming/outgoing",
-        );
-      }
-    }
-  }
-
-  // The referenced edge types — the global indent's, plus every section override's — are what
-  // gets a cardinality entry. Not the whole registry (see structural.ts's header on why).
-  const referenced = new Set([indent.edgeType]);
-  for (const viewSections of Object.values(sections)) {
-    for (const lang of Object.values(viewSections)) {
-      for (const t of lang.edgeTypes) referenced.add(t);
-    }
-  }
-
-  const edgeCardinality = {};
-  for (const edgeType of referenced) {
-    const cardinality = cardinalityRegistry.get(edgeType);
-    if (cardinality === undefined) {
-      // THE §1 GAP, CLOSED FOR THIS PUBLISH: a name the structural language declares that the
-      // edge registry has never heard of. Refuse rather than publish a name the app could show
-      // the operator that the graph itself does not recognise.
-      throw new GenerationError(
-        `edge type '${edgeType}' is named by the structural language (indent binding or a ` +
-          `section override) but is not declared in schema.yaml's edge_types registry — refusing ` +
-          "to publish an edge type the graph does not know.",
-      );
-    }
-    edgeCardinality[edgeType] = cardinality;
-  }
-
-  return {
-    indent: { edgeType: indent.edgeType, edgeSource: indent.edgeSource },
-    edgeCardinality,
-    sections,
-    // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
-    dropped: ledger.toJSON(),
-  };
+  const files = readConfigTree(configDir);
+  const { declaration, dropped } = compile(files, ledger);
+  return { ...declaration, dropped };
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────

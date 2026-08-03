@@ -1376,6 +1376,42 @@ capabilities:
     not clone it — so it runs locally, where the checkout this worktree's own flow-trace invocation
     already assumes is present, and lights up there; the same posture `tests/flow_scenarios/
     vim_gestures.ts` already documents for its own CI gate.
+    ── UPDATE 2026-08-03, THE COMPILE THAT PRODUCES THIS KEY NOW ALSO RUNS AT RUNTIME, IN THE
+    WORKER — `design-the-runtime-compile.md` step B, its own "first observable step." Before this,
+    `scripts/generate-structural-declaration.mjs` was development-time-only: a laptop script,
+    committed output, one caller. It is now a PURE `compile(files)` (`scripts/
+    compile-structural.mjs`, zero imports beyond `ledger.mjs` — the same class of file the design
+    document already measured `yaml-subset.mjs`/`ledger.mjs` into) with TWO callers: the unchanged
+    CLI shell, and a new Worker route, `POST /config/compile/structural`
+    (`worker/src/config.js`), that runs Gate 1 only — no Gate 2, no graph-server call, no
+    persistence, no version minting, exactly as the plan specifies. THIS IS A VERTICAL MOVE: a
+    person can now POST a structural-config fragment to a real, running endpoint and watch it
+    compile or refuse, which was not previously true of any code path this capability names.
+    BYTE-IDENTITY, PROVEN, NOT ASSUMED. The CLI's output is unchanged: `presentation.json` is
+    byte-identical before and after the refactor (sha256
+    `e4867b5e72f2266fe9784af6842a7099ed9ddf2b716360b3ca0a18c62d14a6d1`, three consecutive runs)
+    over the operator's real 276-file config. THE ISOLATE-CONFORMANCE QUESTION §6.3 of the design
+    document flagged as genuinely unverified IS NOW SETTLED, by running the real local Worker
+    runtime (`wrangler dev`, un-deployed) rather than assuming it: Node's V8 and the Worker's
+    `workerd` isolate produce byte-identical `compile()` output for the same input, checked against
+    the operator's real config AND against a real mutation of it (one edge type reference in
+    `views/operator-qntm-network.yaml`, changed in memory only, never written back) that produces
+    the identical refusal sentence in both runtimes. THE REFUSAL CONTRACT SURVIVES THE MOVE,
+    WORD FOR WORD — the same finding `unresolvable field(s): project` already proved for the
+    qualification generator, now reproduced for structural: `edge type '...' is named by the
+    structural language ... but is not declared in schema.yaml's edge_types registry` comes back
+    from the Worker route with the exact wording `compile()` throws directly, proven by
+    `tests/worker-config-compile.test.mjs` section 2's mutation proof (the route's answer flips
+    from 200 to a named 422 when one byte of the submitted config changes — never a canned
+    response). A GENUINE PACKAGING FINDING, NOT A BYTE-LEVEL ONE: the first attempt at the Worker
+    route crashed at MODULE LOAD (`fileURLToPath` on an `undefined import.meta.url`), because
+    importing `compile` from the original single-file generator dragged in `node:fs` and
+    `scripts/monorepo-config.mjs`'s module-level path resolution — a Node idiom that does not
+    survive Wrangler's bundling. "The function is pure" and "the file is safe to import in a
+    Worker" were different claims; this repo had only checked the first. Fixed by splitting the
+    parsing logic into its own zero-Node-import file rather than guarding the crash. Gate 2,
+    persistence, version minting and the config editor remain exactly where the design document
+    put them — not this step's job, not built here.
   tier: functional
   rooting: >-
     isolated for now, same family as `presentation-is-resolved-not-chosen` was at migration stage 2:
