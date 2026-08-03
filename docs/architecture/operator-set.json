@@ -1,0 +1,138 @@
+{
+  "$comment": [
+    "THE OPERATOR SET INDEX — an ENUMERATION, not a merge.",
+    "",
+    "docs/implementation-artifacts/design-the-compiler-and-the-bands.md section 3 found that",
+    "'the operator set' — what a config author's YAML may express — has no single address. It is",
+    "held, correctly, across several independently-authored surfaces that agree by TEST, never by a",
+    "shared type. This file is that address for the surfaces named below, and ONLY those surfaces.",
+    "",
+    "THIS FILE DOES NOT MERGE THE SURFACES. app/present/qualification.ts:60-68's own comment argues",
+    "against widening its type to admit the engine's orderable comparisons; app/present/",
+    "declaration.ts:32-54's own header states the federation across readers is deliberate ('one",
+    "served document, four strict readers, each owning one axis'). Nothing here is imported BY",
+    "qualification.ts, generate-qualification-declaration.mjs, membership.ts or",
+    "qualification-agreement.py — each keeps deciding its own grammar. This file is read only by",
+    "tests/operator-set-agreement.test.mjs, which probes each surface's ACTUAL BEHAVIOUR and",
+    "asserts it matches what is named here — an outside witness, not a shared dependency.",
+    "",
+    "SCOPE — why this indexes TWO vocabularies, not six surfaces.",
+    "",
+    "design-the-compiler-and-the-bands.md section 3.1's own table lists SEVEN files answering FOUR",
+    "different kinds of question, not one: what a predicate may TEST (operators), what a predicate",
+    "may test it ON (fields), what an edge may be (structural.ts), what an ordering/chrome may be",
+    "(resolutiontable.ts), what an output rendition may be (resolution.ts — the table's own row",
+    "calls this 'closed to output facts only', a different axis: OUTPUT shown, not INPUT accepted),",
+    "and what YAML SYNTAX is even readable before any of the above apply (yaml-subset.mjs, a parse",
+    "layer, not a grammar layer). A single index spanning all seven would flatten four different",
+    "questions into one shape none of them actually have. This file indexes the two that share a",
+    "shape and a purpose — MEMBERSHIP OPERATORS and RESOLVABLE FIELDS — because both answer the one",
+    "question 'what may a section's own qualification predicate say about a line being typed', and",
+    "because both, uniquely among the seven, turned out (this document's own verification, see",
+    "'corrections' below) to be duplicated on BOTH sides of the compile boundary, which is exactly",
+    "where an unwitnessed agreement is most expensive to lose. STRUCTURAL, RESOLUTION-TABLE,",
+    "RENDITION and YAML-SYNTAX are real closed vocabularies too, each already refusing loudly in its",
+    "own file (see the citations design-the-compiler-and-the-bands.md section 3.1 gives for each),",
+    "but each answers a different question and none is indexed here. A truthful index over the two",
+    "that share a shape beats a strained one over all seven.",
+    "",
+    "CORRECTIONS TO THE REPORT THIS INDEX WAS COMMISSIONED FROM.",
+    "",
+    "1. The brief that commissioned this work, and design-the-compiler-and-the-bands.md's OWN",
+    "   backlog row (backlog.yaml id 'the-operator-set-has-no-single-address') both list SIX",
+    "   surfaces and both omit app/present/resolution.ts's RESOLUTION_KEYS (the RENDITION",
+    "   vocabulary), even though section 3.1's own table documents it as a seventh row with its own",
+    "   citation. The count 'six' undercounts the design document's own table by one. See the SCOPE",
+    "   note above for why RENDITION is excluded here regardless — the miscount and the exclusion",
+    "   are separate findings and this file is explicit that it is only asserting the second.",
+    "2. Section 3.2 of the same document states RESOLVABLE_FIELDS 'is exported from a .mjs Node",
+    "   script and is structurally unreachable from the browser's TypeScript at compile time, so",
+    "   even that one list cannot be the operator set's address.' THAT IS FACTUALLY WRONG, verified",
+    "   directly in this worktree: app/present/membership.ts:69 independently declares",
+    "   'export const RESOLVABLE_FIELDS = [\"node_type\", \"domain\", \"status\"] as const;' — a BROWSER",
+    "   twin the design document never opened. A THIRD copy lives in",
+    "   scripts/qualification-agreement.py:62 as TRIPLE_FIELDS, whose own comment ('Kept in step",
+    "   with RESOLVABLE_FIELDS in scripts/generate-qualification-declaration.mjs and",
+    "   app/present/membership.ts') proves the author of THAT file already knew about the browser",
+    "   twin the design document missed. So RESOLVABLE_FIELDS is not one list with no address on one",
+    "   side — it is THREE independently hand-synchronised lists, none importing from another, which",
+    "   is a sharper version of the design document's own finding than the design document itself",
+    "   stated, not a refutation of its thesis.",
+    "",
+    "WHAT WIDENING THIS SET MEANS. Adding a predicate operator (e.g. an orderable comparison) or a",
+    "resolvable field is a decision that today requires editing memberOperators / resolvableFields",
+    "below AND every one of the surfaces listed, in the same pull request, or",
+    "tests/operator-set-agreement.test.mjs goes red naming exactly which surface fell out of step."
+  ],
+
+  "memberOperators": {
+    "description": "The complete set of operator keys a MEMBERSHIP predicate may use, both as the browser reads a served declaration and as the compiler normalises a pattern into one. Anything outside this list must be refused, loudly, by every surface below.",
+    "values": ["eq", "not"],
+    "surfaces": [
+      {
+        "name": "MEMBERSHIP predicate grammar (browser)",
+        "file": "app/present/qualification.ts",
+        "symbol": "FieldPredicate (type, :69), readPredicate (:198-222)",
+        "side": "browser"
+      },
+      {
+        "name": "MEMBERSHIP predicate grammar (compiler)",
+        "file": "scripts/generate-qualification-declaration.mjs",
+        "symbol": "normalisePredicate (:205-226), reached via normalisePattern",
+        "side": "compiler"
+      }
+    ]
+  },
+
+  "resolvableFields": {
+    "description": "The complete set of node fields a section's own predicate may range over, for a line the operator is typing (not yet an existing node). Anything outside this list is a field the browser cannot resolve locally and the surface must refuse or withhold it.",
+    "values": ["node_type", "domain", "status"],
+    "surfaces": [
+      {
+        "name": "RESOLVABLE fields (compiler)",
+        "file": "scripts/generate-qualification-declaration.mjs",
+        "symbol": "RESOLVABLE_FIELDS (:96)",
+        "side": "compiler"
+      },
+      {
+        "name": "RESOLVABLE fields (browser) — NOT in the six-surface report; found verifying it",
+        "file": "app/present/membership.ts",
+        "symbol": "RESOLVABLE_FIELDS (:69)",
+        "side": "browser"
+      },
+      {
+        "name": "RESOLVABLE fields (python agreement generator) — also NOT in the report",
+        "file": "scripts/qualification-agreement.py",
+        "symbol": "TRIPLE_FIELDS (:62)",
+        "side": "compiler (test-fixture generator, run against the engine directly)"
+      }
+    ]
+  },
+
+  "excludedSurfaces": [
+    {
+      "name": "STRUCTURAL edge vocabulary",
+      "file": "app/present/structural.ts",
+      "symbol": "EdgeSource, EdgeDirection (:77, :80)",
+      "reason": "Answers 'what may an edge be', a topology question, not what a predicate may test."
+    },
+    {
+      "name": "RESOLUTION table vocabulary",
+      "file": "app/present/resolutiontable.ts",
+      "symbol": "OrderingFieldKind, ChromeShape (:119, :135)",
+      "reason": "Answers 'how may a section order or draw its rows', a presentation question, not what a predicate may test."
+    },
+    {
+      "name": "RENDITION vocabulary",
+      "file": "app/present/resolution.ts",
+      "symbol": "ResolutionKey, RESOLUTION_KEYS (:87, :96)",
+      "reason": "Closed to OUTPUT facts only (the file's own design citation) — what the app may show two ways, not what config may express as input. The design document's own table lists this as a seventh row; the six-surface report omits it entirely."
+    },
+    {
+      "name": "YAML SYNTAX subset",
+      "file": "scripts/yaml-subset.mjs",
+      "symbol": "the parser's supported/rejected forms (:14-21)",
+      "reason": "A parse layer — governs what characters are readable at all, before any predicate or field grammar applies. Orthogonal vocabulary; design-the-compiler-and-the-bands.md section 3.1 itself notes the syntax and predicate refusal lists 'share zero vocabulary items'."
+    }
+  ]
+}
