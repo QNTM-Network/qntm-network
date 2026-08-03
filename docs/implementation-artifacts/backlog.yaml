@@ -3356,3 +3356,73 @@ backlog:
   driving_capability: a-never-seen-config-passes-the-acceptance-test
   kind: capability
   state: unscoped
+- id: resolution-ts-is-not-a-resolution
+  title: >-
+    [pin] `app/present/resolution.ts` HOLDS THE RENDITION VOCABULARY AND NOTHING ABOUT THE TWELVE
+    RESOLUTIONS - `design-pin-the-terms.md` section 5.2 confirms both of the brief's leads: the
+    file's `RESOLUTION_KEYS` (`:96`) is the closed RENDITION grammar (checkbox/heading/prose/tags/
+    stamp times raw/wired), and `app/present/resolutiontable.ts` - not this file - is the reader for
+    `presentation.json`'s own `resolution` key. `docs/architecture/operator-set.json` ALREADY NAMED
+    THIS (its own excludedSurfaces entry for `resolution.ts`, :126-130) before this document existed.
+    THE FIX IS ONE RENAME - `resolution.ts` to `rendition.ts`, symbol names UNCHANGED (a materially
+    larger, separately-priced change, not included). BLAST RADIUS FULLY ENUMERATED, not estimated -
+    20 import sites across 15 files, 3 string-literal/regex test guards
+    (`tests/app-write-correlation.test.mjs:755`, `tests/flow_scenarios/section_addressing.ts:124`,
+    `tests/flow_scenarios/instance_anchor.ts:170`) that a plain text-replace would satisfy without
+    verifying the property each one asserts, 16 `flows.yaml` routing edges found only by a SECOND,
+    broader grep than the first (the same shape of miss the brief's own monkeypatch example warns
+    about, reproduced live rather than assumed), and a `dist/` rebuild. SIZED AT HALF A DAY, not an
+    arc - `design-pin-the-terms.md` section 7 is the full execution order, step by step, with a
+    step-0 flow-trace check gating whether the 16 edges are load-bearing or cosmetic.
+  driving_capability: resolution-ts-is-not-a-resolution
+  kind: capability
+  state: diagnose-ready
+- id: the-grammars-have-no-shared-index
+  title: >-
+    [pin] FIVE CLOSED GRAMMARS EXIST - MEMBERSHIP PREDICATE, STRUCTURAL EDGE, ORDERING/CHROME,
+    RENDITION, YAML SYNTAX - AND ONLY TWO HAVE AN ADDRESS. `docs/architecture/operator-set.json`
+    already indexes `memberOperators` and `resolvableFields`, by design, scoped to one narrow
+    question ("what may a MEMBERSHIP predicate say"). The other three grammars are exactly as
+    closed and exactly as tested (`app/present/structural.ts`'s `EdgeSource`/`EdgeDirection`,
+    `app/present/resolutiontable.ts`'s `OrderingFieldKind`/`ChromeShape`,
+    `app/present/resolution.ts`'s `RESOLUTION_KEYS`, `scripts/yaml-subset.mjs`'s refusal list) and
+    have no address at all. THE FIX IS A NEW INDEX, not a merge - `design-the-compiler-and-the-
+    bands.md` section 3.2's own conclusion, extended from two surfaces to five. `design-pin-the-
+    terms.md` section 7.2 specifies the shape; UNSCOPED because deciding the exact file (a new JSON
+    file beside `operator-set.json`, or an extension of it) is a design choice this branch does not
+    make. UNDER AN HOUR once scoped.
+  driving_capability: the-grammars-have-no-shared-index
+  kind: capability
+  state: unscoped
+- id: accepted-ts-misdescribes-two-siblings
+  title: >-
+    [pin] A HEADER COMMENT CLAIMS TWO MODULES IMPORT NOTHING - THEY DO NOT, AND HAVE NOT SINCE
+    BEFORE THIS BRANCH. `app/present/accepted.ts`'s own header (`:1-7`) states it "imports nothing -
+    the same posture as base.ts, queue.ts, pickup.ts, focus.ts and draft.ts." Verified directly,
+    `design-pin-the-terms.md` section 5.7: `base.ts`, `queue.ts`, `pickup.ts` and `accepted.ts`
+    itself hold the property. `focus.ts` imports six symbols across four modules including
+    `RESOLUTION_KEYS` (`:94-99`). `draft.ts` imports three symbols across two modules (`:78-80`).
+    NEITHER IMPORT LIST IS NEW - the claim went stale when those two files gained the imports and
+    nothing caught it, because `accepted.ts` does not depend on either and nothing re-checks a
+    comment describing OTHER files. A SMALL, REAL INSTANCE of the TIME-axis decay this whole method
+    watches for. THE FIX IS A COMMENT EDIT - narrow the claim to the three modules that hold it, or
+    drop the comparison to the two that do not. UNDER AN HOUR.
+  driving_capability: accepted-ts-misdescribes-two-siblings
+  kind: capability
+  state: diagnose-ready
+- id: an-unrecognised-token-may-pass-silently
+  title: >-
+    [pin] [UNVERIFIED] THE LEAST-EXAMINED OF THE COMPILER'S THREE FAILURE MODES HAS NO KNOWN ANSWER.
+    `design-pin-the-terms.md` section 2.2 names three compiler failure modes matching the three
+    compiler jobs: an unknown token (read the vocabulary), a legal-looking form the operator set
+    cannot express (check the grammars, already refused loudly six/seven times over per `design-the-
+    compiler-and-the-bands.md`), and a resolution kind with no emitter for a target (emit per
+    resolution, the browser's actual gap today). THE FIRST HAS NO ANSWER YET. `scripts/ledger.mjs`
+    records a drop at the FIELD level (a token that set a field the browser cannot resolve) - it is
+    UNKNOWN whether a token matching NONE of the 134 lexicon entries is refused loudly anywhere in
+    the browser path, or passes through as untagged content with no record at all. UNSCOPED -
+    settled by tracing one untagged, unmapped token from keystroke to paint, the same discipline
+    `design-the-compiler-and-the-bands.md` section 2.2 already applied to the field-level drop.
+  driving_capability: an-unrecognised-token-may-pass-silently
+  kind: capability
+  state: unscoped
