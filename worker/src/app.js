@@ -270,6 +270,72 @@ async function editPost(request, env, origin, session) {
   return json({ ok: true, pending_edits: await pendingCount(env, session.user_id) }, 200, origin);
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE RERUN, BOUNDED TO EXACTLY ONE EXTRA CYCLE
+// (backlog `rerun-on-refusal`; server/app.py `POST /cycle`, aa4b069 — verified against the real
+// file, not assumed from a report: the keys are `write_refusals` — a list of the paths the cycle
+// declined to write back — and `rerun_recommended` — `bool(refusals)`, true iff that list is
+// non-empty. Both are unconditional entries in the response dict, so an OLDER server simply omits
+// both keys rather than sending them empty or null.)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// aa4b069 made the cycle's write-back compare before it writes and REFUSE a view file that changed
+// on disk mid-cycle — a save landing in that window is safe, but the cycle that refused is the one
+// that would have stamped it, so the file sits un-rendered until ANOTHER cycle runs. That is what
+// `rerun_recommended` is FOR: the one useful response to it is to run `/cycle` again.
+//
+// THE BOUND IS ONE CALL, NOT A LOOP. `cycleOnceMore` fetches `/cycle` exactly once and never asks
+// what ITS OWN answer recommends — a second `rerun_recommended: true` is read, not chased. Read
+// every call site below: each one calls `/cycle`, then AT MOST ONCE calls `cycleOnceMore`. There is
+// no while loop and no recursion, so the bound is not a runtime count that could grow — it is two
+// fetches in the source text, full stop, however many refusals the rerun itself goes on to report.
+//
+// WHY ONE RERUN IS ENOUGH RATHER THAN ZERO OR N. The refusal fires because a save landed between
+// the cycle's READ of the vault and its WRITE-BACK — a window exactly one cycle wide. A second
+// cycle reads the vault fresh, so the file that was refused is now ordinary input the rerun stamps
+// normally. For the rerun ITSELF to be refused again, a save would have to land in the much
+// narrower window between the FIRST cycle's write and the SECOND cycle's read — possible, but that
+// save gets its own `rerun_recommended` for the NEXT request to this Worker to pick up. Chasing it
+// here would turn one slow request into an unbounded one for the sake of a race so narrow the
+// existing mechanism already covers it on the next gesture.
+//
+// WHAT IT COSTS. A cycle is the ~10-14s step this file measures elsewhere (`editFile`'s own
+// comments below). A rerun DOUBLES that wait on whichever path takes it — doubles the synchronous
+// caller's latency, and doubles how long the `ack: true` path keeps the Worker alive under
+// `waitUntil`. That second cost is real even though nothing is billed for Worker CPU on that path:
+// it is wall time the Fly machine stays awake for, paid for exactly like the first cycle is.
+//
+// WHY IT CANNOT OVERLAP A CYCLE ALREADY RUNNING. `server/app.py` serialises every `/cycle` call
+// through one process-wide `threading.Lock()` (`_cycle_lock`), and there is no distinct "busy"
+// answer for a caller that arrives while it is held — `with _cycle_lock:` simply BLOCKS the request
+// inside the handler until the lock frees, then runs and answers exactly as if nothing had queued
+// (200, or the ordinary 500 on a failed cycle). Two consequences follow. First, `cycleOnceMore` is
+// only ever called AFTER the cycle that recommended it has already returned its full response, so
+// it cannot race the cycle that produced the recommendation — that one is already finished by
+// construction. Second, if some UNRELATED trigger holds the lock when the rerun's `fetch` lands,
+// the rerun does not error or get told to back off — it queues behind the lock, silently, and pays
+// only added latency, never a corrupted overlap. There is no locked-response to branch on because
+// the server never sends one; blocking IS the answer.
+//
+// ABSENCE IS SAFE. `d?.rerun_recommended === true` is false for `undefined` (an older server that
+// never learned the key) exactly as it is for `false` — so every call site below runs one cycle,
+// exactly as it did before this change, whenever the key is missing.
+//
+// FAILS OPEN ON THE RERUN'S OWN FAILURE. If the rerun's `fetch` throws or answers anything other
+// than `ok: true`, `cycleOnceMore` returns `null` and the caller keeps the ORIGINAL cycle's result —
+// a rerun that cannot complete must never turn an already-successful cycle into a reported failure.
+async function cycleOnceMore(env, auth) {
+  try {
+    const r = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d?.ok) return d;
+  } catch {
+    // The rerun's own network failure — fall through and hand the caller nothing, so it keeps
+    // whatever the first cycle already produced rather than losing a good result to a bad retry.
+  }
+  return null;
+}
+
 // POST /app/edit-file (session) — the web write path. The browser sends {path, markdown, base,
 // token} for one view; we write it on the hosted model, run a cycle, and return the fresh
 // projection. `base` and `token` are both OPTIONAL and both forwarded only when present. The
@@ -410,12 +476,25 @@ async function editFile(request, env, origin, session, ctx) {
   // paragraph up: absent and empty are different statements. The page reads `!data.snapshot` as "no
   // projection came back" and must not be handed an empty one to paint.
   //
-  // `waitUntil` TAKES THE PROMISE AND NOTHING READS IT. A cycle that fails after this point cannot
-  // be reported to a response that has already been sent, and inventing a second channel to report
-  // it on would be a worse answer than the one that exists: the browser's pickup finds no
-  // acknowledgement of its write, gives up after a bounded series, and says so.
+  // `waitUntil` TAKES THE PROMISE AND NOTHING OUTSIDE IT READS THE RESPONSE. A cycle that fails
+  // after this point cannot be reported to a response that has already been sent, and inventing a
+  // second channel to report it on would be a worse answer than the one that exists: the browser's
+  // pickup finds no acknowledgement of its write, gives up after a bounded series, and says so.
+  //
+  // WHAT CHANGED: the promise now reads its OWN cycle's answer — not to report it anywhere, but to
+  // decide whether one rerun is owed (see `cycleOnceMore` above for the bound, the cost, and why it
+  // cannot overlap a cycle already running). `deferred` still holds exactly one promise; the rerun
+  // is a second `fetch` INSIDE that same promise chain, not a second registration with `waitUntil`,
+  // so the Worker is kept alive for the whole chain and not a token more.
   if (body?.ack === true && typeof ctx?.waitUntil === "function") {
-    ctx.waitUntil(fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth }));
+    ctx.waitUntil(
+      (async () => {
+        const r = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d?.rerun_recommended === true) await cycleOnceMore(env, auth);
+        return d;
+      })()
+    );
     return json(
       {
         ok: true,
@@ -432,8 +511,18 @@ async function editFile(request, env, origin, session, ctx) {
 
   // 2. cycle (ingest the edit + re-project) — this is the ~14s step
   const c = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });
-  const cd = await c.json().catch(() => ({}));
+  let cd = await c.json().catch(() => ({}));
   if (!c.ok || !cd.ok) return json({ ok: false, error: "cycle failed" }, 502, origin);
+  // 2a. THE RERUN — see `cycleOnceMore`'s own comment above for the bound, the cost, and why it
+  // cannot overlap a cycle already running. `cd.rerun_recommended` is `undefined` on an older
+  // server, `undefined === true` is `false`, and this branch is skipped exactly as if it did not
+  // exist — the projection below is built from the first cycle's answer, today's behaviour intact.
+  if (cd.rerun_recommended === true) {
+    const again = await cycleOnceMore(env, auth);
+    // A rerun that could not complete leaves `cd` as the first cycle's own answer — still correct,
+    // just not yet re-stamped — rather than losing a good result to a failed retry.
+    if (again) cd = again;
+  }
   // 3. hand back the fresh projection, same shape as GET /app/graph
   return json(
     {
