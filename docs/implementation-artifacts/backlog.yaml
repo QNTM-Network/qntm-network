@@ -3453,3 +3453,83 @@ backlog:
   driving_capability: an-unrecognised-token-may-pass-silently
   kind: capability
   state: unscoped
+- id: the-structural-slice-proves-the-runtime-compile
+  title: >-
+    [runtime] THE FIRST OBSERVABLE STEP OF THE RUNTIME COMPILE - ONE GENERATOR, END TO END, NOT THE
+    WHOLE ARC AT ONCE. `design-the-runtime-compile.md` section 8, step B. `design-config-is-
+    content.md` section 7 step 3 already prices "the compile becomes a pure function" as an arc
+    that splits per generator; this row takes the smallest slice (`generate-structural-declaration
+    .mjs`, 386 lines, 9 of 36 total fs call sites) all the way to a working Worker route rather than
+    the whole arc partway. TWO PIECES - refactor the one generator into `compile(files) ->
+    {declaration, dropped}` (half a day, falsifier: CLI output byte-identical before/after), then a
+    Worker route that runs Gate 1 ONLY for structural config (half a day: accept a submitted file
+    map, compile, return the compiled object or a named refusal - nothing stored, nothing forwarded,
+    no version minted). PROVES, ON REAL INFRASTRUCTURE, WITHOUT MULTI-TENANCY: that a person can
+    POST a bad structural config fragment and watch it refuse loudly, named, in the same register
+    `unresolvable field(s): project` already demonstrates is real
+    (`tests/app-generality-acceptance.test.mjs:519`). ABOUT A DAY TOTAL. Needs the version key
+    (`the-declaration-is-fetched-not-baked`, done, `#70`, plus the version field itself, `design-
+    config-is-content.md` section 7 step 1, still unshipped).
+  driving_capability: the-structural-slice-proves-the-runtime-compile
+  kind: capability
+  state: diagnose-ready
+- id: a-config-write-lands-on-both-consumers-or-neither
+  title: >-
+    [runtime] A CONFIG WRITE HAS TWO CONSUMERS - THE ENGINE AND THE BROWSER - AND THEY MUST NEVER BE
+    ABLE TO DIVERGE SILENTLY. `design-the-runtime-compile.md` section 3, the hardest question that
+    document answers. ONE WRITE, GATED TWICE, NOT TWO INDEPENDENT PUSHES: Gate 1 (compile, in the
+    Worker, already specified by `design-config-is-content.md` section 4.3) refuses before anything
+    is forwarded; if it passes, the bytes forward to the graph server's per-tenant `/config`; Gate 2
+    (a dry-load, inside that SAME handler, before the previous config is deleted - today's handler,
+    verified at `server/app.py:470-487`, deletes first and validates never) either accepts or
+    refuses; ONLY WHEN BOTH GATES PASS AND THE GRAPH SERVER HAS ACKED DURABLE RECEIPT does the
+    Worker mint a version and serve it. THE CASE MOST LIKELY TO BE UNDERESTIMATED: Gate 1 passes,
+    Gate 2 fails - the Worker already holds a JS-valid compiled declaration the engine has just
+    refused, and it must be discarded, never versioned, never served, because the two grammars
+    (`yaml-subset.mjs` vs the engine's own schema) are independent by design and the engine's answer
+    is the only one that may ever commit a version. THIS MAKES CONFIG/ENGINE SKEW STRUCTURALLY
+    UNCOMMITTABLE rather than merely detectable after landing, which is stronger than GUARD 2 (a
+    git-hash comparison that can only run separately from the write that caused the skew). UNSCOPED
+    - needs `design-a-user-owns-their-graph.md` stage 3 (the server learns the word "tenant") for a
+    per-user path to dry-load against, and stage 2 (retention) before any new per-tenant config data
+    lands on a volume that document already found cannot absorb more without pruning first; neither
+    stage is this row's to scope or ship.
+  driving_capability: a-config-write-lands-on-both-consumers-or-neither
+  kind: capability
+  state: unscoped
+- id: the-declaration-is-served-by-version-not-by-file
+  title: >-
+    [runtime] THE DECLARATION SHOULD BE A SMALL, ALWAYS-FRESH POINTER IN FRONT OF A LARGE, NEVER-
+    STALE BODY - NOT ONE URL DEFEATING ITS OWN CACHE. `design-the-runtime-compile.md` section 4.
+    TODAY, verified at this branch's base: `/presentation.json` is served by GitHub Pages with an
+    ETag and `max-age=600`, and the app defeats it with `cache: "no-cache"` on every
+    `loadPresentation()` call (`app/index.html:1202`) because the declaration carries no version yet
+    - a full revalidation round trip on every page load, for a document that changes only on a
+    config write. THE FIX IS TWO TIERS - a tiny, mutable, strongly-consistent pointer ("what is the
+    current version for this user", D1, not KV, because KV's cross-edge propagation delay
+    reintroduces a stale-read race for the same person across two requests) in front of a large body
+    served at a per-version URL with `Cache-Control: public, max-age=31536000, immutable` - safe
+    forever because a version, once minted, never changes (guaranteed by
+    `a-config-write-lands-on-both-consumers-or-neither`'s own gating). This is the seam
+    `app/index.html:1124-1139`'s own comment already names in running code ("only the URL changes").
+    SERVED FROM THE WORKER, NOT GITHUB PAGES - Pages has no notion of a user and no write path.
+    Needs the version key and the Worker becoming the config path (`config-compiles-without-a-
+    build`); does not need multi-tenancy to be useful for the operator's own single config.
+  driving_capability: the-declaration-is-served-by-version-not-by-file
+  kind: capability
+  state: diagnose-ready
+- id: the-acceptance-test-backlog-row-is-stale
+  title: >-
+    [runtime] [OBSERVED 2026-08-03] `a-never-seen-config-passes-the-acceptance-test` STILL READS
+    `state: unscoped` AND "NOBODY HAS RUN IT," BUT SOMEBODY HAS. `#82` (`91930f3`,
+    `tests/app-generality-acceptance.test.mjs`) ran the operator's own acceptance test - a node
+    type, tag, view, three sections, predicate, defaults and ordering field that exist nowhere in
+    his real config - and it passed: registration, defaults, membership and its abstention all
+    answered correctly, no hardcoded names, no wrong answers. THIS ROW EXISTS ONLY TO FLAG THE
+    DRIFT, NOT TO RESOLVE IT - reconciling the existing row's title and state against the commit
+    that ran the test is a small, honest edit, and it is not this branch's to make silently against
+    a row `design-the-compiler-and-the-bands.md` filed and does not own. Filed the same way
+    `design-the-compiler-and-the-bands.md` section 12 corrects claims in public rather than quietly
+    rewriting them.
+  kind: null
+  state: unscoped
