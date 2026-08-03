@@ -141,12 +141,20 @@ export type { HeldEdit, HeldReason, HeldRow } from "./held.js";
 export { ProjectionQueue } from "./queue.js";
 export type { OfferOutcome, PendingProjection } from "./queue.js";
 
-export { PickupSchedule, PICKUP_DELAYS } from "./pickup.js";
+export { PickupSchedule, PICKUP_DELAYS, OWED_LIMIT } from "./pickup.js";
 export type { AnswerOutcome, AttemptOutcome, ScheduleOutcome } from "./pickup.js";
 
 export { AcceptedSource } from "./accepted.js";
 
-export { mintWriteToken, readWriteEcho, WriteRegister, WRITE_ECHO_KEY } from "./correlation.js";
+export {
+  lineBody,
+  mintWriteToken,
+  readWriteEcho,
+  stampsLanded,
+  stampsOwed,
+  WriteRegister,
+  WRITE_ECHO_KEY,
+} from "./correlation.js";
 export type { EchoReading, WriteEcho } from "./correlation.js";
 
 export { seedFor, openLine } from "./newline.js";

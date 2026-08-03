@@ -2723,6 +2723,7 @@ var ProjectionQueue = class {
 
 // app/present/pickup.ts
 var PICKUP_DELAYS = [1e4, 1e4, 2e4];
+var OWED_LIMIT = 16;
 var PickupSchedule = class {
   #delays;
   #waiting = /* @__PURE__ */ new Map();
@@ -2738,18 +2739,25 @@ var PickupSchedule = class {
    *
    * `token` is the write's own handle (`correlation.ts`'s `mintWriteToken`) or `null` when the
    * browser could not mint one. `since` is the `generated_at` the page was holding as this write
-   * left. BOTH are held OPAQUELY and only handed back at `attempt` time; nothing here compares
-   * either of them to anything.
+   * left. `owed` is the bodies of the lines it introduced with no stamp (`correlation.ts`'s
+   * `stampsOwed`). ALL THREE are held OPAQUELY and only handed back at `attempt` time; nothing here
+   * compares any of them to anything.
    */
-  schedule(path, token = null, since = null) {
+  schedule(path, token = null, since = null, owed = []) {
     const held = this.#waiting.get(path);
     if (held !== void 0) {
       held.token = token;
       held.since = since;
+      held.owed = [.../* @__PURE__ */ new Set([...held.owed, ...owed])].slice(-OWED_LIMIT);
       held.attempt = 0;
       return { outcome: "joined", attempt: 0 };
     }
-    this.#waiting.set(path, { token, since, attempt: 0 });
+    this.#waiting.set(path, {
+      token,
+      since,
+      owed: [...new Set(owed)].slice(-OWED_LIMIT),
+      attempt: 0
+    });
     return { outcome: "scheduled", delayMs: this.#delayFor(0), attempt: 0 };
   }
   /**
@@ -2765,7 +2773,13 @@ var PickupSchedule = class {
       return { outcome: "cancelled" };
     }
     held.attempt += 1;
-    return { outcome: "read", attempt: held.attempt, token: held.token, since: held.since };
+    return {
+      outcome: "read",
+      attempt: held.attempt,
+      token: held.token,
+      since: held.since,
+      owed: [...held.owed]
+    };
   }
   /**
    * THE ATTEMPT ANSWERED. `satisfied` is the PAGE'S judgement that the write this pickup was
@@ -2800,6 +2814,10 @@ var PickupSchedule = class {
   /** The stamp a pickup for `path` is waiting to see passed, or `null` when there is none. */
   since(path) {
     return this.#waiting.get(path)?.since ?? null;
+  }
+  /** The line bodies a pickup for `path` is waiting to see stamped. Empty when there is none. */
+  owed(path) {
+    return [...this.#waiting.get(path)?.owed ?? []];
   }
   /** Is a pickup outstanding for `path`? */
   waiting(path) {
@@ -2936,6 +2954,54 @@ function readWriteEcho(envelope) {
     }
   }
   return present ? { outcome: "echo", writes } : { outcome: "silent" };
+}
+function lineBody(line) {
+  let out = line;
+  for (const span of [...stampSpans(line)].reverse()) {
+    out = out.slice(0, span.start) + out.slice(span.end);
+  }
+  return out.replace(/^[\s>]*/, "").replace(/^(?:[-*+]|\d+[.)])\s+/, "").replace(/^\[.\]\s*/, "").replace(/\s+/g, " ").trim();
+}
+function isStamped(line) {
+  return stampSpans(line).length > 0;
+}
+function stampsOwed(before, after) {
+  const had = /* @__PURE__ */ new Set();
+  for (const line of (before ?? "").split("\n")) {
+    const body = lineBody(line);
+    if (body !== "") {
+      had.add(body);
+    }
+  }
+  const owed = /* @__PURE__ */ new Set();
+  for (const line of after.split("\n")) {
+    if (isStamped(line)) {
+      continue;
+    }
+    const body = lineBody(line);
+    if (body !== "" && !had.has(body)) {
+      owed.add(body);
+    }
+  }
+  return [...owed];
+}
+function stampsLanded(owed, sources) {
+  if (owed.length === 0) {
+    return true;
+  }
+  const unstamped = /* @__PURE__ */ new Set();
+  for (const source of sources) {
+    for (const line of source.split("\n")) {
+      if (isStamped(line)) {
+        continue;
+      }
+      const body = lineBody(line);
+      if (body !== "") {
+        unstamped.add(body);
+      }
+    }
+  }
+  return owed.every((body) => !unstamped.has(body));
 }
 var GRACE = 3;
 var CAPACITY = 64;
@@ -7757,6 +7823,7 @@ export {
   HeldSurface,
   INDENT_UNIT,
   ModeSurface,
+  OWED_LIMIT,
   PICKUP_DELAYS,
   PickupSchedule,
   PresentationCascade,
@@ -7786,6 +7853,7 @@ export {
   instancesOf,
   isSilent,
   keyOf,
+  lineBody,
   markerSpans,
   markerValue,
   matchesFindClause,
@@ -7816,6 +7884,8 @@ export {
   sectionOrdinalAt,
   seedFor,
   stampSpans,
+  stampsLanded,
+  stampsOwed,
   tagSpans,
   titleSpans,
   todayFor,
