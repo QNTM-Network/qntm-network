@@ -50,6 +50,26 @@
  * the write register (`correlation.ts` — did the projection NAME my write) and about the queue, and
  * this module holds neither. Keeping it here would have meant a second, weaker copy of a judgement
  * that already exists, which is exactly the split `queue.ts` makes with `aLineIsOpen`.
+ *
+ * ── IT DOES CARRY THE ONE FACT THAT DECISION CANNOT BE MADE WITHOUT ──
+ *
+ * `since` — the `generated_at` of the projection the page was holding WHEN THE WRITE LEFT. Held
+ * opaquely, exactly as `token` is, and compared by nothing here.
+ *
+ * IT IS CARRIED BECAUSE THE ECHO ALONE ANSWERS A DIFFERENT QUESTION, and answering the wrong one
+ * cost the operator the whole loop. `correlation.ts`'s own header is exact about what an echo says:
+ * "this server accepted a write carrying this token for this path" — it does NOT claim the
+ * projection in hand is derived from that write. The graph server records the token at `POST
+ * /vault/file`, and the cycle runs BEHIND that write, so an envelope read while the cycle is still
+ * running names the token and carries the PRE-CYCLE file. Measured in a real browser on 2026-08-01:
+ * exactly one pickup fired at ~+11 s, the echo named the write, the series ended satisfied, and the
+ * stamp the engine wrote never reached the screen at all. The series stopped one read short of its
+ * own answer, and nothing could re-arm it.
+ *
+ * SO THE PAGE NEEDS BOTH HALVES AND THE SCHEDULE HAS TO HOLD THEM BOTH ACROSS THE WAIT: "the server
+ * recorded my write" (the token) AND "a projection generated AFTER the one I was holding has
+ * arrived" (this). Two stamps from ONE clock — the server's — which is the only comparison the two
+ * ends can agree on, the same reason `queue.ts` orders by `generated_at` rather than by arrival.
  */
 
 /**
@@ -74,7 +94,13 @@ export type ScheduleOutcome =
 
 /** The timer fired: make the read, or do not — the pickup was cancelled while it waited. */
 export type AttemptOutcome =
-  | { readonly outcome: "read"; readonly attempt: number; readonly token: string | null }
+  | {
+      readonly outcome: "read";
+      readonly attempt: number;
+      readonly token: string | null;
+      /** The `generated_at` the page held when the write left. See the header. */
+      readonly since: string | null;
+    }
   | { readonly outcome: "cancelled" };
 
 /** What the attempt's answer means for the schedule. */
@@ -86,6 +112,11 @@ export type AnswerOutcome =
 interface Waiting {
   /** The write this pickup is collecting the answer to, or `null` when that write carried none. */
   token: string | null;
+  /**
+   * The `generated_at` of the projection the page held when that write left, or `null` when it held
+   * none. Opaque here — see the header for the question it lets the page ask.
+   */
+  since: string | null;
   /** How many attempts have been STARTED for this pickup, counting from 1. */
   attempt: number;
 }
@@ -109,20 +140,27 @@ export class PickupSchedule {
    * A WRITE WAS ACCEPTED FOR `path` — its answer is owed, so place a read.
    *
    * `token` is the write's own handle (`correlation.ts`'s `mintWriteToken`) or `null` when the
-   * browser could not mint one. It is held OPAQUELY and only handed back at `attempt` time; nothing
-   * here compares it to anything.
+   * browser could not mint one. `since` is the `generated_at` the page was holding as this write
+   * left. BOTH are held OPAQUELY and only handed back at `attempt` time; nothing here compares
+   * either of them to anything.
    */
-  schedule(path: string, token: string | null = null): ScheduleOutcome {
+  schedule(path: string, token: string | null = null, since: string | null = null): ScheduleOutcome {
     const held = this.#waiting.get(path);
     if (held !== undefined) {
       // ADOPTED, NOT APPENDED — see the header. The newer write's token replaces the older one
       // because a projection naming the newer one was generated after the older one landed, and the
       // attempts start again because this is a new cycle to wait for.
+      //
+      // AND `since` MOVES WITH IT, because the two describe ONE write and a pickup collects the
+      // answer to the newest one. Keeping the older write's stamp would let a projection generated
+      // between the two writes satisfy a pickup that is waiting for the later one's cycle — the
+      // precise mistake this field exists to stop, one write further on.
       held.token = token;
+      held.since = since;
       held.attempt = 0;
       return { outcome: "joined", attempt: 0 };
     }
-    this.#waiting.set(path, { token, attempt: 0 });
+    this.#waiting.set(path, { token, since, attempt: 0 });
     return { outcome: "scheduled", delayMs: this.#delayFor(0), attempt: 0 };
   }
 
@@ -139,7 +177,7 @@ export class PickupSchedule {
       return { outcome: "cancelled" };
     }
     held.attempt += 1;
-    return { outcome: "read", attempt: held.attempt, token: held.token };
+    return { outcome: "read", attempt: held.attempt, token: held.token, since: held.since };
   }
 
   /**
@@ -173,6 +211,11 @@ export class PickupSchedule {
   /** The write a pickup for `path` is collecting the answer to, or `null` when there is none. */
   token(path: string): string | null {
     return this.#waiting.get(path)?.token ?? null;
+  }
+
+  /** The stamp a pickup for `path` is waiting to see passed, or `null` when there is none. */
+  since(path: string): string | null {
+    return this.#waiting.get(path)?.since ?? null;
   }
 
   /** Is a pickup outstanding for `path`? */

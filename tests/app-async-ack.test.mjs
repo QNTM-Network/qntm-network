@@ -93,6 +93,39 @@ describe("1. THE SCHEDULE — bounded, caused, one per path", () => {
     assert.equal(s.attempt(PATH).token, "w1-b", "the newer write's answer is not the one being waited for");
   });
 
+  test("IT CARRIES THE STAMP THE PAGE HELD WHEN THE WRITE LEFT, and hands it back at attempt time", () => {
+    // The second half of what a pickup is waiting for. See this module's header: the echo says the
+    // server RECORDED the write, which is not the same claim as "the cycle has answered it", and
+    // the page cannot tell them apart without knowing what it already had.
+    const s = new PickupSchedule();
+    s.schedule(PATH, "w1-a", "2026-08-01T09:00:00.000Z");
+    assert.equal(s.since(PATH), "2026-08-01T09:00:00.000Z");
+    assert.deepEqual(s.attempt(PATH), {
+      outcome: "read",
+      attempt: 1,
+      token: "w1-a",
+      since: "2026-08-01T09:00:00.000Z",
+    });
+  });
+
+  test("AND THE STAMP IS ADOPTED WITH THE TOKEN when a second write joins — they are one write", () => {
+    // Keeping the older write's stamp would let a projection generated BETWEEN the two writes
+    // satisfy a pickup that is waiting for the later one's cycle.
+    const s = new PickupSchedule();
+    s.schedule(PATH, "w1-a", "2026-08-01T09:00:00.000Z");
+    s.schedule(PATH, "w1-b", "2026-08-01T09:00:07.000Z");
+    assert.equal(s.since(PATH), "2026-08-01T09:00:07.000Z");
+    assert.equal(s.attempt(PATH).token, "w1-b");
+  });
+
+  test("A WRITE FROM A PAGE HOLDING NO PROJECTION CARRIES NO STAMP — `null`, never invented", () => {
+    const s = new PickupSchedule();
+    s.schedule(PATH, "w1-a");
+    assert.equal(s.since(PATH), null);
+    assert.equal(s.attempt(PATH).since, null);
+    assert.equal(s.since("never-scheduled.md"), null);
+  });
+
   test("TWO PATHS ARE TWO PICKUPS — the coalescing is per file, not global", () => {
     const s = new PickupSchedule();
     s.schedule(PATH, "w1-a");
@@ -564,6 +597,68 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
     assert.equal(d.page.__accepted().sourceFor(PATH), null, "the accepted source outlived the projection");
   });
 
+  test("A READ THAT BEATS THE CYCLE IS TRIED AGAIN, THOUGH IT NAMES THE WRITE PERFECTLY", async () => {
+    // ── THE DEFECT THIS ARM WAS WRITTEN FROM, MEASURED IN A REAL BROWSER ON 2026-08-01 ──────────
+    //
+    // Exactly ONE `GET /app/graph` fired, at ~+11 s. It succeeded. The series then ended, and the
+    // stamp the engine had written was invisible until the operator refreshed by hand.
+    //
+    // THE CAUSE IS THAT THE ECHO ANSWERS A DIFFERENT QUESTION. The graph server records the token
+    // at `POST /vault/file`; the cycle runs BEHIND that write. So an envelope read while the cycle
+    // is still running names the token — truthfully — and carries the file the cycle has not
+    // touched. `correlation.ts`'s own header says exactly this: an echo does not claim the
+    // projection in hand is derived from the write. The old satisfaction test read it as if it did,
+    // and the bounded series therefore stopped one read short of the answer it exists to collect.
+    //
+    // THE ENVELOPE BELOW IS THAT ENVELOPE: the token, named; the pre-cycle file; the pre-cycle
+    // stamp. The pickup must not accept it.
+    d.land();
+    d.boxes()[0].checked = true;
+    d.boxes()[0].dispatch("change");
+    await settle();
+
+    d.control.readAnswer = () => echoing(d, V1, T1);
+    await d.fireTimers();
+
+    assert.equal(d.page.__pickups().waiting(PATH), true, "the echo alone ended the series");
+    assert.equal(d.timers.length, 1, "no second read was placed, so the answer can never arrive");
+    assert.doesNotMatch(d.onScreen(), /🛫 2026-08-04/, "the arm did not set up");
+
+    // AND THE SECOND READ, PLACED BECAUSE THE FIRST WAS NOT ACCEPTED, BRINGS THE CYCLE'S OUTPUT.
+    d.control.readAnswer = () => echoing(d, CYCLED, T2);
+    await d.fireTimers();
+
+    assert.match(d.onScreen(), /🛫 2026-08-04/, "the cycle's answer never reached the screen");
+    assert.equal(d.page.__pickups().waiting(PATH), false, "an answered pickup is still waiting");
+    assert.equal(d.timers.length, 0, "the answered series placed another read");
+  });
+
+  test("AND THE SKIP-THE-FETCH SHORTCUT ASKS THE SAME TWO QUESTIONS — a recorded write is not an answer", async () => {
+    // The same mistake lives in a second place: the pre-fetch test that cancels a pickup whose
+    // answer arrived by another route. Keyed on the register alone it would cancel the read WITHOUT
+    // SPENDING ONE — an echo seen anywhere would end the series before the cycle finished, and the
+    // page would not even have an envelope to be wrong about.
+    d.land();
+    d.boxes()[0].checked = true;
+    d.boxes()[0].dispatch("change");
+    await settle();
+
+    // The re-read button, landing an envelope that names the write and predates the cycle.
+    d.control.readAnswer = () => echoing(d, V1, T1);
+    await d.page.refresh();
+    assert.equal(d.page.__writes().waiting(d.control.posted[0].token), false, "the arm did not set up");
+
+    d.control.readAnswer = () => echoing(d, CYCLED, T2);
+    await d.fireTimers();
+
+    assert.equal(
+      d.control.calls.filter((c) => c === "GET /app/graph").length,
+      2,
+      "the pickup cancelled itself on a write that was merely recorded",
+    );
+    assert.match(d.onScreen(), /🛫 2026-08-04/, "the cycle's answer never reached the screen");
+  });
+
   test("A READ THAT DOES NOT NAME THE WRITE IS TRIED AGAIN — the cycle had not finished", async () => {
     d.land();
     d.boxes()[0].checked = true;
@@ -718,6 +813,37 @@ describe("5. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
       d.control.posted[1].markdown,
       /- \[x\] Draft the launch note/,
       "the acceptance is not load-bearing — removing it did not lose the first tick",
+    );
+  });
+
+  test("BREAK THE SATISFACTION TEST — and the series ends on the echo, exactly as it did live", async () => {
+    // THE SHIPPED EXPRESSION, PUT BACK. This is the code that ran in the browser on 2026-08-01, and
+    // this arm is that morning's measurement: one read, the series over, the stamp invisible. With
+    // it restored the guard above must go red, or the stamp half of the test is decoration.
+    const d = await standUpPage("app-async-ack-mutation-answered", (source) =>
+      assertMutated(
+        source,
+        "pastTheWrite(arrivedAt, going.since) && (going.token === null || !writes.waiting(going.token));",
+        "going.token !== null && !writes.waiting(going.token);",
+      ),
+    );
+    d.land();
+    d.boxes()[0].checked = true;
+    d.boxes()[0].dispatch("change");
+    await settle();
+
+    // The pre-cycle envelope: the token named, the file untouched, the stamp unmoved.
+    d.control.readAnswer = () => echoing(d, V1, T1);
+    await d.fireTimers();
+
+    assert.equal(d.page.__pickups().waiting(PATH), false, "the mutation did not reach the page");
+    assert.equal(d.timers.length, 0, "the series is still going, so the stamp test is not load-bearing");
+    d.control.readAnswer = () => echoing(d, CYCLED, T2);
+    await d.fireTimers();
+    assert.doesNotMatch(
+      d.onScreen(),
+      /🛫 2026-08-04/,
+      "the stamp arrived without the second read — the guard proves nothing",
     );
   });
 

@@ -1142,6 +1142,22 @@ async function api(path, { method = "POST", body, auth = false } = {}) {
   if (!res.ok || data.ok === false) {
     const error = new Error(data.error || ("request failed (" + res.status + ")"));
     error.status = res.status;
+    // ── A REFUSAL CARRIES EVIDENCE, AND IT USED TO BE DROPPED ON THIS LINE ──────────────────────
+    //
+    // `POST /app/edit-file` answers a stale base with `{refused: "stale-base", path, current}`,
+    // where `current` is THE WHOLE FILE AS THE SERVER HOLDS IT (worker/src/app.js, step 1a). Until
+    // this row, every byte of that was parsed into `data` and then thrown away with it — the page
+    // saw a status and a sentence and nothing else, so the only way back to a writable view was the
+    // re-read button, and nothing on screen said so. Measured in a real browser on 2026-08-01: 409,
+    // retry 409, manual Refresh, 200.
+    //
+    // TWO FIELDS, NAMED, NOT THE WHOLE BODY. `error.data = data` would put every field of every
+    // failure within reach of every catch in this page, and the next reader could not tell which of
+    // them anything depends on. These two are the refusal contract and nothing else is carried.
+    if (typeof data.refused === "string") {
+      error.refused = data.refused;
+      error.current = typeof data.current === "string" ? data.current : null;
+    }
     throw error;
   }
   return data;
@@ -1891,9 +1907,62 @@ function accept(path, write) {
 // inside the wake his own write already paid for, because the cycle is running on that machine for
 // the length of it. An idle tab reaches the graph server exactly zero times.
 
-/** A write was accepted for `path`. Place the read that collects its answer. */
+/**
+ * THE `generated_at` OF THE PROJECTION THIS PAGE IS HOLDING, or `null` when it holds none.
+ *
+ * IT IS THE SERVER'S OWN STAMP, READ BACK OUT OF THE ENVELOPE IT ARRIVED IN, and that is what makes
+ * it comparable to the stamp on a projection that arrives later: one clock, the server's. The
+ * browser's clock never enters this comparison, for the reason `queue.ts` orders by `generated_at`
+ * rather than by arrival — clock skew between two machines is not a fact the operator's screen may
+ * depend on.
+ */
+function paintedStamp() {
+  return graphData?.snapshot?.generated_at ?? null;
+}
+
+/**
+ * WAS `at` GENERATED AFTER `since` — i.e. is this projection the product of a cycle that ran after
+ * the write left?
+ *
+ * ── IT FAILS TOWARD READING AGAIN, WHICH IS THE OPPOSITE DIRECTION TO `queue.ts`'s `isNewer` ──
+ *
+ * The two functions look alike and answer different questions, so they fail in different
+ * directions on purpose. `isNewer` asks WHICH OF TWO PROJECTIONS TO SHOW, and when it cannot tell
+ * it shows the arrival — being wrong about ordering beats leaving the screen behind the server for
+ * a reason nobody can see. This asks MAY I STOP COLLECTING, and an unreadable or absent stamp is
+ * not permission to stop: stopping early is the whole measured defect, and the cost of not stopping
+ * is at most two more reads inside a wake the write already paid for. So an unparseable stamp, and
+ * an envelope that carries none at all, both mean NO.
+ *
+ * A `null` `since` IS THE ONE CASE THAT ANSWERS YES ON THIN EVIDENCE, and it has to: the page held
+ * no projection when the write left (a write from a screen that had never painted one), so there is
+ * no stamp to be after and any stamped projection is more than it had.
+ */
+function pastTheWrite(at, since) {
+  if (since === null) {
+    return at !== null;
+  }
+  if (at === null) {
+    return false;
+  }
+  const arrived = Date.parse(at);
+  const held = Date.parse(since);
+  if (Number.isNaN(arrived) || Number.isNaN(held)) {
+    return false;
+  }
+  return arrived > held;
+}
+
+/**
+ * A write was accepted for `path`. Place the read that collects its answer.
+ *
+ * THE STAMP IN HAND GOES WITH IT, and `pickup.ts`'s own header argues why at length: the echo says
+ * the server RECORDED the write, and the cycle runs behind the write, so an envelope read mid-cycle
+ * names the token and carries the file the cycle has not touched yet. The pickup needs to know what
+ * the page already had, or it cannot tell that answer from the answer.
+ */
 function startPickup(path, token) {
-  const placed = pickups.schedule(path, token);
+  const placed = pickups.schedule(path, token, paintedStamp());
   // `joined` MEANS A TIMER IS ALREADY COUNTING FOR THIS PATH and has adopted this write's token. A
   // second timer would fetch the same envelope twice.
   if (placed.outcome === "scheduled") {
@@ -1933,7 +2002,20 @@ async function collect(path) {
   }
   // ALREADY ANSWERED WHILE THE TIMER WAS COUNTING — the re-read button, or a later write's own
   // projection. Asked BEFORE the fetch, so a pickup that is no longer owed costs no request at all.
-  if (going.token !== null && !writes.waiting(going.token)) {
+  //
+  // IT ASKS BOTH HALVES, AND THE STAMP HALF IS THE ONE THIS ROW ADDED. "The register no longer
+  // holds my token" alone was enough to skip a read entirely — and the register lets a token go the
+  // moment ANY envelope names it, including one generated before the cycle ran. So a page that had
+  // seen its write recorded and nothing else would cancel the very read that would have collected
+  // the answer. Both halves, or the series stops one read short of what it is for.
+  //
+  // A QUEUED PROJECTION COUNTS AS IN HAND. It is not on screen — a line is open — but it IS the
+  // answer, already in this page's possession, and `drainProjection` installs it the moment the line
+  // settles. Reading again for something already held would be a request bought and thrown away.
+  const inHand =
+    pastTheWrite(paintedStamp(), going.since) ||
+    pastTheWrite(queued.pending(path)?.generatedAt ?? null, going.since);
+  if (inHand && (going.token === null || !writes.waiting(going.token))) {
     pickups.answered(path, true);
     return;
   }
@@ -1954,7 +2036,25 @@ async function collect(path) {
       sayArrival(landed);
     }
   }
-  const answered = going.token === null ? landed === "installed" || landed === "held" : !writes.waiting(going.token);
+  // ── DID THE CYCLE'S ANSWER ARRIVE — TWO FACTS OFF THE WIRE, BOTH REQUIRED ─────────────────────
+  //
+  // THIS TEST USED TO ASK ONLY WHETHER THE SERVER HAD NAMED THE WRITE, AND THAT IS A DIFFERENT
+  // QUESTION. `WRITE_RECORDED`'s own header states the limit in as many words: an echo says "this
+  // server accepted a write carrying this token", and it does NOT claim the projection in hand is
+  // derived from it. The graph server records the token at `POST /vault/file`; the cycle runs behind
+  // that write and stamps a NEW `generated_at` when it finishes. So the pre-cycle envelope names the
+  // token perfectly and carries the file the operator already had — and the series, satisfied,
+  // ended. Measured in a real browser on 2026-08-01: one read at ~+11 s, no further reads, and the
+  // stamp the engine wrote invisible until he refreshed by hand. The loop completed and he could not
+  // see that it had.
+  //
+  // SO: THE SERVER RECORDED MY WRITE (the token) AND A PROJECTION GENERATED AFTER THE ONE I WAS
+  // HOLDING HAS ARRIVED (the stamp). Neither alone is the answer. With no token the stamp is all
+  // there is, and it is not pretended otherwise — a cycle somebody else's write caused would satisfy
+  // it, which costs a screen that is right for the wrong reason rather than a screen that is wrong.
+  const arrivedAt = data?.snapshot?.generated_at ?? null;
+  const answered =
+    pastTheWrite(arrivedAt, going.since) && (going.token === null || !writes.waiting(going.token));
   const next = pickups.answered(path, answered);
   if (next.outcome === "again") {
     armPickup(path, next.delayMs);
@@ -2608,6 +2708,107 @@ const REFUSED_KEEPING_TYPING =
 const REFUSED_REVERTING_BOX = WRITE_REFUSED + " · the box is back as the server has it";
 
 /**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * THE REFUSAL HANDS THE PAGE THE FILE IT WAS REFUSED AGAINST — TAKE IT, AND THE VIEW IS WRITABLE
+ * AGAIN WITHOUT THE OPERATOR DOING ANYTHING
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ── THE DEFECT, MEASURED IN A REAL BROWSER ON 2026-08-01 ──
+ *
+ * 409, retry 409, manual Refresh, 200. The refusal is correct and the banner is clear, and the view
+ * stayed unwritable until he pressed a button nothing had told him about. The server had already
+ * answered the question that made it unwritable, in the same response.
+ *
+ * ── WHY THE BASE ALONE IS NOT AN OPTION, WHICH IS A FACT ABOUT THIS CODE RATHER THAN A JUDGEMENT ──
+ *
+ * "Re-baseline so the NEXT save succeeds without replacing what he can see" reads like the cautious
+ * answer. IT CANNOT WORK HERE. The precondition that goes on the wire is `baseOf(source)` in
+ * `writeFile` — computed from THE STRING THE PAINTER WALKED, not from `BaseSurface`. `served` is a
+ * REPORTING surface: it decides which sentence the freshness line says, and it reaches no request.
+ * So moving it alone would leave the next save posting the same stale digest, earning the same 409,
+ * and would silence the one sentence that explains why. It would buy nothing and hide the reason.
+ *
+ * THE PAINTER'S SOURCE AND THE BASE THEREFORE MOVE TOGETHER OR NEITHER MOVES. That is exactly the
+ * rule `accept` above already follows for the ack — `accepted.take` and `served.take` in adjacent
+ * statements, with one repaint under them — and this is the same statement about the same file from
+ * the same server, one word different: the ack says "the file now says what you sent" and the
+ * refusal says "the file already says something else, here it is".
+ *
+ * ── THE FAILURE DIRECTION, ARGUED ──
+ *
+ * `current` is a RENDER. The engine recomputes it every cycle, so a copy of it that this page
+ * discards costs one read to get back. HIS TYPING IS NOT. Nothing anywhere recomputes a sentence a
+ * person is halfway through, so the two are not comparable losses and the direction is not a
+ * balance to strike. This adoption refuses on any uncertainty about typing:
+ *
+ *   A LINE IS OPEN — a draft row, or an `<input>` in INSERT. Those characters are in a DOM element a
+ *     repaint destroys and nothing holds them anywhere else. NOTHING is taken; the sentence names
+ *     the re-read button instead, which is his gesture at his moment.
+ *   A PROJECTION IS ALREADY QUEUED — `drainProjection` has advanced the base to it deliberately, and
+ *     that projection is NEWER than a `current` read off a refused write. Overwriting it would move
+ *     the screen backwards through a state the server has already left.
+ *   THE PATH IS NOT ON SCREEN — repainting `currentViewId` from another file's markdown is the one
+ *     thing worse than not repainting.
+ *
+ * AND WHERE IT DOES ADOPT, THE CHARACTERS ARE ALREADY HELD. Both callers hold the refused edit
+ * (`heldFrom("refused", …)`) BEFORE calling this, so what leaves the screen is a second copy of
+ * something the recovery strip is holding — an annoyance, never a loss. A tick has no characters at
+ * all: the box redraws from the true file, which is stronger than putting it back by hand.
+ *
+ * NOT A PROJECTION, AND IT NEVER BECOMES ONE. `graphData` is untouched, nothing is offered to
+ * `ProjectionQueue`, and `current` is server bytes read straight out of the answer — never a string
+ * this app computed, which is the property `base.ts`'s named trap actually protects.
+ *
+ * Returns whether the view was healed, because the sentence differs and only the caller says it.
+ */
+function healFromRefusal(path, current) {
+  if (typeof current !== "string") {
+    return false;
+  }
+  if (path !== paintedPath() || aLineIsOpen() || queued.pending(path) !== null) {
+    return false;
+  }
+  accepted.take(path, current);
+  served.take(path, current);
+  repaintCurrentView();
+  return true;
+}
+
+/**
+ * WHAT HAPPENED AND WHAT NOW WORKS, IN ONE LINE, WITH NO WORD IN IT THE OPERATOR HAS TO DECODE.
+ *
+ * "the copy this app was holding", not "a stale base". "your next save will go through", not
+ * "re-baselined". The first clause is `WRITE_REFUSED` word for word, because a reader who has seen
+ * the unhealed sentence has already read it.
+ */
+const REFUSED_HEALED =
+  WRITE_REFUSED + " · this view now shows the file as the server has it, so your next save will go through";
+/** And the one case it cannot heal: he is typing, so the screen is his until he stops. */
+const REFUSED_TYPING_HELD =
+  WRITE_REFUSED + " · press re-read when you have finished this line · what you typed is held below";
+
+/**
+ * A REFUSED LINE COMMIT, IN ONE SENTENCE — AND IT IS THE ONE PLACE THE ADOPTION IS ATTEMPTED FOR
+ * THIS GESTURE, so the words and the act cannot come apart.
+ *
+ * THREE OUTCOMES AND THEY ARE NOT REDUNDANT:
+ *   ADOPTED           the screen moved to the file the server holds, so "still on this line" is no
+ *                     longer true and is not said. His characters are on the strip, which the
+ *                     caller put them on before this ran.
+ *   NOTHING TO ADOPT  a refusal that carried no `current` — the graph server is entitled to send
+ *                     none. Nothing repainted, so today's sentence is true word for word.
+ *   DECLINED          there is a `current` and this is a bad moment for it (a line is open, a newer
+ *                     projection is queued, another file is on screen). It names his gesture rather
+ *                     than doing it, which is the same answer the pickup's own bound gives.
+ */
+function refusedLineSentence(path, current) {
+  if (healFromRefusal(path, current)) {
+    return REFUSED_HEALED + " · what you typed is held below";
+  }
+  return typeof current === "string" ? REFUSED_TYPING_HELD : REFUSED_KEEPING_TYPING;
+}
+
+/**
  * AFTER THIS COMMIT, DOES THE LINE STILL BELONG IN THE SECTION IT IS IN — design doc step 4, L6
  * PROJECTION. Tonight's proven-but-invisible layers (L3 `sectionAt`, L5 `membershipFor`) SAID from
  * here for the first time. Returns the sentence to show, or `""` when nothing is said.
@@ -2852,10 +3053,17 @@ async function toggleTask(view, toggle) {
     if (e?.status === 409 && token !== null) {
       writes.giveUp(token);
     }
-    $("freshness").textContent =
-      e?.status === 409
-        ? REFUSED_REVERTING_BOX + refusalNote()
-        : "sync failed: " + e.message + takeNotes();
+    if (e?.status !== 409) {
+      $("freshness").textContent = "sync failed: " + e.message + takeNotes();
+      return;
+    }
+    // THE VIEW HEALS ITSELF FROM THE ANSWER THAT REFUSED IT — see `healFromRefusal`. A tick has no
+    // characters at stake, so the only thing at risk here is an OPEN LINE somewhere else on the
+    // screen, and that surface refuses on one. Where it adopts, the box the branch above put back
+    // by hand is redrawn from the file the server actually holds, which is the stronger statement.
+    $("freshness").textContent = healFromRefusal(view.path, e.current)
+      ? REFUSED_HEALED + refusalNote()
+      : REFUSED_REVERTING_BOX + refusalNote();
   }
 }
 
@@ -2956,7 +3164,18 @@ async function commitLine(view, commit) {
           token: null,
         }),
       );
-      $("freshness").textContent = REFUSED_KEEPING_TYPING + refusalNote();
+      // ── AND THEN THE VIEW HEALS, AFTER THE HOLDING AND NEVER BEFORE IT ──────────────────────
+      //
+      // THE ORDER IS THE WHOLE SAFETY ARGUMENT. `holdEdit` above puts his characters somewhere no
+      // repaint can reach; only then may the screen stop showing them. Reverse these two statements
+      // and there is one instant in which the only copy of what he typed is a DOM element being
+      // rebuilt. See `healFromRefusal` for why the base cannot move without the text, and for the
+      // three states in which it declines to move either.
+      //
+      // "STILL ON THIS LINE" STOPS BEING TRUE WHEN IT ADOPTS, so that clause is not said then. The
+      // sentence that replaces it says where the characters went AND that the next save will work,
+      // which is the pair of facts the unhealed branch could only offer half of.
+      $("freshness").textContent = refusedLineSentence(view.path, e.current) + refusalNote();
       return;
     }
     // The painter has already repainted this view from the edited source, so the page is showing

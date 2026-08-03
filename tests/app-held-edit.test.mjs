@@ -592,6 +592,27 @@ describe("2. THE FOUR WAYS A LINE GOES ABSENT — his characters survive every o
     assert.equal(rows[0].text, "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task");
     assert.equal(rows[0].reason, "refused");
     assert.match(rows[0].base, /^sha256-[0-9a-f]{64}$/, "the base the server declined was not carried");
+    // THE SECOND HALF OF THE SENTENCE MOVED WHEN `the-view-heals-itself` LANDED, and the FIRST half
+    // — the one this arm is really about — did not. The refusal carried `current`, so the view
+    // adopted it and "still on this line" stopped being true; what is still true, and is the only
+    // thing §2 exists to prove, is that his characters are held. The screen losing a second copy of
+    // something the strip is holding is exactly what the holding was built to make safe.
+    assert.match(d.freshness(), /what you typed is held below/);
+    assert.match(d.freshness(), /your next save will go through/, "the view did not heal itself");
+  });
+
+  test("2d(ii). REFUSED WITH NOTHING TO ADOPT — the older sentence, word for word, still true", async () => {
+    // A 409 the graph server answered without `current` (it is entitled to: worker/src/app.js
+    // passes it through verbatim and sends `null` when there is none). Nothing repainted, so the
+    // characters really are still on the line AND held, and the page says both.
+    d.control.refuseWith = {
+      status: 409,
+      body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: null },
+    };
+
+    await d.typeAndCommit(V1, "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task");
+
+    assert.equal(page.__held().rows.length, 1, "a refused edit was dropped");
     assert.match(d.freshness(), /what you typed is still on this line, and held below/);
   });
 

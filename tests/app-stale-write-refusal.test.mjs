@@ -317,6 +317,8 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
   let elements;
   /** What the write endpoint answers. Set per arm; `null` means the ordinary success. */
   let refuseWith;
+  /** Every body `POST /app/edit-file` was sent, in order — the wire, which is where `base` lives. */
+  let posted;
 
   const settle = () => new Promise((r) => setImmediate(r));
   const freshness = () => elements.get("freshness").textContent;
@@ -342,6 +344,20 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
   const taskText = () =>
     walk(elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
 
+  /** The characters on the recovery strip — where a refused edit lives once it is held. */
+  const heldTexts = () =>
+    walk(elements.get("heldRows"))
+      .filter((el) => el.tagName === "input")
+      .map((el) => el.value);
+
+  /** Open the first task's line for typing, whatever the view is currently showing. */
+  function openTheLine() {
+    taskText().dispatch("click", makeEvent());
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    assert.ok(input, "clicking the line did not open it for typing");
+    return input;
+  }
+
   /** Park the cursor on the heading so `taskText()` is the first TASK, not the cursor's own line. */
   function open(markdown) {
     land(markdown);
@@ -353,6 +369,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     ({ elements } = installBrowser());
     globalThis.fetch = async (url, init) => {
       if (refuseWith) {
+        posted.push(JSON.parse(init.body));
         return {
           ok: false,
           status: refuseWith.status,
@@ -360,6 +377,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
         };
       }
       const body = JSON.parse(init.body);
+      posted.push(body);
       return {
         ok: true,
         status: 200,
@@ -376,6 +394,8 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
 
   beforeEach(() => {
     refuseWith = null;
+    posted = [];
+    page.__held().clear();
   });
 
   /** Open the first task's line, type `TYPED` into it, and blur — one committed line edit. */
@@ -390,6 +410,20 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
   }
 
   test("THE FALSIFIER'S OTHER HALF — the client reports the refusal and keeps what he typed", async () => {
+    // AMENDED BY `the-view-heals-itself`, AND THE AMENDMENT IS TO WHERE THE CHARACTERS ARE, NEVER
+    // TO WHETHER THEY SURVIVE. This arm used to read them off the painted body, because a 409
+    // deliberately did not repaint. It now reads them off the recovery strip, because `holdEdit`
+    // puts them there BEFORE anything adopts — see the page's `refusedLineSentence`. The property
+    // under test is unchanged and is still the one that matters: a refusal never costs him a
+    // character.
+    //
+    // WHAT THE OLD VERSION OF THIS ARM ASSERTED, AND WHY IT WAS WRONG. It pinned
+    // `page.__served().markdown === V1` and argued that adopting `current` as the base "would make
+    // the NEXT save a clobber with a blessing". That is true of adopting the BASE ALONE and false
+    // of adopting both — and adopting the base alone was never on the table, because the
+    // precondition that goes on the wire is `baseOf(source)` computed from THE PAINTER'S STRING
+    // (see `writeFile`), not from `BaseSurface`. Moving the base by itself would have changed a
+    // sentence and no request. The arm below measures the wire and settles it.
     refuseWith = {
       status: 409,
       body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: MOVED_ON },
@@ -398,11 +432,105 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     typeAndCommit();
     await settle();
 
-    assert.match(onScreen(), /BY FRIDAY/, "the refusal deleted the characters he typed");
+    assert.deepEqual(heldTexts(), [TYPED], "the refusal deleted the characters he typed");
+    assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through · what you typed is held below");
+    // AND THE VIEW IS NOW THE FILE THE SERVER ACTUALLY HOLDS — text and base together, never one
+    // without the other. `#blocked` is the cycle's own output, which is what he was refused for
+    // not having.
+    assert.match(onScreen(), /#blocked/, "the view is still showing a file the server has left");
+    assert.equal(page.__served().markdown, MOVED_ON, "the base did not follow the screen");
+  });
+
+  test("AND THE NEXT SAVE GOES THROUGH — the whole point, measured on the wire", async () => {
+    // THE MEASURED DEFECT, END TO END: 409, retry 409, manual Refresh, 200. This arm is that
+    // sequence with the Refresh taken out, because nothing needs it any more.
+    refuseWith = {
+      status: 409,
+      body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: MOVED_ON },
+    };
+    typeAndCommit();
+    await settle();
+    assert.equal(posted.length, 1, "the arm did not set up");
+    assert.equal(posted[0].base, baseOf(V1), "the refused save did not carry the stale base");
+
+    // The second edit, typed into the healed view — no re-read, no reload, no gesture but typing.
+    refuseWith = null;
+    const input = openTheLine();
+    input.value = "- [ ] Draft the launch note NEXT WEEK [[qntm:121]] #task #blocked";
+    input.dispatch("blur");
+    await settle();
+
+    assert.equal(posted.length, 2, "the second save never left");
+    assert.equal(
+      posted[1].base,
+      baseOf(MOVED_ON),
+      "the second save posted the digest of a copy the server had already refused — the heal is cosmetic",
+    );
+    assert.match(freshness(), /^as of /, "the second save did not land");
+  });
+
+  test("A REFUSAL WITH NOTHING TO ADOPT CHANGES NOTHING — the older behaviour, intact", async () => {
+    // `current` is `null` whenever the graph server sends none (worker/src/app.js passes it through
+    // verbatim and invents nothing). There is then nothing to adopt, so the screen keeps his
+    // characters exactly as it did before this row, and the sentence says so.
+    refuseWith = {
+      status: 409,
+      body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: null },
+    };
+
+    typeAndCommit();
+    await settle();
+
+    assert.match(onScreen(), /BY FRIDAY/, "nothing was adopted, so nothing may have repainted");
     assert.equal(freshness(), REFUSED + " · what you typed is still on this line, and held below");
-    // AND THE PAGE DID NOT ADOPT THE SERVER'S COPY. `current` is on the wire for the holding half
-    // to use; taking it as the new base here would make the NEXT save a clobber with a blessing.
-    assert.equal(page.__served().markdown, V1, "the base moved to a copy the painter never saw");
+    assert.equal(page.__served().markdown, V1, "the base moved with no text to move with it");
+  });
+
+  test("A LINE OPEN SOMEWHERE ELSE REFUSES THE ADOPTION — his typing outranks a render", async () => {
+    // THE HAZARD THIS WHOLE ADOPTION IS FENCED AGAINST. `current` is a render: the engine
+    // recomputes it every cycle, so a copy this page declines costs one read to get back. A
+    // sentence a person is halfway through is recomputed by nothing. So an open line refuses it,
+    // and the page names his own gesture instead of taking one.
+    refuseWith = {
+      status: 409,
+      body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: MOVED_ON },
+    };
+
+    open(V1);
+    // A tick, while a SECOND line is open for typing — the two writes-in-one-cycle shape.
+    const input = openTheLine();
+    input.value = "- [ ] Water the plants HALF TYPED";
+    const box = walk(elements.get("viewBody")).filter((el) => el.type === "checkbox")[0];
+    box.checked = true;
+    box.dispatch("change");
+    await settle();
+
+    assert.equal(freshness(), REFUSED + " · the box is back as the server has it", "the tick was not refused");
+    assert.equal(input.value, "- [ ] Water the plants HALF TYPED", "the adoption repainted an open line");
+    assert.equal(page.__served().markdown, V1, "the base moved while a line was open");
+    assert.doesNotMatch(onScreen(), /#blocked/, "the server's copy reached the screen mid-typing");
+  });
+
+  test("A REFUSED TICK WITH NOTHING OPEN HEALS THE VIEW — and there is no box to put back", async () => {
+    // The other write path, and the easier of the two: a tick has no characters at stake at all, so
+    // the only question is whether the screen may move. Nothing is open, so it may — and the box
+    // then redraws from the file the server actually holds, which is a stronger statement than the
+    // hand-reverted one it replaces.
+    refuseWith = {
+      status: 409,
+      body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: MOVED_ON },
+    };
+
+    open(V1);
+    const box = walk(elements.get("viewBody")).filter((el) => el.type === "checkbox")[0];
+    box.checked = true;
+    box.dispatch("change");
+    await settle();
+
+    assert.match(onScreen(), /#blocked/, "the view did not heal itself");
+    assert.equal(page.__served().markdown, MOVED_ON);
+    assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through");
+    assert.equal(page.__held().count, 0, "a tick has no characters, so it may hold none");
   });
 
   test("THE CONTROL — an ordinary failure still repaints from the last server state", async () => {
