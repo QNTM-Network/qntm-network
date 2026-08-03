@@ -1,11 +1,13 @@
 /**
- * correlation — THE TOKEN A WRITE CARRIES, AND THE ECHO THAT PROVES THAT WRITE LANDED.
+ * correlation — THE TOKEN A WRITE CARRIES, THE ECHO THAT PROVES THAT WRITE LANDED, AND THE STAMP
+ * THAT PROVES THE CYCLE FINISHED WITH THE LINE IT CARRIED.
  *
- * PURE, with ONE named exception. The register and the reader are arithmetic over strings — no DOM,
- * no fetch, no clock — and the module imports nothing. `mintWriteToken` is the one function that
- * reaches for a platform global, and it is separated from the surface for exactly the reason
- * `baseOf` is separated from `BaseSurface` in `base.ts`: the surface stays a comparison of strings
- * that a test can drive with `document`, `fetch` and `Date.now` all made to throw.
+ * PURE, with ONE named exception. The register and the readers are arithmetic over strings — no
+ * DOM, no fetch, no clock — and the module's only import is `resolution.js`'s stamp grammar, which
+ * is itself pure. `mintWriteToken` is the one function that reaches for a platform global, and it
+ * is separated from the surface for exactly the reason `baseOf` is separated from `BaseSurface` in
+ * `base.ts`: the surface stays a comparison of strings that a test can drive with `document`,
+ * `fetch` and `Date.now` all made to throw.
  *
  * ── THE MEASURED DEFECT THIS EXISTS TO FIX ──
  *
@@ -64,7 +66,31 @@
  * being built in another repository at the same time as this one; when its exact envelope shape is
  * known, `WRITE_ECHO_KEY` and `readWriteEcho` are the only things that need to change, and every
  * caller, test and behaviour below stays as it is.
+ *
+ * ── THE SECOND FACT THIS MODULE NOW ANSWERS, AND WHY IT BELONGS BESIDE THE FIRST ──
+ *
+ * A browser drive against the live system on 2026-08-03 measured the `since` half of the pickup's
+ * stopping condition — "a projection generated after the one I was holding has arrived" — being
+ * satisfied TRUTHFULLY and still being the wrong answer. Create at t=0, 200 in 43 ms, exactly ONE
+ * `GET /app/graph` at +10.86 s, and the recorded body of that one poll carried the operator's new
+ * line UNSTAMPED. The projection really was newer. The page counted itself satisfied and stopped.
+ * The engine stamped on a later cycle nothing ever fetched, and 91 seconds later the row still had
+ * no id; a manual Refresh made it `qntm:2697` at once.
+ *
+ * THE ECHO AND THE `generated_at` BOTH ANSWER QUESTIONS ABOUT THE WRITE. Neither answers a question
+ * about the LINE. `readWriteEcho` says the server recorded a POST; `generated_at` says a cycle ran.
+ * The cycle rewrites the file more than once — it ingests the line on one pass and stamps it on
+ * another — and both passes stamp a fresh `generated_at`, so the two facts together still stop one
+ * pass short. `stampsOwed` and `stampsLanded` below are the third fact: DID THE LINE THIS WRITE
+ * CARRIED BECOME A NODE.
+ *
+ * IT IS THE SAME KIND OF QUESTION AS THE ECHO — "is this arrival the answer to MY write" — asked of
+ * the content rather than of the ledger, which is why it sits here and not in `pickup.ts`. The
+ * schedule stays a policy about attempts and delays that holds its inputs opaquely; this module
+ * stays the place where "mine" is decided.
  */
+
+import { stampSpans } from "./resolution.js";
 
 /**
  * The envelope key the echo is read from. Exported so a test can name it rather than repeat it.
@@ -243,6 +269,150 @@ export function readWriteEcho(envelope: unknown): EchoReading {
     }
   }
   return present ? { outcome: "echo", writes } : { outcome: "silent" };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE STAMP — did the line this write carried become a node?
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * THE ONE NORMALISATION A LINE IS RECOGNISED THROUGH, declared rather than assumed — and the whole
+ * of the answer to "what identifies my line before it has an id".
+ *
+ * A line's BODY is its own characters with four things removed, and each removal is one thing the
+ * cycle is known to do to a line it ingests:
+ *
+ *   THE STAMPS      — `[[qntm:N]]`, every one of them. This is the point: the stamped line and the
+ *                     unstamped line must reduce to the SAME body, or the arrival in which the
+ *                     engine finally stamped it would read as a different line entirely.
+ *   THE INDENT      — the cycle re-nests what it ingests, and a line that gained two spaces is the
+ *                     same line at a new depth.
+ *   THE MARKER      — the bullet and the checkbox glyph. `qntm` resolves a checkbox to a CONFIGURED
+ *                     DEFAULT STATE, so `- [ ]` becoming `- [x]` is the engine doing its job, not a
+ *                     different line.
+ *   THE SPACING     — runs of whitespace collapse to one, because re-nesting and re-marking both
+ *                     leave doubled spaces behind.
+ *
+ * AND NOTHING ELSE IS REMOVED. Not the tags, not the case, not the punctuation. A line's characters
+ * are a content hash rather than an identity — `instance.ts` says so in as many words for the same
+ * reason — so every further loosening buys recognition of a line the engine reworded at the price
+ * of confusing two lines the operator wrote. This module's whole job is to say MY line, and the
+ * cost of being wrong runs one way: a body that fails to match costs at most the two extra reads
+ * the schedule's bound already permits, and a body that matches the wrong line stops the series on
+ * somebody else's stamp.
+ *
+ * `""` FOR A LINE WITH NO BODY AT ALL — blank, or a bare marker — and every caller below drops one.
+ * An empty body would match every line in the file, which is the one failure this must not have.
+ */
+export function lineBody(line: string): string {
+  let out = line;
+  for (const span of [...stampSpans(line)].reverse()) {
+    out = out.slice(0, span.start) + out.slice(span.end);
+  }
+  return out
+    .replace(/^[\s>]*/, "")
+    .replace(/^(?:[-*+]|\d+[.)])\s+/, "")
+    .replace(/^\[.\]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Does this line already carry a stamp of its own? The engine has answered it. */
+function isStamped(line: string): boolean {
+  return stampSpans(line).length > 0;
+}
+
+/**
+ * THE STAMPS THIS WRITE IS OWED — the body of every line it INTRODUCED that carries none.
+ *
+ * `before` is the string the edit was computed against (`paint.ts`'s `LineCommit.source`, carried
+ * to the write by `writeFile`); `after` is the string that went on the wire. Nothing else is a
+ * legitimate `before`: a base reconstructed from somewhere else compares the wrong two strings.
+ *
+ * ── INTRODUCED, NOT MERELY PRESENT, AND THAT IS WHAT KEEPS THE COMMON CASE FREE ──
+ *
+ * A file is full of lines that will never carry a stamp: headings, prose, a blank. Waiting on all
+ * of them would make every write exhaust the schedule, which is a poll wearing a bound. Waiting on
+ * the lines this write ADDED is a much smaller set and usually an empty one:
+ *
+ *   A CHECKBOX TICK introduces nothing — the line it changed already had its stamp — so the owed
+ *     set is empty and the stopping condition is exactly what it was before this function existed.
+ *   AN EDIT TO A STAMPED LINE introduces nothing either, for the same reason: the stamp travels
+ *     with the body, so the edited line's body is new but its stamp is not missing.
+ *   A CREATE introduces exactly one, which is the case the drive measured.
+ *
+ * DEDUPLICATED, AND A BODY THE `before` ALREADY HELD UNSTAMPED IS NOT OWED. If the operator's own
+ * source already carried that body without a stamp, this write did not introduce it and the engine
+ * was already going to decide about it; counting it would make one unstampable line poison every
+ * subsequent write to the same file.
+ */
+export function stampsOwed(before: string | null, after: string): readonly string[] {
+  const had = new Set<string>();
+  for (const line of (before ?? "").split("\n")) {
+    const body = lineBody(line);
+    if (body !== "") {
+      had.add(body);
+    }
+  }
+  const owed = new Set<string>();
+  for (const line of after.split("\n")) {
+    if (isStamped(line)) {
+      continue;
+    }
+    const body = lineBody(line);
+    if (body !== "" && !had.has(body)) {
+      owed.add(body);
+    }
+  }
+  return [...owed];
+}
+
+/**
+ * HAS THE CYCLE FINISHED WITH EVERY LINE IN `owed`, ACROSS EVERYTHING THIS PROJECTION CARRIES?
+ *
+ * `sources` is the markdown of EVERY view in the arrival, never just the one the write went to. The
+ * engine reorders lines within a view and moves them BETWEEN views, and a line that moved is still
+ * the operator's line — so nothing positional may enter this comparison. It is a search of the
+ * whole projection for a body, which is exactly why the body is what identity is built on and the
+ * `view/section/token` instance string is not: that string is a POSITION and this question outlives
+ * one.
+ *
+ * ── AN OWED BODY IS SATISFIED BY BEING STAMPED, OR BY BEING GONE ──
+ *
+ * STAMPED is the answer this exists to wait for. GONE is the other half and it is not a fallback:
+ * `POST /vault/file` wrote the operator's bytes verbatim BEFORE the cycle ran, so a projection
+ * generated after that write read a file that contained his line. If the line is not in the
+ * projection, the engine did something to it — reworded it, moved it out of every published view,
+ * deleted it — and that is a decision about content the vault has already taken. There is no
+ * further stamp coming for a line that is no longer there, and waiting for one would be waiting for
+ * nothing. `correlation.ts`'s own header already says this about the echo: the cycle is entitled to
+ * rewrite, move or delete what it ingests, and that is not a loss of the operator's characters.
+ *
+ * IT MUST ONLY EVER BE ASKED OF A PROJECTION GENERATED AFTER THE WRITE. Asked of the file the page
+ * was already holding, "gone" means "never arrived" and this would answer yes to a question about a
+ * cycle that has not run. Every caller pairs it with the `since` comparison for that reason, and
+ * neither half is sufficient alone — which is the whole lesson of the two drives.
+ *
+ * AN EMPTY `owed` IS `true`. A write that introduced no unstamped line is owed no stamp, and the
+ * stopping condition falls back to the two facts that were there before.
+ */
+export function stampsLanded(owed: readonly string[], sources: Iterable<string>): boolean {
+  if (owed.length === 0) {
+    return true;
+  }
+  const unstamped = new Set<string>();
+  for (const source of sources) {
+    for (const line of source.split("\n")) {
+      if (isStamped(line)) {
+        continue;
+      }
+      const body = lineBody(line);
+      if (body !== "") {
+        unstamped.add(body);
+      }
+    }
+  }
+  return owed.every((body) => !unstamped.has(body));
 }
 
 /**

@@ -70,6 +70,30 @@
  * recorded my write" (the token) AND "a projection generated AFTER the one I was holding has
  * arrived" (this). Two stamps from ONE clock — the server's — which is the only comparison the two
  * ends can agree on, the same reason `queue.ts` orders by `generated_at` rather than by arrival.
+ *
+ * ── AND A THIRD, MEASURED THE DAY AFTER THE SECOND SHIPPED: `owed` ──
+ *
+ * The drive was repeated against the live system on 2026-08-03 with the two halves above in place,
+ * and it failed IDENTICALLY. Create at t=0, 200 in 43 ms, exactly ONE `GET /app/graph` at +10.86 s,
+ * 91 seconds of watching with no Refresh, the row still carrying its provisional instance and no
+ * id. The recorded body of that one poll is what settles it: it carried the new line, UNSTAMPED.
+ * The projection genuinely WAS newer, the condition was satisfied truthfully, and the answer was
+ * still the wrong one — because the cycle rewrites the file more than once, stamping a fresh
+ * `generated_at` on each pass, and the pass that STAMPS THE LINE is not the pass that ingests it.
+ *
+ * "A NEWER PROJECTION" IS A FACT ABOUT THE FILE. "MY LINE IS A NODE" IS A FACT ABOUT THE LINE, and
+ * only the second one is what the operator is waiting to see. So the schedule carries a third thing
+ * across the wait — the bodies of the lines this write introduced that the engine still owes a
+ * stamp for — held as opaquely as the other two and compared by nothing here. `correlation.ts`'s
+ * `stampsOwed` computes it and `stampsLanded` decides it; this module only remembers it.
+ *
+ * ── WHICH MAKES THE BOUND LOAD-BEARING RATHER THAN MERELY PRUDENT ──
+ *
+ * A LINE MAY LEGITIMATELY NEVER GAIN A STAMP. The same drive found root-level `#task` lines
+ * reclassified to `#outcome` and rendered with no stamp at all. A condition that waits for a stamp
+ * has no natural end on those, so the bound below is now the only thing that terminates the series
+ * — `delaysMs.length` attempts and then EXHAUSTED, whatever the answer was. It was already the
+ * bound; it is now the reason the page cannot hang.
  */
 
 /**
@@ -87,6 +111,21 @@
  */
 export const PICKUP_DELAYS: readonly number[] = [10_000, 10_000, 20_000];
 
+/**
+ * THE MOST LINE BODIES ONE PATH'S PICKUP WILL REMEMBER IT IS OWED A STAMP FOR.
+ *
+ * A BACKSTOP RATHER THAN A RULE, exactly as `correlation.ts`'s `CAPACITY` is. One write introduces
+ * one line — a create — and the only way the set grows is a second write joining a pickup that is
+ * still waiting, which is the operator's own Enter-Enter gesture inside one cycle. Reaching sixteen
+ * means sixteen creates in forty seconds with no cycle answering any of them, and at that point the
+ * page is not waiting for a stamp, it is waiting for a server.
+ *
+ * THE OLDEST GO, because the newest write is the one the operator is looking at. Dropping a body
+ * costs nothing in the unsafe direction: a forgotten body is one fewer thing to wait for, so the
+ * series ends SOONER, never later — the same direction `correlation.ts`'s grace fails in.
+ */
+export const OWED_LIMIT = 16;
+
 /** A read was placed for this path, or one is already outstanding and this one joined it. */
 export type ScheduleOutcome =
   | { readonly outcome: "scheduled"; readonly delayMs: number; readonly attempt: number }
@@ -100,6 +139,8 @@ export type AttemptOutcome =
       readonly token: string | null;
       /** The `generated_at` the page held when the write left. See the header. */
       readonly since: string | null;
+      /** The line bodies the engine still owes a stamp for. See the header. */
+      readonly owed: readonly string[];
     }
   | { readonly outcome: "cancelled" };
 
@@ -117,6 +158,11 @@ interface Waiting {
    * none. Opaque here — see the header for the question it lets the page ask.
    */
   since: string | null;
+  /**
+   * The bodies of the lines this pickup's writes introduced that the engine still owes a stamp
+   * for, in the order they were first heard about. Opaque here — see the header.
+   */
+  owed: string[];
   /** How many attempts have been STARTED for this pickup, counting from 1. */
   attempt: number;
 }
@@ -141,10 +187,16 @@ export class PickupSchedule {
    *
    * `token` is the write's own handle (`correlation.ts`'s `mintWriteToken`) or `null` when the
    * browser could not mint one. `since` is the `generated_at` the page was holding as this write
-   * left. BOTH are held OPAQUELY and only handed back at `attempt` time; nothing here compares
-   * either of them to anything.
+   * left. `owed` is the bodies of the lines it introduced with no stamp (`correlation.ts`'s
+   * `stampsOwed`). ALL THREE are held OPAQUELY and only handed back at `attempt` time; nothing here
+   * compares any of them to anything.
    */
-  schedule(path: string, token: string | null = null, since: string | null = null): ScheduleOutcome {
+  schedule(
+    path: string,
+    token: string | null = null,
+    since: string | null = null,
+    owed: readonly string[] = [],
+  ): ScheduleOutcome {
     const held = this.#waiting.get(path);
     if (held !== undefined) {
       // ADOPTED, NOT APPENDED — see the header. The newer write's token replaces the older one
@@ -155,12 +207,26 @@ export class PickupSchedule {
       // answer to the newest one. Keeping the older write's stamp would let a projection generated
       // between the two writes satisfy a pickup that is waiting for the later one's cycle — the
       // precise mistake this field exists to stop, one write further on.
+      //
+      // `owed` IS THE ONE THING THAT IS UNIONED RATHER THAN REPLACED, AND THE ASYMMETRY IS THE
+      // POINT. `token` and `since` describe ONE write and the newest write's are the ones worth
+      // waiting on. A stamp is not like that: a stamp the engine owed the FIRST write is still owed
+      // after the second, and the second write's `before` is the first write's own posted file — so
+      // the first line no longer looks introduced and would never be computed again. Replacing here
+      // would silently drop it, and the operator's Enter-Enter gesture is exactly two creates inside
+      // one cycle. Union, capped, oldest first out.
       held.token = token;
       held.since = since;
+      held.owed = [...new Set([...held.owed, ...owed])].slice(-OWED_LIMIT);
       held.attempt = 0;
       return { outcome: "joined", attempt: 0 };
     }
-    this.#waiting.set(path, { token, since, attempt: 0 });
+    this.#waiting.set(path, {
+      token,
+      since,
+      owed: [...new Set(owed)].slice(-OWED_LIMIT),
+      attempt: 0,
+    });
     return { outcome: "scheduled", delayMs: this.#delayFor(0), attempt: 0 };
   }
 
@@ -177,7 +243,13 @@ export class PickupSchedule {
       return { outcome: "cancelled" };
     }
     held.attempt += 1;
-    return { outcome: "read", attempt: held.attempt, token: held.token, since: held.since };
+    return {
+      outcome: "read",
+      attempt: held.attempt,
+      token: held.token,
+      since: held.since,
+      owed: [...held.owed],
+    };
   }
 
   /**
@@ -216,6 +288,11 @@ export class PickupSchedule {
   /** The stamp a pickup for `path` is waiting to see passed, or `null` when there is none. */
   since(path: string): string | null {
     return this.#waiting.get(path)?.since ?? null;
+  }
+
+  /** The line bodies a pickup for `path` is waiting to see stamped. Empty when there is none. */
+  owed(path: string): readonly string[] {
+    return [...(this.#waiting.get(path)?.owed ?? [])];
   }
 
   /** Is a pickup outstanding for `path`? */

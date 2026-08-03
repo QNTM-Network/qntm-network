@@ -105,6 +105,7 @@ describe("1. THE SCHEDULE — bounded, caused, one per path", () => {
       attempt: 1,
       token: "w1-a",
       since: "2026-08-01T09:00:00.000Z",
+      owed: [],
     });
   });
 
@@ -703,6 +704,102 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 3b. THE LINE HE MADE, AND THE STAMP THE ENGINE OWES IT
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ── THE SECOND MEASUREMENT, TAKEN IN A REAL BROWSER AGAINST THE LIVE SYSTEM ON 2026-08-03 ──────
+//
+// The `since` half above shipped and the drive was repeated. Create at t=0 answered 200 in 43 ms.
+// EXACTLY ONE `GET /app/graph` fired, at +10.86 s, and succeeded. The page was then watched for 91
+// seconds with no Refresh: the row kept its provisional instance
+// (`all-personal/0/- [ ] zzTEST stamp watch #task #personal`), never gained a node, and never
+// gained a stamp. A manual Refresh made it `qntm:2697` at once.
+//
+// THE RECORDED BODY OF THAT ONE POLL IS WHAT SETTLES IT. It carried the new line — and carried it
+// UNSTAMPED: raw text, no `[[qntm:NNNN]]`. So the projection genuinely WAS newer than the one the
+// page held, the `since` half was satisfied truthfully, the series ended, and the engine stamped on
+// a cycle the page never fetched.
+//
+// SO "A PROJECTION GENERATED AFTER THE ONE I WAS HOLDING" IS TOO WEAK A STOPPING CONDITION. The
+// cycle rewrites the file more than once: it ingests the line on one pass and stamps it on another,
+// and both passes stamp a new `generated_at`. The page has to wait for the projection in which THE
+// LINE IT WROTE carries a stamp — the line has become a node — not merely for a newer projection.
+const NEW_LINE = "- [ ] zzTEST stamp watch #task #personal";
+const NEW_ID = "qntm:2697";
+const T3 = "2026-08-01T09:00:28.000Z";
+
+/**
+ * Click the empty space below the last line — the page's own create gesture (`paint.ts`'s
+ * `div.newline` row), driven through the wiring that ships rather than around it.
+ */
+function clickBelow(d) {
+  const body = d.elements.get("viewBody");
+  const below = [...body.children].find((el) => String(el.className).split(/\s+/).includes("newline"));
+  assert.ok(below, "the view painted no click-below-the-last-line row");
+  below.dispatch("click", makeEvent());
+  const input = d.inputs()[0];
+  assert.ok(input, "clicking below the last line did not open a row for typing");
+  return input;
+}
+
+/** Make the line, commit it, and hand back the markdown the page actually posted. */
+async function createLine(d, text = NEW_LINE) {
+  const input = clickBelow(d);
+  input.value = text;
+  input.dispatch("blur");
+  await settle();
+  await settle();
+  const posted = d.control.posted.at(-1)?.markdown;
+  assert.ok(typeof posted === "string", "the create posted no file");
+  assert.ok(posted.includes(text), "the create posted a file without the line he typed");
+  return posted;
+}
+
+describe("3b. A PICKUP STOPS ON THE LINE BEING STAMPED, NOT ON A NEWER PROJECTION", () => {
+  let d;
+  before(async () => {
+    d = await standUpPage("app-async-ack-stamp");
+  });
+  beforeEach(() => {
+    d.control.calls = [];
+    d.control.posted = [];
+    d.control.writeAnswers = [];
+    d.control.readAnswer = () => envelope(V1, T1);
+    d.page.__queued().clear();
+    d.page.__pickups().clear();
+    d.page.__writes().clear();
+    d.timers.length = 0;
+  });
+
+  test("THE LIVE DEFECT — a NEWER projection that leaves the new line unstamped is not the answer", async () => {
+    d.land();
+    const posted = await createLine(d);
+    const stamped = posted.replace(NEW_LINE, `${NEW_LINE} [[${NEW_ID}]]`);
+
+    // THE ENVELOPE FROM THE LIVE DRIVE, REBUILT: newer than the one the page held (T2 > T1), naming
+    // the write perfectly, and carrying the operator's line with no stamp on it.
+    d.control.readAnswer = () => echoing(d, posted, T2);
+    await d.fireTimers();
+
+    assert.equal(
+      d.page.__pickups().waiting(PATH),
+      true,
+      "a newer projection that never stamped the line ended the series — the live defect, in the harness",
+    );
+    assert.equal(d.timers.length, 1, "no second read was placed, so the stamp can never arrive");
+    assert.doesNotMatch(d.onScreen(), new RegExp(NEW_ID), "the arm did not set up");
+
+    // AND THE READ THAT WAS PLACED BECAUSE THE FIRST WAS NOT ACCEPTED BRINGS THE STAMP.
+    d.control.readAnswer = () => echoing(d, stamped, T3);
+    await d.fireTimers();
+
+    assert.match(d.onScreen(), new RegExp(NEW_ID), "the stamp never reached the screen without a Refresh");
+    assert.equal(d.page.__pickups().waiting(PATH), false, "the stamped projection did not end the series");
+    assert.equal(d.timers.length, 0, "the answered series placed another read");
+  });
+});
+
 describe("4. IT IS NOT A POLL — the guard on what this costs him", () => {
   let d;
   before(async () => {
@@ -851,7 +948,11 @@ describe("5. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
     // The transport half's own falsifier. `startPickup` is the ONE expression that places a read;
     // with it neutered an accepted write has no answer and the screen stays where it was.
     const d = await standUpPage("app-async-ack-mutation-pickup", (source) =>
-      assertMutated(source, "startPickup(path, write.token ?? null);", "void path;"),
+      assertMutated(
+        source,
+        "startPickup(path, write.token ?? null, stampsOwed(write.source ?? null, write.markdown));",
+        "void path;",
+      ),
     );
     d.land();
     d.boxes()[0].checked = true;

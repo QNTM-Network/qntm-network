@@ -731,10 +731,25 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     assert.deepEqual(assignments(CORRELATION_TS), []);
   });
 
-  test("correlation.ts IMPORTS NOTHING and names no edit constructor", () => {
+  test("correlation.ts IMPORTS ONLY THE STAMP GRAMMAR and names no edit constructor", () => {
     // The same structural argument `held.ts` makes: a module that cannot reach `applyEdit` cannot
     // be "helped" into posting what it holds. This one holds the operator's own write handles.
-    assert.deepEqual(CORRELATION_CODE.match(/^import\b.*$/gm), null, "correlation.ts gained an import");
+    //
+    // ── IT IMPORTED NOTHING UNTIL `stampsOwed` LANDED, AND THE ONE IMPORT IS NAMED RATHER THAN
+    //    ALLOWED ──
+    //
+    // Asking "has the engine stamped this line" means matching `[[qntm:N]]`, and this repository
+    // has exactly ONE grammar for that (`resolution.ts`'s `QNTM_ID`, cited against the engine and
+    // tested against the citation). A second regex here would be the "parallel regex" that module's
+    // own header forbids by name — so the import is the cheaper of two costs, and the guard is
+    // narrowed to the exact module rather than dropped. `resolution.ts` exports no edit
+    // constructor, no writer and no path: it is spans over strings, so the structural argument
+    // above is untouched. A SECOND import, or a different one, still turns this red.
+    assert.deepEqual(
+      CORRELATION_CODE.match(/^import\b.*$/gm),
+      ['import { stampSpans } from "./resolution.js";'],
+      "correlation.ts gained an import that is not the stamp grammar",
+    );
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);
   });
 

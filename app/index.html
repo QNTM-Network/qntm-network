@@ -980,6 +980,8 @@ import {
   WriteRegister,
   mintWriteToken,
   readWriteEcho,
+  stampsOwed,
+  stampsLanded,
   FocusSurface,
   ModeSurface,
   clampLine,
@@ -1639,6 +1641,22 @@ const ARRIVAL_ACCEPTED = "the server took your save — the cycle's answer follo
 const PICKUP_LOST = "the cycle's answer did not arrive — press re-read to ask for it again";
 
 /**
+ * AND WHEN IT FOLLOWED AND LEFT THE LINE WITHOUT AN ID — A DIFFERENT EVENT, SO A DIFFERENT SENTENCE.
+ *
+ * The pickup now stops on the line it wrote being STAMPED rather than on a newer projection
+ * arriving, and a line may legitimately never be stamped: the 2026-08-03 drive found root-level
+ * `#task` lines reclassified to `#outcome` and rendered with no stamp at all. On one of those the
+ * cycle answers perfectly and the id never comes, so the series runs to its bound on a gesture that
+ * worked.
+ *
+ * `PICKUP_LOST` WOULD BE FALSE THERE IN BOTH HALVES. The answer DID arrive, and pressing re-read
+ * would fetch the same unstamped line again. This says the two things that are true — the save
+ * landed, and the engine did not give this line an id — and asks him for nothing, because there is
+ * nothing he could usefully do.
+ */
+const PICKUP_UNSTAMPED = "your save landed — the engine has not given this line an id";
+
+/**
  * WHAT A WRITE'S OWN ANSWER DID, SAID ONCE. Two callers, one sentence each, because the three
  * outcomes of `arrive` are exactly the three things the operator could need to know and two of them
  * used to be unreachable states of the word "syncing…".
@@ -1877,7 +1895,18 @@ function accept(path, write) {
   // PLACED FIRST AND UNCONDITIONALLY, because the answer is owed whatever the screen is doing. The
   // two refusals below are about what may be SHOWN and MEASURED now; neither is a reason to stop
   // collecting the cycle's answer.
-  startPickup(path, write.token ?? null);
+  //
+  // ── AND IT CARRIES WHICH LINES THIS WRITE IS OWED A STAMP FOR ─────────────────────────────────
+  //
+  // `write.source` is the string the edit was computed against, handed up by the painter and
+  // carried here through `writeFile`'s own caller. It is the ONLY legitimate `before`: `graphData`
+  // may have moved under an optimistic repaint, so anything reconstructed here would compare the
+  // wrong two strings and report every line as introduced.
+  //
+  // WITH NO SOURCE, NOTHING IS OWED, AND THAT IS THE FAIL-SAFE DIRECTION. An empty owed set is the
+  // stopping condition this page had before the stamp entered it, which is a screen that may be one
+  // cycle stale — never a screen that hangs.
+  startPickup(path, write.token ?? null, stampsOwed(write.source ?? null, write.markdown));
   if (queued.pending(path) !== null || aLineIsOpen()) {
     return "accepted";
   }
@@ -1960,9 +1989,13 @@ function pastTheWrite(at, since) {
  * the server RECORDED the write, and the cycle runs behind the write, so an envelope read mid-cycle
  * names the token and carries the file the cycle has not touched yet. The pickup needs to know what
  * the page already had, or it cannot tell that answer from the answer.
+ *
+ * AND SO DO THE LINES THE WRITE INTRODUCED, for the reason the second drive measured: a projection
+ * really can be newer, really can name the write, and really can still carry the operator's line
+ * with no stamp on it, because the cycle ingests on one pass and stamps on another. See `accept`.
  */
-function startPickup(path, token) {
-  const placed = pickups.schedule(path, token, paintedStamp());
+function startPickup(path, token, owed = []) {
+  const placed = pickups.schedule(path, token, paintedStamp(), owed);
   // `joined` MEANS A TIMER IS ALREADY COUNTING FOR THIS PATH and has adopted this write's token. A
   // second timer would fetch the same envelope twice.
   if (placed.outcome === "scheduled") {
@@ -2012,9 +2045,18 @@ async function collect(path) {
   // A QUEUED PROJECTION COUNTS AS IN HAND. It is not on screen — a line is open — but it IS the
   // answer, already in this page's possession, and `drainProjection` installs it the moment the line
   // settles. Reading again for something already held would be a request bought and thrown away.
+  //
+  // ── THE THIRD HALF, ASKED OF EACH PROJECTION SEPARATELY AND NEVER ACROSS THEM ─────────────────
+  //
+  // A projection satisfies this pickup only if IT is past the write AND IT stamped the lines the
+  // write introduced. Asking "is anything past the write" and "did anything stamp the line" as two
+  // independent questions would let the painted projection answer the first and a queued one answer
+  // the second, and a pickup satisfied by two different envelopes has collected neither.
+  const pending = queued.pending(path);
   const inHand =
-    pastTheWrite(paintedStamp(), going.since) ||
-    pastTheWrite(queued.pending(path)?.generatedAt ?? null, going.since);
+    (pastTheWrite(paintedStamp(), going.since) && stampsLanded(going.owed, viewSources(graphData))) ||
+    (pastTheWrite(pending?.generatedAt ?? null, going.since) &&
+      stampsLanded(going.owed, viewSources(pending?.data ?? null)));
   if (inHand && (going.token === null || !writes.waiting(going.token))) {
     pickups.answered(path, true);
     return;
@@ -2052,15 +2094,55 @@ async function collect(path) {
   // HOLDING HAS ARRIVED (the stamp). Neither alone is the answer. With no token the stamp is all
   // there is, and it is not pretended otherwise — a cycle somebody else's write caused would satisfy
   // it, which costs a screen that is right for the wrong reason rather than a screen that is wrong.
+  //
+  // ── AND THAT PAIR SHIPPED, AND WAS MEASURED, AND WAS STILL TOO WEAK ───────────────────────────
+  //
+  // The drive was repeated on 2026-08-03 with both facts above in place and failed identically:
+  // one read at +10.86 s, the series satisfied, 91 seconds with no stamp on screen, `qntm:2697` the
+  // instant he pressed Refresh. The recorded body of that one poll carried his new line UNSTAMPED,
+  // so both facts above were TRUE and the answer was still wrong. The cycle rewrites the file more
+  // than once and stamps a fresh `generated_at` each time; the pass that ingests a line is not the
+  // pass that gives it an id.
+  //
+  // SO THERE IS A THIRD: THE LINE THIS WRITE MADE HAS BECOME A NODE. It is asked of the arrival's
+  // WHOLE projection, every view in it, because the engine moves lines between views and a line
+  // that moved is still his line (`correlation.ts`'s `stampsLanded`). A write that introduced no
+  // unstamped line — every checkbox tick, every edit to a line that already had an id — is owed
+  // nothing, answers `true`, and stops exactly where it stopped before.
   const arrivedAt = data?.snapshot?.generated_at ?? null;
-  const answered =
+  const cycled =
     pastTheWrite(arrivedAt, going.since) && (going.token === null || !writes.waiting(going.token));
-  const next = pickups.answered(path, answered);
+  const stamped = stampsLanded(going.owed, viewSources(data));
+  const next = pickups.answered(path, cycled && stamped);
   if (next.outcome === "again") {
     armPickup(path, next.delayMs);
   } else if (next.outcome === "exhausted") {
-    $("freshness").textContent = PICKUP_LOST + takeNotes();
+    // ── TWO ENDINGS, BECAUSE THEY ARE TWO DIFFERENT EVENTS AND ONE SENTENCE FOR BOTH IS A LIE ────
+    //
+    // A LINE MAY LEGITIMATELY NEVER GAIN A STAMP. The same drive found root-level `#task` lines
+    // reclassified to `#outcome` and rendered with no stamp at all. On one of those the cycle DID
+    // answer — a newer projection arrived and named the write — and the engine simply gave the line
+    // no id. Telling the operator to press re-read there would send him to fetch a stamp that is
+    // never coming, and a status line that cries wolf on an ordinary gesture stops being read.
+    $("freshness").textContent = (cycled && !stamped ? PICKUP_UNSTAMPED : PICKUP_LOST) + takeNotes();
   }
+}
+
+/**
+ * THE MARKDOWN OF EVERY VIEW IN ONE ENVELOPE — the whole projection, never one file's slice.
+ *
+ * `stampsLanded` searches for a line's body across all of it on purpose: the engine reorders lines
+ * within a view and moves them BETWEEN views, so a line that left `this_week.md` for `outcomes.md`
+ * is still the line the operator wrote. Narrowing this to the path the write went to would report
+ * the moved line as gone and stop the series on its disappearance.
+ *
+ * `[]` FOR AN ENVELOPE THAT CARRIES NO VIEWS AT ALL, which is a failed read or an empty graph. An
+ * empty list makes `stampsLanded` answer "still owed" for every body, so the series reads again —
+ * the direction this whole mechanism fails in.
+ */
+function viewSources(data) {
+  const views = data?.snapshot?.views;
+  return Array.isArray(views) ? views.map((v) => v?.markdown).filter((m) => typeof m === "string") : [];
 }
 
 /**
@@ -3034,7 +3116,11 @@ async function toggleTask(view, toggle) {
     // repaint on the ordinary path and by the `catch` on a failure, so "still marked" is exactly
     // "this row's answer is not on screen yet", which is the truth. Clearing it here would have
     // been this page inventing a third meaning for a class that already has two.
-    sayArrival(arrive(view.path, data, { markdown: next, token }));
+    // AND THE STRING THE EDIT WAS COMPUTED AGAINST, so `accept` can tell which lines this write
+    // INTRODUCED from the ones that were already there. A tick introduces none — it changes one
+    // glyph on a line that already has its id — so this carries the tick's owed set to empty, which
+    // is what keeps the commonest gesture on exactly the stopping condition it had before.
+    sayArrival(arrive(view.path, data, { markdown: next, token, source: toggle.source }));
   } catch (e) {
     box.checked = !box.checked;
     row.classList.toggle("done", box.checked);
@@ -3117,7 +3203,11 @@ async function commitLine(view, commit) {
     // and installing it here is exactly what used to destroy that row's characters.
     // THE SAME ONE STATEMENT THE CHECKBOX PATH MAKES, carrying the same two facts — see its own
     // comment. `commit.markdown` is non-null here: a `null` returned above without posting.
-    sayArrival(arrive(view.path, data, { markdown: commit.markdown, token }));
+    // `commit.source` RIDES WITH IT for the reason the checkbox path states: it is the only string
+    // that says what this file held BEFORE this write, so it is the only one that can say which
+    // lines the write introduced. On a create that is exactly one line, and it is the line the
+    // pickup now waits to see stamped.
+    sayArrival(arrive(view.path, data, { markdown: commit.markdown, token, source: commit.source }));
   } catch (e) {
     // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ──
     //
