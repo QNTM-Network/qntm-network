@@ -3533,3 +3533,49 @@ backlog:
     rewriting them.
   kind: null
   state: unscoped
+- id: gate-two-declines-a-config-it-cannot-load
+  title: >-
+    [runtime] THE GRAPH SERVER DELETES THE OLD CONFIG BEFORE ATTEMPTING TO LOAD THE REPLACEMENT, SO
+    THERE IS NO MOMENT AT WHICH IT CAN SAY NO. `design-gate-two.md`, the full design. VERIFIED
+    DIRECTLY, `server/app.py:470-487` (read-only, trunk clone, engine monorepo): `config_push`
+    extracts the incoming tar to a staging directory, then unconditionally `shutil.rmtree(CONFIG)`
+    before renaming the staging directory in - no load is attempted anywhere in the function. THE
+    FIX, SINGLE-TENANT, NEEDS NO CROSS-REPO WORK - four steps, all in the engine monorepo, all
+    against today's one shared `/data/config`: (1) call the engine's own `bundle_loader.load()`
+    directly (not `load_with_fallback`, which swallows a failure rather than surfacing it) against
+    the staged candidate before any deletion, refusing loudly with the typed error's own
+    file/line/message/context on `BundleParseError`/`BundleValidationError` - half a day; (2) make
+    `CONFIG` a symlink over two real sibling directories, swapped with one atomic `rename()` so a
+    process death leaves either the old or the new target fully intact, never a missing or
+    half-written one - half a day, needs (1); (3) an idempotency key (hash the incoming bytes,
+    short-circuit a repeat of the last-applied hash to the same success response) so a lost ack is
+    always safe to retry without double-applying - half a day, needs (2); (4) unique per-write
+    staging names plus bounded retention of rejected candidates for inspection - under an hour,
+    needs (1). CONVERTS "DELETE FIRST, VALIDATE NEVER" INTO "VALIDATE FIRST, DELETE ONLY A CONFIG
+    PROVEN REPLACEABLE" for the operator's real, daily `graph-sync cycle` write path, with no
+    dependency on the tenancy arc (see `stage-three-does-not-tenant-ize-config`, filed alongside
+    this row, for why the MULTI-TENANT extension of this same fix is a separate, later, blocked
+    piece of work).
+  driving_capability: gate-two-declines-a-config-it-cannot-load
+  kind: capability
+  state: diagnose-ready
+- id: stage-three-does-not-tenant-ize-config
+  title: >-
+    [runtime] [CORRECTION] `design-the-runtime-compile.md` SECTION 7 ITEM 4 AND SECTION 8 STEP G
+    ASSUME `design-a-user-owns-their-graph.md` STAGE 3 HANDS GATE 2 A PER-USER PATH TO DRY-LOAD
+    AGAINST; STAGE 3 AS WRITTEN DOES NOT DO THAT. VERIFIED DIRECTLY, `design-a-user-owns-their-
+    graph.md:400-416`: Stage 3 ("the server learns the word 'tenant'") derives `VAULT` and `DB`
+    per request from an authenticated header, and its own text says plainly "`CONFIG` stays shared
+    and is opened read-only." Section 2's Option 4 leaves the door open for a fourth, per-user
+    config path "the day he wants it," but Stage 3 does not walk through it. CONSEQUENCE: the
+    single-tenant version of Gate 2 (`gate-two-declines-a-config-it-cannot-load`) needs NEITHER of
+    Stage 3 nor Stage 2 (retention) and is buildable now; only the MULTI-TENANT extension (a
+    per-user `CONFIG` path, needed for `design-the-runtime-compile.md` section 8 step H) is blocked,
+    and it is blocked on a widening of Stage 3 that document does not currently scope, not merely on
+    Stage 3 as written landing. THIS ROW EXISTS ONLY TO FLAG THE GAP, NOT TO RESOLVE IT - widening
+    Stage 3 is `design-a-user-owns-their-graph.md`'s own document to amend, not this branch's to
+    make silently against a row it does not own. Filed the same way
+    `the-acceptance-test-backlog-row-is-stale` flags drift in another document without quietly
+    rewriting it.
+  kind: null
+  state: unscoped
