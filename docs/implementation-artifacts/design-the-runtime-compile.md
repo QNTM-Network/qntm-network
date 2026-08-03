@@ -166,7 +166,7 @@ every cycle — which is a config directory with extra steps, not a different de
 in-process to run Gate 1 (§1.3), and forwards the accepted bytes to the graph server, which is the
 durable store. What the Worker DOES keep, durably, is the **compiled declaration** — small (139–161
 KB today, §11), already the shape D1 holds comfortably, and per-user exactly the way graph snapshots
-already are (**[OBS]** `worker/schema-app.sql:97-109`, keyed by `user_id`). This is the same split
+already are (**[OBS]** `worker/schema-app.sql:69-92`, keyed by `user_id`). This is the same split
 `design-config-is-content.md`'s own three targets already draw: the engine reads the source, the
 browser reads the compiled artefact, and nothing needs to read both.
 
@@ -189,7 +189,7 @@ Q1's finding that the write and the compile are one event:
    by re-running the enumeration `design-config-is-content.md` §2.4 did: sixteen routes, none
    `/config`, confirmed again at this branch's base (§11).
 2. **Gate 1, in the Worker, in the same request.** Compile the submitted bytes in-process
-   (`compile(files)`, §7 step B below). If it throws, or a generator's own `refuse()` fires: **stop
+   (`compile(files)`, §8 step B below). If it throws, or a generator's own `refuse()` fires: **stop
    here.** Nothing is forwarded to the graph server. Nothing is stored. The engine's config is
    untouched; the browser's declaration is untouched. This is the easy failure — one surface, no
    partial state — and it is the one `design-config-is-content.md` already designed.
@@ -277,7 +277,7 @@ Pages origin that serves this page — access-control-allow-origin: *, an ETag, 
 defeats the 600-second cache with `cache: "no-cache"` on every `loadPresentation()` call
 (`app/index.html:1202`), because **the declaration carries no version yet** — a plain cached fetch
 would show a stale copy for up to ten minutes after every change, so the app pays a full
-revalidation round trip on every page load instead, which is the cost §7 step 1 below removes.
+revalidation round trip on every page load instead, which is the cost §8 step A below removes.
 
 ### 4.2 The scheme this design needs
 
@@ -297,7 +297,7 @@ accident:
 **[REA] This is the fetch the app's own comment on `loadPresentation` already names as the seam:**
 *"The declaration coming from a SERVER that compiled it — config-as-content in full — is steps 3 and
 4 of `design-config-is-content.md`, and this line is the seam they will land on: only the URL
-changes"* (`app/index.html:1124-1139`). §4.2's pointer/body split is what that sentence resolves to
+changes"* (`app/index.html:1157-1170`). §4.2's pointer/body split is what that sentence resolves to
 concretely: the URL becomes two URLs, one cheap and volatile, one expensive-once and permanent.
 
 ### 4.3 Where this is served from
@@ -314,8 +314,9 @@ seventeenth Worker route, alongside the write route from §3.1.
 **[REA] Nothing here forces today's single-tenant path to move before a second writer exists.** The
 operator's CLI → commit → GitHub Pages flow is untouched by this document, because the trigger
 being designed (§1) and the scheme being designed here are both properties of a write path that does
-not exist yet for anyone but the operator's own laptop. This bites only once §8 step C below ships,
-which is deliberately not "now."
+not exist yet for anyone but the operator's own laptop. This bites only once §8 step H below ships —
+the point where the Worker becomes the real write-and-serve authority — which is deliberately not
+"now."
 
 ---
 
@@ -371,7 +372,7 @@ content.md` §5.2 already proved, by positive enumeration rather than a grep for
 CURRENT ledger mechanism is read by nothing (`grep -rn "dropped" worker/` — zero hits; every mention
 in `app/index.html` is inside a comment). **The refusal contract this document specifies must not
 repeat that mistake**: it belongs in the same surface where the person typed the YAML — the config
-editor, §8 step F, deliberately last, out of scope to build here, but this section fixes the
+editor, §8 step I, deliberately last, out of scope to build here, but this section fixes the
 CONTRACT it must honour: a named, specific sentence, not a generic "invalid config," using the same
 "named at the operator's own artefact" register §5.1's real example already demonstrates.
 
@@ -552,7 +553,7 @@ adds the explicit cross-document gate**: Gate 2 cannot exist before `design-a-us
 graph.md` stage 3 ("the server learns the word 'tenant'") gives the graph server a per-user path to
 dry-load against, and should not be built before that document's own stage 2 (retention) lands,
 because config is new per-tenant data on the same volume that document already found cannot absorb
-more without pruning first (§7.1 of this document).
+more without pruning first (§7 item 1 of this document).
 
 ### Step H — the two-consumer write path, in full · **an arc** · needs D, F, G, and stage 3 of the sibling document
 
@@ -611,7 +612,7 @@ its own terms even if the tenancy arc slips.
 4. **"An immutable per-version URL is a smaller change than it sounds."** First reading of §4
    treated the pointer/body split as an implementation detail. **Sharpened, not refuted**: it is the
    concrete resolution of a sentence already committed to running code
-   (`app/index.html:1124-1139`'s own comment naming this exact seam), which makes it load-bearing
+   (`app/index.html:1157-1170`'s own comment naming this exact seam), which makes it load-bearing
    rather than optional — the app's `cache: "no-cache"` on every load only exists because this
    scheme does not yet exist.
 5. **The implicit premise that determinism only needed checking for the Worker, since the CLI
@@ -630,7 +631,7 @@ its own terms even if the tenancy arc slips.
 * **[UNVERIFIED]** Whether D1's per-row size ceiling (950,000 bytes, `worker/src/app.js:440-447`)
   holds comfortably for a second user's declaration, or only for the operator's. **[REPO]**
   `design-config-is-content.md` §8.2 already names this as his-instance-only; not re-measured here
-  because it needs a second user's config, which does not exist (§7.5).
+  because it needs a second user's config, which does not exist (§7 item 5).
 * **[UNVERIFIED]** Whether the two-gate sequence in §3 is affordable inside a single Cloudflare
   Worker request's CPU-time budget once it includes a synchronous round trip to the graph server for
   Gate 2 — the compile alone is cheap (§6), but a cross-process dry-load adds real network latency
