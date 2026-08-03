@@ -3259,3 +3259,43 @@ backlog:
     number in this repository is a floor; sampling can only undercount. Needs row 4.
   kind: capability
   state: unscoped
+- id: escape-discards-typed-text
+  title: >-
+    [haven] [OBSERVED 2026-08-03] ESCAPE DISCARDS TYPED TEXT. In vim, Escape leaves INSERT and keeps
+    the characters already typed. Here it destroyed a full line a browser agent had typed — no POST
+    fired, and nothing was held. Reported from the same drive as `held-is-really-held`; filed, not
+    diagnosed.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM A BROWSER AGENT'S OWN SESSION AGAINST `https://qntm.network/app/`, 2026-08-03, view
+    `personal/all`. The agent typed a full line into a new row, pressed Escape, and the line was
+    gone — no row on the recovery strip, no request in the network log. Reading the code rather than
+    guessing: `draftInput`'s `abandon()` (app/present/paint.ts) is the Escape handler for a row opened
+    by `o`/`O`/Enter, and it is BY DESIGN — draft.ts's own header argues an abandoned draft "costs
+    nothing" because it was never written to the file, so there is nothing to hold. That argument is
+    true of the FILE and false of the SCREEN: the operator had typed real characters, watched them on
+    screen, and pressed the one key every editor treats as safe. `heldFrom`/`holdEdit`
+    (app/present/held.ts) are never reached from `abandon()` — only REFUSED and VANISHED edits are
+    held, not ABANDONED ones. WHETHER THIS IS THE DEFECT ITSELF (Escape should hold what he typed, the
+    same as a 409 does) or a second, undiagnosed mechanism is the question this row is filed for, not
+    answered here.
+- id: the-mode-badge-lies
+  title: >-
+    [haven] [OBSERVED 2026-08-03] THE MODE BADGE LIES. After Escape it reads INSERT while the app is
+    genuinely in NORMAL — typing then inserts nothing — so a person cannot tell whether typing is
+    armed. Reported from the same drive as `escape-discards-typed-text`; filed, not diagnosed.
+  kind: null
+  state: unscoped
+  record: >-
+    RECORDED FROM THE SAME SESSION AS `escape-discards-typed-text`, 2026-08-03. After the Escape that
+    discarded a typed line, the badge (`updateVimBadge`, app/index.html) went on reading "INSERT"
+    while keystrokes were reaching vim's NORMAL keymap rather than any `<input>` — confirmed by the
+    next keystrokes producing no characters anywhere. A CANDIDATE MECHANISM, FOUND BY READING RATHER
+    THAN CONFIRMED AGAINST THE SESSION: `updateVimBadge` is called from exactly one place,
+    `repaintCurrentView` (app/index.html) — grepped, one call site. `draftInput.abandon()`
+    (app/present/paint.ts) calls `mode.enterNormal()` (state moves to NORMAL correctly) and then its
+    own `repaint()`, which is `paint.ts`'s internal closure and never calls `updateVimBadge` at all.
+    So the MODE flips correctly and the BADGE does not, until the next `repaintCurrentView` — the next
+    handled keystroke — repaints it. NOT DIAGNOSED AGAINST THE REAL SESSION — filed alongside
+    `escape-discards-typed-text` because the two were observed together and may share one cause.
