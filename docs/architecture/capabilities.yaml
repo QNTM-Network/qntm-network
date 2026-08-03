@@ -1666,6 +1666,20 @@ capabilities:
     also proves directly that the shown sentence is absent from the posted markdown — a measurement
     of zero new sites, treated as broken until the positive control (these four counts, passing
     today) is shown passing, per this session's own house rule.
+    STATUS UPDATED 2026-08-03 (`feat/abstention-is-visible`) — THE SILENT-ABSTENTION DEFECT THIS
+    ROW ALWAYS CARRIED IS NOW CLOSED, BY A SIBLING ROW RATHER THAN BY EDITING THE BEHAVIOUR ABOVE.
+    Before this change, `membershipNoteFor` returned `""` for an abstention (`membershipFor`
+    refusing to resolve the before or after line) AND for a confident answer that nothing changed
+    — byte-identical on the freshness line, exactly the defect
+    `docs/implementation-artifacts/roadmap-the-road-ahead.md` step 2 names. THIS ROW'S OWN
+    NARRATION IS UNCHANGED — `membershipNoteFor` still says only the leaving transition, still
+    silence otherwise, still the same four pinned write-adjacent counts above — because routing an
+    abstention into the SAME sentence, on the SAME keystroke cadence, would reintroduce the exact
+    noise `membershipNoteFor`'s own header refuses. See `membership-abstention-is-visible` below
+    for the second register and second DOM sink (`#membershipBadge`) that closes the defect
+    instead, sharing this row's own before/after evaluation (`membershipReadingFor`, factored out
+    of `membershipNoteFor` without changing its return value, `tests/app-membership-note.test.mjs`
+    unmodified and re-passing) so the two registers cannot drift apart about what was decided.
   tier: functional
   rooting: >-
     isolated inside `app/index.html`, the same posture `a-write-refuses-a-stale-base`'s BASE level
@@ -1677,6 +1691,91 @@ capabilities:
     new export (`__membershipNoteFor`) for exactly this — the same reason `__writeFile`/`__sayAsOf`
     are exported, so a suite can prove one computation without entangling `served`'s own, separately
     tested base reading into every assertion.
+  status: working
+- id: membership-abstention-is-visible
+  intent: >-
+    "I DO NOT KNOW" NOW LOOKS DIFFERENT FROM "YES, NOTHING NEEDED SAYING" —
+    docs/implementation-artifacts/roadmap-the-road-ahead.md step 2, "make an abstention visible",
+    and the finding docs/implementation-artifacts/design-the-compiler-and-the-bands.md §6 names as
+    the operator's own acceptance test's prerequisite: a prediction indistinguishable from silence
+    cannot be scored, by a test or by a person watching the line.
+    THE DEFECT, VERIFIED BEFORE THIS ROW EXISTED: `membershipNoteFor`
+    (`section-membership-is-said-in-the-freshness-line`, above) returns `""` both when
+    `membershipFor` ABSTAINS (one of its five published `Abstention` reasons refusing the before or
+    after line) and when it ANSWERS confidently and nothing changed. Joined into the freshness line
+    and filtered, the two states were byte-identical on screen. The roadmap document's own
+    falsifier: drive one line in a section whose qualification is refused, and one line in a
+    section that publishes cleanly and does not move; the two must produce different output. They
+    now do — `tests/app-membership-diagnostic.test.mjs` §1 proves it directly and §4 is a mutation
+    proof (collapse the abstains branch's text onto the answer branch's, and the falsifier goes
+    red).
+    A SECOND REGISTER, NOT A FIFTH FRESHNESS CLAUSE — THE JUDGEMENT THIS ROW'S SIZE ACTUALLY IS.
+    `membershipNoteFor`'s own header refuses to narrate a safe transition because "a message on
+    every keystroke is noise", and `docs/implementation-artifacts/roadmap-the-road-ahead.md` §2
+    counts 137 of 186 sections as inside that refusal today. Routing an abstention into the SAME
+    sentence, on the SAME cadence, reintroduces exactly the noise the refusal exists to prevent.
+    So the new function, `membershipDiagnosticFor`, writes a SEPARATE DOM sink, `#membershipBadge`
+    — a LEVEL indicator overwritten on every commit rather than an event narration appended to,
+    the same shape `.vim-badge` already uses for NORMAL/INSERT. A level indicator that changes
+    state costs nothing extra per keystroke; a sentence that grows one does.
+    ONE EVALUATION, TWO READERS, NEVER TWO EVALUATIONS. `membershipReadingFor` is the one
+    before/after computation `membershipNoteFor` (narration) and `membershipDiagnosticFor`
+    (this row) both read — extracted from `membershipNoteFor`'s own body without changing its
+    return value, so `tests/app-membership-note.test.mjs` passes unmodified. This is the same
+    failure class `design-the-compiler-and-the-bands.md` §3.1/§12.2 names for three independently
+    hand-typed copies of `RESOLVABLE_FIELDS`: a second, separately-written evaluation here would
+    have been the exact risk that finding describes, one row over.
+    ONE TEXT, TWO READERS, DELIBERATELY SHARED RATHER THAN SPLIT. The operator at the keyboard and
+    an agent driving this page to run the generality test
+    (`design-the-compiler-and-the-bands.md` §6, "a config the system has never seen... unrun")
+    read the same line and want the same fact from it: which of the five published `Abstention`
+    reasons fired, verbatim. `todayNoteFor`'s own `console.warn` already set this precedent (a raw
+    reason token inside an English sentence, `day-boundary-resolver-agrees-with-the-engine` above)
+    — this row repeats that choice rather than inventing a friendlier paraphrase for one reader and
+    a machine-parseable code for the other.
+    "NOT-EVALUATED" IS NAMED AND DELIBERATELY LEFT OUT OF THE REGISTER. The declaration not being
+    loaded, the commit not being a text edit, or the cursor sitting outside any published section
+    are real, distinct states — but they are a precondition this module never got to judge, not a
+    refusal it made, and the roadmap document's own falsifier does not ask for them. Left as a
+    named gap (`tests/app-membership-diagnostic.test.mjs` §3) rather than silently widened into
+    "abstained".
+    NOTHING LOCAL REACHES A WRITE, RE-MEASURED FOR THIS ROW'S OWN CHANGE. The same four
+    write-adjacent counts `section-membership-is-said-in-the-freshness-line` pinned
+    (`graphData` 4, `applyEdit` 5, `writeFile` 2 callers, `.markdown` never assigned) are
+    unchanged and re-verified by `tests/app-membership-diagnostic.test.mjs` §5 — `updateMembershipBadge`
+    assigns only `#membershipBadge`'s own `.textContent` and toggles one CSS class, neither of
+    which matches any of the four patterns.
+    ORDERING HAS NO REGISTER OF ITS OWN YET, STATED RATHER THAN LEFT IMPLIED. `orderingNoteFor`
+    abstains `no-section-declaration` for 177 of 186 sections (only 9 declare an `ordering:`) and
+    that abstention is exactly as invisible today as membership's was before this row. Extending
+    the same pattern to ordering is the obvious next slice and is deliberately NOT done here —
+    a second badge with no test coverage of its own would be the rushed half this row's own
+    argument for a considered register warns against. Filed as the honest gap this row leaves.
+    THE AXIS THIS ROW MOVES, NAMED RATHER THAN NUMBERED, THE SAME CONVENTION
+    `day-boundary-resolver-agrees-with-the-engine` ESTABLISHED FOR THIS ROW'S CLASS. This row
+    carries no `enforcement_depth`/`confidence` triple, matching both of its nearest siblings
+    (`section-membership-is-said-in-the-freshness-line`, `ordering-position-is-said-in-the-
+    freshness-line`) — that field is reserved for the 14 capabilities gated by the static-evidence
+    Python verifier, and this class of page-local, test-proven capability was never part of it.
+    Adding a number here would be inventing a field that does not fit the class, so none is added.
+    What moved is HORIZONTAL — this repository's own count of the three axes' fields: 35 of these
+    49 rows carry no `enforcement_depth`, 35 carry no `confidence`; this row is a 36th and 36th
+    respectively, and that is consistent with its class rather than a regression of it. The move
+    itself is completeness, not depth: an existing, already-rooted, already-working capability
+    (`section-membership-is-said-in-the-freshness-line`) gained a second, honestly-separate way to
+    report a state it previously could not distinguish — not a new depth of enforcement reaching a
+    sink for the first time, which is the day-boundary row's own VERTICAL story, not this one's.
+  tier: functional
+  rooting: >-
+    isolated inside `app/index.html`, the identical posture
+    `section-membership-is-said-in-the-freshness-line` above already has and for the same reason:
+    `membershipReadingFor`, `membershipDiagnosticFor` and `updateMembershipBadge` live in a file
+    node cannot import, so flow-trace cannot see the edge from `commitLine` to
+    `sectionAt`/`membershipFor` however real it is. `tests/app-membership-diagnostic.test.mjs` is
+    the proof instead, driving `app/index.html`'s own lifted script through
+    `tests/fixtures/app-html-page.mjs`, which gained two new exports
+    (`__membershipDiagnosticFor`, `__updateMembershipBadge`) for exactly this — the same reason
+    `__membershipNoteFor` was exported for its own sibling row.
   status: working
 - id: section-addressing-reads-the-full-declared-order
   intent: >-

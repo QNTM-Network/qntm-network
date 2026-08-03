@@ -447,6 +447,31 @@
   .vim-badge-normal { color: var(--dim); }
   .vim-badge-insert { color: var(--green); }
 
+  /* THE ABSTENTION REGISTER — step 2 of docs/implementation-artifacts/roadmap-the-road-ahead.md
+     ("make an abstention visible"). A SEPARATE register from `#freshness`, deliberately, not a
+     fifth clause joined into that line: `membershipNoteFor`'s own header refuses to narrate a
+     safe transition because "a message on every keystroke is noise", and 137 of 186 sections sit
+     inside that refusal today — routing an abstention into the SAME sentence, on the SAME cadence,
+     would reintroduce exactly the noise that refusal exists to prevent.
+
+     THIS IS A STATE, NOT A NARRATION — the same distinction `.vim-badge` above already draws for
+     NORMAL/INSERT. `#freshness` is an event log: it says something happened and is overwritten by
+     the next event. `#membershipBadge` is a level indicator: it says what the LAST commit's
+     membership question resolved to, and stays exactly that until the next commit changes it —
+     which is why it costs nothing extra on every keystroke, unlike a joined sentence would.
+
+     NO RED, NO ALARM COLOUR — the same restraint `.held`'s own header states for the same reason:
+     an abstention is an honest "the app could not tell", not a fault. The distinguishing channel is
+     the WORDS, not the colour, because the second reader this register serves (an agent reading
+     `textContent`, not rendered CSS) cannot see colour at all — see this badge's own JS-side
+     comment for why the two readers share one register rather than two. */
+  .diagnostic-badge {
+    margin: 0 0 var(--s2);
+    font-size: var(--t1); letter-spacing: var(--track);
+  }
+  .diagnostic-badge-answer { color: var(--dim); }
+  .diagnostic-badge-abstains { color: var(--ink); }
+
   /* THE VIM SELECTION MARK — NORMAL mode's selected line, and deliberately not the caret's own
      device. `.viewbody input.rawline` already marks INSERT with `caret-color` and a bottom
      hairline in the identity green; the brief is explicit that NORMAL's mark must "be clearly not
@@ -892,6 +917,12 @@
          by `toggleTask`/`commitLine`/`refresh` ("syncing…", "sync failed: …"), and a badge nested
          inside it would be destroyed by the next one of those and never come back. -->
     <p id="vimBadge" class="vim-badge"></p>
+    <!-- THE ABSTENTION REGISTER, a SIBLING of `#freshness` for the same reason `#vimBadge` is one:
+         `#freshness`'s own textContent is overwritten wholesale by every write path, and a clause
+         nested inside it would be destroyed by the next one and never come back. See the CSS rule
+         above (`.diagnostic-badge`) for the full argument for why this is a second register rather
+         than a fifth freshness clause. -->
+    <p id="membershipBadge" class="diagnostic-badge"></p>
     <p id="freshness" class="muted"></p>
     <!-- THE EMPTY ENVIRONMENT. Three situations that used to render as one grey line, and they
          are not the same situation: an account with no graph behind it, a graph with nothing in
@@ -3124,6 +3155,51 @@ function refusedLineSentence(path, current, typed, heldIt) {
 }
 
 /**
+ * THE ONE EVALUATION `membershipNoteFor` (narration) AND `membershipDiagnosticFor` (the abstention
+ * register — see that function's own header) ARE BOTH COMPUTED FROM, so the two registers cannot
+ * disagree about what this module actually decided. `design-the-compiler-and-the-bands.md` §3.1's
+ * own finding — three independently hand-typed copies of one list drift apart because nothing
+ * ties them together — is exactly the failure a second, separately-written evaluation here would
+ * risk; this function is the tie.
+ *
+ * THREE OUTCOMES, NAMED RATHER THAN COLLAPSED TO A STRING HERE:
+ *   "not-evaluated"  the declaration is not loaded, the commit is not a text edit, or the cursor
+ *                     line is not inside any published section — a precondition this MODULE never
+ *                     gets to judge, not a refusal it made. See §8 of this step's own PR body for
+ *                     why this is left out of the abstention register rather than folded into it.
+ *   "abstains"        `membershipFor` refused on the BEFORE line, the AFTER line, or both — one of
+ *                     its five published `Abstention` reasons, carried through unchanged.
+ *   "answer"          both sides resolved. `membershipNoteFor` below still only NARRATES the
+ *                     leaving transition; `membershipDiagnosticFor` reports that a decision was
+ *                     reached at all, which is the fact the freshness line has never carried.
+ */
+function membershipReadingFor(view, commit) {
+  if (qualification === undefined || commit.kind !== "set-line") {
+    return { kind: "not-evaluated" };
+  }
+  // STEP 11 (design-the-resolution-architecture.md, narrowed — see address.ts's own header for
+  // why): prefer a served `view.sections` order over the static declaration when the server ever
+  // carries one. `server/app.py` carries none today, so `sectionOrderFor` returns
+  // `qualification.sectionOrder` UNCHANGED and this line behaves exactly as it did before this
+  // step — additive, not a behaviour change.
+  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+  if (sectionId === null) {
+    return { kind: "not-evaluated" };
+  }
+  const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
+  const before = membershipFor(view.id, sectionId, beforeLine, qualification);
+  if (before.kind !== "answer") {
+    return { kind: "abstains", because: before.because };
+  }
+  const after = membershipFor(view.id, sectionId, commit.text, qualification);
+  if (after.kind !== "answer") {
+    return { kind: "abstains", because: after.because };
+  }
+  return { kind: "answer", before: before.answer, after: after.answer };
+}
+
+/**
  * AFTER THIS COMMIT, DOES THE LINE STILL BELONG IN THE SECTION IT IS IN — design doc step 4, L6
  * PROJECTION. Tonight's proven-but-invisible layers (L3 `sectionAt`, L5 `membershipFor`) SAID from
  * here for the first time. Returns the sentence to show, or `""` when nothing is said.
@@ -3142,10 +3218,13 @@ function refusedLineSentence(path, current, typed, heldIt) {
  *
  * ── REFUSE RATHER THAN GUESS, APPLIED TWICE ──
  *
- * EITHER SIDE ABSTAINING IS SILENCE. `membershipFor`'s five `Abstention` values already refuse an
- * unpublished qualification, a stamped line, a non-checkbox line, an empty line and an ambiguous
- * token; this function adds no judgement on top — an abstention on either side of the comparison
- * means there is nothing to compare, not that the missing side is assumed to agree or disagree.
+ * EITHER SIDE ABSTAINING IS SILENCE, HERE. `membershipFor`'s five `Abstention` values already
+ * refuse an unpublished qualification, a stamped line, a non-checkbox line, an empty line and an
+ * ambiguous token; this function adds no judgement on top — an abstention on either side of the
+ * comparison means there is nothing to compare, not that the missing side is assumed to agree or
+ * disagree. THE SAME ABSTENTION IS NO LONGER INVISIBLE ELSEWHERE — `membershipDiagnosticFor`
+ * below reads the identical `membershipReadingFor` result and says so, in the abstention register
+ * rather than in this narration.
  *
  * AN INSERTED LINE HAS NO "BEFORE", AND GUESSING ONE WOULD MISATTRIBUTE A DIFFERENT LINE'S
  * ANSWER. `commit.kind !== "set-line"` (a new row from `draftInput`) is refused outright, never by
@@ -3153,29 +3232,84 @@ function refusedLineSentence(path, current, typed, heldIt) {
  * to be pushed down, a different line entirely (see `LineCommit.kind`'s own header in paint.ts).
  */
 function membershipNoteFor(view, commit) {
-  if (qualification === undefined || commit.kind !== "set-line") {
+  const reading = membershipReadingFor(view, commit);
+  if (reading.kind !== "answer") {
     return "";
   }
-  // STEP 11 (design-the-resolution-architecture.md, narrowed — see address.ts's own header for
-  // why): prefer a served `view.sections` order over the static declaration when the server ever
-  // carries one. `server/app.py` carries none today, so `sectionOrderFor` returns
-  // `qualification.sectionOrder` UNCHANGED and this line behaves exactly as it did before this
-  // step — additive, not a behaviour change.
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
-  if (sectionId === null) {
-    return "";
-  }
-  const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
-  const before = membershipFor(view.id, sectionId, beforeLine, qualification);
-  const after = membershipFor(view.id, sectionId, commit.text, qualification);
-  if (before.kind !== "answer" || after.kind !== "answer") {
-    return "";
-  }
-  if (before.answer.belongs && !after.answer.belongs) {
-    return `this line will leave ${after.answer.sectionName}`;
+  if (reading.before.belongs && !reading.after.belongs) {
+    return `this line will leave ${reading.after.sectionName}`;
   }
   return "";
+}
+
+/**
+ * THE ABSTENTION REGISTER — docs/implementation-artifacts/roadmap-the-road-ahead.md step 2, "make
+ * an abstention visible". Read that document's §2 before changing this function; it is the
+ * argument for why this exists as a SECOND function and a SECOND DOM sink rather than a branch
+ * inside `membershipNoteFor` above.
+ *
+ * THE DEFECT THIS FUNCTION CLOSES, STATED EXACTLY. Before this step, an abstention (`before` or
+ * `after` refusing to resolve) and a confident "nothing changed" (both resolved, no leaving
+ * transition) both made `membershipNoteFor` return `""`. Joined into the freshness line and
+ * filtered, the two states were BYTE-IDENTICAL on screen — "I do not know" and "yes, nothing
+ * needed saying" produced the same nothing. `roadmap-the-road-ahead.md` §2's own falsifier: drive
+ * one line in a section whose qualification is refused, and one line in a section that publishes
+ * cleanly and does not move; the two must produce different output. `tests/app-membership-
+ * diagnostic.test.mjs` §2 proves it against `#membershipBadge`, the DOM sink this function feeds.
+ *
+ * WHY A SECOND REGISTER RATHER THAN A FIFTH FRESHNESS CLAUSE. `membershipNoteFor`'s own header
+ * refuses to narrate the safe transition because "a message on every keystroke is noise" — and
+ * `design-the-rule-mirror.md` §11 row 6 (cited by the roadmap doc) counts 137 of 186 sections as
+ * inside that refusal today. Routing an abstention into the SAME sentence, on the SAME cadence,
+ * reintroduces exactly the noise the refusal exists to prevent. `#membershipBadge` is a LEVEL
+ * indicator instead — it reports the LAST commit's answer and is overwritten by the next one,
+ * never appended to, the same shape `.vim-badge` already uses for NORMAL/INSERT. A level indicator
+ * that changes state costs nothing extra per keystroke; a sentence that grows one does.
+ *
+ * "not-evaluated" IS DELIBERATELY LEFT OUT OF THIS REGISTER TOO. It is a real third state — the
+ * declaration has not loaded, the commit is not a text edit, or the cursor is outside any
+ * published section — but it is not the defect this step closes: it is a precondition the module
+ * never got to judge, not a refusal it made, and the falsifier above does not ask for it. Returning
+ * "" here leaves `#membershipBadge` showing whatever the last REAL evaluation said, which is
+ * honest — a gesture this module was never asked about should not overwrite the answer to one it
+ * was. Filed as a known, named gap rather than silently widened into "abstained".
+ *
+ * THE ONE TEXT SERVES TWO READERS, DELIBERATELY, RATHER THAN TWO SEPARATE ONES. The operator at
+ * the keyboard and an agent driving this page to run the generality test (design-the-compiler-and-
+ * the-bands.md §6) both read this line, and they want the same thing from it: which of the five
+ * published `Abstention` reasons fired, verbatim, not a paraphrase a person finds friendlier and an
+ * agent then has to pattern-match around. `todayNoteFor`'s own `console.warn` already sets this
+ * precedent — `` `today: ${reading.because} — the logical-day note is not shown` `` — a raw reason
+ * token in an English sentence, read by both. This function repeats that choice rather than
+ * inventing a second one.
+ */
+function membershipDiagnosticFor(view, commit) {
+  const reading = membershipReadingFor(view, commit);
+  if (reading.kind === "not-evaluated") {
+    return "";
+  }
+  if (reading.kind === "abstains") {
+    return `membership: abstained — ${reading.because}`;
+  }
+  return "membership: decided";
+}
+
+/**
+ * WRITE `membershipDiagnosticFor`'s answer to `#membershipBadge` — the one DOM-touching line this
+ * step adds, kept as small and as separate from `membershipNoteFor`'s own DOM write as
+ * `updateVimBadge` is from everything else on the page. A no-op on "not-evaluated" (see that
+ * function's own header) leaves the badge showing the last real evaluation rather than clearing it.
+ */
+function updateMembershipBadge(view, commit) {
+  const text = membershipDiagnosticFor(view, commit);
+  if (text === "") {
+    return;
+  }
+  const badge = $("membershipBadge");
+  badge.textContent = text;
+  const abstained = text.startsWith("membership: abstained");
+  badge.classList.toggle("diagnostic-badge-abstains", abstained);
+  badge.classList.toggle("diagnostic-badge-answer", !abstained);
 }
 
 /**
@@ -3418,6 +3552,11 @@ async function commitLine(view, commit) {
   // never inside writeFile — see that function's own header for why one slot holds both.
   const notes = [membershipNoteFor(view, commit), orderingNoteFor(view, commit)].filter((n) => n !== "");
   const note = notes.join(" · ");
+  // THE ABSTENTION REGISTER, WRITTEN BESIDE THE NARRATION AND NOT INTO IT — see
+  // `membershipDiagnosticFor`'s own header for why this is a second DOM sink, `#membershipBadge`,
+  // rather than a third element of `notes` above. Ordering has no register of its own yet; see
+  // that function's own header for the honest statement of what this step does not cover.
+  updateMembershipBadge(view, commit);
   // THE CHARACTERS THIS WRITE IS CARRYING, remembered until the projection it causes lands — see
   // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it and the
   // one thing `paintView` cannot recover on its own is what he typed into a line that then vanished.
