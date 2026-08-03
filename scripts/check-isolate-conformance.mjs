@@ -7,9 +7,10 @@
  * fixture, the operator's real 276-file config, and a mutation that triggers a refusal — all three
  * byte-identical, the refusal wording word for word. No automated test spawned `workerd` to
  * re-check it. This script re-ran that exact method — same three cases, same route, same fixture —
- * on every push (`6394420`); this pass extends it to the QUALIFICATION route the same generator's
- * own pure-function port (`compile-qualification.mjs`) added
- * (`design-the-runtime-compile.md` step C), running the SAME three cases against it. See
+ * on every push (`6394420`); `9be7f13` extended it to the QUALIFICATION route
+ * (`compile-qualification.mjs`); this pass extends it to the RESOLUTION route, the last of the
+ * three (`compile-resolution.mjs`, `design-the-runtime-compile.md` step C's remaining generator),
+ * running the SAME three cases against it. See
  * `docs/implementation-artifacts/design-the-runtime-compile.md` §6.3, §10.
  *
  * ── THREE OUTCOMES, ONE EXIT CODE APIECE, ACROSS ALL GENERATORS TOGETHER — `scripts/
@@ -65,6 +66,16 @@ import {
   VIEWS_PREFIX as QUALIFICATION_VIEWS_PREFIX,
   VOCABULARY_PREFIX,
 } from "./compile-qualification.mjs";
+import {
+  compile as compileResolution,
+  SCHEMA_KEY as RESOLUTION_SCHEMA_KEY,
+  LINE_GRAMMARS_KEY,
+  DAY_BOUNDARY_KEY,
+  VIEWS_PREFIX as RESOLUTION_VIEWS_PREFIX,
+  VOCABULARY_PREFIX as RESOLUTION_VOCABULARY_PREFIX,
+  PATTERNS_PREFIX as RESOLUTION_PATTERNS_PREFIX,
+  RULES_PREFIX,
+} from "./compile-resolution.mjs";
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
 const FIXTURE_CONFIG = join(REPO_ROOT, "tests", "fixtures", "config");
@@ -134,6 +145,44 @@ const GENERATORS = [
         throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
       }
       files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "qualification: does-not-exist");
+    },
+  },
+  {
+    name: "resolution",
+    routePath: "/config/compile/resolution",
+    compile: compileResolution,
+    // Read a config directory into exactly the files map `compile()` recognises, sorted the same
+    // way `generate-resolution-declaration.mjs`'s own fs shell reads it. Resolution reads the
+    // largest set of the three: schema.yaml, line_grammars.yaml, day_boundary.yaml, every
+    // views/*.yaml, every vocabulary/*.yaml, every patterns/*.yaml and every rules/*.yaml.
+    readConfigTree(configDir) {
+      const files = {};
+      const schemaPath = join(configDir, "schema.yaml");
+      if (existsSync(schemaPath)) files[RESOLUTION_SCHEMA_KEY] = readFileSync(schemaPath, "utf8");
+      const lineGrammarsPath = join(configDir, "line_grammars.yaml");
+      if (existsSync(lineGrammarsPath)) files[LINE_GRAMMARS_KEY] = readFileSync(lineGrammarsPath, "utf8");
+      const dayBoundaryPath = join(configDir, "day_boundary.yaml");
+      if (existsSync(dayBoundaryPath)) files[DAY_BOUNDARY_KEY] = readFileSync(dayBoundaryPath, "utf8");
+      readYamlDir(join(configDir, "views"), RESOLUTION_VIEWS_PREFIX, files);
+      readYamlDir(join(configDir, "vocabulary"), RESOLUTION_VOCABULARY_PREFIX, files);
+      readYamlDir(join(configDir, "patterns"), RESOLUTION_PATTERNS_PREFIX, files);
+      const rulesDir = join(configDir, "rules");
+      if (existsSync(rulesDir)) readYamlDir(rulesDir, RULES_PREFIX, files);
+      return files;
+    },
+    // A view's own `default_node_type:` repointed at a node type schema.yaml never declares — a
+    // config-integrity refusal `compile()` cannot recover from, resolution's own analogue of
+    // structural's unknown-edge-type refusal and qualification's unknown-pattern refusal. The
+    // same anchor `tests/worker-config-compile.test.mjs`'s own mutation proof uses.
+    mutate(files) {
+      const anchor = "main:\n  path: main.md\n";
+      if (!files["views/main.yaml"] || !files["views/main.yaml"].includes(anchor)) {
+        throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
+      }
+      files["views/main.yaml"] = files["views/main.yaml"].replace(
+        anchor,
+        "main:\n  path: main.md\n  default_node_type: totally_made_up_type\n",
+      );
     },
   },
 ];

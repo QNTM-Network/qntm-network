@@ -53,7 +53,11 @@ import {
   FocusSurface,
   PresentationContext,
 } from "../dist/present.js";
-import { generateResolution, DEFAULT_CONFIG_DIR } from "../scripts/generate-resolution-declaration.mjs";
+import {
+  generateResolution,
+  DEFAULT_CONFIG_DIR,
+  readConfigTree,
+} from "../scripts/generate-resolution-declaration.mjs";
 import { Ledger } from "../scripts/ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -697,13 +701,26 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
 
 describe("6. THE MUTATION PROOF — break the seeding and this file goes red", { skip: MONOREPO }, () => {
   /**
-   * Import a MUTATED copy of the generator, with its relative imports rewritten to absolute file
-   * URLs so the copy can live outside `scripts/`. Nothing is written into the repository.
+   * Import a MUTATED copy of the PURE compile step, with its relative imports rewritten to
+   * absolute file URLs so the copy can live outside `scripts/`. Nothing is written into the
+   * repository.
+   *
+   * TARGETS `compile-resolution.mjs`, NOT `generate-resolution-declaration.mjs` — `design-the-
+   * runtime-compile.md` step C's port (this generator's own) moved `seedTokens` and its callers
+   * out of the CLI file and into the pure compile module. Before this update this harness patched
+   * a line that no longer exists in `generate-resolution-declaration.mjs`, so `mutate()`'s own
+   * `.replace()` silently matched nothing — and the harness's own guard did not catch it, because
+   * the SECOND `.replace()` (rewriting relative imports to absolute file URLs) always changes the
+   * text regardless, so `assert.notEqual(mutated, source, ...)` passed even when the intended
+   * mutation had no effect. Three tests were exercising the REAL, unmutated generator and calling
+   * it a mutant. Recombines the mutant `compile` with the real, unmutated `readConfigTree` — the
+   * same shape `tests/declaration-drop.test.mjs`'s own mutant harness uses for the qualification
+   * generator's equivalent split.
    */
   async function withMutatedGenerator(mutate, use) {
     const scratch = mkdtempSync(join(tmpdir(), "present-seed-mutant-"));
     try {
-      const source = readFileSync(join(REPO, "scripts", "generate-resolution-declaration.mjs"), "utf8");
+      const source = readFileSync(join(REPO, "scripts", "compile-resolution.mjs"), "utf8");
       const mutated = mutate(source).replace(
         /from "\.\/([a-z-]+\.mjs)"/g,
         (_, file) => `from "${new URL(`file://${join(REPO, "scripts", file)}`).href}"`,
@@ -711,7 +728,15 @@ describe("6. THE MUTATION PROOF — break the seeding and this file goes red", {
       assert.notEqual(mutated, source, "the mutation's own anchor is gone — it changed nothing");
       const path = join(scratch, "mutant.mjs");
       writeFileSync(path, mutated);
-      return await use(await import(new URL(`file://${path}`).href));
+      const mutantCompile = await import(new URL(`file://${path}`).href);
+      const wrapped = {
+        generateResolution(configDir, ledger = new Ledger()) {
+          const files = readConfigTree(configDir);
+          const { declaration, dropped } = mutantCompile.compile(files, ledger);
+          return { ...declaration, dropped };
+        },
+      };
+      return await use(wrapped);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

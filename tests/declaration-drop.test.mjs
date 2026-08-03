@@ -805,15 +805,20 @@ describe("7. THE COMPLETENESS SCANNER — no path may leave a declaration withou
    * A new `continue` added later carries neither and turns this red. That is the point: the guard
    * is against the NEXT silent drop, not only the sixteen already closed.
    *
-   * FIVE FILES, NOT THREE — A GAP THIS PASS CLOSED. The structural port (`5d4f1b5`) split
-   * `generate-structural-declaration.mjs`'s parsing logic (and its `continue`s) into
-   * `compile-structural.mjs`, and this generator's own port did the same into
-   * `compile-qualification.mjs` — in both cases the `continue`s MOVED, and until now this list
-   * did not move with them, so every `continue` in `compile-structural.mjs` has been unscanned by
-   * this sweep since `5d4f1b5` merged, silently. Adding both compile modules here closes that gap
-   * for real rather than leaving it as a second, undetected instance of the exact defect this
-   * whole section exists to catch. `generate-resolution-declaration.mjs` is still a single file —
-   * step C's remaining generator, not yet split — so it is unaffected and stays as it was.
+   * SIX FILES, NOT FIVE — THE SAME GAP, CLOSED A SECOND TIME RATHER THAN REPEATED. The structural
+   * port (`5d4f1b5`) split `generate-structural-declaration.mjs`'s parsing logic (and its
+   * `continue`s) into `compile-structural.mjs`; the qualification port (`9be7f13`) did the same
+   * into `compile-qualification.mjs` and added both compile modules here, closing the gap that
+   * `5d4f1b5` had left open (every `continue` in `compile-structural.mjs` was unscanned by this
+   * sweep from the moment it merged until `9be7f13`). This port (resolution, step C's remaining
+   * generator) moved `generate-resolution-declaration.mjs`'s own parsing logic — and every one of
+   * its `continue`s — into `scripts/compile-resolution.mjs` the identical way. Confirmed directly,
+   * not assumed: running this file's own test suite BEFORE adding `compile-resolution.mjs` below
+   * made "the sweep is not vacuous" fail (31 `continue` statements seen, under the >= 40 floor —
+   * the corpus had silently shrunk by exactly the ~16 statements that moved out of
+   * `generate-resolution-declaration.mjs` and were not yet being counted anywhere), which is the
+   * scanner catching the same class of gap PR #86's own commit message named, before it could ship
+   * silently a second time.
    */
   const GENERATORS = [
     "scripts/generate-qualification-declaration.mjs",
@@ -821,6 +826,7 @@ describe("7. THE COMPLETENESS SCANNER — no path may leave a declaration withou
     "scripts/generate-resolution-declaration.mjs",
     "scripts/compile-qualification.mjs",
     "scripts/compile-structural.mjs",
+    "scripts/compile-resolution.mjs",
   ];
   const WINDOW = 12;
 

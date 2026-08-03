@@ -3,6 +3,7 @@
 //   /app/*          the app: capture + the one thing (bearer)    (app.js)
 //   POST /config/compile/structural       Gate 1 only, no persistence (config.js)
 //   POST /config/compile/qualification    Gate 1 only, no persistence (config.js)
+//   POST /config/compile/resolution       Gate 1 only, no persistence (config.js)
 //   GET  /export    operator CSV of the signup list              (this file)
 //   POST /          signup capture -> D1 (the original landing)  (this file)
 

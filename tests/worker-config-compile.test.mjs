@@ -52,11 +52,13 @@ import { fileURLToPath } from "node:url";
 import { handleConfig } from "../worker/src/config.js";
 import { compile as compileStructural } from "../scripts/compile-structural.mjs";
 import { compile as compileQualification } from "../scripts/compile-qualification.mjs";
+import { compile as compileResolution } from "../scripts/compile-resolution.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_CONFIG = resolve(HERE, "fixtures", "config");
 const STRUCTURAL_ROUTE_URL = "http://worker.local/config/compile/structural";
 const QUALIFICATION_ROUTE_URL = "http://worker.local/config/compile/qualification";
+const RESOLUTION_ROUTE_URL = "http://worker.local/config/compile/resolution";
 
 /** Read the committed fixture into exactly the file map structural's `compile()` expects — the
  * same three things `generate-structural-declaration.mjs`'s own fs shell reads, sorted. */
@@ -80,6 +82,24 @@ function readQualificationFixtureFiles() {
   const files = {};
   files["schema.yaml"] = readFileSync(join(FIXTURE_CONFIG, "schema.yaml"), "utf8");
   for (const dir of ["patterns", "views", "vocabulary"]) {
+    const full = join(FIXTURE_CONFIG, dir);
+    for (const f of readdirSync(full).filter((f) => f.endsWith(".yaml")).sort()) {
+      files[`${dir}/${f}`] = readFileSync(join(full, f), "utf8");
+    }
+  }
+  return files;
+}
+
+/** Read the committed fixture into exactly the file map resolution's `compile()` expects — the
+ * same nine things `generate-resolution-declaration.mjs`'s own fs shell reads, sorted. The fixture
+ * has no `rules/` tree, so that prefix simply contributes no keys — the same "zero retype rules"
+ * shape `readRetypeRules` already treats as legitimate, not an error. */
+function readResolutionFixtureFiles() {
+  const files = {};
+  files["schema.yaml"] = readFileSync(join(FIXTURE_CONFIG, "schema.yaml"), "utf8");
+  files["line_grammars.yaml"] = readFileSync(join(FIXTURE_CONFIG, "line_grammars.yaml"), "utf8");
+  files["day_boundary.yaml"] = readFileSync(join(FIXTURE_CONFIG, "day_boundary.yaml"), "utf8");
+  for (const dir of ["views", "vocabulary", "patterns"]) {
     const full = join(FIXTURE_CONFIG, dir);
     for (const f of readdirSync(full).filter((f) => f.endsWith(".yaml")).sort()) {
       files[`${dir}/${f}`] = readFileSync(join(full, f), "utf8");
@@ -214,6 +234,62 @@ describe("2b. qualification — THE MUTATION PROOF", () => {
   });
 });
 
+describe("1c. resolution — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
+  test("a valid submission returns exactly what compile() itself returns for the same bytes", async () => {
+    const files = readResolutionFixtureFiles();
+    const direct = compileResolution(files);
+    const { status, body } = await postTo(RESOLUTION_ROUTE_URL, files);
+
+    assert.equal(status, 200);
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.declaration, direct.declaration);
+    assert.deepEqual(body.dropped, direct.dropped);
+    // A positive control on the shape, not just equality with itself: the fixture's registration
+    // and its one real ordering declaration (main.open -> due_date asc) are actually present.
+    assert.equal(body.declaration.registration.defaultNodeType, "task");
+    assert.deepEqual(body.declaration.ordering.main.open.ordering, [{ field: "due_date", direction: "asc" }]);
+  });
+});
+
+describe("2c. resolution — THE MUTATION PROOF", () => {
+  test("a view naming a default_node_type schema.yaml never declares flips success into a named refusal, same wording as compile()", async () => {
+    const files = readResolutionFixtureFiles();
+
+    // BEFORE: the unmutated fixture compiles cleanly.
+    const before = await postTo(RESOLUTION_ROUTE_URL, files);
+    assert.equal(before.status, 200);
+    assert.equal(before.body.ok, true);
+
+    // THE MUTATION — a view's own `default_node_type:` pointed at a node type schema.yaml has
+    // never heard of. This is a config-integrity defect `compile` cannot recover from — the same
+    // class of hard refusal the structural and qualification routes' own mutations exercise, and
+    // resolution's own analogue of structural's unknown-edge-type refusal.
+    const anchor = "main:\n  path: main.md\n";
+    assert.ok(files["views/main.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+    files["views/main.yaml"] = files["views/main.yaml"].replace(
+      anchor,
+      "main:\n  path: main.md\n  default_node_type: totally_made_up_type\n",
+    );
+
+    // WHAT compile() ITSELF SAYS, DIRECTLY — the ground truth the route must match, word for word.
+    let directMessage = null;
+    try {
+      compileResolution(files);
+    } catch (error) {
+      directMessage = error.message;
+    }
+    assert.match(directMessage, /node type 'totally_made_up_type' is declared as a default_node_type.*not declared in schema\.yaml/s);
+
+    // AFTER: the route, given the mutated bytes, refuses — never a 200, never a stack trace.
+    const after = await postTo(RESOLUTION_ROUTE_URL, files);
+    assert.equal(after.status, 422, "a refusal must not be a 200 — the app would show it as success");
+    assert.equal(after.body.ok, false);
+    assert.equal(after.body.refused, true);
+    // THE POINT OF THE SLICE: the exact sentence, unchanged by the move into the Worker route.
+    assert.equal(after.body.error, directMessage);
+  });
+});
+
 describe("3. malformed requests are refused at the door, never reach compile()", () => {
   test("a body that is not valid JSON", async () => {
     const request = new Request(STRUCTURAL_ROUTE_URL, { method: "POST", body: "not json" });
@@ -259,7 +335,7 @@ describe("3. malformed requests are refused at the door, never reach compile()",
   });
 });
 
-describe("4. the two routes are independently addressed, not one dispatcher guessing", () => {
+describe("4. the three routes are independently addressed, not one dispatcher guessing", () => {
   test("the qualification route never answers a structural-shaped request path, and vice versa", async () => {
     // Each URL only answers ITS OWN route — proven by posting the OTHER generator's fixture keys
     // at the WRONG route and confirming it is refused as a malformed submission (missing the keys
@@ -271,5 +347,26 @@ describe("4. the two routes are independently addressed, not one dispatcher gues
     // never crashes and never silently compiles the wrong grammar.
     assert.equal(status, 422);
     assert.equal(body.refused, true);
+  });
+
+  test("the resolution route refuses a structural-shaped or a qualification-shaped submission", async () => {
+    // NOT SYMMETRIC WITH THE PAIR ABOVE, AND SAID SO RATHER THAN ASSUMED. Resolution's own files
+    // map is the largest of the three (every views/*.yaml, every vocabulary/*.yaml — INCLUDING
+    // structural_tokens.yaml — every patterns/*.yaml, plus line_grammars.yaml/day_boundary.yaml),
+    // a superset of what BOTH other routes require; posting a resolution-shaped submission at
+    // either of the other two routes actually SUCCEEDS rather than refuses (checked directly, not
+    // assumed), so this test only claims the direction that is true: structural's and
+    // qualification's own narrower fixtures are each missing something resolution's compile()
+    // requires (line_grammars.yaml, day_boundary.yaml, or vocabulary/markers.yaml, depending on
+    // which is posted), so both refuse, named, never a 200 and never a crash.
+    const structuralFiles = readStructuralFixtureFiles();
+    const r1 = await postTo(RESOLUTION_ROUTE_URL, structuralFiles);
+    assert.equal(r1.status, 422);
+    assert.equal(r1.body.refused, true);
+
+    const qualificationFiles = readQualificationFixtureFiles();
+    const r2 = await postTo(RESOLUTION_ROUTE_URL, qualificationFiles);
+    assert.equal(r2.status, 422);
+    assert.equal(r2.body.refused, true);
   });
 });
