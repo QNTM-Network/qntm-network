@@ -1,38 +1,43 @@
 // Gate 1 only — `design-the-runtime-compile.md` step B's second half, extended by step C to a
-// second generator.
+// second and now a third generator.
 //
 // POST /config/compile/structural
 // POST /config/compile/qualification
+// POST /config/compile/resolution
 //
 // Accepts a submitted config file map, compiles it with the SAME `compile(files)` this repo's CLI
 // already calls (`scripts/generate-structural-declaration.mjs` /
-// `scripts/generate-qualification-declaration.mjs`), and answers with either the compiled
-// declaration or a named refusal. Nothing here is stored, nothing is forwarded to the graph
-// server, and no version is minted — those are Gate 2 and the two-consumer write path
-// (`design-the-runtime-compile.md` §3, steps G-H), explicitly not this route's job.
+// `scripts/generate-qualification-declaration.mjs` / `scripts/generate-resolution-declaration.
+// mjs`), and answers with either the compiled declaration or a named refusal. Nothing here is
+// stored, nothing is forwarded to the graph server, and no version is minted — those are Gate 2
+// and the two-consumer write path (`design-the-runtime-compile.md` §3, steps G-H), explicitly not
+// this route's job.
 //
-// UNAUTHENTICATED, DELIBERATELY, FOR NOW — same reasoning as the structural route, restated
-// because it still applies to the qualification one: this route touches no storage and names no
-// user, so a session buys nothing but friction against the one thing this slice exists to prove.
-// The two-consumer write path (§3 of the design document) is where a real identity and Gate 2 both
+// UNAUTHENTICATED, DELIBERATELY, FOR NOW — same reasoning as the first two routes, restated
+// because it still applies to the third: this route touches no storage and names no user, so a
+// session buys nothing but friction against the one thing this slice exists to prove. The
+// two-consumer write path (§3 of the design document) is where a real identity and Gate 2 both
 // belong, and it is not built here.
 
 import { json } from "./util.js";
-// FROM `compile-structural.mjs` / `compile-qualification.mjs`, NOT the `generate-*-
-// declaration.mjs` CLI files — importing `compile` from either CLI file drags in `node:fs` and
-// `monorepo-config.mjs`'s module-level `fileURLToPath(import.meta.url)`, which crashed this Worker
-// at load the first time this was tried (verified against the real local `wrangler dev` runtime,
-// not assumed — see `compile-structural.mjs`'s header for the exact error). Both compile modules'
-// import graphs are exactly themselves plus `ledger.mjs` (and, for qualification,
-// `yaml-subset.mjs`) — nothing Node-specific.
+// FROM `compile-structural.mjs` / `compile-qualification.mjs` / `compile-resolution.mjs`, NOT the
+// `generate-*-declaration.mjs` CLI files — importing `compile` from any CLI file drags in
+// `node:fs` and `monorepo-config.mjs`'s module-level `fileURLToPath(import.meta.url)`, which
+// crashed this Worker at load the first time this was tried (verified against the real local
+// `wrangler dev` runtime, not assumed — see `compile-structural.mjs`'s header for the exact
+// error). All three compile modules' import graphs are exactly themselves plus `ledger.mjs` (and,
+// for qualification and resolution, `yaml-subset.mjs`) — nothing Node-specific.
 import { compile as compileStructural } from "../../scripts/compile-structural.mjs";
 import { compile as compileQualification } from "../../scripts/compile-qualification.mjs";
+import { compile as compileResolution } from "../../scripts/compile-resolution.mjs";
 
-// One route entry per generator: the URL suffix, and the pure `compile` it calls. Adding a third
-// generator (resolution, step C's remaining half) is one more entry here, not a new function.
+// One route entry per generator: the URL suffix, and the pure `compile` it calls. Adding this
+// third generator (resolution, step C's remaining half) was one more entry here, not a new
+// function — exactly as this comment already predicted for it.
 const ROUTES = new Map([
   ["POST /config/compile/structural", compileStructural],
   ["POST /config/compile/qualification", compileQualification],
+  ["POST /config/compile/resolution", compileResolution],
 ]);
 
 /**

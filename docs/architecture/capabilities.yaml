@@ -2005,6 +2005,51 @@ capabilities:
     NOT VERIFIED. No browser, no passkey session, no live server, no cycle. Nothing in this table
     has been shown to anybody — see `rooting` below for what "published, not yet narrated" means
     for this specific axis, which is different from the other three.
+    ── UPDATE 2026-08-03, THE COMPILE THAT PRODUCES THIS KEY NOW ALSO RUNS AT RUNTIME, IN THE
+    WORKER — `design-the-runtime-compile.md` step C, the same move `structural-language-is-
+    published-not-guessed` and `section-membership-is-read-not-guessed` already recorded for the
+    structural and qualification keys, completing the arc: all three of this document's generators
+    now compile at runtime, not only at commit time. Before this, `scripts/generate-resolution-
+    declaration.mjs` (1,025 lines, 16 fs sites — the largest of the three) was development-time-
+    only. It is now a PURE `compile(files)` (`scripts/compile-resolution.mjs`, importing only
+    `yaml-subset.mjs` and `ledger.mjs` — both zero-import) with TWO callers: the unchanged CLI
+    shell, and a new Worker route, `POST /config/compile/resolution` (`worker/src/config.js`), that
+    runs Gate 1 only — no Gate 2, no graph-server call, no persistence, no version minting. THIS IS
+    A VERTICAL MOVE: a person can now POST a resolution-config fragment to a real, running endpoint
+    and watch it compile or refuse, which was not previously true of any code path this capability
+    names. BYTE-IDENTITY, PROVEN, NOT ASSUMED. The CLI's output is unchanged: `presentation.json`
+    is byte-identical before and after the refactor over the operator's real 276-file config,
+    sha256 `e4867b5e72f2266fe9784af6842a7099ed9ddf2b716360b3ca0a18c62d14a6d1` — the SAME hash both
+    `structural-language-is-published-not-guessed` and `section-membership-is-read-not-guessed`
+    already recorded for their own ports, unchanged across this one too, three consecutive runs.
+    ISOLATE CONFORMANCE IS SETTLED FOR THIS GENERATOR TOO, by the real local Worker runtime
+    (`wrangler dev`, un-deployed), not assumed: Node's V8 and `workerd` produce byte-identical
+    `compile()` output for the synthetic fixture, the operator's real config, AND a mutation (a
+    view's `default_node_type:` repointed at a node type `schema.yaml` never declares) that
+    produces the identical refusal sentence in both runtimes — `scripts/check-isolate-
+    conformance.mjs`, extended to run all three cases against all three routes, nine cases total,
+    all agreed. A REAL SILENT-DROP GAP THIS PORT FOUND, NOT INHERITED SILENTLY: moving
+    `readRetypeRules`'s patterns/*.yaml loop into `compile-resolution.mjs` separated one
+    `continue` from an unrelated "NOT A DROP" comment it had been accidentally sheltering under
+    (a 12-line-window false pass, not a real verdict), and `tests/declaration-drop.test.mjs`'s own
+    completeness scanner caught it red the moment the file moved — fixed the same way `compile-
+    qualification.mjs`'s own identical pattern-loop shape was already fixed. Confirmed inert for
+    published output (zero patterns/ parse failures today, checked directly). A SECOND SCANNER-
+    COVERAGE GAP, THE SAME SHAPE THE QUALIFICATION PORT ALREADY NAMED AND CLOSED FOR STRUCTURAL,
+    CLOSED HERE FOR RESOLUTION: `compile-resolution.mjs` is added to the sweep's own file list,
+    confirmed by watching it fail first (31 `continue` statements seen, under its own >= 40 floor)
+    and pass after. `tests/present-seed.test.mjs`'s own, separate mutation-proof harness (section
+    6) targeted `generate-resolution-declaration.mjs` by source-text location; its three anchors
+    had silently moved into `compile-resolution.mjs`, so all three of its "mutants" were quietly
+    exercising the real, unmutated generator — its own `assert.notEqual` guard could not catch
+    this, because a second, unrelated `.replace()` (rewriting relative imports to absolute file
+    URLs) always changes the source text regardless of whether the intended mutation applied.
+    Retargeted at `compile-resolution.mjs`, recombined with the real, unmutated `readConfigTree`,
+    the same shape `tests/declaration-drop.test.mjs`'s own mutant harness already uses for
+    qualification's equivalent split; all three tests now genuinely go red under their intended
+    mutation. `app/present/ordering.ts` and the operator's own acceptance test (`91930f3`) both
+    read this generator's published output and neither was touched by this port — the byte-identity
+    proof above is the reason that is safe to say rather than merely hoped.
   tier: functional
   rooting: >-
     PUBLISHED AND WIRED, NOT YET CONSUMED — AND THIS IS A DIFFERENT STATEMENT FROM WHAT THE OTHER
