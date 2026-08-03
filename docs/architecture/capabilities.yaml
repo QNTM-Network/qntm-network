@@ -2074,11 +2074,50 @@ capabilities:
     for "today" — so answering those 8 needs the generator AND `membership.ts`'s evaluator to
     both learn a wider grammar, a separate and larger unit of work than "read the boundary",
     filed as `widen-qualification-language-for-clock-bound-predicates` (backlog.yaml) rather than
-    invented here to manufacture a consumer this step does not have. NO RUNTIME CALL SITE IS
-    WIRED IN THIS PR — `todayFor` has no caller under `app/index.html`, stated rather than hidden,
-    the same posture `resolutiontable.ts`'s own header already took for `dayBoundary` before this
-    step (see that module's header, updated this step to say so as a resolver EXISTS, not just a
-    declaration).
+    invented here to manufacture a consumer this step does not have.
+    STATUS UPDATED 2026-08-03 (`feat/wire-the-clock`) — A RUNTIME CALL SITE IS NOW WIRED.
+    `app/index.html`'s `sayAsOf` (the freshness-line writer `ordering-position-is-said-in-the-
+    freshness-line`/`section-membership-is-said-in-the-freshness-line` already established the
+    pattern for) calls `todayFor(Date.now(), resolution.dayBoundary)` through a new wrapper,
+    `todayNoteFor`, on every fresh projection arrival, and appends the logical date and week end
+    to the sentence the operator reads on every load. `Date.now()` is called from exactly that
+    one place in `app/index.html`, never from `today.ts` itself
+    (`tests/app-today-note.test.mjs` §4). THE ABSTENTION IS MADE VISIBLE, ARGUED RATHER THAN
+    ASSUMED: the engine's own documented default for an absent `day_boundary.yaml` is UTC
+    midnight (`substrate_wiring/day_boundary.py`'s own docstring), but the operator's real
+    config always declares one, so a missing `resolution.dayBoundary` at this call site means
+    the declaration failed to load, not that he chose none — mirroring UTC midnight would show a
+    WRONG logical day for up to four hours a day with nothing on screen to say so, the identical
+    divergence this capability's own header argues against, merely relocated. `todayNoteFor`
+    therefore abstains (no today clause at all) AND calls `console.warn` naming why, the same
+    posture `applyPresentation` already holds for every other declaration problem on this page —
+    proven both for a wholly absent `dayBoundary` and for each of `todayFor`'s own two named
+    refusals (`tests/app-today-note.test.mjs` §3). THE FALSIFIER, CARRIED THROUGH THE CALL SITE,
+    NOT ONLY THE FUNCTION: `tests/app-today-note.test.mjs` §1 restates this row's own falsifier
+    (03:59/04:01/Sunday) against `todayNoteFor`, and §2 is A SCENARIO rather than a bare
+    assertion — a real `sayAsOf` call, fed a projection generated at 02:30 UTC (03:30
+    Europe/London, inside the late-night grace), lands `today 2026-06-22` in the `#freshness`
+    DOM node itself, the sink the operator actually reads, with a second case just the other
+    side of the rollover proving the boundary is honoured in both directions.
+    TWO CANDIDATE CONSUMERS WERE REFUTED IN THE ORIGINAL STEP AND REMAIN REFUTED — this is a
+    THIRD, separately measured consumer (a display sentence), not a retraction of either
+    finding: ordering still needs no clock, and membership's 8 clock-bound qualifications still
+    need a wider predicate grammar this text-only note does not supply.
+    THE VERTICAL AXIS, NAMED RATHER THAN NUMBERED. This capability carries no `enforced_by`/
+    `enforcement_depth`/`confidence` triple, before this change or after it — that scheme is
+    reserved for the 14 capabilities gated by the static-evidence Python verifier
+    (`declared_state`/`verify: PASS`), and this one was never part of it: its proof is
+    `tests/present-today.test.mjs` and (now) `tests/app-today-note.test.mjs`, not a deploy-time
+    predicate. Its two nearest siblings — `ordering-position-is-said-in-the-freshness-line` and
+    `section-membership-is-said-in-the-freshness-line`, both of which already had real runtime
+    call sites into `app/index.html` before this change — ALSO carry no `enforcement_depth`,
+    which confirms the field's absence here is a property of the CAPABILITY'S CLASS, not of
+    whether it reaches a sink. Adding a number to this row would therefore be inventing a field
+    that does not fit its class, the exact mistake this file's own convention (and this
+    session's brief) warns against. What DID move, and is recorded in this row's own native
+    vocabulary instead of a fabricated number: the paragraph above, from "NO RUNTIME CALL SITE
+    IS WIRED" to a named call site, a DOM sink, and a scenario proof — this row's own prose IS
+    its vertical-axis record, and it is now current rather than stale.
     THE FALSIFIER, THE DESIGN DOCUMENT'S OWN, RUN VERBATIM: "at 03:59 Europe/London the resolver's
     `today()` returns the previous calendar date; at 04:01 it returns the current one; a Sunday
     resolves into the week that started the preceding Monday" — `tests/present-today.test.mjs` §1,
@@ -2116,27 +2155,40 @@ capabilities:
     either malformed input (`tests/present-today.test.mjs` §5).
     NOTHING LOCAL REACHES A WRITE. `today.ts` imports exactly one thing — `DayBoundary`, TYPE-ONLY,
     from `resolutiontable.ts` — and nothing from `source.ts`/`context.ts`/`cascade.ts`/`paint.ts`
-    (`tests/present-today.test.mjs` §7). The four pinned write-adjacent counts
-    `section-membership-is-said-in-the-freshness-line` established (`graphData` 5, `applyEdit` 5,
-    `writeFile` 2 callers, `.markdown` never assigned) are UNCHANGED by this step — `app/
-    index.html` and `paint.ts` are not touched at all — re-verified by running `tests/app-
-    ordering-note.test.mjs` and `tests/app-membership-note.test.mjs` unmodified after this step's
-    other changes landed.
+    (`tests/present-today.test.mjs` §7), UNCHANGED by the wiring step. The four pinned
+    write-adjacent counts `section-membership-is-said-in-the-freshness-line` established
+    (`graphData` 4, `applyEdit` 5, `writeFile` 2 callers, `.markdown` never assigned) are ALSO
+    UNCHANGED — `app/index.html` IS touched by this step (an import, `todayNoteFor`, and one
+    line inside `sayAsOf`), which is the wiring itself, but none of the four counted sites moves:
+    `todayNoteFor` assigns no `graphData`, calls no `applyEdit`, calls `writeFile` zero times, and
+    assigns no `.markdown` — re-verified by `tests/app-today-note.test.mjs` §4, run alongside
+    (not instead of) `tests/app-ordering-note.test.mjs` and `tests/app-membership-note.test.mjs`,
+    both still passing unmodified. (The `graphData` count is 4, not 5, as of a prior,
+    unrelated change — `app-ordering-note.test.mjs` §4's own comment records the drop to 4 on
+    2026-08-01; this step does not change it either way.)
   tier: functional
   rooting: >-
-    `app/present/today.ts` is a leaf module: no outgoing edge to any other `app/present/*` runtime
-    module (its one import is a TYPE), so no new `flows.yaml` entry is declared for it, the same
-    posture already taken for a type-only import elsewhere in this directory (`ordering.ts`'s own
-    import of `resolutiontable.ts`'s types, `flows.yaml`'s own comment on
-    `ordering-classifies-the-line`). `context-reads-the-resolution-declaration`'s own comment
-    (flows.yaml) is updated this step to say a resolver now exists for the day-boundary axis
-    specifically, without a runtime consumer wiring it in — the same honest, unfinished-consumer
-    posture that edge's comment already held for steps 6/7/8 collectively before any of the three
-    shipped.
-    `tests/present-today.test.mjs` is the whole proof, run standalone through `dist/present.js` —
-    node cannot import `app/index.html`, so there is no page-level counterpart the way
-    `app-ordering-note.test.mjs` is one for step 7, because this step wires NO call site into the
-    page at all.
+    `app/present/today.ts` is STILL a leaf module: no outgoing edge to any other `app/present/*`
+    runtime module (its one import is a TYPE), so no new `flows.yaml` entry is declared for IT,
+    the same posture already taken for a type-only import elsewhere in this directory
+    (`ordering.ts`'s own import of `resolutiontable.ts`'s types, `flows.yaml`'s own comment on
+    `ordering-classifies-the-line`). The NEW caller, `todayNoteFor`, lives in `app/index.html`
+    itself (beside `membershipNoteFor`/`orderingNoteFor`, the identical posture those two already
+    hold) rather than in a wrapper module — a call from the page is unobservable to flow-trace's
+    node module-load hook wherever the calling code sits, so a wrapper module would buy no
+    additional observability, only an extra file. `context-reads-the-resolution-declaration`'s
+    own comment (flows.yaml) is updated this step (2026-08-03) to say the day-boundary axis NOW
+    HAS a runtime consumer, replacing the honest, unfinished-consumer posture that edge's comment
+    held for this one axis since steps 6/7/8 shipped (the other two axes' comments were already
+    updated when THEIR consumers landed; this is the third and last of the three).
+    `tests/present-today.test.mjs` remains the whole proof of `todayFor`/`resolveLogicalDate`/
+    `resolveWeekEnd` themselves, run standalone through `dist/present.js`. THIS STEP ADDS ITS
+    PAGE-LEVEL COUNTERPART, THE SAME SHAPE `app-ordering-note.test.mjs` IS FOR STEP 7:
+    `tests/app-today-note.test.mjs`, through `tests/fixtures/app-html-page.mjs`'s lifted
+    `app/index.html` script — node still cannot import the HTML file directly, but the fixture's
+    extraction is what lets a test drive the REAL page code (`todayNoteFor`, `sayAsOf`) rather
+    than a reconstruction of it, the same posture every other freshness-line note test in this
+    repo already takes.
     NOT VERIFIED: no browser, no passkey session, no live server, no cycle. The `Intl`-based zone
     conversion was checked against the engine's `zoneinfo`-based one only for the 14 instants
     `scripts/day-boundary-agreement.py` generated (including both 2026 DST transition days), not

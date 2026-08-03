@@ -149,14 +149,19 @@ expected_flows:
   # THE CONFIG-ONLY RESOLUTION TABLE REACHES (added 2026-08-01, design-the-resolution-
   # architecture.md step 5). Same shape as the three edges above, a fourth axis over the SAME
   # served document: registration's two names (default_node_type/base_node_type), ordering, line
-  # grammars, the day boundary. STATUS UPDATED (steps 6, 7, 8 all shipped 2026-08-01):
-  # `chromeShapes` (step 6) and `ordering`/`orderingFields` (step 7) now have real, wired-in
+  # grammars, the day boundary. STATUS UPDATED (steps 6, 7, 8 all shipped 2026-08-01; step 8's
+  # own call site wired 2026-08-03):
+  # `chromeShapes` (step 6) and `ordering`/`orderingFields` (step 7) have real, wired-in
   # consumers (`newline.ts`'s GLOBAL rung; `ordering.ts`'s preview, called from `app/index.html`).
-  # `dayBoundary` (step 8) does NOT — `app/present/today.ts`'s `todayFor` reads and resolves it,
-  # proven to agree with the engine, but no call site under `app/index.html` invokes it, because
-  # step 8's own measurement found neither ordering (already shipped, clock-free) nor membership's
-  # 8 clock-bound qualifications (need a wider predicate grammar, not only the boundary) is a real
-  # consumer today — see capability `day-boundary-resolver-agrees-with-the-engine`'s own record.
+  # `dayBoundary` (step 8) NOW DOES TOO — `app/present/today.ts`'s `todayFor` reads and resolves
+  # it, proven to agree with the engine, and `app/index.html`'s `sayAsOf` calls it
+  # (`todayNoteFor`) on every fresh projection arrival, appending the logical date and week end
+  # to the freshness line. Neither ordering (already shipped, clock-free) nor membership's 8
+  # clock-bound qualifications (still need a wider predicate grammar, not only the boundary) is
+  # answered by this — see capability `day-boundary-resolver-agrees-with-the-engine`'s own
+  # record for the full account, including why this call is not observable as a flows.yaml edge
+  # (a call from `app/index.html` is unobservable to flow-trace's node module-load hook, the
+  # same reason `membershipNoteFor`/`orderingNoteFor`'s own calls have no edge here either).
   - id: context-reads-the-resolution-declaration
     from: app/present/context
     to:   app/present/resolutiontable

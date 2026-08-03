@@ -1010,6 +1010,7 @@ import {
   sectionOrderFor,
   membershipFor,
   orderingFor,
+  todayFor,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -2748,16 +2749,67 @@ function reportCursorReading(reading, proved = false, heldIt = false) {
 }
 
 /**
- * "as of <when> · N queued", plus whatever `paintView` just found out about the cursor, plus
- * whatever the last write found out about its base.
+ * WHAT DAY IS IT, PER THE OPERATOR'S OWN DECLARED BOUNDARY — design-the-resolution-
+ * architecture.md step 8's call site, wired here for the first time (capability
+ * `day-boundary-resolver-agrees-with-the-engine`, capabilities.yaml). `app/present/today.ts`'s
+ * `todayFor` was proven to agree with the engine's own `resolve_logical_day`/`resolve_week_end`
+ * on 2026-08-01; nothing called it until now — see that capability's own record for the two
+ * consumers measured and refuted (ordering needs no clock; membership's 8 clock-bound
+ * qualifications need a wider predicate grammar, not only this).
+ *
+ * `nowUtcMs` IS THE ONE CALL SITE `Date.now()` MAY EVER RUN AT — `today.ts` itself never reads a
+ * clock, by construction (see that module's own header). This function is the structurally
+ * distant place the design asks for: in the page, not in the module, the same posture `paint.ts`
+ * keeps the DOM at arm's length from `app/present/*`.
+ *
+ * TEXT ONLY, NEVER AUTHORITATIVE. The freshness line is a sentence for the operator to read, not
+ * a `Contribution` and not a byte of any `SourceEdit` — this function returns a string and touches
+ * nothing else, the same posture `membershipNoteFor`/`orderingNoteFor` already hold.
+ *
+ * ABSTAINS RATHER THAN GUESSES WHEN THE BOUNDARY IS MISSING, AND SAYS SO. The engine's own
+ * documented default for an absent `day_boundary.yaml` is UTC midnight
+ * (`substrate_wiring/day_boundary.py`'s own docstring) — but the OPERATOR'S real config always
+ * declares one, so a missing `resolution.dayBoundary` here means the declaration failed to load
+ * or arrive, not that he chose no boundary. Silently synthesising UTC midnight in that case would
+ * show a WRONG logical day for up to four hours a day (00:00-04:00 Europe/London, exactly the
+ * grace the boundary exists to give him) with nothing on screen to say the browser had guessed —
+ * the identical divergence `today.ts`'s whole header argues against, relocated to this call site
+ * instead of removed. So this abstains, and the abstention is made VISIBLE with a console warning
+ * rather than a silent missing clause, mirroring `applyPresentation`'s own posture for every other
+ * declaration problem on this page.
+ */
+function todayNoteFor(nowUtcMs) {
+  const boundary = resolution?.dayBoundary;
+  if (boundary === undefined) {
+    console.warn("today: no day boundary declared — the logical-day note is not shown");
+    return "";
+  }
+  const reading = todayFor(nowUtcMs, boundary);
+  if (reading.kind === "abstains") {
+    console.warn(`today: ${reading.because} — the logical-day note is not shown`);
+    return "";
+  }
+  return `today ${reading.answer.logicalDate} · week ends ${reading.answer.weekEnd}`;
+}
+
+/**
+ * "as of <when> · today <logical date> · week ends <date> · N queued", plus whatever `paintView`
+ * just found out about the cursor, plus whatever the last write found out about its base.
  *
  * ONE FUNCTION, THREE CALLERS, because three copies of this string is how the three of them would
  * come to disagree about whether a refusal survives. The notes are consumed: each describes one
  * event — a projection arriving, a write leaving — not a state the page is in.
+ *
+ * THE TODAY CLAUSE IS OMITTED, NOT LEFT EMPTY, WHEN `todayNoteFor` ABSTAINS — see that function's
+ * own header for why an absent boundary must never be guessed at, here of all places: this is the
+ * ONE sentence on the page that would otherwise assert a calendar date the operator did not
+ * declare.
  */
 function sayAsOf(data) {
   const when = new Date(data.snapshot.generated_at).toLocaleString();
-  $("freshness").textContent = `as of ${when} · ${data.pending_edits} queued${takeNotes()}`;
+  const today = todayNoteFor(Date.now());
+  $("freshness").textContent =
+    `as of ${when}${today ? " · " + today : ""} · ${data.pending_edits} queued${takeNotes()}`;
 }
 
 /**

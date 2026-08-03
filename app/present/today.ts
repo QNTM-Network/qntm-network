@@ -63,10 +63,20 @@
  *
  * ── WHO READS THIS TODAY, AND WHO DOES NOT ──
  *
- * Nobody, yet, and that is stated rather than hidden. `resolution.dayBoundary` was already
- * PUBLISHED by step 5; this module is the READ half step 8 asks for ("publish and read... and
- * route every date decision through one function"). Two candidate consumers were measured, in
- * this step, and both were refuted as real dependencies today:
+ * `app/index.html`'s `sayAsOf` DOES, as of the wiring step (`day-boundary-resolver-agrees-with-
+ * the-engine`, capabilities.yaml — updated to record a runtime call site rather than none).
+ * `todayNoteFor`, defined beside `sayAsOf` in the page for the same reason `membershipNoteFor`/
+ * `orderingNoteFor` are — a call from `app/index.html` is unobservable to flow-trace's node
+ * module-load hook wherever it lives, so there is no benefit to a wrapper module — calls
+ * `todayFor(Date.now(), resolution.dayBoundary)` on every fresh projection arrival and appends
+ * the logical date and week end to the freshness line. `Date.now()` runs there, in the page, not
+ * here — this module still never reads a clock itself (see the header above).
+ *
+ * `resolution.dayBoundary` was already PUBLISHED by step 5; this module is the READ half step 8
+ * asked for ("publish and read... and route every date decision through one function"), and the
+ * wiring step is the ROUTE half. Two OTHER candidate consumers were measured and refuted as real
+ * dependencies, and remain refuted — this module's new caller is a THIRD, freshly measured one,
+ * not a retraction of either finding:
  *
  *   ORDERING (`ordering.ts`, step 7) does not need it — already measured and shipped: none of the
  *   9 declared orderings compares a field to the clock, only to another field's value.
@@ -83,7 +93,10 @@
  *   to learn to evaluate them — a widening of the QUALIFICATION LANGUAGE, a different and larger
  *   unit of work than "read the boundary", filed separately
  *   (`widen-qualification-language-for-clock-bound-predicates`, backlog.yaml) rather than
- *   invented here to manufacture a consumer for this step.
+ *   invented here to manufacture a consumer for this step. `sayAsOf`'s new note is TEXT ONLY — a
+ *   sentence on the freshness line, never a `Contribution` and never bytes on a write — so it does
+ *   not answer membership's 8 qualifications either; it is orthogonal to that gap, not a shortcut
+ *   past it.
  */
 
 import type { DayBoundary } from "./resolutiontable.js";
