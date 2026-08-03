@@ -15,7 +15,9 @@
     "generate:qualification": "node scripts/generate-qualification-declaration.mjs",
     "generate:qualification:check": "node scripts/generate-qualification-declaration.mjs --check",
     "generate:resolution": "node scripts/generate-resolution-declaration.mjs",
-    "generate:resolution:check": "node scripts/generate-resolution-declaration.mjs --check"
+    "generate:resolution:check": "node scripts/generate-resolution-declaration.mjs --check",
+    "generate:operator-set": "node scripts/generate-operator-set.mjs",
+    "generate:operator-set:check": "node scripts/generate-operator-set.mjs --check"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

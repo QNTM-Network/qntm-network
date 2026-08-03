@@ -61,6 +61,20 @@
  *     `generateQualification`'s later field-resolvability pass (the RESOLVABLE_FIELDS filter at
  *     generate-qualification-declaration.mjs:304) would still be caught by the direct
  *     RESOLVABLE_FIELDS array check above it, but not independently by a second route.
+ *
+ * ── SECTION 0.5, ADDED WHEN RESOLVABLE_FIELDS BECAME GENERATED ──
+ *
+ * `scripts/generate-operator-set.mjs` now writes `membership.ts`'s array and `qualification-
+ * agreement.py`'s tuple FROM the compiler's list, instead of a person retyping both by hand. Section
+ * 1 below still asserts the three VALUES agree — that is unchanged and still a real check (it would
+ * catch, for instance, `operator-set.json`'s own independently hand-typed `values` list drifting
+ * from what the generator produces). What changes is WHY section 1 could ever go red: before
+ * generation it was "did three people who each retyped this list stay in sync"; after generation it
+ * is narrower — "did someone edit `generate-qualification-declaration.mjs`'s list and forget to
+ * re-run the generator" or "did someone hand-edit a generated file directly, bypassing it." Section
+ * 0.5 below is the more DIRECT form of that second question: it re-runs the generator's own
+ * comparison and fails if either generated file is stale, with no monorepo and no config directory
+ * needed, so it always runs in `npm test`.
  */
 
 import { test, describe } from "node:test";
@@ -71,6 +85,7 @@ import { fileURLToPath } from "node:url";
 
 import { readQualificationDeclaration, RESOLVABLE_FIELDS as BROWSER_RESOLVABLE_FIELDS } from "../dist/present.js";
 import { normalisePattern, RESOLVABLE_FIELDS as COMPILER_RESOLVABLE_FIELDS } from "../scripts/generate-qualification-declaration.mjs";
+import { checkOperatorSet } from "../scripts/generate-operator-set.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const INDEX = JSON.parse(
@@ -165,6 +180,13 @@ describe("0. the index is not vacuous", () => {
   test("the decoy sets do not accidentally overlap the index", () => {
     for (const op of NON_OPERATORS) assert.ok(!OPERATORS.includes(op), `decoy '${op}' is actually indexed`);
     for (const f of NON_FIELDS) assert.ok(!FIELDS.includes(f), `decoy '${f}' is actually indexed`);
+  });
+});
+
+describe("0.5. the two GENERATED copies are not stale", () => {
+  test("membership.ts and qualification-agreement.py match generate-qualification-declaration.mjs's RESOLVABLE_FIELDS", () => {
+    const { stale, lines } = checkOperatorSet();
+    assert.deepEqual(stale, [], `run 'node scripts/generate-operator-set.mjs' and commit:\n${lines.join("\n")}`);
   });
 });
 

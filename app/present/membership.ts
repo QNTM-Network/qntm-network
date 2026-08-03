@@ -65,7 +65,14 @@ import type {
   Qualifier,
 } from "./qualification.js";
 
-/** The three fields a line being typed decides, and the only three any published predicate uses. */
+/**
+ * The three fields a line being typed decides, and the only three any published predicate uses.
+ *
+ * GENERATED from `RESOLVABLE_FIELDS` in `scripts/generate-qualification-declaration.mjs`, by
+ * `scripts/generate-operator-set.mjs` — run `node scripts/generate-operator-set.mjs` after changing
+ * that list, and commit the result. Do not hand-edit the array below; `tests/operator-set-
+ * agreement.test.mjs` fails loudly if this file and the compiler's list ever disagree.
+ */
 export const RESOLVABLE_FIELDS = ["node_type", "domain", "status"] as const;
 
 /** A line's resolved fields — what the engine would mint from it, for these three fields only. */
