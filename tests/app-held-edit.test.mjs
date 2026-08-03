@@ -515,7 +515,7 @@ describe("2. THE FOUR WAYS A LINE GOES ABSENT — his characters survive every o
     // AND IT IS ON SCREEN, not merely in a variable.
     assert.deepEqual(d.heldTexts(), [CURSOR_TEXT]);
     assert.equal(d.stripHidden(), false);
-    assert.match(d.freshness(), /the line you were on is not in this view any more — what was on it is held below/);
+    assert.match(d.freshness(), /the line you were on is not in this view any more — what was on it is held above this view/);
   });
 
   test("2b. THE FIRST STAMP OF AUTHORING — the characters held are the ones HE TYPED, not the ones that were there", async () => {
@@ -597,7 +597,7 @@ describe("2. THE FOUR WAYS A LINE GOES ABSENT — his characters survive every o
     // adopted it and "still on this line" stopped being true; what is still true, and is the only
     // thing §2 exists to prove, is that his characters are held. The screen losing a second copy of
     // something the strip is holding is exactly what the holding was built to make safe.
-    assert.match(d.freshness(), /what you typed is held below/);
+    assert.match(d.freshness(), /what you typed is held above this view/);
     assert.match(d.freshness(), /your next save will go through/, "the view did not heal itself");
   });
 
@@ -613,7 +613,7 @@ describe("2. THE FOUR WAYS A LINE GOES ABSENT — his characters survive every o
     await d.typeAndCommit(V1, "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task");
 
     assert.equal(page.__held().rows.length, 1, "a refused edit was dropped");
-    assert.match(d.freshness(), /what you typed is still on this line, and held below/);
+    assert.match(d.freshness(), /your characters are still on this line · what you typed is held above this view/);
   });
 
   test("2e. AND THE HELD ROW SURVIVES THE NEXT PROJECTION — the whole point of holding it at all", () => {
@@ -846,7 +846,28 @@ describe("4. NOTHING HELD REACHES A WRITE — the pinned sites, re-counted on th
     // Structural, because it is what makes the type-level argument true at runtime: `paint()` gets
     // `#viewBody` and a source string. `#heldStrip` is its SIBLING, so no held row can ever be part
     // of the element tree the painter walks or the source string it computes an edit from.
-    assert.match(APP_SOURCE, /<article id="viewBody"[\s\S]{0,2000}<section id="heldStrip"/);
+    //
+    // ── IT USED TO PIN THE ORDER AND NOW IT PINS THE CONTAINMENT, WHICH IS THE STRONGER CLAIM ──
+    //
+    // The old assertion was `viewBody ... heldStrip`, in that order, within 2,000 characters. That
+    // was never what the argument needed — "the strip is below the column" is a layout fact, and
+    // the strip moved ABOVE the column when "held below" turned out to point a screen and a half
+    // past the fold (see the markup). What the argument needs is that the strip is not INSIDE the
+    // column, and this says exactly that by asserting `#viewBody` is written empty and closed: an
+    // element with no markup children cannot contain the strip wherever the strip sits.
+    assert.match(
+      APP_SOURCE,
+      /<article id="viewBody" class="viewbody"><\/article>/,
+      "the reading column gained markup children — the painter's body must stay empty in the source",
+    );
+    assert.match(APP_SOURCE, /<section id="heldStrip" class="held hidden"/, "the strip is gone");
+    // AND IT IS A CHILD OF `#graph`, NOT OF ANYTHING THE PAINTER IS HANDED. The one element between
+    // them in either direction is the column itself, so this pins "sibling" without pinning "after".
+    assert.match(
+      APP_SOURCE,
+      /<section id="heldStrip"[\s\S]{0,400}<\/section>\s*<article id="viewBody"/,
+      "the strip is no longer the reading column's sibling",
+    );
     // THE BODY IS STILL `#viewBody` AND THE SOURCE IS STILL ONE STRING OFF THE WIRE. The second
     // argument is named `source` since the ack landed, and its ONE definition is asserted below
     // rather than tolerated: `accepted.sourceFor(v.path)` is a file's markdown the SERVER said it
@@ -979,6 +1000,160 @@ describe("5b. MUTATION PROOF — neuter the RELEASE, and §3's clearance asserti
       () => assert.equal(d.page.__held().count, 0),
       /Expected values to be strictly equal/,
       "the release was removed and the clearance assertion still passed",
+    );
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 6. THE SENTENCE IS PRODUCED BY THE HOLDING — `held-is-really-held`
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ── THE DEFECT THIS SECTION IS EVIDENCE FOR ──
+//
+// The page said "what you typed is held below" NEXT TO `holdEdit`, not OUT OF it. `holdEdit` is a
+// no-op for characters `heldFrom` refuses, so every one of the three sentences that name the strip
+// could be said with the strip empty and hidden. On the ADOPTED branch that is the branch that
+// takes his characters off the screen, so a false claim there costs him the last copy there was.
+//
+// ── WHAT IS PROVEN HERE AND WHAT IS NOT ──
+//
+// PROVEN: the clause is said if and only if a row is really on the strip, and the adoption does not
+// run without one. Both directions, both mutation-proved.
+//
+// NOT PROVEN, AND SAID PLAINLY: the operator's own 2026-08-03 browser drive reported a refused save
+// DESTROYING a line he had typed, with the strip empty. That loss was NOT reproduced. Eight
+// gestures were driven through this page with the three browser facts installed (vim `i`+click-away,
+// vim `o`+Enter, vim `o`+click-away, click-to-edit+click-away, Enter mid-edit, an ack save followed
+// by a refused create two turns later, a refusal followed by a re-read, and §2d below) and every one
+// of them put the characters on the strip. The deployed `app/index.html` and `dist/present.js` were
+// fetched and are byte-identical to `origin/main`, so it is not a stale deploy either. See the PR
+// body: the report stays on the board.
+const WORK_HONESTY = makeWorkDir("app-held-edit-honesty");
+const WORK_ALWAYS_HELD = makeWorkDir("app-held-edit-mutant-always-held");
+
+/** The file the SERVER holds — deliberately different from `V1`, so an adoption is observable. */
+const SERVER_HAS = [
+  "# This Week",
+  "",
+  "## Overdue",
+  "- [ ] Draft the launch note [[qntm:121]] #task 🆕 2026-08-03",
+  "- [ ] Water the plants [[qntm:122]] #task",
+  "",
+].join("\n");
+
+/** Refuse the next write, handing back `SERVER_HAS` — the shape `the-view-heals-itself` adopts. */
+const refuse = (d) => {
+  d.control.refuseWith = {
+    status: 409,
+    body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: SERVER_HAS },
+  };
+};
+
+describe("6. A REFUSAL SAYS 'held' ONLY WHEN SOMETHING IS HELD", () => {
+  let d;
+
+  before(async () => {
+    d = await standUpPage(WORK_HONESTY);
+  });
+
+  beforeEach(() => d.arm());
+
+  test("THE POSITIVE CONTROL — characters worth holding are held, said, and on the strip", async () => {
+    refuse(d);
+    await d.typeAndCommit(V1, "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task");
+
+    assert.deepEqual(d.heldTexts(), ["- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task"]);
+    assert.equal(d.stripHidden(), false, "the strip is hidden while it is holding his characters");
+    assert.match(d.freshness(), /what you typed is held above this view/);
+    // AND THE ADOPTION RAN, because the characters are safe somewhere else.
+    assert.equal(d.page.__accepted().markdown, SERVER_HAS, "the view did not heal itself");
+  });
+
+  test(
+    "AN EMPTIED LINE HOLDS NOTHING, AND THE PAGE DOES NOT SAY IT DOES — the sentence that used " +
+      "to lie",
+    async () => {
+      // `heldFrom` refuses whitespace, so this refusal holds nothing. `set-line` to empty is a
+      // legal edit (app/present/source.ts: the asymmetry is deliberate — only INSERT refuses a
+      // contentless line), so it really does reach the wire and really does come back 409.
+      refuse(d);
+      await d.typeAndCommit(V1, "");
+
+      assert.equal(d.page.__held().count, 0, "whitespace was held — `heldFrom`'s rule changed");
+      assert.deepEqual(d.heldTexts(), []);
+      assert.equal(d.stripHidden(), true);
+      assert.doesNotMatch(
+        d.freshness(),
+        /held above this view/,
+        "the page claimed his characters are on the strip while the strip is empty and hidden",
+      );
+      // AND THE FIRST HALF IS STILL SAID, because it is still true: the save was refused and
+      // nothing was written. Only the claim about the strip goes quiet.
+      assert.match(d.freshness(), /the server refused it and nothing was written/);
+    },
+  );
+
+  test(
+    "AND THE ADOPTION IS GATED ON THE HOLDING, NOT ON ITS ATTEMPT — `healFromRefusal`'s own " +
+      "safety argument, written as a precondition",
+    async () => {
+      // The emptied line above is the safe case (`typed.trim() === ""` — nothing to lose), so it
+      // adopts. This asserts the OTHER half: the gate exists and is the expression the mutation
+      // arm below breaks. Nothing here is a behaviour change on today's code — it is the argument
+      // stopping being prose.
+      refuse(d);
+      await d.typeAndCommit(V1, "");
+      assert.equal(d.page.__accepted().markdown, SERVER_HAS, "nothing was at stake, so it heals");
+
+      const pageSource = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
+      assert.match(
+        pageSource,
+        /const safeToAdopt = heldIt \|\| typed\.trim\(\) === "";/,
+        "the adoption's precondition is gone — it is back to trusting the order of two statements",
+      );
+      assert.match(
+        pageSource,
+        /if \(safeToAdopt && healFromRefusal\(path, current\)\) \{/,
+        "the precondition is no longer what gates the adoption",
+      );
+    },
+  );
+});
+
+/**
+ * §6's silence assertion, lifted into a function so the mutated page is driven through EXACTLY the
+ * same check — the shape §5 above already uses, and for the same reason.
+ */
+function assertSaysNothingAboutHolding(d) {
+  assert.equal(d.page.__held().count, 0, "the arm did not set up — something really was held");
+  assert.doesNotMatch(
+    d.freshness(),
+    /held above this view/,
+    "the page claimed his characters are on the strip while the strip is empty and hidden",
+  );
+}
+
+describe("6b. MUTATION PROOF — let the holding claim a success it did not have, and §6 goes red", () => {
+  // THE MUTATION IS THE DEFECT ITSELF. `holdEdit` reports `true` whether or not a row was taken,
+  // which is precisely the shape the page had before this row: the sentence written BESIDE the
+  // call instead of out of it. Everything else about the page is untouched.
+  let d;
+
+  before(async () => {
+    d = await standUpPage(WORK_ALWAYS_HELD, (source) =>
+      assertMutated(source, "  if (held.hold(record) === null) {\n    return false;\n  }", "  if (false) {\n    return false;\n  }"),
+    );
+  });
+
+  test("the page says the characters are held while the strip is empty and hidden", async () => {
+    refuse(d);
+    await d.typeAndCommit(V1, "");
+
+    assert.equal(d.stripHidden(), true, "the mutation put a row on the strip — it is the wrong one");
+    assert.throws(
+      () => assertSaysNothingAboutHolding(d),
+      /the page claimed his characters are on the strip/,
+      "the claim was decoupled from the holding and §6 still passed — the guard proves nothing",
     );
   });
 });
