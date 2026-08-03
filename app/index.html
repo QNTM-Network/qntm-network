@@ -2973,6 +2973,34 @@ const REFUSED_REVERTING_BOX = WRITE_REFUSED + " · the box is back as the server
  * this app computed, which is the property `base.ts`'s named trap actually protects.
  *
  * Returns whether the view was healed, because the sentence differs and only the caller says it.
+ *
+ * ── THE CURSOR MUST BE RE-FOUND BY IDENTITY IN THE ADOPTED FILE, NOT CARRIED AS A RAW INDEX ──
+ * (`refusal-must-not-clobber`, 2026-08-03)
+ *
+ * `repaintCurrentView` clamps `focus.lineIndex` NUMERICALLY against whatever source it is handed —
+ * safe on every OTHER call to it, because the source it clamps against is always the same string
+ * the index was just taken from. It is not safe here: `current` is the SERVER's file, a DIFFERENT
+ * string from the one the cursor's index was last computed against — sharpest when the cursor was
+ * moved by THIS WRITE'S OWN optimistic repaint (`draftInput`'s `settle`, `paint.ts`) onto a line the
+ * 409 says was never written at all. A raw clamp reinterprets that index against whatever real
+ * content now sits at the same position, and the NEXT gesture computes its edit from wherever the
+ * cursor lands — which is how a stale index becomes a destroyed line. Measured live 2026-08-03: an
+ * operator's own task, overwritten in place by a capture that was never meant to touch it.
+ *
+ * `focus.reanchor` IS THE IDENTITY WALK `paintView` ALREADY TRUSTS for every ordinary projection
+ * arrival (`instance.ts`'s two-tier search: same printing, then the whole file by node). Asking it
+ * here, before anything is adopted, is "the offset is recomputed against the adopted file" — reading
+ * `found` MOVES the cursor to the line's real position in `current`, exactly as an ordinary arrival
+ * would; anything else (`absent`, `ambiguous`) means this app cannot say where the cursor's line is
+ * in the file it is about to adopt, and adoption is declined rather than guessed. That is the
+ * POSITIVE CHECK: the line an edit is about to land on must be the line the edit was computed
+ * against, proven by identity, not assumed by position.
+ *
+ * `focus.anchor === null` IS THE ONE CASE LEFT TO THE OLD CLAMP, AND IT IS SAFE TO. No anchor means
+ * either nothing is focused (`focus.lineIndex === null`, `repaintCurrentView`'s own guard skips the
+ * clamp entirely) or the cursor sits on a line with no identity to lose — a blank line, the one case
+ * `instance.ts` refuses to anchor at all. There is nothing there a heal could overwrite that this
+ * check would have caught, so refusing it here would decline a heal that costs the operator nothing.
  */
 function healFromRefusal(path, current) {
   if (typeof current !== "string") {
@@ -2980,6 +3008,12 @@ function healFromRefusal(path, current) {
   }
   if (path !== paintedPath() || aLineIsOpen() || queued.pending(path) !== null) {
     return false;
+  }
+  if (focus.anchor !== null) {
+    const cursorReading = focus.reanchor(current, currentViewId ?? "");
+    if (cursorReading.outcome !== "found") {
+      return false;
+    }
   }
   accepted.take(path, current);
   served.take(path, current);
