@@ -1627,6 +1627,41 @@ capabilities:
     the same field. Each is `newline.ts`'s GLOBAL-rung posture applied to a different question.
     NOT VERIFIED. No browser, no passkey session, no live server, no cycle, and nothing was rendered
     to anybody — see `rooting` below.
+    ── UPDATE 2026-08-03, THE COMPILE THAT PRODUCES THIS KEY NOW ALSO RUNS AT RUNTIME, IN THE
+    WORKER — `design-the-runtime-compile.md` step C, the same move `structural-language-is-
+    published-not-guessed` already recorded for the structural key. Before this,
+    `scripts/generate-qualification-declaration.mjs` was development-time-only. It is now a PURE
+    `compile(files)` (`scripts/compile-qualification.mjs`, importing only `yaml-subset.mjs` and
+    `ledger.mjs` — both zero-import) with TWO callers: the unchanged CLI shell, and a new Worker
+    route, `POST /config/compile/qualification` (`worker/src/config.js`), that runs Gate 1 only —
+    no Gate 2, no graph-server call, no persistence, no version minting. THIS IS A VERTICAL MOVE: a
+    person can now POST a qualification-config fragment to a real, running endpoint and watch it
+    compile or refuse, which was not previously true of any code path this capability names.
+    BYTE-IDENTITY, PROVEN, NOT ASSUMED. The CLI's output is unchanged: `presentation.json` is
+    byte-identical before and after the refactor over the operator's real 276-file config, sha256
+    `e4867b5e72f2266fe9784af6842a7099ed9ddf2b716360b3ca0a18c62d14a6d1` — the SAME hash
+    `structural-language-is-published-not-guessed` already recorded for its own port, unchanged
+    across this one too, three consecutive runs. ISOLATE CONFORMANCE IS SETTLED FOR
+    THIS GENERATOR TOO, by the real local Worker runtime (`wrangler dev`, un-deployed), not
+    assumed: Node's V8 and `workerd` produce byte-identical `compile()` output for the synthetic
+    fixture, the operator's real config, AND a mutation (a section's `qualification:` repointed at
+    a pattern name `patterns/` never defines) that produces the identical refusal sentence in both
+    runtimes — `scripts/check-isolate-conformance.mjs`, extended to run all three cases against
+    both routes, six cases total, all agreed. THE REFUSAL CONTRACT THIS CAPABILITY'S OWN PROSE
+    NAMES SURVIVES THE MOVE, WORD FOR WORD — `unresolvable field(s): project`
+    (`tests/app-generality-acceptance.test.mjs`) is unchanged, because `normalisePattern`, the
+    function that throws it, moved file but not behaviour. `docs/architecture/operator-set.json`
+    and `tests/operator-set-agreement.test.mjs`, which index this generator's `RESOLVABLE_FIELDS`
+    and grammar directly, and `scripts/generate-operator-set.mjs`'s generated copies in
+    `app/present/membership.ts` and `scripts/qualification-agreement.py`, are all unchanged and all
+    still pass — verified, not assumed, because this generator is the one this repo's own operator-
+    set index depends on. A REAL SCANNER-COVERAGE GAP THE STRUCTURAL PORT LEFT, FOUND AND CLOSED
+    HERE: `tests/declaration-drop.test.mjs` section 7's completeness sweep scans a fixed list of
+    generator files for an unclassified `continue;`; `5d4f1b5` moved structural's own `continue`s
+    into `compile-structural.mjs` without adding that file to the scanned list, so every one of
+    them has been unscanned by that sweep since it merged. This pass adds both `compile-
+    qualification.mjs` and `compile-structural.mjs` to the scanned list, closing the gap for both
+    generators rather than only the one this pass touches.
   tier: functional
   rooting: >-
     PARTIALLY ROOTED AS OF 2026-08-01, CORRECTING THE CLAIM THIS FIELD MADE THE DAY BEFORE. It used
