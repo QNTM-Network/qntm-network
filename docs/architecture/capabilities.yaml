@@ -1412,6 +1412,25 @@ capabilities:
     parsing logic into its own zero-Node-import file rather than guarding the crash. Gate 2,
     persistence, version minting and the config editor remain exactly where the design document
     put them — not this step's job, not built here.
+    ── UPDATE 2026-08-03, THE MANUAL PROOF NOW REPEATS ITSELF — the isolate-conformance comparison
+    the UPDATE immediately above this one describes was run ONCE, BY HAND, and no automated check
+    ever re-ran it. `scripts/check-isolate-conformance.mjs`
+    (`.github/workflows/isolate-conformance.yml`) now re-runs the same three cases — the synthetic
+    fixture, the operator's real config, and the refusal mutation — on every push: a real, local,
+    un-deployed `wrangler dev` is spawned, and its `compile()` output is diffed against Node's,
+    byte for byte, refusal wording included. THIS IS A TIME MOVE, NOT A SECOND VERTICAL ONE: no
+    route opens that was not already open (that is the UPDATE above); what changes is whether the
+    fact the route was proven to hold STAYS true as `worker/src/config.js`,
+    `scripts/compile-structural.mjs`, or Wrangler's own bundled `workerd` build change under it —
+    previously nothing would have caught a divergence; now something does. PROVEN TO CATCH ONE,
+    NOT ASSUMED TO: the check was run against `worker/src/config.js` patched to add one extra
+    response key, failed, naming the exact case and the exact bytes that disagreed, then passed
+    clean again once the patch was reverted (never committed) —
+    `design-the-runtime-compile.md` §6.3's own falsifier, exercised for real. THREE OUTCOMES, NOT
+    TWO, and CI can tell them apart: agreement passes quietly, a real disagreement fails the build,
+    and a runtime (or the operator's config) that could not be compared on this runner raises a
+    named `::warning::` and step summary rather than either — a green build here never collapses
+    "agreed" and "did not look" into the same tick.
   tier: functional
   rooting: >-
     isolated for now, same family as `presentation-is-resolved-not-chosen` was at migration stage 2:

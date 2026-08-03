@@ -27,13 +27,16 @@
  *      is not an object, a file whose contents is not a string. None of these should ever reach
  *      `compile()` at all.
  *
- * WHAT THIS FILE DOES NOT PROVE, STATED PLAINLY. Whether the real Cloudflare Worker ISOLATE
- * (`workerd`, via `wrangler dev --local`) produces byte-identical output to this same call in
- * Node's V8 was checked by hand this session, against both a synthetic fixture and the operator's
- * real 276-file config with a real mutation, and confirmed identical — see this PR's own
- * description for the exact commands and bytes. It is not wired into this automated file because
- * no existing test in this repository spawns `wrangler dev`, and doing so inside `npm test` is a
- * separate, heavier piece of infrastructure than this slice's scope.
+ * WHAT THIS FILE DOES NOT PROVE, STATED PLAINLY. This file drives `handleConfig` directly, in
+ * Node — it never spawns the real Worker isolate, so it cannot by itself prove Node and `workerd`
+ * agree. That comparison was first checked by hand (PR #84's own description has the exact
+ * commands and bytes) and is now re-checked on every push by
+ * `scripts/check-isolate-conformance.mjs` (`.github/workflows/isolate-conformance.yml`), which
+ * spawns a real, local, un-deployed `wrangler dev` and runs the same three cases this file's own
+ * fixture and mutation anchor are built from. It is a separate script rather than a `node --test`
+ * file for one reason: it must run and report even when the runtime cannot be spawned at all
+ * (three distinct exit codes — see that script's own header), a shape `node --test`'s pass/skip
+ * model does not give a straightforward way to make loud.
  */
 
 import { test, describe } from "node:test";

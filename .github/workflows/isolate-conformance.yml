@@ -1,0 +1,89 @@
+# Isolate conformance — does the real Cloudflare Worker isolate agree with Node, byte for byte?
+#
+# `5d4f1b5` (PR #84) measured this BY HAND, once: a synthetic fixture, the operator's real
+# 276-file config, and a mutation that triggers a refusal — all three byte-identical between
+# Node's V8 and `workerd`, the refusal wording word for word. No test in this repo spawned the
+# Worker runtime to re-check it. `scripts/check-isolate-conformance.mjs` re-runs the same three
+# cases on every push — a fact nothing re-checks is not a fact this system trusts.
+#
+# NO PATH FILTER, DELIBERATELY. The premise this guards spans two directories that change
+# independently (`scripts/compile-structural.mjs`, `worker/src/config.js`) — gating on
+# `worker/**` alone (the way `worker.yml` does, for its own, different reason) would let a
+# `scripts/` change land with the isolate side never re-checked. `build.yml` takes the same
+# no-filter posture for the same reason.
+#
+# THREE OUTCOMES, not two — the check itself explains each in full; this job only turns the exit
+# code into the distinct GitHub-native signal `build.yml`'s own `checkdeclarations.mjs` step
+# already established the convention for, reused rather than reinvented:
+#   exit 0  COMPARED, AGREED     -> green, plain log.
+#   exit 1  COMPARED, DISAGREED  -> ::error::, job FAILS. A real divergence, never an infra flake.
+#   exit 3  NOT FULLY COMPARED   -> ::warning:: + step summary, job STAYS GREEN. The Worker
+#           runtime could not be spawned, and/or the operator's real config is not checked out
+#           (always true on this GitHub-hosted runner — it does not clone the private monorepo,
+#           same limit `build.yml`'s declaration-freshness step already lives with). A green tick
+#           here must never be read as "the runtimes were compared and agreed" — the step's own
+#           log and summary say, explicitly, which cases were and were not.
+#
+# JOB TIME, MEASURED: `npm ci` in worker/ (wrangler + the ~117 MB workerd binary, warm npm cache)
+# ~7s; the check itself (boot `wrangler dev`, run and compare all three cases, tear down) ~2s.
+# Checkout + setup-node overhead aside, this job's own work is under 15s. It runs in its own job,
+# in parallel with `build` and `worker` (GitHub-hosted runners, not the monorepo's single-executor
+# self-hosted box), so it adds a parallel ~15s job to the workflow, not serial time to either
+# existing job.
+
+name: isolate-conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  isolate-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: install the Worker's deps (wrangler + workerd)
+        working-directory: worker
+        run: npm ci
+
+      - name: Node vs. Worker isolate — byte identity, three cases
+        run: |
+          set +e
+          node scripts/check-isolate-conformance.mjs
+          code=$?
+          set -e
+          case "$code" in
+            0)
+              echo "All comparable cases ran; Node and the Worker isolate agreed, byte for byte."
+              ;;
+            1)
+              echo "::error::The Worker isolate and Node DISAGREED on at least one case. See the step log above for exactly which case and which bytes — this is a real divergence, not an infrastructure gap."
+              exit 1
+              ;;
+            3)
+              echo "::warning title=isolate conformance NOT FULLY COMPARED::Not every case could be compared on this runner (Worker runtime and/or the operator's real config unavailable — see the step log above for which). This is NOT a pass. No disagreement was found in what DID run."
+              {
+                echo "## Isolate conformance was NOT fully compared"
+                echo
+                echo "Read this as \"not fully checked\", never as \"checked and fine\". The step"
+                echo "log above names, case by case, which of the three (synthetic fixture,"
+                echo "mutation/refusal wording, the operator's real config) were compared and"
+                echo "which were not, and why. GitHub-hosted runners never have the operator's"
+                echo "real config checked out (same limit \`build.yml\`'s declaration-freshness"
+                echo "step already lives with) — that case is expected to say NOT COMPARED here."
+              } >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "::error::scripts/check-isolate-conformance.mjs exited ${code} — it crashed before reaching a verdict. This is a bug in the check, not a finding about the runtimes."
+              exit 1
+              ;;
+          esac
