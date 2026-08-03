@@ -164,9 +164,15 @@ describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into 
     // Before this change, `presentationFromDeclaration` (app/present/context.ts) called
     // `readDeclaration` and `readStructuralDeclaration` only — `readQualificationDeclaration` had
     // no production caller, only tests called it directly. This is the falsifier that it now does.
+    // RESTATED 2026-08-03: predicates 43 -> 64, sections 27 -> 32, when `presentation.json` was
+    // regenerated from monorepo `d4c9d98`. The counts are a census of HIS config, not a property
+    // of this wiring, and the config gained seven views (`all-qntm`, `assets-program`,
+    // `defects-program`, `habits-qntm`, `outcomes-all`, `outcomes-qntm`, `routines-qntm`). What
+    // this test actually falsifies — that `presentationFromDeclaration` carries the qualification
+    // axis at all — is unchanged, and `problems` is still empty.
     const declared = presentationFromDeclaration(SERVED);
-    assert.equal(Object.keys(declared.qualification.predicates).length, 43);
-    assert.equal(Object.keys(declared.qualification.sections).length, 27);
+    assert.equal(Object.keys(declared.qualification.predicates).length, 64);
+    assert.equal(Object.keys(declared.qualification.sections).length, 32);
     assert.deepEqual(declared.problems, [], "wiring qualification in introduced a reported problem");
   });
 

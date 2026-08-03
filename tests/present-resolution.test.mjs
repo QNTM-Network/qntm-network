@@ -65,10 +65,15 @@ describe("1. the shipped declaration reads cleanly", () => {
     assert.deepEqual(resolution.lineGrammars.checkbox_only, []);
   });
 
-  test("nine ordering sections, across the six views measured", () => {
+  test("fifteen ordering sections, across the six views measured", () => {
+    // RESTATED 2026-08-03: nine -> fifteen, when `presentation.json` was regenerated from monorepo
+    // `d4c9d98`. The six added sections are all `this-week`'s, from `a901fe8` (relative three-day
+    // window): due-yesterday, available-yesterday, due-today, available-today, due-tomorrow,
+    // available-tomorrow. The VIEW count is still six — no view gained or lost an ordering table.
     const { resolution } = readConfigResolutionDeclaration(SERVED);
     const count = Object.values(resolution.ordering).reduce((n, s) => n + Object.keys(s).length, 0);
-    assert.equal(count, 9);
+    assert.equal(count, 15);
+    assert.equal(Object.keys(resolution.ordering).length, 6, "a view gained or lost an ordering table");
     assert.deepEqual(resolution.ordering["this-week"]["overdue"].ordering, [
       { field: "due_date", direction: "asc" },
     ]);
@@ -298,8 +303,18 @@ describe("4. the falsifier: the app's answer follows the config, because it read
     const resolution = withMutatedConfig((configDir) => {
       const path = join(configDir, "views", "this-week.yaml");
       const original = readFileSync(path, "utf8");
-      // The FIRST 'direction: asc' in the file is 'overdue's own — its section starts the list.
-      const mutated = original.replace("direction: asc", "direction: desc");
+      // THE FALSIFIER AIMS AT `overdue` BY NAME, NOT BY POSITION. It used to take the FIRST
+      // 'direction: asc' in the file, on the stated ground that "its section starts the list".
+      // The monorepo's `a901fe8` (add relative three-day window) put six day-relative sections
+      // AHEAD of `overdue`, so that first match became `due-yesterday`'s. The edit then landed on
+      // a section this test says nothing about, `overdue` stayed `asc`, and a working generator
+      // was reported as broken. A falsifier that can lose its aim when a section is inserted
+      // above it is not a falsifier, so the aim is now taken from the section id.
+      const startsAt = original.indexOf("- id: overdue");
+      assert.notEqual(startsAt, -1, "the falsifier can no longer find overdue's own section");
+      const mutated =
+        original.slice(0, startsAt) +
+        original.slice(startsAt).replace("direction: asc", "direction: desc");
       assert.notEqual(mutated, original, "the falsifier's own edit did not apply");
       writeFileSync(path, mutated);
     });
