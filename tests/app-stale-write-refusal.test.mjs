@@ -310,6 +310,22 @@ const TYPED = "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task";
 const REFUSED =
   "this save was computed from an out-of-date copy of this file — the server refused it and nothing was written";
 
+/**
+ * WHAT THE SERVER ACTUALLY HOLDS BY THE TIME A REFUSAL COMES BACK, IN THE SCENARIO THAT DESTROYS A
+ * LINE (`refusal-must-not-clobber`, 2026-08-03). qntm:121 — the line the operator's cursor is
+ * anchored to — is GONE (completed and archived elsewhere, or ingested by an earlier write of his
+ * own), so qntm:122 has shifted up into the numeric line index qntm:121 used to occupy. A raw index
+ * clamp cannot tell that apart from "the same line, unchanged" — only an identity check can.
+ */
+const CURRENT_AFTER_CYCLE = [
+  "# This Week",
+  "",
+  "## Overdue",
+  "- [ ] Water the plants [[qntm:122]] #task",
+  "- [ ] Buy domain [[qntm:900]] #task",
+  "",
+].join("\n");
+
 const view = (markdown) => ({ id: "this-week", path: PATH, title: "This Week", domain: "work", markdown });
 
 describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app/index.html", () => {
@@ -357,7 +373,15 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
    * now; `i` (here, `page.__enterInsert()`, the state-level equivalent) is what arms typing.
    */
   function openTheLine() {
-    taskText().dispatch("click", makeEvent());
+    // A HEAL THAT RE-FINDS THE CURSOR BY IDENTITY (`refusal-must-not-clobber`) can leave it
+    // ALREADY on the task line — the correct outcome, and an improvement over the raw-index clamp
+    // it replaces, which only ever landed there by accident. `taskText()` finds the UN-FOCUSED
+    // rendition only (a span with resolved HTML); a line the cursor is already on renders as
+    // `paint.ts`'s `normalLine` instead (character spans, no `innerHTML`), which `taskText()` would
+    // not find. A click is needed only when the cursor is not already on a real task node.
+    if (page.__focusAnchor()?.node == null) {
+      taskText().dispatch("click", makeEvent());
+    }
     page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     assert.ok(input, "clicking the line, then arming INSERT, did not open it for typing");
@@ -543,6 +567,61 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     assert.equal(page.__served().markdown, MOVED_ON);
     assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through");
     assert.equal(page.__held().count, 0, "a tick has no characters, so it may hold none");
+  });
+
+  test("A HEAL MUST NOT CLOBBER A NEIGHBOUR — the cursor is re-found by identity, not carried as a raw index", async () => {
+    // THE LIVE DEFECT (`refusal-must-not-clobber`, 2026-08-03), REDUCED TO ITS SMALLEST SHAPE. The
+    // operator's cursor is anchored to qntm:121 BY IDENTITY. Between his last paint and this
+    // refusal, the file the server actually holds has moved on without him: qntm:121 is gone and
+    // qntm:122 — a real line he never touched — has shifted up into the exact numeric position his
+    // cursor's index still names. `healFromRefusal` adopts `current` and repaints through
+    // `repaintCurrentView`, which (unfixed) clamps `focus.lineIndex` NUMERICALLY rather than
+    // re-finding it by identity — so the cursor silently lands on qntm:122, and the very next
+    // keystroke overwrites it. This is the same shape a `insert-line` settling onto a phantom,
+    // never-written row produces in the real app; a tick refusal reaches the identical code path
+    // with far less machinery to stand up.
+    refuseWith = {
+      status: 409,
+      body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: CURRENT_AFTER_CYCLE },
+    };
+
+    open(V1);
+    // THE OPERATOR'S CURSOR IS ON qntm:121 BY IDENTITY — exactly as a click would leave it.
+    page.__setFocus(3, V1);
+    assert.equal(page.__focusAnchor()?.node, "qntm:121", "the arm did not anchor the cursor it means to lose");
+
+    // He ticks that box. The server refuses it — qntm:121 is not in the file it actually holds —
+    // and hands back a file in which a DIFFERENT real line now sits at the same numeric position.
+    const box = walk(elements.get("viewBody")).filter((el) => el.type === "checkbox")[0];
+    box.checked = true;
+    box.dispatch("change");
+    await settle();
+
+    // THE OPERATOR, BELIEVING THE CURSOR IS STILL WHERE HE LEFT IT, KEEPS TYPING. `__enterInsert`
+    // arms whatever line the (possibly wrongly re-anchored) cursor is on now.
+    page.__enterInsert();
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    assert.ok(input, "the heal left no line open for typing");
+    input.value = "- [ ] zzTEST typed after the heal";
+    input.dispatch("blur");
+    await settle();
+
+    // THE MUTATION-PROOF-WORTHY ASSERTION: qntm:122 — a real line the operator never named — must
+    // survive byte for byte, whatever the heal decided to do. Checked on the wire (what was
+    // actually posted, if anything was) and on screen (what he is left looking at).
+    const lastPost = posted.at(-1);
+    if (lastPost !== undefined) {
+      assert.match(
+        lastPost.markdown,
+        /- \[ \] Water the plants \[\[qntm:122\]\] #task/,
+        "the heal clobbered a neighbour it never named — qntm:122 was overwritten",
+      );
+    }
+    assert.match(
+      onScreen(),
+      /Water the plants/,
+      "the heal clobbered a neighbour it never named — qntm:122 is gone from the screen",
+    );
   });
 
   test("THE CONTROL — an ordinary failure still repaints from the last server state", async () => {
