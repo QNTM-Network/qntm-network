@@ -112,7 +112,7 @@
 
 import { relativeAnchorFor, resolveRelativeAnchor } from "./relative.js";
 import type { RelativeAnchor, RelativeRefusal } from "./relative.js";
-import { classifyLine, qntmIdSpans } from "./resolution.js";
+import { classifyLine, qntmIdSpans } from "./rendition.js";
 
 /** The identity token an unstamped heading uses — see the header for why it is a constant. */
 const HEADING_TOKEN = "§heading";

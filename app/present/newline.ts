@@ -142,7 +142,7 @@
  */
 
 import { sectionForInsertAt } from "./address.js";
-import { chromeOf, classifyLine } from "./resolution.js";
+import { chromeOf, classifyLine } from "./rendition.js";
 import { placeFor } from "./draft.js";
 import type { PresentationLevel } from "./levels.js";
 import type { DraftSurface } from "./draft.js";

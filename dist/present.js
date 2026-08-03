@@ -12,7 +12,7 @@ function isSilent(contribution) {
   return contribution === void 0 || Object.keys(contribution).length === 0;
 }
 
-// app/present/resolution.ts
+// app/present/rendition.ts
 var RESOLUTION_KEYS = [
   "checkbox",
   "heading",

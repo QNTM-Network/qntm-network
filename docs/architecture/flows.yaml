@@ -191,7 +191,7 @@ expected_flows:
   # regexes at three call sites.
   - id: paint-classifies-the-line
     from: app/present/paint
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.classifies-a-source-line
     class: presentation-resolution
@@ -210,7 +210,7 @@ expected_flows:
   # evidence that a declaration reached the painter and was obeyed.
   - id: paint-finds-the-tags-in-the-line
     from: app/present/paint
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: tagSpans
     event: app.finds-the-tags-in-a-line
     class: presentation-resolution
@@ -229,7 +229,7 @@ expected_flows:
   # a declaration of `stamp: wired` reached the painter and was obeyed rather than merely loaded.
   - id: paint-finds-the-identity-stamp-in-the-line
     from: app/present/paint
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: stampSpans
     event: app.finds-the-identity-stamp-in-a-line
     class: presentation-resolution
@@ -351,7 +351,7 @@ expected_flows:
   # stops a node titled nothing from being minted, which was measured against a real cycle.
   - id: source-asks-the-grammar-whether-a-line-carries-content
     from: app/present/source
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: carriesContent
     event: app.judges-a-line-empty
     class: source-write-back
@@ -363,7 +363,7 @@ expected_flows:
   # answer instead of re-deriving it.
   - id: newline-reads-the-printed-shape
     from: app/present/newline
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: chromeOf
     event: app.reads-the-printed-shape
     class: presentation-resolution
@@ -375,7 +375,7 @@ expected_flows:
   # view's. Same grammar as the painter's, asked for a different purpose.
   - id: newline-finds-the-section-boundary
     from: app/present/newline
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.finds-a-section-boundary
     class: presentation-resolution
@@ -454,7 +454,7 @@ expected_flows:
 
   - id: boundary-classifies-the-line
     from: app/present/boundary
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.finds-a-structural-boundary
     class: presentation-resolution
@@ -462,7 +462,7 @@ expected_flows:
 
   - id: indent-classifies-the-line
     from: app/present/indent
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.decides-whether-a-line-may-be-indented
     class: presentation-resolution
@@ -470,7 +470,7 @@ expected_flows:
 
   - id: word-finds-the-title-words
     from: app/present/word
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: titleSpans
     event: app.finds-the-title-words-for-a-word-jump
     class: presentation-resolution
@@ -493,7 +493,7 @@ expected_flows:
 
   - id: membership-reads-the-lines-identity-stamp
     from: app/present/membership
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: qntmIdSpans
     event: app.checks-whether-the-line-is-already-a-node
     class: section-membership
@@ -501,7 +501,7 @@ expected_flows:
 
   - id: membership-reads-the-lines-tags
     from: app/present/membership
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: tagSpans
     event: app.resolves-the-lines-fields-from-its-tokens
     class: section-membership
@@ -509,7 +509,7 @@ expected_flows:
 
   - id: membership-checks-the-line-carries-content
     from: app/present/membership
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: carriesContent
     event: app.refuses-a-line-that-would-mint-an-untitled-node
     class: section-membership
@@ -527,7 +527,7 @@ expected_flows:
   # evaluation are two different layers with two different reaches.
   - id: address-classifies-the-line
     from: app/present/address
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.counts-a-lines-section-ordinal
     class: section-addressing
@@ -557,7 +557,7 @@ expected_flows:
   # takes for a type-only import elsewhere.
   - id: ordering-classifies-the-line
     from: app/present/ordering
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.finds-a-sections-line-range
     class: presentation-resolution
@@ -645,7 +645,7 @@ expected_flows:
   # promoted from INFO to declared on 2026-07-31.
   - id: instance-classifies-the-line
     from: app/present/instance
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: classifyLine
     event: app.counts-the-section-a-printed-row-sits-in
     class: section-addressing
@@ -653,7 +653,7 @@ expected_flows:
 
   - id: instance-reads-the-stamp
     from: app/present/instance
-    to:   app/present/resolution
+    to:   app/present/rendition
     callee: qntmIdSpans
     event: app.reads-a-printed-rows-node-id
     class: section-addressing

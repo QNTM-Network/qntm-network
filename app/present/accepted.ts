@@ -3,7 +3,9 @@
  * replaces it.
  *
  * PURE. No DOM, no fetch, no clock, and it imports nothing — the same posture as `base.ts`,
- * `queue.ts`, `pickup.ts`, `focus.ts` and `draft.ts`.
+ * `queue.ts` and `pickup.ts`. `focus.ts` and `draft.ts` do NOT share this posture: `focus.ts`
+ * imports from `context.ts`, `instance.ts`, `motions.ts` and `rendition.ts`, and `draft.ts`
+ * imports from `instance.ts` and `relative.ts`.
  *
  * ── WHY THIS EXISTS, AND WHY IT IS NOT A SECOND COPY OF THE PROJECTION ──
  *

@@ -18,8 +18,8 @@
 
 import { SPECIFICITY, isSilent } from "./levels.js";
 import type { PresentationLevel } from "./levels.js";
-import { DEFAULT } from "./resolution.js";
-import type { Rendition, ResolutionKey } from "./resolution.js";
+import { DEFAULT } from "./rendition.js";
+import type { Rendition, ResolutionKey } from "./rendition.js";
 import type { PresentationContext } from "./context.js";
 
 /** A decision and its provenance: what won, and which level won it. */

@@ -54,8 +54,8 @@
  * document, four strict readers, each owning one axis and none of the other three's keys.
  */
 
-import { RESOLUTION_KEYS } from "./resolution.js";
-import type { Contribution, Rendition } from "./resolution.js";
+import { RESOLUTION_KEYS } from "./rendition.js";
+import type { Contribution, Rendition } from "./rendition.js";
 import { STRUCTURAL_KEY } from "./structural.js";
 import { QUALIFICATION_KEY } from "./qualification.js";
 import { RESOLUTION_TABLE_KEY } from "./resolutiontable.js";

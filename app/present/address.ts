@@ -49,7 +49,7 @@
  * "above the first heading" floor.
  */
 
-import { classifyLine } from "./resolution.js";
+import { classifyLine } from "./rendition.js";
 
 /**
  * The 0-based ordinal of the section that contains `lineIndex` — counting every heading at or
