@@ -81,6 +81,7 @@
     "tokens": {
       "node_type": {
         "#task": "task",
+        "#step": "step",
         "#outcome": "outcome",
         "#project": "project",
         "#routine": "routine",
@@ -97,6 +98,8 @@
         "#writer": "writer",
         "#blog": "blog",
         "#attribute": "attribute",
+        "#defect": "defect",
+        "#asset": "asset",
         "#initiative": "initiative",
         "#strategy": "strategy",
         "#system-sharpener": "system_sharpener",
@@ -114,6 +117,7 @@
         "#work": "work",
         "#personal": "personal",
         "#dev": "dev",
+        "#qntm": "qntm",
         "#home": "home",
         "#arts": "arts",
         "#social": "social",
@@ -253,6 +257,19 @@
           "fields": {
             "domain": {
               "eq": "program"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-qntm-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "qntm"
             }
           }
         },
@@ -649,6 +666,230 @@
         },
         "exclude": []
       },
+      "outcomes-admin": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "admin"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-arts": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "arts"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-character": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "character"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-dev": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "dev"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-dojo": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "dojo"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-health": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "health"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-home": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "home"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-life-admin": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "life-admin"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-personal": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "personal"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-program": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "program"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-qntm": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "qntm"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-social": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "social"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-spirit": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "spirit"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "outcomes-work": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "domain": {
+              "eq": "work"
+            }
+          }
+        },
+        "exclude": []
+      },
       "personal-routines": {
         "find": {
           "nodeType": [
@@ -681,6 +922,70 @@
         },
         "exclude": []
       },
+      "program-assets-active": {
+        "find": {
+          "nodeType": [
+            "asset"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "program-assets-inactive": {
+        "find": {
+          "nodeType": [
+            "asset"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "program-defects-active": {
+        "find": {
+          "nodeType": [
+            "defect"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "program-defects-inactive": {
+        "find": {
+          "nodeType": [
+            "defect"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
       "program-routines": {
         "find": {
           "nodeType": [
@@ -705,6 +1010,38 @@
           "fields": {
             "domain": {
               "eq": "program"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "qntm"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "qntm"
             },
             "status": {
               "eq": "scheduled"
@@ -936,6 +1273,16 @@
           }
         }
       },
+      "all-qntm": {
+        "tasks": {
+          "qualification": "all-qntm-nodes",
+          "nodeType": "task",
+          "name": "All qntm",
+          "defaults": {
+            "domain": "qntm"
+          }
+        }
+      },
       "all-social": {
         "tasks": {
           "qualification": "all-social-nodes",
@@ -953,6 +1300,26 @@
           "name": "All Spirit",
           "defaults": {
             "domain": "spirit"
+          }
+        }
+      },
+      "assets-program": {
+        "active-assets": {
+          "qualification": "program-assets-active",
+          "nodeType": "asset",
+          "name": "Active Assets",
+          "defaults": {
+            "domain": "program",
+            "status": "open"
+          }
+        },
+        "inactive-assets": {
+          "qualification": "program-assets-inactive",
+          "nodeType": "asset",
+          "name": "Inactive Assets",
+          "defaults": {
+            "domain": "program",
+            "status": "done"
           }
         }
       },
@@ -1025,6 +1392,26 @@
           "name": "In Progress",
           "defaults": {
             "domain": "work"
+          }
+        }
+      },
+      "defects-program": {
+        "active-defects": {
+          "qualification": "program-defects-active",
+          "nodeType": "defect",
+          "name": "Active Defects",
+          "defaults": {
+            "domain": "program",
+            "status": "open"
+          }
+        },
+        "inactive-defects": {
+          "qualification": "program-defects-inactive",
+          "nodeType": "defect",
+          "name": "Inactive Defects",
+          "defaults": {
+            "domain": "program",
+            "status": "done"
           }
         }
       },
@@ -1106,6 +1493,78 @@
           "name": "Domain Empty"
         }
       },
+      "outcomes-all": {
+        "work-outcomes": {
+          "qualification": "outcomes-work",
+          "nodeType": "task",
+          "name": "Work Outcomes"
+        },
+        "personal-outcomes": {
+          "qualification": "outcomes-personal",
+          "nodeType": "task",
+          "name": "Personal Outcomes"
+        },
+        "health-outcomes": {
+          "qualification": "outcomes-health",
+          "nodeType": "task",
+          "name": "Health Outcomes"
+        },
+        "dev-outcomes": {
+          "qualification": "outcomes-dev",
+          "nodeType": "task",
+          "name": "Dev Outcomes"
+        },
+        "qntm-outcomes": {
+          "qualification": "outcomes-qntm",
+          "nodeType": "task",
+          "name": "qntm Outcomes"
+        },
+        "home-outcomes": {
+          "qualification": "outcomes-home",
+          "nodeType": "task",
+          "name": "Home Outcomes"
+        },
+        "arts-outcomes": {
+          "qualification": "outcomes-arts",
+          "nodeType": "task",
+          "name": "Arts Outcomes"
+        },
+        "social-outcomes": {
+          "qualification": "outcomes-social",
+          "nodeType": "task",
+          "name": "Social Outcomes"
+        },
+        "program-outcomes": {
+          "qualification": "outcomes-program",
+          "nodeType": "task",
+          "name": "Program Outcomes"
+        },
+        "character-outcomes": {
+          "qualification": "outcomes-character",
+          "nodeType": "task",
+          "name": "Character Outcomes"
+        },
+        "admin-outcomes": {
+          "qualification": "outcomes-admin",
+          "nodeType": "task",
+          "name": "Admin Outcomes"
+        },
+        "spirit-outcomes": {
+          "qualification": "outcomes-spirit",
+          "nodeType": "task",
+          "name": "Spirit Outcomes"
+        },
+        "dojo-outcomes": {
+          "qualification": "outcomes-dojo",
+          "nodeType": "task",
+          "name": "Dojo Outcomes"
+        },
+        "life-admin-outcomes": {
+          "qualification": "outcomes-life-admin",
+          "nodeType": "task",
+          "name": "Life Admin Outcomes"
+        }
+      },
       "people": {
         "people": {
           "qualification": "social-people",
@@ -1172,6 +1631,21 @@
         },
         "upcoming": {
           "qualification": "program-routines-upcoming",
+          "nodeType": "routine",
+          "name": "Upcoming"
+        }
+      },
+      "routines-qntm": {
+        "qntm-routines": {
+          "qualification": "qntm-routines",
+          "nodeType": "routine",
+          "name": "qntm Routines",
+          "defaults": {
+            "domain": "qntm"
+          }
+        },
+        "upcoming": {
+          "qualification": "qntm-routines-upcoming",
           "nodeType": "routine",
           "name": "Upcoming"
         }
@@ -1247,6 +1721,14 @@
             "domain": "program"
           }
         },
+        "qntm-routines": {
+          "qualification": "qntm-routines",
+          "nodeType": "task",
+          "name": "qntm Routines",
+          "defaults": {
+            "domain": "qntm"
+          }
+        },
         "spirit-routines": {
           "qualification": "spirit-routines",
           "nodeType": "task",
@@ -1314,6 +1796,9 @@
       "all-program": [
         "tasks"
       ],
+      "all-qntm": [
+        "tasks"
+      ],
       "all-social": [
         "tasks"
       ],
@@ -1322,6 +1807,10 @@
       ],
       "all-work": [
         "tasks"
+      ],
+      "assets-program": [
+        "active-assets",
+        "inactive-assets"
       ],
       "backlog": [
         "unscoped",
@@ -1355,6 +1844,10 @@
         "due-today",
         "waiting",
         "capture"
+      ],
+      "defects-program": [
+        "active-defects",
+        "inactive-defects"
       ],
       "ego-ideal": [
         "developing",
@@ -1432,6 +1925,10 @@
         "unanchored-habits",
         "habits"
       ],
+      "habits-qntm": [
+        "unanchored-habits",
+        "habits"
+      ],
       "habits-spirit": [
         "unanchored-habits",
         "habits"
@@ -1447,6 +1944,7 @@
         "work-habits",
         "personal-habits",
         "program-habits",
+        "qntm-habits",
         "spirit-habits"
       ],
       "inbox": [
@@ -1501,11 +1999,31 @@
         "outcomes",
         "waiting-for"
       ],
+      "outcomes-all": [
+        "work-outcomes",
+        "personal-outcomes",
+        "health-outcomes",
+        "dev-outcomes",
+        "qntm-outcomes",
+        "home-outcomes",
+        "arts-outcomes",
+        "social-outcomes",
+        "program-outcomes",
+        "character-outcomes",
+        "admin-outcomes",
+        "spirit-outcomes",
+        "dojo-outcomes",
+        "life-admin-outcomes"
+      ],
       "outcomes-personal": [
         "childless-outcomes",
         "outcomes"
       ],
       "outcomes-program": [
+        "childless-outcomes",
+        "outcomes"
+      ],
+      "outcomes-qntm": [
         "childless-outcomes",
         "outcomes"
       ],
@@ -1572,6 +2090,10 @@
         "program-routines",
         "upcoming"
       ],
+      "routines-qntm": [
+        "qntm-routines",
+        "upcoming"
+      ],
       "routines-spirit": [
         "spirit-routines",
         "upcoming"
@@ -1586,6 +2108,7 @@
         "work-routines",
         "personal-routines",
         "program-routines",
+        "qntm-routines",
         "spirit-routines"
       ],
       "termination-dojo": [
@@ -1595,6 +2118,12 @@
         "scratchpad-targets"
       ],
       "this-week": [
+        "due-yesterday",
+        "available-yesterday",
+        "due-today",
+        "available-today",
+        "due-tomorrow",
+        "available-tomorrow",
         "overdue",
         "due-this-week",
         "available-overdue",
@@ -1647,6 +2176,9 @@
       "all-work-nodes": "available_date: operator gt",
       "available-overdue": "available_date: operator lt",
       "available-this-week": "available_date: operator gte+lte",
+      "available-today": "available_date: cycle variable $cycle_today",
+      "available-tomorrow": "available_date: cycle variable $cycle_today + 1 d",
+      "available-yesterday": "available_date: cycle variable $cycle_today - 1 d",
       "captured-today": "created_at: cycle variable $cycle_today",
       "coverage-carrier-overall": "unresolvable field(s): title",
       "coverage-carrier-personal": "unresolvable field(s): title",
@@ -1660,6 +2192,9 @@
       "dev-tickets-unscoped": "unresolvable field(s): stage",
       "due-soon-tasks": "due_date: cycle variable $cycle_today",
       "due-this-week": "due_date: operator gte+lte",
+      "due-today": "due_date: cycle variable $cycle_today",
+      "due-tomorrow": "due_date: cycle variable $cycle_today + 1 d",
+      "due-yesterday": "due_date: cycle variable $cycle_today - 1 d",
       "flowtrace-capabilities-diagnose-ready": "unresolvable field(s): cap_state+project",
       "flowtrace-capabilities-in-progress": "unresolvable field(s): cap_state+project",
       "flowtrace-capabilities-passing": "unresolvable field(s): cap_state+project",
@@ -1717,6 +2252,7 @@
       "qntm-classes-exists": "unresolvable field(s): class_state+project",
       "qntm-classes-extracted": "unresolvable field(s): class_state+project",
       "qntm-classes-subsumed": "unresolvable field(s): class_state+project",
+      "qntm-habits": "step 0: traverses (children+exists)",
       "qntm-packages-concept": "unresolvable field(s): package_state+project",
       "qntm-packages-exists": "unresolvable field(s): package_state+project",
       "qntm-packages-extracted": "unresolvable field(s): package_state+project",
@@ -1794,6 +2330,8 @@
       "section 'habits-personal.unanchored-habits'": "qualification refused: unanchored-habits",
       "section 'habits-program.habits'": "qualification refused: habits-with-routines",
       "section 'habits-program.unanchored-habits'": "qualification refused: unanchored-habits",
+      "section 'habits-qntm.habits'": "qualification refused: habits-with-routines",
+      "section 'habits-qntm.unanchored-habits'": "qualification refused: unanchored-habits",
       "section 'habits-spirit.habits'": "qualification refused: habits-with-routines",
       "section 'habits-spirit.unanchored-habits'": "qualification refused: unanchored-habits",
       "section 'habits-work.habits'": "qualification refused: habits-with-routines",
@@ -1802,6 +2340,7 @@
       "section 'habits.life-admin-habits'": "qualification refused: life-admin-habits",
       "section 'habits.personal-habits'": "qualification refused: personal-habits",
       "section 'habits.program-habits'": "qualification refused: program-habits",
+      "section 'habits.qntm-habits'": "qualification refused: qntm-habits",
       "section 'habits.spirit-habits'": "qualification refused: spirit-habits",
       "section 'habits.unanchored-habits'": "qualification refused: unanchored-habits",
       "section 'habits.work-habits'": "qualification refused: work-habits",
@@ -1841,6 +2380,8 @@
       "section 'outcomes-personal.outcomes'": "qualification refused: outcomes-with-children",
       "section 'outcomes-program.childless-outcomes'": "qualification refused: inverse-orphans",
       "section 'outcomes-program.outcomes'": "qualification refused: outcomes-with-children",
+      "section 'outcomes-qntm.childless-outcomes'": "qualification refused: inverse-orphans",
+      "section 'outcomes-qntm.outcomes'": "qualification refused: outcomes-with-children",
       "section 'outcomes-spirit.childless-outcomes'": "qualification refused: inverse-orphans",
       "section 'outcomes-spirit.outcomes'": "qualification refused: outcomes-with-children",
       "section 'outcomes.childless-outcomes'": "qualification refused: inverse-orphans",
@@ -1871,7 +2412,13 @@
       "section 'test-scratchpad.scratchpad-targets'": "qualification refused: scratchpad-targets",
       "section 'this-week.available-overdue'": "qualification refused: available-overdue",
       "section 'this-week.available-this-week'": "qualification refused: available-this-week",
+      "section 'this-week.available-today'": "qualification refused: available-today",
+      "section 'this-week.available-tomorrow'": "qualification refused: available-tomorrow",
+      "section 'this-week.available-yesterday'": "qualification refused: available-yesterday",
       "section 'this-week.due-this-week'": "qualification refused: due-this-week",
+      "section 'this-week.due-today'": "qualification refused: due-today",
+      "section 'this-week.due-tomorrow'": "qualification refused: due-tomorrow",
+      "section 'this-week.due-yesterday'": "qualification refused: due-yesterday",
       "section 'this-week.overdue'": "qualification refused: overdue",
       "section 'trace-orchestration-queue.queue'": "qualification refused: trace-orchestration-queue-items",
       "section 'unlocks-dojo.chain'": "qualification refused: unlocks-dojo-heads",
@@ -1898,6 +2445,9 @@
       "vocabulary token '#docs'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#documentary'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#drama'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#evening-review'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-15th'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#every-1st'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#every-friday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#every-monday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#every-month-end'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
@@ -1935,12 +2485,14 @@
       "vocabulary token '#scifi'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#scope-{area}'": "sets 'scope' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#spike'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#step-10'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#termination'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#test'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#thriller'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#un-anchored'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#unscoped'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#unverifiable'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '#upset'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#violated'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#weekdays'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#weekends'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
@@ -2011,6 +2563,60 @@
         }
       },
       "this-week": {
+        "due-yesterday": {
+          "ordering": [
+            {
+              "field": "due_date",
+              "direction": "asc"
+            }
+          ],
+          "name": "Yesterday — Due"
+        },
+        "available-yesterday": {
+          "ordering": [
+            {
+              "field": "available_date",
+              "direction": "asc"
+            }
+          ],
+          "name": "Yesterday — Available"
+        },
+        "due-today": {
+          "ordering": [
+            {
+              "field": "due_date",
+              "direction": "asc"
+            }
+          ],
+          "name": "Today — Due"
+        },
+        "available-today": {
+          "ordering": [
+            {
+              "field": "available_date",
+              "direction": "asc"
+            }
+          ],
+          "name": "Today — Available"
+        },
+        "due-tomorrow": {
+          "ordering": [
+            {
+              "field": "due_date",
+              "direction": "asc"
+            }
+          ],
+          "name": "Tomorrow — Due"
+        },
+        "available-tomorrow": {
+          "ordering": [
+            {
+              "field": "available_date",
+              "direction": "asc"
+            }
+          ],
+          "name": "Tomorrow — Available"
+        },
         "overdue": {
           "ordering": [
             {
@@ -2081,9 +2687,11 @@
     },
     "chromeShapes": {
       "album": "checkbox",
+      "asset": "checkbox",
       "attribute": "checkbox",
       "blog": "checkbox",
       "book": "checkbox",
+      "defect": "checkbox",
       "film": "checkbox",
       "group": "plain_line",
       "person": "plain_line",
@@ -2185,6 +2793,18 @@
           ]
         }
       },
+      "all-qntm": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
+          ]
+        }
+      },
       "all-social": {
         "tasks": {
           "nodeType": "task",
@@ -2218,6 +2838,32 @@
           "tokens": [
             "#task",
             "#work"
+          ]
+        }
+      },
+      "assets-program": {
+        "active-assets": {
+          "nodeType": "asset",
+          "defaults": {
+            "domain": "program",
+            "status": "open"
+          },
+          "tokens": [
+            "#asset",
+            "[ ]",
+            "#program"
+          ]
+        },
+        "inactive-assets": {
+          "nodeType": "asset",
+          "defaults": {
+            "domain": "program",
+            "status": "done"
+          },
+          "tokens": [
+            "#asset",
+            "[x]",
+            "#program"
           ]
         }
       },
@@ -2464,6 +3110,32 @@
           "tokens": [
             "#task",
             "#work"
+          ]
+        }
+      },
+      "defects-program": {
+        "active-defects": {
+          "nodeType": "defect",
+          "defaults": {
+            "domain": "program",
+            "status": "open"
+          },
+          "tokens": [
+            "#defect",
+            "[ ]",
+            "#program"
+          ]
+        },
+        "inactive-defects": {
+          "nodeType": "defect",
+          "defaults": {
+            "domain": "program",
+            "status": "done"
+          },
+          "tokens": [
+            "#defect",
+            "[x]",
+            "#program"
           ]
         }
       },
@@ -2967,6 +3639,28 @@
           ]
         }
       },
+      "habits-qntm": {
+        "unanchored-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
+          ]
+        },
+        "habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
+          ]
+        }
+      },
       "habits-spirit": {
         "unanchored-habits": {
           "nodeType": "task",
@@ -3066,6 +3760,16 @@
           "tokens": [
             "#task",
             "#program"
+          ]
+        },
+        "qntm-habits": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
           ]
         },
         "spirit-habits": {
@@ -3361,6 +4065,92 @@
           ]
         }
       },
+      "outcomes-all": {
+        "work-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "personal-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "health-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "dev-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "qntm-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "home-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "arts-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "social-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "program-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "character-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "admin-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "spirit-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "dojo-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "life-admin-outcomes": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        }
+      },
       "outcomes-personal": {
         "childless-outcomes": {
           "nodeType": "task",
@@ -3402,6 +4192,28 @@
           "tokens": [
             "#task",
             "#program"
+          ]
+        }
+      },
+      "outcomes-qntm": {
+        "childless-outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
+          ]
+        },
+        "outcomes": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
           ]
         }
       },
@@ -3813,6 +4625,21 @@
           "tokens": []
         }
       },
+      "routines-qntm": {
+        "qntm-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#qntm"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
       "routines-spirit": {
         "spirit-routines": {
           "nodeType": "routine",
@@ -3894,6 +4721,16 @@
             "#program"
           ]
         },
+        "qntm-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "qntm"
+          },
+          "tokens": [
+            "#task",
+            "#qntm"
+          ]
+        },
         "spirit-routines": {
           "nodeType": "task",
           "defaults": {
@@ -3930,6 +4767,42 @@
         }
       },
       "this-week": {
+        "due-yesterday": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "available-yesterday": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "due-today": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "available-today": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "due-tomorrow": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
+        "available-tomorrow": {
+          "nodeType": "task",
+          "tokens": [
+            "#task"
+          ]
+        },
         "overdue": {
           "nodeType": "task",
           "tokens": [
@@ -4094,6 +4967,9 @@
       "rule 'auto-habit-without-routine-children-reverts-to-task'": "its pattern 'auto-habits-without-routine-children' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'auto-outcome-without-open-children-reverts-to-task'": "its pattern 'auto-outcomes-without-open-children' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'outcome-with-routine-child-becomes-habit'": "its pattern 'outcomes-with-routine-child' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'step-with-cadence-becomes-routine'": "its pattern 'steps-under-routines' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'step-without-routine-parent-becomes-task'": "its pattern 'steps-without-routine-parent' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'task-under-routine-becomes-step'": "its pattern 'tasks-under-routines' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'task-with-open-part-of-child-becomes-outcome'": "its pattern 'tasks-with-open-part-of-child' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'task-with-open-waiting-for-child-becomes-outcome'": "its pattern 'tasks-with-open-waiting-for-child' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'task-with-routine-child-becomes-habit'": "its pattern 'tasks-with-routine-child' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
@@ -4174,6 +5050,8 @@
       "section 'routines-personal.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'routines-program.program-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'routines-program.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-qntm.qntm-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-qntm.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'routines-spirit.spirit-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'routines-spirit.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'routines-work.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
