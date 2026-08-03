@@ -53,6 +53,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { REPO_ROOT, DEFAULT_CONFIG_DIR } from "./monorepo-config.mjs";
+import { receipt } from "../worker/src/config.js";
 import {
   compile as compileStructural,
   STRUCTURAL_TOKENS_KEY,
@@ -211,13 +212,28 @@ async function postToWorker(baseUrl, routePath, files) {
 }
 
 /** Run ONE generator's `compile()` directly in THIS process (Node's V8) and normalise its outcome
- * to the same shape `postToWorker` returns, so the two can be diffed with one function. */
+ * to the same shape `postToWorker` returns, so the two can be diffed with one function. The
+ * receipt is built with `worker/src/config.js`'s own exported `receipt()` — not a hand-copied
+ * shape — so a real divergence in the ROUTE'S OWN construction of it would still show up as a
+ * disagreement here rather than being silently matched by a script that assumes what the route
+ * does. */
 function compileInNode(compileFn, files) {
   try {
-    const { declaration, dropped } = compileFn(files);
-    return { status: 200, body: { ok: true, declaration, dropped } };
+    const { declaration, dropped, version } = compileFn(files);
+    return {
+      status: 200,
+      body: { ok: true, declaration, dropped, receipt: receipt({ compiled: true, version }) },
+    };
   } catch (error) {
-    return { status: 422, body: { ok: false, refused: true, error: String(error?.message || error) } };
+    return {
+      status: 422,
+      body: {
+        ok: false,
+        refused: true,
+        error: String(error?.message || error),
+        receipt: receipt({ compiled: false, version: null }),
+      },
+    };
   }
 }
 

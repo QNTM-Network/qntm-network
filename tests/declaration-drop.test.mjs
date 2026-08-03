@@ -400,7 +400,11 @@ describe("2. THE MUTATION PROOF — re-introduce a silent drop and a test goes r
       assert.notEqual(mutated, source, "the mutation's own patch did not apply");
       const rewritten = mutated
         .replaceAll('from "./yaml-subset.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "yaml-subset.mjs"))}`)
-        .replaceAll('from "./ledger.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "ledger.mjs"))}`);
+        .replaceAll('from "./ledger.mjs"', `from ${JSON.stringify(join(REPO, "scripts", "ledger.mjs"))}`)
+        .replaceAll(
+          'from "./declaration-version.mjs"',
+          `from ${JSON.stringify(join(REPO, "scripts", "declaration-version.mjs"))}`,
+        );
       const path = join(scratch, "mutant-compile.mjs");
       writeFileSync(path, rewritten);
       const mutant = await import(`file://${path}`);

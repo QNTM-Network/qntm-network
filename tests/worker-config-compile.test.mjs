@@ -138,6 +138,12 @@ describe("1a. structural — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
       edgeTypes: ["UNLOCKS"],
       edgeDirection: "outgoing",
     });
+    // THE RECEIPT — the same version compile() itself computed, and an honest set of promises.
+    assert.equal(body.receipt.compiled, true);
+    assert.equal(body.receipt.version, direct.version);
+    assert.match(body.receipt.version, /^sha256-[0-9a-f]{64}$/);
+    assert.equal(body.receipt.stored, false);
+    assert.equal(body.receipt.engineAccepted, null);
   });
 });
 
@@ -178,6 +184,11 @@ describe("2a. structural — THE MUTATION PROOF", () => {
     assert.equal(after.body.refused, true);
     // THE POINT OF THE SLICE: the exact sentence, unchanged by the move into the Worker route.
     assert.equal(after.body.error, directMessage);
+    // THE REFUSAL'S OWN RECEIPT — no version was minted, because nothing compiled.
+    assert.equal(after.body.receipt.compiled, false);
+    assert.equal(after.body.receipt.version, null);
+    assert.equal(after.body.receipt.stored, false);
+    assert.equal(after.body.receipt.engineAccepted, null);
   });
 });
 
@@ -195,6 +206,12 @@ describe("1b. qualification — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
     // refused-for-traversal pattern (`tests/declaration-drop.test.mjs`'s own DROP 14 anchor).
     assert.ok("local-tasks" in body.declaration.predicates);
     assert.equal(body.declaration.refused["traversing-tasks"], "step 0: traverses (exists+parents)");
+    // THE RECEIPT — the same version compile() itself computed, and an honest set of promises.
+    assert.equal(body.receipt.compiled, true);
+    assert.equal(body.receipt.version, direct.version);
+    assert.match(body.receipt.version, /^sha256-[0-9a-f]{64}$/);
+    assert.equal(body.receipt.stored, false);
+    assert.equal(body.receipt.engineAccepted, null);
   });
 });
 
@@ -231,6 +248,11 @@ describe("2b. qualification — THE MUTATION PROOF", () => {
     assert.equal(after.body.refused, true);
     // THE POINT OF THE SLICE: the exact sentence, unchanged by the move into the Worker route.
     assert.equal(after.body.error, directMessage);
+    // THE REFUSAL'S OWN RECEIPT — no version was minted, because nothing compiled.
+    assert.equal(after.body.receipt.compiled, false);
+    assert.equal(after.body.receipt.version, null);
+    assert.equal(after.body.receipt.stored, false);
+    assert.equal(after.body.receipt.engineAccepted, null);
   });
 });
 
@@ -248,6 +270,12 @@ describe("1c. resolution — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
     // and its one real ordering declaration (main.open -> due_date asc) are actually present.
     assert.equal(body.declaration.registration.defaultNodeType, "task");
     assert.deepEqual(body.declaration.ordering.main.open.ordering, [{ field: "due_date", direction: "asc" }]);
+    // THE RECEIPT — the same version compile() itself computed, and an honest set of promises.
+    assert.equal(body.receipt.compiled, true);
+    assert.equal(body.receipt.version, direct.version);
+    assert.match(body.receipt.version, /^sha256-[0-9a-f]{64}$/);
+    assert.equal(body.receipt.stored, false);
+    assert.equal(body.receipt.engineAccepted, null);
   });
 });
 
@@ -287,6 +315,11 @@ describe("2c. resolution — THE MUTATION PROOF", () => {
     assert.equal(after.body.refused, true);
     // THE POINT OF THE SLICE: the exact sentence, unchanged by the move into the Worker route.
     assert.equal(after.body.error, directMessage);
+    // THE REFUSAL'S OWN RECEIPT — no version was minted, because nothing compiled.
+    assert.equal(after.body.receipt.compiled, false);
+    assert.equal(after.body.receipt.version, null);
+    assert.equal(after.body.receipt.stored, false);
+    assert.equal(after.body.receipt.engineAccepted, null);
   });
 });
 
@@ -368,5 +401,79 @@ describe("4. the three routes are independently addressed, not one dispatcher gu
     const r2 = await postTo(RESOLUTION_ROUTE_URL, qualificationFiles);
     assert.equal(r2.status, 422);
     assert.equal(r2.body.refused, true);
+  });
+});
+
+describe("5. THE RECEIPT'S VERSION — the two properties that matter, both by mutation, both through the real route", () => {
+  /**
+   * Determinism is the whole point (`design-the-runtime-compile.md` §8 step A): the same config
+   * must produce the same key, so an unchanged config cannot mint a new version, and a changed one
+   * cannot reuse an old one. Both properties are proven here through the ACTUAL Worker route, not
+   * only against `compile()` directly — the version a caller receives is the one this test drives.
+   *
+   * EVERY MUTATION BELOW IS A VALID CONFIG CHANGE, DELIBERATELY, NOT A REFUSAL. Section 2's own
+   * mutation proofs already show a version is never minted when Gate 1 refuses (`receipt.version`
+   * is `null` there). The property this section proves is the other one: a config that still
+   * compiles, but differently, must not be mistaken for the config that produced the version
+   * before it.
+   */
+  test("structural: two identical submissions receive the identical version; one valid field flip does not", async () => {
+    const files = readStructuralFixtureFiles();
+
+    const first = await post(files);
+    const second = await post(files);
+    assert.equal(first.body.receipt.version, second.body.receipt.version, "an unchanged config minted a new version");
+
+    const anchor = "structural_edge_direction: outgoing";
+    assert.ok(files["views/main.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+    files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "structural_edge_direction: incoming");
+    const mutated = await post(files);
+    assert.equal(mutated.status, 200, "the mutation was meant to stay valid — both directions are legal");
+    assert.notEqual(
+      mutated.body.receipt.version,
+      first.body.receipt.version,
+      "a changed config reused the old version",
+    );
+    assert.notDeepEqual(mutated.body.declaration, first.body.declaration, "the mutation's own anchor did not change the declaration — the version test proves nothing");
+  });
+
+  test("qualification: two identical submissions receive the identical version; one valid field flip does not", async () => {
+    const files = readQualificationFixtureFiles();
+
+    const first = await postTo(QUALIFICATION_ROUTE_URL, files);
+    const second = await postTo(QUALIFICATION_ROUTE_URL, files);
+    assert.equal(first.body.receipt.version, second.body.receipt.version, "an unchanged config minted a new version");
+
+    const anchor = "status: open";
+    assert.ok(files["patterns/basic.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+    files["patterns/basic.yaml"] = files["patterns/basic.yaml"].replace(anchor, "status: done");
+    const mutated = await postTo(QUALIFICATION_ROUTE_URL, files);
+    assert.equal(mutated.status, 200, "the mutation was meant to stay valid — both statuses are legal");
+    assert.notEqual(
+      mutated.body.receipt.version,
+      first.body.receipt.version,
+      "a changed config reused the old version",
+    );
+    assert.notDeepEqual(mutated.body.declaration, first.body.declaration, "the mutation's own anchor did not change the declaration — the version test proves nothing");
+  });
+
+  test("resolution: two identical submissions receive the identical version; one valid field flip does not", async () => {
+    const files = readResolutionFixtureFiles();
+
+    const first = await postTo(RESOLUTION_ROUTE_URL, files);
+    const second = await postTo(RESOLUTION_ROUTE_URL, files);
+    assert.equal(first.body.receipt.version, second.body.receipt.version, "an unchanged config minted a new version");
+
+    const anchor = "direction: asc";
+    assert.ok(files["views/main.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+    files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "direction: desc");
+    const mutated = await postTo(RESOLUTION_ROUTE_URL, files);
+    assert.equal(mutated.status, 200, "the mutation was meant to stay valid — both directions are legal");
+    assert.notEqual(
+      mutated.body.receipt.version,
+      first.body.receipt.version,
+      "a changed config reused the old version",
+    );
+    assert.notDeepEqual(mutated.body.declaration, first.body.declaration, "the mutation's own anchor did not change the declaration — the version test proves nothing");
   });
 });
