@@ -62,7 +62,17 @@
     "WHAT WIDENING THIS SET MEANS. Adding a predicate operator (e.g. an orderable comparison) or a",
     "resolvable field is a decision that today requires editing memberOperators / resolvableFields",
     "below AND every one of the surfaces listed, in the same pull request, or",
-    "tests/operator-set-agreement.test.mjs goes red naming exactly which surface fell out of step."
+    "tests/operator-set-agreement.test.mjs goes red naming exactly which surface fell out of step.",
+    "",
+    "RESOLVABLE_FIELDS STOPPED BEING THREE HAND-TYPED COPIES. scripts/generate-qualification-",
+    "declaration.mjs:96 is now the one hand-authored copy; scripts/generate-operator-set.mjs writes",
+    "app/present/membership.ts's and scripts/qualification-agreement.py's copies FROM it. This file",
+    "was deliberately NOT made the generation source (see CORRECTIONS above) — it exists to OBSERVE",
+    "the surfaces, by test, and handing it a second job as the thing that DEFINES the value would",
+    "blur that. The three surfaces above still each declare their own symbol; only the literal value",
+    "of two of them is now mechanical rather than retyped by hand. This index, and the resolvableFields",
+    "'values' list below, remain independently hand-authored — a fourth, deliberately separate",
+    "declaration of intent that the generated pair is checked against, not derived from."
   ],
 
   "memberOperators": {

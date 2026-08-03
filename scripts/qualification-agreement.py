@@ -59,9 +59,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_DIR = REPO_ROOT.parents[2] / "qntm" / "apps" / "qntm-md" / "config"
 DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "qualification-agreement.json"
 
-# The three fields every published predicate ranges over. Kept in step with `RESOLVABLE_FIELDS` in
-# `scripts/generate-qualification-declaration.mjs` and `app/present/membership.ts`; the assertion
-# below fails loudly if a published predicate ever reaches outside them.
+# The three fields every published predicate ranges over. GENERATED from `RESOLVABLE_FIELDS` in
+# `scripts/generate-qualification-declaration.mjs`, by `scripts/generate-operator-set.mjs` — run
+# `node scripts/generate-operator-set.mjs` after changing that list, and commit the result. Do not
+# hand-edit the tuple below; the assertion in main() still fails loudly if a published predicate
+# ever reaches outside these fields.
 TRIPLE_FIELDS = ("node_type", "domain", "status")
 
 
