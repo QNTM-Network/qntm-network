@@ -188,7 +188,17 @@ export function instancesOf(source: string, view: string): readonly (LineInstanc
   // all — this is what lets this_week.md's duplicated stamps separate for free (§2.4: each
   // printing is in a DIFFERENT section, so their groups never share a key) and keeps the common
   // case's instance string short and stable.
-  const key = (r: RawLine): string => `${r.section ?? "none"} ${r.token}`;
+  //
+  // THE DELIMITER IS NUL, DELIBERATELY, WRITTEN AS \x00 — NEVER AS A LITERAL BYTE. A delimiter is
+  // only safe if it cannot occur in either side it separates: `section` prints as plain decimal
+  // digits (or the literal "none"), but `token` is a line's own text when it carries no stamp — an
+  // indented continuation, "- [ ] a task", any prose — and routinely contains a space, so a space
+  // delimiter would let two different (section, token) pairs collide onto one key. NUL cannot
+  // appear in real text, which is why `git ls-files -z` and `find -print0` use it for the same
+  // reason. It MUST stay an escape sequence: a literal NUL byte here once flipped `file`'s verdict
+  // on this file to `data` and made plain `grep` (without `-a`) silently skip it with no error —
+  // see tests/no-nul-bytes.test.mjs, which fails by name and offset if a raw NUL ever returns.
+  const key = (r: RawLine): string => `${r.section ?? "none"}\x00${r.token}`;
   const groupSize = new Map<string, number>();
   for (const r of raw) {
     if (r === null) {
