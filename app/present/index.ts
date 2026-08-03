@@ -29,7 +29,7 @@ export {
   tagSpans,
   titleSpans,
   wikiLinkSpans,
-} from "./resolution.js";
+} from "./rendition.js";
 export type {
   Contribution,
   LineShape,
@@ -39,7 +39,7 @@ export type {
   StampSpan,
   TagSpan,
   WordSpan,
-} from "./resolution.js";
+} from "./rendition.js";
 
 export { DEFAULT_INDENT_UNIT, readDeclaration } from "./declaration.js";
 export type { DeclarationReading } from "./declaration.js";

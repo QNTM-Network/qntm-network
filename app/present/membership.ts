@@ -56,7 +56,7 @@
  * instruction.
  */
 
-import { carriesContent, qntmIdSpans, tagSpans } from "./resolution.js";
+import { carriesContent, qntmIdSpans, tagSpans } from "./rendition.js";
 import type {
   FieldPredicate,
   FieldValue,

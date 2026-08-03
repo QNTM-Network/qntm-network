@@ -164,10 +164,10 @@ function assertRelativeImportsNothing(): void {
   }
 }
 
-/** CLAIM 2 — `instance.ts` reaches `resolution.ts` and `relative.ts`, and nothing else under app/. */
+/** CLAIM 2 — `instance.ts` reaches `rendition.ts` and `relative.ts`, and nothing else under app/. */
 function assertInstanceReachesOnlyTwo(): void {
   const source = readFileSync(resolve(HERE, "../../app/present/instance.ts"), "utf8");
-  const allowed = new Set(["./resolution.js", "./relative.js"]);
+  const allowed = new Set(["./rendition.js", "./relative.js"]);
   for (const line of source.split(/\r?\n/)) {
     const match = /^\s*import\b[^"']*["']([^"']+)["']/.exec(line);
     if (match === null) {
@@ -177,7 +177,7 @@ function assertInstanceReachesOnlyTwo(): void {
     if (!allowed.has(from)) {
       throw new Error(
         `app/present/instance.ts imports ${from} — the anchor walk may reach only the grammar ` +
-          "(resolution.ts) and the relative anchor (relative.ts); an anchor is not a rendition and " +
+          "(rendition.ts) and the relative anchor (relative.ts); an anchor is not a rendition and " +
           "produces no edit",
       );
     }

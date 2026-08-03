@@ -101,8 +101,8 @@ import { instancesOf } from "./instance.js";
 import type { ModeSurface } from "./motions.js";
 import { openLine } from "./newline.js";
 import type { GlobalRegistration } from "./newline.js";
-import { classifyLine, stampSpans, tagSpans } from "./resolution.js";
-import type { Rendition } from "./resolution.js";
+import { classifyLine, stampSpans, tagSpans } from "./rendition.js";
+import type { Rendition } from "./rendition.js";
 import { applyEdit } from "./source.js";
 
 /** The markdown surface the painter needs. Structural, so any conforming renderer will do. */

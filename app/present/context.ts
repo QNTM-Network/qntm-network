@@ -30,7 +30,7 @@ import { readQualificationDeclaration } from "./qualification.js";
 import type { QualificationLanguage } from "./qualification.js";
 import { readConfigResolutionDeclaration } from "./resolutiontable.js";
 import type { ConfigResolutionTable } from "./resolutiontable.js";
-import type { Contribution } from "./resolution.js";
+import type { Contribution } from "./rendition.js";
 
 export class PresentationContext {
   readonly #contributions: ReadonlyMap<PresentationLevel, Contribution>;

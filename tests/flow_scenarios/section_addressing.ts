@@ -115,14 +115,14 @@ function spyOnCascade(): { state: { count: number }; restore: () => void } {
   };
 }
 
-/** `address.ts` must import ONLY `resolution.ts` — asserted by reading its own source, the same
+/** `address.ts` must import ONLY `rendition.ts` — asserted by reading its own source, the same
  * check `section_membership.ts` runs against `membership.ts`. */
-function assertAddressImportsOnlyResolution(): void {
+function assertAddressImportsOnlyRendition(): void {
   const source = readFileSync(resolve(HERE, "../../app/present/address.ts"), "utf8");
   for (const line of source.split(/\r?\n/)) {
     if (!/^\s*import\b/.test(line)) continue;
-    if (!/["']\.\/resolution\.js["']/.test(line)) {
-      throw new Error(`address.ts imports something other than resolution.js: ${line.trim()}`);
+    if (!/["']\.\/rendition\.js["']/.test(line)) {
+      throw new Error(`address.ts imports something other than rendition.js: ${line.trim()}`);
     }
   }
 }
@@ -182,7 +182,7 @@ function driveAddressingAndItsJoinToMembership(): void {
 }
 
 export function run(): void {
-  assertAddressImportsOnlyResolution();
+  assertAddressImportsOnlyRendition();
   assertMembershipImportsNeitherSourceNorContext();
   const cascadeSpy = spyOnCascade();
   const restoreEnvironment = poisonDomFetchAndClock();

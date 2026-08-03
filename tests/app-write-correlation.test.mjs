@@ -744,15 +744,15 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     //    ALLOWED ──
     //
     // Asking "has the engine stamped this line" means matching `[[qntm:N]]`, and this repository
-    // has exactly ONE grammar for that (`resolution.ts`'s `QNTM_ID`, cited against the engine and
+    // has exactly ONE grammar for that (`rendition.ts`'s `QNTM_ID`, cited against the engine and
     // tested against the citation). A second regex here would be the "parallel regex" that module's
     // own header forbids by name — so the import is the cheaper of two costs, and the guard is
-    // narrowed to the exact module rather than dropped. `resolution.ts` exports no edit
+    // narrowed to the exact module rather than dropped. `rendition.ts` exports no edit
     // constructor, no writer and no path: it is spans over strings, so the structural argument
     // above is untouched. A SECOND import, or a different one, still turns this red.
     assert.deepEqual(
       CORRELATION_CODE.match(/^import\b.*$/gm),
-      ['import { stampSpans } from "./resolution.js";'],
+      ['import { stampSpans } from "./rendition.js";'],
       "correlation.ts gained an import that is not the stamp grammar",
     );
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);

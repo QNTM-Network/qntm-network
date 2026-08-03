@@ -96,7 +96,7 @@
  * different functions rather than merely different lines of one.
  */
 
-import { classifyLine } from "./resolution.js";
+import { classifyLine } from "./rendition.js";
 import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "./resolutiontable.js";
 
 /** Why nothing is said. Each value names a refusal in this module's header. */

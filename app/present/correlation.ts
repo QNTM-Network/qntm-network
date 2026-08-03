@@ -90,7 +90,7 @@
  * stays the place where "mine" is decided.
  */
 
-import { stampSpans } from "./resolution.js";
+import { stampSpans } from "./rendition.js";
 
 /**
  * The envelope key the echo is read from. Exported so a test can name it rather than repeat it.
