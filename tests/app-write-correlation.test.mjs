@@ -498,7 +498,7 @@ describe("2. THE FALSE POSITIVE — a line that saved perfectly is NOT held", ()
     const said = d.freshness();
     assert.match(said, /the cycle rewrote the line you saved/);
     assert.match(said, /the server recorded it/);
-    assert.doesNotMatch(said, /held below/, "the page said the characters are held when they are not");
+    assert.doesNotMatch(said, /held above/, "the page said the characters are held when they are not");
     assert.doesNotMatch(said, /\bwritten\b/, "the page claimed written when it means recorded");
   });
 
@@ -633,7 +633,7 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
 
   test("AND THE FRESHNESS LINE SAYS WHAT IT ALWAYS SAID — no new sentence appears", () => {
     const said = d.freshness();
-    assert.match(said, /the line you were on is not in this view any more — what was on it is held below/);
+    assert.match(said, /the line you were on is not in this view any more — what was on it is held above this view/);
     assert.doesNotMatch(said, /the server recorded your save/);
     assert.doesNotMatch(said, /the server took your save/);
     assert.doesNotMatch(said, /the cycle rewrote the line you saved/);

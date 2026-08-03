@@ -433,7 +433,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     await settle();
 
     assert.deepEqual(heldTexts(), [TYPED], "the refusal deleted the characters he typed");
-    assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through · what you typed is held below");
+    assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through · what you typed is held above this view");
     // AND THE VIEW IS NOW THE FILE THE SERVER ACTUALLY HOLDS — text and base together, never one
     // without the other. `#blocked` is the cycle's own output, which is what he was refused for
     // not having.
@@ -482,7 +482,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     await settle();
 
     assert.match(onScreen(), /BY FRIDAY/, "nothing was adopted, so nothing may have repainted");
-    assert.equal(freshness(), REFUSED + " · what you typed is still on this line, and held below");
+    assert.equal(freshness(), REFUSED + " · your characters are still on this line · what you typed is held above this view");
     assert.equal(page.__served().markdown, V1, "the base moved with no text to move with it");
   });
 
@@ -582,7 +582,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     input.dispatch("blur");
     await settle();
 
-    assert.equal(freshness(), REFUSED + " · what you typed is still on this line, and held below");
+    assert.equal(freshness(), REFUSED + " · your characters are still on this line · what you typed is held above this view");
     assert.doesNotMatch(freshness(), /is overwritten/, "two verdicts about one save");
   });
 

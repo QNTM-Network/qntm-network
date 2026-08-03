@@ -654,9 +654,13 @@
      THE CHARACTERS THEMSELVES KEEP THE COLUMN'S FONT AND `white-space: pre`, matching
      `.viewbody div.rawline`, so what he sees held is byte-for-byte the line he was typing rather
      than a re-flowed paraphrase of it. */
+  /* THE RULE IS UNDER IT, NOT OVER IT, BECAUSE THE STRIP IS NOW ABOVE THE COLUMN. A separator's
+     job is to say where one kind of truth stops and the next begins; with the strip above
+     `#viewBody` the boundary it has to draw is its own bottom edge. See the markup for why it
+     moved. */
   .held {
-    margin-top: var(--s5); padding-top: var(--s4);
-    border-top: 1px solid var(--line);
+    margin-bottom: var(--s5); padding-bottom: var(--s4);
+    border-bottom: 1px solid var(--line);
   }
   .held-head {
     margin: 0 0 var(--s3);
@@ -898,21 +902,35 @@
       <p id="emptyBody" class="empty-body"></p>
       <p id="emptyNext" class="empty-next"></p>
     </div>
-    <article id="viewBody" class="viewbody"></article>
-    <!-- HELD — characters no file owns. BELOW the reading column and OUTSIDE it, which is the
-         whole of the arrangement: `#viewBody` is a rendering of one source string and everything
-         in it is something a file says. A held row is the opposite — characters the source string
-         does NOT own — so putting one inside the column would make the column a mix of two kinds
-         of truth, and the operator would have no way to tell which row was which.
+    <!-- HELD — characters no file owns. OUTSIDE the reading column, which is the load-bearing half
+         of the arrangement: `#viewBody` is a rendering of one source string and everything in it is
+         something a file says. A held row is the opposite — characters the source string does NOT
+         own — so putting one inside the column would make the column a mix of two kinds of truth,
+         and the operator would have no way to tell which row was which.
 
          Its own element also means the painter never sees it. `paint()` is handed `#viewBody` and
          a source string; it cannot walk into a sibling, so nothing here can become part of an
          edit by accident. See app/present/held.ts for the type-level half of the same argument
-         (a held row carries no line index, because an index is what `applyEdit` takes). -->
+         (a held row carries no line index, because an index is what `applyEdit` takes).
+
+         ── IT MOVED ABOVE THE COLUMN, AND THE REASON IS THE ONLY THING THIS STRIP IS FOR ──
+
+         It used to sit BELOW `#viewBody`, and the sentence that names it — said in `#freshness`,
+         which is at the TOP of this section — said "held below". Both statements were true and the
+         pair was useless: the operator's own `this_week.md` renders well over a hundred rows, so
+         "below" meant a screen and a half past the fold, on a strip he had no reason to scroll to
+         and no indication was there. A recovery surface a person cannot see is a recovery surface
+         he does not have, which is the same failure as not holding the characters at all.
+
+         SO IT IS NOW ADJACENT TO THE SENTENCE THAT NAMES IT. Held is hidden whenever nothing is
+         held (`paintHeldRows` toggles `.hidden`), so this costs the reading column nothing in the
+         ordinary case; when something IS held it pushes the view down, which is correct, because
+         at that moment it is the most important thing on the page. -->
     <section id="heldStrip" class="held hidden" aria-label="Held — characters no file owns">
       <p class="held-head">Held — characters no file owns. Nothing here is saved.</p>
       <div id="heldRows"></div>
     </section>
+    <article id="viewBody" class="viewbody"></article>
   </section>
 
   <!-- APP (logged in) -->
@@ -2267,7 +2285,7 @@ function paintView(id, why) {
           // identity of any kind — that is the whole reason it could not be placed — so the two
           // fields are `null` and `keyOf` falls back to the characters, which is what `held.ts`
           // already does for any line the cycle has never seen.
-          holdEdit(
+          const heldTheRow = holdEdit(
             heldFrom("unplaced", {
               text: carried.typed,
               view: id,
@@ -2281,7 +2299,12 @@ function paintView(id, why) {
               token: null,
             }),
           );
-          draftNote = "the cycle moved what you were writing beside — the line you were making is held below";
+          // SAID ONLY WHEN THERE IS A ROW TO SAY IT ABOUT — see `holdEdit`. A row holding nothing
+          // but whitespace is dropped silently, and this sentence used to announce a strip entry
+          // for it anyway.
+          draftNote = heldTheRow
+            ? "the cycle moved what you were writing beside — the line you were making is held above this view"
+            : "";
         }
       }
     }
@@ -2331,8 +2354,11 @@ function paintView(id, why) {
     // write, `proved` is false and the row is held exactly as it always was.
     const mine = sent !== null && sent.view === id;
     const proved = mine && sent.token !== null && landed.has(sent.token);
+    // WHETHER A ROW REALLY REACHED THE STRIP. `reportCursorReading` below builds its second clause
+    // out of this and not out of the fact that a hold was attempted — see `holdEdit`.
+    let heldTheLine = false;
     if (cursorReading.outcome === "absent" && !proved) {
-      holdEdit(
+      heldTheLine = holdEdit(
         heldFrom("vanished", {
           text: mine ? sent.text : (wasShowing.split("\n")[vanishing?.takenAt ?? -1] ?? ""),
           view: id,
@@ -2369,7 +2395,7 @@ function paintView(id, why) {
         id,
       );
     }
-    reportCursorReading(cursorReading, proved);
+    reportCursorReading(cursorReading, proved, heldTheLine);
     // THE CURSOR'S OWN SENTENCE WINS AND THIS FILLS THE SILENCE. Both describe this one arrival and
     // there is one slot; when the line he was PARKED on also went, that is the larger event and its
     // sentence already says his characters are held below.
@@ -2397,13 +2423,45 @@ function paintView(id, why) {
  *
  * `null` IN IS A NO-OP, because `heldFrom` returns `null` for characters that are all whitespace
  * and neither caller should have to guard that twice.
+ *
+ * ── IT RETURNS WHETHER A ROW IS REALLY ON THE STRIP, AND EVERY SENTENCE ABOUT HOLDING IS BUILT
+ *    FROM THAT ANSWER ──
+ *
+ * IT USED TO RETURN NOTHING, and the three sentences that say "held" were written beside the call
+ * rather than out of it — asserted, in prose, one statement later, by a caller that could not see
+ * whether anything had happened. That is a message about where a person's work went, made by code
+ * that did not ask. The no-op above is reachable (`heldFrom` refuses whitespace, and both the
+ * REFUSED and the VANISHED sites can hand it an empty string — a line emptied and saved, a write
+ * whose `sent.text` is blank), and on every one of those passes the page said his characters were
+ * held while the strip stayed empty and hidden.
+ *
+ * A MESSAGE THAT LIES ABOUT WHERE HIS WORK WENT IS WORSE THAN NO MESSAGE, so the claim and the act
+ * are now one expression: this returns `true` only when a row exists and is painted, and no caller
+ * may say "held" on any other evidence. `HELD_ABOVE` is the one clause, appended in one place per
+ * caller, and `tests/app-held-edit.test.mjs` §6 breaks this return value to prove the sentences go
+ * quiet with it.
  */
 function holdEdit(record) {
   if (held.hold(record) === null) {
-    return;
+    return false;
   }
   paintHeldRows();
+  return true;
 }
+
+/**
+ * THE ONE CLAUSE THAT SAYS HIS CHARACTERS ARE SOMEWHERE HE CAN GET THEM, AND IT NAMES A PLACE HE
+ * CAN LOOK AT WITHOUT SCROLLING.
+ *
+ * It said "held below" until `held-is-really-held`, which was true of the markup and false of the
+ * screen — the strip was the last element of `#graph`, under a reading column that is well over a
+ * hundred rows in the operator's own views, while the sentence pointing at it sat at the top. The
+ * strip moved (see the markup); this word moved with it, so the two cannot drift apart.
+ *
+ * IT IS NEVER CONCATENATED UNCONDITIONALLY. `holdEdit` above returns whether there is a row to
+ * point at, and this string is appended only on `true`.
+ */
+const HELD_ABOVE = " · what you typed is held above this view";
 
 /** What each held row says happened to it. One sentence each, same register as `BASE_REFUSALS`. */
 const HELD_REASONS = {
@@ -2521,7 +2579,7 @@ function paintHeldRows() {
  * `text` the neighbourhood the line was written into is gone and only the characters answered: the
  * cursor is somewhere he did not put it, for a reason he cannot see, and that IS an event.
  */
-function reportCursorReading(reading, proved = false) {
+function reportCursorReading(reading, proved = false, heldIt = false) {
   if (reading.outcome === "absent" && proved) {
     // THE SENTENCE THAT STOPPED LYING. `absent` used to say "held below" unconditionally, and on a
     // write the server acknowledged that was false in both halves: nothing was lost and nothing is
@@ -2529,7 +2587,13 @@ function reportCursorReading(reading, proved = false) {
     // It says RECORDED and not WRITTEN — see `WRITE_RECORDED` for why those are different claims.
     cursorNote = "the cycle rewrote the line you saved — the server recorded it, so nothing is held";
   } else if (reading.outcome === "absent") {
-    cursorNote = "the line you were on is not in this view any more — what was on it is held below";
+    // AND THE SECOND HALF IS SAID ONLY WHEN THERE IS A ROW TO SAY IT ABOUT. `paintView` hands the
+    // answer `holdEdit` gave it; an empty `sent.text` (a line emptied and saved) holds nothing, and
+    // this branch used to promise a strip row for it regardless. The first half is true either way
+    // — the line really is gone — so it is said either way.
+    cursorNote =
+      "the line you were on is not in this view any more" +
+      (heldIt ? " — what was on it is held above this view" : "");
   } else if (reading.outcome === "ambiguous") {
     cursorNote = "this view prints that line more than once, so the cursor was not moved";
   } else if (reading.outcome === "found" && reading.via === "text") {
@@ -2698,13 +2762,16 @@ const BASE_REFUSALS = {
  * THE LINE-COMMIT SENTENCE GAINED ITS SECOND HALF WHEN THE HOLDING DID (`a-refused-edit-is-held-
  * unanchored`), and both halves are true at once for a reason worth stating: "still on this line"
  * describes the SCREEN, which survives only because `commitLine` does not repaint after a 409, and
- * "held below" describes the only copy that survives the NEXT projection. A sentence that promised
- * just the first would be promising something the next arrival takes away.
+ * the held clause describes the only copy that survives the NEXT projection. A sentence that
+ * promised just the first would be promising something the next arrival takes away.
+ *
+ * THE TWO HALVES ARE NOW TWO STRINGS RATHER THAN ONE, because only one of them is unconditional.
+ * The screen half is a fact about this branch not repainting and is always true here; the held half
+ * is a fact about `holdEdit` having taken a row, which is not. See `HELD_ABOVE`.
  */
 const WRITE_REFUSED =
   "this save was computed from an out-of-date copy of this file — the server refused it and nothing was written";
-const REFUSED_KEEPING_TYPING =
-  WRITE_REFUSED + " · what you typed is still on this line, and held below";
+const REFUSED_KEEPING_TYPING = WRITE_REFUSED + " · your characters are still on this line";
 const REFUSED_REVERTING_BOX = WRITE_REFUSED + " · the box is back as the server has it";
 
 /**
@@ -2784,8 +2851,7 @@ function healFromRefusal(path, current) {
 const REFUSED_HEALED =
   WRITE_REFUSED + " · this view now shows the file as the server has it, so your next save will go through";
 /** And the one case it cannot heal: he is typing, so the screen is his until he stops. */
-const REFUSED_TYPING_HELD =
-  WRITE_REFUSED + " · press re-read when you have finished this line · what you typed is held below";
+const REFUSED_TYPING_HELD = WRITE_REFUSED + " · press re-read when you have finished this line";
 
 /**
  * A REFUSED LINE COMMIT, IN ONE SENTENCE — AND IT IS THE ONE PLACE THE ADOPTION IS ATTEMPTED FOR
@@ -2800,12 +2866,29 @@ const REFUSED_TYPING_HELD =
  *   DECLINED          there is a `current` and this is a bad moment for it (a line is open, a newer
  *                     projection is queued, another file is on screen). It names his gesture rather
  *                     than doing it, which is the same answer the pickup's own bound gives.
+ *
+ * `heldIt` IS WHAT `holdEdit` ANSWERED, PASSED IN RATHER THAN ASSUMED. All three outcomes gain the
+ * same one clause and only when there is a row on the strip to gain it for — see `HELD_ABOVE`. The
+ * ADOPTED outcome is the one that made this necessary: it is the only branch that takes his
+ * characters OFF the screen, so it is the only branch where a false claim of holding costs him the
+ * last copy there was.
  */
-function refusedLineSentence(path, current) {
-  if (healFromRefusal(path, current)) {
-    return REFUSED_HEALED + " · what you typed is held below";
+function refusedLineSentence(path, current, typed, heldIt) {
+  // ── THE ADOPTION IS NOW GATED ON THE HOLDING HAVING HAPPENED, NOT ON IT HAVING BEEN ATTEMPTED ──
+  //
+  // `healFromRefusal`'s own header offers "the characters are already held" as the safety argument
+  // for taking them off the screen at all. That was a statement about the ORDER of two statements
+  // in `commitLine`, and an order is not a guarantee: `holdEdit` is a no-op for characters
+  // `heldFrom` refuses, so the call could return having held nothing and the adoption would run
+  // anyway — repainting away the only copy there was. This is that argument written as a
+  // precondition instead of as prose. `typed.trim() === ""` is the other safe case and is stated
+  // rather than inferred: there is nothing to lose, so there is nothing to hold first.
+  const safeToAdopt = heldIt || typed.trim() === "";
+  const kept = heldIt ? HELD_ABOVE : "";
+  if (safeToAdopt && healFromRefusal(path, current)) {
+    return REFUSED_HEALED + kept;
   }
-  return typeof current === "string" ? REFUSED_TYPING_HELD : REFUSED_KEEPING_TYPING;
+  return (typeof current === "string" ? REFUSED_TYPING_HELD : REFUSED_KEEPING_TYPING) + kept;
 }
 
 /**
@@ -3147,7 +3230,10 @@ async function commitLine(view, commit) {
       if (token !== null) {
         writes.giveUp(token);
       }
-      holdEdit(
+      // THE ANSWER IS KEPT, because the sentence below is built out of it rather than beside it.
+      // `holdEdit` returns whether a row is really on the strip; nothing here may say "held" on any
+      // weaker evidence, and `refusedLineSentence` will not adopt the server's file without it.
+      const heldIt = holdEdit(
         heldFrom("refused", {
           text: commit.text,
           view: view.id,
@@ -3175,7 +3261,8 @@ async function commitLine(view, commit) {
       // "STILL ON THIS LINE" STOPS BEING TRUE WHEN IT ADOPTS, so that clause is not said then. The
       // sentence that replaces it says where the characters went AND that the next save will work,
       // which is the pair of facts the unhealed branch could only offer half of.
-      $("freshness").textContent = refusedLineSentence(view.path, e.current) + refusalNote();
+      $("freshness").textContent =
+        refusedLineSentence(view.path, e.current, commit.text, heldIt) + refusalNote();
       return;
     }
     // The painter has already repainted this view from the edited source, so the page is showing

@@ -390,7 +390,7 @@ describe("4. an un-replaceable row is held", () => {
       ].join("\n"),
     );
     page.__sayAsOf({ snapshot: { generated_at: "2026-08-01T09:00:00Z" }, pending_edits: 0 });
-    assert.match(elements.get("freshness").textContent, /held below/);
+    assert.match(elements.get("freshness").textContent, /held above this view/);
   });
 });
 

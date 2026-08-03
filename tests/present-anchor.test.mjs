@@ -433,7 +433,7 @@ describe("7. and it reaches the screen — through app/index.html's own script",
     // tests/app-held-edit.test.mjs; this stays a test of the freshness line's shape.
     assert.match(
       said,
-      /^as of .* · 0 queued · the line you were on is not in this view any more — what was on it is held below$/,
+      /^as of .* · 0 queued · the line you were on is not in this view any more — what was on it is held above this view$/,
       said,
     );
   });

@@ -3085,3 +3085,60 @@ backlog:
     character he typed next went to vim's NORMAL keymap, where most letters are unbound and the rest
     are motions. That row is now fixed. WHETHER IT WAS THE WHOLE OF THIS ROW IS UNKNOWN - it was
     never confirmed against his session, and this row stays open until it is.
+- id: held-is-really-held
+  title: >-
+    [haven] [OBSERVED 2026-08-03] A REFUSED SAVE WAS REPORTED DESTROYING WHAT HE TYPED WHILE THE
+    PAGE SAID IT WAS HELD. The sentence is now produced by the holding and the strip moved to where
+    the sentence points. THE REPORTED DESTRUCTION ITSELF WAS NOT REPRODUCED.
+  driving_capability: a-vanished-or-refused-edit-is-held
+  kind: capability
+  state: passing
+  record: >-
+    RECORDED FROM THE OPERATOR'S OWN BROWSER SESSION, 2026-08-03, against the live system. Three of
+    seven saves in the drive were refused 409 stale-base, one from a create posted ~2 s after the
+    previous save, so this path is hit constantly rather than rarely. Reported three separate times:
+    the line he had typed vanished from the view and the freshness line said "what you typed is held
+    below".
+    TWO THINGS WERE FOUND AND FIXED, AND NEITHER OF THEM IS THE REPORTED DESTRUCTION.
+    ONE. THE CLAIM WAS NOT PRODUCED BY THE ACT. `holdEdit` returned nothing, and all three sentences
+    that say "held" were written BESIDE the call rather than out of it. `holdEdit` is a no-op for
+    characters `heldFrom` refuses, and both the REFUSED and the VANISHED sites can hand it an empty
+    string — a line emptied and saved reaches `set-line` legally (app/present/source.ts states the
+    asymmetry) and `sent.text` can be blank. On those passes the page said his characters were held
+    with the strip empty and hidden, and on the ADOPTED branch that is the branch that takes his
+    characters off the screen. `holdEdit` now returns whether a row exists and is painted; the clause
+    is appended only on that; and `refusedLineSentence` will not adopt the server's file unless the
+    characters are held or there were none — `healFromRefusal`'s own safety argument stops being a
+    statement about the ORDER of two statements and becomes a precondition.
+    TWO. "BELOW" WAS TRUE OF THE MARKUP AND FALSE OF THE SCREEN. `#heldStrip` was the last element of
+    `#graph`, under a reading column that runs well over a hundred rows in the operator's own views,
+    while `#freshness` — the line naming it — is at the top. A recovery surface he has no reason to
+    scroll to and no indication is there is a recovery surface he does not have, which presents
+    exactly as "it is not held anywhere". The strip moved ABOVE the column, keeping the property that
+    was ever load-bearing (OUTSIDE it, so the painter cannot walk into it and no row can join an
+    edit), and the sentences say "held above this view".
+    WHAT WAS REFUTED, WHICH IS THE PART WORTH KEEPING. The report's own diagnosis — "the hold does
+    not reach the screen" — did not reproduce. Eight gesture sequences were driven through the real
+    lifted page with the three browser facts installed (vim `i` + click away, vim `o` + Enter, vim
+    `o` + click away, click-to-edit + click away, Enter mid-edit, an ack save followed by a refused
+    create two turns later, a refusal followed by a re-read, and the suite's own §2d) and EVERY ONE
+    of them put the characters on the strip, in the surface and in the DOM. It is not a stale
+    deployment either: `https://qntm.network/app/` and `/dist/present.js` were fetched read-only and
+    are byte-identical to `origin/main`. Every `$("...")` id the page reads exists in its own markup,
+    so the strip's painter cannot be throwing on a missing element.
+    SO THE DESTRUCTION IS STILL UNEXPLAINED AND THIS ROW STAYS ON THE BOARD. The two candidates the
+    reproduction could not reach are (a) a second write in flight whose characters `healFromRefusal`
+    repaints away — `sentEdit` is not the strip, and the adoption replaces every line of the view,
+    not only the refused one; and (b) the report being an account of the strip being unfindable
+    rather than empty, which fix TWO addresses directly. Neither is confirmed against his session.
+    THE SECOND HALF OF THE REPORT WAS REFUTED OUTRIGHT. It said the header renders the literal string
+    `as of <when>` after adopting a 409. That string exists nowhere in the shipped code — only in six
+    code comments in `app/index.html` and in two docs. `sayAsOf` interpolates
+    `new Date(data.snapshot.generated_at).toLocaleString()`, so the failure mode available to it is
+    `Invalid Date`, not an un-substituted placeholder. Nothing was changed for it.
+    EVIDENCE. tests/app-held-edit.test.mjs §6 (three arms: the positive control, the emptied line
+    that holds nothing and says nothing, and the adoption's precondition pinned in the source) and
+    §6b, which mutates `holdEdit` to report a hold it did not make — the exact pre-fix shape — and
+    asserts §6's silence assertion goes red. §4's structural pin was strengthened rather than moved:
+    it used to assert the strip comes AFTER the column, which is a layout fact; it now asserts
+    `#viewBody` is written empty and closed, which is the containment the argument actually needs.
