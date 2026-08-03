@@ -3299,3 +3299,60 @@ backlog:
     So the MODE flips correctly and the BADGE does not, until the next `repaintCurrentView` — the next
     handled keystroke — repaints it. NOT DIAGNOSED AGAINST THE REAL SESSION — filed alongside
     `escape-discards-typed-text` because the two were observed together and may share one cause.
+- id: the-operator-set-has-no-single-address
+  title: >-
+    [pin] [HORIZONTAL] THE OPERATOR SET IS IMPLICIT, HELD BY AGREEMENT ACROSS SIX SURFACES, NOT
+    DECLARED IN ONE. `design-the-compiler-and-the-bands.md` section 3 enumerates them:
+    `app/present/qualification.ts`'s `FieldPredicate` (eq/not), `scripts/generate-qualification-
+    declaration.mjs`'s `normalisePredicate` (the same two operators, re-derived independently),
+    `RESOLVABLE_FIELDS` (node_type/domain/status), `app/present/structural.ts`'s `EdgeSource`/
+    `EdgeDirection`, `app/present/resolutiontable.ts`'s `OrderingFieldKind`/`ChromeShape`, and
+    `scripts/yaml-subset.mjs`'s syntax refusal list. NONE IMPORTS FROM A SHARED ENUMERATION - they
+    agree today because `tests/qualification-agreement.test.mjs` and its siblings prove agreement
+    against the engine, not because a type constrains all six. THE FIX IS NOT A MERGE - 
+    `app/present/declaration.ts:32-54`'s own header states the federation is deliberate, and
+    `qualification.ts:69`'s own comment argues against widening its own type. THE FIX IS AN INDEX -
+    one file naming which six surfaces together constitute the operator set, so a widening decision
+    (a new predicate operator, a new resolvable field) is made once, against a visible list, instead
+    of independently in six pull requests that happen to agree. UNSCOPED ON PURPOSE - deciding which
+    surfaces belong on the list, and whether a seventh exists unread, is a design pass (`design-the-
+    compiler-and-the-bands.md` section 10's own first unverified item), not a row.
+  kind: capability
+  state: unscoped
+- id: the-reachability-set-is-proven-not-compiled
+  title: >-
+    [pin] [VERTICAL GAP] THE REACHABILITY SET HAS BEEN COMPUTED, EXHAUSTIVELY, TWICE - AND SHIPS IN
+    NEITHER GENERATOR. `design-the-rule-mirror.md` section 3.2 swept a capture over all 186 sections
+    (2 of 94 rules, zero collateral). `research-the-resolution-universe.md` section 3.4 swept 652
+    gestures over five views (29 of 94, correcting a 12-node sample's 21). BOTH ARE ONE-OFF PYTHON
+    RIGS, run once against a copy of the database, never wired into `scripts/generate-resolution-
+    declaration.mjs` or any `--check` gate. THE GAP IS BETWEEN "COMPILABLE" AND "COMPILED" - the
+    sweep exists and is correct; no code path produces it as a shipped artefact a browser could read.
+    CASCADE DEPTH IS THE SAME SHAPE, SHARPER - `research-the-resolution-universe.md` section 4.12:
+    the unlock cascade is six rules at one priority band, sequenced by file position, and "the real
+    ceiling on cascade depth is the number of rules in a file, and it is a number no config
+    validator checks." THE BOUND IS READABLE AND NEVER READ. Turn one sweep into a generator output
+    with a `--check` gate, the same shape `scripts/qualification-agreement.py` already proved for
+    the predicate grammar. Needs `the-declaration-is-fetched-not-baked` (done, `#70`) and rides on
+    `config-compiles-without-a-build`'s own sequencing.
+  driving_capability: the-reachability-set-is-proven-not-compiled
+  kind: capability
+  state: diagnose-ready
+- id: a-never-seen-config-passes-the-acceptance-test
+  title: >-
+    [pin] [THE ACCEPTANCE TEST] "WRITE A CONFIG THE SYSTEM HAS NEVER SEEN AND THE BROWSER BEHAVES
+    CORRECTLY WITH NOBODY TOUCHING CODE." The operator's own test, and the point of the whole
+    compiler claim - NOBODY HAS RUN IT. Every agreement test in the corpus
+    (`qualification-agreement.py`, `resolution-agreement.py`, `day-boundary-agreement.py`) runs
+    against the OPERATOR'S OWN real config, not a novel one - `design-the-rule-mirror.md` section
+    9.4: the staleness tests that would catch a stale fixture "self-skip precisely in CI, because CI
+    does not clone the monorepo." The committed CI fixture itself is too thin to stand in - section
+    8.7 of the same document: it "has no `rules/` directory," so the rule-reading half of the
+    resolution generator is never exercised in CI at all. UNSCOPED ON PURPOSE - deciding what a
+    never-seen config should contain (enough to exercise all twelve resolution kinds `research-the-
+    resolution-universe.md` section 4 names, without duplicating the operator's own instance) is a
+    design pass, the same judgement `config-is-per-user-not-per-server` already carries for the same
+    reason. Running it needs a sandbox this branch cannot touch (no cycle, no application source).
+  driving_capability: a-never-seen-config-passes-the-acceptance-test
+  kind: capability
+  state: unscoped
