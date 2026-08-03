@@ -26,9 +26,12 @@
  * Nothing under `app/` is stubbed. The real `membership.ts`, the real `qualification.ts` and the
  * real `resolution.ts` run. What is replaced is the ENVIRONMENT: `document`, `fetch` and
  * `Date.now` are poisoned so that touching any of them throws. A pure module that stayed pure never
- * notices. The declaration is read off disk with `readFileSync` because that is what the build does
- * too (`embedded-declaration.ts` imports the same file), and a file read is not one of the three
- * capabilities being denied.
+ * notices. The declaration is read off disk with `readFileSync`, and a file read is not one of the
+ * three capabilities being denied. THE APP FETCHES IT NOW — `app/present/embedded-declaration.ts`
+ * is deleted and `app/index.html`'s `loadPresentation` reads `/presentation.json` off the wire
+ * (design-config-is-content.md step 2). The fetch was put in the PAGE, not in these modules, for
+ * exactly the reason this scenario poisons `fetch`: a pure module that reached for the network
+ * would fail here, and that is the shape of the change being refused.
  *
  * ── WHAT THIS SCENARIO DOES NOT COVER ──
  *

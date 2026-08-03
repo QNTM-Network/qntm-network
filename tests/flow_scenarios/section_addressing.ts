@@ -34,7 +34,9 @@
  * Nothing under `app/` is stubbed — the real `address.ts`, `membership.ts`, `qualification.ts` and
  * `resolution.ts` run. What is replaced is the ENVIRONMENT, the same three capabilities
  * `section_membership.ts` poisons: `document`, `fetch`, `Date.now`. The declaration is read off
- * disk with `readFileSync`, matching what the build does (`embedded-declaration.ts`).
+ * disk with `readFileSync` — the app FETCHES it now (`app/index.html`'s `loadPresentation`, since
+ * `app/present/embedded-declaration.ts` was deleted), and that fetch lives in the PAGE precisely so
+ * these modules stay pure. `fetch` being poisoned here and the app still working is the proof.
  *
  * ── WHAT THIS SCENARIO DOES NOT COVER ──
  *

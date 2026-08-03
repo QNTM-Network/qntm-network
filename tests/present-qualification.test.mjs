@@ -156,7 +156,11 @@ describe("1a. sectionOrder — the FULL declared order, published beside the pub
 });
 
 describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into the app's ONE reader", () => {
-  test("presentationFromDeclaration(EMBEDDED_DECLARATION)'s shape carries the qualification axis", () => {
+  test("presentationFromDeclaration(SERVED)'s shape carries the qualification axis", () => {
+    // NAMED FOR THE DOCUMENT, NOT FOR A CONSTANT THAT NO LONGER EXISTS. It read
+    // `EMBEDDED_DECLARATION` in the title while reading `SERVED` in the body; the constant is gone
+    // with app/present/embedded-declaration.ts (design-config-is-content.md step 2) and `SERVED` —
+    // presentation.json off disk — is what it always actually asserted on.
     // Before this change, `presentationFromDeclaration` (app/present/context.ts) called
     // `readDeclaration` and `readStructuralDeclaration` only — `readQualificationDeclaration` had
     // no production caller, only tests called it directly. This is the falsifier that it now does.

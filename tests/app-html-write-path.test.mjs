@@ -209,10 +209,16 @@ describe("app.html's own write path", () => {
 describe("the tag chip, through the page (migration stage 8)", () => {
   /**
    * Drive `declaration` through the page's own reader, the way `loadPresentation()` drives the
-   * embedded one. NOT A FETCH STUB ANY MORE — `loadPresentation` reads a bundled constant now
-   * (app/present/embedded-declaration.ts), so there is nothing left to intercept on the wire.
-   * `__applyPresentation` is the exact function `loadPresentation` itself calls, exported so a
-   * suite can point it at a document other than the one actually shipping.
+   * fetched one.
+   *
+   * NOT A FETCH STUB, AND THAT IS NOW A CHOICE RATHER THAN A NECESSITY. This comment used to say
+   * there was nothing left on the wire to intercept, because `loadPresentation` read a constant
+   * baked into the bundle. That decision is reversed — the declaration is fetched from
+   * `/presentation.json` again (design-config-is-content.md step 2, and see
+   * `withDeclaration` in tests/fixtures/app-html-page.mjs for the stub that answers it). What this
+   * suite is asking is still "does the DOCUMENT decide the chips", not "does the request arrive",
+   * so it drives `__applyPresentation` — the exact function `loadPresentation` itself calls once
+   * the bytes are in hand. The request half is proven in tests/present-global.test.mjs section 5.
    */
   function servePresentation(declaration) {
     page.__applyPresentation(declaration);
