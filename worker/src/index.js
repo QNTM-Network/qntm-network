@@ -1,12 +1,14 @@
 // qntm.network Worker — router.
 //   /auth/*         passkey (WebAuthn) register + login          (auth.js)
 //   /app/*          the app: capture + the one thing (bearer)    (app.js)
+//   POST /config/compile/structural   Gate 1 only, no persistence (config.js)
 //   GET  /export    operator CSV of the signup list              (this file)
 //   POST /          signup capture -> D1 (the original landing)  (this file)
 
 import { json, cors } from "./util.js";
 import { handleAuth } from "./auth.js";
 import { handleApp } from "./app.js";
+import { handleConfig } from "./config.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -35,6 +37,10 @@ export default {
     }
     if (url.pathname.startsWith("/app/")) {
       const res = await handleApp(request, env, url, origin, ctx);
+      if (res) return res;
+    }
+    if (url.pathname.startsWith("/config/")) {
+      const res = await handleConfig(request, url, origin);
       if (res) return res;
     }
 
