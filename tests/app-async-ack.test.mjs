@@ -21,13 +21,22 @@
  *
  *   §1  THE SURFACES. `PickupSchedule` and `AcceptedSource` in isolation, out of dist/present.js —
  *       the artifact the browser loads. Bounded, coalesced per path, and never self-arming.
+ *   §1c THE OWED SET. The schedule carries which lines a write is owed a stamp for, opaquely, and
+ *       UNIONS it when a second write joins — the one thing it does not adopt.
+ *   §1d THE BODY. What identifies a line before it has an id, and what deliberately does not.
+ *   §1e `stampsOwed` AND `stampsLanded`. A tick owes nothing; a create owes one; stamped, moved and
+ *       gone all land; still-unstamped does not.
  *   §2  THE WORKER. `ack: true` answers on the vault write and runs the cycle in `ctx.waitUntil`;
  *       three independent ways it falls back to the synchronous answer; and a refused or failed
  *       write is answered BEFORE the branch, so "accepted but not written" is not a state.
  *   §3  THE PAGE. A projection arrives with no gesture behind it and NO write in flight to carry it,
  *       and it lands THROUGH THE QUEUE — held when a line is open, installed when it settles.
+ *   §3b THE STAMP. The 2026-08-03 drive rebuilt: a newer projection that left his line unstamped is
+ *       NOT the answer. Plus the tick's unchanged cost, a line stamped in another view, and the
+ *       bound that terminates on a line the engine never stamps.
  *   §4  IT IS NOT A POLL. No write, no read. The series ends and says so. It never re-arms itself.
- *   §5  MUTATION PROOFS. Break the collection and break the acceptance; watch the guards go red.
+ *   §5  MUTATION PROOFS. Break the collection, the acceptance, and BOTH places the stamp test lives;
+ *       watch the guards go red.
  *
  * ── WHAT COSTS WHAT, AND THE ONE NUMBER THAT DECIDED THE MECHANISM ──
  *
@@ -64,15 +73,23 @@ import {
 
 const PATH = "work/outcomes.md";
 
+/** A `since` for arms that are not about the clock — the schedule holds it opaquely either way. */
+const T_ANY = "2026-08-01T09:00:00.000Z";
+
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // 1. THE SURFACES — app/present/pickup.ts and app/present/accepted.ts, out of the shipped bundle
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 let PickupSchedule;
 let PICKUP_DELAYS;
+let OWED_LIMIT;
 let AcceptedSource;
+let lineBody;
+let stampsOwed;
+let stampsLanded;
 before(async () => {
-  ({ PickupSchedule, PICKUP_DELAYS, AcceptedSource } = await import(join(REPO, "dist", "present.js")));
+  ({ PickupSchedule, PICKUP_DELAYS, OWED_LIMIT, AcceptedSource, lineBody, stampsOwed, stampsLanded } =
+    await import(join(REPO, "dist", "present.js")));
 });
 
 describe("1. THE SCHEDULE — bounded, caused, one per path", () => {
@@ -177,6 +194,161 @@ describe("1. THE SCHEDULE — bounded, caused, one per path", () => {
     const s = new PickupSchedule(delays);
     delays.push(5, 5, 5);
     assert.equal(s.attempts, 2, "the schedule kept a reference to the caller's array");
+  });
+});
+
+describe("1c. THE SCHEDULE CARRIES WHICH LINES ARE OWED A STAMP", () => {
+  test("it holds the owed bodies opaquely and hands them back at attempt time", () => {
+    const s = new PickupSchedule();
+    s.schedule(PATH, "w1-a", T_ANY, ["zzTEST stamp watch #task #personal"]);
+    assert.deepEqual(s.owed(PATH), ["zzTEST stamp watch #task #personal"]);
+    assert.deepEqual(s.attempt(PATH).owed, ["zzTEST stamp watch #task #personal"]);
+  });
+
+  test("A WRITE THAT INTRODUCED NOTHING OWES NOTHING — the default, and the checkbox's whole case", () => {
+    const s = new PickupSchedule();
+    s.schedule(PATH, "w1-a", T_ANY);
+    assert.deepEqual(s.owed(PATH), []);
+    assert.deepEqual(s.owed("never-scheduled.md"), []);
+  });
+
+  test("A SECOND WRITE JOINING UNIONS THE OWED SET — it does NOT replace it, unlike the token", () => {
+    // THE ONE ASYMMETRY IN `schedule`. `token` and `since` describe ONE write and the newest one's
+    // are what is worth waiting on. A stamp is not like that: a stamp owed to the FIRST write is
+    // still owed after the second, and the second write's own `before` is the first write's posted
+    // file — so that line no longer looks introduced and would never be computed again. Replacing
+    // would silently drop it, and Enter-Enter is exactly two creates inside one cycle.
+    const s = new PickupSchedule();
+    s.schedule(PATH, "w1-a", T_ANY, ["first line"]);
+    s.schedule(PATH, "w1-b", T_ANY, ["second line"]);
+    assert.deepEqual(s.owed(PATH).sort(), ["first line", "second line"]);
+    assert.equal(s.attempt(PATH).token, "w1-b", "the token was unioned instead of adopted");
+  });
+
+  test("AND IT IS CAPPED, OLDEST OUT — a backstop, and it fails toward ending sooner", () => {
+    const s = new PickupSchedule();
+    for (let i = 0; i < OWED_LIMIT + 4; i += 1) {
+      s.schedule(PATH, "w1-a", T_ANY, [`line ${i}`]);
+    }
+    const owed = s.owed(PATH);
+    assert.equal(owed.length, OWED_LIMIT, `the owed set grew to ${owed.length}`);
+    assert.equal(owed.at(-1), `line ${OWED_LIMIT + 3}`, "the newest write's line was dropped");
+    assert.ok(!owed.includes("line 0"), "the oldest line survived the cap");
+  });
+
+  test("THE OWED SET CANNOT BE CHANGED FROM OUTSIDE — the caller's array is copied both ways", () => {
+    const s = new PickupSchedule();
+    const mine = ["one"];
+    s.schedule(PATH, "w1-a", T_ANY, mine);
+    mine.push("smuggled");
+    assert.deepEqual(s.owed(PATH), ["one"], "the schedule shares the caller's array");
+    s.owed(PATH).push("smuggled");
+    assert.deepEqual(s.owed(PATH), ["one"], "the reader hands out the live array");
+  });
+});
+
+describe("1d. THE BODY — what identifies a line before it has an id", () => {
+  test("THE STAMP COMES OFF, WHICH IS THE WHOLE POINT — one line, stamped and not, is one body", () => {
+    // If these two reduced differently, the arrival in which the engine finally stamped the line
+    // would read as a different line entirely, and the pickup could never recognise its answer.
+    assert.equal(
+      lineBody("- [ ] zzTEST stamp watch #task #personal [[qntm:2697]]"),
+      lineBody("- [ ] zzTEST stamp watch #task #personal"),
+    );
+  });
+
+  test("AND SO DO THE INDENT, THE MARKER AND THE DOUBLED SPACE — each is a thing the cycle does", () => {
+    const plain = lineBody("- [ ] Draft the launch note #task");
+    assert.equal(lineBody("      - [ ] Draft  the   launch note #task"), plain, "re-nesting broke the body");
+    assert.equal(lineBody("- [x] Draft the launch note #task"), plain, "a resolved checkbox broke the body");
+    assert.equal(lineBody("* Draft the launch note #task"), plain, "a changed bullet broke the body");
+  });
+
+  test("AND NOTHING ELSE DOES — a reworded line is a DIFFERENT line, and this must not pretend otherwise", () => {
+    // A line's characters are a content hash, not an identity (`instance.ts` says so for the same
+    // reason). Every further loosening buys recognition of a line the engine reworded at the price
+    // of confusing two lines the operator WROTE, and this module's whole job is to say MY line.
+    assert.notEqual(lineBody("- [ ] Ring the dentist #task"), lineBody("- [ ] Ring the dentist #outcome"));
+    assert.notEqual(lineBody("- [ ] Ring the dentist #task"), lineBody("- [ ] ring the dentist #task"));
+  });
+
+  test("A LINE WITH NO BODY REDUCES TO `\"\"` — the one match that would match everything", () => {
+    for (const nothing of ["", "   ", "- [ ]", "- ", "> "]) {
+      assert.equal(lineBody(nothing), "", `\`${nothing}\` produced a body`);
+    }
+  });
+});
+
+describe("1e. WHAT A WRITE IS OWED, AND WHETHER IT LANDED", () => {
+  const BEFORE = ["# This Week", "", "- [ ] Ring the dentist [[qntm:122]] #task", ""].join("\n");
+
+  test("A CHECKBOX TICK OWES NOTHING — the line it changed already had its id", () => {
+    const ticked = BEFORE.replace("- [ ]", "- [x]");
+    assert.deepEqual(stampsOwed(BEFORE, ticked), [], "a tick was made to wait for a stamp");
+  });
+
+  test("AN EDIT TO A STAMPED LINE OWES NOTHING EITHER — the stamp travels with the body", () => {
+    const edited = BEFORE.replace("Ring the dentist", "Ring the dentist BEFORE FRIDAY");
+    assert.deepEqual(stampsOwed(BEFORE, edited), []);
+  });
+
+  test("A CREATE OWES EXACTLY ONE — and it is the body of the line he typed", () => {
+    const created = `${BEFORE}- [ ] zzTEST stamp watch #task #personal\n`;
+    assert.deepEqual(stampsOwed(BEFORE, created), ["zzTEST stamp watch #task #personal"]);
+  });
+
+  test("A BODY THE FILE ALREADY HELD UNSTAMPED IS NOT OWED — one bad line must not poison every write", () => {
+    // If it were owed, an unstampable line already in the file would make EVERY later write to that
+    // file run to the bound, forever.
+    const withProse = `${BEFORE}Some prose the engine will never stamp\n`;
+    const created = `${withProse}- [ ] zzTEST stamp watch #task #personal\n`;
+    assert.deepEqual(stampsOwed(withProse, created), ["zzTEST stamp watch #task #personal"]);
+  });
+
+  test("A NEW LINE THAT ARRIVED ALREADY STAMPED OWES NOTHING", () => {
+    const created = `${BEFORE}- [ ] Water the plants [[qntm:123]] #task\n`;
+    assert.deepEqual(stampsOwed(BEFORE, created), []);
+  });
+
+  test("AND WITH NO `before` AT ALL, NOTHING IS PRESUMED SETTLED — the fail-safe direction", () => {
+    assert.deepEqual(stampsOwed(null, "- [ ] one line\n"), ["one line"]);
+  });
+
+  test("OWING NOTHING LANDS AT ONCE — the condition falls back to the two facts that were there", () => {
+    assert.equal(stampsLanded([], []), true);
+    assert.equal(stampsLanded([], ["- [ ] anything at all"]), true);
+  });
+
+  test("STILL UNSTAMPED IS STILL OWED — the live defect, at the value level", () => {
+    const owed = ["zzTEST stamp watch #task #personal"];
+    assert.equal(stampsLanded(owed, ["- [ ] zzTEST stamp watch #task #personal"]), false);
+  });
+
+  test("STAMPED IS LANDED — the answer this exists to wait for", () => {
+    const owed = ["zzTEST stamp watch #task #personal"];
+    assert.equal(stampsLanded(owed, ["- [ ] zzTEST stamp watch #task #personal [[qntm:2697]]"]), true);
+  });
+
+  test("AND STAMPED IN ANOTHER VIEW IS LANDED TOO — the engine moves lines between views", () => {
+    // Nothing positional may enter this comparison. A line that left `this_week.md` for
+    // `outcomes.md` is still the line he wrote, and narrowing the search to the path the write went
+    // to would report it as gone.
+    const owed = ["zzTEST stamp watch #task #personal"];
+    const elsewhere = ["# This Week\n", "# Outcomes\n  - [x] zzTEST stamp watch #task #personal [[qntm:2697]]"];
+    assert.equal(stampsLanded(owed, elsewhere), true);
+  });
+
+  test("AND GONE IS LANDED — the vault held his bytes before the cycle ran, so absence is a DECISION", () => {
+    // `POST /vault/file` wrote the operator's line verbatim BEFORE the cycle ran, so a projection
+    // generated after that write read a file containing it. If it is not there, the engine acted on
+    // it — reworded, moved out of every published view, deleted — and no further stamp is coming.
+    assert.equal(stampsLanded(["zzTEST stamp watch #task #personal"], ["# This Week\n- [ ] something else"]), true);
+  });
+
+  test("ONE UNSTAMPED BODY OUT OF TWO KEEPS THE WHOLE PICKUP WAITING", () => {
+    const owed = ["first line", "second line"];
+    assert.equal(stampsLanded(owed, ["- [ ] first line [[qntm:1]]\n- [ ] second line"]), false);
+    assert.equal(stampsLanded(owed, ["- [ ] first line [[qntm:1]]\n- [ ] second line [[qntm:2]]"]), true);
   });
 });
 
@@ -798,6 +970,136 @@ describe("3b. A PICKUP STOPS ON THE LINE BEING STAMPED, NOT ON A NEWER PROJECTIO
     assert.equal(d.page.__pickups().waiting(PATH), false, "the stamped projection did not end the series");
     assert.equal(d.timers.length, 0, "the answered series placed another read");
   });
+
+  test("A CHECKBOX TICK IS UNCHANGED — it introduced no line, so it is owed no stamp and reads ONCE", async () => {
+    // ── THE BUDGET GUARD, AND THE REASON THE OWED SET IS A DIFF RATHER THAN A SCAN ───────────────
+    //
+    // Waiting for EVERY unstamped line in the posted file would make every tick run to the bound: a
+    // poll wearing a bound, and a 3x bill on his commonest gesture against a 1.23 MB payload. A
+    // tick changes one glyph on a line that already has its id, so it introduces nothing, owes
+    // nothing, and stops exactly where it stopped before this change existed.
+    d.land();
+    d.boxes()[0].checked = true;
+    d.boxes()[0].dispatch("change");
+    await settle();
+    assert.deepEqual(d.page.__pickups().owed(PATH), [], "a tick was made to wait for a stamp");
+
+    d.control.readAnswer = () => echoing(d, CYCLED, T2);
+    await d.fireTimers();
+
+    assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph"], "the tick cost more than one read");
+    assert.equal(d.page.__pickups().waiting(PATH), false, "the tick's pickup is still waiting");
+    assert.match(d.freshness(), /^as of /, "the tick's arrival did not say when it was generated");
+  });
+
+  test("AND THE LINE MAY BE STAMPED IN ANOTHER VIEW — the engine moves lines, and it is still his", async () => {
+    // Nothing positional enters the comparison, so the search is of the WHOLE projection. A line
+    // that left this view for another is answered, not lost.
+    d.land();
+    const posted = await createLine(d);
+    const elsewhere = {
+      ...envelope(posted.replace(`${NEW_LINE}\n`, ""), T2),
+      snapshot: {
+        generated_at: T2,
+        writes: { [PATH]: d.control.posted.map((b) => b.token).filter(Boolean) },
+        views: [
+          view(posted.replace(`${NEW_LINE}\n`, "")),
+          {
+            id: "all-personal",
+            path: "personal/all.md",
+            title: "All Personal",
+            domain: "personal",
+            markdown: `# All Personal\n\n${NEW_LINE} [[${NEW_ID}]]\n`,
+          },
+        ],
+      },
+    };
+    d.control.readAnswer = () => elsewhere;
+    await d.fireTimers();
+
+    assert.equal(
+      d.page.__pickups().waiting(PATH),
+      false,
+      "the line was stamped in another view and the series went on reading for it",
+    );
+    assert.equal(d.timers.length, 0, "a second read was placed for a line that had already been stamped");
+  });
+
+  test("A LINE THE ENGINE NEVER STAMPS ENDS AT THE BOUND — three reads, and an HONEST sentence", async () => {
+    // ── THE BOUND IS NOW LOAD-BEARING RATHER THAN MERELY PRUDENT ─────────────────────────────────
+    //
+    // The same drive found root-level `#task` lines reclassified to `#outcome` and rendered with no
+    // stamp at all. A condition that waits for a stamp has no natural end on one of those, so the
+    // schedule's `delaysMs.length` is the only thing that terminates the series. It terminates
+    // because `answered` counts attempts against an array copied on construction, and because
+    // nothing here re-arms itself — only a new write can.
+    //
+    // AND `PICKUP_LOST` WOULD BE FALSE IN BOTH HALVES HERE. The cycle's answer DID arrive, and
+    // pressing re-read would fetch the same unstamped line again. So this ending says the two
+    // things that are true and asks him for nothing.
+    d.land();
+    const posted = await createLine(d);
+    let tick = 0;
+    d.control.readAnswer = () => {
+      tick += 1;
+      return echoing(d, posted, `2026-08-01T09:0${tick}:00.000Z`);
+    };
+
+    for (let i = 0; i < PICKUP_DELAYS.length; i += 1) {
+      assert.equal(d.timers.length, 1, `attempt ${i + 1} had no timer waiting to fire it`);
+      await d.fireTimers();
+    }
+
+    assert.equal(
+      d.control.calls.filter((c) => c === "GET /app/graph").length,
+      PICKUP_DELAYS.length,
+      "the unstampable line did not read exactly the bounded number of times",
+    );
+    assert.equal(d.timers.length, 0, "THE SERIES DID NOT TERMINATE — it re-armed itself on an unstamped line");
+    assert.equal(d.page.__pickups().waiting(PATH), false, "the exhausted record was not dropped");
+    assert.match(
+      d.freshness(),
+      /your save landed — the engine has not given this line an id/,
+      "an unstampable line was reported as a lost cycle, which is false in both halves",
+    );
+    assert.doesNotMatch(d.freshness(), /press re-read/, "he was sent to fetch a stamp that is never coming");
+  });
+
+  test("AND A CYCLE THAT REALLY DID NOT ANSWER STILL SAYS SO — the other ending, unchanged", async () => {
+    // The two endings must stay two. A read that brings nothing past the write is the case
+    // `PICKUP_LOST` was written for, and the stamp test must not have swallowed it.
+    d.land();
+    await createLine(d);
+    d.control.readAnswer = () => envelope(V1, T1);
+    for (let i = 0; i < PICKUP_DELAYS.length; i += 1) {
+      await d.fireTimers();
+    }
+    assert.match(d.freshness(), /press re-read to ask for it again/, "a cycle that never answered was reported as an id refusal");
+  });
+
+  test("AND THE SKIP-THE-FETCH SHORTCUT ASKS THE STAMP TOO — a newer projection is not an answer", async () => {
+    // The same mistake has always lived in two places. Keyed on the timestamp and the token alone,
+    // the pre-fetch test would CANCEL the read without spending one: the re-read button lands a
+    // newer projection carrying the unstamped line, and the series ends before the stamp exists.
+    d.land();
+    const posted = await createLine(d);
+    const stamped = posted.replace(NEW_LINE, `${NEW_LINE} [[${NEW_ID}]]`);
+
+    d.control.readAnswer = () => echoing(d, posted, T2);
+    await d.page.refresh();
+    assert.equal(d.page.__writes().waiting(d.control.posted[0].token), false, "the arm did not set up");
+    assert.equal(d.page.__pickups().waiting(PATH), true, "the re-read's newer projection ended the series");
+
+    d.control.readAnswer = () => echoing(d, stamped, T3);
+    await d.fireTimers();
+
+    assert.equal(
+      d.control.calls.filter((c) => c === "GET /app/graph").length,
+      2,
+      "the pickup cancelled itself on a projection that had not stamped the line",
+    );
+    assert.match(d.onScreen(), new RegExp(NEW_ID), "the stamp never reached the screen");
+  });
 });
 
 describe("4. IT IS NOT A POLL — the guard on what this costs him", () => {
@@ -942,6 +1244,67 @@ describe("5. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
       /🛫 2026-08-04/,
       "the stamp arrived without the second read — the guard proves nothing",
     );
+  });
+
+  test("BREAK THE STAMP TEST — and the series ends on a newer projection, exactly as it did live", async () => {
+    // ── THE EXPRESSION THAT SHIPPED ON 2026-08-02, PUT BACK VERBATIM ─────────────────────────────
+    //
+    // `pickups.answered(path, cycled)` IS the condition that was in the browser on 2026-08-03, and
+    // this arm is that drive: the create, one read at +10.86 s, an envelope that is genuinely newer
+    // and genuinely names the write and genuinely has no stamp on his line, and the series over. It
+    // must go red, or waiting for the stamp is decoration.
+    const d = await standUpPage("app-async-ack-mutation-stamped", (source) =>
+      assertMutated(source, "pickups.answered(path, cycled && stamped);", "pickups.answered(path, cycled);"),
+    );
+    d.land();
+    const posted = await createLine(d);
+
+    d.control.readAnswer = () => echoing(d, posted, T2);
+    await d.fireTimers();
+
+    assert.equal(d.page.__pickups().waiting(PATH), false, "the mutation did not reach the page");
+    assert.equal(d.timers.length, 0, "the series is still going, so the stamp test is not load-bearing");
+
+    // AND NOTHING WILL EVER FETCH THE CYCLE THAT STAMPED IT. This is the 91 seconds he watched.
+    d.control.readAnswer = () => echoing(d, posted.replace(NEW_LINE, `${NEW_LINE} [[${NEW_ID}]]`), T3);
+    await d.fireTimers();
+    assert.doesNotMatch(
+      d.onScreen(),
+      new RegExp(NEW_ID),
+      "the stamp reached the screen without the second read — the guard proves nothing",
+    );
+  });
+
+  test("BREAK THE SKIP-THE-FETCH SHORTCUT — and the read is cancelled before it is ever spent", async () => {
+    // The second place the same mistake lives. Restored to the timestamp-and-token pair, the
+    // pre-fetch test cancels a pickup on a projection that never stamped the line — and the page
+    // does not even buy an envelope to be wrong about.
+    const d = await standUpPage("app-async-ack-mutation-inhand", (source) =>
+      assertMutated(
+        source,
+        "(pastTheWrite(paintedStamp(), going.since) && stampsLanded(going.owed, viewSources(graphData))) ||\n" +
+          "    (pastTheWrite(pending?.generatedAt ?? null, going.since) &&\n" +
+          "      stampsLanded(going.owed, viewSources(pending?.data ?? null)));",
+        "pastTheWrite(paintedStamp(), going.since) ||\n" +
+          "    pastTheWrite(pending?.generatedAt ?? null, going.since);",
+      ),
+    );
+    d.land();
+    const posted = await createLine(d);
+
+    // The re-read button, landing a newer projection that has not stamped his line.
+    d.control.readAnswer = () => echoing(d, posted, T2);
+    await d.page.refresh();
+
+    d.control.readAnswer = () => echoing(d, posted.replace(NEW_LINE, `${NEW_LINE} [[${NEW_ID}]]`), T3);
+    await d.fireTimers();
+
+    assert.equal(
+      d.control.calls.filter((c) => c === "GET /app/graph").length,
+      1,
+      "the mutation did not reach the page — the shortcut still spent a read",
+    );
+    assert.doesNotMatch(d.onScreen(), new RegExp(NEW_ID), "the stamp arrived without the pickup's own read");
   });
 
   test("BREAK THE PICKUP — and the cycle's answer never reaches the screen", async () => {
