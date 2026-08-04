@@ -1288,38 +1288,66 @@ function rankOf(target, siblings, keys, markers) {
   }
   return rank;
 }
-function orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+function evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
   const declared = ordering[viewId]?.[sectionId];
-  if (declared === void 0) return abstains("no-section-declaration");
+  if (declared === void 0) return { kind: "abstains", because: "no-section-declaration" };
   const keys = declared.ordering;
-  if (keys === void 0 || keys.length === 0) return abstains("insertion-order");
+  if (keys === void 0 || keys.length === 0) return { kind: "abstains", because: "insertion-order" };
   for (const key of keys) {
-    if (orderingFields[key.field] === void 0) return abstains("field-not-published");
+    if (orderingFields[key.field] === void 0) return { kind: "abstains", because: "field-not-published" };
   }
   const lines = source.split("\n");
   const { start, end } = sectionBounds(lines, lineIndex);
-  if (anyLineIndented(lines, start, end)) return abstains("nested-section");
+  if (anyLineIndented(lines, start, end)) return { kind: "abstains", because: "nested-section" };
   const beforeText = lines[lineIndex] ?? "";
   const beforeTuple = tupleFor(beforeText, keys, orderingFields);
   const afterTuple = tupleFor(afterText, keys, orderingFields);
-  if (beforeTuple === void 0 || afterTuple === void 0) return abstains("no-value");
+  if (beforeTuple === void 0 || afterTuple === void 0) return { kind: "abstains", because: "no-value" };
   const siblings = [];
   for (let at = start; at < end; at += 1) {
     if (at === lineIndex) continue;
     const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
-    if (tuple !== void 0) siblings.push(tuple);
+    if (tuple !== void 0) siblings.push({ lineIndex: at, tuple });
   }
-  const beforeRank = rankOf(beforeTuple, siblings, keys, orderingFields);
-  const afterRank = rankOf(afterTuple, siblings, keys, orderingFields);
+  return { kind: "answer", keys, beforeTuple, afterTuple, siblings };
+}
+function orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  if (evaluation.kind === "abstains") return abstains(evaluation.because);
+  const tuples = evaluation.siblings.map((s) => s.tuple);
+  const beforeRank = rankOf(evaluation.beforeTuple, tuples, evaluation.keys, orderingFields);
+  const afterRank = rankOf(evaluation.afterTuple, tuples, evaluation.keys, orderingFields);
   return {
     kind: "answer",
     answer: {
       moved: beforeRank !== afterRank,
       beforeRank,
       afterRank,
-      siblingCount: siblings.length
+      siblingCount: tuples.length
     }
   };
+}
+function orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
+  const { keys, beforeTuple, afterTuple, siblings } = evaluation;
+  const tuples = siblings.map((s) => s.tuple);
+  const beforeRank = rankOf(beforeTuple, tuples, keys, orderingFields);
+  const afterRank = rankOf(afterTuple, tuples, keys, orderingFields);
+  const moved = beforeRank !== afterRank;
+  const entries = [...siblings];
+  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const selfEntry = { lineIndex, tuple: afterTuple };
+  if (insertAt === -1) {
+    entries.push(selfEntry);
+  } else {
+    entries.splice(insertAt, 0, selfEntry);
+  }
+  const sorted = entries.slice().sort((a, b) => compareTuples(a.tuple, b.tuple, keys, orderingFields));
+  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
+  const next = at === -1 ? void 0 : sorted[at + 1];
+  const beforeLineIndex = next === void 0 ? null : next.lineIndex;
+  return { kind: "answer", placement: { moved, beforeLineIndex } };
 }
 
 // app/present/today.ts
@@ -3424,6 +3452,31 @@ function renderTokens(text, tags, stamp, render) {
   const intact = survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN);
   return intact ? html : render(text);
 }
+var SETTLE_CLASS = "settle-move";
+function settleRow(moving, before, body, animate) {
+  const first = animate && typeof moving.getBoundingClientRect === "function" ? moving.getBoundingClientRect() : null;
+  body.insertBefore(moving, before);
+  if (first === null) {
+    return;
+  }
+  const last = moving.getBoundingClientRect();
+  const dy = first.top - last.top;
+  if (dy === 0) {
+    return;
+  }
+  moving.className = moving.className === "" ? SETTLE_CLASS : `${moving.className} ${SETTLE_CLASS}`;
+  moving.style.transition = "none";
+  moving.style.transform = `translateY(${dy}px)`;
+  const settled = () => {
+    moving.style.transition = "";
+    moving.style.transform = "";
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(settled);
+  } else {
+    settled();
+  }
+}
 function paint(body, source, context, deps) {
   paintGeneration += 1;
   const mine = paintGeneration;
@@ -3463,6 +3516,7 @@ function paint(body, source, context, deps) {
       const text = rawText(lineSource);
       stampInstance(text, lineIndex);
       body.append(text);
+      rowsByLineIndex.set(lineIndex, text);
       return;
     }
     if (mode !== void 0 && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
@@ -3470,11 +3524,13 @@ function paint(body, source, context, deps) {
       focusable(line, lineIndex);
       stampInstance(line, lineIndex);
       body.append(line);
+      rowsByLineIndex.set(lineIndex, line);
       return;
     }
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
     stampInstance(input, lineIndex);
     body.append(input);
+    rowsByLineIndex.set(lineIndex, input);
     if (focus.isFocused(lineIndex)) {
       input.focus?.();
       if (superseded()) {
@@ -3517,6 +3573,7 @@ function paint(body, source, context, deps) {
     }
   };
   let lastPaintedIndex = -1;
+  const rowsByLineIndex = /* @__PURE__ */ new Map();
   source.split("\n").forEach((line, index) => {
     if (superseded()) {
       return;
@@ -3566,6 +3623,7 @@ function paint(body, source, context, deps) {
       stampInstance(row, index);
       row.append(box, span);
       body.append(row);
+      rowsByLineIndex.set(index, row);
       return;
     }
     if (shape.kind === "heading") {
@@ -3583,6 +3641,7 @@ function paint(body, source, context, deps) {
       focusable(el, index);
       stampInstance(el, index);
       body.append(el);
+      rowsByLineIndex.set(index, el);
       return;
     }
     if (cascade.resolve("prose").rendition === "raw") {
@@ -3599,9 +3658,22 @@ function paint(body, source, context, deps) {
     focusable(div, index);
     stampInstance(div, index);
     body.append(div);
+    rowsByLineIndex.set(index, div);
   });
   if (superseded()) {
     return;
+  }
+  const settle = deps.settle;
+  if (settle !== void 0) {
+    const instruction = settle.take(source, deps.view ?? "");
+    if (instruction !== null) {
+      const movingEl = rowsByLineIndex.get(instruction.placement.lineIndex);
+      const beforeLineIndex = instruction.placement.beforeLineIndex;
+      const beforeEl = beforeLineIndex === null ? null : rowsByLineIndex.get(beforeLineIndex) ?? null;
+      if (movingEl !== void 0) {
+        settleRow(movingEl, beforeEl, body, instruction.animate);
+      }
+    }
   }
   paintDraft();
   if (superseded()) {
@@ -3618,6 +3690,38 @@ function paint(body, source, context, deps) {
     body.append(below);
   }
 }
+
+// app/present/settle.ts
+var SettleSurface = class {
+  #source = null;
+  #view = "";
+  #placement = null;
+  #animated = false;
+  /**
+   * Arm a placement, computed elsewhere, against the EXACT source it was computed from and the
+   * view it belongs to. Overwrites whatever was armed before — there is one cursor and, for the
+   * same reason, one pending settle: a second commit before the first one's motion has even shown
+   * describes a NEWER prediction, and the newer one is the only one worth keeping.
+   */
+  arm(source, view, placement) {
+    this.#source = source;
+    this.#view = view;
+    this.#placement = placement;
+    this.#animated = false;
+  }
+  /**
+   * What THIS repaint of `source`/`view` should do, or `null` when nothing is armed for this exact
+   * pair — see this class's own header for why a mismatch needs no separate clearing.
+   */
+  take(source, view) {
+    if (this.#placement === null || this.#source !== source || this.#view !== view) {
+      return null;
+    }
+    const animate = !this.#animated;
+    this.#animated = true;
+    return { placement: this.#placement, animate };
+  }
+};
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -3641,6 +3745,7 @@ export {
   RESOLVABLE_FIELDS,
   SPECIFICITY,
   STRUCTURAL_KEY,
+  SettleSurface,
   WRITE_ECHO_KEY,
   WriteRegister,
   applyEdit,
@@ -3668,6 +3773,7 @@ export {
   mintWriteToken,
   openLine,
   orderingFor,
+  orderingPlacementFor,
   paint,
   placeDraft,
   placeFor,

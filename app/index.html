@@ -529,11 +529,22 @@
     .drawer-note { order: 2; }
   }
 
+  /* THE SETTLE AFFORDANCE'S OWN CLASS — app/present/paint.ts's `settleRow`, roadmap-the-road-
+     ahead.md step 3. Carries the SAME `--slide` token every other motion on this page already
+     uses ("one motion, named once"), never a duration of its own: `paint.ts` writes a `transform`
+     computed from real layout (the FLIP technique) and this rule is the only thing that makes the
+     CHANGE to that transform ANIMATE rather than merely apply. A row this class is never put on
+     until a placement is actually armed — see `SettleSurface`'s own header — so it costs nothing
+     on every other repaint. */
+  .settle-move { transition: transform var(--slide); }
+
   /* ══ ASKED NOT TO MOVE ════════════════════════════════════════════════════════════════════
      One block, because the motion is one token. The drawer still opens, closes, and traps
-     focus; it simply arrives rather than travels. */
+     focus; it simply arrives rather than travels. `.settle-move` joins the same block for the
+     same reason: the row still relocates under reduced motion (`settleRow`'s own header — the
+     admission still happens), it just arrives instead of travelling, exactly like the drawer. */
   @media (prefers-reduced-motion: reduce) {
-    .scrim, .drawer, .chev, button { transition: none; }
+    .scrim, .drawer, .chev, button, .settle-move { transition: none; }
   }
   /* ── THE READING COLUMN: ONE ROW GEOMETRY, TWO RENDITIONS ──────────────────────────────────
      Every line of a view is one ROW, and a row is `--row` tall whichever way the line is being
@@ -923,6 +934,10 @@
          above (`.diagnostic-badge`) for the full argument for why this is a second register rather
          than a fifth freshness clause. -->
     <p id="membershipBadge" class="diagnostic-badge"></p>
+    <!-- THE SAME REGISTER, FOR ORDERING — `orderingDiagnosticFor`'s own header for why a section
+         that declared `ordering:` and still could not decide must say so, and why one that never
+         declared it stays silent. roadmap-the-road-ahead.md step 3. -->
+    <p id="orderingBadge" class="diagnostic-badge"></p>
     <p id="freshness" class="muted"></p>
     <!-- THE EMPTY ENVIRONMENT. Three situations that used to render as one grey line, and they
          are not the same situation: an account with no graph behind it, a graph with nothing in
@@ -1041,7 +1056,9 @@ import {
   sectionOrderFor,
   membershipFor,
   orderingFor,
+  orderingPlacementFor,
   todayFor,
+  SettleSurface,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -1349,6 +1366,14 @@ const draftLine = new DraftSurface();
 // selects one with `j`/`k` and presses `i`/Enter. Read motions.ts's own header before assuming
 // this is "the MODE level, stage 4" (reading vs authoring) — it is a deliberately different rung.
 const mode = new ModeSurface();
+
+// AN ARMED PLACEMENT — "the browser predicts this row belongs somewhere else now" — app/present/
+// settle.ts, roadmap-the-road-ahead.md step 3. One surface for the page, same reason as the three
+// above: it has to survive the repaint it causes, and the repaint immediately after that one, for
+// as long as the file it was armed against is still the file on screen — see that module's own
+// header for why it is source-keyed rather than cleared after one use. `commitLine` arms it;
+// `repaintCurrentView`'s call into `paint()` is the only place it is ever read.
+const settle = new SettleSurface();
 
 // WHAT THE SERVER LAST SENT FOR THE FILE ON SCREEN (app/present/base.ts). One surface for the page,
 // same reason as the three above — it has to survive the repaint it describes.
@@ -2908,6 +2933,7 @@ function repaintCurrentView() {
     focus,
     mode,
     draft: draftLine,
+    settle,
     onCheckboxToggle: (toggle) => toggleTask(v, toggle),
     // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
     // created arrive here identically — `commit.markdown` is the whole view source either way, and
@@ -3355,6 +3381,123 @@ function orderingNoteFor(view, commit) {
 }
 
 /**
+ * THE ABSTENTION REGISTER FOR ORDERING — `roadmap-the-road-ahead.md` step 2's own gap, named at
+ * the time in `commitLine`'s own comment ("Ordering has no register of its own yet") and closed
+ * here, the same shape `membershipDiagnosticFor` already gives membership. Hazard 3 of the PR that
+ * added this function states the reason plainly: `orderingFor` already REFUSES honestly — five
+ * named `OrderingAbstention` reasons — and every one of them used to reach exactly as far as
+ * `orderingNoteFor`'s own `return ""`, indistinguishable from "nothing changed." A section that
+ * declares `orderingMode: insertion_order` (`daily-work`/`daily-personal`'s `capture`) abstains on
+ * EVERY edit, forever, and said nothing about it until this function existed.
+ *
+ * "no-section-declaration" IS STILL SILENT, AND DELIBERATELY — the same distinction
+ * `membershipDiagnosticFor`'s own `"not-evaluated"` draws: 177 of 186 sections never declared an
+ * `ordering:` at all, and reporting "I could not decide" about a question nobody asked would be
+ * its own kind of noise, not honesty. Only a section that DID declare ordering and still could not
+ * answer gets a word.
+ */
+function orderingDiagnosticFor(view, commit) {
+  if (resolution === undefined || qualification === undefined || commit.kind !== "set-line") {
+    return "";
+  }
+  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+  if (sectionId === null) {
+    return "";
+  }
+  const reading = orderingFor(
+    view.id,
+    sectionId,
+    commit.source,
+    commit.lineIndex,
+    commit.text,
+    resolution.ordering,
+    resolution.orderingFields,
+  );
+  if (reading.kind === "abstains" && reading.because === "no-section-declaration") {
+    return "";
+  }
+  if (reading.kind === "abstains") {
+    return `ordering: abstained — ${reading.because}`;
+  }
+  return "ordering: decided";
+}
+
+/**
+ * WRITE `orderingDiagnosticFor`'s answer to `#orderingBadge` — the same one-DOM-touching-line
+ * shape `updateMembershipBadge` already established, kept as small and as separate from
+ * `orderingNoteFor`'s own freshness-line write as that function is from everything else on the
+ * page. A no-op on `""` (see that function's own header) leaves the badge showing the last real
+ * evaluation rather than clearing it.
+ */
+function updateOrderingBadge(view, commit) {
+  const text = orderingDiagnosticFor(view, commit);
+  if (text === "") {
+    return;
+  }
+  const badge = $("orderingBadge");
+  badge.textContent = text;
+  const abstained = text.startsWith("ordering: abstained");
+  badge.classList.toggle("diagnostic-badge-abstains", abstained);
+  badge.classList.toggle("diagnostic-badge-answer", !abstained);
+}
+
+/**
+ * ARM THE SETTLE SURFACE — the PLACEMENT half of design-the-resolution-architecture.md step 7,
+ * added by `roadmap-the-road-ahead.md` step 3. `orderingNoteFor`/`orderingDiagnosticFor` above only
+ * SAY what `orderingFor` decided; this is the one place this page calls `orderingPlacementFor`, and
+ * the one place `settle.arm` is ever called — "one write, one function," the same discipline
+ * `holdEdit`'s own header states for its register.
+ *
+ * ONLY WHEN THE PLACEMENT ANSWERS AND `moved` IS TRUE. `orderingPlacementFor` shares every
+ * abstention `orderingFor` has (ordering.ts's own header — both call the same private
+ * `evaluateSection`), so this can never disagree with `orderingNoteFor` about WHETHER something
+ * moved; it only ever adds WHERE, for the exact edits the freshness line already narrates as "this
+ * line will move within X."
+ *
+ * ARMED AGAINST `commit.markdown`, NOT `commit.source`. `commit.markdown` is what
+ * `paint.ts`'s own `rawInput.settle` repaints INTO the instant this function returns — the very
+ * next statement in that function, before `commitLine`'s own `await` below ever resumes — so
+ * arming against anything else would describe a paint that has already happened by the time the
+ * placement could be read, and `SettleSurface.take` would never see it match.
+ *
+ * `commit.kind !== "set-line"` REFUSES OUTRIGHT, the same guard `orderingNoteFor` already applies
+ * and for the same reason: a freshly inserted row has no established position, only a seed value,
+ * and "move a row that did not exist a moment ago" is a different claim this step does not make.
+ */
+function armOrderingSettle(view, commit) {
+  if (
+    resolution === undefined ||
+    qualification === undefined ||
+    commit.kind !== "set-line" ||
+    commit.markdown === null
+  ) {
+    return;
+  }
+  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+  if (sectionId === null) {
+    return;
+  }
+  const reading = orderingPlacementFor(
+    view.id,
+    sectionId,
+    commit.source,
+    commit.lineIndex,
+    commit.text,
+    resolution.ordering,
+    resolution.orderingFields,
+  );
+  if (reading.kind !== "answer" || !reading.placement.moved) {
+    return;
+  }
+  settle.arm(commit.markdown, view.id, {
+    lineIndex: commit.lineIndex,
+    beforeLineIndex: reading.placement.beforeLineIndex,
+  });
+}
+
+/**
  * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
  *
  * `source` is the string the edit was computed against, handed up by the painter (`paint.ts`'s
@@ -3554,9 +3697,14 @@ async function commitLine(view, commit) {
   const note = notes.join(" · ");
   // THE ABSTENTION REGISTER, WRITTEN BESIDE THE NARRATION AND NOT INTO IT — see
   // `membershipDiagnosticFor`'s own header for why this is a second DOM sink, `#membershipBadge`,
-  // rather than a third element of `notes` above. Ordering has no register of its own yet; see
-  // that function's own header for the honest statement of what this step does not cover.
+  // rather than a third element of `notes` above. ORDERING NOW HAS ITS OWN — `#orderingBadge`,
+  // `orderingDiagnosticFor`'s own header — closing the gap this comment used to name.
   updateMembershipBadge(view, commit);
+  updateOrderingBadge(view, commit);
+  // THE SETTLE SURFACE, ARMED BEFORE THE OPTIMISTIC REPAINT THAT FOLLOWS THIS FUNCTION RETURNS —
+  // `armOrderingSettle`'s own header for why it must run here, synchronously, and not after the
+  // `await` below. `roadmap-the-road-ahead.md` step 3: "make it place the row," not merely say so.
+  armOrderingSettle(view, commit);
   // THE CHARACTERS THIS WRITE IS CARRYING, remembered until the projection it causes lands — see
   // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it and the
   // one thing `paintView` cannot recover on its own is what he typed into a line that then vanished.

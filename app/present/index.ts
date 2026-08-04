@@ -80,8 +80,14 @@ export type {
   SectionOrdering,
 } from "./resolutiontable.js";
 
-export { markerValue, orderingFor } from "./ordering.js";
-export type { OrderingAbstention, OrderingAnswer, OrderingReading } from "./ordering.js";
+export { markerValue, orderingFor, orderingPlacementFor } from "./ordering.js";
+export type {
+  OrderingAbstention,
+  OrderingAnswer,
+  OrderingPlacement,
+  OrderingReading,
+  PlacementReading,
+} from "./ordering.js";
 
 export { resolveLogicalDate, resolveWeekEnd, todayFor } from "./today.js";
 export type { TodayAbstention, TodayAnswer, TodayReading } from "./today.js";
@@ -168,6 +174,9 @@ export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
 export { paint } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";
+
+export { SettleSurface } from "./settle.js";
+export type { RowPlacement, SettleInstruction } from "./settle.js";
 
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
 //

@@ -86,14 +86,25 @@
  *   key the section orders by. Symmetric with `membership.ts`'s "either side abstaining is
  *   silence": there is nothing to compare a missing value against.
  *
- * ── WHAT THIS MODULE NEVER DOES ──
+ * ── WHAT THIS MODULE NEVER DOES, AS FIRST WRITTEN — AND THE ONE PARAGRAPH THAT CHANGED ──
  *
- * It produces no `Contribution` and no `SourceEdit`. It moves nothing — `paint.ts`'s row-building
- * code is never reached from here, by construction: this module returns a RANK COMPARISON, not an
- * index into `viewBody`, and its only caller (`app/index.html`'s `orderingNoteFor`) writes the
- * answer into the freshness line, the same structurally-distant register step 4 established for
- * `membershipNoteFor` — see that function's own header for why "say it" and "move it" are kept in
- * different functions rather than merely different lines of one.
+ * `orderingFor` itself produces no `Contribution` and no `SourceEdit`, and still does not:
+ * `paint.ts`'s row-building code is never reached from this function, and its only caller
+ * (`app/index.html`'s `orderingNoteFor`) still only writes the answer into the freshness line.
+ * THAT PARAGRAPH IS UNCHANGED AND THE TESTS THAT PINNED IT (`tests/present-ordering.test.mjs`,
+ * `tests/app-ordering-note.test.mjs`) STILL PASS UNMODIFIED.
+ *
+ * **2026-08-04, `roadmap-the-road-ahead.md` step 3.** The sentence that used to sit here —
+ * "this module returns a RANK COMPARISON, not an index into `viewBody`" — was a true description
+ * of the only function this file had. It is no longer a true description of the FILE, because the
+ * operator's own brief for this step is "make it place the row," which is exactly an index into
+ * `viewBody`. Rather than stretch `orderingFor`'s own contract to cover a second job, this file
+ * gained a SECOND, NAMED function — `orderingPlacementFor` — that answers the placement question
+ * `orderingFor` was built to refuse. It shares every abstention `orderingFor` has (both call the
+ * same private `evaluateSection`, so the two can never disagree about WHETHER to answer) and adds
+ * no new one: the same nine sections that can be ranked can be placed, the same 177 that cannot be
+ * ranked cannot be placed either. See `orderingPlacementFor`'s own header for the proof that its
+ * answer agrees with the engine's, not merely that it produces AN index.
  */
 
 import { classifyLine } from "./rendition.js";
@@ -243,6 +254,69 @@ function rankOf(
   return rank;
 }
 
+/** One OTHER marker-bearing line in the edited line's section, in FILE ORDER — its own line index,
+ * carried alongside its tuple, because `orderingFor` only ever needed the tuple and
+ * `orderingPlacementFor` (below) needs to say WHICH LINE its answer is relative to. */
+interface RankedSibling {
+  readonly lineIndex: number;
+  readonly tuple: readonly string[];
+}
+
+/** What both exported functions need before they can answer their OWN question — the declaration
+ * check, the nesting refusal, and the two tuples, gathered exactly once so `orderingFor` and
+ * `orderingPlacementFor` cannot answer "does this section qualify" two different ways. */
+type SectionEvaluation =
+  | {
+      readonly kind: "answer";
+      readonly keys: readonly OrderingKey[];
+      readonly beforeTuple: readonly string[];
+      readonly afterTuple: readonly string[];
+      readonly siblings: readonly RankedSibling[];
+    }
+  | { readonly kind: "abstains"; readonly because: OrderingAbstention };
+
+function evaluateSection(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+): SectionEvaluation {
+  const declared = ordering[viewId]?.[sectionId];
+  if (declared === undefined) return { kind: "abstains", because: "no-section-declaration" };
+  const keys = declared.ordering;
+  if (keys === undefined || keys.length === 0) return { kind: "abstains", because: "insertion-order" };
+  for (const key of keys) {
+    if (orderingFields[key.field] === undefined) return { kind: "abstains", because: "field-not-published" };
+  }
+
+  const lines = source.split("\n");
+  const { start, end } = sectionBounds(lines, lineIndex);
+  // MUST run before any value is trusted — see this module's header, measurement 2: a section with
+  // ANY indented row nests ancestor/context lines the engine sorts by a DIFFERENT rule (context
+  // rows first, ordering applied only within same-parent siblings), which a flat rank across the
+  // whole section would get wrong. Checked over the section's FULL range, not just the two lines
+  // being compared, because an indented line elsewhere in the section is still evidence the section
+  // is a tree, not a list.
+  if (anyLineIndented(lines, start, end)) return { kind: "abstains", because: "nested-section" };
+
+  const beforeText = lines[lineIndex] ?? "";
+  const beforeTuple = tupleFor(beforeText, keys, orderingFields);
+  const afterTuple = tupleFor(afterText, keys, orderingFields);
+  if (beforeTuple === undefined || afterTuple === undefined) return { kind: "abstains", because: "no-value" };
+
+  const siblings: RankedSibling[] = [];
+  for (let at = start; at < end; at += 1) {
+    if (at === lineIndex) continue;
+    const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
+    if (tuple !== undefined) siblings.push({ lineIndex: at, tuple });
+  }
+
+  return { kind: "answer", keys, beforeTuple, afterTuple, siblings };
+}
+
 /**
  * Does the line at `lineIndex` (as `source` currently holds it) rank differently within its
  * section once it reads `afterText` instead?
@@ -261,45 +335,122 @@ export function orderingFor(
   ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
   orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
 ): OrderingReading {
-  const declared = ordering[viewId]?.[sectionId];
-  if (declared === undefined) return abstains("no-section-declaration");
-  const keys = declared.ordering;
-  if (keys === undefined || keys.length === 0) return abstains("insertion-order");
-  for (const key of keys) {
-    if (orderingFields[key.field] === undefined) return abstains("field-not-published");
-  }
+  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  if (evaluation.kind === "abstains") return abstains(evaluation.because);
 
-  const lines = source.split("\n");
-  const { start, end } = sectionBounds(lines, lineIndex);
-  // MUST run before any value is trusted — see this module's header, measurement 2: a section with
-  // ANY indented row nests ancestor/context lines the engine sorts by a DIFFERENT rule (context
-  // rows first, ordering applied only within same-parent siblings), which a flat rank across the
-  // whole section would get wrong. Checked over the section's FULL range, not just the two lines
-  // being compared, because an indented line elsewhere in the section is still evidence the section
-  // is a tree, not a list.
-  if (anyLineIndented(lines, start, end)) return abstains("nested-section");
-
-  const beforeText = lines[lineIndex] ?? "";
-  const beforeTuple = tupleFor(beforeText, keys, orderingFields);
-  const afterTuple = tupleFor(afterText, keys, orderingFields);
-  if (beforeTuple === undefined || afterTuple === undefined) return abstains("no-value");
-
-  const siblings: (readonly string[])[] = [];
-  for (let at = start; at < end; at += 1) {
-    if (at === lineIndex) continue;
-    const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
-    if (tuple !== undefined) siblings.push(tuple);
-  }
-
-  const beforeRank = rankOf(beforeTuple, siblings, keys, orderingFields);
-  const afterRank = rankOf(afterTuple, siblings, keys, orderingFields);
+  const tuples = evaluation.siblings.map((s) => s.tuple);
+  const beforeRank = rankOf(evaluation.beforeTuple, tuples, evaluation.keys, orderingFields);
+  const afterRank = rankOf(evaluation.afterTuple, tuples, evaluation.keys, orderingFields);
   return {
     kind: "answer",
     answer: {
       moved: beforeRank !== afterRank,
       beforeRank,
       afterRank,
-      siblingCount: siblings.length,
+      siblingCount: tuples.length,
     },
   };
+}
+
+/** The answer `orderingPlacementFor` gives when it can — an index a painter can act on, not a
+ * rank a sentence can narrate. */
+export interface OrderingPlacement {
+  /** Whether the row's position actually changes — the same fact `OrderingAnswer.moved` states,
+   * recomputed independently rather than threaded through, so a caller driving this function alone
+   * (without also calling `orderingFor`) gets a self-contained answer, and so a test can assert the
+   * two never disagree rather than trust that they were computed once and shared. */
+  readonly moved: boolean;
+  /** The CURRENT line index (in `source`, before this edit is painted) of the sibling the edited
+   * line should sit immediately BEFORE once its new value has sorted in. `null` — nothing in the
+   * section sorts after it: the edited line becomes the last ranked row. Meaningless when `moved`
+   * is `false`; a caller that places on `moved` must not read this when it is not. */
+  readonly beforeLineIndex: number | null;
+}
+
+/** Either a placement, or the same reason `OrderingReading` would abstain — see this module's
+ * header for why the two functions can never abstain differently. */
+export type PlacementReading =
+  | { readonly kind: "answer"; readonly placement: OrderingPlacement }
+  | { readonly kind: "abstains"; readonly because: OrderingAbstention };
+
+/**
+ * WHERE the line at `lineIndex` belongs once it reads `afterText` — an index into the section's
+ * OTHER ranked rows, not merely whether one exists. Same inputs as `orderingFor`, same abstentions,
+ * a different question.
+ *
+ * ── THE PROOF OF AGREEMENT, STATED BEFORE THE CODE THAT MAKES IT TRUE ──
+ *
+ * `section_builder.py:340-344` (`_order_children`, the non-`persist_placing` branch every one of
+ * the nine declared sections takes) sorts qualifying nodes with Python's `sorted(qualifying_nodes,
+ * key=...)`. Python's own language reference guarantees that sort is STABLE: two nodes whose keys
+ * compare equal keep the relative order they had in `qualifying_nodes` — which is graph-edge order,
+ * and `orderingFor`'s own header (measurement 2) already establishes, and this module's existing
+ * tests already prove, that graph-edge order and this file's own line-by-line walk of `source`
+ * agree for every flat section — the only shape either function will ever answer for. So: build
+ * the SAME list this function's own walk already has — every ranked sibling, in file order, PLUS
+ * the edited line's own entry (using `afterText`) spliced back into its own file position — and
+ * sort THAT list with the one guarantee that matters: JavaScript's `Array.prototype.sort` has been
+ * REQUIRED stable since ECMA-262 2019, which V8/Node has implemented for every version this repo
+ * could plausibly run on. A stable sort of the identical pre-sort order, under the identical
+ * comparator (`compareTuples`, already measured against his real config), produces the identical
+ * post-sort order — including which element a tie leaves adjacent to which. The row immediately
+ * AFTER the edited line's own entry in that result is the row it now belongs beside.
+ *
+ * THIS IS SOURCE EVIDENCE, NOT A LIVE MEASUREMENT, AND THAT DISTINCTION IS DELIBERATE — the same
+ * one `paint.ts`'s own `normalLine` comment draws for the CSS Working Group's readonly-caret
+ * thread: nobody ran the Python engine to WATCH two tied `due_date`s resolve. What is checked is
+ * that both languages' sort primitives are DOCUMENTED stable and that the pre-sort list this
+ * function builds is the SAME list (same order, same members) `_order_children` sorts — which is a
+ * claim about two specifications agreeing, not about a program run and observed. `tests/present-
+ * ordering.test.mjs` proves the CONSEQUENCE empirically wherever it can (his real config's flat
+ * `queue` sections) and proves the STABILITY claim directly (an invented tie) where his config
+ * currently has none to offer.
+ *
+ * ── WHY `moved` IS RECOMPUTED HERE RATHER THAN PASSED IN ──
+ *
+ * A rank number and a neighbour index are two different representations of the same underlying
+ * fact, and a caller that trusted one without the other would be trusting that whoever wired them
+ * together did so correctly. Recomputing both from `evaluateSection`'s own output, independently,
+ * is what lets a test assert they AGREE rather than assume it.
+ */
+export function orderingPlacementFor(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+): PlacementReading {
+  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
+
+  const { keys, beforeTuple, afterTuple, siblings } = evaluation;
+  const tuples = siblings.map((s) => s.tuple);
+  const beforeRank = rankOf(beforeTuple, tuples, keys, orderingFields);
+  const afterRank = rankOf(afterTuple, tuples, keys, orderingFields);
+  const moved = beforeRank !== afterRank;
+
+  // THE PRE-SORT LIST, REBUILT IN FILE ORDER WITH THE EDITED LINE BACK IN ITS OWN SLOT — see this
+  // function's own header for why file order (not "siblings then the edited line") is what a
+  // stable sort needs to agree with the engine's tie-break. `siblings` is already ascending by
+  // `lineIndex` (the walk that built it never visits a line out of order), so finding where
+  // `lineIndex` belongs is one linear scan, not a second sort.
+  const entries: RankedSibling[] = [...siblings];
+  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const selfEntry: RankedSibling = { lineIndex, tuple: afterTuple };
+  if (insertAt === -1) {
+    entries.push(selfEntry);
+  } else {
+    entries.splice(insertAt, 0, selfEntry);
+  }
+
+  const sorted = entries
+    .slice()
+    .sort((a, b) => compareTuples(a.tuple, b.tuple, keys, orderingFields));
+  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
+  const next = at === -1 ? undefined : sorted[at + 1];
+  const beforeLineIndex = next === undefined ? null : next.lineIndex;
+
+  return { kind: "answer", placement: { moved, beforeLineIndex } };
 }

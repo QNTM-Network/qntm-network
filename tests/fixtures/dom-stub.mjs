@@ -68,7 +68,42 @@ class StubElement {
   append(...nodes) {
     for (const node of nodes) {
       this.children.push(node);
+      node._parent = this;
     }
+  }
+
+  /**
+   * The settle affordance's own reach — `paint.ts`'s `settleRow` is the first thing in this bundle
+   * to reorder an already-appended child. Standard `Node` semantics: remove `node` from wherever it
+   * already sits in THIS element's children, then splice it back in immediately before
+   * `referenceNode`, or at the end when that is `null`/`undefined`.
+   */
+  insertBefore(node, referenceNode) {
+    const at = this.children.indexOf(node);
+    if (at !== -1) this.children.splice(at, 1);
+    node._parent = this;
+    if (referenceNode === null || referenceNode === undefined) {
+      this.children.push(node);
+      return node;
+    }
+    const refAt = this.children.indexOf(referenceNode);
+    this.children.splice(refAt === -1 ? this.children.length : refAt, 0, node);
+    return node;
+  }
+
+  /**
+   * Where the row sits — a MINIMAL layout model, not real layout, and deliberately not a fixed
+   * `_top` a test would have to set by hand before every read: `top` is derived from this
+   * element's OWN INDEX among its current parent's children, times an arbitrary constant row
+   * height. That is enough for `settleRow`'s FLIP arithmetic (`paint.ts`) to see a REAL, non-zero,
+   * sign-correct delta the instant a reorder changes an element's index — read once before
+   * `insertBefore`, once after, exactly as production code does — without this fixture pretending
+   * to lay out text. A test wanting a SPECIFIC number sets `_top` directly, which this checks
+   * first and which nothing here ever overwrites.
+   */
+  getBoundingClientRect() {
+    const top = this._top ?? (this._parent ? this._parent.children.indexOf(this) * 24 : 0);
+    return { top, left: 0, right: 0, bottom: top, width: 0, height: 0 };
   }
 
   addEventListener(type, listener) {

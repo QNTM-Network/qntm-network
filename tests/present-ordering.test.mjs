@@ -29,6 +29,12 @@
  *      ordering answer needs no clock. `Date.now` is poisoned for the whole file's "answer" path.
  *   6. THE NOTHING-LOCAL-REACHES-A-WRITE PROOF for this module specifically — no import of
  *      `source.ts`, no `Contribution` produced.
+ *   7-9. `orderingPlacementFor` — roadmap-the-road-ahead.md step 3's "make it place the row" —
+ *      §7 proves agreement with an INDEPENDENTLY built stable-sort expectation over his real
+ *      config, and that `moved` never disagrees with `orderingFor`'s own answer, over every
+ *      declared section; §8 proves the two functions abstain for the IDENTICAL reason, always;
+ *      §9 proves the tie-break claim (a stable sort's guarantee, not an assumption) over invented
+ *      config his real sections do not currently exercise.
  *
  * WHAT THIS FILE DOES NOT COVER: no DOM, no `app/index.html` wiring (that is
  * `tests/app-ordering-note.test.mjs`), no browser.
@@ -59,7 +65,7 @@ import { homedir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { orderingFor, markerValue, classifyLine } from "../dist/present.js";
+import { orderingFor, orderingPlacementFor, markerValue, classifyLine } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVED = JSON.parse(readFileSync(resolve(HERE, "..", "presentation.json"), "utf8"));
@@ -475,6 +481,7 @@ describe("5. orderingFor reaches the clock zero times", () => {
           // A minimal one-line section is enough to drive every branch up to (and past) the
           // declaration lookup; the clock, if reached at all, would be reached here.
           orderingFor(view, sectionId, "## H\n- [ ] x", 1, "- [ ] x", ORDERING, ORDERING_FIELDS);
+          orderingPlacementFor(view, sectionId, "## H\n- [ ] x", 1, "- [ ] x", ORDERING, ORDERING_FIELDS);
         }
       }
     } finally {
@@ -498,5 +505,282 @@ describe("6. NOTHING LOCAL REACHES A WRITE — ordering.ts's own imports", () =>
         `ordering.ts imports the edit or cascade path: ${line.trim()}`,
       );
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7. orderingPlacementFor — WHERE the row belongs, proven to agree, not merely to answer
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("7. orderingPlacementFor agrees with an independently-built expectation and with orderingFor", () => {
+  test(
+    "flowtrace-queue.queue, real content: beforeLineIndex matches an INDEPENDENTLY stable-sorted expectation",
+    { skip: skipVault },
+    () => {
+      const source = readFileSync(join(vaultDir, "dev/flow-trace/queue.md"), "utf8");
+      const lines = source.split("\n");
+      const fourthIndex = lines.findIndex((l) => l.includes("🔢 4"));
+      assert.ok(fourthIndex !== -1, "no '🔢 4' row found — fixture assumption broken");
+      const after = lines[fourthIndex].replace("🔢 4", "🔢 1");
+
+      const reading = orderingPlacementFor(
+        "flowtrace-queue",
+        "queue",
+        source,
+        fourthIndex,
+        after,
+        ORDERING,
+        ORDERING_FIELDS,
+      );
+      assert.equal(reading.kind, "answer");
+      assert.equal(reading.placement.moved, true);
+
+      // THE INDEPENDENT EXPECTATION — built without calling `orderingPlacementFor` or anything it
+      // calls, so this is not the module checking its own homework. Every 🔢-bearing line in the
+      // section, in FILE ORDER, the edited line's own value substituted in at its own position,
+      // then `Array.prototype.sort` — the same stability guarantee `orderingPlacementFor` itself
+      // relies on (ECMA-262 2019), applied here by a completely separate call site.
+      const marker = ORDERING_FIELDS.queue_position;
+      const startAt = lines.findIndex((l) => classifyLine(l).kind === "heading");
+      const entries = [];
+      for (let at = startAt + 1; at < lines.length; at += 1) {
+        if (classifyLine(lines[at]).kind === "heading") break;
+        const text = at === fourthIndex ? after : lines[at];
+        const value = markerValue(text, marker);
+        if (value !== undefined) entries.push({ at, value: Number(value) });
+      }
+      const sorted = [...entries].sort((a, b) => a.value - b.value);
+      const pos = sorted.findIndex((e) => e.at === fourthIndex);
+      const expectedBefore = sorted[pos + 1]?.at ?? null;
+      assert.equal(reading.placement.beforeLineIndex, expectedBefore);
+    },
+  );
+
+  test("orderingFor.moved and orderingPlacementFor.moved never disagree, over every declared section", () => {
+    // One minimal edit per declared section that HAS a field to move by (insertion-order sections
+    // have none and are covered by §8's abstention-parity proof instead) — driven through BOTH
+    // functions with IDENTICAL arguments, asserting the two either both abstain for the same
+    // reason or both answer with the same `moved`.
+    let exercised = 0;
+    for (const [view, sections] of Object.entries(ORDERING)) {
+      for (const [sectionId, declared] of Object.entries(sections)) {
+        const keys = declared.ordering;
+        if (keys === undefined || keys.length === 0) continue; // insertion-order — §8 covers it
+        const key = keys[0];
+        const marker = ORDERING_FIELDS[key.field];
+        if (marker === undefined) continue; // field-not-published — §8 covers it
+        const low = marker.kind === "date" ? "2026-01-01" : marker.kind === "int" ? "1" : "1.0";
+        const high = marker.kind === "date" ? "2026-06-01" : marker.kind === "int" ? "9" : "9.0";
+        const higher = marker.kind === "date" ? "2026-12-31" : marker.kind === "int" ? "99" : "99.0";
+        const source = [
+          "## H",
+          `- [ ] a [[qntm:1]] ${marker.token} ${low}`,
+          `- [ ] b [[qntm:2]] ${marker.token} ${high}`,
+        ].join("\n");
+        const after = `- [ ] a [[qntm:1]] ${marker.token} ${higher}`;
+        const noteReading = orderingFor(view, sectionId, source, 1, after, ORDERING, ORDERING_FIELDS);
+        const placeReading = orderingPlacementFor(view, sectionId, source, 1, after, ORDERING, ORDERING_FIELDS);
+        exercised += 1;
+        assert.equal(noteReading.kind, placeReading.kind, `${view}.${sectionId}: kind disagreement`);
+        if (noteReading.kind === "answer") {
+          assert.equal(
+            noteReading.answer.moved,
+            placeReading.placement.moved,
+            `${view}.${sectionId}: moved disagreement`,
+          );
+        } else {
+          assert.equal(noteReading.because, placeReading.because, `${view}.${sectionId}: abstention disagreement`);
+        }
+      }
+    }
+    // POSITIVE CONTROL: the sweep above must have actually exercised his real declared sections,
+    // not silently iterated zero of them because the published table changed shape.
+    assert.ok(exercised >= 9, `expected to exercise all 9 field-ordered sections, exercised ${exercised}`);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. orderingPlacementFor abstains for the IDENTICAL reason orderingFor does, every time
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("8. orderingPlacementFor's abstentions match orderingFor's, reason for reason", () => {
+  const cases = [
+    {
+      label: "no-section-declaration",
+      args: ["inbox", "not-a-section", "## H\n- [ ] x", 1, "- [ ] x", ORDERING, ORDERING_FIELDS],
+    },
+    {
+      label: "insertion-order",
+      args: ["daily-work", "capture", "## Work Capture\n- [ ] x", 1, "- [ ] x #work", ORDERING, ORDERING_FIELDS],
+    },
+    {
+      label: "field-not-published",
+      args: [
+        "v",
+        "s",
+        "## H\n- [ ] x",
+        1,
+        "- [ ] x",
+        { v: { s: { ordering: [{ field: "mystery", direction: "asc" }] } } },
+        ORDERING_FIELDS,
+      ],
+    },
+    {
+      label: "nested-section",
+      args: [
+        "v",
+        "s",
+        ["## H", "- [ ] a [[qntm:1]] 🔢 1", "    - [ ] child, indented, no marker"].join("\n"),
+        1,
+        "- [ ] a [[qntm:1]] 🔢 2",
+        { v: { s: { ordering: [{ field: "queue_position", direction: "asc" }] } } },
+        ORDERING_FIELDS,
+      ],
+    },
+    {
+      label: "no-value",
+      args: [
+        "flowtrace-queue",
+        "queue",
+        "## Queue\n- [ ] a [[qntm:1]] #dev 🔢 1",
+        1,
+        "- [ ] a [[qntm:1]] #dev",
+        ORDERING,
+        ORDERING_FIELDS,
+      ],
+    },
+  ];
+  for (const { label, args } of cases) {
+    test(`${label}: orderingFor and orderingPlacementFor abstain identically`, () => {
+      const noteReading = orderingFor(...args);
+      const placeReading = orderingPlacementFor(...args);
+      assert.equal(noteReading.kind, "abstains", `orderingFor did not abstain for ${label}`);
+      assert.equal(placeReading.kind, "abstains", `orderingPlacementFor did not abstain for ${label}`);
+      assert.equal(noteReading.because, label);
+      assert.equal(placeReading.because, label);
+    });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 9. THE STABLE-SORT PROOF — the tie-break is a documented guarantee, proven over invented config
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("9. orderingPlacementFor's tie-break agrees with a stable sort, over config his real sections do not exercise", () => {
+  const fakeOrdering = { v: { s: { ordering: [{ field: "due_date", direction: "asc" }] } } };
+  const fakeMarker = { due_date: { token: "📅", kind: "date" } };
+
+  test("a genuine tie: the edited line settles immediately AFTER the sibling it ties with, in file order", () => {
+    // a (01), b (05), c (10) — c moves down to TIE with a's 01. A stable sort of the pre-sort list
+    // [a, b, c-edited] by date keeps a ahead of the tied c (a came first in FILE order), so c
+    // belongs immediately before b — never before a, which an unstable or naively-appended sort
+    // could produce instead.
+    const source = [
+      "## H",
+      "- [ ] a [[qntm:1]] 📅 2026-08-01",
+      "- [ ] b [[qntm:2]] 📅 2026-08-05",
+      "- [ ] c [[qntm:3]] 📅 2026-08-10",
+    ].join("\n");
+    const reading = orderingPlacementFor(
+      "v",
+      "s",
+      source,
+      3,
+      "- [ ] c [[qntm:3]] 📅 2026-08-01",
+      fakeOrdering,
+      fakeMarker,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, true);
+    assert.equal(reading.placement.beforeLineIndex, 2, "c should settle before b, sorting after the tied a");
+  });
+
+  test("a tie with a LATER sibling, crossed past an earlier one — the case a naive append gets wrong", () => {
+    // z (01), x (EDITED, starts 15, moves down to 10 — TYING with y), w (05), y (10). Moving x
+    // crosses w on the way down (a genuine rank change, `moved` must be true) and lands exactly on
+    // y's value — and x's own file position (idx2) sits BEFORE y's (idx4), so a correct stable
+    // sort must keep x ahead of the tied y.
+    //
+    // A NAIVE IMPLEMENTATION THAT APPENDS THE EDITED LINE AT THE END OF THE PRE-SORT LIST — rather
+    // than reinserting it at its own file position — puts x AFTER y in that list, and a stable
+    // sort then preserves THAT (wrong) relative order for the tied pair: y before x, so x would be
+    // reported as sorting LAST (`beforeLineIndex: null`) instead of immediately before y. This is
+    // the mutation this test is written to catch — the two earlier tie tests above were both
+    // insensitive to it, because in both of them the edited line's tie partner already sat WHERE
+    // an end-appended entry would also land relative to it; this shape does not have that
+    // coincidence.
+    const source = [
+      "## H",
+      "- [ ] z [[qntm:1]] 📅 2026-08-01",
+      "- [ ] x [[qntm:2]] 📅 2026-08-15",
+      "- [ ] w [[qntm:3]] 📅 2026-08-05",
+      "- [ ] y [[qntm:4]] 📅 2026-08-10",
+    ].join("\n");
+    const reading = orderingPlacementFor(
+      "v",
+      "s",
+      source,
+      2,
+      "- [ ] x [[qntm:2]] 📅 2026-08-10",
+      fakeOrdering,
+      fakeMarker,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, true, "x crossed w on the way down — this must register as a move");
+    assert.equal(reading.placement.beforeLineIndex, 4, "x ties with y but sat EARLIER in the file, so settles before y");
+  });
+
+  test("the LAST position: moving a row past every sibling's value returns beforeLineIndex null", () => {
+    const source = [
+      "## H",
+      "- [ ] a [[qntm:1]] 📅 2026-08-01",
+      "- [ ] b [[qntm:2]] 📅 2026-08-05",
+    ].join("\n");
+    const reading = orderingPlacementFor(
+      "v",
+      "s",
+      source,
+      1,
+      "- [ ] a [[qntm:1]] 📅 2026-12-31",
+      fakeOrdering,
+      fakeMarker,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, true);
+    assert.equal(reading.placement.beforeLineIndex, null);
+  });
+
+  test("no motion: a row that already sits in the slot its (tied) value implies reports moved:false", () => {
+    const source = [
+      "## H",
+      "- [ ] a [[qntm:1]] 📅 2026-08-01",
+      "- [ ] b [[qntm:2]] 📅 2026-08-05",
+    ].join("\n");
+    const reading = orderingPlacementFor(
+      "v",
+      "s",
+      source,
+      1,
+      "- [ ] a renamed [[qntm:1]] 📅 2026-08-01",
+      fakeOrdering,
+      fakeMarker,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, false);
+  });
+
+  test("a lone row with no siblings never moves — nothing to rank it against", () => {
+    const source = ["## H", "- [ ] a [[qntm:1]] 📅 2026-08-01"].join("\n");
+    const reading = orderingPlacementFor(
+      "v",
+      "s",
+      source,
+      1,
+      "- [ ] a [[qntm:1]] 📅 2020-01-01",
+      fakeOrdering,
+      fakeMarker,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, false);
   });
 });
