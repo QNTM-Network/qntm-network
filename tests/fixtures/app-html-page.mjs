@@ -179,7 +179,7 @@ export { orderingNoteFor as __orderingNoteFor };
 export { orderingDiagnosticFor as __orderingDiagnosticFor };
 export { updateOrderingBadge as __updateOrderingBadge };
 export { armOrderingSettle as __armOrderingSettle };
-// THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __held
+// THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __served
 // are: a suite reads what the page is holding NOW, and what changes under it is which placement
 // (if any) is armed.
 export const __settle = () => settle;
@@ -188,19 +188,13 @@ export const __settle = () => settle;
 // own so a suite can drive \`todayFor\`'s wiring directly, with an arbitrary instant, without also
 // standing up a whole projection arrival.
 export { todayNoteFor as __todayNoteFor };
-// HELD — characters no file owns (app/present/held.ts). A getter, the same reason \`__served\` is
-// one: a suite reads what the page is holding NOW. \`__paintHeldRows\` is exported so a suite can
-// assert the strip redraws itself without also driving a whole repaint, and \`__sentEdit\` so the
-// one-turn handoff between \`commitLine\` and \`paintView\` is observable rather than inferred.
-export const __held = () => held;
-export { paintHeldRows as __paintHeldRows };
 export const __sentEdit = () => sentEdit;
-// THE LINE BEING MADE (app/present/draft.ts). A getter, the same reason \`__held\` and \`__served\`
-// are: a suite reads the row the page is holding NOW, and \`draftLine\` is a module-scoped const
-// whose CONTENTS change under it. It is the only way to tell "the row survived and was re-placed"
-// apart from "the row was destroyed and a new one opened", which are the same screen.
+// THE LINE BEING MADE (app/present/draft.ts). A getter, the same reason \`__served\` is one: a
+// suite reads the row the page is holding NOW, and \`draftLine\` is a module-scoped const whose
+// CONTENTS change under it. It is the only way to tell "the row survived and was re-placed" apart
+// from "the row was destroyed and a new one opened", which are the same screen.
 export const __draft = () => draftLine;
-// THE BEHAVIOURAL QUEUE (app/present/queue.ts). A getter, the same reason \`__draft\`, \`__held\` and
+// THE BEHAVIOURAL QUEUE (app/present/queue.ts). A getter, the same reason \`__draft\` and
 // \`__served\` are: a suite reads what the page is holding NOW. \`__drainPainted\` and
 // \`__aLineIsOpen\` are exported so a suite can drive the two halves of the gate separately — "is
 // something waiting" and "may it go on" are different failures and a test that could only see the
@@ -208,7 +202,7 @@ export const __draft = () => draftLine;
 export const __queued = () => queued;
 export { drainPainted as __drainPainted, aLineIsOpen as __aLineIsOpen };
 // WRITE CORRELATION (app/present/correlation.ts). \`__writes\` is a getter, the same reason
-// \`__queued\`, \`__held\` and \`__served\` are: a suite reads the register the page is holding NOW,
+// \`__queued\` and \`__served\` are: a suite reads the register the page is holding NOW,
 // and what changes under it is which writes are outstanding. \`__correlate\` is exported so a suite
 // can drive the reader against an arbitrary envelope without also standing up a POST — the same
 // separation \`__membershipNoteFor\` gets, and for the same reason: "what did the echo say" and
@@ -216,7 +210,7 @@ export { drainPainted as __drainPainted, aLineIsOpen as __aLineIsOpen };
 export const __writes = () => writes;
 export { correlate as __correlate };
 // THE PICKUP (app/present/pickup.ts) AND THE ACCEPTED SOURCE (app/present/accepted.ts). Getters,
-// the same reason \`__queued\`, \`__writes\`, \`__held\` and \`__served\` are: a suite reads what the page
+// the same reason \`__queued\`, \`__writes\` and \`__served\` are: a suite reads what the page
 // is holding NOW. \`__collect\` is exported so a suite can drive ONE pickup attempt without waiting
 // out a real \`setTimeout\` — the timer is the page's and the policy is the module's, and a test that
 // could only wait ten seconds could prove neither.

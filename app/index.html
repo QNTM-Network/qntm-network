@@ -460,7 +460,7 @@
      membership question resolved to, and stays exactly that until the next commit changes it —
      which is why it costs nothing extra on every keystroke, unlike a joined sentence would.
 
-     NO RED, NO ALARM COLOUR — the same restraint `.held`'s own header states for the same reason:
+     NO RED, NO ALARM COLOUR — the same restraint every other quiet register on this page keeps:
      an abstention is an honest "the app could not tell", not a fault. The distinguishing channel is
      the WORDS, not the colour, because the second reader this register serves (an agent reading
      `textContent`, not rendered CSS) cannot see colour at all — see this badge's own JS-side
@@ -674,57 +674,6 @@
      "always last" half against the real painter, which is where that claim can actually be tested;
      `tests/app-view-rows.test.mjs` carries the exemption so it is declared rather than assumed. */
   .viewbody .newline { min-height: var(--touch); cursor: text; }
-
-  /* ══ HELD — CHARACTERS NO FILE OWNS ══════════════════════════════════════════════════════
-     A REGION THAT IS DELIBERATELY NOT PART OF THE READING COLUMN, and the styling says so before
-     a word is read: it sits after the column, behind its own rule, and it does not use the
-     column's row rhythm at all. Everything in `.viewbody` is a rendering of something a file
-     says; everything here is something no file says. Two kinds of truth that looked alike would
-     be worse than either.
-
-     IT IS NOT AN ALARM. No red, no border-box, no icon. The register is the same one `#freshness`
-     already uses for "here is what just happened" — dim, quiet, out of the way — because being
-     interrupted mid-sentence is the violation the whole capability exists to prevent, and a
-     panel that shouts is a dialog wearing a different shape.
-
-     THE CHARACTERS THEMSELVES KEEP THE COLUMN'S FONT AND `white-space: pre`, matching
-     `.viewbody div.rawline`, so what he sees held is byte-for-byte the line he was typing rather
-     than a re-flowed paraphrase of it. */
-  /* THE RULE IS UNDER IT, NOT OVER IT, BECAUSE THE STRIP IS NOW ABOVE THE COLUMN. A separator's
-     job is to say where one kind of truth stops and the next begins; with the strip above
-     `#viewBody` the boundary it has to draw is its own bottom edge. See the markup for why it
-     moved. */
-  .held {
-    margin-bottom: var(--s5); padding-bottom: var(--s4);
-    border-bottom: 1px solid var(--line);
-  }
-  .held-head {
-    margin: 0 0 var(--s3);
-    font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase;
-    font-weight: 600; color: var(--dim);
-  }
-  .held-row {
-    display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
-    padding: var(--s2) 0;
-  }
-  /* A READONLY INPUT, NOT A DIV, AND THE REASON IS THE ONE AFFORDANCE THIS ROW HAS. He must be
-     able to select the characters and copy them out; an input gives that on every platform,
-     including a phone's own selection handles, where a div's text selection is unreliable inside
-     a scrolling region. `readOnly` (set in the page's `paintHeldRows`) is what stops it being an
-     editing surface — there is no commit handler on it and no `applyEdit` behind it. */
-  .held-text {
-    flex: 1 1 20rem; min-width: 0;
-    padding: 0; background: transparent; border: 0; border-radius: 0;
-    font: inherit; color: var(--ink); white-space: pre;
-  }
-  .held-text:focus { outline: none; box-shadow: inset 0 -1px 0 var(--green-hairline); }
-  .held-where { margin: 0; flex: 1 1 14rem; font-size: var(--t1); color: var(--dim); }
-  .held-discard {
-    flex: none; min-height: var(--touch);
-    padding: 0 var(--s3); background: transparent; border: 1px solid var(--line);
-    color: var(--dim); font-size: var(--t1); box-shadow: none;
-  }
-  .held-discard:hover { color: var(--ink); background: rgba(255,255,255,.05); box-shadow: none; }
 
   /* THE TAG CHIP — the `wired` rendition of the presentation cascade's `tags` key, and the ONLY
      style this stage adds. Scoped to `.viewbody .tagchip` so it cannot reach anything else on the
@@ -948,34 +897,6 @@
       <p id="emptyBody" class="empty-body"></p>
       <p id="emptyNext" class="empty-next"></p>
     </div>
-    <!-- HELD — characters no file owns. OUTSIDE the reading column, which is the load-bearing half
-         of the arrangement: `#viewBody` is a rendering of one source string and everything in it is
-         something a file says. A held row is the opposite — characters the source string does NOT
-         own — so putting one inside the column would make the column a mix of two kinds of truth,
-         and the operator would have no way to tell which row was which.
-
-         Its own element also means the painter never sees it. `paint()` is handed `#viewBody` and
-         a source string; it cannot walk into a sibling, so nothing here can become part of an
-         edit by accident. See app/present/held.ts for the type-level half of the same argument
-         (a held row carries no line index, because an index is what `applyEdit` takes).
-
-         ── IT MOVED ABOVE THE COLUMN, AND THE REASON IS THE ONLY THING THIS STRIP IS FOR ──
-
-         It used to sit BELOW `#viewBody`, and the sentence that names it — said in `#freshness`,
-         which is at the TOP of this section — said "held below". Both statements were true and the
-         pair was useless: the operator's own `this_week.md` renders well over a hundred rows, so
-         "below" meant a screen and a half past the fold, on a strip he had no reason to scroll to
-         and no indication was there. A recovery surface a person cannot see is a recovery surface
-         he does not have, which is the same failure as not holding the characters at all.
-
-         SO IT IS NOW ADJACENT TO THE SENTENCE THAT NAMES IT. Held is hidden whenever nothing is
-         held (`paintHeldRows` toggles `.hidden`), so this costs the reading column nothing in the
-         ordinary case; when something IS held it pushes the view down, which is correct, because
-         at that moment it is the most important thing on the page. -->
-    <section id="heldStrip" class="held hidden" aria-label="Held — characters no file owns">
-      <p class="held-head">Held — characters no file owns. Nothing here is saved.</p>
-      <div id="heldRows"></div>
-    </section>
     <article id="viewBody" class="viewbody"></article>
   </section>
 
@@ -1036,8 +957,6 @@ import {
   DraftSurface,
   placeDraft,
   placeFor,
-  HeldSurface,
-  heldFrom,
   ProjectionQueue,
   PickupSchedule,
   AcceptedSource,
@@ -1385,18 +1304,8 @@ const settle = new SettleSurface();
 // combination that loses a cycle's output.
 const served = new BaseSurface();
 
-// CHARACTERS NO FILE OWNS (app/present/held.ts). One surface for the page, and the ONLY one of the
-// five whose contents deliberately outlive the view they came from — see `paintHeldRows` below for
-// why a held row survives a view change when a DRAFT does not.
-//
-// IT IS THE FOURTH LEVEL OF THE HAVEN, THE ONE design-the-edit-is-a-safe-haven.md CALLS DELTA and
-// measured as absent: "what has been typed lives in a DOM element a repaint destroys". This is
-// where it lives instead. FOCUS is `focus`, ANCHOR is that surface's `InstanceAnchor`, BASE is
-// `served`, and this is the last of the four.
-const held = new HeldSurface();
-
 // THE NEXT PROJECTION FOR A FILE, HELD UNTIL THE SCREEN CAN TAKE IT (app/present/queue.ts). One
-// surface for the page, same reason as the five above — it has to survive the repaints of the
+// surface for the page, same reason as the four above — it has to survive the repaints of the
 // gesture it is waiting for.
 //
 // IT IS THE READ PATH'S COUNTERPART TO `served`, AND THE TWO MUST NOT BE MERGED. `served` holds the
@@ -1648,21 +1557,15 @@ let paintedViewId = null;
 let paintedSource = "";
 
 /**
- * THE CHARACTERS THE LAST COMMIT PUT ON THE WIRE, held only until the projection it caused lands.
+ * THE WRITE THE LAST COMMIT PUT ON THE WIRE, held only until the projection it caused lands.
  *
- * `{ view, path, text }` or `null`. It exists because the two ends of one event are in two
- * functions: `commitLine` knows WHAT he typed and `paintView` finds out WHETHER the line survived,
- * and the projection that answers the second question arrives after the first has returned.
+ * `{ view, token }` or `null`. It exists because the two ends of one event are in two functions:
+ * `commitLine` knows which view and which write, and `paintView` finds out WHETHER the line
+ * survived and, if the write's own token is later named in an echo, that the cycle rewrote rather
+ * than lost it (`reportCursorReading`'s `proved` argument).
  *
  * NOT A SECOND WRITE PATH AND NOT A QUEUE. It is read exactly once, by the next `paintView`, and
- * cleared whether or not it was used. Nothing posts it, nothing repaints from it, and it holds no
- * markdown — only the one line's characters, so that if the line is gone the held row is the thing
- * HE typed rather than the thing that was there before he typed it.
- *
- * IT NOW ALSO CARRIES `token` — the opaque handle that write went out with
- * (app/present/correlation.ts). It is the ONE field on this record that can tell "the line vanished
- * because the write never landed" apart from "the line vanished because the cycle rewrote what it
- * ingested", which is the distinction the recovery strip was measured getting wrong.
+ * cleared whether or not it was used. Nothing posts it and nothing repaints from it.
  */
 let sentEdit = null;
 
@@ -1864,16 +1767,16 @@ function installProjection(pending) {
 // (app/present/correlation.ts)
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 //
-// THE MEASURED DEFECT. A real browser run on 2026-08-01 found the recovery strip carrying five
-// rows, THREE of which were lines that had saved perfectly. The cause is not in the strip: the
-// cycle REWRITES the line it ingests — stamp, defaults, marker — and the only signal the page had
-// for "is this line back" was its TEXT (`HeldSurface.settle`). Text matching cannot find a line the
-// cycle rewrote, so the row stayed up saying work was lost when none was.
+// THE MEASURED DEFECT. A real browser run on 2026-08-01 found a since-removed recovery strip
+// carrying five rows, THREE of which were lines that had saved perfectly. The cause was not in the
+// strip: the cycle REWRITES the line it ingests — stamp, defaults, marker — and the only signal the
+// page had for "is this line back" was its TEXT. Text matching cannot find a line the cycle
+// rewrote, so the row stayed up saying work was lost when none was.
 //
 // TEXT IS NOT IDENTITY. A TOKEN IS. Each write goes out with one opaque token; a projection that
 // names it back is the server saying "this projection includes your write". That is the only
-// positive evidence this page has ever had for the question, and it is the only thing a held row is
-// released on here.
+// positive evidence this page has ever had for the question, and it is what `reportCursorReading`'s
+// `proved` argument is built on.
 //
 // ── WHAT IT SAYS, AND THE STRONGER THING IT DELIBERATELY DOES NOT SAY ──
 //
@@ -1897,8 +1800,8 @@ const WRITE_ACCEPTED = "the server took your save — it has not acknowledged it
  *
  * ONE CALL PER ENVELOPE, AT THE DOOR, BEFORE ANYTHING DECIDES WHAT TO PAINT. Correlation is a fact
  * about a WRITE and not about a screen, so it must not wait for the projection to be installable:
- * a projection held because a line is open still carries the evidence that clears a false held row,
- * and the strip is outside the reading column precisely so it can be redrawn without one.
+ * a projection held because a line is open still carries the evidence `reportCursorReading`'s
+ * `proved` argument needs, and the register is read before `paintView` decides anything.
  *
  * THE ENVELOPE SAYS WHICH FILE EACH TOKEN BELONGS TO — the echo is `{path: [token, …]}` — so this
  * function needs no path of its own and is not given one. The matching is per path inside the
@@ -1908,13 +1811,11 @@ const WRITE_ACCEPTED = "the server took your save — it has not acknowledged it
  * ── GIVING UP RELEASES NOTHING, AND THAT IS THE WHOLE SAFETY ARGUMENT ──
  *
  * A write whose echo never comes cannot be waited on forever, so the register drops it after three
- * arrivals that named its file without naming it. What is dropped is the REGISTER'S RECORD and
- * nothing else: the held row keeps its token, the strip keeps the row, and the characters stay on
- * screen. A vanished echo is never proof a write failed — the server's ledger caps at 8 tokens per
- * path and ages out at 24 hours, so an acknowledgement can legitimately disappear — and a token
- * given up too early costs only a held row that stays held, which is the direction this app is
- * built to fail in. The row can still be released later, by the file taking the characters back
- * (`settle`) or by the operator dismissing it.
+ * arrivals that named its file without naming it. What is dropped is the REGISTER'S RECORD only. A
+ * vanished echo is never proof a write failed — the server's ledger caps at 8 tokens per path and
+ * ages out at 24 hours, so an acknowledgement can legitimately disappear — and a token given up too
+ * early only costs the reassurance that the cycle rewrote rather than lost the line: `proved` stays
+ * false and the freshness line falls back to naming the line as gone.
  *
  * AN UNREADABLE ECHO IS REPORTED AND TREATED AS NO EVIDENCE AT ALL. `readWriteEcho` is strict on
  * purpose and this is the one caller of it; a shape it does not recognise goes to the console the
@@ -1938,13 +1839,6 @@ function correlate(path, data) {
   const echo = writes.arrive(reading.writes);
   if (echo.matched.length > 0) {
     landedNote = WRITE_RECORDED;
-    // THE ROWS ALREADY ON THE STRIP, RELEASED ON THE SERVER'S OWN WORD. This is the path for an
-    // echo that arrives LATER than the write's own answer — a `GET /graph` re-read, say. The row
-    // that would have been held by THIS arrival is handled one step further on, in `paintView`,
-    // which never holds it in the first place.
-    if (held.landed(echo.matched).length > 0) {
-      paintHeldRows();
-    }
   } else if (waiting > 0) {
     landedNote = WRITE_ACCEPTED;
   }
@@ -1968,7 +1862,7 @@ function correlate(path, data) {
 function arrive(path, data, write = null) {
   // AHEAD OF THE SNAPSHOT GUARD, BECAUSE EVIDENCE IS EVIDENCE. An answer that carries no projection
   // can still name the write it is the answer TO, and refusing to read it because there is nothing
-  // to paint would throw away the one thing that clears a false held row.
+  // to paint would throw away the evidence `reportCursorReading`'s `proved` argument needs.
   correlate(path, data);
   // AN ANSWER WITH NO SNAPSHOT IN IT IS NOT A PROJECTION, AND MUST NOT BECOME ONE BY BEING QUEUED.
   // The queue is drained from a SYNCHRONOUS keydown handler, outside every `try` a write path has,
@@ -2363,7 +2257,7 @@ function drainPainted() {
  * that says nothing gets exactly the behaviour every caller had before this parameter existed.
  */
 function paintView(id, why) {
-  // WHAT HE TYPED, AND WHAT HE WAS LOOKING AT, READ AND CLEARED IN ONE PLACE. Both describe the
+  // WHICH VIEW AND WHICH WRITE HE LAST COMMITTED, READ AND CLEARED IN ONE PLACE. Both describe the
   // moment BEFORE this projection; both are consumed here whether or not a line vanished, so a
   // stale one can never be read against a later arrival.
   const sent = sentEdit;
@@ -2444,13 +2338,7 @@ function paintView(id, why) {
     // statement the base is replaced, because holding one past the projection that answers it is
     // exactly the lie `served`'s own "one base, for the file on screen" rule refuses.
     accepted.drop(entering.path);
-    // RELEASE BEFORE HOLDING, AND BEFORE ANYTHING ELSE READS THIS FILE. Any held row whose
-    // characters this arriving file now contains stops being held: the source owns them, so a row
-    // still claiming them would be a second copy of something the file says — the one thing a held
-    // row must never be. See `HeldSurface.settle` for the two shapes that count as "owns" and for
-    // why the comparison deliberately fails toward keeping the row.
-    held.settle(entering.path, entering.markdown);
-    // ── THE LINE HE IS MAKING, PUT BACK WHERE IT WAS — OR HELD. NEVER DESTROYED ──
+    // ── THE LINE HE IS MAKING, PUT BACK WHERE IT WAS — OR DROPPED ──
     //
     // BEFORE THE CURSOR BLOCK, because the two decisions overlap in one place and this one has to
     // win there: while a row is open `focus` is deliberately BLURRED (`o`/`O` blur it so the line
@@ -2458,23 +2346,17 @@ function paintView(id, why) {
     // land the selection back on a real line and the next repaint would draw a SECOND editable row.
     // `keeping` is what stops it, and it can only be known after the placement has answered.
     //
-    // THE THREE ANSWERS, EACH OF WHICH ALREADY HAS AN OWNER:
+    // THE THREE ANSWERS:
     //   placed    the row goes back beside its neighbour. `placeFor` re-takes the place against the
     //             ARRIVING markdown, for the reason `focus.reanchor` re-takes its own anchor on a
     //             `found` — an anchor that keeps describing the previous projection drifts.
     //   arrived   the cycle ingested his line while he was typing it, so the file now owns the
-    //             characters. The row is released rather than re-placed: two copies of one line on
+    //             characters. The row is dropped rather than re-placed: two copies of one line on
     //             screen, and settling the second would mint a second node.
-    //   unplaced  nothing could be said about where the row goes. The characters are HELD
-    //             (app/present/held.ts) — the operator's own chosen answer for exactly this, and
-    //             the direction this whole capability fails in: a held row is an annoyance, a
-    //             destroyed one is lost work.
-    //
-    // A ROW HOLDING NOTHING BUT ITS OWN CHROME IS DROPPED SILENTLY on the last two. `applyEdit`
-    // refuses to insert it, so there was never a line there to lose — and holding `- [ ] ` would
-    // put a row on the strip for an event that cost him nothing.
+    //   unplaced  nothing could be said about where the row goes, so it is dropped. The cycle's
+    //             placement is the newer truth, the same posture `paintView` takes for every other
+    //             projection arrival.
     let keeping = false;
-    let draftNote = "";
     if (carried !== null) {
       const placement = placeDraft(carried, wasShowing, entering.markdown, id);
       if (placement.outcome === "placed") {
@@ -2483,39 +2365,8 @@ function paintView(id, why) {
       } else {
         draftLine.drop();
         mode.enterNormal();
-        if (placement.outcome === "unplaced" && carried.typed !== carried.seed) {
-          // NO INSTANCE AND NO NODE, AND NOT FOR WANT OF LOOKING. A row that is in no file has no
-          // identity of any kind — that is the whole reason it could not be placed — so the two
-          // fields are `null` and `keyOf` falls back to the characters, which is what `held.ts`
-          // already does for any line the cycle has never seen.
-          const heldTheRow = holdEdit(
-            heldFrom("unplaced", {
-              text: carried.typed,
-              view: id,
-              path: entering.path,
-              instance: null,
-              node: null,
-              base: null,
-              // AND NO WRITE TOKEN EITHER, FOR THE SAME REASON THE OTHER TWO ARE `null`. The row was
-              // being MADE — it is in no file and no write of this app's has ever carried it — so
-              // there is no acknowledgement anywhere that could speak for these characters.
-              token: null,
-            }),
-          );
-          // SAID ONLY WHEN THERE IS A ROW TO SAY IT ABOUT — see `holdEdit`. A row holding nothing
-          // but whitespace is dropped silently, and this sentence used to announce a strip entry
-          // for it anyway.
-          draftNote = heldTheRow
-            ? "the cycle moved what you were writing beside — the line you were making is held above this view"
-            : "";
-        }
       }
     }
-    // THE ANCHOR OF THE LINE THAT MAY BE ABOUT TO VANISH, TAKEN BEFORE ANYTHING CAN REPLACE IT.
-    // The note left here by the row that built `reanchor` is exact about this: the seeding below
-    // REPLACES the anchor with whichever line the clamp landed on, so the vanished line's identity
-    // has to be read out first. `reanchor` itself moves and clears nothing on a refusal.
-    const vanishing = focus.anchor;
     // THE WORLD ARRIVED IN THE VIEW HE IS ALREADY IN — ASK BY IDENTITY, NOT BY POSITION. The clamp
     // below is the ONLY thing that used to happen here, and a clamp cannot help with either of the
     // two failures this row measured against unmodified main (see app/present/instance.ts's
@@ -2529,54 +2380,19 @@ function paintView(id, why) {
     // (re)painting, and `sameView` above is exactly the guard that makes it also the view the
     // anchor being resolved was taken against.
     const cursorReading = sameView ? focus.reanchor(entering.markdown, id) : { outcome: "unanchored" };
-    // HIS LINE IS NOT IN WHAT ARRIVED, SO HIS CHARACTERS ARE HELD RATHER THAN REPAINTED AWAY.
-    //
-    // `absent` IS THE WHOLE TRIGGER, AND `ambiguous` IS DELIBERATELY NOT ONE. Ambiguous means the
-    // view prints that line in MORE THAN ONE place — the characters are demonstrably still in the
-    // file, twice, so holding a copy would put on screen a third thing claiming to be them. The
-    // cursor is not moved and the freshness line already says so.
-    //
-    // WHICH CHARACTERS. `sent.text` when this projection is the answer to a write he just made —
-    // that is what HE typed, and the line as it stood in the previous projection is what was there
-    // BEFORE he typed it, so preferring the older string would hold the wrong thing. Otherwise the
-    // line he was parked on, out of the string that was on screen. `heldFrom` refuses an empty one.
-    //
-    // ── AND ONE `absent` IS NOW NOT HELD AT ALL, WHICH IS THE DEFECT THIS BRANCH SHIPPED WITH ──
+    // HIS LINE IS NOT IN WHAT ARRIVED. `absent` IS THE WHOLE TRIGGER, AND `ambiguous` IS
+    // DELIBERATELY NOT ONE. Ambiguous means the view prints that line in MORE THAN ONE place — the
+    // characters are demonstrably still in the file, twice. The cursor is not moved and the
+    // freshness line already says so.
     //
     // `mine` is "this projection is the answer to a write I just made". `proved` is the stronger
     // thing: the server NAMED that write's token in this envelope (`correlate` above), so the file
-    // his characters were in reached the vault. His line is absent from the projection because the
-    // CYCLE REWROTE WHAT IT INGESTED — the stamp, the defaults, the marker — not because anything
-    // was lost, and `HeldSurface.settle` can never see that by comparing text.
-    //
-    // A REAL BROWSER RUN MEASURED THE COST OF NOT KNOWING: five held rows, three of them lines that
-    // saved perfectly. A strip full of rows that are not losses is a strip nobody can read, which
-    // makes the two rows that ARE losses invisible — so this is not tidiness, it is the signal.
-    //
-    // IT IS STILL POSITIVE EVIDENCE ONLY. With no token, no echo, or an echo that did not name this
-    // write, `proved` is false and the row is held exactly as it always was.
+    // his characters were in reached the vault. When his line is absent from the projection because
+    // the CYCLE REWROTE WHAT IT INGESTED — the stamp, the defaults, the marker — `proved` is what
+    // lets the freshness line say so rather than merely say the line is gone. With no token, no
+    // echo, or an echo that did not name this write, `proved` is false.
     const mine = sent !== null && sent.view === id;
     const proved = mine && sent.token !== null && landed.has(sent.token);
-    // WHETHER A ROW REALLY REACHED THE STRIP. `reportCursorReading` below builds its second clause
-    // out of this and not out of the fact that a hold was attempted — see `holdEdit`.
-    let heldTheLine = false;
-    if (cursorReading.outcome === "absent" && !proved) {
-      heldTheLine = holdEdit(
-        heldFrom("vanished", {
-          text: mine ? sent.text : (wasShowing.split("\n")[vanishing?.takenAt ?? -1] ?? ""),
-          view: id,
-          path: entering.path,
-          instance: vanishing?.instance ?? null,
-          node: vanishing?.node ?? null,
-          base: null,
-          // THE WRITE THAT CARRIED THESE CHARACTERS, so an echo arriving LATER than this projection
-          // can still release the row on the server's own word. `null` when these characters were
-          // not the ones a write of this app's just posted — the cursor was simply parked on a line
-          // the cycle removed, and no acknowledgement exists that could speak for it.
-          token: mine ? sent.token : null,
-        }),
-      );
-    }
     if (cursorReading.outcome !== "found" && !keeping) {
       // NOTHING WAS FOUND, SO THE OLD SEEDING STANDS — vim always has a cursor on some line, and
       // this is where a view first gets one. What has changed is that it is no longer the whole
@@ -2598,153 +2414,16 @@ function paintView(id, why) {
         id,
       );
     }
-    reportCursorReading(cursorReading, proved, heldTheLine);
-    // THE CURSOR'S OWN SENTENCE WINS AND THIS FILLS THE SILENCE. Both describe this one arrival and
-    // there is one slot; when the line he was PARKED on also went, that is the larger event and its
-    // sentence already says his characters are held below.
-    if (draftNote !== "" && cursorNote === "") {
-      cursorNote = draftNote;
-    }
+    reportCursorReading(cursorReading, proved);
   } else if (carried !== null) {
-    // THE VIEW IS NOT IN THE SNAPSHOT AT ALL, so there is no markdown to place a row against and no
-    // path to hold it under. It is dropped, which is what happened to it before this row existed.
+    // THE VIEW IS NOT IN THE SNAPSHOT AT ALL, so there is no markdown to place a row against. It is
+    // dropped.
     draftLine.drop();
     mode.enterNormal();
   }
   paintedViewId = id;
   paintedSource = entering === undefined ? "" : entering.markdown;
   repaintCurrentView();
-}
-
-/**
- * THE ONE PLACE A HELD ROW COMES INTO EXISTENCE — two callers, one gate.
- *
- * It exists so that "nothing is held except through here" is a fact a reader can check by grepping
- * one name, and so that the guard which proves the holding really works has exactly one expression
- * to break (tests/app-held-edit.test.mjs's mutation arm rewrites this call and every survival
- * assertion goes red).
- *
- * `null` IN IS A NO-OP, because `heldFrom` returns `null` for characters that are all whitespace
- * and neither caller should have to guard that twice.
- *
- * ── IT RETURNS WHETHER A ROW IS REALLY ON THE STRIP, AND EVERY SENTENCE ABOUT HOLDING IS BUILT
- *    FROM THAT ANSWER ──
- *
- * IT USED TO RETURN NOTHING, and the three sentences that say "held" were written beside the call
- * rather than out of it — asserted, in prose, one statement later, by a caller that could not see
- * whether anything had happened. That is a message about where a person's work went, made by code
- * that did not ask. The no-op above is reachable (`heldFrom` refuses whitespace, and both the
- * REFUSED and the VANISHED sites can hand it an empty string — a line emptied and saved, a write
- * whose `sent.text` is blank), and on every one of those passes the page said his characters were
- * held while the strip stayed empty and hidden.
- *
- * A MESSAGE THAT LIES ABOUT WHERE HIS WORK WENT IS WORSE THAN NO MESSAGE, so the claim and the act
- * are now one expression: this returns `true` only when a row exists and is painted, and no caller
- * may say "held" on any other evidence. `HELD_ABOVE` is the one clause, appended in one place per
- * caller, and `tests/app-held-edit.test.mjs` §6 breaks this return value to prove the sentences go
- * quiet with it.
- */
-function holdEdit(record) {
-  if (held.hold(record) === null) {
-    return false;
-  }
-  paintHeldRows();
-  return true;
-}
-
-/**
- * THE ONE CLAUSE THAT SAYS HIS CHARACTERS ARE SOMEWHERE HE CAN GET THEM, AND IT NAMES A PLACE HE
- * CAN LOOK AT WITHOUT SCROLLING.
- *
- * It said "held below" until `held-is-really-held`, which was true of the markup and false of the
- * screen — the strip was the last element of `#graph`, under a reading column that is well over a
- * hundred rows in the operator's own views, while the sentence pointing at it sat at the top. The
- * strip moved (see the markup); this word moved with it, so the two cannot drift apart.
- *
- * IT IS NEVER CONCATENATED UNCONDITIONALLY. `holdEdit` above returns whether there is a row to
- * point at, and this string is appended only on `true`.
- */
-const HELD_ABOVE = " · what you typed is held above this view";
-
-/** What each held row says happened to it. One sentence each, same register as `BASE_REFUSALS`. */
-const HELD_REASONS = {
-  vanished: "the line this was on is not in that view any more",
-  refused: "the server refused this save — nothing was written",
-  unplaced: "the cycle changed that view while you were making this line — nothing was written",
-};
-
-/**
- * PAINT THE HELD ROWS — every one of them, each naming the file it came from.
- *
- * ── IT SURVIVES A VIEW CHANGE, AND `paintView` DROPS A DRAFT ON ONE. BOTH ARE RIGHT ──
- *
- * `draftLine.drop()` is unconditional on every view change with an argued reason: "a row leaking
- * across a view change is the one way this affordance could write into a file nobody was looking
- * at". THAT REASON IS ABOUT THE WRITE, AND IT DOES NOT TRANSFER. A draft carries a LINE INDEX and
- * settles into an `insert-line` against whatever source is on screen — which is exactly how a row
- * opened in one view could be posted into another. A held row carries no index (app/present/held.ts
- * refuses the field on purpose), reaches no edit constructor, and has no settle path at all. The
- * hazard the drop protects against does not exist here.
- *
- * AND THE COST OF DROPPING WOULD BE THE THING THIS WHOLE CAPABILITY FORBIDS. A view change is one
- * click in the drawer. Clearing his characters on it would mean the recovery surface is destroyed
- * by the most ordinary gesture on the page — a silent loss, restored, in the feature built to end
- * silent losses.
- *
- * SO EVERY ROW IS PAINTED, WHATEVER VIEW IS ON SCREEN, AND EACH ONE NAMES ITS OWN FILE. The
- * alternative — show only this view's rows and keep the others hidden — was refused for the same
- * reason: held work he cannot see is held work he does not know he has. The strip is outside the
- * reading column and says in its own heading that no file owns what is in it, so a row from another
- * file cannot be mistaken for a line of this one.
- *
- * ── WHAT HE CAN DO WITH ONE, AND WHAT IS DELIBERATELY LEFT OUT ──
- *
- * COPY IT OUT (the characters are in a readonly `<input>`, selectable on every platform) and
- * DISCARD IT. That is the whole set, and it is not a dead end: retyping is the third action and it
- * needs no button, because a retyped line commits through the ordinary write path and `settle`
- * clears the held row by itself when the projection carries the characters back.
- *
- * WHAT IS LEFT OUT IS "PUT IT BACK", and the reason is not effort. Re-placing a vanished line means
- * re-inserting into a view the cycle deliberately removed it from — which the next cycle removes
- * again, or, if the node is gone, mints a fresh one. `design-the-edit-is-a-safe-haven.md` §6.4
- * refuses that behaviour and §11's open decision 1 says the question belongs to the ENGINE. A
- * button here would answer it in the browser.
- */
-function paintHeldRows() {
-  const strip = $("heldStrip");
-  const list = held.rows;
-  strip.classList.toggle("hidden", list.length === 0);
-  const rows = $("heldRows");
-  rows.innerHTML = "";
-  for (const row of list) {
-    const line = document.createElement("div");
-    line.className = "held-row";
-
-    const text = document.createElement("input");
-    text.className = "held-text";
-    text.type = "text";
-    // READONLY IS THE LOAD-BEARING ATTRIBUTE ON THIS ELEMENT. It is an `<input>` so the characters
-    // can be selected and copied; it is readonly so it is not an editing surface. There is no
-    // `blur` handler, no `onLineCommit`, and no source string behind it — this element is the end
-    // of a path, not the start of one.
-    text.readOnly = true;
-    text.value = row.text;
-
-    const where = document.createElement("p");
-    where.className = "held-where";
-    where.textContent = `${row.path} · ${HELD_REASONS[row.reason]}`;
-
-    const discard = document.createElement("button");
-    discard.className = "held-discard";
-    discard.textContent = "Discard";
-    discard.addEventListener("click", () => {
-      held.discard(row.id);
-      paintHeldRows();
-    });
-
-    line.append(text, where, discard);
-    rows.append(line);
-  }
 }
 
 /**
@@ -2761,12 +2440,7 @@ function paintHeldRows() {
  * which has no identity — see app/present/instance.ts), so there is nothing that could have been
  * lost.
  *
- * IT NOW ALSO SAYS WHERE THE CHARACTERS WENT, because as of `a-refused-edit-is-held-unanchored`
- * they went somewhere. The sentence gained one clause and no second sentence: `paintView` holds the
- * row and this names it, in the one line this page already uses to say what just happened. The
- * `ambiguous` sentence is unchanged, because nothing is held for it — the line is still in the
- * file, printed more than once (see `paintView`).
- *
+
  * ── ONE `found` NOW SPEAKS, AND EXACTLY ONE — `widen-instance-identity-past-the-first-stamp` ──
  *
  * `resolveInstanceAnchor` grades a restore by `ANCHOR_TRUST` (app/present/instance.ts), and two of
@@ -2782,21 +2456,14 @@ function paintHeldRows() {
  * `text` the neighbourhood the line was written into is gone and only the characters answered: the
  * cursor is somewhere he did not put it, for a reason he cannot see, and that IS an event.
  */
-function reportCursorReading(reading, proved = false, heldIt = false) {
+function reportCursorReading(reading, proved = false) {
   if (reading.outcome === "absent" && proved) {
-    // THE SENTENCE THAT STOPPED LYING. `absent` used to say "held below" unconditionally, and on a
-    // write the server acknowledged that was false in both halves: nothing was lost and nothing is
-    // held. What is true is that the CYCLE rewrote the line, which is an event worth one sentence.
-    // It says RECORDED and not WRITTEN — see `WRITE_RECORDED` for why those are different claims.
-    cursorNote = "the cycle rewrote the line you saved — the server recorded it, so nothing is held";
+    // THE SERVER NAMED THE WRITE. What is true is that the CYCLE rewrote the line, which is an
+    // event worth one sentence. It says RECORDED and not WRITTEN — see `WRITE_RECORDED` for why
+    // those are different claims.
+    cursorNote = "the cycle rewrote the line you saved — the server recorded it";
   } else if (reading.outcome === "absent") {
-    // AND THE SECOND HALF IS SAID ONLY WHEN THERE IS A ROW TO SAY IT ABOUT. `paintView` hands the
-    // answer `holdEdit` gave it; an empty `sent.text` (a line emptied and saved) holds nothing, and
-    // this branch used to promise a strip row for it regardless. The first half is true either way
-    // — the line really is gone — so it is said either way.
-    cursorNote =
-      "the line you were on is not in this view any more" +
-      (heldIt ? " — what was on it is held above this view" : "");
+    cursorNote = "the line you were on is not in this view any more";
   } else if (reading.outcome === "ambiguous") {
     cursorNote = "this view prints that line more than once, so the cursor was not moved";
   } else if (reading.outcome === "found" && reading.via === "text") {
@@ -2892,10 +2559,6 @@ function repaintCurrentView() {
   const body = $("viewBody");
   body.innerHTML = "";
   updateVimBadge();
-  // AHEAD OF THE `!v` GUARD, because a held row does not belong to the view on screen and must
-  // still be shown when there is no view on screen at all — see `paintHeldRows` for why it survives
-  // a view change. It is the only thing in this function that is not about `v`.
-  paintHeldRows();
   if (!v) return;
   // ── WHAT THE PAINTER WALKS: THE FILE AS THE SERVER LAST SAID IT STANDS ─────────────────────────
   //
@@ -3014,15 +2677,9 @@ const BASE_REFUSALS = {
  * whole row exists to stop. A refused TICK has no characters to keep: the box goes back to what the
  * server has, which is the truth, and a second click sends it again.
  *
- * THE LINE-COMMIT SENTENCE GAINED ITS SECOND HALF WHEN THE HOLDING DID (`a-refused-edit-is-held-
- * unanchored`), and both halves are true at once for a reason worth stating: "still on this line"
- * describes the SCREEN, which survives only because `commitLine` does not repaint after a 409, and
- * the held clause describes the only copy that survives the NEXT projection. A sentence that
- * promised just the first would be promising something the next arrival takes away.
- *
- * THE TWO HALVES ARE NOW TWO STRINGS RATHER THAN ONE, because only one of them is unconditional.
- * The screen half is a fact about this branch not repainting and is always true here; the held half
- * is a fact about `holdEdit` having taken a row, which is not. See `HELD_ABOVE`.
+ * "STILL ON THIS LINE" DESCRIBES THE SCREEN, AND IT IS THE WHOLE OF THE ANSWER: `commitLine` does
+ * not repaint after a 409, so the characters he typed stay exactly where he left them until he
+ * retypes the line (which posts them again) or leaves it (which is his own choice to let them go).
  */
 const WRITE_REFUSED =
   "this save was computed from an out-of-date copy of this file — the server refused it and nothing was written";
@@ -3072,10 +2729,10 @@ const REFUSED_REVERTING_BOX = WRITE_REFUSED + " · the box is back as the server
  *   THE PATH IS NOT ON SCREEN — repainting `currentViewId` from another file's markdown is the one
  *     thing worse than not repainting.
  *
- * AND WHERE IT DOES ADOPT, THE CHARACTERS ARE ALREADY HELD. Both callers hold the refused edit
- * (`heldFrom("refused", …)`) BEFORE calling this, so what leaves the screen is a second copy of
- * something the recovery strip is holding — an annoyance, never a loss. A tick has no characters at
- * all: the box redraws from the true file, which is stronger than putting it back by hand.
+ * AND WHERE A LINE COMMIT DOES ADOPT, IT IS BECAUSE THERE WAS NOTHING TO LOSE. `refusedLineSentence`
+ * below only calls this for a line commit when the typed text is empty — nothing at stake — so an
+ * adoption never overwrites characters he cares about. A tick has no characters at all: the box
+ * redraws from the true file, which is stronger than putting it back by hand.
  *
  * NOT A PROJECTION, AND IT NEVER BECOMES ONE. `graphData` is untouched, nothing is offered to
  * `ProjectionQueue`, and `current` is server bytes read straight out of the answer — never a string
@@ -3140,44 +2797,33 @@ function healFromRefusal(path, current) {
 const REFUSED_HEALED =
   WRITE_REFUSED + " · this view now shows the file as the server has it, so your next save will go through";
 /** And the one case it cannot heal: he is typing, so the screen is his until he stops. */
-const REFUSED_TYPING_HELD = WRITE_REFUSED + " · press re-read when you have finished this line";
+const REFUSED_NOT_ADOPTED = WRITE_REFUSED + " · press re-read when you have finished this line";
 
 /**
  * A REFUSED LINE COMMIT, IN ONE SENTENCE — AND IT IS THE ONE PLACE THE ADOPTION IS ATTEMPTED FOR
  * THIS GESTURE, so the words and the act cannot come apart.
  *
  * THREE OUTCOMES AND THEY ARE NOT REDUNDANT:
- *   ADOPTED           the screen moved to the file the server holds, so "still on this line" is no
- *                     longer true and is not said. His characters are on the strip, which the
- *                     caller put them on before this ran.
+ *   ADOPTED           the screen moved to the file the server holds. This only ever happens when
+ *                     `typed` was empty, so nothing his own typing produced is on screen to lose.
  *   NOTHING TO ADOPT  a refusal that carried no `current` — the graph server is entitled to send
  *                     none. Nothing repainted, so today's sentence is true word for word.
- *   DECLINED          there is a `current` and this is a bad moment for it (a line is open, a newer
- *                     projection is queued, another file is on screen). It names his gesture rather
- *                     than doing it, which is the same answer the pickup's own bound gives.
+ *   DECLINED          there is a `current`, `typed` is not empty, and this is not a moment nothing
+ *                     is at stake. It names his gesture rather than doing it — "still on this line"
+ *                     — which is the same answer the pickup's own bound gives.
  *
- * `heldIt` IS WHAT `holdEdit` ANSWERED, PASSED IN RATHER THAN ASSUMED. All three outcomes gain the
- * same one clause and only when there is a row on the strip to gain it for — see `HELD_ABOVE`. The
- * ADOPTED outcome is the one that made this necessary: it is the only branch that takes his
- * characters OFF the screen, so it is the only branch where a false claim of holding costs him the
- * last copy there was.
+ * ── THE ADOPTION IS GATED ON THERE BEING NOTHING TO LOSE, NOT ON AN ORDER OF STATEMENTS ──
+ *
+ * `typed.trim() === ""` is stated as a precondition rather than inferred from context, because a
+ * refusal that repaints over characters he actually typed is the one outcome worse than the clobber
+ * this whole row exists to stop.
  */
-function refusedLineSentence(path, current, typed, heldIt) {
-  // ── THE ADOPTION IS NOW GATED ON THE HOLDING HAVING HAPPENED, NOT ON IT HAVING BEEN ATTEMPTED ──
-  //
-  // `healFromRefusal`'s own header offers "the characters are already held" as the safety argument
-  // for taking them off the screen at all. That was a statement about the ORDER of two statements
-  // in `commitLine`, and an order is not a guarantee: `holdEdit` is a no-op for characters
-  // `heldFrom` refuses, so the call could return having held nothing and the adoption would run
-  // anyway — repainting away the only copy there was. This is that argument written as a
-  // precondition instead of as prose. `typed.trim() === ""` is the other safe case and is stated
-  // rather than inferred: there is nothing to lose, so there is nothing to hold first.
-  const safeToAdopt = heldIt || typed.trim() === "";
-  const kept = heldIt ? HELD_ABOVE : "";
+function refusedLineSentence(path, current, typed) {
+  const safeToAdopt = typed.trim() === "";
   if (safeToAdopt && healFromRefusal(path, current)) {
-    return REFUSED_HEALED + kept;
+    return REFUSED_HEALED;
   }
-  return (typeof current === "string" ? REFUSED_TYPING_HELD : REFUSED_KEEPING_TYPING) + kept;
+  return typeof current === "string" ? REFUSED_NOT_ADOPTED : REFUSED_KEEPING_TYPING;
 }
 
 /**
@@ -3446,8 +3092,8 @@ function updateOrderingBadge(view, commit) {
  * ARM THE SETTLE SURFACE — the PLACEMENT half of design-the-resolution-architecture.md step 7,
  * added by `roadmap-the-road-ahead.md` step 3. `orderingNoteFor`/`orderingDiagnosticFor` above only
  * SAY what `orderingFor` decided; this is the one place this page calls `orderingPlacementFor`, and
- * the one place `settle.arm` is ever called — "one write, one function," the same discipline
- * `holdEdit`'s own header states for its register.
+ * the one place `settle.arm` is ever called — "one write, one function" for this register, the same
+ * discipline every gated write on this page keeps.
  *
  * ONLY WHEN THE PLACEMENT ANSWERS AND `moved` IS TRUE. `orderingPlacementFor` shares every
  * abstention `orderingFor` has (ordering.ts's own header — both call the same private
@@ -3568,8 +3214,8 @@ async function writeFile(view, markdown, source, note = "", token = null) {
   // exactly the pattern `worker/src/app.js` already uses for `base`, and it is the whole of the
   // shipping condition on this line. A browser with no CSPRNG (`mintWriteToken` returns `null`)
   // posts a body byte-for-byte identical to the one it posted before this change; a server that
-  // ignores the field behaves exactly as it does today; and NOTHING downstream releases a held row,
-  // because there is no token to be echoed back.
+  // ignores the field behaves exactly as it does today; and `proved` in `paintView` never turns
+  // true for this write, because there is no token to be echoed back.
   //
   // THE REGISTER IS OPENED IN THE SAME STATEMENT THE TOKEN GOES ON THE WIRE, so a token this
   // browser is waiting for and a token this browser sent cannot come apart. It is opened BEFORE the
@@ -3609,10 +3255,10 @@ async function toggleTask(view, toggle) {
   row.classList.toggle("done", box.checked);
   row.classList.add("syncing");
   box.disabled = true;
-  // ONE TOKEN PER WRITE, AND A TICK IS A WRITE. It holds no held row of its own — a tick is one
-  // glyph and the box is put back on a failure, so there are no characters to lose — but it is one
-  // of the two writes that can be in the air at once, and the register has to be able to tell its
-  // answer from a line commit's. That is the whole of the two-writes-to-one-path case.
+  // ONE TOKEN PER WRITE, AND A TICK IS A WRITE. A tick is one glyph and the box is put back on a
+  // failure, so there are no characters to lose — but it is one of the two writes that can be in the
+  // air at once, and the register has to be able to tell its answer from a line commit's. That is
+  // the whole of the two-writes-to-one-path case.
   const token = mintWriteToken();
   try {
     const data = await writeFile(view, next, toggle.source, "", token);
@@ -3705,16 +3351,15 @@ async function commitLine(view, commit) {
   // `armOrderingSettle`'s own header for why it must run here, synchronously, and not after the
   // `await` below. `roadmap-the-road-ahead.md` step 3: "make it place the row," not merely say so.
   armOrderingSettle(view, commit);
-  // THE CHARACTERS THIS WRITE IS CARRYING, remembered until the projection it causes lands — see
-  // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it and the
-  // one thing `paintView` cannot recover on its own is what he typed into a line that then vanished.
+  // WHICH VIEW THIS WRITE WAS MADE IN, remembered until the projection it causes lands — see
+  // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it.
   //
-  // AND THE HANDLE THAT SAYS WHICH WRITE THESE CHARACTERS WENT OUT ON. Minted here rather than
-  // inside `writeFile` because two things need it and they are on opposite sides of the `await`:
-  // the POST body carries it, and `sentEdit` holds it so `paintView` can ask "did the server name
-  // MY write" when the line turns out to be absent from what came back.
+  // AND THE HANDLE THAT SAYS WHICH WRITE THIS WAS. Minted here rather than inside `writeFile`
+  // because two things need it and they are on opposite sides of the `await`: the POST body carries
+  // it, and `sentEdit` holds it so `paintView` can ask "did the server name MY write" when the line
+  // turns out to be absent from what came back.
   const token = mintWriteToken();
-  sentEdit = { view: view.id, path: view.path, text: commit.text, token };
+  sentEdit = { view: view.id, token };
   try {
     const data = await writeFile(view, commit.markdown, commit.source, note, token);
     // OFFERED, NOT INSTALLED — the same one statement the checkbox path makes, for the same reason.
@@ -3738,58 +3383,18 @@ async function commitLine(view, commit) {
     // in as many words. It is the cheaper cost by a distance — the clobber this row exists to stop
     // loses work nobody typed, and a refusal that answered it by deleting work he DID type would be
     // strictly worse than the defect.
-    //
-    // AND NOW IT IS ALSO HELD, WHICH IS WHAT THIS PARAGRAPH USED TO SAY IT WAS NOT.
-    // `a-refused-edit-is-held-unanchored` landed: the characters go into `held` as a row no file
-    // owns, so they survive the next projection rather than only the current screen. The two are
-    // not redundant. "Still on this line" is true until something repaints and is the reason this
-    // branch does not; "held below" is true afterwards, and afterwards is when it matters.
-    //
-    // UNANCHORED IS THE LOAD-BEARING WORD. The anchor is carried for RECOGNITION only — the line it
-    // named may not exist in the file the server refused this against, and app/present/held.ts
-    // holds no line index at all, so there is nothing here that could be re-inserted anywhere.
     sentEdit = null;
     if (e?.status === 409) {
-      // NOTHING WAS WRITTEN, SO THE TOKEN IS CLOSED AND THE ROW CARRIES NONE. See `toggleTask`'s
-      // own 409 branch for why this is the one answer that closes one, and `HeldEdit.token` for why
-      // a refused row must not carry a handle to evidence that cannot exist. The row is held on the
-      // text rule alone, exactly as it was before correlation existed.
+      // NOTHING WAS WRITTEN, SO THE TOKEN IS CLOSED. See `toggleTask`'s own 409 branch for why this
+      // is the one answer that closes one.
       if (token !== null) {
         writes.giveUp(token);
       }
-      // THE ANSWER IS KEPT, because the sentence below is built out of it rather than beside it.
-      // `holdEdit` returns whether a row is really on the strip; nothing here may say "held" on any
-      // weaker evidence, and `refusedLineSentence` will not adopt the server's file without it.
-      const heldIt = holdEdit(
-        heldFrom("refused", {
-          text: commit.text,
-          view: view.id,
-          path: view.path,
-          instance: focus.anchor?.instance ?? null,
-          node: focus.anchor?.node ?? null,
-          // THE BASE THE SERVER DECLINED, kept so the row can say which copy of the file these
-          // characters were computed against. Read, never posted — `writeFile` is the one place a
-          // base reaches the wire and it computes its own from the source it was handed.
-          base: baseOf(commit.source),
-          // NO TOKEN ON A REFUSED ROW. The 409 says nothing was written, so no projection can ever
-          // name this write — a token here would be a handle for evidence that cannot exist, and
-          // the one release it could ever produce would be a false one.
-          token: null,
-        }),
-      );
-      // ── AND THEN THE VIEW HEALS, AFTER THE HOLDING AND NEVER BEFORE IT ──────────────────────
-      //
-      // THE ORDER IS THE WHOLE SAFETY ARGUMENT. `holdEdit` above puts his characters somewhere no
-      // repaint can reach; only then may the screen stop showing them. Reverse these two statements
-      // and there is one instant in which the only copy of what he typed is a DOM element being
-      // rebuilt. See `healFromRefusal` for why the base cannot move without the text, and for the
-      // three states in which it declines to move either.
-      //
-      // "STILL ON THIS LINE" STOPS BEING TRUE WHEN IT ADOPTS, so that clause is not said then. The
-      // sentence that replaces it says where the characters went AND that the next save will work,
-      // which is the pair of facts the unhealed branch could only offer half of.
+      // `refusedLineSentence` ONLY ADOPTS THE SERVER'S FILE WHEN `commit.text` IS EMPTY — see that
+      // function's own header for why. Otherwise the screen simply keeps showing what he typed,
+      // which is what NOT repainting above already guarantees.
       $("freshness").textContent =
-        refusedLineSentence(view.path, e.current, commit.text, heldIt) + refusalNote();
+        refusedLineSentence(view.path, e.current, commit.text) + refusalNote();
       return;
     }
     // The painter has already repainted this view from the edited source, so the page is showing
@@ -4114,17 +3719,9 @@ function logout() {
   // AND THE BASE GOES WITH THE GRAPH IT DESCRIBED. A base held past the projection it was taken
   // from is a claim about a file this session can no longer see.
   served.drop();
-  // AND SO DOES ANYTHING HELD. This is the ONE release that is not `settle` or a Discard press, and
-  // it is not an exception to "a held row is kept until the file takes the characters back": at
-  // sign-out there is no longer a file, a session or — the deciding fact — necessarily the same
-  // person at the screen. A row surviving here would show one operator's writing to the next one.
-  held.clear();
-  paintHeldRows();
   // AND SO DO THE OUTSTANDING WRITES. A token is a claim about a POST this session made; carrying
-  // one past a sign-out would let a projection served to the NEXT person release a row that no
-  // longer exists — and, worse, would make this page's evidence about "my write" survive a change
-  // of whose write it was. There is nothing to paint: giving up releases nothing, and the strip was
-  // emptied one statement above.
+  // one past a sign-out would make this page's evidence about "my write" survive a change of whose
+  // write it was.
   writes.clear();
   // AND SO DOES ANYTHING WAITING TO BE SHOWN, for the same reason `served.drop()` is two statements
   // up rather than one: a projection is a copy of the operator's files, and the next person at this
@@ -4133,7 +3730,7 @@ function logout() {
   queued.clear();
   // AND SO DO THE READS OWED TO WRITES THIS SESSION MADE, AND WHAT THE SERVER SAID IT HELD FOR THEM.
   // A pickup is a scheduled `GET /app/graph` carrying this session's bearer, and the accepted source
-  // is a copy of one of the operator's files — both are exactly the two things the four releases
+  // is a copy of one of the operator's files — both are exactly the two things the three releases
   // above refuse to let survive a change of whose browser this is. `clear()` cannot stop a timer
   // that is already counting; it does not need to, because `attempt` answers `cancelled` for a path
   // with no record and `collect` returns before it reads anything.

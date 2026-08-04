@@ -2545,151 +2545,6 @@ var DraftSurface = class {
   }
 };
 
-// app/present/held.ts
-function heldFrom(reason, edit) {
-  if (edit.text.trim() === "") {
-    return null;
-  }
-  return { ...edit, reason };
-}
-function sourceOwns(text, lines) {
-  const appended = text.trimEnd() === text && text !== "" ? text + " " : null;
-  return lines.some((line) => line === text || appended !== null && line.startsWith(appended));
-}
-var HeldSurface = class {
-  #rows = [];
-  #next = 1;
-  /**
-   * Every held row, NEWEST FIRST — the order the operator's attention is in. He has one cursor, so
-   * rows can only ever be produced one at a time, and the most recent one is the one he was
-   * looking at when it went.
-   */
-  get rows() {
-    return this.#rows;
-  }
-  get count() {
-    return this.#rows.length;
-  }
-  /**
-   * Hold an edit. `null` in — as `heldFrom` returns for empty characters — is a no-op returning
-   * `null`, so a caller never has to guard twice.
-   *
-   * ── ONE HELD ROW OR MANY, ANSWERED RATHER THAN LEFT UNDEFINED ──
-   *
-   * MANY. He has one cursor, so a second held row can only exist because a FIRST one is still
-   * unresolved — and the rule this whole module serves is "fail toward keeping his characters", so
-   * a second event must not evict the first. A bounded list would have the same defect at its
-   * bound.
-   *
-   * WITH ONE SUPERSESSION RULE, AND IT IS LOSSLESS BY CONSTRUCTION. The obvious way to accumulate
-   * junk is the same line refused twice — he retries a declined save and gets a second row for the
-   * same characters. So a new row REPLACES an existing one for the same key when the new text
-   * CONTAINS the old text: everything the earlier row was holding is still held afterwards, so the
-   * replacement cannot lose a character. Anything else stacks, because two texts where neither
-   * contains the other are two different pieces of writing.
-   *
-   * The key is the view plus the identity the line had, falling back to the characters themselves
-   * for a line that never had one — the same fallback `instance.ts` makes for an unstamped line,
-   * and for the same reason: its text IS its identity.
-   */
-  hold(edit) {
-    if (edit === null) {
-      return null;
-    }
-    const row = { ...edit, id: this.#next };
-    this.#next += 1;
-    const key = keyOf(edit);
-    const supersedes = this.#rows.findIndex((held) => keyOf(held) === key && edit.text.includes(held.text));
-    if (supersedes !== -1) {
-      this.#rows.splice(supersedes, 1);
-    }
-    this.#rows.unshift(row);
-    return row;
-  }
-  /** He is done with one row. The only release he asks for by hand. Returns whether it was held. */
-  discard(id) {
-    const at = this.#rows.findIndex((row) => row.id === id);
-    if (at === -1) {
-      return false;
-    }
-    this.#rows.splice(at, 1);
-    return true;
-  }
-  /**
-   * THE FILE TOOK THE CHARACTERS BACK — release every row for `path` that `source` now owns.
-   *
-   * This is the RESEMBLANCE release, and it was the only one until `landed` below joined it. A held
-   * row that the file now contains is a second copy of something the source owns, which is the one
-   * thing a held row must never be. Everything else — a repaint, a view change, time passing,
-   * another hold — releases nothing: a row is held until its characters are demonstrably safe
-   * somewhere else or he says he is done with them.
-   *
-   * TWO RELEASES AND NOT TWO MECHANISMS. Both answer one question — "are these characters somewhere
-   * other than this strip" — from the two kinds of evidence a browser can have. This one reads the
-   * file it was handed and asks whether the characters are in it. `landed` reads the SERVER'S
-   * acknowledgement of the write that carried them. This one is available always and is wrong
-   * whenever the cycle rewrites a line; that one is available only once the server echoes and is
-   * exact when it does. Neither subsumes the other, and removing this one would lose the case where
-   * the operator retypes a line by hand and no write of his is outstanding at all.
-   *
-   * IT IS ALSO THE RECOVERY PATH, WHICH IS WHY THERE IS NO "PUT IT BACK" BUTTON. He retypes the
-   * line himself, the write lands, the next projection carries the characters, and the row that
-   * was holding them clears itself. Nothing this module holds ever re-enters the write path; the
-   * write is the gesture he makes, exactly as it always was.
-   *
-   * Returns the rows released, so a caller can say what happened rather than guessing.
-   */
-  settle(path, source) {
-    const lines = source.split("\n");
-    const released = this.#rows.filter((row) => row.path === path && sourceOwns(row.text, lines));
-    if (released.length === 0) {
-      return released;
-    }
-    this.#rows = this.#rows.filter((row) => !released.includes(row));
-    return released;
-  }
-  /**
-   * THE WRITE DEMONSTRABLY LANDED — release every row the acknowledged writes carried.
-   *
-   * THE SECOND AUTOMATIC RELEASE, AND IT IS A DIFFERENT KIND OF FACT FROM THE FIRST. `settle` above
-   * asks "does the file now PRINT these characters", which is resemblance, and resemblance is
-   * exactly what the cycle destroys: it appends a stamp, applies the defaults, re-sorts the line, or
-   * moves it into another view, and the row goes on claiming characters the vault took. A real
-   * browser run on 2026-08-01 measured three of five held rows in that state — every one of them a
-   * line that saved perfectly, every one of them unreleasable by text.
-   *
-   * `tokens` ARE THE SERVER'S OWN ACKNOWLEDGEMENT (`correlation.ts`), matched against the write each
-   * row carries. That is POSITIVE EVIDENCE — the one thing this module is allowed to release on —
-   * and it says something no comparison of strings can: the file the operator's characters were in
-   * reached the server and the projection in hand is derived from it.
-   *
-   * IT CANNOT RELEASE A ROW THAT CARRIES NO TOKEN, which is every REFUSED row and every UNPLACED
-   * one, and that is the fail-safe direction stated as code rather than as a promise: no token, no
-   * evidence, no release. An empty `tokens` releases nothing, so a server that echoes nothing
-   * leaves this method a no-op and the strip behaving exactly as it did before it existed.
-   *
-   * Returns the rows released, so a caller can say what happened rather than guessing.
-   */
-  landed(tokens) {
-    if (tokens.length === 0) {
-      return [];
-    }
-    const released = this.#rows.filter((row) => row.token !== null && tokens.includes(row.token));
-    if (released.length === 0) {
-      return released;
-    }
-    this.#rows = this.#rows.filter((row) => !released.includes(row));
-    return released;
-  }
-  /** Let everything go. Sign-out only — see `app/index.html`. Not a lifecycle event on a view. */
-  clear() {
-    this.#rows = [];
-  }
-};
-function keyOf(edit) {
-  return `${edit.view} ${edit.instance ?? edit.text}`;
-}
-
 // app/present/queue.ts
 function isNewer(arriving, held) {
   if (arriving === null || held === null) {
@@ -3128,7 +2983,7 @@ var WriteRegister = class {
   waiting(token) {
     return this.#open.has(token);
   }
-  /** Forget everything. Sign-out only, for the same reason `HeldSurface.clear` exists. */
+  /** Forget everything. Sign-out only — the same posture every other per-session surface takes. */
   clear() {
     this.#open.clear();
   }
@@ -3730,7 +3585,6 @@ export {
   DEFAULT_INDENT_UNIT,
   DraftSurface,
   FocusSurface,
-  HeldSurface,
   INDENT_UNIT,
   ModeSurface,
   OWED_LIMIT,
@@ -3757,13 +3611,11 @@ export {
   clampLine,
   classifyLine,
   extendsLine,
-  heldFrom,
   indentedLine,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
   isSilent,
-  keyOf,
   lineBody,
   markerSpans,
   markerValue,
