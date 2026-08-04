@@ -1,0 +1,10 @@
+# `unset_field` — the widening beyond the original two rules' grammar. No `when:` at all, which
+# this grammar reads as always-true (matching `compile-resolution.mjs`'s own `evaluateWhen`).
+
+- id: clear-stale-flag
+  for_each:
+    pattern: flagged-nodes
+  actions:
+    - verb: unset_field
+      node_id: $current.node.id
+      field: stale_flag

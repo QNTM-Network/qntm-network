@@ -1,0 +1,14 @@
+# An action targeting a node other than the one that matched. This grammar publishes a fact about
+# "the node this rule's for_each matched," and a rule that writes somewhere else cannot be stated
+# in that shape without being wrong.
+
+- id: propagate-to-parent
+  for_each:
+    pattern: tasks
+  when:
+    eq: [$current.node.fields.status, done]
+  actions:
+    - verb: set_field
+      node_id: $current.node.parent_id
+      field: child_done
+      value: true

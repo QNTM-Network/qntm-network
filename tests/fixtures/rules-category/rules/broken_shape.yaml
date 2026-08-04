@@ -1,0 +1,4 @@
+# The file itself does not parse into a top-level list of rules — a mapping instead. Every rule
+# it might have declared is dropped, at the FILE, because there is no rule-level key to blame it
+# on.
+not_a_list: true

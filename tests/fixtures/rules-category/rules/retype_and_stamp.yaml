@@ -1,0 +1,39 @@
+# A small, invented fixture — NOT the operator's real config. Three rules, each modelled by
+# `compile-rules.mjs`'s closed grammar: a "null" predicate, a "not"-wrapped "null" predicate, and
+# an "eq" predicate, one action each (set_node_type / set_node_type / set_field).
+
+- id: routine-without-cadence-becomes-task
+  for_each:
+    pattern: routines
+  when:
+    "null": [$current.node.fields.cadence]
+  actions:
+    - verb: set_node_type
+      node_id: $current.node.id
+      node_type: task
+    - verb: emit_event
+      type: routine_demoted
+      payload:
+        node_id: $current.node.id
+
+- id: task-with-cadence-becomes-routine
+  for_each:
+    pattern: tasks
+  when:
+    not:
+      - "null": [$current.node.fields.cadence]
+  actions:
+    - verb: set_node_type
+      node_id: $current.node.id
+      node_type: routine
+
+- id: stamp-created-at-on-task
+  for_each:
+    pattern: tasks
+  when:
+    eq: [$current.node.fields.created_at, null]
+  actions:
+    - verb: set_field
+      node_id: $current.node.id
+      field: created_at
+      value: "$cycle_today"

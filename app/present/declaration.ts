@@ -53,16 +53,20 @@
  * for the same reason, by `qualification.ts` and `resolutiontable.ts` respectively — one served
  * document, four strict readers, each owning one axis and none of the other three's keys.
  *
- * ── A FIFTH KEY, WITH NO READER YET — `captureRules` ──
+ * ── A FIFTH KEY, WITH NO READER YET — `rules` ──
  *
- * `scripts/generate-capture-rules-declaration.mjs` publishes the closed grammar of the two rules a
- * bare capture reaches and their order (`design-the-rule-mirror.md` §11 row 4). It is skipped here
- * for the same reason `structural` is — this file must not misreport a key it does not own as
- * unrecognised — but unlike the other four, NO strict reader owns this axis yet, and nothing in
- * `app/` consumes it. Publishing the grammar and wiring a consumer that acts on it (the settle
- * animation `roadmap-the-road-ahead.md` step 3 describes) are deliberately separate steps; this is
- * only the first. `CAPTURE_RULES_KEY`'s only job today is to stop `readDeclaration` from reporting
- * a published, well-formed key as a typo.
+ * `scripts/generate-rules-declaration.mjs` publishes every rule under the operator's `rules/`
+ * directory that a closed grammar can model — pattern, predicate, priority and one action — plus
+ * the fire order the real engine would give the published set (`scripts/compile-rules.mjs`'s own
+ * header has the full derivation). It replaces the narrower `captureRules` key (which named
+ * exactly two rule ids by hand) with a CATEGORY: the unit of work is "a rule this grammar can
+ * model," never a specific operator-authored rule id. It is skipped here for the same reason
+ * `structural` is — this file must not misreport a key it does not own as unrecognised — but
+ * unlike the other four, NO strict reader owns this axis yet, and nothing in `app/` consumes it.
+ * Publishing the grammar and wiring a consumer that acts on it (the settle animation `roadmap-the-
+ * road-ahead.md` step 3 describes) are deliberately separate steps; this is only the first.
+ * `RULES_KEY`'s only job today is to stop `readDeclaration` from reporting a published,
+ * well-formed key as a typo.
  */
 
 import { RESOLUTION_KEYS } from "./rendition.js";
@@ -75,9 +79,9 @@ import { INDENT_UNIT } from "./indent.js";
 /** The one key of the served document that is prose for a human rather than a declaration. */
 const NOTE = "note";
 
-/** The closed capture-rules grammar's own top-level key. See this file's header. No reader owns
- * this axis yet — it is recognised only so it is not misreported as unrecognised. */
-const CAPTURE_RULES_KEY = "captureRules";
+/** The rules-category grammar's own top-level key. See this file's header. No reader owns this
+ * axis yet — it is recognised only so it is not misreported as unrecognised. */
+const RULES_KEY = "rules";
 
 /**
  * The instance's indent unit, in spaces — how many leading spaces make one nesting level. Read
@@ -161,7 +165,7 @@ export function readDeclaration(document: unknown): DeclarationReading {
       // same document, on the CONFIG-ONLY RESOLUTION axis (registration/ordering/day boundary).
       continue;
     }
-    if (key === CAPTURE_RULES_KEY) {
+    if (key === RULES_KEY) {
       // Nor this one — see this file's header. Unlike the four above, no reader validates it yet;
       // it is skipped rather than owned, so a published, well-formed grammar is not misreported as
       // an unrecognised key while its consumer does not exist.
