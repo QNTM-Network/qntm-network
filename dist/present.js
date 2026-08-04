@@ -4211,6 +4211,37 @@ function settleRow(moving, before, body, animate) {
     settled();
   }
 }
+var PREDICT_CLASS = "row-prediction";
+var PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
+function appendPrediction(row, text, kind, animate) {
+  if (row.tagName.toLowerCase() === "input") {
+    return;
+  }
+  const span = document.createElement("span");
+  const classes = [PREDICT_CLASS];
+  if (kind === "withdrawn") {
+    classes.push(PREDICT_WITHDRAWN_CLASS);
+  }
+  span.className = classes.join(" ");
+  span.textContent = text;
+  span.title = kind === "withdrawn" ? "predicted \u2014 the engine answered differently" : "predicted \u2014 not yet confirmed by the engine";
+  row.append(span);
+  if (kind === "pending" && animate) {
+    span.style.transition = "none";
+    span.style.opacity = "0";
+    span.style.transform = "translateY(-.2em)";
+    const settled = () => {
+      span.style.transition = "";
+      span.style.opacity = "";
+      span.style.transform = "";
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(settled);
+    } else {
+      settled();
+    }
+  }
+}
 function paint(body, source, context, deps) {
   paintGeneration += 1;
   const mine = paintGeneration;
@@ -4409,6 +4440,24 @@ function paint(body, source, context, deps) {
       }
     }
   }
+  const predict = deps.predict;
+  if (predict !== void 0) {
+    const instruction = predict.take(source, deps.view ?? "");
+    if (instruction !== null) {
+      for (const prediction of instruction.predictions) {
+        const el = rowsByLineIndex.get(prediction.lineIndex);
+        if (el !== void 0) {
+          appendPrediction(el, prediction.text, "pending", instruction.animate);
+        }
+      }
+      for (const withdrawn of instruction.withdrawn) {
+        const el = rowsByLineIndex.get(withdrawn.lineIndex);
+        if (el !== void 0) {
+          appendPrediction(el, withdrawn.text, "withdrawn", true);
+        }
+      }
+    }
+  }
   paintDraft();
   if (superseded()) {
     return;
@@ -4456,6 +4505,64 @@ var SettleSurface = class {
     return { placement: this.#placement, animate };
   }
 };
+
+// app/present/predict.ts
+var PredictSurface = class {
+  #source = null;
+  #view = "";
+  #predictions = [];
+  #animated = false;
+  /**
+   * Arm a set of predictions, computed elsewhere, against the EXACT source they describe and the
+   * view they belong to. Overwrites whatever was armed before, even an empty list — see this
+   * class's own header for why an empty arm must still happen.
+   */
+  arm(source, view, predictions) {
+    this.#source = source;
+    this.#view = view;
+    this.#predictions = predictions;
+    this.#animated = false;
+  }
+  /**
+   * What THIS repaint of `source`/`view` should do.
+   *
+   *   `null` — nothing is armed for this view at all, or nothing is armed for this exact source and
+   *   nothing was armed for this view either (there is nothing to show and nothing to reconcile).
+   *
+   *   `source` matches exactly — the armed predictions are still live; returns them, `animate` true
+   *   only the first time.
+   *
+   *   `view` matches but `source` does not — the file this view shows has genuinely changed since
+   *   the arm (the cycle answered, or the operator moved past this state some other way). Reconciled
+   *   ONCE: every armed prediction whose text is not found anywhere in the new `source` comes back as
+   *   `withdrawn`; the arm is then cleared, so this can never fire twice for the same claim. A
+   *   prediction that WAS found reports nothing — see this class's own header for why silence is the
+   *   right answer for "this came true".
+   */
+  take(source, view) {
+    if (this.#source === null || this.#view !== view) {
+      return null;
+    }
+    if (this.#source === source) {
+      if (this.#predictions.length === 0) {
+        return null;
+      }
+      const animate = !this.#animated;
+      this.#animated = true;
+      return { predictions: this.#predictions, withdrawn: [], animate };
+    }
+    const armed = this.#predictions;
+    this.#source = null;
+    this.#view = "";
+    this.#predictions = [];
+    this.#animated = false;
+    const withdrawn = armed.filter((prediction) => !source.includes(prediction.text));
+    if (withdrawn.length === 0) {
+      return null;
+    }
+    return { predictions: [], withdrawn, animate: true };
+  }
+};
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -4469,6 +4576,7 @@ export {
   OWED_LIMIT,
   PICKUP_DELAYS,
   PickupSchedule,
+  PredictSurface,
   PresentationCascade,
   PresentationContext,
   ProjectionQueue,

@@ -545,6 +545,13 @@
      admission still happens), it just arrives instead of travelling, exactly like the drawer. */
   @media (prefers-reduced-motion: reduce) {
     .scrim, .drawer, .chev, button, .settle-move { transition: none; }
+    /* THE PREDICT AFFORDANCE'S OWN ENTRANCE — joins the rule above rather than needing a second one,
+       because it is the SAME token-driven `transition` every other motion on this page already
+       turns off here. The decoration itself is UNCONDITIONAL: `paint.ts`'s `appendPrediction`
+       always appends the chip; this only ever silences the rise-and-fade it arrives with, the same
+       "the admission still happens, only the motion is not shown" contract `.settle-move` already
+       keeps for a relocated row. */
+    .row-prediction { transition: none; }
   }
   /* ── THE READING COLUMN: ONE ROW GEOMETRY, TWO RENDITIONS ──────────────────────────────────
      Every line of a view is one ROW, and a row is `--row` tall whichever way the line is being
@@ -754,6 +761,74 @@
   /* Same reason as the chip: an atomic inline is already exempt from an ancestor's line-through,
      and a struck-through dot would read as a rendering fault rather than as "this is done". */
   .viewbody .task.done span .stampmark { text-decoration: none; }
+
+  /* THE PREDICT AFFORDANCE — a CLAIM about what the engine's next answer will add to this row,
+     app/present/predict.ts, painted by app/present/paint.ts's `appendPrediction`. Two predictions
+     ship on it today (the `🆕` created-date stamp on the row just typed, a promotion rule's retype
+     on the row above it) and a third or fourth reads this same rule with no new CSS.
+
+     WHY IT MUST NOT LOOK LIKE THE TAG CHIP OR THE STAMP MARK, EVEN THOUGH ALL THREE ARE PILLS. Those
+     two are the ENGINE'S OWN confirmed vocabulary — a chip is drawn because a `#tag` is really in the
+     source, a mark because `[[qntm:N]]` really is. This pill is drawn because the BROWSER GUESSED,
+     correctly or not, before anything answered — "the browser's first answer is a claim, not a
+     fact" is the operator's own principle for the settle affordance, and this is the same principle
+     applied to CONTENT rather than to POSITION. A pill styled identically to a chip would let a
+     prediction masquerade as the fact it is standing in for, which is the one failure this whole
+     feature exists to avoid. So it takes the identity's OWN accent (`--accent`, the pale blue this
+     page already uses for a heading) rather than the declared green those two reserve for confirmed
+     content, and a DASHED border rather than their solid one — dashes are the one border style this
+     page draws nowhere else, so "dashed" reads as "provisional" the first time it is ever seen and
+     stays that way because nothing else on the page borrows it.
+
+     `inline-block` AND `line-height: 1` FOR THE SAME MEASURED REASON THE CHIP AND THE MARK ALREADY
+     STATE: an atomic inline whose box is its own content area cannot make a row taller than the row
+     invariant this whole reading column enforces (`.viewbody`'s own header comment). `white-space:
+     nowrap` for the same reason the chip sets it — `.viewbody` scrolls horizontally rather than
+     wrapping a row into two, and a multi-word promotion phrase must not become the first rendition
+     that does. */
+  .viewbody .row-prediction {
+    display: inline-block;
+    margin-left: .4em;
+    padding: .1em .5em;
+    border-radius: 999px;
+    background: rgba(207,232,255,.08);
+    border: 1px dashed rgba(207,232,255,.45);
+    color: var(--accent);
+    font-size: .78em;
+    line-height: 1;
+    white-space: nowrap;
+    vertical-align: baseline;
+    opacity: .85;
+    /* THE ONE-SHOT ARRIVAL, AS A `transition`, NOT AN `animation` — this page's stylesheet may
+       declare `@media` and nothing else (tests/app-view-rows.test.mjs's own reader refuses every
+       other at-rule, `qmark.css` is where a component's `@keyframes` belongs), so the rise-and-fade
+       a NEWLY APPEARING chip gets is driven the same way `settleRow`'s own FLIP motion is
+       (`paint.ts`): `appendPrediction` sets `opacity`/`transform` inline to a START state with
+       `transition: none`, then — one frame later, the identical `requestAnimationFrame`-or-
+       synchronous-fallback `settleRow` already uses — clears them, and THIS transition is what
+       animates the change back to the stylesheet's own resting values. Stated once, unconditionally,
+       because a repaint that is NOT an arrival never sets the inline start state at all, so this
+       property costs nothing on any other repaint. */
+    transition: opacity var(--slide), transform var(--slide);
+  }
+  /* A completed line strikes its text through — the chip/mark's own rule, restated for the same
+     reason: an atomic inline is already exempt, and a struck-through claim would read as a rendering
+     fault rather than as "this task is done". */
+  .viewbody .task.done span .row-prediction { text-decoration: none; }
+  /* THE WITHDRAWAL — `predict.ts`'s own one-shot reconciliation: this repaint discovered the claim's
+     text is nowhere in what the engine actually sent back. Struck through and dimmed rather than
+     simply removed, so "this did not happen" is a fact the operator is TOLD, not one he has to infer
+     from a chip quietly not reappearing — see this rule's own header, and predict.ts's, for why
+     silence is reserved for the OPPOSITE case (a confirmed claim, now indistinguishable from the
+     row's own ordinary characters). Shown for exactly one repaint, by construction — `predict.ts`'s
+     `take` clears the arm the instant it reports a withdrawal, so nothing here has to time out. */
+  .viewbody .row-prediction-withdrawn {
+    border-style: solid;
+    border-color: rgba(139,147,161,.4);
+    color: var(--dim);
+    text-decoration: line-through;
+    opacity: .7;
+  }
 </style>
 </head>
 <body>
@@ -902,6 +977,12 @@
          `app/index.html`'s own PARENT PROMOTION block for why this is a SEPARATE element from
          `#rulesBadge` rather than a second sentence inside it — the two answer different rows. -->
     <p id="parentBadge" class="diagnostic-badge"></p>
+    <!-- BOTH BADGES ABOVE ARE NARRATION, ABOVE THE VIEW. `armPrediction` (app/index.html) is what
+         ALSO paints the claim itself, into the row it is about — the `.row-prediction` chip,
+         app/present/predict.ts + paint.ts. The badges say what was decided and why (or why not);
+         the chip is where the operator actually looks. Neither replaces the other: an abstention on
+         either badge means no chip either, by construction — `armPrediction` reads the SAME
+         `rulesReading`/`parentReading` this block already computed. -->
     <p id="freshness" class="muted"></p>
     <!-- THE EMPTY ENVIRONMENT. Three situations that used to render as one grey line, and they
          are not the same situation: an account with no graph behind it, a graph with nothing in
@@ -994,6 +1075,7 @@ import {
   resolveOrderingPlacementFor,
   todayFor,
   SettleSurface,
+  PredictSurface,
   applyRules,
   renderRuleEffects,
   applyGraphAwareRules,
@@ -1323,6 +1405,14 @@ const mode = new ModeSurface();
 // header for why it is source-keyed rather than cleared after one use. `commitLine` arms it;
 // `repaintCurrentView`'s call into `paint()` is the only place it is ever read.
 const settle = new SettleSurface();
+
+// AN ARMED PREDICTION — "the browser expects the engine's next answer to change this row (or the
+// one above it)" — app/present/predict.ts. One surface for the page, same reason as `settle`: it
+// has to survive the repaint it causes, and every incidental repaint after that, for as long as the
+// file it describes is still the file on screen. `armPrediction` (below, called from `commitLine`
+// right after `armOrderingSettle`) is the one place this is ever armed; `repaintCurrentView`'s call
+// into `paint()` is the only place it is ever read.
+const predict = new PredictSurface();
 
 // WHAT THE SERVER LAST SENT FOR THE FILE ON SCREEN (app/present/base.ts). One surface for the page,
 // same reason as the three above — it has to survive the repaint it describes.
@@ -2627,6 +2717,7 @@ function repaintCurrentView() {
     mode,
     draft: draftLine,
     settle,
+    predict,
     onCheckboxToggle: (toggle) => toggleTask(v, toggle),
     // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
     // created arrive here identically — `commit.markdown` is the whole view source either way, and
@@ -3670,30 +3761,138 @@ function updateParentBadge(reading) {
 }
 
 /**
- * THIS FUNCTION DOES NOT EXIST — AND THE REASON IS NAMED HERE RATHER THAN LEFT FOR SOMEONE TO
- * REDISCOVER BY BREAKING A TEST.
+ * WHY `commit.markdown`/`commit.text` ARE NEVER ASSIGNED ANYWHERE IN THIS FILE, NAMED HERE RATHER
+ * THAN LEFT FOR SOMEONE TO REDISCOVER BY BREAKING A TEST.
  *
- * The first shape this feature took DID exist: it reassigned `commit.markdown`/`commit.text` in
- * place before the write, so the stamp would ride the same POST the operator's own edit made.
+ * The first shape the rules feature took DID reassign them: it wrote the stamp into `commit.markdown`
+ * in place before the write, so the glyph would ride the same POST the operator's own edit made.
  * `tests/app-membership-note.test.mjs`'s own `` `.markdown` is never ASSIGNED in app/ — only
  * compared, read or passed through `` — caught it, and seven OTHER test files pin the identical
  * invariant (`app-membership-diagnostic`, `app-ordering-note`, `app-today-note`, `app-write-
- * correlation`, `app-seed-from-cascade`, `app-generality-acceptance`, `graph-sync-guards`). That
- * is not incidental scope; it is the guarantee "what he typed is what gets saved" — the same
- * guarantee `writeFile`'s own header states for `source` ("never re-derived here"), extended to
- * `markdown`. A rules pass with any bug in it must never be able to silently change what a write
- * carries beyond what the operator's own keystrokes and the painter's own `applyEdit` produced.
+ * correlation`, `app-seed-from-cascade`, `app-generality-acceptance`, `graph-sync-guards`). That is
+ * not incidental scope; it is the guarantee "what he typed is what gets saved" — the same guarantee
+ * `writeFile`'s own header states for `source` ("never re-derived here"), extended to `markdown`. A
+ * rules pass with any bug in it must never be able to silently change what a write carries beyond
+ * what the operator's own keystrokes and the painter's own `applyEdit` produced.
  *
- * WHAT SHIPS INSTEAD: `rulesNoteFor`/`updateRulesBadge`, above, tell the operator IMMEDIATELY —
- * beside "syncing…", the instant the write leaves — which rule fired and what it decided, through
- * the SAME freshness-line and badge registers membership/ordering already use. What does not ship
- * in this change: the literal `🆕 <date>` GLYPH painted into the row's own characters before the
- * cycle answers. That would need `paint.ts` itself to grow a new, OPT-IN decoration surface (the
- * same shape `settle`/`SettleSurface` already are — a `PaintDeps` field paint.ts reads while
- * BUILDING a row, never a mutation of a value already on its way to the wire) so the glyph reaches
- * the DOM without ever touching `LineCommit.markdown`. That is real, additional, well-scoped work
- * this change does not attempt — see the PR description for why it is filed rather than rushed.
+ * WHAT SHIPS NOW, WITHOUT WEAKENING THAT GUARANTEE AT ALL: the literal glyph DOES reach the screen —
+ * `armPrediction`, below, arms `predict` (`app/present/predict.ts`'s `PredictSurface`) with the
+ * characters `rulesReadingFor`/`parentPromotionFor` already computed, and `paint.ts` paints them as a
+ * DOM-only decoration the instant the optimistic repaint that follows this function runs. The
+ * invariant above is exactly why it had to be built this way: `predict.arm` never touches `commit`,
+ * `paint.ts`'s `appendPrediction` only ever calls `row.append(span)`, and nothing in either file
+ * calls `applyEdit`, reads `innerHTML` back, or reaches `deps.onLineCommit`/`deps.onCheckboxToggle` a
+ * second time. `tests/app-html-write-path.test.mjs` and the seven files named above are UNCHANGED by
+ * this leg and still pass unmodified — the positive proof, not an inference from a missing call site,
+ * lives in `tests/app-predict-wiring.test.mjs` section 5.
  */
+
+/**
+ * THE CHILD'S OWN PREDICTION — the row `commit` itself just became, decorated with whatever
+ * `rulesReadingFor` decided it will carry once the cycle answers.
+ *
+ * SCOPED TO EXACTLY THE CASES `rulesReadingFor` ALREADY CALLS "answer", NEVER TO AN ABSTENTION —
+ * `reading.kind !== "answer"` covers BOTH `not-evaluated` (a "set-line" commit, no declaration yet)
+ * and `abstains` (`needs-graph-traversal`, `rendering-unrenderable-effect`, …); this function reads
+ * neither differently, and paints nothing for either, because `rulesReadingFor` itself already
+ * refuses to tell them apart from "no claim to make" — see that function's own header. `reading.text
+ * === null` is the THIRD silent case: a rules pass ran and genuinely decided nothing (an `unset` on a
+ * field that was never set), which is a real, complete answer with no characters to show.
+ *
+ * THE TEXT IS THE DELTA, NOT THE WHOLE LINE — `reading.text` is `renderRuleEffects`'s own
+ * `line + appended` (rules.ts), so the characters the operator already typed are sliced back off
+ * before this ever reaches a row: the row already shows them, from `source`, and repeating them in
+ * the decoration would be the chip doubling the line rather than adding to it.
+ */
+function childPredictionFor(commit, rulesReading) {
+  if (commit.kind !== "insert-line" || commit.markdown === null) {
+    return null;
+  }
+  if (rulesReading.kind !== "answer" || rulesReading.text === null) {
+    return null;
+  }
+  const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
+  const delta = rulesReading.text.slice(line.length).trim();
+  return delta === "" ? null : { lineIndex: commit.lineIndex, text: delta };
+}
+
+/**
+ * THE PARENT'S OWN PREDICTION — the row ABOVE `commit`, decorated with the retype a graph-aware
+ * promotion rule decided for it, when this app can spell that retype onto a line at all.
+ *
+ * WHY THIS RENDERS ONLY THE `retype` EFFECTS, NEVER THE WHOLE OF `parentReading.applied` —
+ * `task-with-open-part-of-child-becomes-outcome` and its three siblings (`presentation.json`) ALWAYS
+ * pair their retype with a `set_field` targeting `auto_outcome`/`auto_habit`, and
+ * `vocabulary/markers.yaml` declares no trailing marker for either — `renderRuleEffects`'s own
+ * ALL-OR-NOTHING rule (rules.ts, "never show a line half-corrected") would therefore abstain on
+ * EVERY real promotion this app will ever see, silencing the one scenario this whole leg exists to
+ * paint. That rule protects a claim about what a LINE'S OWN CHARACTERS will become; `auto_outcome`
+ * never becomes characters at all, in this app's decoration OR in the engine's own real, eventual
+ * content — there is no marker for it anywhere, ever. Filtering to `retype` before rendering is not
+ * routing around the all-or-nothing guard; it is asking the guard the question it can actually
+ * answer ("can this app spell 'becomes outcome' onto this line"), which `parentPromotionDiagnosticFor`
+ * (the badge) already answers separately, in words, for the retype AND the un-renderable set
+ * together — this decoration is the SAME retype fact, painted where it happens, not a substitute for
+ * that badge's fuller account.
+ *
+ * NO NEW VOCABULARY. `renderRuleEffects` is the same governed function `rulesReadingFor` already
+ * calls for the child; this call site differs only in WHICH `line` and WHICH slice of `applied` it is
+ * handed. `qualification.tokens.node_type` is the same table `rulesReadingFor` reads too.
+ */
+function parentPredictionFor(commit, parentReading) {
+  if (parentReading.kind !== "answer" || parentReading.applied.length === 0) {
+    return null;
+  }
+  if (qualification === undefined || commit.markdown === null) {
+    return null;
+  }
+  const retypes = parentReading.applied.filter((effect) => effect.verb === "retype");
+  if (retypes.length === 0) {
+    return null;
+  }
+  const parentLine = commit.markdown.split("\n")[parentReading.parentLineIndex] ?? "";
+  const rendered = renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
+  if (rendered.kind !== "rendered") {
+    return null;
+  }
+  const text = rendered.text.slice(parentLine.length).trim();
+  return text === "" ? null : { lineIndex: parentReading.parentLineIndex, text };
+}
+
+/**
+ * ARM THE PREDICT SURFACE — the one place `predict.arm` (`app/present/predict.ts`) is ever called,
+ * the same "one write, one function" discipline `armOrderingSettle` already keeps for `settle`.
+ *
+ * CALLED UNCONDITIONALLY, EVEN WHEN NEITHER PREDICTION FIRES — deliberately NOT mirroring
+ * `armOrderingSettle`'s own "only arm when there is a real placement" posture. A single placement
+ * left un-rearmed simply keeps describing the same still-correct claim; an EMPTY predict arm still
+ * has to happen, because leaving a stale, unrelated one in place would let a LATER, unrelated
+ * commit's own optimistic repaint reconcile it — `predict.ts`'s own `take` would see a NEW source and
+ * treat the earlier claim as contradicted, when nothing has actually answered it yet. That was the
+ * first shape this function took, and it produced exactly that false "withdrawn" the moment a second,
+ * unrelated line was committed before the first cycle answered — see this PR's own description for
+ * where that was caught and why the rule changed.
+ *
+ * ARMED AGAINST `commit.markdown`, THE SAME BASE `armOrderingSettle` uses and for the identical
+ * reason: it is what `paint.ts`'s own `rawInput.settle`/`draftInput.settle` repaints INTO the instant
+ * this function returns, so arming against anything else would describe a paint that has already
+ * happened by the time `PredictSurface.take` could ever see it.
+ */
+function armPrediction(view, commit, rulesReading, parentReading) {
+  if (commit.markdown === null) {
+    return;
+  }
+  const predictions = [];
+  const child = childPredictionFor(commit, rulesReading);
+  if (child !== null) {
+    predictions.push(child);
+  }
+  const parent = parentPredictionFor(commit, parentReading);
+  if (parent !== null) {
+    predictions.push(parent);
+  }
+  predict.arm(commit.markdown, view.id, predictions);
+}
 
 /**
  * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
@@ -3922,6 +4121,9 @@ async function commitLine(view, commit) {
   // `armOrderingSettle`'s own header for why it must run here, synchronously, and not after the
   // `await` below. `roadmap-the-road-ahead.md` step 3: "make it place the row," not merely say so.
   armOrderingSettle(view, commit);
+  // THE PREDICT SURFACE, ARMED THE SAME WAY AND FOR THE SAME REASON — see `armPrediction`'s own
+  // header for why it runs unconditionally, synchronously, here, and never after the `await` below.
+  armPrediction(view, commit, rulesReading, parentReading);
   // WHICH VIEW THIS WRITE WAS MADE IN, remembered until the projection it causes lands — see
   // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it.
   //

@@ -218,6 +218,9 @@ export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./pa
 export { SettleSurface } from "./settle.js";
 export type { RowPlacement, SettleInstruction } from "./settle.js";
 
+export { PredictSurface } from "./predict.js";
+export type { PredictInstruction, RowPrediction, WithdrawnPrediction } from "./predict.js";
+
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
 //
 // `app/present/embedded-declaration.ts` used to `import presentationJson from

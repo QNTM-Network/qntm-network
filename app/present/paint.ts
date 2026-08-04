@@ -104,6 +104,7 @@ import type { GlobalRegistration } from "./newline.js";
 import { classifyLine, stampSpans, tagSpans } from "./rendition.js";
 import type { Rendition } from "./rendition.js";
 import type { SettleSurface } from "./settle.js";
+import type { PredictSurface } from "./predict.js";
 import { applyEdit } from "./source.js";
 
 /** The markdown surface the painter needs. Structural, so any conforming renderer will do. */
@@ -268,6 +269,23 @@ export interface PaintDeps {
    * this file for what "relocate" and "animate" each do to the DOM.
    */
   readonly settle?: SettleSurface;
+  /**
+   * ARMED PREDICTIONS, IF THIS REPAINT SHOULD SHOW OR RECONCILE ANY — optional, and its absence is
+   * a real configuration exactly as `settle`'s is: without it a painted view never decorates a row
+   * with a claim about what the engine will do to it, which is every test written before
+   * `predict.ts` existed. With it, this paint asks the surface ONCE (`PredictSurface.take`, keyed by
+   * this exact `source` and `deps.view`) for the claims still live and the ones this repaint just
+   * discovered were contradicted — see `predict.ts`'s own header for what "live", "confirmed" and
+   * "withdrawn" mean, and `appendPrediction` in this file for what each does to the DOM.
+   *
+   * THE SAME SURFACE, USED FOR TWO PREDICTIONS THAT LAND ON TWO DIFFERENT ROWS — `stamp-created-
+   * at-on-task`'s own row (the one just committed) and a graph-aware promotion rule's row (the
+   * structural PARENT, never the committed line) both arrive here as entries in ONE
+   * `PredictInstruction.predictions` array, addressed by their own `lineIndex`. This function does
+   * not know or care which rule produced which entry — `app/index.html`'s `armPrediction` is where
+   * that distinction is made, once, before either ever reaches this file.
+   */
+  readonly predict?: PredictSurface;
 }
 
 /**
@@ -1032,6 +1050,85 @@ function settleRow(moving: HTMLElement, before: HTMLElement | null, body: HTMLEl
   }
 }
 
+/** The predicted decoration's own class — see app/index.html's stylesheet counterpart,
+ * `.row-prediction`, for what a CLAIM looks like next to SETTLED content. */
+const PREDICT_CLASS = "row-prediction";
+/** The one-shot "this did not happen" mark — painted for exactly the repaint that reconciles an
+ * armed claim against a source that turned out not to carry it (`predict.ts`'s own `withdrawn`).
+ * A struck-through claim is a DIFFERENT fact from a claim quietly not reappearing, and the operator's
+ * own principle ("the browser's first answer is a claim, not a fact") is only honoured if a WRONG
+ * claim is admitted as wrong rather than left to be inferred from its own absence. */
+const PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
+
+/**
+ * Paint one predicted decoration onto `row` — a claim about what the engine's next answer will add
+ * to this line, visually distinct from the line's own settled characters.
+ *
+ * ── WHY THIS IS A CHILD ELEMENT, NEVER A CHARACTER SPLICED INTO THE ROW'S OWN CONTENT ──
+ *
+ * `row`'s own text was already built by `renderTokens`/`rawText`/`normalLine` from the SOURCE
+ * STRING, and nothing about that changes here — this function only ever APPENDS a further element,
+ * the same "decorate, never rewrite" posture the tag chip and the stamp mark already take for
+ * confirmed content. A claim spliced into the row's own text node would be indistinguishable, to
+ * anything that reads the DOM back, from a character the operator actually typed — and nothing in
+ * this bundle reads the DOM back to build an edit (`applyEdit` always reads `source`), so this is a
+ * belt this file already wears; the decoration keeps its own element as the braces, because a claim
+ * that could ever be mistaken for settled content is the exact failure this whole feature exists to
+ * avoid.
+ *
+ * ── WHY AN `<input>` IS SKIPPED RATHER THAN DECORATED ──
+ *
+ * The row currently being typed, or one the cursor just landed back on in INSERT, is rendered as a
+ * real `<input>` (`rawInput`/`draftInput`, above) — an element with nowhere to usefully show a
+ * child: a void/replaced element accepts an appended node without error and never renders it. There
+ * is also nothing useful to say: the operator is either mid-keystroke on this exact line (he does
+ * not need a claim about characters he is choosing himself) or has just landed the cursor back on it
+ * (same reason). Skipping is a choice made for clarity, not a workaround for a crash.
+ */
+function appendPrediction(row: HTMLElement, text: string, kind: "pending" | "withdrawn", animate: boolean): void {
+  if (row.tagName.toLowerCase() === "input") {
+    return;
+  }
+  const span = document.createElement("span");
+  const classes = [PREDICT_CLASS];
+  if (kind === "withdrawn") {
+    classes.push(PREDICT_WITHDRAWN_CLASS);
+  }
+  span.className = classes.join(" ");
+  span.textContent = text;
+  // A HOVER EXPLANATION, THE SAME REGISTER `stampMark`'s OWN `title` USES — non-interactive,
+  // read by nothing, there only for a person who pauses on the chip and wants to know what it is.
+  span.title =
+    kind === "withdrawn" ? "predicted — the engine answered differently" : "predicted — not yet confirmed by the engine";
+  row.append(span);
+
+  // THE ARRIVAL — `settleRow`'s OWN TECHNIQUE, reused rather than reinvented: this page's
+  // stylesheet may declare `@media` and nothing else (`tests/app-view-rows.test.mjs`'s own reader
+  // refuses any other at-rule), so there is no `@keyframes` this file could hand a class to trigger.
+  // What IS available is a `transition` stated once on `.row-prediction` in the stylesheet — so this
+  // sets the START state INLINE with `transition: none` (no animation on the frame that builds the
+  // element), then clears both a moment later, letting the stylesheet's own transition animate the
+  // change back to its resting opacity/position. Only for `kind === "pending" && animate`: a
+  // withdrawal is struck through by its own class, unconditionally, and does not rise in — it is
+  // reporting something that already happened, not something arriving.
+  if (kind === "pending" && animate) {
+    span.style.transition = "none";
+    span.style.opacity = "0";
+    span.style.transform = "translateY(-.2em)";
+    const settled = (): void => {
+      span.style.transition = "";
+      span.style.opacity = "";
+      span.style.transform = "";
+    };
+    // NO `requestAnimationFrame` IN A NODE TEST RUN — same fallback `settleRow` already takes.
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(settled);
+    } else {
+      settled();
+    }
+  }
+}
+
 /**
  * Paint a view's markdown into `body`.
  *
@@ -1491,6 +1588,46 @@ export function paint(
       // either function fails by doing nothing rather than by throwing.
       if (movingEl !== undefined) {
         settleRow(movingEl, beforeEl, body, instruction.animate);
+      }
+    }
+  }
+
+  // ── THE PREDICT AFFORDANCE — decorating a row with what the browser believes the engine's next
+  // answer will add to it ──────────────────────────────────────────────────────────────────────
+  //
+  // Asked ONCE, for THIS `source`/`deps.view` pair, after every row this paint would draw anyway
+  // already exists in `rowsByLineIndex` — same timing as the settle consumption immediately above,
+  // and the same reason: a claim can only be attached to a row that has already been built.
+  //
+  // NOT REACHED WHEN `deps.predict` IS ABSENT — every test written before `predict.ts` existed, and
+  // the golden master's own byte-identical comparison, paint exactly what they always painted.
+  //
+  // TWO ROWS, NOT ONE, AND NEITHER IS DECIDED HERE. `instruction.predictions`/`instruction.withdrawn`
+  // each carry their OWN `lineIndex` — `app/index.html`'s `armPrediction` is what decided which rows
+  // those are (the row just committed, for `stamp-created-at-on-task`; the structural PARENT, for a
+  // graph-aware promotion rule) and this function never asks which prediction is which kind, the same
+  // "paint may build DOM, it may not decide" split this whole file's header states for every other
+  // affordance below it.
+  //
+  // `el === undefined` IS A REAL OUTCOME, the same defence the settle consumption above already
+  // states: a claim armed against THIS source could still name a blank line, or (see
+  // `appendPrediction`'s own header) a row currently rendered as an `<input>` with nowhere to show
+  // a child — both are silently skipped rather than treated as a bug.
+  const predict = deps.predict;
+  if (predict !== undefined) {
+    const instruction = predict.take(source, deps.view ?? "");
+    if (instruction !== null) {
+      for (const prediction of instruction.predictions) {
+        const el = rowsByLineIndex.get(prediction.lineIndex);
+        if (el !== undefined) {
+          appendPrediction(el, prediction.text, "pending", instruction.animate);
+        }
+      }
+      for (const withdrawn of instruction.withdrawn) {
+        const el = rowsByLineIndex.get(withdrawn.lineIndex);
+        if (el !== undefined) {
+          appendPrediction(el, withdrawn.text, "withdrawn", true);
+        }
       }
     }
   }

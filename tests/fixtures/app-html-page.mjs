@@ -204,6 +204,18 @@ export { updateParentBadge as __updateParentBadge };
 // are: a suite reads what the page is holding NOW, and what changes under it is which placement
 // (if any) is armed.
 export const __settle = () => settle;
+// THE PREDICT SURFACE (app/present/predict.ts) — same reasoning as __settle immediately above.
+// __armPrediction/__childPredictionFor/__parentPredictionFor are exported on their own, the same
+// reason __armOrderingSettle is: a suite can drive "what would this commit arm" directly, without
+// also standing up a whole commitLine write. __repaintCurrentView is exported so a suite can drive
+// an ACTUAL paint of the current view (the same function every real projection and every real
+// keystroke eventually calls) and inspect \`#viewBody\`'s own children — the only way to prove a
+// prediction lands in the ROW it belongs to, rather than merely that it was armed.
+export const __predict = () => predict;
+export { armPrediction as __armPrediction };
+export { childPredictionFor as __childPredictionFor };
+export { parentPredictionFor as __parentPredictionFor };
+export { repaintCurrentView as __repaintCurrentView };
 // THE TODAY NOTE (design-the-resolution-architecture.md step 8's call site). Same reasoning as
 // __membershipNoteFor and __orderingNoteFor above — its own separate computation, exported on its
 // own so a suite can drive \`todayFor\`'s wiring directly, with an arbitrary instant, without also
