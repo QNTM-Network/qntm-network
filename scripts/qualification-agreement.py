@@ -1,5 +1,22 @@
 """qualification-agreement — produce the ENGINE's own membership answers, to measure the browser's against.
 
+── RESTATED 2026-08-04: GRAPH-DEPENDENT PATTERNS ARE OUT OF THIS FIXTURE'S SCOPE, BY NAME ──
+
+`compile-qualification.mjs`'s one-hop `children:`/`parents:` widening (`normaliseEdgeStep`) now
+publishes a predicate whose answer for a node depends on that node's NEIGHBOURS, not only its own
+(node_type, domain, status) triple — `edgeSteps` names those. This script's whole method (key the
+fixture on the triple, and PROVE every node sharing one triple gets the same answer) is invalid for
+such a predicate by construction: two nodes with the identical triple can have different edges, so
+"one input, one answer" does not hold. Measured directly: without this exclusion, `orphan-outcomes`
+(a real published pattern) fails the per-triple determinism check below with exactly that diagnosis.
+`GRAPH_DEPENDENT` names every pattern this script therefore does not attempt to verify — it is not
+silently skipped; it is a recorded, positive fact in the fixture (`graphDependentPatterns`), and
+`tests/qualification-agreement.test.mjs` asserts the app's own `qualifierNeedsGraph` agrees with it
+exactly. Applying one of these patterns for real needs a graph-aware matcher (`app/present/
+qualification.ts`'s own header) that this repo does not build yet — the app abstains
+(`needs-graph-traversal`) rather than answer, so there is no wrong answer for THIS script to catch
+here; agreement for these patterns is a later leg's proof, not this one's to fake.
+
 `tests/qualification-agreement.test.mjs` asserts that `app/present/membership.ts` agrees with the
 engine. Agreement is worthless if the expected side was written by hand: a transcribed expectation
 proves the transcriber and the implementer had the same misunderstanding, which is exactly the
@@ -81,11 +98,21 @@ def main() -> int:
     args = parser.parse_args()
 
     declaration = json.loads((REPO_ROOT / "presentation.json").read_text())["qualification"]
-    published = sorted(declaration["predicates"])
+    all_published = sorted(declaration["predicates"])
+    # GRAPH-DEPENDENT, NOT ATTEMPTED HERE — see this file's own header, "RESTATED 2026-08-04".
+    graph_dependent = sorted(
+        name
+        for name, predicate in declaration["predicates"].items()
+        if predicate.get("edgeSteps")
+    )
+    published = sorted(name for name in all_published if name not in graph_dependent)
 
-    # Every published predicate must range only over the three fields, or the fixture's key is not
-    # a complete input and the whole comparison is invalid.
-    for name, predicate in declaration["predicates"].items():
+    # Every SELF-ONLY published predicate must range only over the three fields, or the fixture's
+    # key is not a complete input and the whole comparison is invalid. `edgeSteps` clauses are
+    # deliberately not scanned here — they range over a NEIGHBOUR's fields, which is exactly why
+    # their patterns were excluded from `published` just above rather than checked by this loop.
+    for name in published:
+        predicate = declaration["predicates"][name]
         for clause in [predicate["find"], *predicate["exclude"]]:
             outside = set(clause["fields"]) - set(TRIPLE_FIELDS)
             if outside:
@@ -223,6 +250,11 @@ def main() -> int:
             "qualification the ENGINE says a node with that triple belongs to."
         ),
         "patterns": published,
+        # NAMED, NOT SILENT — every published predicate this script did NOT attempt to verify,
+        # because it is graph-dependent (see this file's own header). `all_published` minus this
+        # equals `patterns` above; `tests/qualification-agreement.test.mjs` asserts both halves
+        # against the live declaration, not just the one this script could check.
+        "graphDependentPatterns": graph_dependent,
         "matchSets": match_sets,
         "nodes": sum(row["nodes"] for row in rows),
         "triples": len(rows),
@@ -239,7 +271,9 @@ def main() -> int:
         f"wrote {args.out}\n"
         f"  {fixture['nodes']} nodes collapse to {fixture['triples']} distinct field triples\n"
         f"  {len(probe_cells)} probe triples over the reachable space\n"
-        f"  {len(published)} published qualifications answered by the engine"
+        f"  {len(published)} published qualifications answered by the engine\n"
+        f"  {len(graph_dependent)} published qualifications are graph-dependent and were not "
+        "attempted: " + ", ".join(graph_dependent)
     )
     return 0
 

@@ -45,7 +45,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readQualificationDeclaration, matchesQualifier } from "../dist/present.js";
+import { readQualificationDeclaration, matchesQualifier, qualifierNeedsGraph } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const read = (path) => JSON.parse(readFileSync(resolve(HERE, path), "utf8"));
@@ -62,16 +62,49 @@ function appAnswer(fields) {
 }
 
 describe("0. the fixture is about the declaration that actually shipped", () => {
-  test("every pattern the engine answered for is a pattern the app published", () => {
+  // RESTATED 2026-08-04: `compile-qualification.mjs`'s one-hop `children:`/`parents:` widening
+  // publishes patterns whose answer for a node depends on that node's NEIGHBOURS, not only its own
+  // (node_type, domain, status) triple — `scripts/qualification-agreement.py`'s own method (key on
+  // the triple, prove one triple gets one answer) is invalid for those by construction, so it
+  // EXCLUDES them from `TRUTH.patterns` and names them, separately, in `TRUTH.graphDependentPatterns`
+  // (that script's own header, "RESTATED 2026-08-04"). `LANGUAGE.predicates` still carries ALL of
+  // them — `TRUTH.patterns` is a proper SUBSET now, not the same set.
+  const published = Object.keys(LANGUAGE.predicates).sort();
+
+  test("every SELF-ONLY pattern the engine answered for is a pattern the app published", () => {
     // A fixture generated against a different declaration would compare two unrelated things and
     // could pass while proving nothing.
-    const published = Object.keys(LANGUAGE.predicates).sort();
-    assert.deepEqual(
-      TRUTH.patterns.slice().sort(),
-      published,
-      "the agreement fixture is STALE — regenerate it with scripts/qualification-agreement.py",
-    );
+    for (const name of TRUTH.patterns) {
+      assert.ok(
+        published.includes(name),
+        `'${name}' is in the engine's fixture but not in the app's published predicates — ` +
+          "the agreement fixture is STALE, regenerate it with scripts/qualification-agreement.py",
+      );
+    }
   });
+
+  test(
+    "THE HEADLINE PROOF FOR THIS LEG'S OWN CLASSIFICATION: the engine's own script and the app's " +
+      "own qualifierNeedsGraph agree, pattern for pattern, on which predicates are graph-dependent",
+    () => {
+      // `TRUTH.graphDependentPatterns` was computed PYTHON-SIDE, by reading `edgeSteps` off the SAME
+      // served `presentation.json` this test reads — not derived from this test's own opinion, and
+      // not re-derived from `qualifierNeedsGraph` here either. Two independent readings of one fact,
+      // compared, is what makes this an agreement proof rather than a tautology.
+      const appGraphDependent = published.filter((name) => qualifierNeedsGraph(LANGUAGE.predicates[name])).sort();
+      assert.deepEqual(TRUTH.graphDependentPatterns.slice().sort(), appGraphDependent);
+      assert.ok(appGraphDependent.length > 0, "no graph-dependent pattern published — this widening did not widen");
+      // AND every self-only pattern the engine verified is published, is NOT flagged graph-dependent
+      // by the app — the two classifications must partition `published`, not overlap.
+      for (const name of TRUTH.patterns) {
+        assert.ok(
+          !appGraphDependent.includes(name),
+          `'${name}' is in both TRUTH.patterns (self-only, engine-verified) and the app's ` +
+            "graph-dependent set — the two must be disjoint",
+        );
+      }
+    },
+  );
 
   test("the fixture is not empty in either direction", () => {
     assert.ok(TRUTH.rows.length > 0 && TRUTH.probeCells.length > 0);

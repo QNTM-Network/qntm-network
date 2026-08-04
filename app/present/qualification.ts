@@ -79,17 +79,59 @@ export interface FindClause {
 }
 
 /**
- * A whole qualification, flattened: match `find`, and match NONE of `exclude`.
+ * A ONE-HOP `children:`/`parents:` edge-existence step — `compile-qualification.mjs`'s
+ * `normaliseEdgeStep`, unchanged on the wire. `direction` names which single traversal the engine
+ * takes (`children`/`parents`, never transitive — an `ancestors:`/`descendants:` step is refused at
+ * compile time and never reaches here); `edgeType`/`nodeType`/`fields` restrict the NEIGHBOUR node
+ * reached that way, the same `FindClause` shape reused rather than restated; `mustExist` is `true`
+ * for the config's `exists: true` and `false` for `not_exists: true`.
  *
- * `exclude` carries both step forms the config uses, because over a single candidate node they are
- * the same form. A hand-authored `- not: [{find_nodes: {status: done}}]` with `min: 1` and the
- * structural-chrome exclusions that `bundle/pattern_structural_defaults.py` synthesises at bundle
- * load both reduce to "the candidate does not match this find" — see the generator's header for
- * the derivation through `_evaluate_not`'s bounded complement.
+ * NEITHER `qualification.ts` NOR `membership.ts` EVALUATES THIS STEP. Doing so needs the graph
+ * payload's own edges, which `resolveLineFields`'s whole domain (a line being typed, not yet
+ * minted) never carries — see `qualifierNeedsGraph`, below, and that function's own callers.
+ */
+export interface EdgeStep {
+  readonly direction: "children" | "parents";
+  readonly mustExist: boolean;
+  readonly edgeType: readonly string[];
+  readonly nodeType: readonly string[] | null;
+  readonly fields: Readonly<Record<string, FieldPredicate>>;
+}
+
+/**
+ * A whole qualification, flattened: match `find`, match NONE of `exclude`, and — when `edgeSteps`
+ * is present and non-empty — satisfy every one-hop edge-existence test too.
+ *
+ * `exclude` carries both SELF-test step forms the config uses, because over a single candidate node
+ * they are the same form. A hand-authored `- not: [{find_nodes: {status: done}}]` with `min: 1` and
+ * the structural-chrome exclusions that `bundle/pattern_structural_defaults.py` synthesises at
+ * bundle load both reduce to "the candidate does not match this find" — see the generator's header
+ * for the derivation through `_evaluate_not`'s bounded complement.
+ *
+ * `edgeSteps` IS OPTIONAL, AND ABSENT RATHER THAN `[]` FOR EVERY PATTERN THAT NEVER USES ONE — the
+ * exact two-key `{find, exclude}` shape every pattern published before this key existed keeps
+ * publishing, byte-identical (`compile-qualification.mjs`'s own comment at the call site). A
+ * `Qualifier` carrying a non-empty `edgeSteps` cannot be decided by `matchesQualifier` — see
+ * `qualifierNeedsGraph`.
  */
 export interface Qualifier {
   readonly find: FindClause;
   readonly exclude: readonly FindClause[];
+  readonly edgeSteps?: readonly EdgeStep[];
+}
+
+/**
+ * Does deciding `qualifier` need the graph — a neighbour node's own fields, reached by one
+ * `children:`/`parents:` hop — rather than only the candidate's own fields? `matchesQualifier`
+ * (`membership.ts`) throws rather than guess when this is `true`; every caller of it (`membership.ts`'s
+ * `membershipFor`, `rules.ts`'s `applyRules`) checks this FIRST and abstains instead of calling it.
+ *
+ * A pure structural check, not a graph read: it asks what KIND of qualifier this is, never what a
+ * `children:` step MEANS — the same "reader, not interpreter" boundary this module's own header
+ * draws for the rest of the pattern language.
+ */
+export function qualifierNeedsGraph(qualifier: Qualifier): boolean {
+  return (qualifier.edgeSteps?.length ?? 0) > 0;
 }
 
 /** What a section declares: its qualification, and the registration defaults a line under it gets. */
@@ -265,6 +307,50 @@ function readFindClause(path: string, value: unknown, problems: string[]): FindC
   return { nodeType, fields };
 }
 
+const DIRECTIONS = ["children", "parents"] as const;
+
+/**
+ * One `edgeSteps[i]` entry — `EdgeStep`'s own wire shape. Mirrors `readFindClause`'s "one bad
+ * clause drops the whole pattern" posture: a dropped edge step would silently turn a REQUIRED
+ * existence test into "not checked", which admits nodes the config excludes — the same wrong-
+ * direction risk a dropped `exclude` clause already carries.
+ */
+function readEdgeStep(path: string, value: unknown, problems: string[]): EdgeStep | undefined {
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — this edge step stays unknown`);
+    return undefined;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== "direction" && key !== "mustExist" && key !== "edgeType" && key !== "nodeType" && key !== "fields") {
+      problems.push(
+        `'${path}.${key}' is not a recognised key — the keys are direction, mustExist, edgeType, ` +
+          "nodeType, fields",
+      );
+    }
+  }
+  if (typeof value.direction !== "string" || !(DIRECTIONS as readonly string[]).includes(value.direction)) {
+    problems.push(`'${path}.direction' is ${JSON.stringify(value.direction)}, not children or parents`);
+    return undefined;
+  }
+  if (typeof value.mustExist !== "boolean") {
+    problems.push(`'${path}.mustExist' is ${shapeOf(value.mustExist)}, not a boolean`);
+    return undefined;
+  }
+  const edgeType = readStringList(`${path}.edgeType`, value.edgeType, problems);
+  if (edgeType.length === 0) return undefined; // readStringList already reported the shape problem
+  // Reuses `readFindClause`'s own nodeType/fields reading over the REST of this object — the
+  // neighbour-node restriction is exactly a `FindClause`, just reached by a hop instead of self.
+  const rest = readFindClause(path, { nodeType: value.nodeType, fields: value.fields }, problems);
+  if (rest === undefined) return undefined;
+  return {
+    direction: value.direction as EdgeStep["direction"],
+    mustExist: value.mustExist,
+    edgeType,
+    nodeType: rest.nodeType,
+    fields: rest.fields,
+  };
+}
+
 function readPredicates(value: unknown, problems: string[]): Record<string, Qualifier> {
   if (!isPlainObject(value)) {
     problems.push(
@@ -281,8 +367,8 @@ function readPredicates(value: unknown, problems: string[]): Record<string, Qual
       continue;
     }
     for (const key of Object.keys(raw)) {
-      if (key !== "find" && key !== "exclude") {
-        problems.push(`'${path}.${key}' is not a recognised key — the keys are find, exclude`);
+      if (key !== "find" && key !== "exclude" && key !== "edgeSteps") {
+        problems.push(`'${path}.${key}' is not a recognised key — the keys are find, exclude, edgeSteps`);
       }
     }
     const find = readFindClause(`${path}.find`, raw.find, problems);
@@ -303,7 +389,23 @@ function readPredicates(value: unknown, problems: string[]): Record<string, Qual
       }
       exclude.push(read);
     }
-    if (ok) out[name] = { find, exclude };
+    if (!ok) continue;
+    if (raw.edgeSteps !== undefined && !Array.isArray(raw.edgeSteps)) {
+      problems.push(`'${path}.edgeSteps' is ${shapeOf(raw.edgeSteps)}, not an array`);
+      continue;
+    }
+    const edgeSteps: EdgeStep[] = [];
+    let edgeOk = true;
+    for (const [i, step] of (raw.edgeSteps ?? []).entries()) {
+      const read = readEdgeStep(`${path}.edgeSteps[${i}]`, step, problems);
+      if (read === undefined) {
+        edgeOk = false;
+        break;
+      }
+      edgeSteps.push(read);
+    }
+    if (!edgeOk) continue;
+    out[name] = edgeSteps.length > 0 ? { find, exclude, edgeSteps } : { find, exclude };
   }
   return out;
 }

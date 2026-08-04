@@ -106,6 +106,7 @@
         "#inbox": "inbox",
         "#backlog": "backlog",
         "#explainer": "explainer",
+        "#note": "note",
         "#capability": "capability",
         "#principle": "principle",
         "#package": "package",
@@ -125,7 +126,8 @@
         "#character": "character",
         "#admin": "admin",
         "#spirit": "spirit",
-        "#life-admin": "life-admin"
+        "#life-admin": "life-admin",
+        "#family": "family"
       },
       "status": {
         "[ ]": "open",
@@ -149,6 +151,35 @@
           }
         },
         "exclude": []
+      },
+      "admin-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "admin"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "admin-open": {
         "find": {
@@ -231,6 +262,19 @@
           "fields": {
             "domain": {
               "eq": "arts"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "all-family-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "family"
             }
           }
         },
@@ -577,6 +621,51 @@
           }
         ]
       },
+      "family-people": {
+        "find": {
+          "nodeType": [
+            "person"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "family"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "family-routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "family"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "family-routines-upcoming": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "family"
+            },
+            "status": {
+              "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
       "films-to-watch": {
         "find": {
           "nodeType": [
@@ -602,6 +691,32 @@
           }
         },
         "exclude": []
+      },
+      "habits-with-routines": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "in-progress-tasks": {
         "find": {
@@ -631,6 +746,66 @@
                 "eq": "done"
               }
             }
+          }
+        ]
+      },
+      "inverse-orphans": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF",
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {
+              "status": {
+                "not": {
+                  "eq": "done"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "life-admin-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "life-admin"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
           }
         ]
       },
@@ -665,6 +840,26 @@
           }
         },
         "exclude": []
+      },
+      "orphan-outcomes": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {}
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
       },
       "outcomes-admin": {
         "find": {
@@ -874,6 +1069,37 @@
         },
         "exclude": []
       },
+      "outcomes-with-children": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF",
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {
+              "status": {
+                "not": {
+                  "eq": "done"
+                }
+              }
+            }
+          }
+        ]
+      },
       "outcomes-work": {
         "find": {
           "nodeType": [
@@ -889,6 +1115,35 @@
           }
         },
         "exclude": []
+      },
+      "personal-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "personal-routines": {
         "find": {
@@ -921,6 +1176,74 @@
           }
         },
         "exclude": []
+      },
+      "personal-tasks-waited-on-by-someone": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
       },
       "program-assets-active": {
         "find": {
@@ -986,6 +1309,35 @@
         },
         "exclude": []
       },
+      "program-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "program"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
       "program-routines": {
         "find": {
           "nodeType": [
@@ -1017,6 +1369,35 @@
           }
         },
         "exclude": []
+      },
+      "qntm-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "qntm"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "qntm-routines": {
         "find": {
@@ -1089,6 +1470,35 @@
         },
         "exclude": []
       },
+      "spirit-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "spirit"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
       "spirit-routines": {
         "find": {
           "nodeType": [
@@ -1121,6 +1531,222 @@
         },
         "exclude": []
       },
+      "tasks-held-by-requires-personal": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "REQUIRES"
+            ],
+            "nodeType": null,
+            "fields": {
+              "status": {
+                "not": {
+                  "eq": "done"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "tasks-held-by-requires-work": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "REQUIRES"
+            ],
+            "nodeType": null,
+            "fields": {
+              "status": {
+                "not": {
+                  "eq": "done"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "tasks-waited-on-by-someone": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
       "tv-done": {
         "find": {
           "nodeType": [
@@ -1142,6 +1768,234 @@
           "fields": {
             "status": {
               "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "unanchored-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "waiting-personal-tasks": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "waiting-tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "waiting-work-tasks": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "work-habits": {
+        "find": {
+          "nodeType": [
+            "habit"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "work-notes": {
+        "find": {
+          "nodeType": [
+            "note"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "work"
             }
           }
         },
@@ -1253,6 +2107,16 @@
           }
         }
       },
+      "all-family": {
+        "tasks": {
+          "qualification": "all-family-nodes",
+          "nodeType": "task",
+          "name": "All Family",
+          "defaults": {
+            "domain": "family"
+          }
+        }
+      },
       "all-home": {
         "tasks": {
           "qualification": "all-home-nodes",
@@ -1360,10 +2224,26 @@
         }
       },
       "daily-personal": {
+        "waiting": {
+          "qualification": "waiting-tasks",
+          "nodeType": "task",
+          "name": "Personal Waiting",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
         "routine-drift": {
           "qualification": "routine-drift",
           "nodeType": "task",
           "name": "Routine Drift",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "orphans": {
+          "qualification": "orphan-outcomes",
+          "nodeType": "task",
+          "name": "Orphans",
           "defaults": {
             "domain": "personal"
           }
@@ -1390,6 +2270,14 @@
           "qualification": "in-progress-tasks",
           "nodeType": "task",
           "name": "In Progress",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "waiting": {
+          "qualification": "waiting-tasks",
+          "nodeType": "task",
+          "name": "Work Waiting",
           "defaults": {
             "domain": "work"
           }
@@ -1481,6 +2369,195 @@
           }
         }
       },
+      "habits-admin": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Admin Habits",
+          "defaults": {
+            "domain": "admin"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "Admin Habits",
+          "defaults": {
+            "domain": "admin"
+          }
+        }
+      },
+      "habits-life-admin": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Life Admin Habits",
+          "defaults": {
+            "domain": "life-admin"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "Life Admin Habits",
+          "defaults": {
+            "domain": "life-admin"
+          }
+        }
+      },
+      "habits-personal": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Personal Habits",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "Personal Habits",
+          "defaults": {
+            "domain": "personal"
+          }
+        }
+      },
+      "habits-program": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Program Habits",
+          "defaults": {
+            "domain": "program"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "Program Habits",
+          "defaults": {
+            "domain": "program"
+          }
+        }
+      },
+      "habits-qntm": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored qntm Habits",
+          "defaults": {
+            "domain": "qntm"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "qntm Habits",
+          "defaults": {
+            "domain": "qntm"
+          }
+        }
+      },
+      "habits-spirit": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Spirit Habits",
+          "defaults": {
+            "domain": "spirit"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "Spirit Habits",
+          "defaults": {
+            "domain": "spirit"
+          }
+        }
+      },
+      "habits-work": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Work Habits",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "habits": {
+          "qualification": "habits-with-routines",
+          "nodeType": "task",
+          "name": "Work Habits",
+          "defaults": {
+            "domain": "work"
+          }
+        }
+      },
+      "habits": {
+        "unanchored-habits": {
+          "qualification": "unanchored-habits",
+          "nodeType": "task",
+          "name": "Unanchored Habits"
+        },
+        "admin-habits": {
+          "qualification": "admin-habits",
+          "nodeType": "task",
+          "name": "Admin Habits",
+          "defaults": {
+            "domain": "admin"
+          }
+        },
+        "life-admin-habits": {
+          "qualification": "life-admin-habits",
+          "nodeType": "task",
+          "name": "Life Admin Habits",
+          "defaults": {
+            "domain": "life-admin"
+          }
+        },
+        "work-habits": {
+          "qualification": "work-habits",
+          "nodeType": "task",
+          "name": "Work Habits",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "personal-habits": {
+          "qualification": "personal-habits",
+          "nodeType": "task",
+          "name": "Personal Habits",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "program-habits": {
+          "qualification": "program-habits",
+          "nodeType": "task",
+          "name": "Program Habits",
+          "defaults": {
+            "domain": "program"
+          }
+        },
+        "qntm-habits": {
+          "qualification": "qntm-habits",
+          "nodeType": "task",
+          "name": "qntm Habits",
+          "defaults": {
+            "domain": "qntm"
+          }
+        },
+        "spirit-habits": {
+          "qualification": "spirit-habits",
+          "nodeType": "task",
+          "name": "Spirit Habits",
+          "defaults": {
+            "domain": "spirit"
+          }
+        }
+      },
       "inbox": {
         "inbox-tagged": {
           "qualification": "inbox-items",
@@ -1491,6 +2568,16 @@
           "qualification": "domain-empty",
           "nodeType": "task",
           "name": "Domain Empty"
+        }
+      },
+      "notes-work": {
+        "work-notes": {
+          "qualification": "work-notes",
+          "nodeType": "note",
+          "name": "Work Notes",
+          "defaults": {
+            "domain": "work"
+          }
         }
       },
       "outcomes-all": {
@@ -1565,6 +2652,106 @@
           "name": "Life Admin Outcomes"
         }
       },
+      "outcomes-personal": {
+        "childless-outcomes": {
+          "qualification": "inverse-orphans",
+          "nodeType": "task",
+          "name": "Personal Childless Outcomes",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "outcomes": {
+          "qualification": "outcomes-with-children",
+          "nodeType": "task",
+          "name": "Personal Outcomes",
+          "defaults": {
+            "domain": "personal"
+          }
+        }
+      },
+      "outcomes-program": {
+        "childless-outcomes": {
+          "qualification": "inverse-orphans",
+          "nodeType": "task",
+          "name": "Program Childless Outcomes",
+          "defaults": {
+            "domain": "program"
+          }
+        },
+        "outcomes": {
+          "qualification": "outcomes-with-children",
+          "nodeType": "task",
+          "name": "Program Outcomes",
+          "defaults": {
+            "domain": "program"
+          }
+        }
+      },
+      "outcomes-qntm": {
+        "childless-outcomes": {
+          "qualification": "inverse-orphans",
+          "nodeType": "task",
+          "name": "qntm Childless Outcomes",
+          "defaults": {
+            "domain": "qntm"
+          }
+        },
+        "outcomes": {
+          "qualification": "outcomes-with-children",
+          "nodeType": "task",
+          "name": "qntm Outcomes",
+          "defaults": {
+            "domain": "qntm"
+          }
+        }
+      },
+      "outcomes-spirit": {
+        "childless-outcomes": {
+          "qualification": "inverse-orphans",
+          "nodeType": "task",
+          "name": "Spirit Childless Outcomes",
+          "defaults": {
+            "domain": "spirit"
+          }
+        },
+        "outcomes": {
+          "qualification": "outcomes-with-children",
+          "nodeType": "task",
+          "name": "Spirit Outcomes",
+          "defaults": {
+            "domain": "spirit"
+          }
+        }
+      },
+      "outcomes": {
+        "childless-outcomes": {
+          "qualification": "inverse-orphans",
+          "nodeType": "task",
+          "name": "Childless Outcomes",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "outcomes": {
+          "qualification": "outcomes-with-children",
+          "nodeType": "task",
+          "name": "Outcomes",
+          "defaults": {
+            "domain": "work"
+          }
+        }
+      },
+      "people-family": {
+        "people": {
+          "qualification": "family-people",
+          "nodeType": "person",
+          "name": "People",
+          "defaults": {
+            "domain": "family"
+          }
+        }
+      },
       "people": {
         "people": {
           "qualification": "social-people",
@@ -1586,6 +2773,21 @@
         },
         "upcoming": {
           "qualification": "admin-routines-upcoming",
+          "nodeType": "routine",
+          "name": "Upcoming"
+        }
+      },
+      "routines-family": {
+        "family-routines": {
+          "qualification": "family-routines",
+          "nodeType": "routine",
+          "name": "Family Routines",
+          "defaults": {
+            "domain": "family"
+          }
+        },
+        "upcoming": {
+          "qualification": "family-routines-upcoming",
           "nodeType": "routine",
           "name": "Upcoming"
         }
@@ -1713,6 +2915,14 @@
             "domain": "personal"
           }
         },
+        "family-routines": {
+          "qualification": "family-routines",
+          "nodeType": "task",
+          "name": "Family Routines",
+          "defaults": {
+            "domain": "family"
+          }
+        },
         "program-routines": {
           "qualification": "program-routines",
           "nodeType": "task",
@@ -1756,6 +2966,58 @@
           }
         }
       },
+      "waiting-for-personal": {
+        "personal-waiting-for": {
+          "qualification": "personal-tasks-waited-on-by-someone",
+          "nodeType": "task",
+          "name": "Personal Waiting For",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "personal-blocked": {
+          "qualification": "waiting-personal-tasks",
+          "nodeType": "task",
+          "name": "Personal Blocked",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "personal-held": {
+          "qualification": "tasks-held-by-requires-personal",
+          "nodeType": "task",
+          "name": "Personal Held",
+          "defaults": {
+            "domain": "personal"
+          }
+        }
+      },
+      "waiting-for-work": {
+        "waiting-for": {
+          "qualification": "tasks-waited-on-by-someone",
+          "nodeType": "task",
+          "name": "Waiting For",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "blocked": {
+          "qualification": "waiting-work-tasks",
+          "nodeType": "task",
+          "name": "Blocked",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "held": {
+          "qualification": "tasks-held-by-requires-work",
+          "nodeType": "task",
+          "name": "Held",
+          "defaults": {
+            "domain": "work"
+          }
+        }
+      },
       "writers": {
         "to-check": {
           "qualification": "writers-open",
@@ -1785,6 +3047,9 @@
         "listened"
       ],
       "all-arts": [
+        "tasks"
+      ],
+      "all-family": [
         "tasks"
       ],
       "all-home": [
@@ -1979,6 +3244,9 @@
         "overall-age-of-intent",
         "overall-coverage"
       ],
+      "notes-work": [
+        "work-notes"
+      ],
       "operator-flowtrace": [
         "tasks",
         "outcomes",
@@ -2035,6 +3303,9 @@
         "childless-outcomes",
         "outcomes"
       ],
+      "people-family": [
+        "people"
+      ],
       "people": [
         "people"
       ],
@@ -2078,6 +3349,10 @@
         "admin-routines",
         "upcoming"
       ],
+      "routines-family": [
+        "family-routines",
+        "upcoming"
+      ],
       "routines-life-admin": [
         "life-admin-routines",
         "upcoming"
@@ -2107,6 +3382,7 @@
         "life-admin-routines",
         "work-routines",
         "personal-routines",
+        "family-routines",
         "program-routines",
         "qntm-routines",
         "spirit-routines"
@@ -2167,7 +3443,6 @@
       "accuracy-carrier-work-1d": "unresolvable field(s): title",
       "accuracy-carrier-work-3d": "unresolvable field(s): title",
       "accuracy-carrier-work-7d": "unresolvable field(s): title",
-      "admin-habits": "step 0: traverses (children+exists)",
       "age-intent-carrier-overall": "unresolvable field(s): title",
       "age-intent-carrier-personal": "unresolvable field(s): title",
       "age-intent-carrier-program": "unresolvable field(s): title",
@@ -2216,32 +3491,24 @@
       "flowtrace-principles-violated": "unresolvable field(s): principle_state+project",
       "flowtrace-queue-items": "unresolvable field(s): project",
       "flowtrace-sinks-all": "unresolvable field(s): project",
-      "free-trial-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "free-trial-dojo-heads": "unresolvable field(s): project",
       "god-box-discussed": "unresolvable field(s): god_box",
       "god-box-not-discussed": "unresolvable field(s): god_box",
-      "habit-dojo-heads": "step 0: traverses (not_exists+parents)",
-      "habits-with-routines": "step 0: traverses (children+exists)",
+      "habit-dojo-heads": "unresolvable field(s): project",
       "high-priority-tasks": "unresolvable field(s): priority",
-      "inverse-orphans": "step 0: traverses (children+not_exists)",
-      "life-admin-habits": "step 0: traverses (children+exists)",
       "operator-flowtrace-outcomes-open": "unresolvable field(s): project",
       "operator-flowtrace-tasks-open": "unresolvable field(s): project",
-      "operator-flowtrace-waited-on": "step 0: traverses (exists+parents)",
+      "operator-flowtrace-waited-on": "unresolvable field(s): project",
       "operator-qntm-network-outcomes-open": "unresolvable field(s): project",
       "operator-qntm-network-tasks-open": "unresolvable field(s): project",
-      "operator-qntm-network-waited-on": "step 0: traverses (exists+parents)",
+      "operator-qntm-network-waited-on": "unresolvable field(s): project",
       "operator-qntm-outcomes-open": "unresolvable field(s): project",
       "operator-qntm-tasks-open": "unresolvable field(s): project",
-      "operator-qntm-waited-on": "step 0: traverses (exists+parents)",
+      "operator-qntm-waited-on": "unresolvable field(s): project",
       "operator-trace-orchestration-outcomes-open": "unresolvable field(s): project",
       "operator-trace-orchestration-tasks-open": "unresolvable field(s): project",
-      "operator-trace-orchestration-waited-on": "step 0: traverses (exists+parents)",
-      "orphan-outcomes": "step 0: traverses (not_exists+parents)",
-      "outcomes-with-children": "step 0: traverses (children+exists)",
+      "operator-trace-orchestration-waited-on": "unresolvable field(s): project",
       "overdue": "due_date: operator lt",
-      "personal-habits": "step 0: traverses (children+exists)",
-      "personal-tasks-waited-on-by-someone": "step 0: traverses (exists+parents)",
-      "program-habits": "step 0: traverses (children+exists)",
       "qntm-capabilities-diagnose-ready": "unresolvable field(s): cap_state+project",
       "qntm-capabilities-in-progress": "unresolvable field(s): cap_state+project",
       "qntm-capabilities-passing": "unresolvable field(s): cap_state+project",
@@ -2252,7 +3519,6 @@
       "qntm-classes-exists": "unresolvable field(s): class_state+project",
       "qntm-classes-extracted": "unresolvable field(s): class_state+project",
       "qntm-classes-subsumed": "unresolvable field(s): class_state+project",
-      "qntm-habits": "step 0: traverses (children+exists)",
       "qntm-packages-concept": "unresolvable field(s): package_state+project",
       "qntm-packages-exists": "unresolvable field(s): package_state+project",
       "qntm-packages-extracted": "unresolvable field(s): package_state+project",
@@ -2264,20 +3530,11 @@
       "qntm-principles-violated": "unresolvable field(s): principle_state+project",
       "qntm-queue-items": "unresolvable field(s): project",
       "qntm-sinks-all": "unresolvable field(s): project",
-      "routine-cascade-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "routine-cascade-dojo-heads": "unresolvable field(s): project",
       "scratchpad-targets": "unresolvable field(s): title",
-      "spirit-habits": "step 0: traverses (children+exists)",
-      "tasks-held-by-requires-personal": "step 0: traverses (children+exists)",
-      "tasks-held-by-requires-work": "step 0: traverses (children+exists)",
-      "tasks-waited-on-by-someone": "step 0: traverses (exists+parents)",
-      "termination-dojo-heads": "step 0: traverses (not_exists+parents)",
+      "termination-dojo-heads": "unresolvable field(s): project",
       "trace-orchestration-queue-items": "unresolvable field(s): project",
-      "unanchored-habits": "step 0: traverses (children+not_exists)",
-      "unlocks-dojo-heads": "step 0: traverses (not_exists+parents)",
-      "waiting-personal-tasks": "step 0: traverses (children+exists)",
-      "waiting-tasks": "step 0: traverses (exists+parents)",
-      "waiting-work-tasks": "step 0: traverses (children+exists)",
-      "work-habits": "step 0: traverses (children+exists)"
+      "unlocks-dojo-heads": "unresolvable field(s): project"
     },
     "dropped": {
       "section 'all-personal.tasks'": "qualification refused: all-personal-nodes",
@@ -2291,12 +3548,9 @@
       "section 'daily-personal.capture'": "qualification refused: captured-today",
       "section 'daily-personal.due-soon'": "qualification refused: due-soon-tasks",
       "section 'daily-personal.high-priority'": "qualification refused: high-priority-tasks",
-      "section 'daily-personal.orphans'": "qualification refused: orphan-outcomes",
-      "section 'daily-personal.waiting'": "qualification refused: waiting-tasks",
       "section 'daily-work.capture'": "qualification refused: captured-today",
       "section 'daily-work.due-today'": "qualification refused: due-soon-tasks",
       "section 'daily-work.urgent'": "qualification refused: high-priority-tasks",
-      "section 'daily-work.waiting'": "qualification refused: waiting-tasks",
       "section 'flowtrace-capabilities.diagnose-ready'": "qualification refused: flowtrace-capabilities-diagnose-ready",
       "section 'flowtrace-capabilities.in-progress'": "qualification refused: flowtrace-capabilities-in-progress",
       "section 'flowtrace-capabilities.passing'": "qualification refused: flowtrace-capabilities-passing",
@@ -2322,28 +3576,6 @@
       "section 'god-box.discussed'": "qualification refused: god-box-discussed",
       "section 'god-box.not-discussed'": "qualification refused: god-box-not-discussed",
       "section 'habit-dojo.classification'": "qualification refused: habit-dojo-heads",
-      "section 'habits-admin.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-admin.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits-life-admin.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-life-admin.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits-personal.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-personal.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits-program.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-program.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits-qntm.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-qntm.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits-spirit.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-spirit.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits-work.habits'": "qualification refused: habits-with-routines",
-      "section 'habits-work.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits.admin-habits'": "qualification refused: admin-habits",
-      "section 'habits.life-admin-habits'": "qualification refused: life-admin-habits",
-      "section 'habits.personal-habits'": "qualification refused: personal-habits",
-      "section 'habits.program-habits'": "qualification refused: program-habits",
-      "section 'habits.qntm-habits'": "qualification refused: qntm-habits",
-      "section 'habits.spirit-habits'": "qualification refused: spirit-habits",
-      "section 'habits.unanchored-habits'": "qualification refused: unanchored-habits",
-      "section 'habits.work-habits'": "qualification refused: work-habits",
       "section 'metrics-personal.personal-accuracy-1d'": "qualification refused: accuracy-carrier-personal-1d",
       "section 'metrics-personal.personal-accuracy-3d'": "qualification refused: accuracy-carrier-personal-3d",
       "section 'metrics-personal.personal-accuracy-7d'": "qualification refused: accuracy-carrier-personal-7d",
@@ -2376,16 +3608,6 @@
       "section 'operator-trace-orchestration.outcomes'": "qualification refused: operator-trace-orchestration-outcomes-open",
       "section 'operator-trace-orchestration.tasks'": "qualification refused: operator-trace-orchestration-tasks-open",
       "section 'operator-trace-orchestration.waiting-for'": "qualification refused: operator-trace-orchestration-waited-on",
-      "section 'outcomes-personal.childless-outcomes'": "qualification refused: inverse-orphans",
-      "section 'outcomes-personal.outcomes'": "qualification refused: outcomes-with-children",
-      "section 'outcomes-program.childless-outcomes'": "qualification refused: inverse-orphans",
-      "section 'outcomes-program.outcomes'": "qualification refused: outcomes-with-children",
-      "section 'outcomes-qntm.childless-outcomes'": "qualification refused: inverse-orphans",
-      "section 'outcomes-qntm.outcomes'": "qualification refused: outcomes-with-children",
-      "section 'outcomes-spirit.childless-outcomes'": "qualification refused: inverse-orphans",
-      "section 'outcomes-spirit.outcomes'": "qualification refused: outcomes-with-children",
-      "section 'outcomes.childless-outcomes'": "qualification refused: inverse-orphans",
-      "section 'outcomes.outcomes'": "qualification refused: outcomes-with-children",
       "section 'qntm-capabilities.diagnose-ready'": "qualification refused: qntm-capabilities-diagnose-ready",
       "section 'qntm-capabilities.in-progress'": "qualification refused: qntm-capabilities-in-progress",
       "section 'qntm-capabilities.passing'": "qualification refused: qntm-capabilities-passing",
@@ -2422,12 +3644,6 @@
       "section 'this-week.overdue'": "qualification refused: overdue",
       "section 'trace-orchestration-queue.queue'": "qualification refused: trace-orchestration-queue-items",
       "section 'unlocks-dojo.chain'": "qualification refused: unlocks-dojo-heads",
-      "section 'waiting-for-personal.personal-blocked'": "qualification refused: waiting-personal-tasks",
-      "section 'waiting-for-personal.personal-held'": "qualification refused: tasks-held-by-requires-personal",
-      "section 'waiting-for-personal.personal-waiting-for'": "qualification refused: personal-tasks-waited-on-by-someone",
-      "section 'waiting-for-work.blocked'": "qualification refused: waiting-work-tasks",
-      "section 'waiting-for-work.held'": "qualification refused: tasks-held-by-requires-work",
-      "section 'waiting-for-work.waiting-for'": "qualification refused: tasks-waited-on-by-someone",
       "vocabulary token '#God'": "sets 'god_box', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#action'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#animation'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
@@ -5169,13 +6385,21 @@
         "stamp-interval-days-30",
         "stamp-interval-days-90",
         "album-defaults-to-arts-domain",
+        "task-with-open-part-of-child-becomes-outcome",
+        "task-with-open-waiting-for-child-becomes-outcome",
         "blog-defaults-to-arts-domain",
         "books-defaults-to-arts-domain",
         "task-with-cadence-becomes-routine",
         "routine-without-cadence-becomes-task",
+        "change-type-carrying-node-becomes-ticket",
         "film-defaults-to-arts-domain",
+        "task-with-routine-child-becomes-habit",
+        "outcome-with-routine-child-becomes-habit",
         "asset-defaults-to-program-domain",
         "defect-defaults-to-program-domain",
+        "task-under-routine-becomes-step",
+        "step-with-cadence-becomes-routine",
+        "step-without-routine-parent-becomes-task",
         "stamp-created-at-on-task",
         "tv-defaults-to-arts-domain",
         "writer-defaults-to-arts-domain"
@@ -5191,8 +6415,13 @@
           "value": "1"
         },
         "priority": 0,
-        "setsField": "interval_days",
-        "setsFieldTo": 1
+        "actions": [
+          {
+            "verb": "set",
+            "field": "interval_days",
+            "to": 1
+          }
+        ]
       },
       "stamp-interval-days-3": {
         "pattern": "routines",
@@ -5202,8 +6431,13 @@
           "value": "3"
         },
         "priority": 0,
-        "setsField": "interval_days",
-        "setsFieldTo": 3
+        "actions": [
+          {
+            "verb": "set",
+            "field": "interval_days",
+            "to": 3
+          }
+        ]
       },
       "stamp-interval-days-7": {
         "pattern": "routines",
@@ -5213,8 +6447,13 @@
           "value": "7"
         },
         "priority": 0,
-        "setsField": "interval_days",
-        "setsFieldTo": 7
+        "actions": [
+          {
+            "verb": "set",
+            "field": "interval_days",
+            "to": 7
+          }
+        ]
       },
       "stamp-interval-days-14": {
         "pattern": "routines",
@@ -5224,8 +6463,13 @@
           "value": "14"
         },
         "priority": 0,
-        "setsField": "interval_days",
-        "setsFieldTo": 14
+        "actions": [
+          {
+            "verb": "set",
+            "field": "interval_days",
+            "to": 14
+          }
+        ]
       },
       "stamp-interval-days-30": {
         "pattern": "routines",
@@ -5235,8 +6479,13 @@
           "value": "30"
         },
         "priority": 0,
-        "setsField": "interval_days",
-        "setsFieldTo": 30
+        "actions": [
+          {
+            "verb": "set",
+            "field": "interval_days",
+            "to": 30
+          }
+        ]
       },
       "stamp-interval-days-90": {
         "pattern": "routines",
@@ -5246,8 +6495,13 @@
           "value": "90"
         },
         "priority": 0,
-        "setsField": "interval_days",
-        "setsFieldTo": 90
+        "actions": [
+          {
+            "verb": "set",
+            "field": "interval_days",
+            "to": 90
+          }
+        ]
       },
       "album-defaults-to-arts-domain": {
         "pattern": "albums-all",
@@ -5256,8 +6510,53 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "arts"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "arts"
+          }
+        ]
+      },
+      "task-with-open-part-of-child-becomes-outcome": {
+        "pattern": "tasks-with-open-part-of-child",
+        "when": {
+          "op": "null",
+          "field": "change_type"
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "outcome"
+          },
+          {
+            "verb": "set",
+            "field": "auto_outcome",
+            "to": true
+          }
+        ],
+        "partial": true
+      },
+      "task-with-open-waiting-for-child-becomes-outcome": {
+        "pattern": "tasks-with-open-waiting-for-child",
+        "when": {
+          "op": "null",
+          "field": "change_type"
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "outcome"
+          },
+          {
+            "verb": "set",
+            "field": "auto_outcome",
+            "to": true
+          }
+        ],
+        "partial": true
       },
       "blog-defaults-to-arts-domain": {
         "pattern": "blogs-all",
@@ -5266,8 +6565,13 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "arts"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "arts"
+          }
+        ]
       },
       "books-defaults-to-arts-domain": {
         "pattern": "books-all",
@@ -5276,8 +6580,13 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "arts"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "arts"
+          }
+        ]
       },
       "task-with-cadence-becomes-routine": {
         "pattern": "tasks",
@@ -5289,7 +6598,13 @@
           }
         },
         "priority": 0,
-        "retypesTo": "routine"
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "routine"
+          }
+        ],
+        "partial": true
       },
       "routine-without-cadence-becomes-task": {
         "pattern": "routines",
@@ -5298,7 +6613,36 @@
           "field": "cadence"
         },
         "priority": 0,
-        "retypesTo": "task"
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "task"
+          }
+        ],
+        "partial": true
+      },
+      "change-type-carrying-node-becomes-ticket": {
+        "pattern": "tasks",
+        "when": {
+          "op": "not",
+          "of": {
+            "op": "null",
+            "field": "change_type"
+          }
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "ticket"
+          },
+          {
+            "verb": "set",
+            "field": "auto_ticket",
+            "to": true
+          }
+        ],
+        "partial": true
       },
       "film-defaults-to-arts-domain": {
         "pattern": "films-all",
@@ -5307,8 +6651,57 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "arts"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "arts"
+          }
+        ]
+      },
+      "task-with-routine-child-becomes-habit": {
+        "pattern": "tasks-with-routine-child",
+        "when": {
+          "op": "null",
+          "field": "cadence"
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "habit"
+          },
+          {
+            "verb": "set",
+            "field": "auto_habit",
+            "to": true
+          }
+        ],
+        "partial": true
+      },
+      "outcome-with-routine-child-becomes-habit": {
+        "pattern": "outcomes-with-routine-child",
+        "when": {
+          "op": "null",
+          "field": "cadence"
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "habit"
+          },
+          {
+            "verb": "set",
+            "field": "auto_habit",
+            "to": true
+          },
+          {
+            "verb": "unset",
+            "field": "auto_outcome"
+          }
+        ],
+        "partial": true
       },
       "asset-defaults-to-program-domain": {
         "pattern": "assets-all",
@@ -5317,8 +6710,13 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "program"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "program"
+          }
+        ]
       },
       "defect-defaults-to-program-domain": {
         "pattern": "defects-all",
@@ -5327,8 +6725,58 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "program"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "program"
+          }
+        ]
+      },
+      "task-under-routine-becomes-step": {
+        "pattern": "tasks-under-routines",
+        "when": {
+          "op": "null",
+          "field": "cadence"
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "step"
+          }
+        ]
+      },
+      "step-with-cadence-becomes-routine": {
+        "pattern": "steps-under-routines",
+        "when": {
+          "op": "not",
+          "of": {
+            "op": "null",
+            "field": "cadence"
+          }
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "routine"
+          }
+        ]
+      },
+      "step-without-routine-parent-becomes-task": {
+        "pattern": "steps-without-routine-parent",
+        "when": {
+          "op": "null",
+          "field": "cadence"
+        },
+        "priority": 0,
+        "actions": [
+          {
+            "verb": "retype",
+            "to": "task"
+          }
+        ]
       },
       "stamp-created-at-on-task": {
         "pattern": "tasks",
@@ -5338,8 +6786,13 @@
           "value": null
         },
         "priority": 0,
-        "setsField": "created_at",
-        "setsFieldTo": "$cycle_today"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "created_at",
+            "to": "$cycle_today"
+          }
+        ]
       },
       "tv-defaults-to-arts-domain": {
         "pattern": "tv-all",
@@ -5348,8 +6801,13 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "arts"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "arts"
+          }
+        ]
       },
       "writer-defaults-to-arts-domain": {
         "pattern": "writers-all",
@@ -5358,8 +6816,13 @@
           "field": "domain"
         },
         "priority": 0,
-        "setsField": "domain",
-        "setsFieldTo": "arts"
+        "actions": [
+          {
+            "verb": "set",
+            "field": "domain",
+            "to": "arts"
+          }
+        ]
       }
     },
     "patterns": {
@@ -5417,6 +6880,32 @@
         },
         "exclude": []
       },
+      "outcomes-with-routine-child": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
       "routines": {
         "find": {
           "nodeType": [
@@ -5426,6 +6915,50 @@
         },
         "exclude": []
       },
+      "steps-under-routines": {
+        "find": {
+          "nodeType": [
+            "step"
+          ],
+          "fields": {}
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "steps-without-routine-parent": {
+        "find": {
+          "nodeType": [
+            "step"
+          ],
+          "fields": {}
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
       "tasks": {
         "find": {
           "nodeType": [
@@ -5434,6 +6967,206 @@
           "fields": {}
         },
         "exclude": []
+      },
+      "tasks-under-routines": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {}
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "tasks-with-open-part-of-child": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "album",
+              "asset",
+              "attribute",
+              "backlog",
+              "blog",
+              "book",
+              "capability",
+              "class",
+              "defect",
+              "edge_repair",
+              "explainer",
+              "film",
+              "group",
+              "habit",
+              "header",
+              "inbox",
+              "initiative",
+              "mandate",
+              "outcome",
+              "package",
+              "person",
+              "phase",
+              "principle",
+              "project",
+              "routine",
+              "scorecard",
+              "sink",
+              "step",
+              "strategy",
+              "system_sharpener",
+              "task",
+              "ticket",
+              "tv_show",
+              "writer"
+            ],
+            "fields": {
+              "status": {
+                "not": {
+                  "eq": "done"
+                }
+              }
+            }
+          },
+          {
+            "direction": "children",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "tasks-with-open-waiting-for-child": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": [
+              "album",
+              "asset",
+              "attribute",
+              "backlog",
+              "blog",
+              "book",
+              "capability",
+              "class",
+              "defect",
+              "edge_repair",
+              "explainer",
+              "film",
+              "group",
+              "habit",
+              "header",
+              "inbox",
+              "initiative",
+              "mandate",
+              "outcome",
+              "package",
+              "person",
+              "phase",
+              "principle",
+              "project",
+              "routine",
+              "scorecard",
+              "sink",
+              "step",
+              "strategy",
+              "system_sharpener",
+              "task",
+              "ticket",
+              "tv_show",
+              "writer"
+            ],
+            "fields": {
+              "status": {
+                "not": {
+                  "eq": "done"
+                }
+              }
+            }
+          },
+          {
+            "direction": "children",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "tasks-with-routine-child": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            }
+          }
+        },
+        "exclude": [],
+        "edgeSteps": [
+          {
+            "direction": "children",
+            "mustExist": true,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": [
+              "routine"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "tv-all": {
         "find": {
@@ -5485,7 +7218,6 @@
       "rule 'auto-outcome-without-open-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'cancelled-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'cancelled-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'change-type-carrying-node-becomes-ticket'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'clamp-completed-at-to-cycle-today'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'clear-completion-stamp-when-not-done'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'clear-routine-reset-cascade-marker'": "its for_each pattern 'routines-with-reset-cascade-marker' could not be resolved: unresolvable field(s): reset_cascade_pending",
@@ -5511,14 +7243,13 @@
       "rule 'obsolete-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'onboard_client'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'onboarding_followups'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'outcome-with-routine-child-becomes-habit'": "3 modelled actions (verbs: set_node_type, set_field, unset_field) — this grammar publishes exactly one action per rule",
       "rule 'parallel-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'part-of-child-of-ticket-becomes-spike'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'promote-scheduled-routine-to-open'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'resolved-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'routine-cascade-opens-descendants-on-promotion'": "its for_each pattern 'nodes-under-promoted-routine' could not be resolved: step 0: traverses (ancestors+exists)",
       "rule 'routine-complete-reset-available-date'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'routine-reset-cascades-to-descendants'": "3 modelled actions (verbs: set_field, unset_field, unset_field) — this grammar publishes exactly one action per rule",
+      "rule 'routine-reset-cascades-to-descendants'": "its for_each pattern 'nodes-under-resetting-routine' could not be resolved: step 0: traverses (ancestors+exists)",
       "rule 'stamp-available-date-on-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'stamp-completed-at-on-done-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'stamp-dev-ticket-number'": "'for_each' is a list of 2 pattern binding(s) (a multi-source join), which this closed grammar does not model",
@@ -5527,14 +7258,8 @@
       "rule 'stamp-task-intent-planned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-intent-unplanned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-overdue-drag'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'step-with-cadence-becomes-routine'": "its for_each pattern 'steps-under-routines' could not be resolved: step 0: traverses (exists+parents)",
-      "rule 'step-without-routine-parent-becomes-task'": "its for_each pattern 'steps-without-routine-parent' could not be resolved: step 0: traverses (not_exists+parents)",
       "rule 'target-of-open-waiter-gets-status-waiting'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'target-reopens-when-no-open-waiters-remain'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'task-under-routine-becomes-step'": "its for_each pattern 'tasks-under-routines' could not be resolved: step 0: traverses (exists+parents)",
-      "rule 'task-with-open-part-of-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
-      "rule 'task-with-open-waiting-for-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
-      "rule 'task-with-routine-child-becomes-habit'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'termination'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'unblock-node-when-all-requires-done'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'unlocks-descendant-becomes-held'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
@@ -5545,6 +7270,9 @@
       "rule 'unlocks-node-becomes-released'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'update-scorecard-done-count'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'upset'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule-set field 'auto_habit'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
+      "rule-set field 'auto_outcome'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
+      "rule-set field 'auto_ticket'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
       "rule-set field 'domain'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
       "rule-set field 'interval_days'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it"
     }

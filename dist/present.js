@@ -410,6 +410,9 @@ function readStructuralDeclaration(document2) {
 }
 
 // app/present/qualification.ts
+function qualifierNeedsGraph(qualifier) {
+  return (qualifier.edgeSteps?.length ?? 0) > 0;
+}
 var QUALIFICATION_KEY = "qualification";
 var TOP_KEYS = [
   "defaultNodeType",
@@ -499,6 +502,39 @@ function readFindClause(path, value, problems) {
   }
   return { nodeType, fields };
 }
+var DIRECTIONS = ["children", "parents"];
+function readEdgeStep(path, value, problems) {
+  if (!isPlainObject2(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object \u2014 this edge step stays unknown`);
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== "direction" && key !== "mustExist" && key !== "edgeType" && key !== "nodeType" && key !== "fields") {
+      problems.push(
+        `'${path}.${key}' is not a recognised key \u2014 the keys are direction, mustExist, edgeType, nodeType, fields`
+      );
+    }
+  }
+  if (typeof value.direction !== "string" || !DIRECTIONS.includes(value.direction)) {
+    problems.push(`'${path}.direction' is ${JSON.stringify(value.direction)}, not children or parents`);
+    return void 0;
+  }
+  if (typeof value.mustExist !== "boolean") {
+    problems.push(`'${path}.mustExist' is ${shapeOf(value.mustExist)}, not a boolean`);
+    return void 0;
+  }
+  const edgeType = readStringList(`${path}.edgeType`, value.edgeType, problems);
+  if (edgeType.length === 0) return void 0;
+  const rest = readFindClause(path, { nodeType: value.nodeType, fields: value.fields }, problems);
+  if (rest === void 0) return void 0;
+  return {
+    direction: value.direction,
+    mustExist: value.mustExist,
+    edgeType,
+    nodeType: rest.nodeType,
+    fields: rest.fields
+  };
+}
 function readPredicates(value, problems) {
   if (!isPlainObject2(value)) {
     problems.push(
@@ -514,8 +550,8 @@ function readPredicates(value, problems) {
       continue;
     }
     for (const key of Object.keys(raw)) {
-      if (key !== "find" && key !== "exclude") {
-        problems.push(`'${path}.${key}' is not a recognised key \u2014 the keys are find, exclude`);
+      if (key !== "find" && key !== "exclude" && key !== "edgeSteps") {
+        problems.push(`'${path}.${key}' is not a recognised key \u2014 the keys are find, exclude, edgeSteps`);
       }
     }
     const find = readFindClause(`${path}.find`, raw.find, problems);
@@ -534,7 +570,23 @@ function readPredicates(value, problems) {
       }
       exclude.push(read);
     }
-    if (ok) out[name] = { find, exclude };
+    if (!ok) continue;
+    if (raw.edgeSteps !== void 0 && !Array.isArray(raw.edgeSteps)) {
+      problems.push(`'${path}.edgeSteps' is ${shapeOf(raw.edgeSteps)}, not an array`);
+      continue;
+    }
+    const edgeSteps = [];
+    let edgeOk = true;
+    for (const [i, step] of (raw.edgeSteps ?? []).entries()) {
+      const read = readEdgeStep(`${path}.edgeSteps[${i}]`, step, problems);
+      if (read === void 0) {
+        edgeOk = false;
+        break;
+      }
+      edgeSteps.push(read);
+    }
+    if (!edgeOk) continue;
+    out[name] = edgeSteps.length > 0 ? { find, exclude, edgeSteps } : { find, exclude };
   }
   return out;
 }
@@ -747,7 +799,7 @@ var TRAILING_MARKER_KEYS = ["token", "kind"];
 var ENUM_MARKER_KEYS = ["kind", "values"];
 var TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"];
 var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
-var DIRECTIONS = ["asc", "desc"];
+var DIRECTIONS2 = ["asc", "desc"];
 var CHROME_SHAPES = ["checkbox", "plain_line"];
 var EMPTY3 = {
   registration: void 0,
@@ -924,9 +976,9 @@ function readOrderingKey(path, value, problems) {
     problems.push(`'${path}.field' is ${JSON.stringify(field)}, not a non-empty string`);
     return void 0;
   }
-  if (!DIRECTIONS.includes(direction)) {
+  if (!DIRECTIONS2.includes(direction)) {
     problems.push(
-      `'${path}.direction' is ${JSON.stringify(direction)}, not one of ${DIRECTIONS.join(", ")}`
+      `'${path}.direction' is ${JSON.stringify(direction)}, not one of ${DIRECTIONS2.join(", ")}`
     );
     return void 0;
   }
@@ -1740,6 +1792,11 @@ function matchesFindClause(fields, clause) {
   return true;
 }
 function matchesQualifier(fields, qualifier) {
+  if (qualifierNeedsGraph(qualifier)) {
+    throw new Error(
+      "matchesQualifier: this qualifier carries edgeSteps (a one-hop children:/parents: traversal) \u2014 it ranges over a NEIGHBOUR node's fields, which this function does not have. The caller must check qualifierNeedsGraph() and abstain, never call this function to decide."
+    );
+  }
   if (!matchesFindClause(fields, qualifier.find)) return false;
   return !qualifier.exclude.some((clause) => matchesFindClause(fields, clause));
 }
@@ -1772,6 +1829,7 @@ function membershipFor(viewId, sectionId, line, language) {
   if (section === void 0) return abstains3("no-section-declaration");
   const qualifier = language.predicates[section.qualification];
   if (qualifier === void 0) return abstains3("no-section-declaration");
+  if (qualifierNeedsGraph(qualifier)) return abstains3("needs-graph-traversal");
   const fields = resolveLineFields(line, section, language);
   if (typeof fields === "string") return abstains3(fields);
   return {
@@ -1830,7 +1888,39 @@ function readWhen(path, value, problems) {
   problems.push(`'${path}.op' is ${JSON.stringify(op)}, not one of true, null, eq, not`);
   return void 0;
 }
-var ACTION_KEYS = ["retypesTo", "setsField", "setsFieldTo", "unsetsField"];
+function readActionSpec(path, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
+    return void 0;
+  }
+  if (value.verb === "retype") {
+    if (typeof value.to !== "string" || value.to === "") {
+      problems.push(`'${path}.to' is ${JSON.stringify(value.to)}, not a node type`);
+      return void 0;
+    }
+    return { verb: "retype", to: value.to };
+  }
+  if (value.verb === "set") {
+    if (typeof value.field !== "string" || value.field === "") {
+      problems.push(`'${path}.field' is ${JSON.stringify(value.field)}, not a field name`);
+      return void 0;
+    }
+    if (!isFieldValue2(value.to)) {
+      problems.push(`'${path}.to' is ${shapeOf3(value.to)}, not a scalar or null`);
+      return void 0;
+    }
+    return { verb: "set", field: value.field, to: value.to };
+  }
+  if (value.verb === "unset") {
+    if (typeof value.field !== "string" || value.field === "") {
+      problems.push(`'${path}.field' is ${JSON.stringify(value.field)}, not a field name`);
+      return void 0;
+    }
+    return { verb: "unset", field: value.field };
+  }
+  problems.push(`'${path}.verb' is ${JSON.stringify(value.verb)}, not retype, set or unset`);
+  return void 0;
+}
 function readRuleSpec(path, value, problems) {
   if (!isPlainObject4(value)) {
     problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
@@ -1846,27 +1936,26 @@ function readRuleSpec(path, value, problems) {
     problems.push(`'${path}.priority' is ${JSON.stringify(value.priority)}, not an integer`);
     return void 0;
   }
-  const hasRetype = typeof value.retypesTo === "string" && value.retypesTo !== "";
-  const hasSet = typeof value.setsField === "string" && value.setsField !== "";
-  const hasUnset = typeof value.unsetsField === "string" && value.unsetsField !== "";
-  const actionCount = [hasRetype, hasSet, hasUnset].filter(Boolean).length;
-  if (actionCount !== 1) {
-    problems.push(
-      `'${path}' carries ${actionCount} of ${ACTION_KEYS.join("/")} \u2014 exactly one action shape is published per rule`
-    );
+  if (!Array.isArray(value.actions) || value.actions.length === 0) {
+    problems.push(`'${path}.actions' is ${shapeOf3(value.actions)}, not a non-empty array`);
     return void 0;
   }
-  if (hasSet && !isFieldValue2(value.setsFieldTo)) {
-    problems.push(`'${path}.setsFieldTo' is ${shapeOf3(value.setsFieldTo)}, not a scalar or null`);
+  const actions = [];
+  for (const [i, raw] of value.actions.entries()) {
+    const action = readActionSpec(`${path}.actions[${i}]`, raw, problems);
+    if (action === void 0) return void 0;
+    actions.push(action);
+  }
+  if (value.partial !== void 0 && typeof value.partial !== "boolean") {
+    problems.push(`'${path}.partial' is ${shapeOf3(value.partial)}, not a boolean`);
     return void 0;
   }
   return {
     pattern: value.pattern,
     when,
     priority: value.priority,
-    ...hasRetype ? { retypesTo: value.retypesTo } : {},
-    ...hasSet ? { setsField: value.setsField, setsFieldTo: value.setsFieldTo } : {},
-    ...hasUnset ? { unsetsField: value.unsetsField } : {}
+    actions,
+    ...value.partial === true ? { partial: true } : {}
   };
 }
 function readFieldPredicate(path, value, problems) {
@@ -1920,6 +2009,34 @@ function readFindClause2(path, value, problems) {
   }
   return { nodeType, fields };
 }
+var DIRECTIONS3 = ["children", "parents"];
+function readEdgeStep2(path, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
+    return void 0;
+  }
+  if (typeof value.direction !== "string" || !DIRECTIONS3.includes(value.direction)) {
+    problems.push(`'${path}.direction' is ${JSON.stringify(value.direction)}, not children or parents`);
+    return void 0;
+  }
+  if (typeof value.mustExist !== "boolean") {
+    problems.push(`'${path}.mustExist' is ${shapeOf3(value.mustExist)}, not a boolean`);
+    return void 0;
+  }
+  if (!Array.isArray(value.edgeType) || value.edgeType.length === 0 || !value.edgeType.every((t) => typeof t === "string" && t !== "")) {
+    problems.push(`'${path}.edgeType' is not a non-empty array of non-empty strings`);
+    return void 0;
+  }
+  const rest = readFindClause2(path, { nodeType: value.nodeType, fields: value.fields }, problems);
+  if (rest === void 0) return void 0;
+  return {
+    direction: value.direction,
+    mustExist: value.mustExist,
+    edgeType: value.edgeType,
+    nodeType: rest.nodeType,
+    fields: rest.fields
+  };
+}
 function readPatterns(value, problems) {
   if (!isPlainObject4(value)) {
     problems.push(`'${RULES_KEY2}.patterns' is ${shapeOf3(value)}, not an object`);
@@ -1948,7 +2065,23 @@ function readPatterns(value, problems) {
       }
       exclude.push(read);
     }
-    if (ok) out[name] = { find, exclude };
+    if (!ok) continue;
+    if (raw.edgeSteps !== void 0 && !Array.isArray(raw.edgeSteps)) {
+      problems.push(`'${path}.edgeSteps' is ${shapeOf3(raw.edgeSteps)}, not an array`);
+      continue;
+    }
+    const edgeSteps = [];
+    let edgeOk = true;
+    for (const [i, step] of (raw.edgeSteps ?? []).entries()) {
+      const read = readEdgeStep2(`${path}.edgeSteps[${i}]`, step, problems);
+      if (read === void 0) {
+        edgeOk = false;
+        break;
+      }
+      edgeSteps.push(read);
+    }
+    if (!edgeOk) continue;
+    out[name] = edgeSteps.length > 0 ? { find, exclude, edgeSteps } : { find, exclude };
   }
   return out;
 }
@@ -2039,31 +2172,38 @@ function evaluateWhen(when, fields) {
 function applyRules(fields, language, today) {
   let working = { ...fields };
   const applied = [];
+  const partial = [];
+  const undecidable = [];
   for (const ruleId of language.order) {
     const rule = language.rules[ruleId];
     if (rule === void 0) continue;
     const qualifier = language.patterns[rule.pattern];
     if (qualifier === void 0) continue;
+    if (qualifierNeedsGraph(qualifier)) {
+      undecidable.push(ruleId);
+      continue;
+    }
     if (!matchesQualifier(working, qualifier)) continue;
     if (!evaluateWhen(rule.when, working)) continue;
-    if (rule.retypesTo !== void 0) {
-      working = { ...working, node_type: rule.retypesTo };
-      applied.push({ verb: "retype", ruleId, to: rule.retypesTo });
-      continue;
-    }
-    if (rule.setsField !== void 0) {
-      const resolved = resolveRuleValue(rule.setsFieldTo ?? null, today);
-      if (resolved.kind === "unresolvable") continue;
-      working = { ...working, [rule.setsField]: resolved.value };
-      applied.push({ verb: "set", ruleId, field: rule.setsField, to: resolved.value });
-      continue;
-    }
-    if (rule.unsetsField !== void 0) {
-      working = { ...working, [rule.unsetsField]: null };
-      applied.push({ verb: "unset", ruleId, field: rule.unsetsField });
+    if (rule.partial === true) partial.push(ruleId);
+    for (const action of rule.actions) {
+      if (action.verb === "retype") {
+        working = { ...working, node_type: action.to };
+        applied.push({ verb: "retype", ruleId, to: action.to });
+        continue;
+      }
+      if (action.verb === "set") {
+        const resolved = resolveRuleValue(action.to, today);
+        if (resolved.kind === "unresolvable") continue;
+        working = { ...working, [action.field]: resolved.value };
+        applied.push({ verb: "set", ruleId, field: action.field, to: resolved.value });
+        continue;
+      }
+      working = { ...working, [action.field]: null };
+      applied.push({ verb: "unset", ruleId, field: action.field });
     }
   }
-  return { fields: working, applied };
+  return { fields: working, applied, partial, undecidable };
 }
 function resolveRuleValue(raw, today) {
   if (typeof raw !== "string" || !raw.startsWith("$")) return { kind: "value", value: raw };
@@ -4286,6 +4426,7 @@ export {
   placeFor,
   presentationFromDeclaration,
   qntmIdSpans,
+  qualifierNeedsGraph,
   readConfigResolutionDeclaration,
   readDeclaration,
   readQualificationDeclaration,

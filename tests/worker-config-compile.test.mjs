@@ -230,7 +230,10 @@ describe("1b. qualification — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
     // A positive control on the shape: the fixture's one publishable pattern, and the one
     // refused-for-traversal pattern (`tests/declaration-drop.test.mjs`'s own DROP 14 anchor).
     assert.ok("local-tasks" in body.declaration.predicates);
-    assert.equal(body.declaration.refused["traversing-tasks"], "step 0: traverses (exists+parents)");
+    // RESTATED 2026-08-04: the fixture's `traversing-tasks` pattern moved from a ONE-HOP `parents:`
+    // step (now modelled and published by `normaliseEdgeStep`) to `ancestors:` (transitive, still
+    // refused) — see `tests/fixtures/config/patterns/basic.yaml`'s own header.
+    assert.equal(body.declaration.refused["traversing-tasks"], "step 0: traverses (ancestors+exists)");
     // THE RECEIPT — the same version compile() itself computed, and an honest set of promises.
     assert.equal(body.receipt.compiled, true);
     assert.equal(body.receipt.version, direct.version);
@@ -364,8 +367,7 @@ describe("1d. rules — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
       pattern: "local-tasks",
       when: { op: "eq", field: "status", value: "open" },
       priority: 0,
-      setsField: "status",
-      setsFieldTo: "in_progress",
+      actions: [{ verb: "set", field: "status", to: "in_progress" }],
     });
     // THE RECEIPT — the same version compile() itself computed, and an honest set of promises.
     assert.equal(body.receipt.compiled, true);

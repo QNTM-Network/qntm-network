@@ -3262,6 +3262,14 @@ function rulesReadingFor(view, commit) {
   const today = todayFor(Date.now(), resolution.dayBoundary);
   const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : undefined);
   if (pass.applied.length === 0) {
+    // UNDECIDABLE, NOT "DECIDED: NOTHING APPLIES" — `applyRules`'s own header: at least one rule
+    // this candidate reached could not be checked at all (its pattern needs a graph this app does
+    // not have), so "no rule fired" is not a confident answer this app can stand behind. Checked
+    // only in the applied-nothing case — see that header for why a fired rule elsewhere in the
+    // same pass is not blocked by this and does not report it.
+    if (pass.undecidable.length > 0) {
+      return { kind: "abstains", because: "rule-pattern-needs-graph-traversal" };
+    }
     return { kind: "answer", applied: [], text: null };
   }
   const rendered = renderRuleEffects(
@@ -3278,6 +3286,10 @@ function rulesReadingFor(view, commit) {
     kind: "answer",
     applied: pass.applied,
     text: rendered.kind === "rendered" ? rendered.text : null,
+    // TRUE when a rule that fired ALSO carries an unmodelled `emit_event` — `applyRules`'s own
+    // header ("PARTIAL"). The rendered text is still correct; this says the rule's real effect is
+    // bigger than what got rendered, so a reader must not treat this answer as the whole story.
+    partial: pass.partial.length > 0,
   };
 }
 
@@ -3322,7 +3334,10 @@ function rulesDiagnosticFor(reading) {
   if (reading.kind === "abstains") {
     return `rules: abstained — ${reading.because}`;
   }
-  return "rules: decided";
+  // PARTIAL, NOT ABSTAINED — the rendered text is real and correct (`rulesReadingFor`'s own
+  // header); this says so rather than presenting it as the complete effect, "never silently
+  // complete" applied to the one axis that can be right AND incomplete at once.
+  return reading.partial ? "rules: decided (partial — action(s) not modelled)" : "rules: decided";
 }
 
 /**

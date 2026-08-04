@@ -25,9 +25,18 @@
  * fabrication:
  *
  *   NO SECTION DECLARATION. The section is not in the published table, so its qualification was
- *   refused by the generator (it traverses an edge, consults the clock, or ranges over a field the
- *   app cannot resolve). 118 of the operator's 159 qualifications are in this category and the app
- *   is silent about every one of them.
+ *   refused by the generator (it traverses more than one hop, consults the clock, or ranges over a
+ *   field the app cannot resolve).
+ *
+ *   NEEDS GRAPH TRAVERSAL. The section's qualification WAS published — `compile-qualification.mjs`
+ *   widened to model a ONE-HOP `children:`/`parents:` edge-existence test alongside its original
+ *   self-only grammar — but deciding it needs a neighbour node's OWN fields, which this module does
+ *   not have: `resolveLineFields`'s whole domain is a line being typed, with no graph to walk.
+ *   `qualifierNeedsGraph` (`qualification.ts`) is the structural check; this is the visible
+ *   abstention it produces, kept distinct from `no-section-declaration` because the two are
+ *   different facts — one names a predicate the config declares and this app cannot read AT ALL,
+ *   the other names one it CAN read but cannot yet APPLY without a graph-aware matcher (a later
+ *   leg's work).
  *
  *   THE LINE ALREADY CARRIES A `[[qntm:N]]` STAMP. This module answers for a line being TYPED. An
  *   existing node's fields live in the graph, and this module does not read the graph — but the
@@ -57,6 +66,7 @@
  */
 
 import { carriesContent, qntmIdSpans, tagSpans } from "./rendition.js";
+import { qualifierNeedsGraph } from "./qualification.js";
 import type {
   FieldPredicate,
   FieldValue,
@@ -81,6 +91,7 @@ export type ResolvedFields = Readonly<Record<string, FieldValue>>;
 /** Why nothing is said. Each value names a refusal in this module's header. */
 export type Abstention =
   | "no-section-declaration"
+  | "needs-graph-traversal"
   | "already-a-node"
   | "not-a-declared-checkbox"
   | "no-content"
@@ -159,8 +170,25 @@ export function matchesFindClause(fields: ResolvedFields, clause: FindClause): b
   return true;
 }
 
-/** Match the find, and match NONE of the exclusions. See `Qualifier` for why both are one shape. */
+/**
+ * Match the find, and match NONE of the exclusions. See `Qualifier` for why both are one shape.
+ *
+ * THROWS if `qualifier` carries a one-hop edge step (`qualifierNeedsGraph(qualifier)` is `true`)
+ * rather than silently ignoring it or guessing — evaluating `find`/`exclude` alone and dropping the
+ * edge test would ADMIT nodes the config's `exists: true` requires a live child for, exactly the
+ * confident-and-wrong answer this whole module refuses to give. Both real callers
+ * (`membershipFor`, below, and `rules.ts`'s `applyRules`) check `qualifierNeedsGraph` FIRST and
+ * abstain before ever reaching this function with a graph-dependent qualifier; this guard is the
+ * defence for a caller that does not.
+ */
 export function matchesQualifier(fields: ResolvedFields, qualifier: Qualifier): boolean {
+  if (qualifierNeedsGraph(qualifier)) {
+    throw new Error(
+      "matchesQualifier: this qualifier carries edgeSteps (a one-hop children:/parents: " +
+        "traversal) — it ranges over a NEIGHBOUR node's fields, which this function does not have. " +
+        "The caller must check qualifierNeedsGraph() and abstain, never call this function to decide.",
+    );
+  }
   if (!matchesFindClause(fields, qualifier.find)) return false;
   return !qualifier.exclude.some((clause) => matchesFindClause(fields, clause));
 }
@@ -227,6 +255,10 @@ export function membershipFor(
   // was not published. Kept because this function also accepts a hand-built language in tests, and
   // a missing predicate must abstain rather than throw under a live cursor.
   if (qualifier === undefined) return abstains("no-section-declaration");
+  // A STRUCTURAL FACT ABOUT THE SECTION, checked BEFORE the line's own characters are read —
+  // the same tier as `no-section-declaration`, not a line-shape refusal. See `Abstention`'s own
+  // header for why this is a different fact from that one.
+  if (qualifierNeedsGraph(qualifier)) return abstains("needs-graph-traversal");
 
   const fields = resolveLineFields(line, section, language);
   if (typeof fields === "string") return abstains(fields);

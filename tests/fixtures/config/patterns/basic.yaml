@@ -7,11 +7,15 @@ local-tasks:
       node_type: task
       status: open
 
-# REFUSED: an edge-traversing step is not decidable from a line's own fields.
+# REFUSED: a MULTI-HOP edge-traversing step is not decidable from a line's own fields.
+# RESTATED 2026-08-04: this pattern used to use `parents:` — a ONE-HOP step, which
+# `compile-qualification.mjs`'s `normaliseEdgeStep` widening now models and publishes (with an
+# `edgeSteps` entry) instead of refusing. `ancestors:` is TRANSITIVE and stays outside this
+# generator's grammar, which is what this fixture exists to exercise.
 traversing-tasks:
   root:
     find:
       node_type: task
   steps:
-    - parents: { edge_type: PART_OF }
+    - ancestors: { edge_type: PART_OF }
       exists: true

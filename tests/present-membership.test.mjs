@@ -122,10 +122,27 @@ describe("2. what it refuses, and why each refusal is not timidity", () => {
   };
 
   test("a section whose qualification was never published gets no answer", () => {
-    // `waiting-for-work.yaml`'s section traverses a WAITING_FOR edge. 118 of the operator's 159
-    // qualifications are in this category and the app is silent about every one.
-    assert.equal(because("waiting-for-work", "waiting-for", "- [ ] Anything"), "no-section-declaration");
+    // RESTATED 2026-08-04: `waiting-for-work.yaml`'s `waiting-for` section used to be the example
+    // here — its qualification (`tasks-waited-on-by-someone`) traversed a WAITING_FOR edge, and the
+    // old grammar refused every edge traversal outright. `compile-qualification.mjs`'s one-hop
+    // `children:`/`parents:` widening now resolves it (see the NEXT test), so it moved to
+    // `needs-graph-traversal` instead — a DIFFERENT, more specific abstention, not this one.
+    // `habit-dojo.yaml`'s `classification` section names `habit-dojo-heads`, which ranges over
+    // `project` (outside `RESOLVABLE_FIELDS`) — refused for a reason this widening never touches —
+    // and stands in for this test's original claim instead.
+    assert.equal(because("habit-dojo", "classification", "- [ ] Anything"), "no-section-declaration");
     assert.equal(because("inbox", "no-such-section", "- [ ] Anything"), "no-section-declaration");
+  });
+
+  test("a section whose qualification traverses ONE HOP publishes, but membership still abstains — visibly, differently", () => {
+    // ADDED 2026-08-04, alongside `normaliseEdgeStep`. `waiting-for-work.yaml`'s `waiting-for`
+    // section — the example the test above used to use — is a REAL instance of the same claim
+    // `tests/present-qualification.test.mjs`'s falsifier proves on a scratch config: published is
+    // not the same as decidable, and the app abstains with a NAMED, DIFFERENT reason
+    // (`needs-graph-traversal`) than a section this grammar could not read at all
+    // (`no-section-declaration`).
+    assert.notEqual(SERVED.qualification.sections["waiting-for-work"]?.["waiting-for"], undefined);
+    assert.equal(because("waiting-for-work", "waiting-for", "- [ ] Anything"), "needs-graph-traversal");
   });
 
   test("a line that already carries a [[qntm:N]] stamp gets no answer", () => {
