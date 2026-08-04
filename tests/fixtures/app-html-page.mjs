@@ -191,6 +191,15 @@ export { rulesNoteFor as __rulesNoteFor };
 export { rulesDiagnosticFor as __rulesDiagnosticFor };
 export { updateRulesBadge as __updateRulesBadge };
 export const __rulesTable = () => rulesTable;
+// PARENT PROMOTION (\`app/present/graphmatch.ts\`, wired for the first time this leg). Same
+// reasoning as \`__rulesReadingFor\` immediately above — \`__parentPromotionFor\` is the ONE
+// evaluation \`__parentPromotionNoteFor\`/\`__parentPromotionDiagnosticFor\`/\`__updateParentBadge\`
+// are all computed from, exported so a suite can assert the abstention/answer split directly
+// without also standing up a whole \`commitLine\` write.
+export { parentPromotionFor as __parentPromotionFor };
+export { parentPromotionNoteFor as __parentPromotionNoteFor };
+export { parentPromotionDiagnosticFor as __parentPromotionDiagnosticFor };
+export { updateParentBadge as __updateParentBadge };
 // THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __served
 // are: a suite reads what the page is holding NOW, and what changes under it is which placement
 // (if any) is armed.

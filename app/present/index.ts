@@ -118,7 +118,14 @@ export type {
   ResolvedFields,
 } from "./membership.js";
 
-export { RULES_KEY, readRulesDeclaration, applyRules, renderRuleEffects } from "./rules.js";
+export {
+  RULES_KEY,
+  readRulesDeclaration,
+  applyRules,
+  applyRuleActions,
+  evaluateWhen,
+  renderRuleEffects,
+} from "./rules.js";
 export type {
   FieldMarker,
   RuleActionSpec,
@@ -131,6 +138,16 @@ export type {
   RuleSpec,
   RuleWhen,
 } from "./rules.js";
+
+export { matchesQualifierGraphAware, applyGraphAwareRules } from "./graphmatch.js";
+export type {
+  EdgeSourceOf,
+  GraphAwareRulePassResult,
+  GraphEdge,
+  GraphNode,
+  GraphSnapshot,
+  ProspectiveChild,
+} from "./graphmatch.js";
 
 export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
