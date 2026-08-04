@@ -17,7 +17,9 @@
     "generate:resolution": "node scripts/generate-resolution-declaration.mjs",
     "generate:resolution:check": "node scripts/generate-resolution-declaration.mjs --check",
     "generate:operator-set": "node scripts/generate-operator-set.mjs",
-    "generate:operator-set:check": "node scripts/generate-operator-set.mjs --check"
+    "generate:operator-set:check": "node scripts/generate-operator-set.mjs --check",
+    "generate:capture-rules": "node scripts/generate-capture-rules-declaration.mjs",
+    "generate:capture-rules:check": "node scripts/generate-capture-rules-declaration.mjs --check"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

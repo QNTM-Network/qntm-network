@@ -52,6 +52,17 @@
  * registration's two names, ordering, line grammars, the day boundary) are skipped the same way,
  * for the same reason, by `qualification.ts` and `resolutiontable.ts` respectively — one served
  * document, four strict readers, each owning one axis and none of the other three's keys.
+ *
+ * ── A FIFTH KEY, WITH NO READER YET — `captureRules` ──
+ *
+ * `scripts/generate-capture-rules-declaration.mjs` publishes the closed grammar of the two rules a
+ * bare capture reaches and their order (`design-the-rule-mirror.md` §11 row 4). It is skipped here
+ * for the same reason `structural` is — this file must not misreport a key it does not own as
+ * unrecognised — but unlike the other four, NO strict reader owns this axis yet, and nothing in
+ * `app/` consumes it. Publishing the grammar and wiring a consumer that acts on it (the settle
+ * animation `roadmap-the-road-ahead.md` step 3 describes) are deliberately separate steps; this is
+ * only the first. `CAPTURE_RULES_KEY`'s only job today is to stop `readDeclaration` from reporting
+ * a published, well-formed key as a typo.
  */
 
 import { RESOLUTION_KEYS } from "./rendition.js";
@@ -63,6 +74,10 @@ import { INDENT_UNIT } from "./indent.js";
 
 /** The one key of the served document that is prose for a human rather than a declaration. */
 const NOTE = "note";
+
+/** The closed capture-rules grammar's own top-level key. See this file's header. No reader owns
+ * this axis yet — it is recognised only so it is not misreported as unrecognised. */
+const CAPTURE_RULES_KEY = "captureRules";
 
 /**
  * The instance's indent unit, in spaces — how many leading spaces make one nesting level. Read
@@ -144,6 +159,12 @@ export function readDeclaration(document: unknown): DeclarationReading {
     if (key === RESOLUTION_TABLE_KEY) {
       // Nor this one. `resolutiontable.ts` reads and validates it — a fourth grammar over the
       // same document, on the CONFIG-ONLY RESOLUTION axis (registration/ordering/day boundary).
+      continue;
+    }
+    if (key === CAPTURE_RULES_KEY) {
+      // Nor this one — see this file's header. Unlike the four above, no reader validates it yet;
+      // it is skipped rather than owned, so a published, well-formed grammar is not misreported as
+      // an unrecognised key while its consumer does not exist.
       continue;
     }
     if (key === INDENT_UNIT_KEY) {
