@@ -136,16 +136,9 @@ function normaliseFind(find, where) {
 
 /**
  * `{not: [{find_nodes: F}], min: 1}` over a single candidate is exactly "the candidate does not
- * match F". Every other step form reaches beyond the node.
+ * match F" — a SELF-test, never a traversal. Returns `{kind: "self", nodeType, fields}`.
  */
-function normaliseStep(step, index) {
-  if (!step || typeof step !== "object" || Array.isArray(step)) {
-    refuse(`step ${index}: not a mapping`);
-  }
-  const keys = Object.keys(step).sort();
-  if (keys.length !== 2 || keys[0] !== "min" || keys[1] !== "not") {
-    refuse(`step ${index}: traverses (${keys.join("+")})`);
-  }
+function normaliseSelfStep(step, index) {
   if (step.min !== 1) refuse(`step ${index}: min=${JSON.stringify(step.min)}`);
   if (!Array.isArray(step.not) || step.not.length !== 1) {
     refuse(`step ${index}: 'not' is not a single-element list`);
@@ -157,7 +150,74 @@ function normaliseStep(step, index) {
   if (!("find_nodes" in sub)) {
     refuse(`step ${index}: traverses (${Object.keys(sub)[0]})`);
   }
-  return normaliseFind(sub.find_nodes, `step ${index}.not[0].find_nodes`);
+  return { kind: "self", ...normaliseFind(sub.find_nodes, `step ${index}.not[0].find_nodes`) };
+}
+
+/**
+ * `{children: {edge_type: T, ...F}, exists: true}` / `{parents: {...}, not_exists: true}` — a
+ * ONE-HOP edge-existence test: does the candidate have (or not have) at least one neighbour,
+ * reached by ONE `children`/`parents` traversal of `edge_type`, matching `F`?
+ *
+ * MEASURED against the operator's real config (`tasks_with_open_part_of_child.yaml`,
+ * `tasks_with_open_waiting_for_child.yaml`, and 25 more patterns 27 sections reference): every
+ * real `children:`/`parents:` step names `edge_type` (a string or a list — `chain_head_candidates
+ * .yaml`'s `[NEXT, PARALLEL]`), optionally `node_type`, and optionally further field predicates
+ * (`status: {not: {eq: done}}`, or a bare boolean like `reset_cascade_pending: true`) — exactly the
+ * shape `normaliseFind` already reads for `root.find` and for a self-step's own `find_nodes`, so
+ * this reuses it rather than re-deriving field-predicate handling a third time.
+ *
+ * ONE HOP ONLY, ON PURPOSE. `ancestors:`/`descendants:` are TRANSITIVE by the operator's own
+ * comments (`routine_reset_cascade.yaml`: "TRANSITIVE, not one hop (`ancestors` ...)";
+ * `unlocks_propagation.yaml`: "Transitive (`ancestors`, not `parents`)") — a walk of unbounded
+ * depth, not a single edge. Modelling that would need a graph-aware matcher this leg does not
+ * build (see `app/present/membership.ts`'s `qualifierNeedsGraph`); `normaliseStep` below refuses
+ * any direction key other than `children`/`parents` for exactly this reason, with the same
+ * `traverses (...)` wording a self-step refusal already uses.
+ */
+function normaliseEdgeStep(direction, mustExist, spec, index) {
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
+    refuse(`step ${index}.${direction}: not a mapping`);
+  }
+  const { edge_type: edgeTypeRaw, ...rest } = spec;
+  const edgeTypeList = Array.isArray(edgeTypeRaw) ? edgeTypeRaw : [edgeTypeRaw];
+  if (
+    edgeTypeList.length === 0 ||
+    !edgeTypeList.every((t) => typeof t === "string" && t !== "" && !t.startsWith("$"))
+  ) {
+    refuse(`step ${index}.${direction}.edge_type: not a string or non-empty list of strings`);
+  }
+  const edgeType = [...edgeTypeList].sort();
+  const { nodeType, fields } = normaliseFind(rest, `step ${index}.${direction}`);
+  return { kind: "edge", direction, mustExist, edgeType, nodeType, fields };
+}
+
+/**
+ * One pattern `step`, normalised to either a SELF-test (`{kind: "self", nodeType, fields}` — the
+ * original, unwidened grammar) or a ONE-HOP edge-existence test (`{kind: "edge", direction,
+ * mustExist, edgeType, nodeType, fields}` — see `normaliseEdgeStep`). Any other shape — including
+ * `ancestors:`/`descendants:`, three or more keys, or an `exists`/`not_exists` value that is not
+ * literally `true` — is refused with the same `traverses (...)` naming the original grammar used,
+ * so a config change that adds a step shape neither form models still names exactly what it saw.
+ */
+function normaliseStep(step, index) {
+  if (!step || typeof step !== "object" || Array.isArray(step)) {
+    refuse(`step ${index}: not a mapping`);
+  }
+  const keys = Object.keys(step).sort();
+  if (keys.length === 2 && keys[0] === "min" && keys[1] === "not") {
+    return normaliseSelfStep(step, index);
+  }
+  if (keys.length === 2) {
+    const direction = keys.includes("children") ? "children" : keys.includes("parents") ? "parents" : null;
+    const polarityKey = keys.includes("exists") ? "exists" : keys.includes("not_exists") ? "not_exists" : null;
+    if (direction !== null && polarityKey !== null) {
+      if (step[polarityKey] !== true) {
+        refuse(`step ${index}.${polarityKey}: ${JSON.stringify(step[polarityKey])}, not true`);
+      }
+      return normaliseEdgeStep(direction, polarityKey === "exists", step[direction], index);
+    }
+  }
+  refuse(`step ${index}: traverses (${keys.join("+")})`);
 }
 
 /**
@@ -181,7 +241,19 @@ export function normalisePattern(config) {
   }
   const find = normaliseFind(root.find, "root.find");
   const steps = Array.isArray(config.steps) ? config.steps : config.steps == null ? [] : refuse("'steps' is not a list");
-  const exclude = steps.map((step, i) => normaliseStep(step, i));
+  const normalisedSteps = steps.map((step, i) => normaliseStep(step, i));
+  const exclude = normalisedSteps
+    .filter((s) => s.kind === "self")
+    .map(({ nodeType, fields }) => ({ nodeType, fields }));
+  const edgeSteps = normalisedSteps
+    .filter((s) => s.kind === "edge")
+    .map(({ direction, mustExist, edgeType, nodeType, fields }) => ({
+      direction,
+      mustExist,
+      edgeType,
+      nodeType,
+      fields,
+    }));
 
   // THE LAST REFUSAL, AND THE ONE THAT DECIDES WHAT SHIPS. A predicate can be perfectly local and
   // still be unanswerable, because the app has to resolve the LINE's fields before it can test
@@ -192,6 +264,13 @@ export function normalisePattern(config) {
   // elsewhere, or by an engine rule at mint time, and a browser that resolved them to "absent"
   // would answer confidently and wrongly. Withholding them here keeps ONE refusal boundary with
   // ONE legible record, instead of a predicate on the wire that the app must silently decline.
+  //
+  // EDGE-STEP FIELDS ARE DELIBERATELY OUTSIDE THIS CHECK. A `children:`/`parents:` field predicate
+  // (`status`, `reset_cascade_pending`, `cluster_locked`, ...) ranges over a NEIGHBOUR NODE's
+  // fields, read from the graph payload the same way any node's fields are — never from the LINE
+  // being typed, which is what `RESOLVABLE_FIELDS` exists to bound. Applying that bound here would
+  // refuse every one-hop pattern this widening exists to admit, for a restriction that was never
+  // about the graph in the first place.
   const referencedFields = new Set();
   for (const clause of [find, ...exclude]) {
     for (const field of Object.keys(clause.fields)) referencedFields.add(field);
@@ -200,7 +279,15 @@ export function normalisePattern(config) {
   if (unresolvable.length > 0) {
     refuse(`unresolvable field(s): ${unresolvable.join("+")}`);
   }
-  return { find, exclude };
+  const result = { find, exclude };
+  // OMITTED, NOT `[]`, WHEN NO PATTERN IN THE OPERATOR'S CONFIG USES ONE — every pattern that
+  // resolved before this widening keeps the EXACT TWO-KEY `{find, exclude}` shape it always had,
+  // insertion order and all, so its JSON is BYTE-IDENTICAL, not merely semantically equal.
+  // VERIFIED against the operator's real config for this widening's own PR: all 69 previously-
+  // published patterns hash identical before/after, 19 new ones resolve, 0 regressed — see that
+  // PR's own description for the exact reproducible comparison run.
+  if (edgeSteps.length > 0) result.edgeSteps = edgeSteps;
+  return result;
 }
 
 /**

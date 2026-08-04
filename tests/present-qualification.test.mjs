@@ -114,19 +114,25 @@ describe("1a. sectionOrder — the FULL declared order, published beside the pub
     assert.deepEqual(qualification.sectionOrder["inbox"], ["inbox-tagged", "domain-empty"]);
   });
 
-  test("daily-work: 5 declared, only 1 published — sectionOrder still carries all 5", () => {
+  test("daily-work: 5 declared, only 2 published — sectionOrder still carries all 5", () => {
+    // RESTATED 2026-08-04, the one-hop `children:`/`parents:` widening
+    // (`compile-qualification.mjs`'s `normaliseEdgeStep`): `waiting` joined `in-progress` in
+    // `sections` because its own qualification is a one-hop edge-existence test, which this
+    // generator now normalises instead of refusing outright. `sectionOrder` itself is untouched —
+    // it was always the full declared order, and still is.
     const { qualification } = readQualificationDeclaration(SERVED);
     assert.deepEqual(
       qualification.sectionOrder["daily-work"],
       ["in-progress", "urgent", "due-today", "waiting", "capture"],
     );
-    assert.deepEqual(Object.keys(qualification.sections["daily-work"]), ["in-progress"]);
+    assert.deepEqual(Object.keys(qualification.sections["daily-work"]), ["in-progress", "waiting"]);
   });
 
-  test("daily-personal: 8 declared, only 3 published — sectionOrder still carries all 8", () => {
+  test("daily-personal: 8 declared, only 5 published — sectionOrder still carries all 8", () => {
+    // RESTATED 2026-08-04 — see the `daily-work` test above for why the published count moved.
     const { qualification } = readQualificationDeclaration(SERVED);
     assert.equal(qualification.sectionOrder["daily-personal"].length, 8);
-    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 3);
+    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 5);
   });
 
   test("every published section's id also appears in its view's full order", () => {
@@ -165,14 +171,16 @@ describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into 
     // `readDeclaration` and `readStructuralDeclaration` only — `readQualificationDeclaration` had
     // no production caller, only tests called it directly. This is the falsifier that it now does.
     // RESTATED 2026-08-03: predicates 43 -> 64, sections 27 -> 32, when `presentation.json` was
-    // regenerated from monorepo `d4c9d98`. The counts are a census of HIS config, not a property
-    // of this wiring, and the config gained seven views (`all-qntm`, `assets-program`,
-    // `defects-program`, `habits-qntm`, `outcomes-all`, `outcomes-qntm`, `routines-qntm`). What
-    // this test actually falsifies — that `presentationFromDeclaration` carries the qualification
-    // axis at all — is unchanged, and `problems` is still empty.
+    // regenerated from monorepo `d4c9d98`. RESTATED AGAIN 2026-08-04: predicates 64 -> 88, sections
+    // 32 -> 51 — `compile-qualification.mjs`'s one-hop `children:`/`parents:` widening
+    // (`normaliseEdgeStep`) resolved 19 patterns that were previously refused for "traverses an
+    // edge", each covering one or more sections across several views. The counts are a census of
+    // HIS config, not a property of this wiring. What this test actually falsifies — that
+    // `presentationFromDeclaration` carries the qualification axis at all — is unchanged, and
+    // `problems` is still empty.
     const declared = presentationFromDeclaration(SERVED);
-    assert.equal(Object.keys(declared.qualification.predicates).length, 64);
-    assert.equal(Object.keys(declared.qualification.sections).length, 32);
+    assert.equal(Object.keys(declared.qualification.predicates).length, 88);
+    assert.equal(Object.keys(declared.qualification.sections).length, 51);
     assert.deepEqual(declared.problems, [], "wiring qualification in introduced a reported problem");
   });
 
@@ -336,17 +344,23 @@ describe("4. the falsifier: the app's answer follows the config, because it read
     assert.equal(belongs(language, BARE_LINE), false);
   });
 
-  test("REFUSAL FOLLOWS THE CONFIG TOO: make the pattern traverse, and the app goes silent", { skip }, () => {
+  test("REFUSAL FOLLOWS THE CONFIG TOO: make the pattern traverse MORE THAN ONE HOP, and the app goes silent", { skip }, () => {
+    // RESTATED 2026-08-04: this mutation used to be `parents: {...}, exists: true` — a ONE-HOP
+    // step. `compile-qualification.mjs`'s `normaliseEdgeStep` widening now models exactly that
+    // shape (see the test below), so it no longer proves "the app goes silent". `ancestors:` is
+    // TRANSITIVE (`routine_reset_cascade.yaml`'s own comment: "TRANSITIVE, not one hop") and stays
+    // refused — this is what still proves the claim this test's own name makes.
     const language = withMutatedConfig((configDir) => {
       const path = join(configDir, "patterns", "domain_empty.yaml");
       const mutated = readFileSync(path, "utf8").replace(
         "  steps:",
-        "  steps:\n    - parents: { edge_type: PART_OF }\n      exists: true",
+        "  steps:\n    - ancestors: { edge_type: PART_OF }\n      exists: true",
       );
       writeFileSync(path, mutated);
     });
-    // An edge-traversing step is not decidable from a line's own fields, so the generator publishes
-    // nothing and the app says nothing — rather than answering from the half it still understands.
+    // A MULTI-HOP traversing step is not decidable from a line's own fields, so the generator
+    // publishes nothing and the app says nothing — rather than answering from the half it still
+    // understands.
     assert.equal(language.sections["inbox"]?.["domain-empty"], undefined);
     assert.equal(
       membershipFor("inbox", "domain-empty", BARE_LINE, language).because,
@@ -366,5 +380,35 @@ describe("4. the falsifier: the app's answer follows the config, because it read
       "qualification refused: domain-empty",
       "the heading the refusal costs is not named in `dropped`",
     );
+  });
+
+  test("ONE-HOP TRAVERSAL PUBLISHES, BUT MEMBERSHIP STILL ABSTAINS — visibly, and for a NAMED reason", { skip }, () => {
+    // ADDED 2026-08-04, alongside `normaliseEdgeStep`. A `parents:`/`children:` step with
+    // `exists:`/`not_exists:` true is now a real, decidable predicate — `compile-qualification.mjs`
+    // publishes it, unlike the `ancestors:` case above — but DECIDING it needs a neighbour node's
+    // own fields, which `membership.ts`'s whole domain (a line being typed, not yet minted, no
+    // graph to walk) never has. This is the falsifier for THAT half of the claim: published is not
+    // the same as decidable, and the app must abstain with a DIFFERENT, more specific reason than
+    // "no-section-declaration" — `needs-graph-traversal` — rather than silently answering wrong.
+    const language = withMutatedConfig((configDir) => {
+      const path = join(configDir, "patterns", "domain_empty.yaml");
+      const mutated = readFileSync(path, "utf8").replace(
+        "  steps:",
+        "  steps:\n    - parents: { edge_type: PART_OF }\n      exists: true",
+      );
+      writeFileSync(path, mutated);
+    });
+    assert.notEqual(
+      language.sections["inbox"]?.["domain-empty"],
+      undefined,
+      "the one-hop pattern should now be published, not refused",
+    );
+    assert.equal(language.predicates["domain-empty"]?.edgeSteps?.length, 1);
+    const reading = membershipFor("inbox", "domain-empty", BARE_LINE, language);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "needs-graph-traversal");
+    // NOT REFUSED — a published-but-graph-dependent predicate carries no entry in `refused` at all;
+    // that map is only for a pattern that failed to normalise, which this one did not.
+    assert.equal("domain-empty" in language.refused, false);
   });
 });

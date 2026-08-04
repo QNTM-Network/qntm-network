@@ -59,8 +59,9 @@ export type {
 
 export { sectionAt, sectionForInsertAt, sectionOrderFor, sectionOrdinalAt } from "./address.js";
 
-export { QUALIFICATION_KEY, readQualificationDeclaration } from "./qualification.js";
+export { QUALIFICATION_KEY, readQualificationDeclaration, qualifierNeedsGraph } from "./qualification.js";
 export type {
+  EdgeStep,
   FieldPredicate,
   FieldValue,
   FindClause,
@@ -120,6 +121,7 @@ export type {
 export { RULES_KEY, readRulesDeclaration, applyRules, renderRuleEffects } from "./rules.js";
 export type {
   FieldMarker,
+  RuleActionSpec,
   RuleEffect,
   RulePassResult,
   RuleRenderAbstention,

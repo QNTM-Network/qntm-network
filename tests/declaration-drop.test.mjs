@@ -690,26 +690,28 @@ const monorepo = existsSync(DEFAULT_CONFIG_DIR);
 const skip = monorepo ? false : `monorepo not checked out at ${DEFAULT_CONFIG_DIR}`;
 
 describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his own config", () => {
-  test("BASELINE: his real config today drops 82 tokens and 148 sections, all recorded", { skip }, () => {
-    // RESTATED 2026-08-03 against monorepo `d4c9d98`: 77/137/214 -> 82/148/230. Nothing about the
-    // ledger changed; the operator's config grew. `b859c93` (cross-domain outcomes view),
-    // `ec5e0b3` (program assets and defects catalogues), `4b5fd88` (qntm domain surfaces),
-    // `62f79ae` (split root outcomes by domain) and `a901fe8` (relative three-day window) added
-    // views whose sections this generator refuses, and `d4c9d98` (day-of-month cadence tags) added
-    // the last 2 refused tokens. 80/148 was already the measured figure on 2026-08-02, so this
-    // number was stale before today began.
+  test("BASELINE: his real config today drops 82 tokens and 107 sections, all recorded", { skip }, () => {
+    // RESTATED 2026-08-03 against monorepo `d4c9d98`: 77/137/214 -> 82/148/230.
     //
-    // THESE THREE NUMBERS ARE A RECORD OF HIS CONFIG, NOT A PROPERTY OF THIS REPO. They move
-    // whenever he adds a view, and they are expected to. Re-measure and restate them with the
-    // monorepo commit named — do not relax the assertion into a range.
+    // RESTATED AGAIN 2026-08-04 against monorepo `0fe6c1d`: 82/148/230 -> 82/107/189. Not his
+    // config moving this time — `compile-qualification.mjs`'s one-hop `children:`/`parents:`
+    // widening (`normaliseEdgeStep`, this leg) resolved 19 patterns that used to be refused for
+    // "traverses an edge", each covering one or more sections, so 41 fewer sections are dropped for
+    // that reason. The token count is untouched (82): vocabulary drops are a different axis this
+    // widening never reads.
+    //
+    // THESE THREE NUMBERS ARE A RECORD OF HIS CONFIG AND THIS GENERATOR'S GRAMMAR, NOT A FIXED
+    // PROPERTY OF THIS REPO. They move whenever he adds a view OR this generator's grammar widens,
+    // and they are expected to. Re-measure and restate them with the monorepo commit named — do not
+    // relax the assertion into a range.
     const dropped = generateQualification(DEFAULT_CONFIG_DIR).dropped;
     const tokens = Object.keys(dropped).filter((k) => k.startsWith("vocabulary token"));
     const sections = Object.keys(dropped).filter((k) => k.startsWith("section "));
     assert.equal(tokens.length, 82, "the token drop count moved — regenerate and say so");
-    assert.equal(sections.length, 148, "the refused-section count moved — regenerate and say so");
+    assert.equal(sections.length, 107, "the refused-section count moved — regenerate and say so");
     // design-the-rule-mirror.md §9.2 measured 137 of 186 by running a script. It is now a fact
     // the declaration states about itself.
-    assert.equal(Object.keys(dropped).length, 230);
+    assert.equal(Object.keys(dropped).length, 189);
     for (const reason of Object.values(dropped)) assert.ok(reason.length > 0);
   });
 

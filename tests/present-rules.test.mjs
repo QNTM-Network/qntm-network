@@ -62,19 +62,23 @@ describe("1. the shipped declaration carries the widened category, not just the 
     assert.equal(typeof SERVED.rules.order.derivedFrom, "string");
   });
 
-  test("both of the original capture-rules are still published, unchanged in shape", () => {
+  test("both of the original capture-rules are still published, actions now a list", () => {
+    // RESTATED 2026-08-04: `routine-without-cadence-becomes-task`'s own YAML
+    // (`cadence_auto_routine.yaml`) always carried an `emit_event` alongside its `set_node_type` —
+    // the OLD grammar filtered that out with no record; `modelledActions`'s widening names it as
+    // `partial: true`. The retype itself (`actions[0]`) is unchanged.
     assert.deepEqual(SERVED.rules.rules["routine-without-cadence-becomes-task"], {
       pattern: "routines",
       when: { op: "null", field: "cadence" },
       priority: 0,
-      retypesTo: "task",
+      actions: [{ verb: "retype", to: "task" }],
+      partial: true,
     });
     assert.deepEqual(SERVED.rules.rules["stamp-created-at-on-task"], {
       pattern: "tasks",
       when: { op: "eq", field: "created_at", value: null },
       priority: 0,
-      setsField: "created_at",
-      setsFieldTo: "$cycle_today",
+      actions: [{ verb: "set", field: "created_at", to: "$cycle_today" }],
     });
   });
 
@@ -146,59 +150,81 @@ describe("3. the served value is what the monorepo's rules/ directory actually d
 // ── 4 ────────────────────────────────────────────────────────────────────────────────────────
 
 describe("4. THE AGREEMENT TEST — an invented fixture, every grammar path exercised, exact shape", () => {
-  test("PUBLISHED: all four modelled shapes compile to exactly the expected facts", () => {
+  test("PUBLISHED: all five modelled shapes compile to exactly the expected facts", () => {
+    // WIDENED 2026-08-04: `double_action.yaml`'s `retype-and-stamp-together` (two modelled
+    // actions, `set_node_type` then `set_field`, no `emit_event`) used to be DROPPED — "this
+    // grammar publishes exactly one action per rule". `modelledActions` now publishes an ORDERED
+    // LIST instead, so this rule joins the other four. `routine-without-cadence-becomes-task`
+    // ALSO changed shape here, though its own YAML did not: it always carried an `emit_event`
+    // alongside its `set_node_type` (`retype_and_stamp.yaml`), which the OLD grammar silently
+    // filtered out with no record at all. `partial: true` is that silence, named.
     const { declaration } = compile(fixtureFiles());
     assert.deepEqual(declaration.rules, {
       "clear-stale-flag": {
         pattern: "flagged-nodes",
         when: { op: "true" },
         priority: 0,
-        unsetsField: "stale_flag",
+        actions: [{ verb: "unset", field: "stale_flag" }],
+      },
+      "retype-and-stamp-together": {
+        pattern: "tasks",
+        when: { op: "eq", field: "status", value: "done" },
+        priority: 0,
+        actions: [
+          { verb: "retype", to: "outcome" },
+          { verb: "set", field: "completed_at", to: "$cycle_today" },
+        ],
       },
       "routine-without-cadence-becomes-task": {
         pattern: "routines",
         when: { op: "null", field: "cadence" },
         priority: 0,
-        retypesTo: "task",
+        actions: [{ verb: "retype", to: "task" }],
+        partial: true,
       },
       "task-with-cadence-becomes-routine": {
         pattern: "tasks",
         when: { op: "not", of: { op: "null", field: "cadence" } },
         priority: 0,
-        retypesTo: "routine",
+        actions: [{ verb: "retype", to: "routine" }],
       },
       "stamp-created-at-on-task": {
         pattern: "tasks",
         when: { op: "eq", field: "created_at", value: null },
         priority: 0,
-        setsField: "created_at",
-        setsFieldTo: "$cycle_today",
+        actions: [{ verb: "set", field: "created_at", to: "$cycle_today" }],
       },
     });
   });
 
-  test("DROPPED: all six unmodelled shapes are recorded, each with the operator's own reason", () => {
+  test("DROPPED: all five unmodelled shapes plus one unspellable field are recorded, each with the operator's own reason", () => {
+    // `rule 'retype-and-stamp-together'` left this list — see the PUBLISHED test above. It ADDED
+    // `rule-set field 'completed_at'`, though: that rule's own `set_field` action targets
+    // `completed_at`, and the fixture's `vocabulary/markers.yaml` declares no trailing marker for
+    // it (only `created_at`) — PASS 3's own drop, unrelated to this widening's own grammar but only
+    // reachable now that the rule naming the field survives PASS 2 at all.
     const { dropped } = compile(fixtureFiles());
     assert.deepEqual(Object.keys(dropped).sort(), [
       "rule 'classify-when-and'",
       "rule 'propagate-to-parent'",
-      "rule 'retype-and-stamp-together'",
       "rule 'weighted-priority-metric'",
+      "rule-set field 'completed_at'",
       "rules/broken_shape.yaml",
       "rules/no_id_entry.yaml#0",
     ]);
     assert.match(dropped["rule 'classify-when-and'"], /operator 'and'/);
     assert.match(dropped["rule 'propagate-to-parent'"], /not the current node/);
-    assert.match(dropped["rule 'retype-and-stamp-together'"], /2 modelled actions/);
     assert.match(dropped["rule 'weighted-priority-metric'"], /multi-source join/);
+    assert.match(dropped["rule-set field 'completed_at'"], /declares no trailing marker for it/);
     assert.match(dropped["rules/broken_shape.yaml"], /did not parse into a top-level list/);
     assert.match(dropped["rules/no_id_entry.yaml#0"], /no readable 'id:'/);
   });
 
-  test("order.sequence is exactly the four published rules, file-order tiebreak, none of the six dropped ones", () => {
+  test("order.sequence is exactly the five published rules, file-order tiebreak, none of the five dropped ones", () => {
     const { declaration } = compile(fixtureFiles());
     assert.deepEqual(declaration.order.sequence, [
-      "clear-stale-flag", // clear_flag.yaml sorts before retype_and_stamp.yaml
+      "clear-stale-flag", // clear_flag.yaml sorts before double_action.yaml
+      "retype-and-stamp-together", // double_action.yaml sorts before retype_and_stamp.yaml
       "routine-without-cadence-becomes-task", // retype_and_stamp.yaml's own declared order
       "task-with-cadence-becomes-routine",
       "stamp-created-at-on-task",
@@ -333,6 +359,7 @@ describe("7. THE ORDER — priority then file order, generalised to N rows, and 
     const { declaration } = compile(fixtureFiles());
     assert.deepEqual(declaration.order.sequence, [
       "clear-stale-flag",
+      "retype-and-stamp-together",
       "routine-without-cadence-becomes-task",
       "task-with-cadence-becomes-routine",
       "stamp-created-at-on-task",
@@ -447,7 +474,12 @@ describe("8. patterns/fieldMarkers — what a rule's for_each and setsField reso
     assert.ok("stamp-created-at-on-task" in declaration.rules);
   });
 
-  test("MUTANT: a pattern that traverses an edge drops every rule naming it, with normalisePattern's own reason", () => {
+  test("MUTANT: a pattern that traverses MORE THAN ONE HOP drops every rule naming it, with normalisePattern's own reason", () => {
+    // RESTATED 2026-08-04: this mutation used to be a `parents:` step — a ONE HOP traversal.
+    // `compile-qualification.mjs`'s `normaliseEdgeStep` widening now models exactly that shape (see
+    // "MUTANT: a pattern with a ONE-HOP edge step publishes" below), so it no longer proves "drops
+    // every rule naming it". `ancestors:` is TRANSITIVE and stays refused — see that widening's own
+    // header for why one hop is modelled and more than one is not.
     const files = { ...fixtureFiles() };
     files["patterns/edge_pattern.yaml"] = [
       "nested-things:",
@@ -457,7 +489,7 @@ describe("8. patterns/fieldMarkers — what a rule's for_each and setsField reso
       "    find:",
       "      node_type: task",
       "  steps:",
-      "    - parents:",
+      "    - ancestors:",
       "        edge_type: PART_OF",
       "        node_type: routine",
       "      exists: true",
@@ -478,6 +510,49 @@ describe("8. patterns/fieldMarkers — what a rule's for_each and setsField reso
     assert.ok(!("rule-with-edge-pattern" in declaration.rules));
     assert.match(dropped["rule 'rule-with-edge-pattern'"], /traverses/);
     assert.ok("routine-without-cadence-becomes-task" in declaration.rules, "an unrelated rule must be unaffected");
+  });
+
+  test("MUTANT: a pattern with a ONE-HOP edge step publishes — a rule naming it publishes too, edgeSteps and all", () => {
+    // ADDED 2026-08-04, alongside `normaliseEdgeStep`. The one-hop sibling of the test above: a
+    // `children:`/`parents:` step with `exists:`/`not_exists:` true DOES resolve now, and PASS 2's
+    // `normalisePattern` reuse means a rule naming it is published exactly like any other rule —
+    // `app/present/rules.ts`'s `applyRules` is what abstains at APPLY time (`qualifierNeedsGraph`),
+    // never this compiler's job.
+    const files = { ...fixtureFiles() };
+    files["patterns/edge_pattern.yaml"] = [
+      "nested-things:",
+      "  description: fixture",
+      "  parameters: {}",
+      "  root:",
+      "    find:",
+      "      node_type: task",
+      "  steps:",
+      "    - parents:",
+      "        edge_type: PART_OF",
+      "        node_type: routine",
+      "      exists: true",
+      "",
+    ].join("\n");
+    files["rules/edge_rule.yaml"] = [
+      "- id: rule-with-one-hop-edge-pattern",
+      "  for_each:",
+      "    pattern: nested-things",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: x",
+      "      value: 1",
+      "",
+    ].join("\n");
+    const { declaration } = compile(files);
+    assert.ok("rule-with-one-hop-edge-pattern" in declaration.rules);
+    assert.deepEqual(declaration.patterns["nested-things"], {
+      find: { nodeType: ["task"], fields: {} },
+      exclude: [],
+      edgeSteps: [
+        { direction: "parents", mustExist: true, edgeType: ["PART_OF"], nodeType: ["routine"], fields: {} },
+      ],
+    });
   });
 
   test("MUTANT: a setsField target with no vocabulary marker is named in dropped, not silently unspelled", () => {

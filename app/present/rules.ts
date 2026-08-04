@@ -52,7 +52,8 @@
  * decision this module does not make — see `app/index.html`'s own header for that boundary.
  */
 
-import type { FieldValue, Qualifier } from "./qualification.js";
+import type { EdgeStep, FieldValue, Qualifier } from "./qualification.js";
+import { qualifierNeedsGraph } from "./qualification.js";
 import { matchesQualifier } from "./membership.js";
 import type { ResolvedFields } from "./membership.js";
 import { tagSpans } from "./rendition.js";
@@ -65,16 +66,27 @@ export type RuleWhen =
   | { readonly op: "eq"; readonly field: string; readonly value: FieldValue }
   | { readonly op: "not"; readonly of: RuleWhen };
 
+/** One published, modelled action — exactly `RuleEffect`'s own three verb shapes, minus `ruleId`
+ * (which the action does not carry until it FIRES). `compile-rules.mjs`'s `normaliseModelledAction`
+ * publishes this shape, in the config's own declared order. */
+export type RuleActionSpec =
+  | { readonly verb: "retype"; readonly to: string }
+  | { readonly verb: "set"; readonly field: string; readonly to: FieldValue }
+  | { readonly verb: "unset"; readonly field: string };
+
 /** One published rule, exactly `compile-rules.mjs`'s own per-id shape — `pattern`/`when`/
- * `priority` always present, plus EXACTLY ONE of the three action shapes. */
+ * `priority`/`actions` always present, `actions` a NON-EMPTY ordered list (WIDENED this leg from
+ * "exactly one action shape" — see `compile-rules.mjs`'s own header, "WHAT THIS GRAMMAR MODELS").
+ * `partial` is `true` only when the rule ALSO declares an `emit_event` this grammar recognises and
+ * excludes — `actions` is then a real but INCOMPLETE account of the rule's effect; see
+ * `applyRules`'s own header for what this module does with that fact. Absent (not `false`) for the
+ * common case, mirroring the wire's own omission. */
 export interface RuleSpec {
   readonly pattern: string;
   readonly when: RuleWhen;
   readonly priority: number;
-  readonly retypesTo?: string;
-  readonly setsField?: string;
-  readonly setsFieldTo?: FieldValue;
-  readonly unsetsField?: string;
+  readonly actions: readonly RuleActionSpec[];
+  readonly partial?: boolean;
 }
 
 /** The trailing-marker spelling for a `setsField` target — `compile-rules.mjs` PASS 3's own
@@ -154,7 +166,40 @@ function readWhen(path: string, value: unknown, problems: string[]): RuleWhen | 
   return undefined;
 }
 
-const ACTION_KEYS = ["retypesTo", "setsField", "setsFieldTo", "unsetsField"] as const;
+/** One `actions[i]` entry. Mirrors `RuleEffect`'s own three verb shapes — see `RuleActionSpec`. */
+function readActionSpec(path: string, value: unknown, problems: string[]): RuleActionSpec | undefined {
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object`);
+    return undefined;
+  }
+  if (value.verb === "retype") {
+    if (typeof value.to !== "string" || value.to === "") {
+      problems.push(`'${path}.to' is ${JSON.stringify(value.to)}, not a node type`);
+      return undefined;
+    }
+    return { verb: "retype", to: value.to };
+  }
+  if (value.verb === "set") {
+    if (typeof value.field !== "string" || value.field === "") {
+      problems.push(`'${path}.field' is ${JSON.stringify(value.field)}, not a field name`);
+      return undefined;
+    }
+    if (!isFieldValue(value.to)) {
+      problems.push(`'${path}.to' is ${shapeOf(value.to)}, not a scalar or null`);
+      return undefined;
+    }
+    return { verb: "set", field: value.field, to: value.to };
+  }
+  if (value.verb === "unset") {
+    if (typeof value.field !== "string" || value.field === "") {
+      problems.push(`'${path}.field' is ${JSON.stringify(value.field)}, not a field name`);
+      return undefined;
+    }
+    return { verb: "unset", field: value.field };
+  }
+  problems.push(`'${path}.verb' is ${JSON.stringify(value.verb)}, not retype, set or unset`);
+  return undefined;
+}
 
 function readRuleSpec(path: string, value: unknown, problems: string[]): RuleSpec | undefined {
   if (!isPlainObject(value)) {
@@ -171,28 +216,30 @@ function readRuleSpec(path: string, value: unknown, problems: string[]): RuleSpe
     problems.push(`'${path}.priority' is ${JSON.stringify(value.priority)}, not an integer`);
     return undefined;
   }
-  const hasRetype = typeof value.retypesTo === "string" && value.retypesTo !== "";
-  const hasSet = typeof value.setsField === "string" && value.setsField !== "";
-  const hasUnset = typeof value.unsetsField === "string" && value.unsetsField !== "";
-  const actionCount = [hasRetype, hasSet, hasUnset].filter(Boolean).length;
-  if (actionCount !== 1) {
-    problems.push(
-      `'${path}' carries ${actionCount} of ${ACTION_KEYS.join("/")} — exactly one action shape ` +
-        "is published per rule",
-    );
+  if (!Array.isArray(value.actions) || value.actions.length === 0) {
+    problems.push(`'${path}.actions' is ${shapeOf(value.actions)}, not a non-empty array`);
     return undefined;
   }
-  if (hasSet && !isFieldValue(value.setsFieldTo)) {
-    problems.push(`'${path}.setsFieldTo' is ${shapeOf(value.setsFieldTo)}, not a scalar or null`);
+  const actions: RuleActionSpec[] = [];
+  for (const [i, raw] of value.actions.entries()) {
+    const action = readActionSpec(`${path}.actions[${i}]`, raw, problems);
+    // ONE UNREADABLE ACTION DROPS THE WHOLE RULE — the same "a partial read is a different and
+    // wrong answer" posture `qualification.ts`'s `readFindClause` already takes: publishing the
+    // OTHER, readable actions while silently losing one would apply an effect the config never
+    // declared on its own.
+    if (action === undefined) return undefined;
+    actions.push(action);
+  }
+  if (value.partial !== undefined && typeof value.partial !== "boolean") {
+    problems.push(`'${path}.partial' is ${shapeOf(value.partial)}, not a boolean`);
     return undefined;
   }
   return {
     pattern: value.pattern,
     when,
     priority: value.priority,
-    ...(hasRetype ? { retypesTo: value.retypesTo as string } : {}),
-    ...(hasSet ? { setsField: value.setsField as string, setsFieldTo: value.setsFieldTo as FieldValue } : {}),
-    ...(hasUnset ? { unsetsField: value.unsetsField as string } : {}),
+    actions,
+    ...(value.partial === true ? { partial: true } : {}),
   };
 }
 
@@ -253,6 +300,45 @@ function readFindClause(path: string, value: unknown, problems: string[]): Quali
   return { nodeType, fields } as Qualifier["find"];
 }
 
+const DIRECTIONS = ["children", "parents"] as const;
+
+/**
+ * One `edgeSteps[i]` entry — mirrors `qualification.ts`'s own `readEdgeStep`, restated rather than
+ * imported for the SAME reason `readFindClause` above already is (this file's own header): two
+ * independent strict readers, not one shared private helper.
+ */
+function readEdgeStep(path: string, value: unknown, problems: string[]): EdgeStep | undefined {
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object`);
+    return undefined;
+  }
+  if (typeof value.direction !== "string" || !(DIRECTIONS as readonly string[]).includes(value.direction)) {
+    problems.push(`'${path}.direction' is ${JSON.stringify(value.direction)}, not children or parents`);
+    return undefined;
+  }
+  if (typeof value.mustExist !== "boolean") {
+    problems.push(`'${path}.mustExist' is ${shapeOf(value.mustExist)}, not a boolean`);
+    return undefined;
+  }
+  if (
+    !Array.isArray(value.edgeType) ||
+    value.edgeType.length === 0 ||
+    !value.edgeType.every((t) => typeof t === "string" && t !== "")
+  ) {
+    problems.push(`'${path}.edgeType' is not a non-empty array of non-empty strings`);
+    return undefined;
+  }
+  const rest = readFindClause(path, { nodeType: value.nodeType, fields: value.fields }, problems);
+  if (rest === undefined) return undefined;
+  return {
+    direction: value.direction as EdgeStep["direction"],
+    mustExist: value.mustExist,
+    edgeType: value.edgeType as readonly string[],
+    nodeType: rest.nodeType,
+    fields: rest.fields,
+  };
+}
+
 function readPatterns(value: unknown, problems: string[]): Record<string, Qualifier> {
   if (!isPlainObject(value)) {
     problems.push(`'${RULES_KEY}.patterns' is ${shapeOf(value)}, not an object`);
@@ -281,7 +367,23 @@ function readPatterns(value: unknown, problems: string[]): Record<string, Qualif
       }
       exclude.push(read);
     }
-    if (ok) out[name] = { find, exclude };
+    if (!ok) continue;
+    if (raw.edgeSteps !== undefined && !Array.isArray(raw.edgeSteps)) {
+      problems.push(`'${path}.edgeSteps' is ${shapeOf(raw.edgeSteps)}, not an array`);
+      continue;
+    }
+    const edgeSteps: EdgeStep[] = [];
+    let edgeOk = true;
+    for (const [i, step] of (raw.edgeSteps ?? []).entries()) {
+      const read = readEdgeStep(`${path}.edgeSteps[${i}]`, step, problems);
+      if (read === undefined) {
+        edgeOk = false;
+        break;
+      }
+      edgeSteps.push(read);
+    }
+    if (!edgeOk) continue;
+    out[name] = edgeSteps.length > 0 ? { find, exclude, edgeSteps } : { find, exclude };
   }
   return out;
 }
@@ -409,6 +511,18 @@ export interface RulePassResult {
   readonly fields: ResolvedFields;
   /** Every rule that matched (pattern AND `when`) and fired, in the order it fired. */
   readonly applied: readonly RuleEffect[];
+  /** Rule ids, in fire order, whose `actions` were applied but which ALSO carry `partial: true`
+   * (an `emit_event` this grammar excludes) — `applied` above already carries their real, correct
+   * modelled effects; this is the separate fact that those effects are not the WHOLE of what the
+   * rule does. See `applyRules`'s own header for why the modelled effects still apply and render
+   * rather than abstaining outright. */
+  readonly partial: readonly string[];
+  /** Rule ids, in `language.order`'s own order, SKIPPED because their `for_each` pattern carries a
+   * one-hop edge step (`qualifierNeedsGraph`) — this pass could not tell whether they matched, so
+   * it did not apply them, but it also did not treat them as a confident "no match". See
+   * `applyRules`'s own header for why a rule here does not block a LATER rule in the same pass from
+   * firing normally. */
+  readonly undecidable: readonly string[];
 }
 
 /**
@@ -423,6 +537,35 @@ export interface RulePassResult {
  * rule at compile time would be, and deliberately so — `compile-rules.mjs` cannot know today
  * whether a future `setsFieldTo` will ever be `$cycle_today`-shaped, so refusing this one
  * unresolvable VALUE, per candidate, is this reader's own abstention to make, not the compiler's.
+ *
+ * ── WIDENED THIS LEG: MULTIPLE ACTIONS, AND TWO NEW WAYS A PASS CAN BE INCOMPLETE ──
+ *
+ * A rule's `actions` is now an ORDERED LIST (`compile-rules.mjs`'s own widening) — this function
+ * applies every one, in order, exactly as it always applied its single action.
+ *
+ * TWO KINDS OF INCOMPLETENESS ARE NAMED, NEVER HIDDEN, NEVER TREATED AS A CONFIDENT "NO MATCH":
+ *
+ *   PARTIAL (`RulePassResult.partial`) — a rule that FIRED (its pattern and `when` both matched)
+ *   but ALSO declares an `emit_event` this grammar excludes. Its modelled `actions` are REAL and
+ *   CORRECT — the retype/set/unset genuinely happens — so they still apply to `working` and still
+ *   appear in `applied`, rendering exactly as before. What is incomplete is only this function's
+ *   OWN AWARENESS of the rule's full effect (an event fires that nothing here represents); the
+ *   caller (`app/index.html`'s `rulesReadingFor`) surfaces that as an annotation on an otherwise
+ *   real answer, never as a reason to withhold the modelled part.
+ *
+ *   UNDECIDABLE (`RulePassResult.undecidable`) — a rule whose `for_each` pattern carries a one-hop
+ *   edge step (`qualifierNeedsGraph`): this function cannot tell whether the candidate matches it
+ *   at all, because that needs a NEIGHBOUR node's fields and this function only ever has the
+ *   candidate's own. SKIPPED, not treated as "does not match" and not treated as "the whole pass is
+ *   void" — a LATER rule in `language.order` (lower priority, or same priority and later in file
+ *   order) is still evaluated normally. Aborting the whole pass here would be the wrong trade: it
+ *   was measured against the operator's real config that a graph-dependent pattern's `root.find`
+ *   alone (no exclude, no edge test) matches the OVERWHELMING majority of ordinary fresh captures —
+ *   `stamp-created-at-on-task` (an unrelated, fully-decidable rule) would stop firing on nearly
+ *   every plain task capture if one undecidable rule silenced the rest. The caller still surfaces
+ *   `undecidable` — see `rulesReadingFor` — but only when NOTHING else in the pass fired, which is
+ *   exactly the case where "no rule applies" would otherwise be a confident answer this function
+ *   cannot actually stand behind.
  */
 export function applyRules(
   fields: ResolvedFields,
@@ -431,35 +574,42 @@ export function applyRules(
 ): RulePassResult {
   let working: Record<string, FieldValue> = { ...fields };
   const applied: RuleEffect[] = [];
+  const partial: string[] = [];
+  const undecidable: string[] = [];
 
   for (const ruleId of language.order) {
     const rule = language.rules[ruleId];
     if (rule === undefined) continue; // defence in depth — order and rules must agree; a caller-built language might not
     const qualifier = language.patterns[rule.pattern];
     if (qualifier === undefined) continue; // same defence — compile-rules.mjs guarantees this never happens for a real declaration
+    if (qualifierNeedsGraph(qualifier)) {
+      undecidable.push(ruleId);
+      continue;
+    }
     if (!matchesQualifier(working, qualifier)) continue;
     if (!evaluateWhen(rule.when, working)) continue;
 
-    if (rule.retypesTo !== undefined) {
-      working = { ...working, node_type: rule.retypesTo };
-      applied.push({ verb: "retype", ruleId, to: rule.retypesTo });
-      continue;
-    }
-    if (rule.setsField !== undefined) {
-      const resolved = resolveRuleValue(rule.setsFieldTo ?? null, today);
-      if (resolved.kind === "unresolvable") continue; // see this function's own header
-      working = { ...working, [rule.setsField]: resolved.value };
-      applied.push({ verb: "set", ruleId, field: rule.setsField, to: resolved.value });
-      continue;
-    }
-    // unsetsField
-    if (rule.unsetsField !== undefined) {
-      working = { ...working, [rule.unsetsField]: null };
-      applied.push({ verb: "unset", ruleId, field: rule.unsetsField });
+    if (rule.partial === true) partial.push(ruleId);
+    for (const action of rule.actions) {
+      if (action.verb === "retype") {
+        working = { ...working, node_type: action.to };
+        applied.push({ verb: "retype", ruleId, to: action.to });
+        continue;
+      }
+      if (action.verb === "set") {
+        const resolved = resolveRuleValue(action.to, today);
+        if (resolved.kind === "unresolvable") continue; // see this function's own header
+        working = { ...working, [action.field]: resolved.value };
+        applied.push({ verb: "set", ruleId, field: action.field, to: resolved.value });
+        continue;
+      }
+      // unset
+      working = { ...working, [action.field]: null };
+      applied.push({ verb: "unset", ruleId, field: action.field });
     }
   }
 
-  return { fields: working, applied };
+  return { fields: working, applied, partial, undecidable };
 }
 
 type ResolvedRuleValue = { readonly kind: "value"; readonly value: FieldValue } | { readonly kind: "unresolvable" };

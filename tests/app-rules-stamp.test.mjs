@@ -238,8 +238,7 @@ describe("3. ABSTAIN VISIBLY — a rule that fires but cannot be rendered says s
           pattern: "tasks",
           when: { op: "true" },
           priority: 0,
-          setsField: "no_marker_for_this_field",
-          setsFieldTo: "x",
+          actions: [{ verb: "set", field: "no_marker_for_this_field", to: "x" }],
         },
       },
       patterns: { tasks: { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
@@ -351,5 +350,134 @@ describe("5. SCOPED TO A FRESH CAPTURE — an existing, already-minted line neve
       kind: "set-line",
     });
     assert.equal(reading.kind, "not-evaluated", "a set-line commit must never reach the rules pass at all");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 6. GRAPH-DEPENDENT PATTERNS (2026-08-04 widening) — a rule whose for_each pattern carries a
+// one-hop edge step (`compile-qualification.mjs`'s `normaliseEdgeStep`, reused by `compile-
+// rules.mjs`'s PASS 2) is exactly the shape the operator's own `task-with-open-part-of-child-
+// becomes-outcome`/`task-with-open-waiting-for-child-becomes-outcome` rules are: published now,
+// where they used to be dropped outright, but UNDECIDABLE for this fresh-capture-only evaluator —
+// `applyRules` has no graph to walk. This section proves the three claims that matter: (a) an
+// undecidable rule does not crash the pass, (b) it does not silently masquerade as "no rule
+// matches" when nothing else fires, and (c) it does not block a LATER, fully-decidable rule in the
+// same pass from firing and rendering exactly as it always did.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("6. GRAPH-DEPENDENT PATTERNS — undecidable, never silently skipped, never blocking a later rule", () => {
+  let page;
+  let elements;
+
+  // A hand-built declaration: `graph-dependent-promotes` mirrors the operator's real
+  // `task-with-open-part-of-child-becomes-outcome` shape exactly — a `for_each` pattern whose
+  // `root.find` (`node_type: task`) matches almost any fresh task capture, PLUS a one-hop
+  // `children:`/`exists: true` edgeStep this evaluator cannot decide from a line's own fields.
+  // `stamps-a-field` is an ORDINARY, fully-decidable rule at LOWER priority (so it sorts after the
+  // undecidable one in `language.order`) — the positive control that proves the undecidable rule
+  // does not block it.
+  const DECLARATION = {
+    qualification: {
+      defaultNodeType: "task",
+      structuralNodeTypes: [],
+      tokens: { node_type: { "#task": "task" }, domain: {}, status: { "[ ]": "open", "[x]": "done" } },
+      predicates: { "demo-open": { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
+      sections: { demo: { capture: { qualification: "demo-open", nodeType: "task", name: "Capture" } } },
+      sectionOrder: { demo: ["capture"] },
+      refused: {},
+      dropped: {},
+    },
+    resolution: {
+      registration: {},
+      lineGrammars: {},
+      ordering: {},
+      orderingFields: {},
+      dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" },
+      chromeShapes: {},
+      sectionRegistration: {},
+      defaultOrdering: [],
+      priorityRank: {},
+      dropped: {},
+    },
+    rules: {
+      order: { established: true, sequence: ["graph-dependent-promotes", "stamps-a-field"] },
+      rules: {
+        "graph-dependent-promotes": {
+          pattern: "open-tasks-with-live-child",
+          when: { op: "true" },
+          priority: 10,
+          actions: [{ verb: "retype", to: "outcome" }],
+        },
+        "stamps-a-field": {
+          pattern: "tasks",
+          when: { op: "true" },
+          priority: 0,
+          actions: [{ verb: "set", field: "demo_flag", to: true }],
+        },
+      },
+      patterns: {
+        "open-tasks-with-live-child": {
+          find: { nodeType: ["task"], fields: {} },
+          exclude: [],
+          edgeSteps: [
+            { direction: "children", mustExist: true, edgeType: ["PART_OF"], nodeType: null, fields: {} },
+          ],
+        },
+        tasks: { find: { nodeType: ["task"], fields: {} }, exclude: [] },
+      },
+      fieldMarkers: { demo_flag: { token: "🚩", kind: "int" } },
+      dropped: {},
+    },
+  };
+
+  before(async () => {
+    ({ elements } = installBrowser());
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+    page = await importPage(WORK);
+    page.__applyPresentation(DECLARATION);
+  });
+
+  const VIEW = { id: "demo", path: "demo.md" };
+  const BEFORE = "## Capture\n";
+  const AFTER = "## Capture\n- [ ] Try this\n";
+  const CAPTURE = { lineIndex: 1, text: "- [ ] Try this", markdown: AFTER, source: BEFORE, kind: "insert-line" };
+
+  test("THE UNDECIDABLE RULE DOES NOT CRASH THE PASS, AND THE LATER DECIDABLE RULE STILL FIRES", () => {
+    const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    assert.equal(reading.kind, "answer", "an undecidable rule must not turn the whole pass into an abstention here — something else really did fire");
+    assert.deepEqual(reading.applied, [{ verb: "set", ruleId: "stamps-a-field", field: "demo_flag", to: true }]);
+    assert.equal(reading.text, "- [ ] Try this 🚩 true");
+    assert.equal(reading.partial, false, "nothing partial fired — only the fully-decidable rule did");
+  });
+
+  test("WITH THE DECIDABLE RULE REMOVED, THE SAME CANDIDATE ABSTAINS VISIBLY — never a confident 'nothing applies'", () => {
+    const UNDECIDABLE_ONLY = JSON.parse(JSON.stringify(DECLARATION));
+    delete UNDECIDABLE_ONLY.rules.rules["stamps-a-field"];
+    UNDECIDABLE_ONLY.rules.order.sequence = ["graph-dependent-promotes"];
+    page.__applyPresentation(UNDECIDABLE_ONLY);
+
+    const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "rule-pattern-needs-graph-traversal");
+
+    page.__updateRulesBadge(reading);
+    assert.equal(elements.get("rulesBadge").textContent, "rules: abstained — rule-pattern-needs-graph-traversal");
+
+    page.__applyPresentation(DECLARATION); // restore, so later tests in this file see the original
+  });
+
+  test("MUTATION PROOF: the pure applyRules function itself never calls matchesQualifier on the undecidable pattern", () => {
+    // A direct proof at the pure-function level, not only through the page: `applyRules` must
+    // record the rule id in `pass.undecidable`, never throw (matchesQualifier WOULD throw if this
+    // function forgot the qualifierNeedsGraph guard — membership.ts's own defence-in-depth), and
+    // never appear in `pass.applied`.
+    const rulesTable = readRulesDeclaration(DECLARATION).rules;
+    const pass = applyRules({ node_type: "task", domain: null, status: "open" }, rulesTable, TODAY.answer);
+    assert.deepEqual(pass.undecidable, ["graph-dependent-promotes"]);
+    assert.ok(!pass.applied.some((e) => e.ruleId === "graph-dependent-promotes"));
+    assert.deepEqual(
+      pass.applied.map((e) => e.ruleId),
+      ["stamps-a-field"],
+    );
   });
 });

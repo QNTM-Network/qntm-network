@@ -64,6 +64,14 @@
       }
     },
     {
+      "view": "all-family",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "family"
+      }
+    },
+    {
       "view": "all-home",
       "section": "tasks",
       "nodeType": "task",
@@ -155,7 +163,23 @@
     },
     {
       "view": "daily-personal",
+      "section": "waiting",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "daily-personal",
       "section": "routine-drift",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "daily-personal",
+      "section": "orphans",
       "nodeType": "task",
       "defaults": {
         "domain": "personal"
@@ -180,6 +204,14 @@
     {
       "view": "daily-work",
       "section": "in-progress",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "daily-work",
+      "section": "waiting",
       "nodeType": "task",
       "defaults": {
         "domain": "work"
@@ -260,6 +292,180 @@
       }
     },
     {
+      "view": "habits-admin",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "admin"
+      }
+    },
+    {
+      "view": "habits-admin",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "admin"
+      }
+    },
+    {
+      "view": "habits-life-admin",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "life-admin"
+      }
+    },
+    {
+      "view": "habits-life-admin",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "life-admin"
+      }
+    },
+    {
+      "view": "habits-personal",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "habits-personal",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "habits-program",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "program"
+      }
+    },
+    {
+      "view": "habits-program",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "program"
+      }
+    },
+    {
+      "view": "habits-qntm",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "qntm"
+      }
+    },
+    {
+      "view": "habits-qntm",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "qntm"
+      }
+    },
+    {
+      "view": "habits-spirit",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit"
+      }
+    },
+    {
+      "view": "habits-spirit",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit"
+      }
+    },
+    {
+      "view": "habits-work",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "habits-work",
+      "section": "habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "unanchored-habits",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "habits",
+      "section": "admin-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "admin"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "life-admin-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "life-admin"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "work-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "personal-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "program-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "program"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "qntm-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "qntm"
+      }
+    },
+    {
+      "view": "habits",
+      "section": "spirit-habits",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit"
+      }
+    },
+    {
       "view": "inbox",
       "section": "inbox-tagged",
       "nodeType": "task",
@@ -270,6 +476,14 @@
       "section": "domain-empty",
       "nodeType": "task",
       "defaults": null
+    },
+    {
+      "view": "notes-work",
+      "section": "work-notes",
+      "nodeType": "note",
+      "defaults": {
+        "domain": "work"
+      }
     },
     {
       "view": "outcomes-all",
@@ -356,6 +570,94 @@
       "defaults": null
     },
     {
+      "view": "outcomes-personal",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "outcomes-personal",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "outcomes-program",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "program"
+      }
+    },
+    {
+      "view": "outcomes-program",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "program"
+      }
+    },
+    {
+      "view": "outcomes-qntm",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "qntm"
+      }
+    },
+    {
+      "view": "outcomes-qntm",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "qntm"
+      }
+    },
+    {
+      "view": "outcomes-spirit",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit"
+      }
+    },
+    {
+      "view": "outcomes-spirit",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit"
+      }
+    },
+    {
+      "view": "outcomes",
+      "section": "childless-outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "outcomes",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "people-family",
+      "section": "people",
+      "nodeType": "person",
+      "defaults": {
+        "domain": "family"
+      }
+    },
+    {
       "view": "people",
       "section": "people",
       "nodeType": "person",
@@ -373,6 +675,20 @@
     },
     {
       "view": "routines-admin",
+      "section": "upcoming",
+      "nodeType": "routine",
+      "defaults": null
+    },
+    {
+      "view": "routines-family",
+      "section": "family-routines",
+      "nodeType": "routine",
+      "defaults": {
+        "domain": "family"
+      }
+    },
+    {
+      "view": "routines-family",
       "section": "upcoming",
       "nodeType": "routine",
       "defaults": null
@@ -491,6 +807,14 @@
       "nodeType": "task",
       "defaults": {
         "domain": "personal"
+      }
+    },
+    {
+      "view": "routines",
+      "section": "family-routines",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "family"
       }
     },
     {
@@ -531,6 +855,54 @@
       "nodeType": "tv_show",
       "defaults": {
         "domain": "arts"
+      }
+    },
+    {
+      "view": "waiting-for-personal",
+      "section": "personal-waiting-for",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "waiting-for-personal",
+      "section": "personal-blocked",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "waiting-for-personal",
+      "section": "personal-held",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "waiting-for-work",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "waiting-for-work",
+      "section": "blocked",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "waiting-for-work",
+      "section": "held",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
       }
     },
     {

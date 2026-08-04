@@ -74,11 +74,20 @@
  *                rules — are outside this grammar and dropped with the operator naming which
  *                operator it was.
  *   priority     absent -> 0 (`compiler/core.py:114`'s own default), or an integer.
- *   actions      exactly one action whose verb is `set_node_type`, `set_field` or `unset_field`,
- *                targeting `$current.node.id`, plus any number of `emit_event` actions (recognised
- *                and excluded — see `compile-capture-rules.mjs`'s original reasoning, unchanged:
- *                nothing published here reads the event log). A verb outside that set, more than
- *                one modelled action, or an action targeting a different node — dropped.
+ *   actions      an ORDERED LIST of zero-or-more `set_node_type`/`set_field`/`unset_field` actions,
+ *                each targeting `$current.node.id`, IN THE ORDER THE CONFIG DECLARES THEM (order is
+ *                part of a rule's meaning — see `modelledActions`'s own header), plus any number of
+ *                `emit_event` actions (recognised and excluded — see `compile-capture-rules.mjs`'s
+ *                original reasoning, unchanged: nothing published here reads the event log). A verb
+ *                outside that set, zero modelled actions, or a modelled action targeting a different
+ *                node — dropped. WIDENED (this leg) from "exactly one modelled action" to "one or
+ *                more": `task-with-open-part-of-child-becomes-outcome` and its WAITING_FOR sibling
+ *                each declare THREE actions (`set_node_type`, `set_field`, `emit_event`) and were
+ *                dropped by the old one-action grammar regardless of whether their `for_each`
+ *                pattern resolved. A rule whose action list ALSO carries an `emit_event` publishes
+ *                `partial: true` — its `actions` are a real but INCOMPLETE account of what the rule
+ *                does, and `app/present/rules.ts`'s `applyRules` must show that rather than apply the
+ *                modelled subset as if it were the whole effect (see that module's own header).
  *
  * `unset_field` is a genuine widening beyond the original two rules' grammar (which only ever saw
  * `set_node_type` and `set_field`): it appears in 14 of the operator's real rules, it is exactly as
@@ -267,12 +276,47 @@ function patternOf(forEach) {
 }
 
 /**
- * The rule's one modelled action — `set_node_type`, `set_field` or `unset_field` — plus
- * confirmation that every OTHER action on the rule is either that one or an ignored `emit_event`.
- * Refuses (drops the rule) on: an unrecognised verb, zero or more than one modelled action, or an
- * action targeting anything but the current node.
+ * One modelled action, `{verb: "retype", to}` / `{verb: "set", field, to}` / `{verb: "unset",
+ * field}` — the SAME verb-tagged shape `app/present/rules.ts`'s own `RuleEffect` already uses for
+ * a FIRED action, reused here for a PUBLISHED one rather than inventing a second vocabulary for
+ * the same three verbs.
  */
-function primaryAction(actions) {
+function normaliseModelledAction(action) {
+  if (action.node_id !== SELF_NODE) {
+    refuse(`'${action.verb}' targets ${JSON.stringify(action.node_id)}, not the current node ('${SELF_NODE}')`);
+  }
+  if (action.verb === "set_node_type") {
+    if (typeof action.node_type !== "string") refuse("'set_node_type' has no string 'node_type'");
+    return { verb: "retype", to: action.node_type };
+  }
+  if (action.verb === "set_field") {
+    if (typeof action.field !== "string") refuse("'set_field' has no string 'field'");
+    return { verb: "set", field: action.field, to: action.value ?? null };
+  }
+  // unset_field
+  if (typeof action.field !== "string") refuse("'unset_field' has no string 'field'");
+  return { verb: "unset", field: action.field };
+}
+
+/**
+ * The rule's modelled actions, IN THE ORDER THE CONFIG DECLARES THEM — `set_node_type`/
+ * `set_field`/`unset_field`, plus confirmation that every OTHER action on the rule is one of
+ * those or an ignored `emit_event`. Order is preserved because it is part of the rule's own
+ * meaning (`task-with-open-part-of-child-becomes-outcome` retypes to `outcome` BEFORE it sets
+ * `auto_outcome: true` — a later rule matching on `node_type: outcome` in the SAME pass, if one
+ * existed, would see the retype only because it ran first): a caller applying these one at a time,
+ * in array order, reproduces that.
+ *
+ * Refuses (drops the rule) on: an unrecognised verb, zero modelled actions, or a modelled action
+ * targeting anything but the current node. Does NOT refuse on more than one modelled action, and
+ * does NOT refuse on an `emit_event` sitting alongside modelled ones — see `partial`, below.
+ *
+ * @returns {{actions: object[], partial: boolean}} `partial` is `true` when the rule ALSO
+ *   declares at least one `emit_event` — this closed grammar recognises and excludes it (`app/
+ *   present/rules.ts` has no event bus to fire it into), so `actions` is a PROPER SUBSET of the
+ *   rule's real effect, and a caller must show that rather than present `actions` as complete.
+ */
+function modelledActions(actions) {
   if (!Array.isArray(actions)) refuse("'actions' is not a list");
 
   const unmodelled = [
@@ -293,28 +337,8 @@ function primaryAction(actions) {
         "publishes a fact about set_node_type/set_field/unset_field only",
     );
   }
-  if (modelled.length > 1) {
-    refuse(
-      `${modelled.length} modelled actions (verbs: ${modelled.map((a) => a.verb).join(", ")}) — ` +
-        "this grammar publishes exactly one action per rule",
-    );
-  }
-  const action = modelled[0];
-  if (action.node_id !== SELF_NODE) {
-    refuse(`'${action.verb}' targets ${JSON.stringify(action.node_id)}, not the current node ('${SELF_NODE}')`);
-  }
-
-  if (action.verb === "set_node_type") {
-    if (typeof action.node_type !== "string") refuse("'set_node_type' has no string 'node_type'");
-    return { retypesTo: action.node_type };
-  }
-  if (action.verb === "set_field") {
-    if (typeof action.field !== "string") refuse("'set_field' has no string 'field'");
-    return { setsField: action.field, setsFieldTo: action.value ?? null };
-  }
-  // unset_field
-  if (typeof action.field !== "string") refuse("'unset_field' has no string 'field'");
-  return { unsetsField: action.field };
+  const partial = actions.some((a) => a && typeof a === "object" && IGNORED_VERBS.has(a.verb));
+  return { actions: modelled.map(normaliseModelledAction), partial };
 }
 
 const basenameOf = (key) => key.split("/").pop();
@@ -523,8 +547,11 @@ export function compile(files, ledger = new Ledger()) {
         const pattern = patternOf(entry.for_each);
         const when = normaliseWhen(entry.when);
         const priority = priorityOf(entry);
-        const action = primaryAction(entry.actions);
-        rules[id] = { pattern, when, priority, ...action };
+        const { actions, partial } = modelledActions(entry.actions);
+        // `partial` OMITTED, NOT `false`, for the common case — the same "absent means the common
+        // answer" posture `compile-qualification.mjs`'s new `edgeSteps` takes, so a rule with no
+        // excluded action keeps the exact shape it always published.
+        rules[id] = { pattern, when, priority, actions, ...(partial ? { partial: true } : {}) };
         orderEntries.push({ ruleId: id, fileKey: key, priority });
       } catch (error) {
         if (!(error instanceof Refusal)) throw error;
@@ -544,10 +571,15 @@ export function compile(files, ledger = new Ledger()) {
   // membership. Reusing it here (rather than writing a second reduction of the same YAML shape) is
   // "generate once" applied to a SECOND consumer of one already-published grammar, not a new one —
   // the same move `compile-resolution.mjs`'s own `readRetypeRules` already made for its narrower
-  // purpose (predicting a SEED's type tag). A pattern this closed grammar cannot model — an edge
-  // traversal, a field outside `RESOLVABLE_FIELDS` — is not guessed at: every rule that names it is
-  // DROPPED, because a rule this app cannot tell the candidate for is a rule this app cannot apply,
-  // however cleanly its own `when`/action read.
+  // purpose (predicting a SEED's type tag). A pattern this closed grammar cannot model AT ALL — a
+  // MULTI-HOP traversal (`ancestors:`/`descendants:`), a field outside `RESOLVABLE_FIELDS` — is not
+  // guessed at: every rule that names it is DROPPED, because a rule this app cannot tell the
+  // candidate for is a rule this app cannot apply, however cleanly its own `when`/action read. A
+  // pattern that resolves but carries `edgeSteps` (a ONE-HOP `children:`/`parents:` existence test,
+  // widened alongside this file — `compile-qualification.mjs`'s own header) is NOT dropped here: it
+  // is a real, decidable predicate, just not one this reader's own consumer (`app/present/rules.ts`,
+  // a FRESH-CAPTURE-ONLY evaluator) can apply without a graph. That is `applyRules`'s abstention to
+  // make at read time (`qualifierNeedsGraph`), never this compiler's to guess at or drop for.
   //
   // STRUCTURAL-CHROME EXCLUSION (`applyStructuralExclusionDefaults`, `compile-qualification.mjs`)
   // is DELIBERATELY NOT APPLIED HERE. It is a no-op for every pattern any rule in the operator's
@@ -605,8 +637,9 @@ export function compile(files, ledger = new Ledger()) {
   // trailing-marker grammar `compile-resolution.mjs` already reads, over a different field set.
   const setFieldTargets = new Set(
     Object.values(rules)
-      .map((r) => r.setsField)
-      .filter((f) => typeof f === "string"),
+      .flatMap((r) => r.actions)
+      .filter((a) => a.verb === "set")
+      .map((a) => a.field),
   );
   const fieldMarkers = readFieldMarkers(setFieldTargets, has, get, ledger);
 

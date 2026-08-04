@@ -284,13 +284,15 @@ before(() => {
     ].join("\n"),
   );
 
-  // 6. rules/gentest_widgets.yaml — the RULES-CATEGORY axis's own generality claim. One rule this
-  //    grammar can model (`gentest-widget-done-clears-rank`: an `eq` predicate, an `unset_field`
-  //    action — the exact widened verb `compile-capture-rules.mjs` never modelled) and one it
-  //    cannot (`gentest-widget-cancelled-or-done`: an `in` predicate, the shape real rules like
-  //    `waiter_status_propagation.yaml` use) — so both the positive and the negative half of the
-  //    rules axis are proven on config this generator has never seen, the same as qualification's
-  //    own positive/negative split (§5 below).
+  // 6. rules/gentest_widgets.yaml — the RULES-CATEGORY axis's own generality claim. Three rules
+  //    this grammar can model (`gentest-widget-done-clears-rank`: an `eq` predicate, an
+  //    `unset_field` action — the widened verb `compile-capture-rules.mjs` never modelled;
+  //    `gentest-widget-done-relinks-and-notifies`: TWO modelled actions plus an `emit_event`,
+  //    the MULTIPLE-ACTIONS-PER-RULE widening this leg adds — see §8 below) and one it cannot
+  //    (`gentest-widget-cancelled-or-done`: an `in` predicate, the shape real rules like
+  //    `waiter_status_propagation.yaml` use) — so the positive, the negative, AND the multi-action
+  //    halves of the rules axis are all proven on config this generator has never seen, the same as
+  //    qualification's own positive/negative split (§5 below).
   writeFileSync(
     join(configDir, "rules", "gentest_widgets.yaml"),
     [
@@ -303,6 +305,23 @@ before(() => {
       "    - verb: unset_field",
       "      node_id: $current.node.id",
       "      field: gentest_rank",
+      "- id: gentest-widget-done-relinks-and-notifies",
+      "  for_each:",
+      "    pattern: gentest-widgets-done",
+      "  when:",
+      "    eq: [$current.node.fields.status, done]",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: domain",
+      "      value: qntm",
+      "    - verb: unset_field",
+      "      node_id: $current.node.id",
+      "      field: gentest_rank",
+      "    - verb: emit_event",
+      "      type: gentest_widget_relinked",
+      "      payload:",
+      "        node_id: $current.node.id",
       "- id: gentest-widget-cancelled-or-done",
       "  for_each:",
       "    pattern: gentest-widgets-done",
@@ -742,17 +761,36 @@ describe("7. STRUCTURAL — a brand-new edge type and section override, read wit
 //    here either — which is exactly how a compiler naming two of the operator's own rule ids by
 //    hand (`compile-capture-rules.mjs`, merged as PR #91) shipped through 1803 green tests. This
 //    section closes that gap on the SAME never-seen config every other axis in this file proves
-//    itself against: one rule this grammar models (`gentest-widget-done-clears-rank`), one it does
-//    not (`gentest-widget-cancelled-or-done`, an `in:` predicate) — both from step 6 above.
+//    itself against: one single-action rule this grammar models (`gentest-widget-done-clears-
+//    rank`), one MULTI-ACTION rule it now models too (`gentest-widget-done-relinks-and-notifies` —
+//    the MULTIPLE-ACTIONS-PER-RULE widening this leg adds, ORDERED and `partial` because of its
+//    `emit_event`), and one it does not model at all (`gentest-widget-cancelled-or-done`, an `in:`
+//    predicate) — all three from step 6 above.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 describe("8. RULES CATEGORY — an invented rule is published or dropped, with no hardcoded name", { skip }, () => {
-  test("the modelled rule is published with the exact facts its YAML declares", () => {
+  test("the single-action rule is published with the exact facts its YAML declares", () => {
     assert.deepEqual(RULES.rules["gentest-widget-done-clears-rank"], {
       pattern: "gentest-widgets-done",
       when: { op: "eq", field: "status", value: "done" },
       priority: 0,
-      unsetsField: "gentest_rank",
+      actions: [{ verb: "unset", field: "gentest_rank" }],
+    });
+  });
+
+  test("the MULTI-ACTION rule publishes its actions IN THE CONFIG'S OWN ORDER, and is marked partial", () => {
+    // `set_field` THEN `unset_field` — the YAML's own declared order (step 6 above) — with the
+    // `emit_event` recognised and excluded, never faked, and named by `partial: true` rather than
+    // silently dropped or silently treated as the rule's whole effect.
+    assert.deepEqual(RULES.rules["gentest-widget-done-relinks-and-notifies"], {
+      pattern: "gentest-widgets-done",
+      when: { op: "eq", field: "status", value: "done" },
+      priority: 0,
+      actions: [
+        { verb: "set", field: "domain", to: "qntm" },
+        { verb: "unset", field: "gentest_rank" },
+      ],
+      partial: true,
     });
   });
 
@@ -760,8 +798,9 @@ describe("8. RULES CATEGORY — an invented rule is published or dropped, with n
     assert.match(RULES.dropped["rule 'gentest-widget-cancelled-or-done'"], /operator 'in'/);
   });
 
-  test("the modelled rule takes its place in the published fire order", () => {
+  test("both modelled rules take their place in the published fire order; the unmodelled one does not", () => {
     assert.ok(RULES.order.sequence.includes("gentest-widget-done-clears-rank"));
+    assert.ok(RULES.order.sequence.includes("gentest-widget-done-relinks-and-notifies"));
     assert.ok(!RULES.order.sequence.includes("gentest-widget-cancelled-or-done"));
   });
 });
