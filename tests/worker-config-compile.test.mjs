@@ -53,12 +53,14 @@ import { handleConfig } from "../worker/src/config.js";
 import { compile as compileStructural } from "../scripts/compile-structural.mjs";
 import { compile as compileQualification } from "../scripts/compile-qualification.mjs";
 import { compile as compileResolution } from "../scripts/compile-resolution.mjs";
+import { compile as compileRules, GenerationError } from "../scripts/compile-rules.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_CONFIG = resolve(HERE, "fixtures", "config");
 const STRUCTURAL_ROUTE_URL = "http://worker.local/config/compile/structural";
 const QUALIFICATION_ROUTE_URL = "http://worker.local/config/compile/qualification";
 const RESOLUTION_ROUTE_URL = "http://worker.local/config/compile/resolution";
+const RULES_ROUTE_URL = "http://worker.local/config/compile/rules";
 
 /** Read the committed fixture into exactly the file map structural's `compile()` expects — the
  * same three things `generate-structural-declaration.mjs`'s own fs shell reads, sorted. */
@@ -104,6 +106,21 @@ function readResolutionFixtureFiles() {
     for (const f of readdirSync(full).filter((f) => f.endsWith(".yaml")).sort()) {
       files[`${dir}/${f}`] = readFileSync(join(full, f), "utf8");
     }
+  }
+  return files;
+}
+
+/** Read the committed fixture's `rules/*.yaml` into exactly the file map rules' `compile()`
+ * expects — the same two files (`primary.yaml`, `secondary.yaml`) `scripts/check-isolate-
+ * conformance.mjs`'s own `rules` generator entry reads for the identical fixture, sorted. Unlike
+ * the other three, rules' `compile()` reads no `schema.yaml` and no other directory — see
+ * `compile-rules.mjs`'s header: `for_each.pattern` is stored opaquely, never cross-checked against
+ * `patterns/`. */
+function readRulesFixtureFiles() {
+  const files = {};
+  const rulesDir = join(FIXTURE_CONFIG, "rules");
+  for (const f of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    files[`rules/${f}`] = readFileSync(join(rulesDir, f), "utf8");
   }
   return files;
 }
@@ -323,6 +340,81 @@ describe("2c. resolution — THE MUTATION PROOF", () => {
   });
 });
 
+describe("1d. rules — THE ROUTE COMPILES WHAT IT IS GIVEN", () => {
+  test("a valid submission returns exactly what compile() itself returns for the same bytes", async () => {
+    const files = readRulesFixtureFiles();
+    const direct = compileRules(files);
+    const { status, body } = await postTo(RULES_ROUTE_URL, files);
+
+    assert.equal(status, 200);
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.declaration, direct.declaration);
+    assert.deepEqual(body.dropped, direct.dropped);
+    // A positive control on the shape, not just equality with itself: the fixture's one modelled
+    // rule, publishing the exact fact its YAML declares.
+    assert.deepEqual(body.declaration.rules["mark-in-progress"], {
+      pattern: "local-tasks",
+      when: { op: "eq", field: "status", value: "open" },
+      priority: 0,
+      setsField: "status",
+      setsFieldTo: "in_progress",
+    });
+    // THE RECEIPT — the same version compile() itself computed, and an honest set of promises.
+    assert.equal(body.receipt.compiled, true);
+    assert.equal(body.receipt.version, direct.version);
+    assert.match(body.receipt.version, /^sha256-[0-9a-f]{64}$/);
+    assert.equal(body.receipt.stored, false);
+    assert.equal(body.receipt.engineAccepted, null);
+  });
+});
+
+describe("2d. rules — THE MUTATION PROOF", () => {
+  test(
+    "UNLIKE THE OTHER THREE: compile-rules.mjs never refuses over an unmodelled rule shape — " +
+      "it DROPS it and still answers 200. The one shape it refuses outright is a duplicate rule " +
+      "id (the engine's own seen_ids check), so THAT is this route's mutation anchor.",
+    async () => {
+      const files = readRulesFixtureFiles();
+
+      // BEFORE: the unmutated fixture compiles cleanly (claim 1 already proved this; re-asserted
+      // here so the mutation below is provably a delta over a working baseline).
+      const before = await postTo(RULES_ROUTE_URL, files);
+      assert.equal(before.status, 200);
+      assert.equal(before.body.ok, true);
+
+      // THE MUTATION — rename secondary.yaml's own rule id to collide with primary.yaml's.
+      const anchor = "id: note-in-progress";
+      assert.ok(files["rules/secondary.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+      files["rules/secondary.yaml"] = files["rules/secondary.yaml"].replace(anchor, "id: mark-in-progress");
+
+      // WHAT compile() ITSELF SAYS, DIRECTLY — the ground truth the route must match, word for word.
+      let directMessage = null;
+      let directIsGenerationError = false;
+      try {
+        compileRules(files);
+      } catch (error) {
+        directMessage = error.message;
+        directIsGenerationError = error instanceof GenerationError;
+      }
+      assert.ok(directIsGenerationError, "the mutation must trigger compile-rules.mjs's own GenerationError, not some other throw");
+      assert.match(directMessage, /declared in two files/);
+
+      // AFTER: the route, given the mutated bytes, refuses — never a 200, never a stack trace.
+      const after = await postTo(RULES_ROUTE_URL, files);
+      assert.equal(after.status, 422, "a refusal must not be a 200 — the app would show it as success");
+      assert.equal(after.body.ok, false);
+      assert.equal(after.body.refused, true);
+      // THE POINT OF THE SLICE: the exact sentence, unchanged by the move into the Worker route.
+      assert.equal(after.body.error, directMessage);
+      // THE REFUSAL'S OWN RECEIPT — no version was minted, because nothing compiled.
+      assert.equal(after.body.receipt.compiled, false);
+      assert.equal(after.body.receipt.version, null);
+      assert.equal(after.body.receipt.stored, false);
+      assert.equal(after.body.receipt.engineAccepted, null);
+    },
+  );
+});
+
 describe("3. malformed requests are refused at the door, never reach compile()", () => {
   test("a body that is not valid JSON", async () => {
     const request = new Request(STRUCTURAL_ROUTE_URL, { method: "POST", body: "not json" });
@@ -402,6 +494,30 @@ describe("4. the three routes are independently addressed, not one dispatcher gu
     assert.equal(r2.status, 422);
     assert.equal(r2.body.refused, true);
   });
+
+  test(
+    "the rules route does NOT refuse a structural/qualification/resolution-shaped submission — " +
+      "it sees no 'rules/' keys and answers an EMPTY category, 200, not a refusal. Stated, not " +
+      "assumed: unlike the other three, compile-rules.mjs requires nothing to be present at all " +
+      "(a category with zero rules is legitimate — compile-rules.mjs's own header).",
+    async () => {
+      const structuralFiles = readStructuralFixtureFiles();
+      const { status, body } = await postTo(RULES_ROUTE_URL, structuralFiles);
+      assert.equal(status, 200);
+      assert.equal(body.ok, true);
+      assert.deepEqual(body.declaration.rules, {});
+      assert.deepEqual(body.declaration.order.sequence, []);
+    },
+  );
+
+  test("a rules-shaped submission (only 'rules/' keys) refuses at the other three routes — each is missing what it requires", async () => {
+    const rulesFiles = readRulesFixtureFiles();
+    for (const url of [STRUCTURAL_ROUTE_URL, QUALIFICATION_ROUTE_URL, RESOLUTION_ROUTE_URL]) {
+      const { status, body } = await postTo(url, rulesFiles);
+      assert.equal(status, 422, `${url} did not refuse a rules-shaped submission`);
+      assert.equal(body.refused, true);
+    }
+  });
 });
 
 describe("5. THE RECEIPT'S VERSION — the two properties that matter, both by mutation, both through the real route", () => {
@@ -469,6 +585,27 @@ describe("5. THE RECEIPT'S VERSION — the two properties that matter, both by m
     files["views/main.yaml"] = files["views/main.yaml"].replace(anchor, "direction: desc");
     const mutated = await postTo(RESOLUTION_ROUTE_URL, files);
     assert.equal(mutated.status, 200, "the mutation was meant to stay valid — both directions are legal");
+    assert.notEqual(
+      mutated.body.receipt.version,
+      first.body.receipt.version,
+      "a changed config reused the old version",
+    );
+    assert.notDeepEqual(mutated.body.declaration, first.body.declaration, "the mutation's own anchor did not change the declaration — the version test proves nothing");
+  });
+
+  test("rules: two identical submissions receive the identical version; one valid field flip does not", async () => {
+    const files = readRulesFixtureFiles();
+
+    const first = await postTo(RULES_ROUTE_URL, files);
+    const second = await postTo(RULES_ROUTE_URL, files);
+    assert.equal(first.body.receipt.version, second.body.receipt.version, "an unchanged config minted a new version");
+
+    // A valid field flip, deliberately not the duplicate-id refusal section 2d already covers.
+    const anchor = "value: in_progress";
+    assert.ok(files["rules/primary.yaml"].includes(anchor), "the mutation's own anchor moved — fixture changed under this test");
+    files["rules/primary.yaml"] = files["rules/primary.yaml"].replace(anchor, "value: blocked");
+    const mutated = await postTo(RULES_ROUTE_URL, files);
+    assert.equal(mutated.status, 200, "the mutation was meant to stay valid — both field values are legal");
     assert.notEqual(
       mutated.body.receipt.version,
       first.body.receipt.version,

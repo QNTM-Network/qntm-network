@@ -9,11 +9,14 @@
 -- identity (`scripts/declaration-version.mjs`, `sha256-<hex>` of the canonical
 -- `{declaration, dropped}` pair). NEVER UPDATED IN PLACE: a version names one immutable byte
 -- string by construction (`versionKey`'s own header), so the only legal operations on this table
--- are INSERT and read — `kind` is one of structural | qualification | resolution, one row per
--- generator's own compile, matching the three independent Gate-1 routes already shipped.
+-- are INSERT and read — `kind` is one of structural | qualification | resolution | rules, one row
+-- per generator's own compile, matching the four independent Gate-1 routes already shipped. No
+-- schema change was needed to add `rules` as a fourth kind — `kind` was always a bare TEXT column
+-- with no CHECK constraint, so this comment is the only place the set of kinds is enumerated at
+-- the SQL layer, and it is descriptive, not enforced.
 CREATE TABLE IF NOT EXISTS declarations (
   user_id          TEXT NOT NULL REFERENCES users(id),
-  kind             TEXT NOT NULL,               -- structural | qualification | resolution
+  kind             TEXT NOT NULL,               -- structural | qualification | resolution | rules
   version          TEXT NOT NULL,               -- sha256-<hex>, from declaration-version.mjs
   declaration_json TEXT NOT NULL,
   dropped_json     TEXT NOT NULL,

@@ -8,6 +8,7 @@
 // POST /config/declaration/structural       operator-only — compile(files), then store
 // POST /config/declaration/qualification    operator-only — compile(files), then store
 // POST /config/declaration/resolution       operator-only — compile(files), then store
+// POST /config/declaration/rules            operator-only — compile(files), then store
 // GET  /config/declaration/<kind>/current   public — the latest STORED version's body, no-cache
 // GET  /config/declaration/<kind>/<version> public — one immutable version's body, cache-forever
 //
@@ -40,11 +41,13 @@ import { operatorUser } from "./app.js";
 import { compile as compileStructural } from "../../scripts/compile-structural.mjs";
 import { compile as compileQualification } from "../../scripts/compile-qualification.mjs";
 import { compile as compileResolution } from "../../scripts/compile-resolution.mjs";
+import { compile as compileRules } from "../../scripts/compile-rules.mjs";
 
 const COMPILERS = new Map([
   ["structural", compileStructural],
   ["qualification", compileQualification],
   ["resolution", compileResolution],
+  ["rules", compileRules],
 ]);
 
 // Same shape `design-the-runtime-compile.md` §4.2 point 2 specifies for the immutable body — a

@@ -8,9 +8,13 @@
  * byte-identical, the refusal wording word for word. No automated test spawned `workerd` to
  * re-check it. This script re-ran that exact method — same three cases, same route, same fixture —
  * on every push (`6394420`); `9be7f13` extended it to the QUALIFICATION route
- * (`compile-qualification.mjs`); this pass extends it to the RESOLUTION route, the last of the
- * three (`compile-resolution.mjs`, `design-the-runtime-compile.md` step C's remaining generator),
- * running the SAME three cases against it. See
+ * (`compile-qualification.mjs`); a later pass extended it to the RESOLUTION route
+ * (`compile-resolution.mjs`, `design-the-runtime-compile.md` step C's remaining generator); this
+ * pass extends it to the fourth and, for now, last generator — the RULES route
+ * (`compile-rules.mjs`) — running the SAME three cases against it. Its own hard-refusal shape (a
+ * duplicate rule id — see `compile-rules.mjs`'s header) stands in for the config-integrity refusal
+ * the other three generators' own mutations trigger, since a rule this grammar cannot model is
+ * DROPPED, never refused, and a drop is a 200, not the 422 this comparison needs to exercise. See
  * `docs/implementation-artifacts/design-the-runtime-compile.md` §6.3, §10.
  *
  * ── THREE OUTCOMES, ONE EXIT CODE APIECE, ACROSS ALL GENERATORS TOGETHER — `scripts/
@@ -77,6 +81,7 @@ import {
   PATTERNS_PREFIX as RESOLUTION_PATTERNS_PREFIX,
   RULES_PREFIX,
 } from "./compile-resolution.mjs";
+import { compile as compileRules, RULES_PREFIX as RULES_CATEGORY_PREFIX } from "./compile-rules.mjs";
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
 const FIXTURE_CONFIG = join(REPO_ROOT, "tests", "fixtures", "config");
@@ -184,6 +189,34 @@ const GENERATORS = [
         anchor,
         "main:\n  path: main.md\n  default_node_type: totally_made_up_type\n",
       );
+    },
+  },
+  {
+    name: "rules",
+    routePath: "/config/compile/rules",
+    compile: compileRules,
+    // Read a config directory into exactly the files map `compile()` recognises — every
+    // `rules/*.yaml`, sorted, the same way `generate-rules-declaration.mjs`'s own fs shell reads
+    // it. `rules/` absence is not an error (a category with zero rules is legitimate).
+    readConfigTree(configDir) {
+      const files = {};
+      const rulesDir = join(configDir, "rules");
+      if (existsSync(rulesDir)) readYamlDir(rulesDir, RULES_CATEGORY_PREFIX, files);
+      return files;
+    },
+    // UNLIKE THE OTHER THREE. `compile-rules.mjs` never refuses the whole category over a rule
+    // shape it cannot model — it DROPS that rule and keeps going (its whole reason to exist over
+    // the coupled compiler it replaced). The one shape it still refuses outright is two rules
+    // sharing one id — the engine's own `seen_ids` check, cited by name in that file's header —
+    // so THAT is this generator's mutation anchor, not a config-integrity refusal like the other
+    // three's. `tests/worker-config-compile.test.mjs`'s own rules mutation proof uses the same
+    // anchor.
+    mutate(files) {
+      const anchor = "id: note-in-progress";
+      if (!files["rules/secondary.yaml"] || !files["rules/secondary.yaml"].includes(anchor)) {
+        throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
+      }
+      files["rules/secondary.yaml"] = files["rules/secondary.yaml"].replace(anchor, "id: mark-in-progress");
     },
   },
 ];

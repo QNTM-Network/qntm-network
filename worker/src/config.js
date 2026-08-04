@@ -1,14 +1,17 @@
 // Gate 1 only — `design-the-runtime-compile.md` step B's second half, extended by step C to a
-// second and now a third generator, and by step A/E-F to a version key and a receipt.
+// second, a third, and now a fourth generator (rules), and by step A/E-F to a version key and a
+// receipt.
 //
 // POST /config/compile/structural
 // POST /config/compile/qualification
 // POST /config/compile/resolution
+// POST /config/compile/rules
 //
 // Accepts a submitted config file map, compiles it with the SAME `compile(files)` this repo's CLI
 // already calls (`scripts/generate-structural-declaration.mjs` /
 // `scripts/generate-qualification-declaration.mjs` / `scripts/generate-resolution-declaration.
-// mjs`), and answers with either the compiled declaration (plus its version) or a named refusal.
+// mjs` / `scripts/generate-rules-declaration.mjs`), and answers with either the compiled
+// declaration (plus its version) or a named refusal.
 // Nothing here is stored, nothing is forwarded to the graph server — those are Gate 2 and the
 // two-consumer write path (`design-the-runtime-compile.md` §3, steps G-H), explicitly not this
 // route's job. `receipt()` below says exactly that, in its own field names.
@@ -20,24 +23,27 @@
 // belong, and it is not built here.
 
 import { json } from "./util.js";
-// FROM `compile-structural.mjs` / `compile-qualification.mjs` / `compile-resolution.mjs`, NOT the
-// `generate-*-declaration.mjs` CLI files — importing `compile` from any CLI file drags in
-// `node:fs` and `monorepo-config.mjs`'s module-level `fileURLToPath(import.meta.url)`, which
-// crashed this Worker at load the first time this was tried (verified against the real local
-// `wrangler dev` runtime, not assumed — see `compile-structural.mjs`'s header for the exact
-// error). All three compile modules' import graphs are exactly themselves plus `ledger.mjs` (and,
-// for qualification and resolution, `yaml-subset.mjs`) — nothing Node-specific.
+// FROM `compile-structural.mjs` / `compile-qualification.mjs` / `compile-resolution.mjs` /
+// `compile-rules.mjs`, NOT the `generate-*-declaration.mjs` CLI files — importing `compile` from
+// any CLI file drags in `node:fs` and `monorepo-config.mjs`'s module-level
+// `fileURLToPath(import.meta.url)`, which crashed this Worker at load the first time this was
+// tried (verified against the real local `wrangler dev` runtime, not assumed — see
+// `compile-structural.mjs`'s header for the exact error). All four compile modules' import graphs
+// are exactly themselves plus `ledger.mjs` (and, for qualification, resolution and rules,
+// `yaml-subset.mjs`) — nothing Node-specific.
 import { compile as compileStructural } from "../../scripts/compile-structural.mjs";
 import { compile as compileQualification } from "../../scripts/compile-qualification.mjs";
 import { compile as compileResolution } from "../../scripts/compile-resolution.mjs";
+import { compile as compileRules } from "../../scripts/compile-rules.mjs";
 
-// One route entry per generator: the URL suffix, and the pure `compile` it calls. Adding this
-// third generator (resolution, step C's remaining half) was one more entry here, not a new
-// function — exactly as this comment already predicted for it.
+// One route entry per generator: the URL suffix, and the pure `compile` it calls. Adding the
+// third generator (resolution) and now the fourth (rules) was one more entry here each time, not
+// a new function — exactly as this comment already predicted for both.
 const ROUTES = new Map([
   ["POST /config/compile/structural", compileStructural],
   ["POST /config/compile/qualification", compileQualification],
   ["POST /config/compile/resolution", compileResolution],
+  ["POST /config/compile/rules", compileRules],
 ]);
 
 /**
