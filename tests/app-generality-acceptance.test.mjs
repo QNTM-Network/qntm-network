@@ -815,6 +815,12 @@ describe("9. THE REGRESSION PROOF — the retired coupled compiler, reproduced, 
     try {
       mkdirSync(join(renamed, "rules"), { recursive: true });
       writeFileSync(join(renamed, "rules", "my_own_rules.yaml"), "- id: whatever-i-called-it\n  for_each: {pattern: tasks}\n  actions: [{verb: set_field, node_id: $current.node.id, field: x, value: 1}]\n");
+      // The widened compiler's PASS 2 (compile-rules.mjs, "RESOLVE for_each.pattern") needs the
+      // NAMED pattern to be resolvable — the same genericity claim this section is proving, one
+      // level deeper: `patterns/` is read the same way for ANY operator's instance, no file name
+      // baked in, so a renamed pattern FILE (not just a renamed rule file) is understood too.
+      mkdirSync(join(renamed, "patterns"), { recursive: true });
+      writeFileSync(join(renamed, "patterns", "my_own_patterns.yaml"), "tasks:\n  root:\n    find:\n      node_type: task\n");
       assert.throws(() => hardcodedCoupledCompile(renamed), /does not exist/);
       // The widened compiler, pointed at the SAME renamed config, sees it — no file name is baked in.
       const widened = generateRules(renamed, new Ledger());

@@ -179,6 +179,18 @@ export { orderingNoteFor as __orderingNoteFor };
 export { orderingDiagnosticFor as __orderingDiagnosticFor };
 export { updateOrderingBadge as __updateOrderingBadge };
 export { armOrderingSettle as __armOrderingSettle };
+// THE RULES AXIS (\`app/present/rules.ts\`, wired for the first time). Same reasoning as
+// __membershipNoteFor/__orderingNoteFor above — \`__rulesReadingFor\` is the ONE evaluation the
+// other two are computed from, exported so a suite can assert the abstention/answer split
+// directly. THERE IS NO \`__applyRulesToCommit\` — read \`app/index.html\`'s own comment where that
+// function would have been (right after \`updateRulesBadge\`) for why: it would have reassigned
+// \`commit.markdown\`, which \`tests/app-membership-note.test.mjs\`'s own '.markdown is never
+// ASSIGNED in app/' invariant (and seven other files pinning the same check) exists to refuse.
+export { rulesReadingFor as __rulesReadingFor };
+export { rulesNoteFor as __rulesNoteFor };
+export { rulesDiagnosticFor as __rulesDiagnosticFor };
+export { updateRulesBadge as __updateRulesBadge };
+export const __rulesTable = () => rulesTable;
 // THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __served
 // are: a suite reads what the page is holding NOW, and what changes under it is which placement
 // (if any) is armed.

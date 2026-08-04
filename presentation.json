@@ -5176,16 +5176,11 @@
         "film-defaults-to-arts-domain",
         "asset-defaults-to-program-domain",
         "defect-defaults-to-program-domain",
-        "task-under-routine-becomes-step",
-        "step-with-cadence-becomes-routine",
-        "step-without-routine-parent-becomes-task",
-        "routine-cascade-opens-descendants-on-promotion",
         "stamp-created-at-on-task",
         "tv-defaults-to-arts-domain",
-        "writer-defaults-to-arts-domain",
-        "clear-routine-reset-cascade-marker"
+        "writer-defaults-to-arts-domain"
       ],
-      "derivedFrom": "priority, descending, stable — ties broken by the compiled-list order the bundle loader's config-tree walk produces (file name) — computed over every rule this grammar published; a rule this grammar dropped is not part of this ordering. See compile-rules.mjs's header, 'THE ORDER'."
+      "derivedFrom": "priority, descending, stable — ties broken by the compiled-list order the bundle loader's config-tree walk produces (file name) — computed over every rule this grammar published AND whose for_each pattern this grammar could also resolve; a rule dropped by either pass is not part of this ordering. See compile-rules.mjs's header, 'THE ORDER'."
     },
     "rules": {
       "stamp-interval-days-1": {
@@ -5335,54 +5330,6 @@
         "setsField": "domain",
         "setsFieldTo": "program"
       },
-      "task-under-routine-becomes-step": {
-        "pattern": "tasks-under-routines",
-        "when": {
-          "op": "null",
-          "field": "cadence"
-        },
-        "priority": 0,
-        "retypesTo": "step"
-      },
-      "step-with-cadence-becomes-routine": {
-        "pattern": "steps-under-routines",
-        "when": {
-          "op": "not",
-          "of": {
-            "op": "null",
-            "field": "cadence"
-          }
-        },
-        "priority": 0,
-        "retypesTo": "routine"
-      },
-      "step-without-routine-parent-becomes-task": {
-        "pattern": "steps-without-routine-parent",
-        "when": {
-          "op": "null",
-          "field": "cadence"
-        },
-        "priority": 0,
-        "retypesTo": "task"
-      },
-      "routine-cascade-opens-descendants-on-promotion": {
-        "pattern": "nodes-under-promoted-routine",
-        "when": {
-          "op": "null",
-          "field": "cadence"
-        },
-        "priority": 0,
-        "setsField": "status",
-        "setsFieldTo": "open"
-      },
-      "clear-routine-reset-cascade-marker": {
-        "pattern": "routines-with-reset-cascade-marker",
-        "when": {
-          "op": "true"
-        },
-        "priority": -4,
-        "unsetsField": "reset_cascade_pending"
-      },
       "stamp-created-at-on-task": {
         "pattern": "tasks",
         "when": {
@@ -5415,6 +5362,104 @@
         "setsFieldTo": "arts"
       }
     },
+    "patterns": {
+      "albums-all": {
+        "find": {
+          "nodeType": [
+            "album"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "assets-all": {
+        "find": {
+          "nodeType": [
+            "asset"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "blogs-all": {
+        "find": {
+          "nodeType": [
+            "blog"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "books-all": {
+        "find": {
+          "nodeType": [
+            "book"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "defects-all": {
+        "find": {
+          "nodeType": [
+            "defect"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "films-all": {
+        "find": {
+          "nodeType": [
+            "film"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "routines": {
+        "find": {
+          "nodeType": [
+            "routine"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "tv-all": {
+        "find": {
+          "nodeType": [
+            "tv_show"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      },
+      "writers-all": {
+        "find": {
+          "nodeType": [
+            "writer"
+          ],
+          "fields": {}
+        },
+        "exclude": []
+      }
+    },
+    "fieldMarkers": {
+      "created_at": {
+        "token": "🆕",
+        "kind": "date"
+      }
+    },
     "dropped": {
       "rule 'accuracy-overall-1d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'accuracy-overall-3d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
@@ -5443,6 +5488,7 @@
       "rule 'change-type-carrying-node-becomes-ticket'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'clamp-completed-at-to-cycle-today'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'clear-completion-stamp-when-not-done'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
+      "rule 'clear-routine-reset-cascade-marker'": "its for_each pattern 'routines-with-reset-cascade-marker' could not be resolved: unresolvable field(s): reset_cascade_pending",
       "rule 'completed-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'completed-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'completed_effort_sum_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
@@ -5470,6 +5516,7 @@
       "rule 'part-of-child-of-ticket-becomes-spike'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'promote-scheduled-routine-to-open'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'resolved-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'routine-cascade-opens-descendants-on-promotion'": "its for_each pattern 'nodes-under-promoted-routine' could not be resolved: step 0: traverses (ancestors+exists)",
       "rule 'routine-complete-reset-available-date'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'routine-reset-cascades-to-descendants'": "3 modelled actions (verbs: set_field, unset_field, unset_field) — this grammar publishes exactly one action per rule",
       "rule 'stamp-available-date-on-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
@@ -5480,8 +5527,11 @@
       "rule 'stamp-task-intent-planned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-intent-unplanned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-overdue-drag'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'step-with-cadence-becomes-routine'": "its for_each pattern 'steps-under-routines' could not be resolved: step 0: traverses (exists+parents)",
+      "rule 'step-without-routine-parent-becomes-task'": "its for_each pattern 'steps-without-routine-parent' could not be resolved: step 0: traverses (not_exists+parents)",
       "rule 'target-of-open-waiter-gets-status-waiting'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'target-reopens-when-no-open-waiters-remain'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'task-under-routine-becomes-step'": "its for_each pattern 'tasks-under-routines' could not be resolved: step 0: traverses (exists+parents)",
       "rule 'task-with-open-part-of-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'task-with-open-waiting-for-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'task-with-routine-child-becomes-habit'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
@@ -5494,7 +5544,9 @@
       "rule 'unlocks-link-becomes-unlocked'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'unlocks-node-becomes-released'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'update-scorecard-done-count'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'upset'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model"
+      "rule 'upset'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule-set field 'domain'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
+      "rule-set field 'interval_days'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it"
     }
   }
 }

@@ -30,6 +30,8 @@ import { readQualificationDeclaration } from "./qualification.js";
 import type { QualificationLanguage } from "./qualification.js";
 import { readConfigResolutionDeclaration } from "./resolutiontable.js";
 import type { ConfigResolutionTable } from "./resolutiontable.js";
+import { readRulesDeclaration } from "./rules.js";
+import type { RulesLanguage } from "./rules.js";
 import type { Contribution } from "./rendition.js";
 
 export class PresentationContext {
@@ -103,6 +105,11 @@ export interface DeclaredPresentation {
    * (defaults and the per-view minting default, already published on `qualification` above) and
    * why none of it has a production consumer yet. */
   readonly resolution: ConfigResolutionTable;
+  /** THE RULES-CATEGORY GRAMMAR — `scripts/compile-rules.mjs`'s own published pattern/predicate/
+   * priority/action table, plus the pattern find-clauses and field-marker spellings needed to
+   * APPLY it to a fresh capture's own resolved fields. See `rules.ts`'s header for what reads it
+   * (`app/index.html`'s `rulesReadingFor`) and what it deliberately never does on its own. */
+  readonly rules: RulesLanguage;
   readonly problems: readonly string[];
 }
 
@@ -144,17 +151,20 @@ export function presentationFromDeclaration(document: unknown): DeclaredPresenta
   const structuralReading = readStructuralDeclaration(document);
   const qualificationReading = readQualificationDeclaration(document);
   const resolutionReading = readConfigResolutionDeclaration(document);
+  const rulesReading = readRulesDeclaration(document);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
     structural: structuralReading.structural,
     qualification: qualificationReading.qualification,
     resolution: resolutionReading.resolution,
+    rules: rulesReading.rules,
     problems: [
       ...reading.problems,
       ...structuralReading.problems,
       ...qualificationReading.problems,
       ...resolutionReading.problems,
+      ...rulesReading.problems,
     ],
   };
 }

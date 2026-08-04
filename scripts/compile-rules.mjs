@@ -132,6 +132,7 @@
 import { Ledger } from "./ledger.mjs";
 import { versionKey } from "./declaration-version.mjs";
 import { parseYamlSubset } from "./yaml-subset.mjs";
+import { normalisePattern, PATTERNS_PREFIX } from "./compile-qualification.mjs";
 
 export class GenerationError extends Error {}
 class Refusal extends Error {}
@@ -139,9 +140,29 @@ const refuse = (reason) => {
   throw new Refusal(reason);
 };
 
-/** The one prefix `compile`'s file map recognises. Named once so the pure function and the fs
- * shell in `generate-rules-declaration.mjs` agree on the exact same string without restating it. */
+/** The one prefix `compile`'s file map recognises for rule files. Named once so the pure function
+ * and the fs shell in `generate-rules-declaration.mjs` agree on the exact same string without
+ * restating it. */
 export const RULES_PREFIX = "rules/";
+
+/**
+ * Re-exported, not restated: this file also reads `patterns/*.yaml`, and `compile-qualification.mjs`
+ * already names that prefix — see "THE PATTERN GAP" below for why.
+ */
+export { PATTERNS_PREFIX };
+
+/** Where the trailing-marker spelling for a `setsField` action's target field lives. Read only for
+ * the SMALL, bounded set of fields this compile actually needs a glyph for — see "THE MARKER GAP". */
+export const MARKERS_KEY = "vocabulary/markers.yaml";
+
+// The three trailing-marker shapes this generator can spell a VALUE with — the exact subset
+// `compile-resolution.mjs`'s own `EXTRACTION_KINDS` already established for `orderingFields`,
+// restated here rather than imported: that map is a closure-local constant inside
+// `compile-resolution.mjs`'s own `compile()`, not an export, and the two tables read the SAME three
+// `extraction_hint` strings from the SAME `vocabulary/markers.yaml` grammar for the SAME reason —
+// this is the identical closed grammar, applied to a different candidate field set (rule-authored
+// `setsField` targets instead of `ordering:`-declared fields), not a second interpretation of it.
+const EXTRACTION_KINDS = { trailing_date: "date", trailing_int: "int", trailing_float: "float" };
 
 const SELF_NODE = "$current.node.id";
 const FIELD_REF = /^\$current\.node\.fields\.([A-Za-z0-9_]+)$/;
@@ -313,17 +334,132 @@ function computeOrderSequence(entries) {
 }
 
 /**
+ * `patterns/*.yaml` -> `{name -> raw config}`, sorted by file the same way `compile-qualification
+ * .mjs` reads the same directory. A DUPLICATE name across two files is not this generator's
+ * concern to adjudicate (`compile-qualification.mjs` already refuses that outright for its own
+ * purpose); the FIRST file read wins here, because this generator only ever asks "what does this
+ * NAME mean", never "is this directory internally consistent" — that question belongs to the
+ * generator that owns the whole `patterns/` tree.
+ */
+function readRawPatterns(allKeys, get, ledger) {
+  const patternKeys = allKeys()
+    .filter((k) => k.startsWith(PATTERNS_PREFIX) && k.endsWith(".yaml"))
+    .sort();
+  const rawPatterns = new Map();
+  for (const key of patternKeys) {
+    const file = key.slice(PATTERNS_PREFIX.length);
+    let parsed;
+    try {
+      parsed = parseYamlSubset(get(key), key);
+    } catch (error) {
+      ledger.drop(
+        `patterns/${file}`,
+        `it did not parse (${error.message}), so no pattern it declares could resolve a rule's for_each`,
+      );
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      ledger.drop(
+        `patterns/${file}`,
+        "the file did not parse into a mapping of pattern name -> definition, so no pattern it " +
+          "declares could resolve a rule's for_each",
+      );
+      continue;
+    }
+    for (const [name, config] of Object.entries(parsed)) {
+      if (!rawPatterns.has(name)) rawPatterns.set(name, config);
+    }
+  }
+  return rawPatterns;
+}
+
+/**
+ * `vocabulary/markers.yaml` -> `{field -> {token, kind}}`, restricted to `fields` — the SMALL,
+ * BOUNDED set of trailing-marker-shaped fields a `setsField` action, among the rules PASS 2 kept,
+ * actually targets. See "THE MARKER GAP" at this file's top import block for why this exists and
+ * why it is scoped this narrowly rather than reading the whole vocabulary: a field this closed
+ * grammar cannot spell a glyph for is a field this app cannot WRITE, however confidently the rule
+ * itself was modelled, and this reader is what lets that be a named, per-field fact rather than a
+ * silent "nothing happened" the moment a caller tries to render an applied `set_field`.
+ *
+ * Deliberately NARROWER than `compile-resolution.mjs`'s own `readOrderingFieldMarkers`: no `enum`
+ * branch, because the two fields this repo's real config needs it for today (`created_at`,
+ * `interval_days`) are both trailing-shaped, and a field this app already spells through the
+ * ENUM token families (`node_type`, `domain`, `status` — `qualification.tokens`) never needs a
+ * second spelling published here at all; the browser tries that family first (see `rules.ts`).
+ */
+function readFieldMarkers(fields, has, get, ledger) {
+  if (fields.size === 0) return {};
+  if (!has(MARKERS_KEY)) return {};
+  let parsed;
+  try {
+    parsed = parseYamlSubset(get(MARKERS_KEY), MARKERS_KEY);
+  } catch (error) {
+    ledger.drop(MARKERS_KEY, `it did not parse (${error.message}), so no rule-set field can be spelled`);
+    return {};
+  }
+  const markers = parsed?.markers;
+  if (!Array.isArray(markers)) {
+    ledger.drop(MARKERS_KEY, "no 'markers:' list, so no rule-set field can be spelled");
+    return {};
+  }
+  const out = {};
+  for (const entry of markers) {
+    // NOT A DROP: a non-mapping marker declares no field — nothing named here was discarded; if it
+    // was the only marker for a field this reader needs, the field-level sweep below records that.
+    if (!entry || typeof entry !== "object") continue;
+    const { token, field, extraction_hint: hint, value, render_only: renderOnly } = entry;
+    // NOT A DROP: this table is restricted to fields a PUBLISHED rule's `setsField` actually
+    // targets — a marker outside that set was never a candidate, the same posture
+    // `readOrderingFieldMarkers` (compile-resolution.mjs) already takes for its own field set.
+    if (typeof field !== "string" || !fields.has(field)) continue;
+    const what = `rule-set field '${field}'`;
+    if (value !== undefined) {
+      // NOT A DROP: a fixed-value (enum) marker row for a field this reader was asked about — not
+      // modelled here (see this function's own header); the field stays unspelled and is named as
+      // such by the field-level sweep below, once, after every marker row has had its chance.
+      continue;
+    }
+    if (renderOnly === true) {
+      ledger.drop(what, `its marker '${token}' is 'render_only: true' — the engine never ingests a value from that glyph`);
+      continue;
+    }
+    const kind = EXTRACTION_KINDS[hint];
+    // NOT A DROP: an extraction_hint this reader does not model (or none at all) — the field
+    // simply gathers no candidate token from THIS row; the field-level sweep below is what
+    // ultimately records the field as unspelled if no row ever supplies one.
+    if (kind === undefined) continue;
+    // NOT A DROP: a marker row with no usable token string — the same "gathers nothing from this
+    // row" posture as the extraction_hint check just above.
+    if (typeof token !== "string" || token === "") continue;
+    if (out[field] === undefined) out[field] = { token, kind };
+  }
+  for (const field of fields) {
+    if (out[field] === undefined && ledger.toJSON()[`rule-set field '${field}'`] === undefined) {
+      ledger.drop(
+        `rule-set field '${field}'`,
+        "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no " +
+          "trailing marker for it, so this app cannot write a value into a line for it",
+      );
+    }
+  }
+  return out;
+}
+
+/**
  * Compile the rules-category declaration from an in-memory map of path -> contents. PURE: no
  * filesystem, no command line, no clock, no randomness.
  *
  * @param {Record<string, string> | Map<string, string>} files recognised keys: every
- *   `"rules/<name>.yaml"`. Paths use `/` regardless of platform — this is a logical tree, not a
- *   filesystem one.
+ *   `"rules/<name>.yaml"`, every `"patterns/<name>.yaml"` and `"vocabulary/markers.yaml"`. Paths
+ *   use `/` regardless of platform — this is a logical tree, not a filesystem one.
  * @param {Ledger} ledger
- * @returns {{declaration: {order: object, rules: object}, dropped: object, version: string}}
+ * @returns {{declaration: {order: object, rules: object, patterns: object, fieldMarkers: object},
+ *   dropped: object, version: string}}
  */
 export function compile(files, ledger = new Ledger()) {
   const isMap = files instanceof Map;
+  const has = (key) => (isMap ? files.has(key) : Object.prototype.hasOwnProperty.call(files, key));
   const get = (key) => (isMap ? files.get(key) : files[key]);
   const allKeys = () => (isMap ? [...files.keys()] : Object.keys(files));
 
@@ -397,17 +533,101 @@ export function compile(files, ledger = new Ledger()) {
     });
   }
 
+  // ── PASS 2 — RESOLVE `for_each.pattern`, THE ONE FACT PASS 1 NEVER READ ────────────────────────
+  //
+  // A published rule names a PATTERN, never says what it means: `compile-rules.mjs`'s own header
+  // states this plainly ("every published action targets $current.node.id regardless of what the
+  // binding is named") — the CANDIDATE a rule fires over is left for a reader to resolve. Applying
+  // a rule needs that resolved — "does THIS line's own fields match pattern X" — and X's meaning is
+  // `patterns/<name>.yaml`'s own `root.find`/`steps`, the identical closed grammar
+  // `compile-qualification.mjs`'s `normalisePattern` already models, tests and ships for section
+  // membership. Reusing it here (rather than writing a second reduction of the same YAML shape) is
+  // "generate once" applied to a SECOND consumer of one already-published grammar, not a new one —
+  // the same move `compile-resolution.mjs`'s own `readRetypeRules` already made for its narrower
+  // purpose (predicting a SEED's type tag). A pattern this closed grammar cannot model — an edge
+  // traversal, a field outside `RESOLVABLE_FIELDS` — is not guessed at: every rule that names it is
+  // DROPPED, because a rule this app cannot tell the candidate for is a rule this app cannot apply,
+  // however cleanly its own `when`/action read.
+  //
+  // STRUCTURAL-CHROME EXCLUSION (`applyStructuralExclusionDefaults`, `compile-qualification.mjs`)
+  // is DELIBERATELY NOT APPLIED HERE. It is a no-op for every pattern any rule in the operator's
+  // real config names — measured: `routines`/`tasks`/`albums-all`/… all declare `node_type`
+  // explicitly, and that function only ever adds anything when `root.find` names none — and it is
+  // a no-op BY CONSTRUCTION for the one thing this declaration's patterns are ever matched against:
+  // a FRESH CAPTURE'S OWN RESOLVED FIELDS (`membership.ts`'s `resolveLineFields`), which can never
+  // itself resolve to a structural/chrome node type (that function seeds `node_type` from a
+  // section's own registered content type or a vocabulary token, never from schema chrome). Calling
+  // it would cost a `schema.yaml` dependency this generator does not otherwise need, for a
+  // correction that changes nothing this declaration is ever matched against.
+  const rawPatterns = readRawPatterns(allKeys, get, ledger);
+  const neededPatternNames = new Set(Object.values(rules).map((r) => r.pattern));
+  const patterns = {};
+  const patternRefused = new Map();
+  for (const name of [...neededPatternNames].sort()) {
+    const raw = rawPatterns.get(name);
+    if (raw === undefined) {
+      patternRefused.set(
+        name,
+        `no pattern named '${name}' is declared under patterns/, so no rule naming it can be applied`,
+      );
+      // NOT A DROP: this loop records WHY a pattern name could not be resolved, keyed by the
+      // pattern, not by the rule — the actual `ledger.drop("rule '<id>'", ...)` (below, per rule)
+      // is where the record lands, because a pattern name is not itself an operator artefact and
+      // more than one rule can share one refused pattern; recording here too would double-report.
+      continue;
+    }
+    try {
+      patterns[name] = normalisePattern(raw);
+    } catch (error) {
+      patternRefused.set(name, error.message);
+    }
+  }
+  for (const id of Object.keys(rules)) {
+    const pattern = rules[id].pattern;
+    if (patternRefused.has(pattern)) {
+      ledger.drop(
+        `rule '${id}'`,
+        `its for_each pattern '${pattern}' could not be resolved: ${patternRefused.get(pattern)}`,
+      );
+      delete rules[id];
+    }
+  }
+  const survivingIds = new Set(Object.keys(rules));
+  const orderSequence = computeOrderSequence(orderEntries.filter((e) => survivingIds.has(e.ruleId)));
+
+  // ── PASS 3 — THE SPELLING FOR EVERY `setsField` TARGET, AMONG WHAT SURVIVED PASS 2 ─────────────
+  //
+  // Applying `stamp-created-at-on-task`'s own action decides a VALUE (`created_at` becomes today's
+  // logical date); WRITING that value into a line the operator can see needs a GLYPH, and nothing
+  // published before this file named one for any field a rule sets — `resolution.orderingFields`
+  // carries exactly the four fields an `ordering:` declares, and `created_at` orders nothing. See
+  // `readFieldMarkers`'s own header for the full account, including why this is the SAME closed
+  // trailing-marker grammar `compile-resolution.mjs` already reads, over a different field set.
+  const setFieldTargets = new Set(
+    Object.values(rules)
+      .map((r) => r.setsField)
+      .filter((f) => typeof f === "string"),
+  );
+  const fieldMarkers = readFieldMarkers(setFieldTargets, has, get, ledger);
+
   const declaration = {
     order: {
       established: true,
-      sequence: computeOrderSequence(orderEntries),
+      sequence: orderSequence,
       derivedFrom:
         "priority, descending, stable — ties broken by the compiled-list order the bundle " +
         "loader's config-tree walk produces (file name) — computed over every rule this grammar " +
-        "published; a rule this grammar dropped is not part of this ordering. See " +
-        "compile-rules.mjs's header, 'THE ORDER'.",
+        "published AND whose for_each pattern this grammar could also resolve; a rule dropped by " +
+        "either pass is not part of this ordering. See compile-rules.mjs's header, 'THE ORDER'.",
     },
     rules,
+    /** pattern name -> `{find, exclude}` (`app/present/qualification.ts`'s own `Qualifier` shape) —
+     * every `for_each.pattern` a PUBLISHED rule names, resolved. See PASS 2 above. */
+    patterns,
+    /** field name -> `{token, kind}` — the trailing-marker spelling for every field a PUBLISHED
+     * rule's `set_field` action targets, where one exists. See PASS 3 above. A field absent here
+     * that IS a `setsField` target has no marker this app can write with; `dropped` names why. */
+    fieldMarkers,
   };
   const dropped = ledger.toJSON();
   return { declaration, dropped, version: versionKey({ declaration, dropped }) };

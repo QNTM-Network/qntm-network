@@ -29,6 +29,10 @@
  *   7. THE ORDER — priority-then-file-order, generalised from two rows to N, with the composition
  *      property (`compile-rules.mjs`'s header) proved directly: a dropped rule never appears in
  *      `order.sequence`, and does not change the relative order of two published rules.
+ *   8. `patterns`/`fieldMarkers` — PASS 2 (resolve `for_each.pattern`) and PASS 3 (spell a
+ *      `setsField` target), the two facts the browser needs to APPLY a published rule that this
+ *      file's declaration alone never carried. A rule whose pattern cannot be resolved is dropped
+ *      here too, never left half-published.
  */
 
 import { test, describe } from "node:test";
@@ -395,5 +399,126 @@ describe("7. THE ORDER — priority then file order, generalised to N rows, and 
       assert.match(ORDER_UNESTABLISHED_REASON, /core\/rule-engine/);
       assert.strictEqual(SERVED.rules.order.established, true);
     });
+  });
+});
+
+// ── 8 ────────────────────────────────────────────────────────────────────────────────────────
+
+describe("8. patterns/fieldMarkers — what a rule's for_each and setsField resolve to", () => {
+  test("the fixture's three referenced patterns are published, reduced to the closed find/exclude grammar", () => {
+    const { declaration } = compile(fixtureFiles());
+    assert.deepEqual(declaration.patterns.tasks, { find: { nodeType: ["task"], fields: {} }, exclude: [] });
+    assert.deepEqual(declaration.patterns.routines, { find: { nodeType: ["routine"], fields: {} }, exclude: [] });
+    assert.deepEqual(declaration.patterns["flagged-nodes"], {
+      find: { nodeType: ["task"], fields: {} },
+      exclude: [],
+    });
+  });
+
+  test("created_at's trailing marker is published for the fixture's one setsField target", () => {
+    const { declaration } = compile(fixtureFiles());
+    assert.deepEqual(declaration.fieldMarkers, { created_at: { token: "🆕", kind: "date" } });
+  });
+
+  test("SHIPPED: the real config's 'tasks'/'routines' patterns are bare node_type filters, and created_at's marker is 🆕/trailing_date", () => {
+    assert.deepEqual(SERVED.rules.patterns.tasks, { find: { nodeType: ["task"], fields: {} }, exclude: [] });
+    assert.deepEqual(SERVED.rules.patterns.routines, { find: { nodeType: ["routine"], fields: {} }, exclude: [] });
+    assert.deepEqual(SERVED.rules.fieldMarkers.created_at, { token: "🆕", kind: "date" });
+  });
+
+  test("MUTANT: a rule naming a pattern nothing under patterns/ declares is DROPPED, not left dangling", () => {
+    const files = { ...fixtureFiles() };
+    files["rules/undeclared_pattern.yaml"] = [
+      "- id: rule-with-missing-pattern",
+      "  for_each:",
+      "    pattern: no-such-pattern",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: x",
+      "      value: 1",
+      "",
+    ].join("\n");
+    const { declaration, dropped } = compile(files);
+    assert.ok(!("rule-with-missing-pattern" in declaration.rules), "an unresolvable pattern must not publish the rule");
+    assert.ok(!declaration.order.sequence.includes("rule-with-missing-pattern"));
+    assert.match(dropped["rule 'rule-with-missing-pattern'"], /no pattern named 'no-such-pattern' is declared/);
+    // Nothing else in the fixture was disturbed by the mutation.
+    assert.ok("stamp-created-at-on-task" in declaration.rules);
+  });
+
+  test("MUTANT: a pattern that traverses an edge drops every rule naming it, with normalisePattern's own reason", () => {
+    const files = { ...fixtureFiles() };
+    files["patterns/edge_pattern.yaml"] = [
+      "nested-things:",
+      "  description: fixture",
+      "  parameters: {}",
+      "  root:",
+      "    find:",
+      "      node_type: task",
+      "  steps:",
+      "    - parents:",
+      "        edge_type: PART_OF",
+      "        node_type: routine",
+      "      exists: true",
+      "",
+    ].join("\n");
+    files["rules/edge_rule.yaml"] = [
+      "- id: rule-with-edge-pattern",
+      "  for_each:",
+      "    pattern: nested-things",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: x",
+      "      value: 1",
+      "",
+    ].join("\n");
+    const { declaration, dropped } = compile(files);
+    assert.ok(!("rule-with-edge-pattern" in declaration.rules));
+    assert.match(dropped["rule 'rule-with-edge-pattern'"], /traverses/);
+    assert.ok("routine-without-cadence-becomes-task" in declaration.rules, "an unrelated rule must be unaffected");
+  });
+
+  test("MUTANT: a setsField target with no vocabulary marker is named in dropped, not silently unspelled", () => {
+    const files = { ...fixtureFiles() };
+    files["rules/unspellable.yaml"] = [
+      "- id: rule-sets-unspellable-field",
+      "  for_each:",
+      "    pattern: tasks",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: no_such_marker_field",
+      "      value: 1",
+      "",
+    ].join("\n");
+    const { declaration, dropped } = compile(files);
+    // The rule itself is still published — PASS 3 reports an unwritable field, it does not drop
+    // the rule that sets it (a caller may still want to know the VALUE even if it cannot render a
+    // glyph for it; see rules.ts for how the browser treats this).
+    assert.ok("rule-sets-unspellable-field" in declaration.rules);
+    assert.equal(declaration.fieldMarkers.no_such_marker_field, undefined);
+    assert.match(
+      dropped["rule-set field 'no_such_marker_field'"],
+      /declares no trailing marker for it/,
+    );
+  });
+
+  test("COMPOSITION: dropping one rule's pattern does not change fieldMarkers for a surviving rule's field", () => {
+    const files = { ...fixtureFiles() };
+    files["rules/undeclared_pattern.yaml"] = [
+      "- id: rule-with-missing-pattern",
+      "  for_each:",
+      "    pattern: no-such-pattern",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: created_at",
+      "      value: 1",
+      "",
+    ].join("\n");
+    const { declaration } = compile(files);
+    assert.deepEqual(declaration.fieldMarkers.created_at, { token: "🆕", kind: "date" });
   });
 });

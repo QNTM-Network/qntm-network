@@ -53,7 +53,7 @@
  * for the same reason, by `qualification.ts` and `resolutiontable.ts` respectively — one served
  * document, four strict readers, each owning one axis and none of the other three's keys.
  *
- * ── A FIFTH KEY, WITH NO READER YET — `rules` ──
+ * ── A FIFTH KEY — `rules` ──
  *
  * `scripts/generate-rules-declaration.mjs` publishes every rule under the operator's `rules/`
  * directory that a closed grammar can model — pattern, predicate, priority and one action — plus
@@ -61,12 +61,14 @@
  * header has the full derivation). It replaces the narrower `captureRules` key (which named
  * exactly two rule ids by hand) with a CATEGORY: the unit of work is "a rule this grammar can
  * model," never a specific operator-authored rule id. It is skipped here for the same reason
- * `structural` is — this file must not misreport a key it does not own as unrecognised — but
- * unlike the other four, NO strict reader owns this axis yet, and nothing in `app/` consumes it.
- * Publishing the grammar and wiring a consumer that acts on it (the settle animation `roadmap-the-
- * road-ahead.md` step 3 describes) are deliberately separate steps; this is only the first.
- * `RULES_KEY`'s only job today is to stop `readDeclaration` from reporting a published,
- * well-formed key as a typo.
+ * `structural` is — this file must not misreport a key it does not own as unrecognised.
+ *
+ * **UPDATE: `rules.ts`'s `readRulesDeclaration` now owns this axis**, the same way
+ * `qualification.ts`/`resolutiontable.ts` own theirs — read alongside this file, off the SAME
+ * document, by `context.ts`'s `presentationFromDeclaration`, and applied by `app/index.html`'s
+ * `rulesReadingFor`. `RULES_KEY` stays declared HERE too, for the same reason
+ * `QUALIFICATION_KEY`/`RESOLUTION_TABLE_KEY` do: so a key this file does not itself validate is
+ * not misreported as unrecognised by the one reader that owns every OTHER key.
  */
 
 import { RESOLUTION_KEYS } from "./rendition.js";

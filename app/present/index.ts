@@ -117,6 +117,19 @@ export type {
   ResolvedFields,
 } from "./membership.js";
 
+export { RULES_KEY, readRulesDeclaration, applyRules, renderRuleEffects } from "./rules.js";
+export type {
+  FieldMarker,
+  RuleEffect,
+  RulePassResult,
+  RuleRenderAbstention,
+  RuleRenderOutcome,
+  RulesLanguage,
+  RulesReading,
+  RuleSpec,
+  RuleWhen,
+} from "./rules.js";
+
 export { PresentationContext, presentationFromDeclaration } from "./context.js";
 export type { DeclaredPresentation } from "./context.js";
 

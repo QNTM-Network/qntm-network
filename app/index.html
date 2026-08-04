@@ -887,6 +887,12 @@
          that declared `ordering:` and still could not decide must say so, and why one that never
          declared it stays silent. roadmap-the-road-ahead.md step 3. -->
     <p id="orderingBadge" class="diagnostic-badge"></p>
+    <!-- THE SAME REGISTER, FOR RULES — `rulesDiagnosticFor`'s own header. A fresh capture whose
+         section a published rule would retype or stamp says "rules: decided"; one a published
+         rule matches but cannot render (no marker for the field it sets) or whose candidate rule
+         this closed grammar dropped at compile time says "rules: abstained — <reason>", visibly,
+         rather than silently doing nothing. -->
+    <p id="rulesBadge" class="diagnostic-badge"></p>
     <p id="freshness" class="muted"></p>
     <!-- THE EMPTY ENVIRONMENT. Three situations that used to render as one grey line, and they
          are not the same situation: an account with no graph behind it, a graph with nothing in
@@ -974,10 +980,13 @@ import {
   sectionAt,
   sectionOrderFor,
   membershipFor,
+  resolveLineFields,
   resolveOrderingFor,
   resolveOrderingPlacementFor,
   todayFor,
   SettleSurface,
+  applyRules,
+  renderRuleEffects,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -1023,6 +1032,14 @@ let qualification = undefined;
 // has printed no node line, instead of refusing outright.
 let resolution = undefined;
 
+// THE RULES-CATEGORY AXIS (`scripts/compile-rules.mjs`) — every rule under the operator's `rules/`
+// directory a closed grammar can model, in fire order, plus the pattern find-clauses and field
+// marker spellings needed to APPLY it to a fresh capture. Read and validated here, the same
+// posture as `structural`/`qualification`/`resolution` above. `rulesReadingFor` (below) is what
+// finally reads it — the axis every OTHER category already had a call site for and this one did
+// not, until now.
+let rulesTable = undefined;
+
 // THE PAGE FETCHES; IT DOES NOT HOLD A COPY. Turning the document into levels is still
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
 // declaration read inside this file is a declaration whose reader nothing can observe, because
@@ -1060,6 +1077,7 @@ function applyPresentation(document) {
   structural = declared.structural;
   qualification = declared.qualification;
   resolution = declared.resolution;
+  rulesTable = declared.rules;
 }
 
 /**
@@ -3183,6 +3201,172 @@ function armOrderingSettle(view, commit) {
   });
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// RULES — `rules.ts`'s own axis, wired for the first time. `presentation.json`'s `structural`,
+// `qualification` and `resolution` keys are read across the call sites above; `rules` was read at
+// zero, until this block. The gap this closes, in the operator's own words: "it gets the default
+// tag added of new (i imagine that will come from rules?)" — `🆕`, `stamp-created-at-on-task`,
+// ten seconds late every time, until now.
+//
+// SCOPED TO A FRESH CAPTURE (`commit.kind === "insert-line"`), NEVER AN EXISTING LINE — see
+// `rulesReadingFor`'s own header for why: `resolveLineFields` (membership.ts) already refuses to
+// resolve fields for a line carrying a `[[qntm:N]]` stamp, so a "set-line" commit on an existing
+// node abstains here by construction, never by a branch this file adds.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * THE ONE EVALUATION `rulesNoteFor` (narration) AND `rulesDiagnosticFor` (the abstention
+ * register) ARE BOTH COMPUTED FROM — the same tie `membershipReadingFor` already is for its own
+ * axis, and for the same reason: two separately written evaluations of "what does this line's
+ * rules pass decide" is exactly the drift `design-the-compiler-and-the-bands.md` §3.1 already
+ * found once. Read-only — see the comment above `updateRulesBadge`, below `rulesDiagnosticFor`,
+ * for why this reading is never used to rewrite `commit`.
+ *
+ * `"answer"` carries `text: string | null` — the committed line's characters WITH every rendered
+ * effect appended, or `null` when a rules pass ran and fired nothing at all (a legitimate answer:
+ * no published rule matched this candidate). `"abstains"` covers two different refusals, named
+ * rather than conflated: `resolveLineFields`'s own five reasons (an existing node, an empty line,
+ * …) and, prefixed `rendering-`, `renderRuleEffects`'s own two (`unrenderable-effect`,
+ * `conflicting-token-present`) — a rule matched and fired, but this app cannot spell its effect
+ * onto a line without inventing characters or overwriting ones the operator typed.
+ */
+function rulesReadingFor(view, commit) {
+  if (rulesTable === undefined || qualification === undefined || resolution === undefined) {
+    return { kind: "not-evaluated" };
+  }
+  if (commit.kind !== "insert-line" || commit.markdown === null) {
+    return { kind: "not-evaluated" };
+  }
+  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+  const sectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
+  if (sectionId === null) {
+    return { kind: "not-evaluated" };
+  }
+  const section = qualification.sections[view.id]?.[sectionId];
+  if (section === undefined) {
+    return { kind: "not-evaluated" };
+  }
+  const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
+  const fields = resolveLineFields(line, section, qualification);
+  if (typeof fields === "string") {
+    // membership.ts's own `Abstention` vocabulary — not this axis's to invent a second one for.
+    return { kind: "abstains", because: fields };
+  }
+  // `$cycle_today`/`$cycle_week_end` — the day boundary, resolved the way the engine resolves it,
+  // NEVER the system clock read directly (`today.ts`'s own header states why: the operator's
+  // logical day rolls over at a declared hour in a declared zone, not at local midnight). A
+  // boundary this app cannot resolve (a malformed `dayBoundary`) still lets `applyRules` run —
+  // every rule not naming a cycle variable is unaffected — it just cannot resolve `$cycle_today`
+  // itself, which `applyRules`'s own per-candidate refusal already covers (see that function's
+  // header).
+  const today = todayFor(Date.now(), resolution.dayBoundary);
+  const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : undefined);
+  if (pass.applied.length === 0) {
+    return { kind: "answer", applied: [], text: null };
+  }
+  const rendered = renderRuleEffects(
+    line,
+    pass.applied,
+    qualification.tokens.node_type ?? {},
+    qualification.tokens,
+    rulesTable.fieldMarkers,
+  );
+  if (rendered.kind === "abstains") {
+    return { kind: "abstains", because: `rendering-${rendered.because}` };
+  }
+  return {
+    kind: "answer",
+    applied: pass.applied,
+    text: rendered.kind === "rendered" ? rendered.text : null,
+  };
+}
+
+/**
+ * ONE SENTENCE, IN THE FRESHNESS LINE — the same "only speak about a change" posture
+ * `membershipNoteFor`/`orderingNoteFor` already take. Silent unless a rule actually fired AND its
+ * effect could be rendered (an abstention is `rulesDiagnosticFor`'s to say, not this function's —
+ * the same split membership/ordering already draw between narration and the abstention register).
+ *
+ * TAKES THE ALREADY-COMPUTED `reading`, NOT `(view, commit)` — `commitLine` computes
+ * `rulesReadingFor` exactly once and threads that ONE answer through this function,
+ * `rulesDiagnosticFor` and `updateRulesBadge` alike, the same reason `membershipReadingFor` is
+ * computed once for its own two readers.
+ */
+function rulesNoteFor(reading) {
+  if (reading.kind !== "answer" || reading.applied.length === 0 || reading.text === null) {
+    return "";
+  }
+  const words = reading.applied.map((effect) => {
+    if (effect.verb === "retype") return `becomes ${effect.to}`;
+    if (effect.verb === "set") return `sets ${effect.field}`;
+    return `clears ${effect.field}`;
+  });
+  return `this line ${words.join(", ")}`;
+}
+
+/**
+ * THE ABSTENTION REGISTER FOR RULES — the same shape `membershipDiagnosticFor`/
+ * `orderingDiagnosticFor` already give their own axis, and the one the operator's own brief asks
+ * for by name: "the 79 dropped rules must abstain visibly … the browser must not attempt them,
+ * must not silently ignore them." A rule this closed grammar never modelled at all is never IN
+ * `rulesTable.rules` — this register's job is the DIFFERENT case: a rule that IS published,
+ * WOULD fire, and still cannot be shown (`rendering-unrenderable-effect`,
+ * `rendering-conflicting-token-present`), which used to be indistinguishable from "nothing
+ * applies here" before this function existed. Takes the shared `reading` — see `rulesNoteFor`'s
+ * own header for why it is not recomputed here.
+ */
+function rulesDiagnosticFor(reading) {
+  if (reading.kind === "not-evaluated") {
+    return "";
+  }
+  if (reading.kind === "abstains") {
+    return `rules: abstained — ${reading.because}`;
+  }
+  return "rules: decided";
+}
+
+/**
+ * WRITE `rulesDiagnosticFor`'s answer to `#rulesBadge` — the same one-DOM-touching-line shape
+ * `updateMembershipBadge`/`updateOrderingBadge` already establish. Takes the shared `reading`.
+ */
+function updateRulesBadge(reading) {
+  const text = rulesDiagnosticFor(reading);
+  if (text === "") {
+    return;
+  }
+  const badge = $("rulesBadge");
+  badge.textContent = text;
+  const abstained = text.startsWith("rules: abstained");
+  badge.classList.toggle("diagnostic-badge-abstains", abstained);
+  badge.classList.toggle("diagnostic-badge-answer", !abstained);
+}
+
+/**
+ * THIS FUNCTION DOES NOT EXIST — AND THE REASON IS NAMED HERE RATHER THAN LEFT FOR SOMEONE TO
+ * REDISCOVER BY BREAKING A TEST.
+ *
+ * The first shape this feature took DID exist: it reassigned `commit.markdown`/`commit.text` in
+ * place before the write, so the stamp would ride the same POST the operator's own edit made.
+ * `tests/app-membership-note.test.mjs`'s own `` `.markdown` is never ASSIGNED in app/ — only
+ * compared, read or passed through `` — caught it, and seven OTHER test files pin the identical
+ * invariant (`app-membership-diagnostic`, `app-ordering-note`, `app-today-note`, `app-write-
+ * correlation`, `app-seed-from-cascade`, `app-generality-acceptance`, `graph-sync-guards`). That
+ * is not incidental scope; it is the guarantee "what he typed is what gets saved" — the same
+ * guarantee `writeFile`'s own header states for `source` ("never re-derived here"), extended to
+ * `markdown`. A rules pass with any bug in it must never be able to silently change what a write
+ * carries beyond what the operator's own keystrokes and the painter's own `applyEdit` produced.
+ *
+ * WHAT SHIPS INSTEAD: `rulesNoteFor`/`updateRulesBadge`, above, tell the operator IMMEDIATELY —
+ * beside "syncing…", the instant the write leaves — which rule fired and what it decided, through
+ * the SAME freshness-line and badge registers membership/ordering already use. What does not ship
+ * in this change: the literal `🆕 <date>` GLYPH painted into the row's own characters before the
+ * cycle answers. That would need `paint.ts` itself to grow a new, OPT-IN decoration surface (the
+ * same shape `settle`/`SettleSurface` already are — a `PaintDeps` field paint.ts reads while
+ * BUILDING a row, never a mutation of a value already on its way to the wire) so the glyph reaches
+ * the DOM without ever touching `LineCommit.markdown`. That is real, additional, well-scoped work
+ * this change does not attempt — see the PR description for why it is filed rather than rushed.
+ */
+
 /**
  * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
  *
@@ -3375,18 +3559,28 @@ async function commitLine(view, commit) {
     queueMicrotask(drainPainted);
     return;
   }
+  // THE RULES PASS — computed EXACTLY ONCE and threaded through every function below that needs
+  // it, the same reason `membershipReadingFor` is computed once for its own two readers.
+  // READ-ONLY: `commit.markdown`/`commit.text` are NEVER rewritten from this answer — see the
+  // comment above `updateRulesBadge`'s own definition for why, and what would be needed to go
+  // further.
+  const rulesReading = rulesReadingFor(view, commit);
   // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's and
   // orderingNoteFor's own headers for what each says, when, and why only the LEAVING transition
   // and a RANK CHANGE (never an unchanged answer) are said at all. Joined into one string here,
   // never inside writeFile — see that function's own header for why one slot holds both.
-  const notes = [membershipNoteFor(view, commit), orderingNoteFor(view, commit)].filter((n) => n !== "");
+  const notes = [membershipNoteFor(view, commit), orderingNoteFor(view, commit), rulesNoteFor(rulesReading)].filter(
+    (n) => n !== "",
+  );
   const note = notes.join(" · ");
   // THE ABSTENTION REGISTER, WRITTEN BESIDE THE NARRATION AND NOT INTO IT — see
   // `membershipDiagnosticFor`'s own header for why this is a second DOM sink, `#membershipBadge`,
-  // rather than a third element of `notes` above. ORDERING NOW HAS ITS OWN — `#orderingBadge`,
-  // `orderingDiagnosticFor`'s own header — closing the gap this comment used to name.
+  // rather than a third element of `notes` above. ORDERING AND RULES EACH HAVE THEIR OWN —
+  // `#orderingBadge`/`#rulesBadge`, `orderingDiagnosticFor`'s own header — closing the gap this
+  // comment used to name.
   updateMembershipBadge(view, commit);
   updateOrderingBadge(view, commit);
+  updateRulesBadge(rulesReading);
   // THE SETTLE SURFACE, ARMED BEFORE THE OPTIMISTIC REPAINT THAT FOLLOWS THIS FUNCTION RETURNS —
   // `armOrderingSettle`'s own header for why it must run here, synchronously, and not after the
   // `await` below. `roadmap-the-road-ahead.md` step 3: "make it place the row," not merely say so.

@@ -271,8 +271,11 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
   });
 
   // THE ONE CHECK UNIQUE TO THIS STEP — the design's own constraint, verified rather than trusted:
-  // today.ts never calls Date.now() itself, so the ONE legitimate call is inside sayAsOf, in the
-  // page, not the module. Comment lines are stripped before counting — this codebase's own prose
+  // today.ts never calls Date.now() itself, so every legitimate call is in the page, not the
+  // module — `sayAsOf` (this step) and `rulesReadingFor` (`rules.ts`'s own consumer, added
+  // later — see that test's own header for why a second, equally audited site is correct rather
+  // than a widening to route around). Comment lines are stripped before counting — this codebase's
+  // own prose
   // names `Date.now()` repeatedly (that is the whole point being documented), and a bare string
   // search would mistake a sentence about the rule for a violation of it. Every comment line in
   // this repo starts with `//` or `*` once trimmed, so filtering on that is exact, not a heuristic
@@ -290,12 +293,29 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
     assert.doesNotMatch(codeOnly(TODAY_SOURCE), /Date\.now\(\)/);
   });
 
-  test("Date.now() is called exactly once in app/index.html's CODE, inside sayAsOf", () => {
+  // WIDENED TO TWO, NOT LOOSENED TO "SOME" — `rules.ts`'s own consumer (`rulesReadingFor`) is a
+  // SECOND legitimate need for "now", answering a DIFFERENT question at a DIFFERENT moment:
+  // `sayAsOf` reads it when a PROJECTION arrives (to caption the freshness line); `rulesReadingFor`
+  // reads it at COMMIT time, because `stamp-created-at-on-task`'s `$cycle_today` has to be
+  // resolved before the write leaves, not after the server answers — reusing `sayAsOf`'s own
+  // instant would either be stale (a commit made before the first projection ever landed) or from
+  // the wrong moment entirely. Both call sites keep the SAME discipline `today.ts`'s own test
+  // above already proves for the module: the instant is read ONCE per call, at the page, and
+  // handed to a PURE function (`todayFor`/`applyRules`) as a parameter — neither `today.ts` nor
+  // `rules.ts` ever reads the clock itself. Two audited call sites, not an unbounded one.
+  test("Date.now() is called from exactly two places in app/index.html's CODE — sayAsOf and rulesReadingFor", () => {
     const appCode = codeOnly(APP_SOURCE);
     const fn = /function sayAsOf[\s\S]*?\n\}\n/.exec(appCode)?.[0];
     assert.ok(fn, "sayAsOf was not found — this test is checking the wrong source");
-    assert.match(fn, /Date\.now\(\)/, "sayAsOf must call Date.now() itself — that is the one legitimate call site");
+    assert.match(fn, /Date\.now\(\)/, "sayAsOf must call Date.now() itself — one of the two legitimate call sites");
+    const rulesFn = /function rulesReadingFor[\s\S]*?\n\}\n/.exec(appCode)?.[0];
+    assert.ok(rulesFn, "rulesReadingFor was not found — this test is checking the wrong source");
+    assert.match(
+      rulesFn,
+      /Date\.now\(\)/,
+      "rulesReadingFor must call Date.now() itself — the other legitimate call site, for $cycle_today at commit time",
+    );
     const allCalls = appCode.match(/Date\.now\(\)/g) ?? [];
-    assert.equal(allCalls.length, 1, "Date.now() must be called from exactly one place in app/index.html's code");
+    assert.equal(allCalls.length, 2, "Date.now() must be called from exactly two places in app/index.html's code");
   });
 });
