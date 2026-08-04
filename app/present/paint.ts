@@ -103,6 +103,7 @@ import { openLine } from "./newline.js";
 import type { GlobalRegistration } from "./newline.js";
 import { classifyLine, stampSpans, tagSpans } from "./rendition.js";
 import type { Rendition } from "./rendition.js";
+import type { SettleSurface } from "./settle.js";
 import { applyEdit } from "./source.js";
 
 /** The markdown surface the painter needs. Structural, so any conforming renderer will do. */
@@ -257,6 +258,16 @@ export interface PaintDeps {
    * `newline.ts`'s own header states for itself.
    */
   readonly declared?: GlobalRegistration;
+  /**
+   * AN ARMED PLACEMENT, IF THIS REPAINT SHOULD SHOW ONE — optional, and its absence is a real
+   * configuration exactly as `focus`'s is: without it a painted view never reorders a row, which is
+   * every test written before `settle.ts` existed and the golden master's own comparison. With it,
+   * this paint asks the surface ONCE (`SettleSurface.take`, keyed by this exact `source` and
+   * `deps.view`) whether a row should relocate and whether THIS repaint gets to animate it — see
+   * `settle.ts`'s own header for why armed elsewhere and only consumed here, and `settleRow` in
+   * this file for what "relocate" and "animate" each do to the DOM.
+   */
+  readonly settle?: SettleSurface;
 }
 
 /**
@@ -954,6 +965,73 @@ function renderTokens(
   return intact ? html : render(text);
 }
 
+/** The class a settling row carries for the length of its motion — see `settleRow` below and this
+ * file's own stylesheet counterpart in app/index.html, `.settle-move`. */
+const SETTLE_CLASS = "settle-move";
+
+/**
+ * THE ONE SETTLE AFFORDANCE — relocates a row and, when asked, admits the move with motion rather
+ * than letting it silently already be there. `docs/implementation-artifacts/roadmap-the-road-
+ * ahead.md` step 3: built once, here, so the next two occasions this document names (a corrected
+ * node type, a cascaded field) call THIS function rather than each inventing their own. `paint()`'s
+ * own call site below decides WHICH row and WHETHER to animate (by asking `deps.settle`); this
+ * function decides HOW the motion looks, and that is the whole of the split.
+ *
+ * ── THE MOTION IS FLIP, NOT PIXEL ARITHMETIC GUESSED FROM ROW HEIGHT ──
+ *
+ * `getBoundingClientRect` before the reorder and after it, a translate that cancels the visual
+ * jump the reorder alone would cause, then a transition back to zero — First/Last/Invert/Play.
+ * Reading real layout, rather than assuming every row is `--row` tall, is what keeps this correct
+ * for the one case this file's own stylesheet comment in app/index.html admits it does not
+ * control: "a line whose rendition WRAPS... no rule here can make it [uniform]."
+ *
+ * ── WHY THE TRANSITION ITSELF IS A CSS CLASS, NOT A JS-SIDE DURATION ──
+ *
+ * `--slide` is already, in the operator's own words carried in app/index.html's root variables,
+ * "one motion, named once, so `prefers-reduced-motion` has exactly one thing to turn off." Writing
+ * a second, JS-computed duration here would be the second thing that sentence exists to prevent.
+ * `SETTLE_CLASS` carries `transition: transform var(--slide)` in the stylesheet, and the identical
+ * `@media (prefers-reduced-motion: reduce)` block that already silences `.scrim`/`.drawer`/`.chev`/
+ * `button` silences this class too. So this function always runs the same FLIP arithmetic in every
+ * environment and lets the ONE stylesheet decide whether the operator sees the row travel or sees
+ * it simply arrive — the admission always happens (hazard 5: "the row still moves... but without
+ * the animation"), only the transform's visibility is conditional, and it is conditional in CSS,
+ * not in this function.
+ *
+ * `animate` FALSE STILL REPOSITIONS. A repeat repaint of an already-shown placement (the operator
+ * pressed `j` a moment after the row settled, before the cycle confirmed it) must keep the row
+ * where it was put — the alternative is the row snapping back to its old spot on the very next
+ * keystroke, which is worse than never moving it. Only the transform step is skipped; `insertBefore`
+ * always runs.
+ */
+function settleRow(moving: HTMLElement, before: HTMLElement | null, body: HTMLElement, animate: boolean): void {
+  const first = animate && typeof moving.getBoundingClientRect === "function" ? moving.getBoundingClientRect() : null;
+  body.insertBefore(moving, before);
+  if (first === null) {
+    return;
+  }
+  const last = moving.getBoundingClientRect();
+  const dy = first.top - last.top;
+  if (dy === 0) {
+    return;
+  }
+  moving.className = moving.className === "" ? SETTLE_CLASS : `${moving.className} ${SETTLE_CLASS}`;
+  moving.style.transition = "none";
+  moving.style.transform = `translateY(${dy}px)`;
+  const settled = (): void => {
+    moving.style.transition = "";
+    moving.style.transform = "";
+  };
+  // NO `requestAnimationFrame` IN A NODE TEST RUN — the FLIP still has to happen (`settled` still
+  // clears the transform), it just happens on the next microtask/turn rather than the next real
+  // frame. A real browser always has this global; app/index.html runs in one.
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(settled);
+  } else {
+    settled();
+  }
+}
+
 /**
  * Paint a view's markdown into `body`.
  *
@@ -1086,6 +1164,7 @@ export function paint(
       const text = rawText(lineSource);
       stampInstance(text, lineIndex);
       body.append(text);
+      rowsByLineIndex.set(lineIndex, text);
       return;
     }
     if (mode !== undefined && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
@@ -1096,6 +1175,7 @@ export function paint(
       focusable(line, lineIndex);
       stampInstance(line, lineIndex);
       body.append(line);
+      rowsByLineIndex.set(lineIndex, line);
       return;
     }
     // THE LINE AND THE FILE ARE TWO ARGUMENTS AND THEY ARE NAMED APART. The input shows ONE
@@ -1108,6 +1188,7 @@ export function paint(
     // APPEND BEFORE FOCUS. `focus()` on an element that is not in the document does nothing, so
     // the order here is what puts the cursor in the line a person just clicked.
     body.append(input);
+    rowsByLineIndex.set(lineIndex, input);
     if (focus.isFocused(lineIndex)) {
       (input as HTMLInputElement).focus?.();
       // FOCUSING BLURS WHATEVER HAD FOCUS, AND A BLUR SETTLES. So this call is one of the three
@@ -1183,6 +1264,14 @@ export function paint(
 
   /** The last source line this paint drew a row for. `-1` when the view painted nothing at all. */
   let lastPaintedIndex = -1;
+
+  // EVERY ROW THIS PAINT BUILT, BY THE SOURCE LINE IT CAME FROM — the settle affordance's own
+  // lookup, and nothing else's. `orderingPlacementFor` (ordering.ts) answers in line indices, never
+  // in DOM references, because it is PURE and has never touched a document; this map is the one
+  // place that answer meets an actual element, and it exists for exactly the two lookups the
+  // settle consumption below makes (`instruction.placement.lineIndex`,
+  // `instruction.placement.beforeLineIndex`) and nothing else reads it.
+  const rowsByLineIndex = new Map<number, HTMLElement>();
 
   source.split("\n").forEach((line, index) => {
     // A ROW BUILT BY A SUPERSEDED FRAME CLOSES OVER A SOURCE THE PAGE NO LONGER HAS, and its
@@ -1313,6 +1402,7 @@ export function paint(
       stampInstance(row, index);
       row.append(box, span);
       body.append(row);
+      rowsByLineIndex.set(index, row);
       return;
     }
 
@@ -1336,6 +1426,7 @@ export function paint(
       focusable(el, index);
       stampInstance(el, index);
       body.append(el);
+      rowsByLineIndex.set(index, el);
       return;
     }
 
@@ -1360,6 +1451,7 @@ export function paint(
     focusable(div, index);
     stampInstance(div, index);
     body.append(div);
+    rowsByLineIndex.set(index, div);
   });
 
   // NOTHING BELOW THIS LINE MAY RUN FOR A FRAME THAT HAS BEEN REPLACED. The trailing draft row and
@@ -1367,6 +1459,40 @@ export function paint(
   // this frame's `source` into `applyEdit`. See `paintGeneration`.
   if (superseded()) {
     return;
+  }
+
+  // ── THE SETTLE AFFORDANCE — placing a row where the browser predicts the engine will ──────────
+  //
+  // Asked ONCE, for THIS `source`/`deps.view` pair, after every row this paint would draw anyway
+  // already exists in `rowsByLineIndex` — `settle.ts`'s own header is where WHY this is source-
+  // keyed and one-shot is argued; `ordering.ts`'s `orderingPlacementFor` is where the placement
+  // came from and the proof it agrees with the engine; `settleRow` above is HOW the motion looks.
+  //
+  // NOT REACHED WHEN `deps.settle` IS ABSENT — every test written before `settle.ts` existed, and
+  // the golden master's own byte-identical comparison, paint exactly what they always painted.
+  //
+  // A ROW STILL BEING TYPED IS NEVER THE ROW THIS MOVES. `SettleSurface.arm` is only ever called
+  // from `commitLine` (app/index.html), after `paint.ts`'s own `rawInput.settle` has already run
+  // `leaveInsert()` — the `<input>` for the line just committed is gone from the DOM by the time
+  // THIS forEach pass even starts building rows again, replaced by whatever the cascade resolves
+  // the line to now (a NORMAL block cursor, or inert text). There is no code path that can hand
+  // this function an element still carrying a live text box.
+  const settle = deps.settle;
+  if (settle !== undefined) {
+    const instruction = settle.take(source, deps.view ?? "");
+    if (instruction !== null) {
+      const movingEl = rowsByLineIndex.get(instruction.placement.lineIndex);
+      const beforeLineIndex = instruction.placement.beforeLineIndex;
+      const beforeEl = beforeLineIndex === null ? null : (rowsByLineIndex.get(beforeLineIndex) ?? null);
+      // `movingEl === undefined` IS A REAL OUTCOME, NOT A BUG. The placement was armed against THIS
+      // `source` (the `take` check above already proved that), but `lineIndex` could still name a
+      // blank line — `orderingPlacementFor` never returns one (a blank line has no marker value to
+      // rank), so this guard is defensive rather than load-bearing; it is here so a future change to
+      // either function fails by doing nothing rather than by throwing.
+      if (movingEl !== undefined) {
+        settleRow(movingEl, beforeEl, body, instruction.animate);
+      }
+    }
   }
 
   // A DRAFT OPENED PAST THE LAST LINE. `insert-line` accepts `lines.length` because "after the last

@@ -172,6 +172,17 @@ export { updateMembershipBadge as __updateMembershipBadge };
 // THE ORDERING NOTE (design-the-resolution-architecture.md step 7). Same reasoning as
 // __membershipNoteFor immediately above — its own separate computation, exported on its own.
 export { orderingNoteFor as __orderingNoteFor };
+// THE ORDERING ABSTENTION REGISTER AND THE PLACEMENT ARM (roadmap-the-road-ahead.md step 3).
+// Same reasoning as __membershipDiagnosticFor/__updateMembershipBadge above, plus the one function
+// unique to this step: __armOrderingSettle is exported so a suite can drive "did this edit arm the
+// settle surface" directly, without also standing up a whole commitLine write.
+export { orderingDiagnosticFor as __orderingDiagnosticFor };
+export { updateOrderingBadge as __updateOrderingBadge };
+export { armOrderingSettle as __armOrderingSettle };
+// THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __held
+// are: a suite reads what the page is holding NOW, and what changes under it is which placement
+// (if any) is armed.
+export const __settle = () => settle;
 // THE TODAY NOTE (design-the-resolution-architecture.md step 8's call site). Same reasoning as
 // __membershipNoteFor and __orderingNoteFor above — its own separate computation, exported on its
 // own so a suite can drive \`todayFor\`'s wiring directly, with an arbitrary instant, without also
@@ -350,6 +361,35 @@ export function installBrowser() {
     },
     append(...nodes) {
       this.children.push(...nodes);
+      for (const node of nodes) node._parent = this;
+    },
+    // THE SETTLE AFFORDANCE'S OWN REACH — `paint.ts`'s `settleRow` is the first thing in this
+    // bundle to reorder an already-appended child, and this stub is the fixture-file's own
+    // instance of the rule `tests/fixtures/dom-stub.mjs` states for itself: a painter reaching for
+    // a new piece of the DOM fails loudly unless the stub is widened on purpose. Standard `Node`
+    // semantics — remove `node` from wherever it already sits in THIS element's children, then
+    // splice it back in immediately before `referenceNode`, or at the end when that is `null`.
+    insertBefore(node, referenceNode) {
+      const at = this.children.indexOf(node);
+      if (at !== -1) this.children.splice(at, 1);
+      node._parent = this;
+      if (referenceNode === null || referenceNode === undefined) {
+        this.children.push(node);
+        return node;
+      }
+      const refAt = this.children.indexOf(referenceNode);
+      this.children.splice(refAt === -1 ? this.children.length : refAt, 0, node);
+      return node;
+    },
+    // WHERE THE ROW SITS — a MINIMAL layout model derived from this element's own index among its
+    // current parent's children, times an arbitrary constant row height, mirroring
+    // tests/fixtures/dom-stub.mjs's own version of this method (see that file for the full
+    // rationale). Enough for `settleRow`'s FLIP arithmetic (paint.ts) to see a real, non-zero,
+    // sign-correct delta the instant a reorder changes an element's index, without this fixture
+    // pretending to lay out text. `_top`, when a suite sets it directly, wins.
+    getBoundingClientRect() {
+      const top = this._top ?? (this._parent ? this._parent.children.indexOf(this) * 24 : 0);
+      return { top, left: 0, right: 0, bottom: top, width: 0, height: 0 };
     },
     addEventListener(type, listener) {
       const existing = this.listeners.get(type) ?? [];

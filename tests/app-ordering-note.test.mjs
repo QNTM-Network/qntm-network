@@ -31,6 +31,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { importPage, installBrowser, makeWorkDir } from "./fixtures/app-html-page.mjs";
+import { orderingPlacementFor } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-ordering-note");
@@ -288,6 +289,211 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor'
     for (const line of ORDERING_SOURCE.split(/\r?\n/)) {
       if (!/^\s*import\b/.test(line)) continue;
       assert.doesNotMatch(line, /["']\.\/source\.js["']/, `ordering.ts imports the edit path: ${line.trim()}`);
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 5. THE PLACEMENT IS ARMED — armOrderingSettle, through app/index.html's OWN function, agreeing
+//    with orderingPlacementFor called directly. roadmap-the-road-ahead.md step 3.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("5. armOrderingSettle arms the settle surface, and agrees with orderingPlacementFor called directly", () => {
+  let page;
+
+  before(async () => {
+    installBrowser();
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+    page = await importPage(WORK);
+    page.__applyPresentation(FAKE_DECLARATION);
+  });
+
+  const COMMIT = {
+    lineIndex: 3,
+    text: "- [ ] c [[qntm:3]] 🔢 1",
+    markdown: DEMO_SOURCE.replace("- [ ] c [[qntm:3]] 🔢 3", "- [ ] c [[qntm:3]] 🔢 1"),
+    source: DEMO_SOURCE,
+    kind: "set-line",
+  };
+
+  test("moving c from rank 3 to rank 1 arms the surface with the SAME beforeLineIndex orderingPlacementFor gives directly", () => {
+    page.__armOrderingSettle(DEMO_VIEW, COMMIT);
+    const instruction = page.__settle().take(COMMIT.markdown, DEMO_VIEW.id);
+    assert.notEqual(instruction, null, "the settle surface was never armed");
+
+    // THE AGREEMENT PROOF, NOT MERELY A NON-NULL ANSWER — the same section, source and line
+    // handed to `orderingPlacementFor` DIRECTLY, off the same declaration `armOrderingSettle`
+    // read from the page's own module state, must produce the identical placement.
+    const direct = orderingPlacementFor(
+      DEMO_VIEW.id,
+      "queue",
+      COMMIT.source,
+      COMMIT.lineIndex,
+      COMMIT.text,
+      FAKE_DECLARATION.resolution.ordering,
+      FAKE_DECLARATION.resolution.orderingFields,
+    );
+    assert.equal(direct.kind, "answer");
+    assert.equal(direct.placement.moved, true);
+    assert.deepEqual(instruction.placement, {
+      lineIndex: COMMIT.lineIndex,
+      beforeLineIndex: direct.placement.beforeLineIndex,
+    });
+  });
+
+  test("an edit that does not move anything never arms the surface", () => {
+    page.__applyPresentation(FAKE_DECLARATION);
+    const noMove = {
+      lineIndex: 3,
+      text: "- [ ] c renamed [[qntm:3]] 🔢 3",
+      markdown: DEMO_SOURCE.replace("- [ ] c [[qntm:3]] 🔢 3", "- [ ] c renamed [[qntm:3]] 🔢 3"),
+      source: DEMO_SOURCE,
+      kind: "set-line",
+    };
+    page.__armOrderingSettle(DEMO_VIEW, noMove);
+    assert.equal(page.__settle().take(noMove.markdown, DEMO_VIEW.id), null);
+  });
+
+  test("an INSERTED line never arms the surface — the same guard orderingNoteFor already applies", () => {
+    page.__applyPresentation(FAKE_DECLARATION);
+    // A MARKDOWN STRING NO EARLIER TEST IN THIS FILE HAS EVER ARMED — `take()` returning `null`
+    // must mean THIS call armed nothing, not merely that some earlier test's still-live instruction
+    // (the surface is one page-level singleton, shared across every test in this describe block)
+    // happens not to match. Reusing `COMMIT.markdown` here would prove nothing: the first test in
+    // this block already armed exactly that string, and `take()` would return ITS instruction.
+    const insertCommit = { ...COMMIT, kind: "insert-line", markdown: COMMIT.markdown + "\nunique-marker" };
+    page.__armOrderingSettle(DEMO_VIEW, insertCommit);
+    assert.equal(page.__settle().take(insertCommit.markdown, DEMO_VIEW.id), null);
+  });
+
+  test("a section outside the published table never arms the surface", () => {
+    page.__applyPresentation(FAKE_DECLARATION);
+    const elsewhere = {
+      lineIndex: 1,
+      text: "- [ ] x #work",
+      markdown: "## Somewhere Else\n- [ ] x #work",
+      source: "## Somewhere Else\n- [ ] x",
+      kind: "set-line",
+    };
+    page.__armOrderingSettle(DEMO_VIEW, elsewhere);
+    assert.equal(page.__settle().take(elsewhere.markdown, DEMO_VIEW.id), null);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 6. THE ABSTENTION REGISTER, THROUGH THE PAGE'S OWN FUNCTIONS — #orderingBadge
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+const BADGE_DECLARATION = {
+  qualification: {
+    ...FAKE_DECLARATION.qualification,
+    sectionOrder: { ...FAKE_DECLARATION.qualification.sectionOrder, "daily-work": ["capture"] },
+  },
+  resolution: {
+    ordering: {
+      ...FAKE_DECLARATION.resolution.ordering,
+      "daily-work": { capture: { ordering: undefined, orderingMode: "insertion_order", name: "Work Capture" } },
+    },
+    orderingFields: FAKE_DECLARATION.resolution.orderingFields,
+  },
+};
+
+describe("6. updateOrderingBadge writes #orderingBadge — decided, abstained, or left alone", () => {
+  let page;
+  let elements;
+
+  before(async () => {
+    ({ elements } = installBrowser());
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+    page = await importPage(WORK);
+    page.__applyPresentation(BADGE_DECLARATION);
+  });
+
+  test('a section that declared ordering and answered says "ordering: decided"', () => {
+    page.__updateOrderingBadge(DEMO_VIEW, {
+      lineIndex: 3,
+      text: "- [ ] c [[qntm:3]] 🔢 1",
+      markdown: "irrelevant",
+      source: DEMO_SOURCE,
+      kind: "set-line",
+    });
+    assert.equal(elements.get("orderingBadge").textContent, "ordering: decided");
+    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-answer"));
+    assert.ok(!elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
+  });
+
+  test('a section that declared ordering but could not decide says "ordering: abstained — insertion-order"', () => {
+    // daily-work.capture: `orderingMode: insertion_order`, no field an edit could move a row BY —
+    // exactly the case hazard 3 of this step's own brief names by name: "sections with
+    // orderingMode: insertion_order have no field to compare at all," and a silent no-op for it
+    // is the failure this register exists to remove.
+    page.__updateOrderingBadge(
+      { id: "daily-work", path: "x.md" },
+      {
+        lineIndex: 1,
+        text: "- [ ] x #work",
+        markdown: "irrelevant",
+        source: "## Work Capture\n- [ ] x",
+        kind: "set-line",
+      },
+    );
+    assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — insertion-order");
+    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
+    assert.ok(!elements.get("orderingBadge").classList.contains("diagnostic-badge-answer"));
+  });
+
+  test('a section outside the published table ("no-section-declaration") leaves the badge as it was', () => {
+    page.__updateOrderingBadge(DEMO_VIEW, {
+      lineIndex: 3,
+      text: "- [ ] c [[qntm:3]] 🔢 1",
+      markdown: "irrelevant",
+      source: DEMO_SOURCE,
+      kind: "set-line",
+    });
+    const before = elements.get("orderingBadge").textContent;
+    assert.equal(before, "ordering: decided");
+    // THE SAME POSTURE `membershipBadge` ALREADY ESTABLISHED: a LEVEL indicator says what the last
+    // REAL evaluation found and stays exactly that until the next one — "no-section-declaration"
+    // is not a question anyone asked (177 of 186 sections never declare ordering at all), so
+    // reporting it would be noise, not honesty, and the badge is left showing the prior answer.
+    page.__updateOrderingBadge(DEMO_VIEW, {
+      lineIndex: 10,
+      text: "- [ ] x",
+      markdown: "irrelevant",
+      source: "## Somewhere Else\n- [ ] x",
+      kind: "set-line",
+    });
+    assert.equal(elements.get("orderingBadge").textContent, before);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7. NOTHING NEW REACHES A WRITE — armOrderingSettle and orderingDiagnosticFor, the same pinned
+//    counts §4 already covers, re-verified so this file alone proves this step added no write path
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("7. NOTHING NEW REACHES A WRITE — armOrderingSettle and orderingDiagnosticFor's own imports", () => {
+  const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
+  const SETTLE_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "settle.ts"), "utf8");
+
+  test("armOrderingSettle calls applyEdit zero times — it only ever calls settle.arm", () => {
+    const fn = /function armOrderingSettle[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
+    assert.ok(fn, "armOrderingSettle was not found — this test is checking the wrong source");
+    assert.ok(!/\bapplyEdit\(/.test(fn), "armOrderingSettle calls applyEdit");
+    assert.ok(!/\bwriteFile\(/.test(fn), "armOrderingSettle calls writeFile");
+    assert.ok(/\bsettle\.arm\(/.test(fn), "armOrderingSettle no longer arms the settle surface at all");
+  });
+
+  test("orderingDiagnosticFor calls applyEdit zero times, the same proof orderingNoteFor already has", () => {
+    const fn = /function orderingDiagnosticFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
+    assert.ok(fn, "orderingDiagnosticFor was not found — this test is checking the wrong source");
+    assert.ok(!/\bapplyEdit\(/.test(fn), "orderingDiagnosticFor calls applyEdit");
+  });
+
+  test("settle.ts imports nothing from source.ts — it holds an instruction, it never builds one", () => {
+    for (const line of SETTLE_SOURCE.split(/\r?\n/)) {
+      if (!/^\s*import\b/.test(line)) continue;
+      assert.fail(`settle.ts is expected to import nothing at all, found: ${line.trim()}`);
     }
   });
 });
