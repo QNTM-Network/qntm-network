@@ -418,6 +418,21 @@ capabilities:
     checkbox branch renders only its tail, inline, with no indent. The invariant the tests hold is
     therefore ALL-OR-NOTHING rather than "always hidden" - never a stamp that is neither shown nor
     marked. Filed as `an-indented-prose-line-cannot-carry-a-token-rendition`.
+    ── UPDATE 2026-08-04, THE "UPDATE 2026-07-31" PARAGRAPH ABOVE (IN THIS SAME ENTRY) IS ITSELF
+    STALE, AND NOTHING CORRECTED IT UNTIL NOW. It states `presentation.json` is read at BUILD time
+    via `app/present/embedded-declaration.ts` and baked into `dist/present.js`. THAT STOPPED BEING
+    TRUE IN `b2a97af` (#70, "the declaration is fetched at run time, not baked into the bundle"),
+    which post-dates that paragraph and deleted the file it names — verified in this worktree,
+    `find app -iname "*embedded-declaration*"` returns nothing, and `loadPresentation()`
+    (`app/index.html:1198-1218`) once again does `await fetch(DECLARATION_URL, ...)` against
+    `DECLARATION_URL = "/presentation.json"` (`app/index.html:1172`), a real network read, not the
+    embedded constant. Left in place at its own site rather than rewritten (the house rule — state
+    the claim, state the fact, name what changed it — `roadmap-the-road-ahead.md` §6.3): the
+    2026-07-31 update was true when written and stopped being true three days later. THE
+    FALSIFIER THIS CAPABILITY NAMED is unaffected either way — `tests/present-global.test.mjs`
+    section 4 drives declarations through the page's own lifted script regardless of which channel
+    supplies them. See also `flows.yaml`'s `embedded-declaration.ts` comment block, corrected the
+    same way, same day.
   tier: foundational
   status: undeclared
 - id: the-focused-line-shows-its-source
@@ -1469,6 +1484,22 @@ capabilities:
     here. `app/present/indent.ts` IS wired into production (`indentedLine`'s new `unit` parameter,
     threaded from `app/index.html`'s `loadPresentation`), so the indent-unit half of this
     capability's claims are claims about the shipped `>`/`<` gesture, not about an unwired module.
+    ── UPDATE 2026-08-04, THE "UPDATE 2026-07-31" PARAGRAPH ABOVE (IN THIS SAME ENTRY) IS ITSELF
+    STALE, AND NOTHING CORRECTED IT UNTIL NOW. It states `app/present/embedded-declaration.ts`
+    imports `presentation.json` at BUILD time and `dist/present.js` carries it as
+    `EMBEDDED_DECLARATION`. THAT STOPPED BEING TRUE IN `b2a97af` (#70, "the declaration is fetched
+    at run time, not baked into the bundle"), which post-dates that paragraph and deleted the file
+    it names — verified in this worktree, `find app -iname "*embedded-declaration*"` returns
+    nothing. `loadPresentation()` (`app/index.html:1198-1218`) once again does `await
+    fetch(DECLARATION_URL, ...)` against `DECLARATION_URL = "/presentation.json"`
+    (`app/index.html:1172`), a real network read. Left in place at its own site rather than
+    rewritten (the house rule — state the claim, state the fact, name what changed it —
+    `roadmap-the-road-ahead.md` §6.3): true when written, stopped being true three days later.
+    `tests/present-global.test.mjs` section 0's `EMBEDDED_DECLARATION` deep-equality assertion this
+    paragraph cites no longer runs against anything of that name either — the drift guard it
+    describes retired along with the constant. See `presentation-is-resolved-not-chosen` (this
+    file) and `flows.yaml`'s `embedded-declaration.ts` comment block, corrected the same way, same
+    day.
   status: working
 - id: the-world-moves-around-you
   intent: >-
@@ -3668,4 +3699,148 @@ capabilities:
     ~10 s -> ~250 ms is a claim about a network no arm touches. What is measured is the SHAPE -
     which requests are made, in which order, carrying what, and what the page does with the answers.
   status: 'working'
+
+# ── PINNED 2026-08-04 — docs/implementation-artifacts/pin-the-cube.md, the four-axis pass. ────────
+# Both entries below record a distinction that was live only in conversation before this pass and
+# is now a claim with a named, running check. Neither is a new BEHAVIOUR; both are a name put on a
+# shape the compilers already have, made permanent by an assertion that can go red.
+
+- id: a-compiler-knows-the-category-not-the-instance
+  intent: >-
+    A GENERATOR MUST KNOW WHAT A RULE (OR A NODE TYPE, OR A SECTION) IS, NOT WHICH ONES THE
+    OPERATOR HAPPENS TO HAVE WRITTEN. The operator's 46 rule files, 186 sections and his specific
+    node types are ARBITRARY PERSONAL CONTENT; a generator that is done only for HIS config is not
+    done, it is coupled. The falsifier this claim names — and the one thing that makes it a claim
+    rather than an aspiration — is `compile-capture-rules.mjs`, the RETIRED rules compiler this
+    project already shipped and removed: it modelled exactly two rule ids by name
+    (`routine-without-cadence-becomes-task`, `stamp-created-at-on-task`), reached 1803 GREEN tests
+    on `main`, and would have kept passing indefinitely against a THIRD rule of the same shape,
+    because nothing in the suite ever offered it one. A green suite is not evidence of generality;
+    it is evidence nobody tried.
+    ENFORCED BY `tests/app-generality-acceptance.test.mjs` — THE OPERATOR'S OWN ACCEPTANCE TEST,
+    RUN. A node type, a tag, a view with three sections and a marker glyph that appear NOWHERE in
+    the operator's real config (verified absent with `rg -a` against both the monorepo config and
+    this worktree before the file was written — never plain `grep`, which has silently skipped a
+    real file in this repo before, `tests/no-nul-bytes.test.mjs`'s own reason for existing) are
+    written into a scratch COPY of his config, and all FOUR of `generate-qualification-
+    declaration.mjs`, `generate-resolution-declaration.mjs`, `generate-structural-declaration.mjs`
+    and `generate-rules-declaration.mjs` are run against it — registration, defaults, membership
+    and its abstention, ordering, section addressing, a new structural edge type, and a new rule
+    the widened rules compiler models. `node --test tests/app-generality-acceptance.test.mjs` — 30
+    tests, 10 describe blocks, 30 PASS / 0 FAIL, verified this pass.
+    MUTATION-PROVEN AGAINST THE EXACT DEFECT THIS CLAIM NAMES, ALREADY IN THE SUITE. Section 9 of
+    that file ("THE REGRESSION PROOF") reproduces the retired coupled compiler's own algorithm in
+    miniature against the SAME never-seen scratch config section 8 proves the widened generator
+    gets right, and shows the coupled one goes RED on it — the direct, already-answered version of
+    "would this gate have caught the coupled compiler." Widened 2026-08-04 (§7-§9): before that
+    date this file called exactly two of the four generators (qualification, resolution);
+    structural and rules were not exercised by it at all, which is exactly how the coupled compiler
+    merged in the first place.
+    ONE GENERATOR THIS CLAIM DOES NOT YET COVER, NAMED RATHER THAN LEFT IMPLIED.
+    `scripts/generate-operator-set.mjs` (a fifth script, writing the derived `RESOLVABLE_FIELDS`
+    copies `design-the-compiler-and-the-bands.md` §12.2 records) is never imported or called by
+    `tests/app-generality-acceptance.test.mjs` — mentioned once, in a comment, and nowhere invoked.
+    "All four compilers" is accurate for qualification, resolution, structural and rules; it is not
+    a claim about this fifth, smaller script, and this line exists so nobody reads it as one.
+  tier: functional
+  status: working
+
+- id: the-cascade-resolves-into-per-section-answers-not-a-layer-key
+  intent: >-
+    THE LAYER — global -> view -> section -> node type -> line — IS A DIMENSION EVERY CONFIG TYPE
+    IS READ THROUGH ON THE WAY IN, NOT A KEY THAT SURVIVES INTO WHAT THE BROWSER READS.
+    `apps/qntm-md/config/views/admin.yaml` in the monorepo (read-only, trunk clone) shows the whole
+    of the mechanism in sixteen lines: `default_node_type: task` sits at the top of the sheet (the
+    VIEW layer), and `defaults: {domain: admin}` sits nested inside each of its two sections (the
+    STRUCTURAL_NODE layer) — the SAME file, two layers expressed by nesting alone. No
+    `view_defaults.yaml` exists anywhere in that config tree, and none was ever needed: nesting IS
+    the layer. What each of the four compiled sections of `presentation.json` answers is
+    PER-SECTION, with the cascade already resolved away — `structural.sections`,
+    `qualification.sections`/`sectionOrder`, `resolution.sectionRegistration` — and none of the
+    four carries a literal `global` key or a literal `view` key anywhere in its tree.
+    `global_defaults.yaml` IS THE ONE LAYER THAT GOT ITS OWN FILE, BECAUSE IT HAD NO NESTING TO SIT
+    IN — AND IT IS LIVE, NOT INERT. Correcting a claim this project's own conversation carried into
+    today: `global_defaults.yaml` is wired end to end in the monorepo's ENGINE —
+    `bundle/loader.py:431-432,574-592` reads its `defaults:` map into `LoadedBundle.global_defaults`,
+    `coordination/orchestrator.py` threads it into cycle scope, and `io/applier.py:4080-4156`
+    actually merges it in at `ResolutionLevel.GLOBAL`. Its `defaults:` map is `{}` today, which is
+    why nothing has ever been seen to move. THE SKEW THE ORIGINAL CLAIM WAS REACHING FOR IS REAL,
+    JUST NARROWER THAN STATED: none of the four browser-facing generators in THIS repo
+    (qualification, resolution, structural, rules) reads `global_defaults.yaml` at all — only
+    `scripts/resolution-agreement.py`, a verification script, does. So the day the operator declares
+    a real global default, the ENGINE (and Obsidian, the surface it renders) applies it immediately;
+    the BROWSER stays silent about it, with no error and no drop, because nothing in its compile
+    path so much as opens the file. The redistribution direction the operator set — a global default
+    node type belongs at `schema.yaml`'s own root, a global vocabulary meaning at `vocabulary/`'s
+    own root, and so on, so `global_defaults.yaml` disappears by redistribution rather than by a
+    better central file — is RIGHT, and it is a monorepo-side change this repo cannot make (read-only
+    access to `apps/qntm-md/`); recorded as future work, not attempted here.
+    THE SKEW ITSELF IS ALSO PINNED, NOT JUST DESCRIBED — `tests/global-defaults-does-not-reach-
+    the-browser.test.mjs`, ADDED THIS PASS. Reads each of the four generator scripts as a `Buffer`
+    (not text — a NUL byte cannot make this silently pass the way plain `grep` has silently
+    skipped a real file in this repo before) and asserts none contains the literal string
+    `global_defaults`. This does not close the skew; it stops a future change widening the browser's
+    reach from doing so BY ACCIDENT. MUTATION-PROVEN, THIS PASS: appended a `global_defaults`
+    reference to `generate-rules-declaration.mjs`, watched that one test go RED naming the exact
+    file, reverted with `git checkout`, watched all four go GREEN again.
+    ENFORCED BY `tests/declaration-layer-is-flattened.test.mjs`, ADDED THIS PASS. Reads the
+    committed `presentation.json` (the artifact the browser actually loads; CI already refuses to
+    ship one stale against a fresh build, `.github/workflows/build.yml`) and asserts, for each of
+    `structural`, `qualification`, `resolution` and `rules`: no literal `global` or `view` key
+    anywhere in its tree, `structural` carries `sections`, `qualification` carries `sections` and
+    `sectionOrder`, `resolution` carries `sectionRegistration`. MUTATION-PROVEN, THIS PASS: injected
+    a literal `global: {...}` key into `compile-resolution.mjs`'s declaration object, regenerated
+    `presentation.json`, watched the new test go RED (`found a literal "global" key inside
+    'resolution' — the layer leaked into the output`), reverted the compiler source, restored
+    `presentation.json` to its committed bytes (`git checkout`), watched all 7 assertions go GREEN
+    again. Needs no monorepo checkout to run, so unlike the four monorepo-comparison suites in this
+    repo, it runs — and can fail — in CI on every push, not only locally.
+  tier: functional
+  status: working
+
+- id: config-is-loaded-by-type-not-by-package
+  intent: >-
+    A BUNDLE IS A PACKAGE OF CONFIG, NOT A FIRST-CLASS CONFIG TYPE ITSELF — each config type should
+    load directly, and a bundle's directory shape should never be mistaken for configuration that
+    exists. `apps/qntm-md/bundles/starter/` (monorepo, read-only) holds ten entries — `schema.yaml`
+    plus nine directories (`chains`, `follow_up_chains`, `metrics`, `patterns`, `recurrence`,
+    `rendering`, `rules`, `templates`, `views`; `vocabulary` besides). The operator's own live
+    `config/` tree mirrors that shape closely enough to have been misread, in this project's own
+    conversation, as evidence the whole nine were unpopulated scaffolding. CORRECTED HERE: only SIX
+    of those nine — `chains`, `follow_up_chains`, `metrics`, `recurrence`, `rendering`, `templates`
+    — are empty but for a `.gitkeep` in the live config. `patterns` (139 files), `rules` (49 files)
+    and `views` (85 files) are the operator's real, populated, live instance, not scaffolding of any
+    kind. The claim holds for six of nine, not nine of nine, and the corrected version is the one
+    worth keeping: the starter bundle's directory NAMES were stamped onto a real config tree, and
+    six of those names still carry nothing in it.
+    `SupportedContentType.STARTER_PACKAGE` (`config_registration.py:39`) IS ALREADY THE HONEST
+    ANSWER TO "IS IT A FIRST-CLASS TYPE" — IT IS RECOGNISED AND UNIMPLEMENTED, NOT LIVE. It sits in
+    `loader.py`'s own `_UNIMPLEMENTED_CONTENT_TYPES` set (`loader.py:313-317`, alongside `ACTIONS`)
+    — parsed when a `starter_package.yaml` marker is found, consumed by nothing. So the fix the
+    operator named — "config should be loaded directly per active config type, not via a package;
+    then the type and the empty directories go" — is smaller than it first reads: the type is
+    already inert code, not live routing, and removing it is a monorepo-side deletion this repo has
+    no write access to make (`apps/qntm-md/` is read-only from here). Filed as future work, not
+    attempted.
+    SHELLS ARE THE PRECEDENT THIS SAME CLEANUP ALREADY WENT THROUGH, AND IT IS DONE, NOT PENDING.
+    `SupportedContentType.SHELL` and `CAPABILITY_SHELLS` are defined in
+    `config_registration.py:38,44` and routed in `bundle/loader.py:295-312,1349-1354` (moved
+    slightly from the brief's cited 295-309/1349, current as of this pass). `loader.py:296-299`'s
+    own comment names four RETIRED shells whose folders are gone with them — `metrics` (2026-07-19),
+    `templates`, `follow_up_chains`, `recurrence` (all 2026-07-28) — matching four of the six empty
+    directories above exactly. No shell config file exists anywhere in `config/` (verified by
+    listing its sixteen top-level entries directly, not by grep-for-absence: no `shell.yaml`, no
+    `capability_shells.yaml`, no `decision_tables.yaml`). One correction to "only inside loader.py":
+    the two enum members are DEFINED in `config_registration.py`, one file over; behavioural
+    consumption (the `shell_yaml_files` merge into `render_decision_tables`) is confined to
+    `loader.py` alone, which is the load-bearing part of the original claim and does hold.
+    `chains` IS THE ONE EMPTY DIRECTORY THAT MATCHES NEITHER SET — worth naming so it is not lost.
+    It carries no routing at all in `loader.py` or `config_registration.py`; it is not a retired
+    shell and not a starter-package name with special handling, just an unrouted, unused folder.
+    UNENFORCED. No check in this repo can verify a Python enum's removal in a monorepo this repo
+    cannot write to. The nearest available check is a future one, in the monorepo's own test suite
+    (`tests/bundle/test_config_registration.py`, `tests/bundle/test_loader_registration.py`), and it
+    does not exist yet.
+  tier: functional
+  status: undeclared
 

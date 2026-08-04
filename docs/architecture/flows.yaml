@@ -1076,6 +1076,18 @@ forbidden_flows:
   # participates in — `app/index.html`'s `loadPresentation` calling `presentationFromDeclaration`
   # with this constant — was already undeclared before this change (that caller is the page, same
   # invisibility as everywhere else in this note) and stays undeclared for the same reason.
+  #
+  # ── UPDATE 2026-08-04, THE PARAGRAPH ABOVE IS STALE, AND NOTHING CORRECTED IT UNTIL NOW ──────
+  # `app/present/embedded-declaration.ts` NO LONGER EXISTS. `b2a97af` (#70, "the declaration is
+  # fetched at run time, not baked into the bundle") deleted it; verified in this worktree,
+  # `find app -iname "*embedded-declaration*"` returns nothing. `loadPresentation()`
+  # (`app/index.html:1198-1218`) once again does `await fetch(DECLARATION_URL, ...)` against
+  # `DECLARATION_URL = "/presentation.json"` (`app/index.html:1172`) — a real network read, with a
+  # real observable importer-caller edge again, not a JSON import this note had to explain away.
+  # Left in place rather than rewritten (the house rule — state the claim, state the fact, name
+  # what changed it — `roadmap-the-road-ahead.md` §6.3): true when written, stopped being true the
+  # same week. Corrected the same way, same day, in `capabilities.yaml`'s
+  # `presentation-is-resolved-not-chosen` and `structural-language-is-published-not-guessed`.
 
   # ── STEP 13, AND IT DECLARES NOTHING HERE EITHER — SAID, NOT LEFT IMPLIED ────────────────
   #

@@ -3579,3 +3579,48 @@ backlog:
     rewriting it.
   kind: null
   state: unscoped
+- id: starter-package-and-six-empty-directories-are-monorepo-cleanup
+  title: >-
+    [config] [FLAG, NOT A FIX] `docs/implementation-artifacts/pin-the-cube.md` claim C:
+    `SupportedContentType.STARTER_PACKAGE` (`apps/qntm-md/src/qntm_md/bundle/
+    config_registration.py:39`, monorepo, read-only) is already recognised-and-unimplemented
+    (`bundle/loader.py:313-317`'s `_UNIMPLEMENTED_CONTENT_TYPES`), and six of the operator's
+    `config/` directories (`chains`, `follow_up_chains`, `metrics`, `recurrence`, `rendering`,
+    `templates`) hold nothing but a `.gitkeep`. The operator's own direction — config loads
+    directly per active type, never via a package, so the type and the six empty directories go —
+    is a Python deletion in a repo this branch has read-only access to
+    (`apps/qntm-md/`) and no write access to at all. THIS ROW EXISTS ONLY TO FLAG THE FINDING, NOT
+    TO RESOLVE IT — the same posture `the-acceptance-test-backlog-row-is-stale` and
+    `stage-three-does-not-tenant-ize-config` take for gaps this repo can see but not close. Needs,
+    in the monorepo: delete `STARTER_PACKAGE` from `SupportedContentType` and its two routing
+    branches in `loader.py`, delete the six empty directories (or file per-directory reasons for
+    keeping any of them), and extend that repo's own `tests/bundle/test_config_registration.py` /
+    `test_loader_registration.py` to assert the type's absence. `chains` matches neither the
+    starter-package set nor the four already-retired shells (`metrics`, `templates`,
+    `follow_up_chains`, `recurrence` — `loader.py:296-299`'s own comment); it is unrouted and
+    unused on its own, and needs naming separately when this row is picked up.
+  kind: null
+  state: unscoped
+- id: flow-trace-derives-a-time-axis-from-enforcer-git-history
+  title: >-
+    [tooling] [PROPOSAL, NOT BUILT] `docs/implementation-artifacts/pin-the-cube.md`'s TIME-axis
+    recommendation: flow-trace has VERTICAL (`enforcement_depth`), HORIZONTAL (`rooting`,
+    `horizontal_completeness`) and now a fourth, enforcement (a capability either names its check
+    or is UNENFORCED) — no field answers "how long has this been true, and how much has been built
+    on it since." PROPOSED, NOT INVENTED SILENTLY: two fields, DERIVED from git, never hand-typed —
+    `enforcement_age_days` (days since the git history of every path an `enforced_by` /
+    `enforced_by`-equivalent citation names first introduced that path) and
+    `enforcement_touch_count` (count of distinct commits that modified those same paths since). The
+    reasoning for DERIVED over hand-typed: this whole project's own finding, repeated across every
+    merged design document, is that a hand-maintained note rots the moment nobody is looking at it
+    (`global_defaults.yaml`'s stale "INERT" comment, `capabilities.yaml`'s own four-day-stale
+    "embedded" paragraphs this same pass corrected — see claim H). A `first_pinned:` date typed by
+    hand is the same failure shape one field later. A number computed fresh from `git log --follow`
+    every run cannot go stale between runs; it can only be wrong if the enforcer citation itself is
+    wrong, which is a defect `horizontal_completeness.rooted` already exists to catch. This is
+    flow-trace's own tool to build (its source is not in this repo, and not in `apps/qntm-md/`
+    either — this branch has no path to it); filed here because this repo's `capabilities.yaml` is
+    the consumer of whatever field lands, and the shape should be settled before the field exists,
+    not after.
+  kind: null
+  state: unscoped
