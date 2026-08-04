@@ -1787,6 +1787,354 @@ function membershipFor(viewId, sectionId, line, language) {
   };
 }
 
+// app/present/rules.ts
+var RULES_KEY2 = "rules";
+var EMPTY4 = {
+  orderEstablished: false,
+  order: [],
+  rules: {},
+  patterns: {},
+  fieldMarkers: {},
+  dropped: {}
+};
+function isPlainObject4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+var shapeOf3 = (value) => Array.isArray(value) ? "an array" : typeof value;
+function isFieldValue2(value) {
+  return value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+function readWhen(path, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
+    return void 0;
+  }
+  const op = value.op;
+  if (op === "true") return { op: "true" };
+  if (op === "null" || op === "eq") {
+    if (typeof value.field !== "string" || value.field === "") {
+      problems.push(`'${path}.field' is ${JSON.stringify(value.field)}, not a field name`);
+      return void 0;
+    }
+    if (op === "null") return { op: "null", field: value.field };
+    if (!isFieldValue2(value.value)) {
+      problems.push(`'${path}.value' is ${shapeOf3(value.value)}, not a scalar or null`);
+      return void 0;
+    }
+    return { op: "eq", field: value.field, value: value.value };
+  }
+  if (op === "not") {
+    const inner = readWhen(`${path}.of`, value.of, problems);
+    return inner === void 0 ? void 0 : { op: "not", of: inner };
+  }
+  problems.push(`'${path}.op' is ${JSON.stringify(op)}, not one of true, null, eq, not`);
+  return void 0;
+}
+var ACTION_KEYS = ["retypesTo", "setsField", "setsFieldTo", "unsetsField"];
+function readRuleSpec(path, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
+    return void 0;
+  }
+  if (typeof value.pattern !== "string" || value.pattern === "") {
+    problems.push(`'${path}.pattern' is ${JSON.stringify(value.pattern)}, not a pattern name`);
+    return void 0;
+  }
+  const when = readWhen(`${path}.when`, value.when, problems);
+  if (when === void 0) return void 0;
+  if (typeof value.priority !== "number" || !Number.isInteger(value.priority)) {
+    problems.push(`'${path}.priority' is ${JSON.stringify(value.priority)}, not an integer`);
+    return void 0;
+  }
+  const hasRetype = typeof value.retypesTo === "string" && value.retypesTo !== "";
+  const hasSet = typeof value.setsField === "string" && value.setsField !== "";
+  const hasUnset = typeof value.unsetsField === "string" && value.unsetsField !== "";
+  const actionCount = [hasRetype, hasSet, hasUnset].filter(Boolean).length;
+  if (actionCount !== 1) {
+    problems.push(
+      `'${path}' carries ${actionCount} of ${ACTION_KEYS.join("/")} \u2014 exactly one action shape is published per rule`
+    );
+    return void 0;
+  }
+  if (hasSet && !isFieldValue2(value.setsFieldTo)) {
+    problems.push(`'${path}.setsFieldTo' is ${shapeOf3(value.setsFieldTo)}, not a scalar or null`);
+    return void 0;
+  }
+  return {
+    pattern: value.pattern,
+    when,
+    priority: value.priority,
+    ...hasRetype ? { retypesTo: value.retypesTo } : {},
+    ...hasSet ? { setsField: value.setsField, setsFieldTo: value.setsFieldTo } : {},
+    ...hasUnset ? { unsetsField: value.unsetsField } : {}
+  };
+}
+function readFieldPredicate(path, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
+    return void 0;
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== 1) {
+    problems.push(`'${path}' carries ${keys.length} operators \u2014 exactly one of eq, not`);
+    return void 0;
+  }
+  if (keys[0] === "eq") {
+    if (!isFieldValue2(value.eq)) {
+      problems.push(`'${path}.eq' is ${shapeOf3(value.eq)}, not a scalar or null`);
+      return void 0;
+    }
+    return { eq: value.eq };
+  }
+  if (keys[0] === "not") {
+    const inner = readFieldPredicate(`${path}.not`, value.not, problems);
+    return inner === void 0 ? void 0 : { not: inner };
+  }
+  problems.push(`'${path}' uses operator '${keys[0]}' \u2014 the operators are eq, not`);
+  return void 0;
+}
+function readFindClause2(path, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${path}' is ${shapeOf3(value)}, not an object`);
+    return void 0;
+  }
+  let nodeType = null;
+  if (value.nodeType !== null && value.nodeType !== void 0) {
+    if (!Array.isArray(value.nodeType) || !value.nodeType.every((t) => typeof t === "string" && t !== "")) {
+      problems.push(`'${path}.nodeType' is not null and not an array of non-empty strings`);
+      return void 0;
+    }
+    nodeType = value.nodeType;
+  }
+  const fields = {};
+  if (value.fields !== void 0) {
+    if (!isPlainObject4(value.fields)) {
+      problems.push(`'${path}.fields' is ${shapeOf3(value.fields)}, not an object`);
+      return void 0;
+    }
+    for (const [field, predicate] of Object.entries(value.fields)) {
+      const read = readFieldPredicate(`${path}.fields.${field}`, predicate, problems);
+      if (read === void 0) return void 0;
+      fields[field] = read;
+    }
+  }
+  return { nodeType, fields };
+}
+function readPatterns(value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${RULES_KEY2}.patterns' is ${shapeOf3(value)}, not an object`);
+    return {};
+  }
+  const out = {};
+  for (const [name, raw] of Object.entries(value)) {
+    const path = `${RULES_KEY2}.patterns.${name}`;
+    if (!isPlainObject4(raw)) {
+      problems.push(`'${path}' is ${shapeOf3(raw)}, not an object`);
+      continue;
+    }
+    const find = readFindClause2(`${path}.find`, raw.find, problems);
+    if (find === void 0) continue;
+    if (raw.exclude !== void 0 && !Array.isArray(raw.exclude)) {
+      problems.push(`'${path}.exclude' is ${shapeOf3(raw.exclude)}, not an array`);
+      continue;
+    }
+    const exclude = [];
+    let ok = true;
+    for (const [i, clause] of (raw.exclude ?? []).entries()) {
+      const read = readFindClause2(`${path}.exclude[${i}]`, clause, problems);
+      if (read === void 0) {
+        ok = false;
+        break;
+      }
+      exclude.push(read);
+    }
+    if (ok) out[name] = { find, exclude };
+  }
+  return out;
+}
+function readFieldMarkers(value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${RULES_KEY2}.fieldMarkers' is ${shapeOf3(value)}, not an object`);
+    return {};
+  }
+  const out = {};
+  const kinds = /* @__PURE__ */ new Set(["date", "int", "float"]);
+  for (const [field, raw] of Object.entries(value)) {
+    const path = `${RULES_KEY2}.fieldMarkers.${field}`;
+    if (!isPlainObject4(raw) || typeof raw.token !== "string" || raw.token === "" || !kinds.has(raw.kind)) {
+      problems.push(`'${path}' is not a {token, kind} marker`);
+      continue;
+    }
+    out[field] = { token: raw.token, kind: raw.kind };
+  }
+  return out;
+}
+function readReasons2(key, value, problems) {
+  if (!isPlainObject4(value)) {
+    problems.push(`'${RULES_KEY2}.${key}' is ${shapeOf3(value)}, not an object`);
+    return {};
+  }
+  const out = {};
+  for (const [name, reason] of Object.entries(value)) {
+    if (typeof reason !== "string") {
+      problems.push(`'${RULES_KEY2}.${key}.${name}' is ${shapeOf3(reason)}, not a string`);
+      continue;
+    }
+    out[name] = reason;
+  }
+  return out;
+}
+function readRulesDeclaration(document2) {
+  if (!isPlainObject4(document2) || !(RULES_KEY2 in document2)) {
+    return { rules: EMPTY4, problems: [] };
+  }
+  const raw = document2[RULES_KEY2];
+  const problems = [];
+  if (!isPlainObject4(raw)) {
+    problems.push(`'${RULES_KEY2}' is ${shapeOf3(raw)}, not an object`);
+    return { rules: EMPTY4, problems };
+  }
+  const rulesRaw = raw.rules;
+  const rules = {};
+  if (isPlainObject4(rulesRaw)) {
+    for (const [id, entry] of Object.entries(rulesRaw)) {
+      const spec = readRuleSpec(`${RULES_KEY2}.rules.${id}`, entry, problems);
+      if (spec !== void 0) rules[id] = spec;
+    }
+  } else {
+    problems.push(`'${RULES_KEY2}.rules' is ${shapeOf3(rulesRaw)}, not an object`);
+  }
+  let orderEstablished = false;
+  let order = [];
+  const orderRaw = raw.order;
+  if (isPlainObject4(orderRaw) && orderRaw.established === true) {
+    if (Array.isArray(orderRaw.sequence) && orderRaw.sequence.every((id) => typeof id === "string")) {
+      order = orderRaw.sequence;
+      orderEstablished = true;
+    } else {
+      problems.push(`'${RULES_KEY2}.order.sequence' is not an array of rule ids`);
+    }
+  } else if (isPlainObject4(orderRaw) && orderRaw.established === false) {
+  } else {
+    problems.push(`'${RULES_KEY2}.order' is not a recognised {established, sequence} shape`);
+  }
+  return {
+    rules: {
+      orderEstablished,
+      order,
+      rules,
+      patterns: "patterns" in raw ? readPatterns(raw.patterns, problems) : {},
+      fieldMarkers: "fieldMarkers" in raw ? readFieldMarkers(raw.fieldMarkers, problems) : {},
+      dropped: "dropped" in raw ? readReasons2("dropped", raw.dropped, problems) : {}
+    },
+    problems
+  };
+}
+function evaluateWhen(when, fields) {
+  if (when.op === "true") return true;
+  if (when.op === "null") return (fields[when.field] ?? null) === null;
+  if (when.op === "eq") return (fields[when.field] ?? null) === when.value;
+  return !evaluateWhen(when.of, fields);
+}
+function applyRules(fields, language, today) {
+  let working = { ...fields };
+  const applied = [];
+  for (const ruleId of language.order) {
+    const rule = language.rules[ruleId];
+    if (rule === void 0) continue;
+    const qualifier = language.patterns[rule.pattern];
+    if (qualifier === void 0) continue;
+    if (!matchesQualifier(working, qualifier)) continue;
+    if (!evaluateWhen(rule.when, working)) continue;
+    if (rule.retypesTo !== void 0) {
+      working = { ...working, node_type: rule.retypesTo };
+      applied.push({ verb: "retype", ruleId, to: rule.retypesTo });
+      continue;
+    }
+    if (rule.setsField !== void 0) {
+      const resolved = resolveRuleValue(rule.setsFieldTo ?? null, today);
+      if (resolved.kind === "unresolvable") continue;
+      working = { ...working, [rule.setsField]: resolved.value };
+      applied.push({ verb: "set", ruleId, field: rule.setsField, to: resolved.value });
+      continue;
+    }
+    if (rule.unsetsField !== void 0) {
+      working = { ...working, [rule.unsetsField]: null };
+      applied.push({ verb: "unset", ruleId, field: rule.unsetsField });
+    }
+  }
+  return { fields: working, applied };
+}
+function resolveRuleValue(raw, today) {
+  if (typeof raw !== "string" || !raw.startsWith("$")) return { kind: "value", value: raw };
+  if (today === void 0) return { kind: "unresolvable" };
+  if (raw === "$cycle_today") return { kind: "value", value: today.logicalDate };
+  if (raw === "$cycle_week_end") return { kind: "value", value: today.weekEnd };
+  return { kind: "unresolvable" };
+}
+function invertTokenFamily(family) {
+  const out = /* @__PURE__ */ new Map();
+  for (const token of Object.keys(family).sort()) {
+    const value = family[token];
+    if (value !== void 0 && !out.has(value)) out.set(value, token);
+  }
+  return out;
+}
+function tagFromFamily(line, family) {
+  for (const span of tagSpans(line)) {
+    if (Object.prototype.hasOwnProperty.call(family, span.text)) return span.text;
+  }
+  return void 0;
+}
+function formatMarkerValue(value) {
+  return value === null ? "" : String(value);
+}
+function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMarkers) {
+  if (effects.length === 0) return { kind: "unchanged" };
+  let appended = "";
+  for (const effect of effects) {
+    if (effect.verb === "retype") {
+      const byValue = invertTokenFamily(nodeTypeTokens);
+      const token = byValue.get(effect.to);
+      if (token === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
+      const existing = tagFromFamily(line, nodeTypeTokens);
+      if (existing === token) continue;
+      if (existing !== void 0) return { kind: "abstains", because: "conflicting-token-present", effect };
+      appended += ` ${token}`;
+      continue;
+    }
+    if (effect.verb === "set") {
+      const enumFamily2 = fieldTokens[effect.field];
+      if (enumFamily2 !== void 0) {
+        const byValue = invertTokenFamily(enumFamily2);
+        const token = byValue.get(effect.to);
+        if (token === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
+        const existing = tagFromFamily(line, enumFamily2);
+        if (existing === token) continue;
+        if (existing !== void 0) return { kind: "abstains", because: "conflicting-token-present", effect };
+        appended += ` ${token}`;
+        continue;
+      }
+      const marker2 = fieldMarkers[effect.field];
+      if (marker2 === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
+      if (line.includes(marker2.token)) {
+        return { kind: "abstains", because: "conflicting-token-present", effect };
+      }
+      appended += ` ${marker2.token} ${formatMarkerValue(effect.to)}`;
+      continue;
+    }
+    const enumFamily = fieldTokens[effect.field];
+    if (enumFamily !== void 0 && tagFromFamily(line, enumFamily) !== void 0) {
+      return { kind: "abstains", because: "conflicting-token-present", effect };
+    }
+    const marker = fieldMarkers[effect.field];
+    if (marker !== void 0 && line.includes(marker.token)) {
+      return { kind: "abstains", because: "conflicting-token-present", effect };
+    }
+  }
+  return appended === "" ? { kind: "unchanged" } : { kind: "rendered", text: line + appended };
+}
+
 // app/present/context.ts
 var PresentationContext = class _PresentationContext {
   #contributions;
@@ -1838,17 +2186,20 @@ function presentationFromDeclaration(document2) {
   const structuralReading = readStructuralDeclaration(document2);
   const qualificationReading = readQualificationDeclaration(document2);
   const resolutionReading = readConfigResolutionDeclaration(document2);
+  const rulesReading = readRulesDeclaration(document2);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
     structural: structuralReading.structural,
     qualification: qualificationReading.qualification,
     resolution: resolutionReading.resolution,
+    rules: rulesReading.rules,
     problems: [
       ...reading.problems,
       ...structuralReading.problems,
       ...qualificationReading.problems,
-      ...resolutionReading.problems
+      ...resolutionReading.problems,
+      ...rulesReading.problems
     ]
   };
 }
@@ -3896,12 +4247,14 @@ export {
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,
   RESOLVABLE_FIELDS,
+  RULES_KEY2 as RULES_KEY,
   SPECIFICITY,
   STRUCTURAL_KEY,
   SettleSurface,
   WRITE_ECHO_KEY,
   WriteRegister,
   applyEdit,
+  applyRules,
   baseOf,
   boundaryLine,
   carriesContent,
@@ -3936,9 +4289,11 @@ export {
   readConfigResolutionDeclaration,
   readDeclaration,
   readQualificationDeclaration,
+  readRulesDeclaration,
   readStructuralDeclaration,
   readWriteEcho,
   relativeAnchorFor,
+  renderRuleEffects,
   resolveInstanceAnchor,
   resolveLineFields,
   resolveLogicalDate,

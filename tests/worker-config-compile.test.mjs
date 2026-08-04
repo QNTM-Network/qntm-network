@@ -110,18 +110,26 @@ function readResolutionFixtureFiles() {
   return files;
 }
 
-/** Read the committed fixture's `rules/*.yaml` into exactly the file map rules' `compile()`
- * expects — the same two files (`primary.yaml`, `secondary.yaml`) `scripts/check-isolate-
- * conformance.mjs`'s own `rules` generator entry reads for the identical fixture, sorted. Unlike
- * the other three, rules' `compile()` reads no `schema.yaml` and no other directory — see
- * `compile-rules.mjs`'s header: `for_each.pattern` is stored opaquely, never cross-checked against
- * `patterns/`. */
+/** Read the committed fixture's `rules/*.yaml` (`primary.yaml`, `secondary.yaml`), PLUS
+ * `patterns/*.yaml` and `vocabulary/markers.yaml`, into exactly the file map rules' `compile()`
+ * expects — the same reader `scripts/check-isolate-conformance.mjs`'s own `rules` generator entry
+ * now uses for the identical fixture. `compile-rules.mjs`'s own two later passes need the wider
+ * set: PASS 2 resolves `for_each.pattern` (`local-tasks`) against `patterns/`, and PASS 3 spells a
+ * `setsField` target against `vocabulary/markers.yaml` — see that file's header, "THE PATTERN
+ * GAP"/"THE MARKER GAP". Reading `patterns/`/`vocabulary/` here is no longer a cross-check this
+ * generator performs by choice; it is data PASS 2/PASS 3 require to publish anything at all. */
 function readRulesFixtureFiles() {
   const files = {};
   const rulesDir = join(FIXTURE_CONFIG, "rules");
   for (const f of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
     files[`rules/${f}`] = readFileSync(join(rulesDir, f), "utf8");
   }
+  const patternsDir = join(FIXTURE_CONFIG, "patterns");
+  for (const f of readdirSync(patternsDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    files[`patterns/${f}`] = readFileSync(join(patternsDir, f), "utf8");
+  }
+  const markersPath = join(FIXTURE_CONFIG, "vocabulary", "markers.yaml");
+  files["vocabulary/markers.yaml"] = readFileSync(markersPath, "utf8");
   return files;
 }
 

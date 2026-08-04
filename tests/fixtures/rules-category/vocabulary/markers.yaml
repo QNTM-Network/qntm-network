@@ -1,0 +1,6 @@
+# The marker spelling PASS 3 (compile-rules.mjs, "THE SPELLING FOR EVERY setsField TARGET") reads
+# to publish `fieldMarkers`. Only `created_at` is needed: it is the one `setsField` target among
+# the fixture's four PUBLISHED rules (`stamp-created-at-on-task`) — matching the real config's own
+# vocabulary/markers.yaml entry for the same field, same token, same extraction_hint.
+markers:
+  - { token: "🆕", field: created_at, extraction_hint: trailing_date }

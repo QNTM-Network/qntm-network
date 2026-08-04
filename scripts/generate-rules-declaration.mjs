@@ -32,7 +32,7 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
 import { Ledger, reportDropped } from "./ledger.mjs";
-import { compile, GenerationError, RULES_PREFIX } from "./compile-rules.mjs";
+import { compile, GenerationError, RULES_PREFIX, PATTERNS_PREFIX, MARKERS_KEY } from "./compile-rules.mjs";
 
 // Re-exported, not restated: tests import it from here, same as every sibling generator.
 export { DEFAULT_CONFIG_DIR };
@@ -55,7 +55,11 @@ export { compile };
  * declaration.mjs` already export for exactly that reason.
  *
  * `rules/` absence is NOT an error: a category with zero rules is a legitimate (if unusual) state,
- * the same posture `generate-resolution-declaration.mjs`'s own `rules/` reader already takes.
+ * the same posture `generate-resolution-declaration.mjs`'s own `rules/` reader already takes. The
+ * same now applies to `patterns/` and `vocabulary/markers.yaml`: `compile`'s own PASS 2/PASS 3
+ * (`compile-rules.mjs`'s header) read them to resolve a rule's `for_each.pattern` and to spell a
+ * `setsField` target's marker — their absence just means every rule needing either drops, which
+ * `compile` already reports through `dropped`, not a reason for this shell to refuse to run.
  *
  * @param {string} configDir
  * @returns {Record<string, string>}
@@ -67,6 +71,16 @@ export function readConfigTree(configDir) {
     for (const f of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
       files[`${RULES_PREFIX}${f}`] = readFileSync(join(rulesDir, f), "utf8");
     }
+  }
+  const patternsDir = join(configDir, "patterns");
+  if (existsSync(patternsDir)) {
+    for (const f of readdirSync(patternsDir).filter((f) => f.endsWith(".yaml")).sort()) {
+      files[`${PATTERNS_PREFIX}${f}`] = readFileSync(join(patternsDir, f), "utf8");
+    }
+  }
+  const markersPath = join(configDir, "vocabulary", "markers.yaml");
+  if (existsSync(markersPath)) {
+    files[MARKERS_KEY] = readFileSync(markersPath, "utf8");
   }
   return files;
 }

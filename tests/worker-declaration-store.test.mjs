@@ -55,14 +55,20 @@ function readStructuralFixtureFiles() {
   return files;
 }
 
-/** Read the committed fixture's `rules/*.yaml` — the same reader
- * `tests/worker-config-compile.test.mjs` uses for the identical fixture. */
+/** Read the committed fixture's `rules/*.yaml`, `patterns/*.yaml` and `vocabulary/markers.yaml` —
+ * the same reader `tests/worker-config-compile.test.mjs` uses for the identical fixture; see that
+ * file's own header for why `patterns/`/`vocabulary/` are needed now too. */
 function readRulesFixtureFiles() {
   const files = {};
   const rulesDir = join(FIXTURE_CONFIG, "rules");
   for (const f of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
     files[`rules/${f}`] = readFileSync(join(rulesDir, f), "utf8");
   }
+  const patternsDir = join(FIXTURE_CONFIG, "patterns");
+  for (const f of readdirSync(patternsDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    files[`patterns/${f}`] = readFileSync(join(patternsDir, f), "utf8");
+  }
+  files["vocabulary/markers.yaml"] = readFileSync(join(FIXTURE_CONFIG, "vocabulary", "markers.yaml"), "utf8");
   return files;
 }
 

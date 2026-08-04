@@ -81,7 +81,12 @@ import {
   PATTERNS_PREFIX as RESOLUTION_PATTERNS_PREFIX,
   RULES_PREFIX,
 } from "./compile-resolution.mjs";
-import { compile as compileRules, RULES_PREFIX as RULES_CATEGORY_PREFIX } from "./compile-rules.mjs";
+import {
+  compile as compileRules,
+  RULES_PREFIX as RULES_CATEGORY_PREFIX,
+  PATTERNS_PREFIX as RULES_PATTERNS_PREFIX,
+  MARKERS_KEY as RULES_MARKERS_KEY,
+} from "./compile-rules.mjs";
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
 const FIXTURE_CONFIG = join(REPO_ROOT, "tests", "fixtures", "config");
@@ -196,12 +201,20 @@ const GENERATORS = [
     routePath: "/config/compile/rules",
     compile: compileRules,
     // Read a config directory into exactly the files map `compile()` recognises — every
-    // `rules/*.yaml`, sorted, the same way `generate-rules-declaration.mjs`'s own fs shell reads
-    // it. `rules/` absence is not an error (a category with zero rules is legitimate).
+    // `rules/*.yaml`, every `patterns/*.yaml` and `vocabulary/markers.yaml`, sorted, the same way
+    // `generate-rules-declaration.mjs`'s own fs shell reads it. PASS 2 (resolve `for_each.pattern`)
+    // and PASS 3 (spell a `setsField` target) — `compile-rules.mjs`'s own header — are what make
+    // `patterns/`/`vocabulary/` non-optional now; their absence is still not an error on its own
+    // (a category with zero rules, or zero rules whose pattern resolves, is legitimate), same as
+    // `rules/` absence always was.
     readConfigTree(configDir) {
       const files = {};
       const rulesDir = join(configDir, "rules");
       if (existsSync(rulesDir)) readYamlDir(rulesDir, RULES_CATEGORY_PREFIX, files);
+      const patternsDir = join(configDir, "patterns");
+      if (existsSync(patternsDir)) readYamlDir(patternsDir, RULES_PATTERNS_PREFIX, files);
+      const markersPath = join(configDir, "vocabulary", "markers.yaml");
+      if (existsSync(markersPath)) files[RULES_MARKERS_KEY] = readFileSync(markersPath, "utf8");
       return files;
     },
     // UNLIKE THE OTHER THREE. `compile-rules.mjs` never refuses the whole category over a rule

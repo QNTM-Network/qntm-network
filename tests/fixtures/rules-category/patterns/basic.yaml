@@ -1,0 +1,31 @@
+# Pattern definitions for the fixture's `for_each.pattern` names — added so PASS 2
+# (compile-rules.mjs, "RESOLVE for_each.pattern") has something to resolve them against. Each is
+# the simplest shape the operator's real config actually uses for these three names: a bare
+# `node_type` filter, nothing else — see routines.yaml/tasks.yaml under the real config for the
+# shapes these are modelled on.
+
+tasks:
+  description: "fixture: all task nodes"
+  parameters: {}
+  root:
+    find:
+      node_type: task
+  steps: []
+
+routines:
+  description: "fixture: all routine nodes"
+  parameters: {}
+  root:
+    find:
+      node_type: routine
+  steps: []
+
+flagged-nodes:
+  description: "fixture: nodes clear-stale-flag iterates — a plain node_type filter is enough to
+    exercise PASS 2's resolution; the fixture's own rule never depends on the field this pattern's
+    real-config counterpart would actually check."
+  parameters: {}
+  root:
+    find:
+      node_type: task
+  steps: []
