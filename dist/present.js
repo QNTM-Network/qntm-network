@@ -2169,6 +2169,27 @@ function evaluateWhen(when, fields) {
   if (when.op === "eq") return (fields[when.field] ?? null) === when.value;
   return !evaluateWhen(when.of, fields);
 }
+function applyRuleActions(ruleId, actions, working, today) {
+  let next = working;
+  const effects = [];
+  for (const action of actions) {
+    if (action.verb === "retype") {
+      next = { ...next, node_type: action.to };
+      effects.push({ verb: "retype", ruleId, to: action.to });
+      continue;
+    }
+    if (action.verb === "set") {
+      const resolved = resolveRuleValue(action.to, today);
+      if (resolved.kind === "unresolvable") continue;
+      next = { ...next, [action.field]: resolved.value };
+      effects.push({ verb: "set", ruleId, field: action.field, to: resolved.value });
+      continue;
+    }
+    next = { ...next, [action.field]: null };
+    effects.push({ verb: "unset", ruleId, field: action.field });
+  }
+  return { working: next, effects };
+}
 function applyRules(fields, language, today) {
   let working = { ...fields };
   const applied = [];
@@ -2186,22 +2207,9 @@ function applyRules(fields, language, today) {
     if (!matchesQualifier(working, qualifier)) continue;
     if (!evaluateWhen(rule.when, working)) continue;
     if (rule.partial === true) partial.push(ruleId);
-    for (const action of rule.actions) {
-      if (action.verb === "retype") {
-        working = { ...working, node_type: action.to };
-        applied.push({ verb: "retype", ruleId, to: action.to });
-        continue;
-      }
-      if (action.verb === "set") {
-        const resolved = resolveRuleValue(action.to, today);
-        if (resolved.kind === "unresolvable") continue;
-        working = { ...working, [action.field]: resolved.value };
-        applied.push({ verb: "set", ruleId, field: action.field, to: resolved.value });
-        continue;
-      }
-      working = { ...working, [action.field]: null };
-      applied.push({ verb: "unset", ruleId, field: action.field });
-    }
+    const { working: nextWorking, effects } = applyRuleActions(ruleId, rule.actions, working, today);
+    working = nextWorking;
+    applied.push(...effects);
   }
   return { fields: working, applied, partial, undecidable };
 }
@@ -2273,6 +2281,87 @@ function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMark
     }
   }
   return appended === "" ? { kind: "unchanged" } : { kind: "rendered", text: line + appended };
+}
+
+// app/present/graphmatch.ts
+function candidateFieldsOf(node) {
+  return { node_type: node.type, ...node.fields };
+}
+function neighboursOf(candidateId, edgeType, direction, edgeSourceOf, graph) {
+  const touching = graph.edges.filter(
+    (e) => e.type === edgeType && (e.source === candidateId || e.target === candidateId)
+  );
+  if (touching.length === 0) return [];
+  const source = edgeSourceOf(edgeType);
+  if (source === void 0) return void 0;
+  const candidateIsSource = direction === "children" && source === "position" || direction === "parents" && source === "self";
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const neighbourIds = /* @__PURE__ */ new Set();
+  for (const edge of touching) {
+    if (candidateIsSource) {
+      if (edge.source === candidateId) neighbourIds.add(edge.target);
+    } else {
+      if (edge.target === candidateId) neighbourIds.add(edge.source);
+    }
+  }
+  const out = [];
+  for (const id of neighbourIds) {
+    const node = byId.get(id);
+    if (node === void 0) return void 0;
+    out.push(node);
+  }
+  return out;
+}
+function edgeStepIsSatisfied(candidateId, step, edgeSourceOf, graph, prospective) {
+  const candidates = [];
+  for (const edgeType of step.edgeType) {
+    const found = neighboursOf(candidateId, edgeType, step.direction, edgeSourceOf, graph);
+    if (found === void 0) return void 0;
+    for (const node of found) candidates.push(candidateFieldsOf(node));
+  }
+  if (prospective !== void 0 && step.direction === "children" && step.edgeType.includes(prospective.edgeType)) {
+    candidates.push(prospective.fields);
+  }
+  const clause = { nodeType: step.nodeType, fields: step.fields };
+  const anyMatches = candidates.some((fields) => matchesFindClause(fields, clause));
+  return step.mustExist ? anyMatches : !anyMatches;
+}
+function matchesQualifierGraphAware(candidateFields, candidateId, qualifier, graph, edgeSourceOf, prospective) {
+  if (!matchesFindClause(candidateFields, qualifier.find)) return false;
+  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause))) return false;
+  const steps = qualifier.edgeSteps ?? [];
+  if (steps.length === 0) return true;
+  const id = candidateId ?? "";
+  for (const step of steps) {
+    const ok = edgeStepIsSatisfied(id, step, edgeSourceOf, graph, prospective);
+    if (ok === void 0) return void 0;
+    if (!ok) return false;
+  }
+  return true;
+}
+function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf, prospective, today) {
+  let working = { ...fields };
+  const applied = [];
+  const partial = [];
+  const undecidable = [];
+  for (const ruleId of language.order) {
+    const rule = language.rules[ruleId];
+    if (rule === void 0) continue;
+    const qualifier = language.patterns[rule.pattern];
+    if (qualifier === void 0) continue;
+    const matched = matchesQualifierGraphAware(working, candidateId, qualifier, graph, edgeSourceOf, prospective);
+    if (matched === void 0) {
+      undecidable.push(ruleId);
+      continue;
+    }
+    if (!matched) continue;
+    if (!evaluateWhen(rule.when, working)) continue;
+    if (rule.partial === true) partial.push(ruleId);
+    const { working: nextWorking, effects } = applyRuleActions(ruleId, rule.actions, working, today);
+    working = nextWorking;
+    applied.push(...effects);
+  }
+  return { fields: working, applied, partial, undecidable };
 }
 
 // app/present/context.ts
@@ -4394,6 +4483,8 @@ export {
   WRITE_ECHO_KEY,
   WriteRegister,
   applyEdit,
+  applyGraphAwareRules,
+  applyRuleActions,
   applyRules,
   baseOf,
   boundaryLine,
@@ -4405,6 +4496,7 @@ export {
   cleanTitleFor,
   defaultOrderingFor,
   defaultOrderingPlacementFor,
+  evaluateWhen,
   extendsLine,
   indentedLine,
   instanceAnchorFor,
@@ -4416,6 +4508,7 @@ export {
   markerValue,
   matchesFindClause,
   matchesQualifier,
+  matchesQualifierGraphAware,
   membershipFor,
   mintWriteToken,
   openLine,

@@ -489,7 +489,13 @@ export function readRulesDeclaration(document: unknown): RulesReading {
 // APPLICATION — the closed grammar, run over one candidate's resolved fields.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-function evaluateWhen(when: RuleWhen, fields: ResolvedFields): boolean {
+/**
+ * Exported so `graphmatch.ts`'s own one-pass walk (evaluating an EXTERNAL candidate — a structural
+ * PARENT the operator did not just commit — against the SAME published `RuleWhen` grammar) can
+ * reuse this exact evaluation rather than a second, drifting copy. Behaviour is unchanged; only the
+ * visibility widened.
+ */
+export function evaluateWhen(when: RuleWhen, fields: ResolvedFields): boolean {
   if (when.op === "true") return true;
   if (when.op === "null") return (fields[when.field] ?? null) === null;
   if (when.op === "eq") return (fields[when.field] ?? null) === when.value;
@@ -567,6 +573,45 @@ export interface RulePassResult {
  *   exactly the case where "no rule applies" would otherwise be a confident answer this function
  *   cannot actually stand behind.
  */
+/**
+ * Apply one rule's ALREADY-MATCHED `actions`, in order, to `working` — exactly the inline loop
+ * `applyRules` used to carry directly, factored out so `graphmatch.ts`'s own one-pass walk over an
+ * EXTERNAL candidate (a structural parent, never the commit's own line — see that module's header)
+ * can apply a fired rule's effects identically, rather than a second copy of this arithmetic that
+ * could drift from this one. PURE, same contract as `applyRules` itself.
+ *
+ * `applyRules` below is now a thin caller of this — behaviourally BYTE-IDENTICAL to what it did
+ * before this split; nothing about a rule's fields-in/fields-out result changed, only where the
+ * fifteen lines that do it live.
+ */
+export function applyRuleActions(
+  ruleId: string,
+  actions: readonly RuleActionSpec[],
+  working: Record<string, FieldValue>,
+  today: { readonly logicalDate: string; readonly weekEnd: string } | undefined,
+): { readonly working: Record<string, FieldValue>; readonly effects: readonly RuleEffect[] } {
+  let next = working;
+  const effects: RuleEffect[] = [];
+  for (const action of actions) {
+    if (action.verb === "retype") {
+      next = { ...next, node_type: action.to };
+      effects.push({ verb: "retype", ruleId, to: action.to });
+      continue;
+    }
+    if (action.verb === "set") {
+      const resolved = resolveRuleValue(action.to, today);
+      if (resolved.kind === "unresolvable") continue; // see applyRules's own header
+      next = { ...next, [action.field]: resolved.value };
+      effects.push({ verb: "set", ruleId, field: action.field, to: resolved.value });
+      continue;
+    }
+    // unset
+    next = { ...next, [action.field]: null };
+    effects.push({ verb: "unset", ruleId, field: action.field });
+  }
+  return { working: next, effects };
+}
+
 export function applyRules(
   fields: ResolvedFields,
   language: RulesLanguage,
@@ -590,23 +635,9 @@ export function applyRules(
     if (!evaluateWhen(rule.when, working)) continue;
 
     if (rule.partial === true) partial.push(ruleId);
-    for (const action of rule.actions) {
-      if (action.verb === "retype") {
-        working = { ...working, node_type: action.to };
-        applied.push({ verb: "retype", ruleId, to: action.to });
-        continue;
-      }
-      if (action.verb === "set") {
-        const resolved = resolveRuleValue(action.to, today);
-        if (resolved.kind === "unresolvable") continue; // see this function's own header
-        working = { ...working, [action.field]: resolved.value };
-        applied.push({ verb: "set", ruleId, field: action.field, to: resolved.value });
-        continue;
-      }
-      // unset
-      working = { ...working, [action.field]: null };
-      applied.push({ verb: "unset", ruleId, field: action.field });
-    }
+    const { working: nextWorking, effects } = applyRuleActions(ruleId, rule.actions, working, today);
+    working = nextWorking;
+    applied.push(...effects);
   }
 
   return { fields: working, applied, partial, undecidable };
