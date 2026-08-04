@@ -1,0 +1,15 @@
+# An `and:` when-clause — real in the operator's config (clamp_completed_at_to_cycle_today.yaml
+# and others), not one of the three shapes (null/eq/not) this grammar models.
+
+- id: classify-when-and
+  for_each:
+    pattern: tasks
+  when:
+    and:
+      - eq: [$current.node.fields.status, done]
+      - "null": [$current.node.fields.completed_at]
+  actions:
+    - verb: set_field
+      node_id: $current.node.id
+      field: completed_at
+      value: "$cycle_today"

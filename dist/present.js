@@ -1110,7 +1110,7 @@ function indentedLine(line, direction, count, unit = INDENT_UNIT) {
 
 // app/present/declaration.ts
 var NOTE = "note";
-var CAPTURE_RULES_KEY = "captureRules";
+var RULES_KEY = "rules";
 var INDENT_UNIT_KEY = "indentUnit";
 var DEFAULT_INDENT_UNIT = INDENT_UNIT;
 var RENDITIONS = ["raw", "wired"];
@@ -1147,7 +1147,7 @@ function readDeclaration(document2) {
     if (key === RESOLUTION_TABLE_KEY) {
       continue;
     }
-    if (key === CAPTURE_RULES_KEY) {
+    if (key === RULES_KEY) {
       continue;
     }
     if (key === INDENT_UNIT_KEY) {

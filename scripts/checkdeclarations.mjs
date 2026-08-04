@@ -1,11 +1,11 @@
 /**
- * checkdeclarations — ONE staleness gate over all three generated keys, with an exit code CI can
+ * checkdeclarations — ONE staleness gate over all four generated keys, with an exit code CI can
  * read and a test can drive.
  *
  * ── WHY THIS EXISTS ──
  *
- * `design-the-rule-mirror.md` §9.4 measured the hole: all three generators have a `--check` mode
- * that exits 1 when the declaration is stale, none of the three was wired into CI, and the tests
+ * `design-the-rule-mirror.md` §9.4 measured the hole: every generator has a `--check` mode
+ * that exits 1 when the declaration is stale, none of them was wired into CI, and the tests
  * that would catch it (`tests/present-qualification.test.mjs` and its twins) are guarded by
  * `existsSync(DEFAULT_CONFIG_DIR)` and therefore SELF-SKIP exactly in CI, which does not clone the
  * monorepo. So a stale declaration shipped green.
@@ -43,12 +43,21 @@ import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
 import { generateQualification } from "./generate-qualification-declaration.mjs";
 import { generateStructural } from "./generate-structural-declaration.mjs";
 import { generateResolution } from "./generate-resolution-declaration.mjs";
+import { generateRules } from "./generate-rules-declaration.mjs";
 
-/** The three generated keys, each with the function that produces it. */
+/**
+ * The four generated keys, each with the function that produces it. `rules` joined this list
+ * having previously run its own, separate `--check` (`generate-capture-rules-declaration.mjs`,
+ * retired) — that separation existed only because its `dropped` was always `{}` by construction
+ * (a closed set of exactly two hand-picked rules). `scripts/compile-rules.mjs` widened it into a
+ * real category compiler that drops what it cannot model, so it belongs in this shared gate now,
+ * the same as the other three.
+ */
 export const GENERATORS = Object.freeze([
   ["qualification", generateQualification],
   ["structural", generateStructural],
   ["resolution", generateResolution],
+  ["rules", generateRules],
 ]);
 
 /**
@@ -110,7 +119,7 @@ function main() {
   const { stale, lines } = checkDeclarations(args.configDir, served);
   for (const line of lines) console.log(line);
   if (stale.length === 0) {
-    console.log("all three generated declarations match the config.");
+    console.log("all four generated declarations match the config.");
     return;
   }
   console.error(

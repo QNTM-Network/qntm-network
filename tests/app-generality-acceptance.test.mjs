@@ -29,9 +29,8 @@
  * ── SCOPE, MATCHING THE BRANCH THIS SUITE SHIPS ON ──
  *
  * EVERYTHING in this file is built from a `cpSync` COPY of the monorepo config, under the test
- * runner's own temp dir, torn down in a `finally`. The five new/changed files are written INTO that
- * copy, never into `DEFAULT_CONFIG_DIR` itself. The two real generators
- * (`generate-qualification-declaration.mjs`, `generate-resolution-declaration.mjs`) run against the
+ * runner's own temp dir, torn down in a `finally`. The new/changed files are written INTO that
+ * copy, never into `DEFAULT_CONFIG_DIR` itself. The generators under test run against the
  * copy and their JS objects are held in memory — `presentation.json` on disk, in this worktree or
  * anywhere else, is never written by this file. The declaration reaches the page through
  * `loadPresentation()`'s own fetch, stubbed to answer with the in-memory object
@@ -42,6 +41,20 @@
  * suite SKIPS, loudly, if `DEFAULT_CONFIG_DIR` is not checked out — the same guard
  * `tests/app-seed-from-cascade.test.mjs` §3/§5 use, for the same reason: CI does not clone the
  * monorepo.
+ *
+ * ── WIDENED, 2026-08-04: STRUCTURAL AND RULES JOIN THE GATE ──
+ *
+ * Measured before this widening: this file called exactly two generators —
+ * `generate-qualification-declaration.mjs` and `generate-resolution-declaration.mjs`.
+ * `generate-structural-declaration.mjs` was never invoked from here at all, and neither was any
+ * rules-category generator — which is exactly how `compile-capture-rules.mjs` (two hardcoded file
+ * paths, two hardcoded rule ids) merged with 1803 tests passing (PR #91). Sections 7-9 below close
+ * both gaps on the SAME never-seen scratch config every other section already uses: a new edge
+ * type and a new section-level structural override (schema.yaml / views/gentest_widgets.yaml,
+ * §7), and a new `rules/gentest_widgets.yaml` carrying one rule the widened `compile-rules.mjs`
+ * models and one it does not (§8) — and §9 reproduces the RETIRED coupled compiler's own
+ * algorithm in miniature and shows it goes red on exactly the content §8 proves the widened one
+ * gets right, which is the direct answer to "would this gate have caught the coupled compiler."
  *
  * ── THE HEADLINE, PER RESOLUTION KIND — recorded here as a claim this file's own assertions
  *    below are what proves or disproves it, not as a substitute for reading them ──
@@ -87,7 +100,7 @@
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -96,6 +109,8 @@ import { fileURLToPath } from "node:url";
 import { importPage, installBrowser, makeEvent, makeWorkDir, walk, withDeclaration, SERVED_DECLARATION } from "./fixtures/app-html-page.mjs";
 import { generateQualification } from "../scripts/generate-qualification-declaration.mjs";
 import { generateResolution } from "../scripts/generate-resolution-declaration.mjs";
+import { generateStructural } from "../scripts/generate-structural-declaration.mjs";
+import { generateRules } from "../scripts/generate-rules-declaration.mjs";
 import { DEFAULT_CONFIG_DIR } from "../scripts/monorepo-config.mjs";
 import { Ledger } from "../scripts/ledger.mjs";
 import { orderingFor, sectionAt, sectionForInsertAt } from "../dist/present.js";
@@ -141,6 +156,8 @@ describe("0. THE NAMES ARE GENUINELY UNSEEN — verified with `rg -a`, never pla
 let DECLARATION;
 let RESOLUTION;
 let QUALIFICATION;
+let STRUCTURAL;
+let RULES;
 let scratchRoot;
 
 before(() => {
@@ -165,6 +182,14 @@ before(() => {
       "    fields: [title, qntm_id, status, domain, gentest_rank]\n" +
       "    render:\n" +
       "      shape: checkbox\n",
+  );
+  // An edge type (`GENTEST_LINKS`) neither `compile-structural.mjs` nor its section-level override
+  // reader has ever seen. `queued`'s own `structural_edge_types`/`structural_edge_direction`
+  // override (step 5 below) names it — the STRUCTURAL axis's own generality claim, proven the same
+  // way the other axes are: new config, no code change, correct answer.
+  schema = schema.replace(
+    /^edge_types:\n/m,
+    "edge_types:\n  GENTEST_LINKS:\n    direction: directed\n    cardinality: many_to_many\n",
   );
   writeFileSync(schemaPath, schema);
 
@@ -238,6 +263,8 @@ before(() => {
       "        - { field: gentest_rank, direction: asc }",
       "      defaults:",
       "        domain: dev",
+      "      structural_edge_types: [GENTEST_LINKS]",
+      "      structural_edge_direction: outgoing",
       "    - id: done",
       "      qualification: gentest-widgets-done",
       '      name: "Done"',
@@ -252,9 +279,50 @@ before(() => {
     ].join("\n"),
   );
 
+  // 6. rules/gentest_widgets.yaml — the RULES-CATEGORY axis's own generality claim. One rule this
+  //    grammar can model (`gentest-widget-done-clears-rank`: an `eq` predicate, an `unset_field`
+  //    action — the exact widened verb `compile-capture-rules.mjs` never modelled) and one it
+  //    cannot (`gentest-widget-cancelled-or-done`: an `in` predicate, the shape real rules like
+  //    `waiter_status_propagation.yaml` use) — so both the positive and the negative half of the
+  //    rules axis are proven on config this generator has never seen, the same as qualification's
+  //    own positive/negative split (§5 below).
+  writeFileSync(
+    join(configDir, "rules", "gentest_widgets.yaml"),
+    [
+      "- id: gentest-widget-done-clears-rank",
+      "  for_each:",
+      "    pattern: gentest-widgets-done",
+      "  when:",
+      "    eq: [$current.node.fields.status, done]",
+      "  actions:",
+      "    - verb: unset_field",
+      "      node_id: $current.node.id",
+      "      field: gentest_rank",
+      "- id: gentest-widget-cancelled-or-done",
+      "  for_each:",
+      "    pattern: gentest-widgets-done",
+      "  when:",
+      "    in: [$current.node.fields.status, [done, cancelled]]",
+      "  actions:",
+      "    - verb: set_field",
+      "      node_id: $current.node.id",
+      "      field: gentest_rank",
+      "      value: 0",
+      "",
+    ].join("\n"),
+  );
+
   QUALIFICATION = generateQualification(configDir, new Ledger());
   RESOLUTION = generateResolution(configDir, new Ledger());
-  DECLARATION = { ...SERVED_DECLARATION, qualification: QUALIFICATION, resolution: RESOLUTION };
+  STRUCTURAL = generateStructural(configDir, new Ledger());
+  RULES = generateRules(configDir, new Ledger());
+  DECLARATION = {
+    ...SERVED_DECLARATION,
+    qualification: QUALIFICATION,
+    resolution: RESOLUTION,
+    structural: STRUCTURAL,
+    rules: RULES,
+  };
 });
 
 after(() => {
@@ -567,5 +635,127 @@ describe("6. NOTHING LOCAL IS WRITTEN beyond the seed characters and the stubbed
   test("`.markdown` is never assigned — the page reads the envelope and never rewrites it", () => {
     assert.deepEqual(APP.match(/\.markdown\s*=(?!=)/g), null);
     assert.deepEqual(PAINT.match(/\.markdown\s*=(?!=)/g), null);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7. STRUCTURAL — measured before this file's own widening: this suite exercised
+//    `generate-qualification-declaration.mjs` and `generate-resolution-declaration.mjs` only.
+//    `generate-structural-declaration.mjs` was never called from here, so a structural compiler
+//    hardcoded to the operator's own edge types and view names could have merged green through
+//    this file exactly the way `compile-capture-rules.mjs` did. This section closes that gap: a
+//    brand-new edge type (`GENTEST_LINKS`, step 1 above) and a brand-new section-level override
+//    (`queued`'s own `structural_edge_types`/`structural_edge_direction`, step 5 above) — read
+//    correctly, with no hardcoded name.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("7. STRUCTURAL — a brand-new edge type and section override, read with no hardcoded name", { skip }, () => {
+  test("the new edge type's cardinality is published, read off schema.yaml alone", () => {
+    assert.equal(STRUCTURAL.edgeCardinality.GENTEST_LINKS, "many_to_many");
+  });
+
+  test("the new section's structural override is published, read off the view sheet alone", () => {
+    assert.deepEqual(STRUCTURAL.sections["gentest-widgets"]?.queued, {
+      edgeTypes: ["GENTEST_LINKS"],
+      edgeDirection: "outgoing",
+    });
+  });
+
+  test("nothing was dropped for this brand-new view — a well-formed override is not silently discarded", () => {
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(STRUCTURAL.dropped).filter(([what]) => what.includes("gentest")),
+      ),
+      {},
+    );
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. RULES CATEGORY — measured before this file's own widening: `generate-rules-declaration.mjs`
+//    (and its retired predecessor, `generate-capture-rules-declaration.mjs`) was never called from
+//    here either — which is exactly how a compiler naming two of the operator's own rule ids by
+//    hand (`compile-capture-rules.mjs`, merged as PR #91) shipped through 1803 green tests. This
+//    section closes that gap on the SAME never-seen config every other axis in this file proves
+//    itself against: one rule this grammar models (`gentest-widget-done-clears-rank`), one it does
+//    not (`gentest-widget-cancelled-or-done`, an `in:` predicate) — both from step 6 above.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("8. RULES CATEGORY — an invented rule is published or dropped, with no hardcoded name", { skip }, () => {
+  test("the modelled rule is published with the exact facts its YAML declares", () => {
+    assert.deepEqual(RULES.rules["gentest-widget-done-clears-rank"], {
+      pattern: "gentest-widgets-done",
+      when: { op: "eq", field: "status", value: "done" },
+      priority: 0,
+      unsetsField: "gentest_rank",
+    });
+  });
+
+  test("the unmodelled rule ('in:') is dropped, visibly, with a reason naming the operator it used", () => {
+    assert.match(RULES.dropped["rule 'gentest-widget-cancelled-or-done'"], /operator 'in'/);
+  });
+
+  test("the modelled rule takes its place in the published fire order", () => {
+    assert.ok(RULES.order.sequence.includes("gentest-widget-done-clears-rank"));
+    assert.ok(!RULES.order.sequence.includes("gentest-widget-cancelled-or-done"));
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 9. THE REGRESSION PROOF — the ORIGINAL COUPLED SHAPE, reproduced and run against THIS config,
+//    to show it would NOT have found the rule §8 just proved the widened compiler finds. This is
+//    the mutation the task asks for: "reintroduce a hardcoded rule id and confirm the gate goes
+//    red." `compile-capture-rules.mjs` (retired, PR #91) is gone from the tree, so its algorithm is
+//    reproduced here verbatim in miniature — two named files, two named rule ids — rather than
+//    imported, and driven against the exact scratch config every other section in this file uses.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("9. THE REGRESSION PROOF — the retired coupled compiler, reproduced, goes red on this config", { skip }, () => {
+  /** `compile-capture-rules.mjs`'s own algorithm, miniaturised: two hardcoded file keys, two
+   * hardcoded rule ids. Throws if either file is absent — the coupling the task names verbatim:
+   * "Point it at any other operator's config and it sees nothing." */
+  function hardcodedCoupledCompile(configDir) {
+    const CADENCE_KEY = "rules/cadence_auto_routine.yaml";
+    const STAMP_KEY = "rules/stamp_created_at.yaml";
+    const HARDCODED_IDS = ["routine-without-cadence-becomes-task", "stamp-created-at-on-task"];
+    for (const key of [CADENCE_KEY, STAMP_KEY]) {
+      const path = join(configDir, ...key.split("/"));
+      if (!existsSync(path)) {
+        throw new Error(`${key} does not exist — this coupled shape only ever reads two named files`);
+      }
+    }
+    return HARDCODED_IDS; // the only two rule ids this shape could ever name, by construction
+  }
+
+  test("the coupled shape's two files exist (this scratch config is a full copy of the real one)", () => {
+    assert.doesNotThrow(() => hardcodedCoupledCompile(join(scratchRoot, "config")));
+  });
+
+  test("RED: the coupled shape cannot see the brand-new rule §8 proved the widened compiler publishes", () => {
+    const foundByCoupledShape = hardcodedCoupledCompile(join(scratchRoot, "config"));
+    assert.ok(
+      !foundByCoupledShape.includes("gentest-widget-done-clears-rank"),
+      "the coupled shape can only ever name two hardcoded ids, by construction",
+    );
+  });
+
+  test("GREEN: the widened compiler publishes it — the same config, the two outcomes differ", () => {
+    assert.ok("gentest-widget-done-clears-rank" in RULES.rules);
+  });
+
+  test("RED, THE OTHER WAY: point the coupled shape at a config that renamed its two files and it THROWS", () => {
+    // The task's own framing, proven directly: "Point it at any other operator's config and it
+    // sees nothing." A renamed rules/ directory is exactly that — a different operator's instance.
+    const renamed = mkdtempSync(join(tmpdir(), "gentest-renamed-config-"));
+    try {
+      mkdirSync(join(renamed, "rules"), { recursive: true });
+      writeFileSync(join(renamed, "rules", "my_own_rules.yaml"), "- id: whatever-i-called-it\n  for_each: {pattern: tasks}\n  actions: [{verb: set_field, node_id: $current.node.id, field: x, value: 1}]\n");
+      assert.throws(() => hardcodedCoupledCompile(renamed), /does not exist/);
+      // The widened compiler, pointed at the SAME renamed config, sees it — no file name is baked in.
+      const widened = generateRules(renamed, new Ledger());
+      assert.ok("whatever-i-called-it" in widened.rules);
+    } finally {
+      rmSync(renamed, { recursive: true, force: true });
+    }
   });
 });

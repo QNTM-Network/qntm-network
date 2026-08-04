@@ -41,6 +41,7 @@ import {
 } from "../scripts/generate-qualification-declaration.mjs";
 import { generateStructural } from "../scripts/generate-structural-declaration.mjs";
 import { generateResolution } from "../scripts/generate-resolution-declaration.mjs";
+import { generateRules } from "../scripts/generate-rules-declaration.mjs";
 import { checkDeclarations } from "../scripts/checkdeclarations.mjs";
 import { Ledger } from "../scripts/ledger.mjs";
 import { parseYamlSubset } from "../scripts/yaml-subset.mjs";
@@ -491,7 +492,7 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
     }
   };
 
-  /** Write a presentation.json holding the three keys generated from `configDir`. */
+  /** Write a presentation.json holding the four generated keys from `configDir`. */
   const servedFrom = (configDir, scratch) => {
     const path = join(scratch, "presentation.json");
     writeFileSync(
@@ -502,6 +503,7 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
           qualification: generateQualification(configDir),
           structural: generateStructural(configDir),
           resolution: generateResolution(configDir),
+          rules: generateRules(configDir),
         },
         null,
         2,
@@ -570,12 +572,14 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
       qualification: generateQualification(FIXTURE_CONFIG),
       structural: generateStructural(FIXTURE_CONFIG),
       resolution: generateResolution(FIXTURE_CONFIG),
+      rules: generateRules(FIXTURE_CONFIG),
     };
     assert.deepEqual(checkDeclarations(FIXTURE_CONFIG, served).stale, []);
     assert.deepEqual(checkDeclarations(FIXTURE_CONFIG, {}).stale, [
       "qualification",
       "structural",
       "resolution",
+      "rules",
     ]);
   });
 });
@@ -828,9 +832,11 @@ describe("7. THE COMPLETENESS SCANNER — no path may leave a declaration withou
     "scripts/generate-qualification-declaration.mjs",
     "scripts/generate-structural-declaration.mjs",
     "scripts/generate-resolution-declaration.mjs",
+    "scripts/generate-rules-declaration.mjs",
     "scripts/compile-qualification.mjs",
     "scripts/compile-structural.mjs",
     "scripts/compile-resolution.mjs",
+    "scripts/compile-rules.mjs",
   ];
   const WINDOW = 12;
 

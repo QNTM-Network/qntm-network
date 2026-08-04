@@ -1,0 +1,16 @@
+# A `for_each:` expressed as a LIST of pattern bindings — a multi-source join, the shape every
+# aggregate/metric rule in the operator's real config uses. Not the single `{pattern: name}` shape
+# this grammar models; dropped, not guessed at.
+
+- id: weighted-priority-metric
+  for_each:
+    - pattern: metric-source-a
+      bind: current
+    - pattern: metric-source-b
+      bind: events
+  when:
+    eq: [1, 1]
+  actions:
+    - verb: weighted_sum
+      node_id: $current.node.id
+      field: priority_weight

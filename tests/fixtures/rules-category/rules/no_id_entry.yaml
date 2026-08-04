@@ -1,0 +1,8 @@
+# A rule entry with no 'id:' at all — nothing to publish it under.
+- for_each:
+    pattern: tasks
+  actions:
+    - verb: set_field
+      node_id: $current.node.id
+      field: x
+      value: 1

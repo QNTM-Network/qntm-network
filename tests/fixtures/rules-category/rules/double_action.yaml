@@ -1,0 +1,18 @@
+# Two modelled actions on one rule — the operator's real config has this shape too
+# (change_type_carrying_node_becomes_ticket: set_node_type + set_field together). This grammar
+# publishes exactly one action per rule, so a rule doing two is dropped rather than picking one
+# and silently discarding the other.
+
+- id: retype-and-stamp-together
+  for_each:
+    pattern: tasks
+  when:
+    eq: [$current.node.fields.status, done]
+  actions:
+    - verb: set_node_type
+      node_id: $current.node.id
+      node_type: outcome
+    - verb: set_field
+      node_id: $current.node.id
+      field: completed_at
+      value: "$cycle_today"
