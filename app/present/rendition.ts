@@ -727,3 +727,108 @@ export function titleSpans(line: string): readonly WordSpan[] {
   }
   return words;
 }
+
+/** Why `cleanTitleFor` has nothing to say. */
+export type CleanTitleAbstention = "no-title" | "style-ambiguous";
+
+/** Either the line's clean (chrome-free) title text, or the reason there is none. */
+export type CleanTitleReading =
+  | { readonly kind: "title"; readonly text: string }
+  | { readonly kind: "abstains"; readonly because: CleanTitleAbstention };
+
+// A leading+trailing wrap this reader does NOT unwrap — see cleanTitleFor's own header.
+const STYLE_WRAPS = ["~~", "**", "*", "_"];
+
+/**
+ * `cleanTitleFor` — the SAME chrome-free text `apps/qntm-md/src/qntm_md/io/parser/line_parser.py`
+ * stores as a node's `title` field (`canonicalise_title_segment(_normalise_title(remainder))`,
+ * `line_parser.py:241`/`:379`), read from the printed line rather than transcribed. Built for
+ * `app/present/ordering.ts`'s default-ordering comparator, which needs a TITLE VALUE for every
+ * qualifying-looking row even when `due_date`/`priority` are absent (title is the engine's OWN
+ * final tiebreak — see `ordering.ts`'s header).
+ *
+ * ── HOW IT AGREES WITH THE ENGINE'S OWN PIPELINE, STEP FOR STEP ──
+ *
+ *   1. CHROME (checkbox/bullet prefix) — the SAME "which shape, which tail" walk `titleSpans`
+ *      above already does, reused rather than re-decided.
+ *   2. TAGS / WIKI-LINKS / MARKERS — the SAME three atom-finders `titleSpans` claims content with,
+ *      in the SAME priority order (`line_parser.py:79-89`'s own extraction order, that function's
+ *      own header cites the chain for). Every claimed span is CUT OUT rather than walked around —
+ *      `titleSpans` only needs to know a word does not START inside a claim; this needs the
+ *      claimed characters actually gone, the way `parse_marker`/`parse_wiki_link`/`parse_tag`
+ *      remove them from `remainder` before the engine ever normalises it.
+ *   3. WHITESPACE — `\s+` collapsed to one space, then trimmed, mirroring `_normalise_title`
+ *      (`line_parser.py:55-57`) exactly (same regex shape, same order: collapse then strip).
+ *
+ * ── WHY AN EMPTY RESULT IS SOMETIMES A TITLE AND SOMETIMES `no-title` ──
+ *
+ * A genuinely `blank` line (`classifyLine`'s own `"blank"` shape) mints no node at all — there is
+ * no title to compare because there is no ROW. A `- [ ] ` with nothing else DOES mint a node
+ * (`rendition.ts`'s own `carriesContent` header: "`- [ ] ` MINTS A NODE TITLED NOTHING"), and
+ * `_normalise_title("")` is `""`, not `None` — the engine's own `title` field is the EMPTY STRING,
+ * a real, comparable value (`str("")` sorts before every non-empty title). So only the `blank`
+ * shape abstains `no-title` here; every other shape that strips down to nothing still returns
+ * `{ kind: "title", text: "" }`.
+ *
+ * ── WHAT IT DOES NOT ATTEMPT, NAMED RATHER THAN SILENTLY WRONG ──
+ *
+ * `canonicalise_title_segment` ALSO strips a leading+trailing STYLING wrapper (`~~`/`**`/`*`/`_`)
+ * around the whole title (`render_context_parse.py`'s `_strip_wrapped_title_segment`), guarded by
+ * a `_would_become_parser_syntax` check this reader does not reproduce. Rather than risk a title
+ * string that silently disagrees with the engine's (an operator who writes `**Ship it**` would get
+ * a browser-side title carrying the `**` and an engine-side title without it — two different sort
+ * keys for the same row), this function ABSTAINS `style-ambiguous` the instant the stripped content
+ * starts AND ends with the same wrapper — an honest "I don't know" rather than a guess that could
+ * place a row where the engine will not. Unconfirmed empirically how often the operator's real
+ * content hits this (measured for `titleSpans`' own decorative-emoji case, not this one) — stated,
+ * not assumed away.
+ */
+export function cleanTitleFor(line: string): CleanTitleReading {
+  const shape = classifyLine(line);
+
+  let content: string;
+  if (shape.kind === "blank") {
+    return { kind: "abstains", because: "no-title" };
+  } else if (shape.kind === "heading") {
+    content = shape.text;
+  } else if (shape.kind === "checkbox") {
+    content = shape.tail;
+  } else {
+    // prose — the same "bullet then checkbox glyph" chrome sequence titleSpans/carriesContent use.
+    const bullet = BULLET.exec(line);
+    let rest = bullet !== null ? line.slice(bullet[0].length) : line;
+    const glyph = CHECKBOX_GLYPH.exec(rest);
+    if (glyph !== null) rest = rest.slice(glyph[0].length);
+    content = rest;
+  }
+
+  const claims: WordSpan[] = [];
+  for (const span of [...wikiLinkSpans(content), ...tagSpans(content), ...markerSpans(content)]) {
+    // Same priority rule titleSpans uses: a later grammar's span loses to an earlier one it starts
+    // inside of.
+    if (!claims.some((claimed) => span.start >= claimed.start && span.start < claimed.end)) {
+      claims.push(span);
+    }
+  }
+  claims.sort((a, b) => a.start - b.start);
+
+  let cut = "";
+  let at = 0;
+  for (const claim of claims) {
+    cut += content.slice(at, claim.start);
+    at = claim.end;
+  }
+  cut += content.slice(at);
+
+  const normalised = cut.replace(/\s+/g, " ").trim();
+  for (const wrap of STYLE_WRAPS) {
+    if (
+      normalised.startsWith(wrap) &&
+      normalised.endsWith(wrap) &&
+      normalised.length > wrap.length * 2
+    ) {
+      return { kind: "abstains", because: "style-ambiguous" };
+    }
+  }
+  return { kind: "title", text: normalised };
+}

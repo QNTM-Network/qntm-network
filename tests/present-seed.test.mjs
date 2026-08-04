@@ -203,7 +203,14 @@ describe("2. THE AGREEMENT — the browser's seed is the engine's own rendered t
     // `scripts/resolution-agreement.py` against monorepo `d4c9d98`. Seven new views arrived and
     // brought their sections with them. The claim — that the fixture covers EVERY section rather
     // than a sample — is unchanged.
-    assert.equal(TRUTH.seeds.length, 219, "the engine did not answer for all 219 sections");
+    // RESTATED AGAIN, 2026-08-04 (default-ordering step): 219 -> 225, when the fixture was
+    // regenerated so `defaultOrdering`/`priorityRank` (this step's own addition) could be checked
+    // by LIVE ENGINE IMPORT (`tests/resolution-default-ordering-agreement.test.mjs`). The
+    // regeneration incidentally picked up unrelated config growth (the operator's own `family`
+    // domain: `all-family`, `people-family`, `routines-family`, `notes-work`, six new sections)
+    // that had already landed in his config before this branch started — not caused by this step,
+    // just newly visible once the fixture this test reads was regenerated for an unrelated reason.
+    assert.equal(TRUTH.seeds.length, 225, "the engine did not answer for all 225 sections");
     // POSITIVE CONTROL, the same one `scripts/resolution-agreement.py` refuses without: an
     // all-empty truth side would agree with a completely broken browser just as well.
     assert.ok(
@@ -254,8 +261,12 @@ describe("2. THE AGREEMENT — the browser's seed is the engine's own rendered t
     // The numbers design-the-rule-mirror.md predicted, arrived at independently: 13 of 186.
     // RESTATED 2026-08-03 against monorepo `d4c9d98`: 15 withheld + 200 identical + the 4 sections
     // of the filed checkbox-seed defect = 219, the whole fixture. Nothing is unaccounted for.
-    assert.equal(withheld, 15, "the type-tag refusal no longer lands on exactly 15 sections");
-    assert.equal(identical, 200, "the sections that agree outright are no longer 200");
+    // RESTATED AGAIN, 2026-08-04 (see the fixture-size comment above, same cause): 17 withheld +
+    // 204 identical + 4 = 225. The `family` domain's routines hit the SAME
+    // `routine-without-cadence-becomes-task` withholding rule the other 15 already did (+2); the
+    // rest of the family/notes-work additions agree outright (+4).
+    assert.equal(withheld, 17, "the type-tag refusal no longer lands on exactly 17 sections");
+    assert.equal(identical, 204, "the sections that agree outright are no longer 204");
     assert.equal(
       withheld + identical + Object.keys(KNOWN_CHECKBOX_SEED_DEFECT).length,
       TRUTH.seeds.length,
@@ -596,16 +607,19 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
     assert.deepEqual(seed, null, "the GLOBAL rung answered without a table to answer from");
   });
 
-  test("THE 15 SECTIONS — a rule retypes the capture, so the type tag is refused", () => {
+  test("THE 17 SECTIONS — a rule retypes the capture, so the type tag is refused", () => {
     // RESTATED 2026-08-03: 13 -> 15, when `presentation.json` was regenerated from monorepo
     // `d4c9d98`. The two added are `routines-qntm`'s own sections, from `4b5fd88` (qntm domain
     // surfaces) — the same `routine-without-cadence-becomes-task` rule, on a new domain. The
     // claim is unchanged and the per-section proof below still runs over every one of them.
+    // RESTATED AGAIN, 2026-08-04: 15 -> 17 — `routines-family`'s own two sections hit the SAME
+    // rule, on the family domain this time (same cause as this file's other two "RESTATED AGAIN"
+    // comments: unrelated config growth, newly visible once this branch regenerated the fixture).
     const refused = Object.entries(RESOLUTION.dropped)
       .filter(([, why]) => /type tag is not seeded/.test(why))
       .map(([what]) => what)
       .sort();
-    assert.equal(refused.length, 15, "the §3.3 count moved; the gate is measuring something else");
+    assert.equal(refused.length, 17, "the §3.3 count moved; the gate is measuring something else");
     // APPLYING THE DEFAULTS DOES NOT FIX IT, and this is the measurement the design asked for. The
     // rule fires on the ABSENCE of `cadence`, and not one of these 15 sections declares a
     // `defaults:` block that supplies it — so the retype stands whatever the defaults say. The
@@ -650,6 +664,11 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
     // `sectionsWithDefaults` followed it, because seven new views arrived and every one of them
     // declares its domain. The refused set did NOT move — still `project` 60, `stage` 9,
     // `domain` 5 — so nothing newly became unspellable, which is the half that would have mattered.
+    // RESTATED AGAIN, 2026-08-04 — same cause as `tests/present-seed.test.mjs`'s own "225" comment
+    // above (the family domain's six new sections, visible once this branch's OWN unrelated
+    // regeneration of the fixture/declaration picked them up): `domain` 165 -> 170,
+    // `sectionsWithDefaults` follows it. Nothing else moved — the refused set is still
+    // `project` 60, `stage` 9, `domain` 5.
     const declared = {};
     const spelled = {};
     const unspelled = {};
@@ -669,9 +688,9 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
         }
       }
     }
-    assert.equal(sectionsWithDefaults, 165, "the 165-section figure moved");
+    assert.equal(sectionsWithDefaults, 170, "the 170-section figure moved");
     assert.deepEqual(declared, {
-      domain: 165,
+      domain: 170,
       project: 60,
       cap_state: 12,
       principle_state: 10,
@@ -682,7 +701,7 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
       god_box: 2,
     }, "the 9 declared default fields, and their counts, moved");
     assert.deepEqual(spelled, {
-      domain: 160,
+      domain: 165,
       cap_state: 12,
       principle_state: 10,
       class_state: 8,

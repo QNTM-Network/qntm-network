@@ -2,3 +2,9 @@ markers:
   - token: "📅"
     field: due_date
     extraction_hint: trailing_date
+  - token: "🔽"
+    field: priority
+    value: low
+  - token: "⏫"
+    field: priority
+    value: high

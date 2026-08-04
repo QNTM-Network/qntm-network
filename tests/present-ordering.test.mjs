@@ -65,12 +65,23 @@ import { homedir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { orderingFor, orderingPlacementFor, markerValue, classifyLine } from "../dist/present.js";
+import {
+  orderingFor,
+  orderingPlacementFor,
+  defaultOrderingFor,
+  defaultOrderingPlacementFor,
+  resolveOrderingFor,
+  resolveOrderingPlacementFor,
+  markerValue,
+  classifyLine,
+} from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVED = JSON.parse(readFileSync(resolve(HERE, "..", "presentation.json"), "utf8"));
 const ORDERING = SERVED.resolution.ordering;
 const ORDERING_FIELDS = SERVED.resolution.orderingFields;
+const DEFAULT_ORDERING = SERVED.resolution.defaultOrdering;
+const PRIORITY_RANK = SERVED.resolution.priorityRank;
 
 const vaultDir = join(homedir(), "qntm");
 const vaultAvailable = existsSync(vaultDir);
@@ -782,5 +793,220 @@ describe("9. orderingPlacementFor's tie-break agrees with a stable sort, over co
     );
     assert.equal(reading.kind, "answer");
     assert.equal(reading.placement.moved, false);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 10. THE DEFAULT ORDERING — `defaultOrderingFor`/`defaultOrderingPlacementFor`/
+//     `resolveOrderingFor`/`resolveOrderingPlacementFor`, 2026-08-04's own step: the engine's own
+//     fallback for the 171 (of 186) sections `orderingFor` itself always abstains
+//     `no-section-declaration` for, made explicit. `DEFAULT_ORDERING`/`PRIORITY_RANK` above are
+//     read from the SERVED declaration, never invented by this file — the same posture §2 already
+//     takes for `ORDERING`/`ORDERING_FIELDS`. `tests/resolution-default-ordering-agreement.test.mjs`
+//     is the proof that `DEFAULT_ORDERING`/`PRIORITY_RANK` themselves agree with the ENGINE; this
+//     file proves the COMPARATOR built on top of them agrees with what those two facts imply.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("10a. THE TIERED RULE — a missing due_date/priority sorts LAST, regardless of direction", () => {
+  test("due_date present beats due_date absent, even though the absent row's TITLE would sort first", () => {
+    // "AAA" would win on title alone (the final tiebreak) — but "AAA" has no due_date, and "ZZZ"
+    // does, so "ZZZ" (present, tier 0) outranks "AAA" (absent, tier 1) on the FIRST key.
+    const source = ["## H", "- [ ] AAA", "- [ ] ZZZ 📅 2026-08-10"].join("\n");
+    const reading = defaultOrderingFor("v", "s", source, 1, "- [ ] AAA edited", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.beforeRank, 2, "AAA (no due_date) should rank BEHIND ZZZ (has one)");
+  });
+
+  test("HIS OWN DEGENERATE CASE, REPRODUCED: neither due_date nor priority set anywhere — pure title, ascending, case-sensitive", () => {
+    // The operator's own measured inbox order, verbatim (report's own six lines), rebuilt as a
+    // fixture: "Family domain" / "Micu lunch" / "Open day close day" / "account opening form per
+    // ca" / "zzTEST fast one" / "zzTEST inbox ordering test one". Uppercase sorts before lowercase
+    // in codepoint order ('F'=70 < 'a'=97), which is why 'account' sorts after 'Open' and the two
+    // 'zzTEST' rows sort last, tied on their shared prefix until 'fast' vs 'inbox'.
+    const rows = [
+      "Family domain",
+      "Micu lunch",
+      "Open day close day",
+      "account opening form per ca",
+      "zzTEST fast one",
+      "zzTEST inbox ordering test one",
+    ];
+    const source = ["## Inbox", ...rows.map((r) => `- [ ] ${r}`)].join("\n");
+    // Rank EVERY row by editing it to itself (a no-op edit) and reading its OWN afterRank — proves
+    // the comparator's ranking of the whole set, not just one pairwise comparison.
+    const ranks = rows.map((row, i) => {
+      const reading = defaultOrderingFor("v", "s", source, i + 1, `- [ ] ${row}`, {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+      assert.equal(reading.kind, "answer", `row '${row}' should answer, not abstain`);
+      return { row, rank: reading.answer.beforeRank };
+    });
+    const sorted = [...ranks].sort((a, b) => a.rank - b.rank).map((r) => r.row);
+    assert.deepEqual(sorted, rows, "the fixture is already in the operator's own measured order — ranks should reproduce it exactly");
+  });
+});
+
+describe("10b. PRIORITY — the enum marker, and the engine's own rank table, DESCENDING", () => {
+  const source = ["## H", "- [ ] low 🔽", "- [ ] high ⏫", "- [ ] none"].join("\n");
+
+  test("high (rank 3) outranks low (rank 1) outranks none (tier 1, absent)", () => {
+    const rankOf = (lineIndex, text) => {
+      const reading = defaultOrderingFor("v", "s", source, lineIndex, text, {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+      assert.equal(reading.kind, "answer");
+      return reading.answer.beforeRank;
+    };
+    assert.equal(rankOf(2, "- [ ] high ⏫"), 1, "high should rank first");
+    assert.equal(rankOf(1, "- [ ] low 🔽"), 2, "low should rank second");
+    assert.equal(rankOf(3, "- [ ] none"), 3, "no priority marker at all should rank last");
+  });
+
+  test("moving a row from low to high crosses the middle rank — a real, provable move", () => {
+    // Distinct titles on purpose: "low"/"high"/"none" above only needed to prove the RANK table;
+    // this needs a case where priority TIES after the edit, so title (the third key) is what
+    // decides the tie — "alpha" [[qntm's]] own title sorts before "beta"'s alphabetically, so once
+    // alpha's priority rises to tie beta's, alpha settles AHEAD of beta, not merely "after the
+    // sibling it used to trail" the way an unrelated-title fixture would obscure.
+    const titled = ["## H", "- [ ] alpha 🔽", "- [ ] beta ⏫", "- [ ] gamma"].join("\n");
+    const before = defaultOrderingFor("v", "s", titled, 1, "- [ ] alpha 🔽", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(before.kind, "answer");
+    assert.equal(before.answer.beforeRank, 2, "alpha (low) starts behind beta (high), ahead of gamma (no priority)");
+
+    const reading = defaultOrderingPlacementFor("v", "s", titled, 1, "- [ ] alpha ⏫", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, true, "alpha crosses beta on the way from low to high — a real rank change");
+    assert.equal(reading.placement.beforeLineIndex, 2, "alpha now TIES beta's rank, and 'alpha' < 'beta' alphabetically, so it settles immediately before beta");
+  });
+});
+
+describe("10c. TITLE — codepoint comparison, NOT JavaScript's native `<`, over an ASTRAL character", () => {
+  // U+FFFF (a lone BMP code point, one UTF-16 code unit: 0xFFFF) vs U+10000 (the first astral code
+  // point, a SURROGATE PAIR: high surrogate 0xD800, low surrogate 0xDC00). TRUE code-point order:
+  // 0xFFFF < 0x10000, so the BMP title sorts FIRST. JavaScript's native `a < b` compares UTF-16
+  // CODE UNITS instead: the astral title's FIRST code unit is 0xD800, which is LESS than 0xFFFF,
+  // so naive `<` would rank the astral title first — the exact wrong answer this module's own
+  // header names as a real risk ("locale collation" / codepoint-vs-code-unit) and `compareCodepoints`
+  // (ordering.ts) exists to avoid. Neither of these titles carries a marker glyph — a genuinely
+  // exotic character an operator could still type into a title.
+  const bmp = "￿-title";
+  const astral = "\u{10000}-title";
+
+  test("the BMP title (U+FFFF) ranks BEFORE the astral title (U+10000) — true code-point order", () => {
+    const source = ["## H", `- [ ] ${astral}`, `- [ ] ${bmp}`].join("\n");
+    const reading = defaultOrderingFor("v", "s", source, 2, `- [ ] ${bmp}`, {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.beforeRank, 1, "U+FFFF should sort before U+10000 in TRUE code-point order");
+  });
+
+  test("POSITIVE CONTROL: native `<` really would get this backwards, so the test above is not vacuous", () => {
+    assert.ok(bmp < astral === false, "if native `<` ever agrees with code-point order here, this fixture stopped proving anything — pick a new pair");
+    assert.ok(astral < bmp, "native code-UNIT comparison ranks the astral title first — the wrong answer this module avoids");
+  });
+});
+
+describe("10d. ABSTENTIONS — the three NEW reasons, plus the reused ones, all reachable through the default path", () => {
+  test("field-not-published: neither due_date nor priority has a marker in this (invented) config", () => {
+    const reading = defaultOrderingFor("v", "s", "## H\n- [ ] x", 1, "- [ ] x edited", {}, DEFAULT_ORDERING, {}, PRIORITY_RANK);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "field-not-published");
+  });
+
+  test("nested-section: the SAME refusal orderingFor already has, reachable for an undeclared section too", () => {
+    const source = ["## H", "- [ ] a", "    - [ ] indented child"].join("\n");
+    const reading = defaultOrderingFor("v", "s", source, 1, "- [ ] a edited", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "nested-section");
+  });
+
+  test("container-ordering-directive: the section's OWN heading carries a live #order: directive", () => {
+    const source = ["## H #order:queue_position:asc", "- [ ] a", "- [ ] b"].join("\n");
+    const reading = defaultOrderingFor("v", "s", source, 1, "- [ ] a edited", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "container-ordering-directive");
+  });
+
+  test("style-ambiguous-title: a title wrapped in ** could disagree with the engine's own stripped title", () => {
+    const source = ["## H", "- [ ] **Ship it**", "- [ ] plain"].join("\n");
+    const reading = defaultOrderingFor("v", "s", source, 1, "- [ ] **Ship it now**", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "style-ambiguous-title");
+  });
+
+  test("has-declared-ordering: calling the default path directly on a section that DID declare ordering refuses, defensively", () => {
+    const declared = { v: { s: { ordering: [{ field: "due_date", direction: "asc" }] } } };
+    const reading = defaultOrderingFor("v", "s", "## H\n- [ ] x", 1, "- [ ] x edited", declared, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "has-declared-ordering");
+  });
+
+  test("defaultOrderingFor and defaultOrderingPlacementFor abstain identically, reason for reason (mirrors §8 for the declared path)", () => {
+    const cases = [
+      ["field-not-published", "## H\n- [ ] x", {}],
+      ["nested-section", ["## H", "- [ ] a", "    - [ ] b"].join("\n"), ORDERING_FIELDS],
+      ["container-ordering-directive", "## H #order:x:asc\n- [ ] a", ORDERING_FIELDS],
+    ];
+    for (const [label, source, fields] of cases) {
+      const noteReading = defaultOrderingFor("v", "s", source, 1, "- [ ] a edited", {}, DEFAULT_ORDERING, fields, PRIORITY_RANK);
+      const placeReading = defaultOrderingPlacementFor("v", "s", source, 1, "- [ ] a edited", {}, DEFAULT_ORDERING, fields, PRIORITY_RANK);
+      assert.equal(noteReading.kind, "abstains", `defaultOrderingFor did not abstain for ${label}`);
+      assert.equal(placeReading.kind, "abstains", `defaultOrderingPlacementFor did not abstain for ${label}`);
+      assert.equal(noteReading.because, label);
+      assert.equal(placeReading.because, label);
+    }
+  });
+});
+
+describe("10e. THE DISPATCHER — resolveOrderingFor/resolveOrderingPlacementFor route by declaration, not guess", () => {
+  test("a DECLARED section routes to orderingFor unchanged — identical answer, over his real config", () => {
+    const source = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
+    const direct = orderingFor("flowtrace-queue", "queue", source, 1, "- [ ] a [[qntm:1]] 🔢 5", ORDERING, ORDERING_FIELDS);
+    const dispatched = resolveOrderingFor(
+      "flowtrace-queue", "queue", source, 1, "- [ ] a [[qntm:1]] 🔢 5", ORDERING, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK,
+    );
+    assert.deepEqual(dispatched, direct);
+    assert.equal(direct.kind, "answer", "positive control — this pair must actually answer, not merely agree while abstaining");
+  });
+
+  test("an UNDECLARED section routes to defaultOrderingFor — identical answer", () => {
+    const source = ["## H", "- [ ] AAA", "- [ ] ZZZ 📅 2026-08-10"].join("\n");
+    const direct = defaultOrderingFor("v", "s", source, 1, "- [ ] AAA edited", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    const dispatched = resolveOrderingFor("v", "s", source, 1, "- [ ] AAA edited", {}, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK);
+    assert.deepEqual(dispatched, direct);
+    assert.equal(direct.kind, "answer");
+  });
+
+  test("the placement twin dispatches the same way, for both declared and undeclared sections", () => {
+    const declaredSource = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
+    const declaredDirect = orderingPlacementFor("flowtrace-queue", "queue", declaredSource, 1, "- [ ] a [[qntm:1]] 🔢 5", ORDERING, ORDERING_FIELDS);
+    const declaredDispatched = resolveOrderingPlacementFor(
+      "flowtrace-queue", "queue", declaredSource, 1, "- [ ] a [[qntm:1]] 🔢 5", ORDERING, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK,
+    );
+    assert.deepEqual(declaredDispatched, declaredDirect);
+
+    const undeclaredSource = ["## H", "- [ ] AAA", "- [ ] ZZZ 📅 2026-08-10"].join("\n");
+    const undeclaredDirect = defaultOrderingPlacementFor("v", "s", undeclaredSource, 1, "- [ ] AAA edited", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    const undeclaredDispatched = resolveOrderingPlacementFor("v", "s", undeclaredSource, 1, "- [ ] AAA edited", {}, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK);
+    assert.deepEqual(undeclaredDispatched, undeclaredDirect);
+  });
+});
+
+describe("10f. NOTHING LOCAL REACHES A WRITE — the default-ordering path's own imports, mirroring §6", () => {
+  test("ordering.ts still imports nothing from source.ts", () => {
+    const ORDERING_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "ordering.ts"), "utf8");
+    for (const line of ORDERING_SOURCE.split(/\r?\n/)) {
+      if (!/^\s*import\b/.test(line)) continue;
+      assert.doesNotMatch(line, /["']\.\/source\.js["']/, `ordering.ts imports the edit path: ${line.trim()}`);
+    }
+  });
+
+  test("defaultOrderingFor reaches the clock zero times — the same claim §5 makes for orderingFor", () => {
+    const realNow = Date.now;
+    Date.now = () => {
+      throw new Error("defaultOrderingFor read the clock");
+    };
+    try {
+      const source = ["## H", "- [ ] AAA", "- [ ] ZZZ 📅 2026-08-10"].join("\n");
+      const reading = defaultOrderingFor("v", "s", source, 1, "- [ ] AAA edited", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+      assert.equal(reading.kind, "answer");
+    } finally {
+      Date.now = realNow;
+    }
   });
 });

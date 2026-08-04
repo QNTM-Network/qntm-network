@@ -31,7 +31,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { importPage, installBrowser, makeWorkDir } from "./fixtures/app-html-page.mjs";
-import { orderingPlacementFor } from "../dist/present.js";
+import { orderingPlacementFor, resolveOrderingPlacementFor } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-ordering-note");
@@ -495,5 +495,142 @@ describe("7. NOTHING NEW REACHES A WRITE — armOrderingSettle and orderingDiagn
       if (!/^\s*import\b/.test(line)) continue;
       assert.fail(`settle.ts is expected to import nothing at all, found: ${line.trim()}`);
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. THE DEFAULT ORDERING — an undeclared section now says and PLACES something, through the SAME
+//    real functions §1/§5/§6 already exercise. 2026-08-04, `roadmap-the-road-ahead.md`'s "the
+//    engine's own default ordering, made explicit" step: `resolution.ordering` never names
+//    `inbox`/`shelved` below (the same shape §3's "no-section-declaration" fixture used), but
+//    `orderingNoteFor`/`updateOrderingBadge`/`armOrderingSettle` now reach `resolveOrderingFor`/
+//    `resolveOrderingPlacementFor` instead of `orderingFor`/`orderingPlacementFor` directly, and
+//    THAT function answers for an undeclared section instead of staying silent.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+const DEFAULT_DECLARATION = {
+  qualification: {
+    ...FAKE_DECLARATION.qualification,
+    sectionOrder: { demo3: ["inbox", "shelved"] },
+  },
+  resolution: {
+    // NEITHER 'inbox' NOR 'shelved' appears here — the exact "no-section-declaration" shape.
+    ordering: {},
+    orderingFields: {
+      due_date: { token: "📅", kind: "date" },
+      priority: { kind: "enum", values: { "🔽": "low", "⏫": "high" } },
+    },
+    defaultOrdering: [
+      { field: "due_date", direction: "asc" },
+      { field: "priority", direction: "desc" },
+      { field: "title", direction: "asc" },
+    ],
+    priorityRank: { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 },
+  },
+};
+
+const DEMO3_VIEW = { id: "demo3", path: "demo3.md" };
+
+// FLAT, no due_date/priority on either row — his inbox's own degenerate case (title, the only
+// live key). "Zebra task" > "Apple task" in codepoint order, so it starts LAST.
+const INBOX_SOURCE = ["## Inbox", "- [ ] Zebra task", "- [ ] Apple task"].join("\n");
+
+describe("8. THE DEFAULT ORDERING — an undeclared section now speaks, through the real page functions", () => {
+  let page, elements;
+
+  before(async () => {
+    ({ elements } = installBrowser());
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+    page = await importPage(WORK);
+    page.__applyPresentation(DEFAULT_DECLARATION);
+  });
+
+  test("orderingNoteFor: renaming the LAST-sorting row to sort FIRST says \"this line will move within inbox\"", () => {
+    // "Zebra task" -> "AAA task" sorts BEFORE "Apple task" ('A' < 'p' at the second character) —
+    // rank 2 -> rank 1, a real move, decided by title, the engine's own final tiebreak.
+    const said = page.__orderingNoteFor(DEMO3_VIEW, {
+      lineIndex: 1,
+      text: "- [ ] AAA task",
+      markdown: "irrelevant to this test",
+      source: INBOX_SOURCE,
+      kind: "set-line",
+    });
+    assert.equal(said, "this line will move within inbox");
+  });
+
+  test("orderingNoteFor: an edit that leaves the title's rank unchanged says nothing", () => {
+    const said = page.__orderingNoteFor(DEMO3_VIEW, {
+      lineIndex: 1,
+      text: "- [ ] Zebra task edited",
+      markdown: "irrelevant",
+      source: INBOX_SOURCE,
+      kind: "set-line",
+    });
+    assert.equal(said, "", "still last alphabetically — 'Zebra task edited' > 'Apple task'");
+  });
+
+  test("updateOrderingBadge: the SAME undeclared section now says \"ordering: decided\" instead of staying silent", () => {
+    page.__updateOrderingBadge(DEMO3_VIEW, {
+      lineIndex: 1,
+      text: "- [ ] AAA task",
+      markdown: "irrelevant",
+      source: INBOX_SOURCE,
+      kind: "set-line",
+    });
+    assert.equal(elements.get("orderingBadge").textContent, "ordering: decided");
+    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-answer"));
+  });
+
+  test("armOrderingSettle: places the row, and agrees with defaultOrderingPlacementFor/resolveOrderingPlacementFor called directly", () => {
+    const commit = {
+      lineIndex: 1,
+      text: "- [ ] AAA task",
+      markdown: INBOX_SOURCE.replace("- [ ] Zebra task", "- [ ] AAA task"),
+      source: INBOX_SOURCE,
+      kind: "set-line",
+    };
+    page.__armOrderingSettle(DEMO3_VIEW, commit);
+    const instruction = page.__settle().take(commit.markdown, DEMO3_VIEW.id);
+    assert.notEqual(instruction, null, "the settle surface was never armed for an undeclared section");
+
+    const direct = resolveOrderingPlacementFor(
+      DEMO3_VIEW.id,
+      "inbox",
+      commit.source,
+      commit.lineIndex,
+      commit.text,
+      DEFAULT_DECLARATION.resolution.ordering,
+      DEFAULT_DECLARATION.resolution.orderingFields,
+      DEFAULT_DECLARATION.resolution.defaultOrdering,
+      DEFAULT_DECLARATION.resolution.priorityRank,
+    );
+    assert.equal(direct.kind, "answer");
+    assert.equal(direct.placement.moved, true);
+    // "AAA task" (edited, now line 1) belongs immediately BEFORE "Apple task" (line 2) — the row
+    // it ranks ahead of once its new title has sorted in.
+    assert.equal(direct.placement.beforeLineIndex, 2);
+    assert.deepEqual(instruction.placement, {
+      lineIndex: commit.lineIndex,
+      beforeLineIndex: direct.placement.beforeLineIndex,
+    });
+  });
+
+  test("a NESTED section (indentation present) abstains \"nested-section\", VISIBLY, through #orderingBadge", () => {
+    // 'shelved' is ALSO undeclared, but its printed range carries indentation — the same refusal
+    // the DECLARED path already had (ordering.ts's own header, measurement 2), now reachable for
+    // an undeclared section too rather than silently returning nothing.
+    // BOTH headings, in declared order — `sectionAt` resolves by ORDINAL heading position within
+    // a view (`address.ts`'s own model), not by heading TEXT; a lone '## Shelved' heading would
+    // resolve to ordinal 0 ('inbox'), not 'shelved' (ordinal 1).
+    const nestedSource = ["## Inbox", "## Shelved", "- [ ] Parent item", "    - [ ] Child item"].join("\n");
+    page.__updateOrderingBadge(DEMO3_VIEW, {
+      lineIndex: 2, // "## Inbox"=0, "## Shelved"=1, "Parent item"=2
+      text: "- [ ] Parent item edited",
+      markdown: "irrelevant",
+      source: nestedSource,
+      kind: "set-line",
+    });
+    assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — nested-section");
+    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
   });
 });

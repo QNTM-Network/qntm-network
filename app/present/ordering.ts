@@ -107,16 +107,43 @@
  * answer agrees with the engine's, not merely that it produces AN index.
  */
 
-import { classifyLine } from "./rendition.js";
+import { classifyLine, cleanTitleFor } from "./rendition.js";
+import type { CleanTitleReading } from "./rendition.js";
 import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "./resolutiontable.js";
 
-/** Why nothing is said. Each value names a refusal in this module's header. */
+/**
+ * Why nothing is said. The first five name a refusal in this module's own header, for the DECLARED
+ * path (`orderingFor`/`orderingPlacementFor`). The last three belong to the DEFAULT path
+ * (`defaultOrderingFor`/`defaultOrderingPlacementFor`, below `orderingPlacementFor`'s own code) —
+ * `roadmap-the-road-ahead.md`'s next step, "the engine's own default ordering, made explicit":
+ *
+ *   CONTAINER-ORDERING-DIRECTIVE. The section's own heading line carries a literal `#order:`
+ *   substring — `view_registration.py`'s `ordering_binding` reads the CONTAINER NODE'S OWN
+ *   `ordering` field (settable at runtime by exactly this directive, `parse_order_directive.py`)
+ *   BEFORE it ever falls back to the view-section `ordering:` this app already reads, and that
+ *   node-owned value is graph state this app has no way to preview. `format_directive` prints it
+ *   straight back onto the rendered heading, so this is a printed fact, not a hidden one — this
+ *   module refuses rather than assume the config-only fallback still applies.
+ *
+ *   STYLE-AMBIGUOUS-TITLE. `cleanTitleFor` (rendition.ts) could not prove its title string agrees
+ *   with the engine's own `canonicalise_title_segment` — see that function's own header.
+ *
+ *   HAS-DECLARED-ORDERING. Defence in depth: `defaultOrderingFor`/`defaultOrderingPlacementFor`
+ *   are for sections `ordering[view][section]` has NOTHING to say about. Calling either on a
+ *   section that DOES declare `ordering`/`orderingMode` is a caller error this module refuses
+ *   rather than silently answers by the wrong rule — `resolveOrderingFor`/
+ *   `resolveOrderingPlacementFor` (this file's own dispatcher) never makes that call by
+ *   construction, so a caller reaching this abstention went around the dispatcher.
+ */
 export type OrderingAbstention =
   | "no-section-declaration"
   | "insertion-order"
   | "field-not-published"
   | "nested-section"
-  | "no-value";
+  | "no-value"
+  | "container-ordering-directive"
+  | "style-ambiguous-title"
+  | "has-declared-ordering";
 
 /** The answer, when there is one. `moved` is the whole of it; the rest is provenance. */
 export interface OrderingAnswer {
@@ -140,11 +167,19 @@ const abstains = (because: OrderingAbstention): OrderingReading => ({ kind: "abs
 // of" convention app/present/address.ts's own header cites (renderer.py:399/:430), walked directly
 // rather than reused, because address.ts's ordinal walk answers "which section", not "which OTHER
 // lines are in it" — a different question this module needs and that one does not.
-function sectionBounds(lines: readonly string[], lineIndex: number): { start: number; end: number } {
+function sectionBounds(
+  lines: readonly string[],
+  lineIndex: number,
+): { start: number; end: number; headingIndex: number | null } {
   let start = 0;
+  // `headingIndex` — null if no heading was found above `lineIndex` at all (malformed content);
+  // added for the DEFAULT-ordering path's own container-directive check, below. The declared path
+  // never reads it — one walk, a second consumer, not a second walk.
+  let headingIndex: number | null = null;
   for (let at = lineIndex; at >= 0; at -= 1) {
     if (classifyLine(lines[at] ?? "").kind === "heading") {
       start = at + 1;
+      headingIndex = at;
       break;
     }
   }
@@ -155,7 +190,7 @@ function sectionBounds(lines: readonly string[], lineIndex: number): { start: nu
       break;
     }
   }
-  return { start, end };
+  return { start, end, headingIndex };
 }
 
 // A line carries indentation when a non-blank character sits behind leading whitespace —
@@ -175,7 +210,13 @@ const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 const INT_SHAPE = /^-?\d+$/;
 const FLOAT_SHAPE = /^-?\d+(?:\.\d+)?$/;
 
-function shapeMatches(marker: OrderingFieldMarker, token: string): boolean {
+/** The trailing-token half of `OrderingFieldMarker` — `markerValue` below reads only this shape;
+ * an `"enum"` marker (`priority`'s `🔽`/`⏫`) has no single glyph and no trailing value at all, so
+ * it is never a valid argument here — see `tupleFor`'s own guard, which refuses one before it
+ * would reach this function. */
+type TrailingMarker = Extract<OrderingFieldMarker, { readonly kind: "date" | "int" | "float" }>;
+
+function shapeMatches(marker: TrailingMarker, token: string): boolean {
   if (marker.kind === "date") return DATE_SHAPE.test(token);
   if (marker.kind === "int") return INT_SHAPE.test(token);
   return FLOAT_SHAPE.test(token);
@@ -190,7 +231,7 @@ function shapeMatches(marker: OrderingFieldMarker, token: string): boolean {
  * variation selector, and building a pattern from arbitrary characters is a heavier and riskier
  * tool than `indexOf` needs to be for an exact, known string.
  */
-export function markerValue(line: string, marker: OrderingFieldMarker): string | undefined {
+export function markerValue(line: string, marker: TrailingMarker): string | undefined {
   const at = line.indexOf(marker.token);
   if (at === -1) return undefined;
   const after = line.slice(at + marker.token.length);
@@ -210,6 +251,10 @@ function tupleFor(
   for (const key of keys) {
     const marker = markers[key.field];
     if (marker === undefined) return undefined; // field-not-published; caller has already checked
+    // An "enum" marker has no reader in THIS declared-path model (compareValue below never learned
+    // priorityRank) — evaluateSection's own field-not-published guard is widened to catch this
+    // before tupleFor is ever reached; this is defence in depth, not the primary guard.
+    if (marker.kind === "enum") return undefined;
     const value = markerValue(line, marker);
     if (value === undefined) return undefined;
     values.push(value);
@@ -289,7 +334,13 @@ function evaluateSection(
   const keys = declared.ordering;
   if (keys === undefined || keys.length === 0) return { kind: "abstains", because: "insertion-order" };
   for (const key of keys) {
-    if (orderingFields[key.field] === undefined) return { kind: "abstains", because: "field-not-published" };
+    const marker = orderingFields[key.field];
+    // An "enum" marker (priority's shape) has no reader in this declared-ordering model — see
+    // tupleFor/markerValue's own guard. Treated the SAME as no marker at all: this model can no
+    // more read a value from it than it could read one from nothing.
+    if (marker === undefined || marker.kind === "enum") {
+      return { kind: "abstains", because: "field-not-published" };
+    }
   }
 
   const lines = source.split("\n");
@@ -453,4 +504,438 @@ export function orderingPlacementFor(
   const beforeLineIndex = next === undefined ? null : next.lineIndex;
 
   return { kind: "answer", placement: { moved, beforeLineIndex } };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE DEFAULT ORDERING — the engine's own fallback for the 171 (of 186) sections that declare
+// NEITHER `ordering:` NOR `ordering_mode:`, made explicit rather than left to the browser's
+// silence. `resolution.defaultOrdering`/`resolution.priorityRank` (resolutiontable.ts) are ENGINE
+// FACTS — `section_builder.py`'s `_DEFAULT_ORDERING`/`_PRIORITY_RANK`, published unconditionally,
+// never read out of any operator's YAML — see `scripts/compile-resolution.mjs`'s own header for
+// the full account and `tests/resolution-default-ordering-agreement.test.mjs` for the live-import
+// proof that this file's copy of the tuple has not drifted from the engine's.
+//
+// ── WHY THIS IS A SEPARATE COMPARATOR, NOT A THIRD BRANCH INSIDE `compareTuples` ──
+//
+// `compareTuples`/`tupleFor` (above) implement the DECLARED path's own rule: EVERY key must have a
+// value, or the whole comparison abstains `no-value` — correct for `due_date`/`available_date`/
+// `queue_position`, which the operator's own 15 declared sections treat as though every qualifying
+// row carries one. The engine's default ordering is built on the OPPOSITE rule
+// (`section_builder.py:400-423`, `_field_order_key`): a MISSING `due_date` or `priority` does not
+// abstain the comparison — it sorts the row AFTER every row that HAS one (tier 1 vs tier 0), which
+// is exactly how his inbox — no `due_date`, no `priority` on any item — still gets a real order
+// (title, the final tiebreak). Reusing `compareTuples` for this would mean teaching one function
+// two incompatible "what does a missing value mean" answers; a second, parallel comparator keeps
+// each rule legible on its own.
+//
+// ── THE THIRD FIELD, TITLE, HAS NO MARKER AT ALL ──
+//
+// `due_date`/`priority` are read the same way the declared path already does (a marker glyph,
+// looked up in `orderingFields`). `title` is different in kind: it is not a value a glyph spells,
+// it is the printed line's OWN chrome-free text — `cleanTitleFor` (rendition.ts) computes it,
+// proven to agree with the engine's `canonicalise_title_segment(_normalise_title(...))` step for
+// step (see that function's own header), and it is ALWAYS available (barring `style-ambiguous`)
+// for any non-blank content line, unlike `due_date`/`priority` which are absent on most rows.
+//
+// ── THE ABSTENTIONS THIS PATH ADDS, AND THE ONES IT REUSES ──
+//
+// `field-not-published` (reused): `due_date` or `priority` has no marker in THIS config at all —
+// this app cannot tell "absent on this row" from "present but unreadable", so it refuses the whole
+// comparison rather than guess every row is tier 1. `nested-section` (reused): the SAME
+// indentation check the declared path uses — see measurement 2 in this module's own header for why
+// a flat render is the signal this codebase already trusts, and this file's own report for what
+// remains UNCONFIRMED about that signal for a section this feature has not exercised before.
+// `container-ordering-directive`, `style-ambiguous-title`, `has-declared-ordering`: new, see
+// `OrderingAbstention`'s own header above for each.
+
+/** One field's comparison key for the DEFAULT ordering's tiered rule — `tier: 0` (present) always
+ * sorts before `tier: 1` (absent), REGARDLESS of `direction`; `value` is compared only within one
+ * tier. Mirrors `section_builder.py:400-423`'s own `(tier, value)` tuple exactly. */
+interface DefaultFieldKey {
+  readonly tier: 0 | 1;
+  readonly value: string | number;
+}
+
+/**
+ * Compare two strings by UNICODE CODE POINT — the same rule Python 3's `str.__lt__` uses (no
+ * normalisation, no locale) — rather than JavaScript's native `<`, which compares UTF-16 CODE
+ * UNITS and can disagree with true code-point order for a title containing an ASTRAL character
+ * (a surrogate pair): `Array.from` iterates a string by code point, so building an array first and
+ * comparing element-by-element is the correct comparison, not merely a stylistic one. This is what
+ * lets `title`'s own tiebreak agree with the engine's `str < str` for EVERY title, not only the
+ * ASCII/BMP-only ones his current inbox happens to show.
+ */
+function compareCodepoints(a: string, b: string): number {
+  const ac = Array.from(a);
+  const bc = Array.from(b);
+  const len = Math.min(ac.length, bc.length);
+  for (let i = 0; i < len; i += 1) {
+    const ca = ac[i]?.codePointAt(0) ?? 0;
+    const cb = bc[i]?.codePointAt(0) ?? 0;
+    if (ca !== cb) return ca - cb;
+  }
+  return ac.length - bc.length;
+}
+
+/**
+ * One field's key for one line — `undefined` fields (a marker glyph absent, an enum with no
+ * matching token, a title on a genuinely blank line) return `{ tier: 1, ... }`, never abstain
+ * individually; only a `style-ambiguous` title propagates as a refusal, to the whole comparison
+ * (`evaluateDefaultSection`'s own call site), never silently to just this one field.
+ */
+function defaultFieldKeyFor(
+  line: string,
+  field: string,
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  priorityRank: Readonly<Record<string, number>>,
+  title: CleanTitleReading,
+): DefaultFieldKey | "style-ambiguous" {
+  if (field === "title") {
+    if (title.kind === "abstains") {
+      // A genuinely blank line (no node at all) has nothing to rank — tier 1, the same "absent"
+      // tier a missing due_date gets. A style-ambiguous title is a REFUSAL, not an absence — see
+      // this module's header.
+      return title.because === "style-ambiguous" ? "style-ambiguous" : { tier: 1, value: "" };
+    }
+    return { tier: 0, value: title.text };
+  }
+
+  const marker = orderingFields[field];
+  if (marker === undefined) return { tier: 1, value: "" }; // the caller has already refused this generally
+
+  if (marker.kind === "enum") {
+    // `priority`'s shape: scan for ANY of the field's own tokens (🔽/⏫), never a single glyph.
+    let found: string | undefined;
+    for (const [token, spelled] of Object.entries(marker.values)) {
+      if (!line.includes(token)) continue;
+      // Two DIFFERENT tokens for the same field on one line is the shape `line_parser.py`'s own
+      // `AmbiguousEditError` refuses to ingest at all — this preview cannot know what the engine
+      // would resolve it to, so it treats the row as tier 1 (absent) rather than pick one.
+      if (found !== undefined && found !== spelled) return { tier: 1, value: 0 };
+      found = spelled;
+    }
+    if (found === undefined) return { tier: 1, value: 0 };
+    const rank = priorityRank[found];
+    return rank === undefined ? { tier: 1, value: 0 } : { tier: 0, value: rank };
+  }
+
+  const raw = markerValue(line, marker);
+  if (raw === undefined) return { tier: 1, value: marker.kind === "date" ? "" : 0 };
+  return marker.kind === "date" ? { tier: 0, value: raw } : { tier: 0, value: Number(raw) };
+}
+
+/** Every field's key for one line, in `defaultOrdering`'s own order — or `"style-ambiguous"` the
+ * instant the title field (the one field every row actually has) cannot be read cleanly. */
+function defaultTupleFor(
+  line: string,
+  defaultOrdering: readonly OrderingKey[],
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  priorityRank: Readonly<Record<string, number>>,
+): readonly DefaultFieldKey[] | "style-ambiguous" {
+  const title = cleanTitleFor(line);
+  const tuple: DefaultFieldKey[] = [];
+  for (const key of defaultOrdering) {
+    const fieldKey = defaultFieldKeyFor(line, key.field, orderingFields, priorityRank, title);
+    if (fieldKey === "style-ambiguous") return "style-ambiguous";
+    tuple.push(fieldKey);
+  }
+  return tuple;
+}
+
+/** -1 if `a` sorts before `b` under `defaultOrdering`'s own tiered rule, +1 after, 0 tied on every
+ * key — the DEFAULT-path twin of `compareTuples`, tier-aware rather than abstain-on-missing. */
+function compareDefaultTuples(
+  a: readonly DefaultFieldKey[],
+  b: readonly DefaultFieldKey[],
+  defaultOrdering: readonly OrderingKey[],
+): number {
+  for (let i = 0; i < defaultOrdering.length; i += 1) {
+    const key = defaultOrdering[i];
+    const av = a[i];
+    const bv = b[i];
+    if (key === undefined || av === undefined || bv === undefined) continue;
+    if (av.tier !== bv.tier) return av.tier - bv.tier; // present ALWAYS before absent, direction-independent
+    if (av.tier === 1) continue; // both absent on this key — tied here, try the next key
+    let diff: number;
+    if (key.field === "title") diff = compareCodepoints(String(av.value), String(bv.value));
+    else if (typeof av.value === "number" && typeof bv.value === "number") diff = av.value - bv.value;
+    else diff = String(av.value) < String(bv.value) ? -1 : String(av.value) > String(bv.value) ? 1 : 0;
+    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
+  }
+  return 0;
+}
+
+/** 1-based rank of `target` among itself and every tuple in `siblings` that sorts before it —
+ * the DEFAULT-path twin of `rankOf`. */
+function defaultRankOf(
+  target: readonly DefaultFieldKey[],
+  siblings: readonly (readonly DefaultFieldKey[])[],
+  defaultOrdering: readonly OrderingKey[],
+): number {
+  let rank = 1;
+  for (const sibling of siblings) {
+    if (compareDefaultTuples(sibling, target, defaultOrdering) < 0) rank += 1;
+  }
+  return rank;
+}
+
+/** One OTHER line in the edited line's section, ranked for the DEFAULT ordering — the twin of
+ * `RankedSibling`. */
+interface RankedDefaultSibling {
+  readonly lineIndex: number;
+  readonly tuple: readonly DefaultFieldKey[];
+}
+
+type DefaultSectionEvaluation =
+  | {
+      readonly kind: "answer";
+      readonly beforeTuple: readonly DefaultFieldKey[];
+      readonly afterTuple: readonly DefaultFieldKey[];
+      readonly siblings: readonly RankedDefaultSibling[];
+    }
+  | { readonly kind: "abstains"; readonly because: OrderingAbstention };
+
+// `format_directive` (parse_order_directive.py) prints a container node's OWN ordering back onto
+// its heading as literally this substring — see `OrderingAbstention`'s own header.
+const CONTAINER_ORDER_DIRECTIVE = "#order:";
+
+function evaluateDefaultSection(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  defaultOrdering: readonly OrderingKey[],
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  priorityRank: Readonly<Record<string, number>>,
+): DefaultSectionEvaluation {
+  // Defence in depth — see `OrderingAbstention`'s own header for `has-declared-ordering`.
+  if (ordering[viewId]?.[sectionId] !== undefined) {
+    return { kind: "abstains", because: "has-declared-ordering" };
+  }
+  if (defaultOrdering.length === 0) {
+    // The declaration itself carried no default ordering to compare by (a malformed or absent
+    // publish — `resolutiontable.ts`'s own reader falls back to `[]`, never fabricates one).
+    return { kind: "abstains", because: "field-not-published" };
+  }
+  for (const key of defaultOrdering) {
+    if (key.field === "title") continue; // title is never marker-based — see this module's header
+    if (orderingFields[key.field] === undefined) return { kind: "abstains", because: "field-not-published" };
+  }
+
+  const lines = source.split("\n");
+  const { start, end, headingIndex } = sectionBounds(lines, lineIndex);
+
+  if (headingIndex !== null && (lines[headingIndex] ?? "").includes(CONTAINER_ORDER_DIRECTIVE)) {
+    return { kind: "abstains", because: "container-ordering-directive" };
+  }
+  // The SAME nested-section refusal the declared path uses — see this module's header for the
+  // measurement it rests on, and this file's own report for what stays unconfirmed here.
+  if (anyLineIndented(lines, start, end)) {
+    return { kind: "abstains", because: "nested-section" };
+  }
+
+  const beforeText = lines[lineIndex] ?? "";
+  const beforeTuple = defaultTupleFor(beforeText, defaultOrdering, orderingFields, priorityRank);
+  const afterTuple = defaultTupleFor(afterText, defaultOrdering, orderingFields, priorityRank);
+
+  const siblingsRaw: { lineIndex: number; tuple: readonly DefaultFieldKey[] | "style-ambiguous" }[] = [];
+  for (let at = start; at < end; at += 1) {
+    if (at === lineIndex) continue;
+    siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+  }
+  // A SINGLE ambiguous title anywhere in the section refuses the WHOLE comparison, not just that
+  // one row — excluding the row silently would risk placing the edited line beside a neighbour
+  // whose true rank this app could not actually establish. See `OrderingAbstention`'s own header.
+  if (
+    beforeTuple === "style-ambiguous" ||
+    afterTuple === "style-ambiguous" ||
+    siblingsRaw.some((sibling) => sibling.tuple === "style-ambiguous")
+  ) {
+    return { kind: "abstains", because: "style-ambiguous-title" };
+  }
+
+  return {
+    kind: "answer",
+    beforeTuple,
+    afterTuple,
+    siblings: siblingsRaw as RankedDefaultSibling[],
+  };
+}
+
+/**
+ * The DEFAULT-path twin of `orderingFor` — same question ("did this edit change the edited line's
+ * rank"), same shape of answer, a different rule underneath (see this module's header) for the 171
+ * sections `orderingFor` itself always abstains `no-section-declaration` for.
+ */
+export function defaultOrderingFor(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  defaultOrdering: readonly OrderingKey[],
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  priorityRank: Readonly<Record<string, number>>,
+): OrderingReading {
+  const evaluation = evaluateDefaultSection(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+  );
+  if (evaluation.kind === "abstains") return abstains(evaluation.because);
+
+  const tuples = evaluation.siblings.map((sibling) => sibling.tuple);
+  const beforeRank = defaultRankOf(evaluation.beforeTuple, tuples, defaultOrdering);
+  const afterRank = defaultRankOf(evaluation.afterTuple, tuples, defaultOrdering);
+  return {
+    kind: "answer",
+    answer: {
+      moved: beforeRank !== afterRank,
+      beforeRank,
+      afterRank,
+      siblingCount: tuples.length,
+    },
+  };
+}
+
+/**
+ * The DEFAULT-path twin of `orderingPlacementFor` — same STABLE-SORT proof structure
+ * (`orderingPlacementFor`'s own header states the full argument: rebuild the pre-sort list in FILE
+ * ORDER with the edited line spliced back into its own slot, sort it with the one comparator this
+ * whole module uses, read off the row immediately after). `compareDefaultTuples` is the ONLY
+ * difference from `orderingPlacementFor` — a stable sort under a DIFFERENT, but equally
+ * deterministic, comparator produces the identical structural guarantee.
+ *
+ * The same caveat `orderingFor`'s header names for the declared path's own flat sections applies
+ * here with one more link in the chain, named rather than hidden: this proof needs the PRE-SORT
+ * list (this function's own siblings walk) to be the SAME list `_order_children`'s flat branch
+ * would sort. For the three declared `queue` sections that is MEASURED (`tests/present-
+ * ordering.test.mjs` §1, against real content). For an arbitrary UNDECLARED section, it is the
+ * SAME assumption `nested-section`'s own indentation check already rests on, extended to a wider
+ * set of sections than that check has ever been exercised against — see this branch's own report
+ * for what stays UNCONFIRMED rather than proven here.
+ */
+export function defaultOrderingPlacementFor(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  defaultOrdering: readonly OrderingKey[],
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  priorityRank: Readonly<Record<string, number>>,
+): PlacementReading {
+  const evaluation = evaluateDefaultSection(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+  );
+  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
+
+  const { beforeTuple, afterTuple, siblings } = evaluation;
+  const tuples = siblings.map((sibling) => sibling.tuple);
+  const beforeRank = defaultRankOf(beforeTuple, tuples, defaultOrdering);
+  const afterRank = defaultRankOf(afterTuple, tuples, defaultOrdering);
+  const moved = beforeRank !== afterRank;
+
+  const entries: RankedDefaultSibling[] = [...siblings];
+  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const selfEntry: RankedDefaultSibling = { lineIndex, tuple: afterTuple };
+  if (insertAt === -1) {
+    entries.push(selfEntry);
+  } else {
+    entries.splice(insertAt, 0, selfEntry);
+  }
+
+  const sorted = entries.slice().sort((a, b) => compareDefaultTuples(a.tuple, b.tuple, defaultOrdering));
+  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
+  const next = at === -1 ? undefined : sorted[at + 1];
+  const beforeLineIndex = next === undefined ? null : next.lineIndex;
+
+  return { kind: "answer", placement: { moved, beforeLineIndex } };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE DISPATCHER — "make the browser resolve it like every other resolver", the operator's own
+// words for this step. ONE function each call site (`app/index.html`'s `orderingNoteFor`/
+// `orderingDiagnosticFor`/`armOrderingSettle`) now calls, for EVERY section, declared or not —
+// never a branch repeated at each call site. Routing is the ONE fact `ordering[view][section] !==
+// undefined` already states (readOrdering's own definition of "declared": a section publishes an
+// entry here iff its view sheet names an `ordering:` or an `ordering_mode:`), so the dispatcher
+// adds no new abstention of its own — it either hands off to `orderingFor`/`orderingPlacementFor`
+// UNCHANGED (every existing test for those two keeps its exact, pinned behaviour) or to
+// `defaultOrderingFor`/`defaultOrderingPlacementFor` above.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Resolve WHETHER an edit moves its line, for ANY section — declared or the engine default. */
+export function resolveOrderingFor(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  defaultOrdering: readonly OrderingKey[],
+  priorityRank: Readonly<Record<string, number>>,
+): OrderingReading {
+  if (ordering[viewId]?.[sectionId] !== undefined) {
+    return orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  }
+  return defaultOrderingFor(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+  );
+}
+
+/** Resolve WHERE an edit's line belongs, for ANY section — declared or the engine default. The
+ * placement-half twin of `resolveOrderingFor`, sharing the exact same routing rule. */
+export function resolveOrderingPlacementFor(
+  viewId: string,
+  sectionId: string,
+  source: string,
+  lineIndex: number,
+  afterText: string,
+  ordering: Readonly<Record<string, Readonly<Record<string, SectionOrdering>>>>,
+  orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
+  defaultOrdering: readonly OrderingKey[],
+  priorityRank: Readonly<Record<string, number>>,
+): PlacementReading {
+  if (ordering[viewId]?.[sectionId] !== undefined) {
+    return orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  }
+  return defaultOrderingPlacementFor(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+  );
 }

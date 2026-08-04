@@ -113,16 +113,39 @@ describe("1. the shipped declaration reads cleanly", () => {
     }
   });
 
-  test("step 7 — orderingFields publishes a marker for exactly the 3 fields the 9 orderings use", () => {
+  test("step 7 — orderingFields publishes a marker for the 3 fields the 15 orderings use, PLUS priority", () => {
+    // RESTATED 2026-08-04, `roadmap-the-road-ahead.md`'s "the engine's own default ordering, made
+    // explicit" step: 3 -> 4. `priority` is named by NO declared section's own `ordering:` —
+    // it is named by `defaultOrdering` (below), unconditionally, for every config, which is why
+    // its marker is looked up even though nothing in `resolution.ordering` itself mentions it.
     const { resolution } = readConfigResolutionDeclaration(SERVED);
     assert.deepEqual(Object.keys(resolution.orderingFields).sort(), [
       "available_date",
       "due_date",
+      "priority",
       "queue_position",
     ]);
     assert.deepEqual(resolution.orderingFields.due_date, { token: "📅", kind: "date" });
     assert.deepEqual(resolution.orderingFields.available_date, { token: "🛫", kind: "date" });
     assert.deepEqual(resolution.orderingFields.queue_position, { token: "🔢", kind: "int" });
+    // priority's TWO tokens (🔽=low, ⏫=high) — the enum shape, never a single glyph.
+    assert.deepEqual(resolution.orderingFields.priority, {
+      kind: "enum",
+      values: { "🔽": "low", "⏫": "high" },
+    });
+  });
+
+  test("THE ENGINE DEFAULT — defaultOrdering/priorityRank are published, unconditionally, for every config", () => {
+    // `apps/qntm-md/src/qntm_md/render/section_builder.py:26-37` — `_DEFAULT_ORDERING`/
+    // `_PRIORITY_RANK`, verbatim. Pinned against a LIVE import of the engine's own tuple by
+    // `tests/resolution-default-ordering-agreement.test.mjs`; this test only proves it SHIPPED.
+    const { resolution } = readConfigResolutionDeclaration(SERVED);
+    assert.deepEqual(resolution.defaultOrdering, [
+      { field: "due_date", direction: "asc" },
+      { field: "priority", direction: "desc" },
+      { field: "title", direction: "asc" },
+    ]);
+    assert.deepEqual(resolution.priorityRank, { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
   });
 
   test("the day boundary — 04:00, Europe/London, week starts Monday", () => {
@@ -240,6 +263,48 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     assert.deepEqual(resolution.orderingFields, {});
     assert.equal(resolution.dayBoundary.timezone, "Europe/London", "one bad key blinded the reader to a good one");
     assert.ok(problems.some((p) => p.includes("orderingFields")), problems.join("\n"));
+  });
+
+  test("orderingFields: an enum marker reads cleanly, and rejects an empty/missing `values`", () => {
+    const { resolution, problems } = read({
+      orderingFields: {
+        priority: { kind: "enum", values: { "🔽": "low", "⏫": "high" } },
+        broken: { kind: "enum", values: {} },
+      },
+    });
+    assert.deepEqual(resolution.orderingFields.priority, {
+      kind: "enum",
+      values: { "🔽": "low", "⏫": "high" },
+    });
+    assert.equal(resolution.orderingFields.broken, undefined);
+    assert.ok(problems.some((p) => p.includes("orderingFields.broken.values")), problems.join("\n"));
+  });
+
+  test("orderingFields: an enum marker with an unrecognised key (e.g. a stray 'token') is reported", () => {
+    const { problems } = read({
+      orderingFields: { priority: { kind: "enum", values: { "🔽": "low" }, token: "🔽" } },
+    });
+    assert.ok(problems.some((p) => p.includes("orderingFields.priority.token")), problems.join("\n"));
+  });
+
+  test("defaultOrdering: an empty array is reported — the engine default stays unknown, never fabricated", () => {
+    const { resolution, problems } = read({ defaultOrdering: [] });
+    assert.deepEqual(resolution.defaultOrdering, []);
+    assert.ok(problems.some((p) => p.includes("defaultOrdering")), problems.join("\n"));
+  });
+
+  test("defaultOrdering: one malformed entry drops the WHOLE list — an engine fact is all-or-nothing", () => {
+    const { resolution, problems } = read({
+      defaultOrdering: [{ field: "due_date", direction: "asc" }, { field: "priority", direction: "sideways" }],
+    });
+    assert.deepEqual(resolution.defaultOrdering, []);
+    assert.ok(problems.some((p) => p.includes("defaultOrdering[1].direction")), problems.join("\n"));
+  });
+
+  test("priorityRank: a non-integer or non-positive rank is reported and the whole map drops", () => {
+    const { resolution, problems } = read({ priorityRank: { urgent: 4, low: 0 } });
+    assert.deepEqual(resolution.priorityRank, {});
+    assert.ok(problems.some((p) => p.includes("priorityRank.low")), problems.join("\n"));
   });
 
   test("a section's `name` that is an empty string is reported and the whole section drops", () => {
@@ -392,6 +457,29 @@ describe("4. the falsifier: the app's answer follows the config, because it read
     assert.equal(resolution.orderingFields.queue_position.token, "🔟", "the published token did not follow the mutation");
     // due_date's own marker is untouched — only queue_position's glyph moved.
     assert.equal(resolution.orderingFields.due_date.token, "📅");
+  });
+
+  test("MUTATE AN ENUM MARKER'S TOKEN: change priority's low glyph, and orderingFields.priority follows", { skip }, () => {
+    const before = generateResolution(DEFAULT_CONFIG_DIR);
+    assert.deepEqual(before.orderingFields.priority, { kind: "enum", values: { "🔽": "low", "⏫": "high" } });
+    const resolution = withMutatedConfig((configDir) => {
+      const path = join(configDir, "vocabulary", "markers.yaml");
+      const original = readFileSync(path, "utf8");
+      const needle = '{ token: "🔽", field: priority,       value: low                     }';
+      assert.equal(original.split(needle).length - 1, 1, "the anchor this falsifier depends on moved");
+      const mutated = original.replace(needle, needle.replace("🔽", "⬇️"));
+      assert.notEqual(mutated, original, "the falsifier's own edit did not apply");
+      writeFileSync(path, mutated);
+    });
+    assert.deepEqual(
+      resolution.orderingFields.priority,
+      { kind: "enum", values: { "⬇️": "low", "⏫": "high" } },
+      "the published enum's token did not follow the mutation",
+    );
+    // high's own token is untouched — only low's glyph moved. The RANK TABLE
+    // (`priorityRank`/`ENGINE_PRIORITY_RANK`) is an ENGINE fact, not a config one, so it does not
+    // move with this — see tests/resolution-default-ordering-agreement.test.mjs.
+    assert.deepEqual(resolution.priorityRank, { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
   });
 
   test("MUTATE A MARKER OUT OF EXTRACTABILITY: turn queue_position render_only, and it stops publishing", { skip }, () => {
