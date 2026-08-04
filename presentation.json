@@ -5065,5 +5065,32 @@
       "vocabulary token '☑️'": "spells 'done_task_count' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip",
       "vocabulary token '🎯'": "spells 'par' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip"
     }
+  },
+  "captureRules": {
+    "order": [
+      "routine-without-cadence-becomes-task",
+      "stamp-created-at-on-task"
+    ],
+    "rules": {
+      "routine-without-cadence-becomes-task": {
+        "pattern": "routines",
+        "when": {
+          "op": "null",
+          "field": "cadence"
+        },
+        "retypesTo": "task"
+      },
+      "stamp-created-at-on-task": {
+        "pattern": "tasks",
+        "when": {
+          "op": "eq",
+          "field": "created_at",
+          "value": null
+        },
+        "setsField": "created_at",
+        "setsFieldTo": "$cycle_today"
+      }
+    },
+    "dropped": {}
   }
 }

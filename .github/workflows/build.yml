@@ -112,3 +112,30 @@ jobs:
               exit 1
               ;;
           esac
+
+      # THE FOURTH DECLARATION'S OWN FRESHNESS GATE, run as its own step rather than folded into
+      # checkdeclarations.mjs — see generate-capture-rules-declaration.mjs's header for why. Same
+      # exit-code contract as the step above: 0 fresh, 1 stale (fails the build), 3 not checked
+      # (warns, never a silent pass) because this runner does not clone the monorepo either.
+      - name: capture-rules declaration freshness (exit 3 = NOT CHECKED, not a pass)
+        run: |
+          set +e
+          node scripts/generate-capture-rules-declaration.mjs --check
+          code=$?
+          set -e
+          case "$code" in
+            0)
+              echo "presentation.json's captureRules key matches the monorepo config."
+              ;;
+            1)
+              echo "::error::presentation.json's captureRules key is STALE relative to the monorepo config. Run 'node scripts/generate-capture-rules-declaration.mjs' and commit the result."
+              exit 1
+              ;;
+            3)
+              echo "::warning title=capture-rules freshness NOT CHECKED::The qntm-md config is not present on this runner, so captureRules was NOT checked against it. This is NOT a pass. tests/present-capture-rules.test.mjs section 4 covers the part CI CAN check unconditionally, against a committed fixture."
+              ;;
+            *)
+              echo "::error::generate-capture-rules-declaration.mjs --check exited ${code} — it never reached a verdict."
+              exit 1
+              ;;
+          esac
