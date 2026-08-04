@@ -5067,10 +5067,10 @@
     }
   },
   "captureRules": {
-    "order": [
-      "routine-without-cadence-becomes-task",
-      "stamp-created-at-on-task"
-    ],
+    "order": {
+      "established": false,
+      "reason": "the compiled rule list these two rules feed into is built, in alphabetical config-tree file order, by apps/qntm-md/src/qntm_md/bundle/loader.py (traced: _iter_registered_yaml_files -> _choose_winning_candidates -> validate_rules), and apps/qntm-md/src/qntm_md/lifecycle/rule_loader.py's rule_id sort is confirmed dead code (no callers in src/). But whether qntm_rule_engine.execute() and compile_rules() -- defined in core/rule-engine/src/qntm_rule_engine, outside this generator's permitted read boundary -- fire rules in that list order or re-derive their own from the compiled priority field is not established."
+    },
     "rules": {
       "routine-without-cadence-becomes-task": {
         "pattern": "routines",

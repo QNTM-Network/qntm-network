@@ -4,19 +4,30 @@
  *   node --test tests/present-capture-rules.test.mjs
  *
  * `design-the-rule-mirror.md` §3.2/§3.3 found a bare capture reaches exactly TWO of the operator's
- * 94 rules — `routine-without-cadence-becomes-task` and `stamp-created-at-on-task` — and that the
- * ORDER between them (retype before stamp) is decided by a fact the config itself never states:
- * the alphabetical position of their two source files. §11 row 4 prices publishing that as a closed
- * grammar at `½`, ahead of any evaluator. `roadmap-the-road-ahead.md` step 3 names why: without it,
- * the browser has no way to know a correction (`routine` -> `task`) is coming in 13 of 186
- * sections, and a silent swap ten seconds later would be a lie told twice.
+ * 94 rules — `routine-without-cadence-becomes-task` and `stamp-created-at-on-task`. §11 row 4
+ * prices publishing them as a closed grammar at `½`, ahead of any evaluator. `roadmap-the-road-
+ * ahead.md` step 3 names why: without it, the browser has no way to know a correction
+ * (`routine` -> `task`) is coming in 13 of 186 sections, and a silent swap ten seconds later would
+ * be a lie told twice.
+ *
+ * THE ORDER BETWEEN THEM IS DELIBERATELY NOT PUBLISHED AS A SEQUENCE. An earlier version of this
+ * grammar derived `order` from the two source files' basenames and called that "the alphabetical
+ * position... in config/rules/" — a review caught that this was two independent naming schemes
+ * (file name, `rule_id`) agreeing by coincidence, traced to neither the loader nor the rule
+ * engine. `scripts/compile-capture-rules.mjs`'s header records the full re-investigation: the
+ * loader mechanism IS traced, precisely, as far as `apps/qntm-md/src/qntm_md/**` reaches — but the
+ * final link, whether `qntm_rule_engine.execute()` (in `core/rule-engine`, outside that boundary)
+ * preserves the traced list order or re-derives its own, is not established. So `captureRules.
+ * order` is `{established: false, reason: ...}`, not an array — an honest gap, not a confident
+ * coincidence restated with better citations.
  *
  * This is a published fact, not an evaluator. Nothing here (or in `scripts/compile-capture-
  * rules.mjs`) tests a `when` clause against a real node — see that file's header.
  *
  * Six sections:
  *
- *   1. THE SHIPPED DECLARATION is a closed grammar of exactly two rules and their order.
+ *   1. THE SHIPPED DECLARATION is a closed grammar of exactly two rules, with `order` an honest
+ *      "unestablished" rather than a guessed sequence.
  *   2. `declaration.ts` DOES NOT MISREPORT `captureRules` as an unrecognised key — and the
  *      detector that would have fired on it before it was taught the key is shown still alive.
  *   3. THE SERVED VALUE IS WHAT THE MONOREPO'S TWO RULE FILES ACTUALLY DECLARE — generated, not
@@ -29,7 +40,8 @@
  *   5. THE MUTATION PROOF — the grammar is CLOSED: a shape it does not model throws, it is never
  *      silently approximated. Five mutants, each on a real anchor string, each asserted to change
  *      the source before it is fed back in.
- *   6. THE ORDER IS DERIVED FROM THE FILES' OWN NAMES, not hand-asserted as a literal.
+ *   6. THE ORDER IS AN HONEST GAP, NOT A GUESS — `established` is a hard `false`, and the reason
+ *      names both the ruled-out mechanism and the one boundary that still blocks closing it.
  */
 
 import { test, describe } from "node:test";
@@ -44,6 +56,7 @@ import {
   GenerationError,
   CADENCE_RULES_KEY,
   STAMP_RULES_KEY,
+  ORDER_UNESTABLISHED_REASON,
 } from "../scripts/compile-capture-rules.mjs";
 import {
   generateCaptureRules,
@@ -94,13 +107,16 @@ const EXPECTED_RULES = {
     setsFieldTo: "$cycle_today",
   },
 };
-const EXPECTED_ORDER = ["routine-without-cadence-becomes-task", "stamp-created-at-on-task"];
+const EXPECTED_ORDER = { established: false, reason: ORDER_UNESTABLISHED_REASON };
 
 // ── 1 ────────────────────────────────────────────────────────────────────────────────────────
 
-describe("1. the shipped declaration is a closed grammar of exactly two rules and their order", () => {
-  test("order names the retype before the stamp, and nothing else", () => {
+describe("1. the shipped declaration is a closed grammar of exactly two rules", () => {
+  test("order is explicitly unestablished — not a guessed sequence", () => {
     assert.deepEqual(SERVED.captureRules.order, EXPECTED_ORDER);
+    assert.equal(SERVED.captureRules.order.established, false);
+    assert.equal(typeof SERVED.captureRules.order.reason, "string");
+    assert.ok(SERVED.captureRules.order.reason.length > 0);
   });
 
   test("each rule's pattern/predicate/action match what the authored YAML declares", () => {
@@ -274,19 +290,43 @@ describe("5. THE MUTATION PROOF — a shape this closed grammar does not model i
 
 // ── 6 ────────────────────────────────────────────────────────────────────────────────────────
 
-describe("6. the order is derived from the two files' own names, not hand-asserted", () => {
-  test("the mechanism: 'cadence_auto_routine.yaml' sorts before 'stamp_created_at.yaml'", () => {
-    assert.ok(
-      "cadence_auto_routine.yaml".localeCompare("stamp_created_at.yaml") < 0,
-      "the file-name sort this generator relies on no longer orders the two files the way " +
-        "design-the-rule-mirror.md §3.3 observed",
-    );
+describe("6. the order is an honest gap, not a guess", () => {
+  test("'established' is a hard false, not an absent key or a falsy placeholder", () => {
+    assert.strictEqual(SERVED.captureRules.order.established, false);
+    assert.notEqual(SERVED.captureRules.order.established, undefined);
   });
 
-  test("and the published order follows it", () => {
-    assert.deepEqual(SERVED.captureRules.order, [
-      "routine-without-cadence-becomes-task",
-      "stamp-created-at-on-task",
-    ]);
+  test("no 'sequence' is published while unestablished — nothing to mistake for an answer", () => {
+    assert.equal("sequence" in SERVED.captureRules.order, false);
   });
+
+  test("the reason names the mechanism that WAS traced and ruled out (rule_id sort, dead code)", () => {
+    assert.match(SERVED.captureRules.order.reason, /rule_loader\.py/);
+    assert.match(SERVED.captureRules.order.reason, /dead code/);
+    assert.match(SERVED.captureRules.order.reason, /no callers/);
+  });
+
+  test("the reason names the mechanism that WAS traced and DOES feed the compiled rule list (the loader)", () => {
+    assert.match(SERVED.captureRules.order.reason, /bundle\/loader\.py/);
+    assert.match(SERVED.captureRules.order.reason, /alphabetical config-tree file order/);
+  });
+
+  test("the reason names the one boundary that still blocks closing the gap (core/rule-engine)", () => {
+    assert.match(SERVED.captureRules.order.reason, /qntm_rule_engine\.execute\(\)/);
+    assert.match(SERVED.captureRules.order.reason, /core\/rule-engine/);
+    assert.match(SERVED.captureRules.order.reason, /outside this generator's permitted read boundary/);
+  });
+
+  test(
+    "MUTATION CHECK: if the reason string were emptied, this section's own detectors would catch it",
+    () => {
+      // Not a mutation of shipped code — a demonstration that the assertions above are not
+      // vacuously matching an empty string, by running the same regexes against "" and confirming
+      // every one of them fails first.
+      const empty = "";
+      assert.equal(/rule_loader\.py/.test(empty), false);
+      assert.equal(/bundle\/loader\.py/.test(empty), false);
+      assert.equal(/qntm_rule_engine\.execute\(\)/.test(empty), false);
+    },
+  );
 });

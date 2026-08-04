@@ -111,10 +111,12 @@ async function main() {
   }
 
   writeFileSync(presentationPath, JSON.stringify({ ...current, captureRules }, null, 2) + "\n");
-  console.log(
-    `wrote capture-rules declaration to ${presentationPath}\n` +
-      `  order: ${captureRules.order.join(" -> ")}`,
-  );
+  // `order` is an object, not a sequence — see compile-capture-rules.mjs's header ("THE ORDER") for
+  // why this generator does not (yet) claim to know which of the two rules fires first.
+  const orderLine = captureRules.order.established
+    ? `order: ${captureRules.order.sequence.join(" -> ")}`
+    : "order: UNESTABLISHED — see captureRules.order.reason";
+  console.log(`wrote capture-rules declaration to ${presentationPath}\n  ${orderLine}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
