@@ -26,10 +26,10 @@ export function cors(origin) {
   };
 }
 
-export function json(obj, status, origin) {
+export function json(obj, status, origin, extraHeaders = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { "Content-Type": "application/json", ...cors(origin) },
+    headers: { "Content-Type": "application/json", ...cors(origin), ...extraHeaders },
   });
 }
 
