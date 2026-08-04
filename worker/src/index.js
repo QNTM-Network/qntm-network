@@ -4,6 +4,9 @@
 //   POST /config/compile/structural       Gate 1 only, no persistence (config.js)
 //   POST /config/compile/qualification    Gate 1 only, no persistence (config.js)
 //   POST /config/compile/resolution       Gate 1 only, no persistence (config.js)
+//   POST /config/declaration/<kind>          operator-only — compile + durably store (declarations.js)
+//   GET  /config/declaration/<kind>/current  the latest stored version's body (declarations.js)
+//   GET  /config/declaration/<kind>/<version> one immutable stored version's body (declarations.js)
 //   GET  /export    operator CSV of the signup list              (this file)
 //   POST /          signup capture -> D1 (the original landing)  (this file)
 
@@ -11,6 +14,7 @@ import { json, cors } from "./util.js";
 import { handleAuth } from "./auth.js";
 import { handleApp } from "./app.js";
 import { handleConfig } from "./config.js";
+import { handleDeclarations } from "./declarations.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -44,6 +48,8 @@ export default {
     if (url.pathname.startsWith("/config/")) {
       const res = await handleConfig(request, url, origin);
       if (res) return res;
+      const res2 = await handleDeclarations(request, env, url, origin);
+      if (res2) return res2;
     }
 
     // --- operator export: GET /export?key=SECRET ---

@@ -548,7 +548,10 @@ async function editFile(request, env, origin, session, ctx) {
 }
 
 // Operator (headless laptop) auth: GRAPH_PUSH_KEY sent as Bearer -> the single operator user_id.
-function operatorUser(request, env) {
+// EXPORTED so `worker/src/declarations.js` can gate its own store route on the same shared key —
+// the identical reasoning `POST /app/graph` already applies (a write that durably grows a D1 table
+// needs the same "who may write" gate, not a second one invented to match).
+export function operatorUser(request, env) {
   const key = bearer(request);
   if (!key || !env.GRAPH_PUSH_KEY || key !== env.GRAPH_PUSH_KEY) return null;
   return env.GRAPH_USER_ID || null;
