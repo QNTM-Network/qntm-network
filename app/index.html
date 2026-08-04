@@ -974,8 +974,8 @@ import {
   sectionAt,
   sectionOrderFor,
   membershipFor,
-  orderingFor,
-  orderingPlacementFor,
+  resolveOrderingFor,
+  resolveOrderingPlacementFor,
   todayFor,
   SettleSurface,
 } from "/dist/present.js";
@@ -3010,7 +3010,14 @@ function orderingNoteFor(view, commit) {
   if (sectionId === null) {
     return "";
   }
-  const reading = orderingFor(
+  // `resolveOrderingFor` (ordering.ts), NOT `orderingFor` directly — 2026-08-04,
+  // `roadmap-the-road-ahead.md`'s "the engine's own default ordering, made explicit" step. Routes
+  // to `orderingFor` unchanged for the 15 sections that declare `ordering`/`orderingMode`, and to
+  // the NEW `defaultOrderingFor` for every OTHER section — `due_date`/`priority`/`title`, the
+  // engine's own fallback (`section_builder.py`'s `_DEFAULT_ORDERING`), not a browser guess. This
+  // is the one line that makes an edit to an undeclared section (his inbox, `dev/qntm/backlog`,
+  // most of his vault) say something here for the first time.
+  const reading = resolveOrderingFor(
     view.id,
     sectionId,
     commit.source,
@@ -3018,6 +3025,8 @@ function orderingNoteFor(view, commit) {
     commit.text,
     resolution.ordering,
     resolution.orderingFields,
+    resolution.defaultOrdering,
+    resolution.priorityRank,
   );
   if (reading.kind !== "answer" || !reading.answer.moved) {
     return "";
@@ -3036,11 +3045,18 @@ function orderingNoteFor(view, commit) {
  * declares `orderingMode: insertion_order` (`daily-work`/`daily-personal`'s `capture`) abstains on
  * EVERY edit, forever, and said nothing about it until this function existed.
  *
- * "no-section-declaration" IS STILL SILENT, AND DELIBERATELY — the same distinction
- * `membershipDiagnosticFor`'s own `"not-evaluated"` draws: 177 of 186 sections never declared an
- * `ordering:` at all, and reporting "I could not decide" about a question nobody asked would be
- * its own kind of noise, not honesty. Only a section that DID declare ordering and still could not
- * answer gets a word.
+ * "NO-SECTION-DECLARATION" WAS STILL SILENT — RESTATED, 2026-08-04, NOW THAT IT NEVER FIRES HERE
+ * AT ALL. Before this step, 177 of 186 sections never declared an `ordering:`, and reporting "I
+ * could not decide" about a question nobody asked would have been its own kind of noise. That
+ * premise is gone: `resolveOrderingFor` (below) routes an undeclared section to
+ * `defaultOrderingFor`, which ALWAYS has a real question to answer (the engine's own default) —
+ * `no-section-declaration` is `orderingFor`'s OWN abstention, reachable only by calling that
+ * function directly (as `tests/present-ordering.test.mjs` still does, unchanged), never through
+ * this page's own dispatch. So every section now gets a word: "decided" or one of the SEVEN named
+ * abstentions the default path can also give — `field-not-published` (this config publishes no
+ * `due_date`/`priority` marker at all), `nested-section`, `container-ordering-directive`,
+ * `style-ambiguous-title`, or (for the 15 DECLARED sections, unchanged) `insertion-order`/
+ * `field-not-published`/`nested-section`/`no-value`.
  */
 function orderingDiagnosticFor(view, commit) {
   if (resolution === undefined || qualification === undefined || commit.kind !== "set-line") {
@@ -3051,7 +3067,7 @@ function orderingDiagnosticFor(view, commit) {
   if (sectionId === null) {
     return "";
   }
-  const reading = orderingFor(
+  const reading = resolveOrderingFor(
     view.id,
     sectionId,
     commit.source,
@@ -3059,10 +3075,9 @@ function orderingDiagnosticFor(view, commit) {
     commit.text,
     resolution.ordering,
     resolution.orderingFields,
+    resolution.defaultOrdering,
+    resolution.priorityRank,
   );
-  if (reading.kind === "abstains" && reading.because === "no-section-declaration") {
-    return "";
-  }
   if (reading.kind === "abstains") {
     return `ordering: abstained — ${reading.because}`;
   }
@@ -3091,15 +3106,17 @@ function updateOrderingBadge(view, commit) {
 /**
  * ARM THE SETTLE SURFACE — the PLACEMENT half of design-the-resolution-architecture.md step 7,
  * added by `roadmap-the-road-ahead.md` step 3. `orderingNoteFor`/`orderingDiagnosticFor` above only
- * SAY what `orderingFor` decided; this is the one place this page calls `orderingPlacementFor`, and
- * the one place `settle.arm` is ever called — "one write, one function" for this register, the same
- * discipline every gated write on this page keeps.
+ * SAY what `resolveOrderingFor` decided; this is the one place this page calls
+ * `resolveOrderingPlacementFor`, and the one place `settle.arm` is ever called — "one write, one
+ * function" for this register, the same discipline every gated write on this page keeps.
  *
- * ONLY WHEN THE PLACEMENT ANSWERS AND `moved` IS TRUE. `orderingPlacementFor` shares every
- * abstention `orderingFor` has (ordering.ts's own header — both call the same private
- * `evaluateSection`), so this can never disagree with `orderingNoteFor` about WHETHER something
- * moved; it only ever adds WHERE, for the exact edits the freshness line already narrates as "this
- * line will move within X."
+ * ONLY WHEN THE PLACEMENT ANSWERS AND `moved` IS TRUE. `resolveOrderingPlacementFor` shares every
+ * abstention `resolveOrderingFor` has (ordering.ts's own header — the declared half calls the same
+ * private `evaluateSection` for both of ITS functions, and the default half calls the same private
+ * `evaluateDefaultSection` for both of ITS OWN), so this can never disagree with `orderingNoteFor`
+ * about WHETHER something moved; it only ever adds WHERE, for the exact edits the freshness line
+ * already narrates as "this line will move within X" — including, since 2026-08-04, an undeclared
+ * section: the operator adds a line to his inbox, and THIS is the call that places it.
  *
  * ARMED AGAINST `commit.markdown`, NOT `commit.source`. `commit.markdown` is what
  * `paint.ts`'s own `rawInput.settle` repaints INTO the instant this function returns — the very
@@ -3125,7 +3142,7 @@ function armOrderingSettle(view, commit) {
   if (sectionId === null) {
     return;
   }
-  const reading = orderingPlacementFor(
+  const reading = resolveOrderingPlacementFor(
     view.id,
     sectionId,
     commit.source,
@@ -3133,6 +3150,8 @@ function armOrderingSettle(view, commit) {
     commit.text,
     resolution.ordering,
     resolution.orderingFields,
+    resolution.defaultOrdering,
+    resolution.priorityRank,
   );
   if (reading.kind !== "answer" || !reading.placement.moved) {
     return;

@@ -93,6 +93,50 @@ const ORDERING_MODES = new Set(["pattern_default", "insertion_order"]);
 // read a value from — see the domain header for the two kinds left out on purpose.
 const EXTRACTION_KINDS = { trailing_date: "date", trailing_int: "int", trailing_float: "float" };
 
+// ── THE ENGINE'S DEFAULT ORDERING — an ENGINE FACT, not a config fact ─────────────────────────
+//
+// `apps/qntm-md/src/qntm_md/render/section_builder.py:26-29` (`_DEFAULT_ORDERING`) is the sort
+// spec `_section_order_key` (section_builder.py:392-397) applies whenever `_resolve_ordering`
+// (`ViewRegistration.ordering_binding`: the container node's OWN `ordering` field — settable at
+// runtime by a `#order:field:direction` heading directive — falling back to the view-section
+// `ordering:`) has NOTHING to say — i.e. every section that declares neither a per-view
+// `ordering:` nor an `ordering_mode:`. That is 171 of 186 sections in the operator's own config
+// (186 total, 15 declare `ordering:`/`ordering_mode:` per `readOrdering` above) and, because
+// `_DEFAULT_ORDERING` is a module-level constant with no config input at all, it is EXACTLY AS
+// TRUE for a config this app has never seen — the same tuple, unconditionally, for every qntm-md
+// instance. So it is published here unconditionally too, never read out of YAML.
+//
+// REFUTES "IT IS JUST ALPHABETICAL": the operator's own description ("if you add something
+// anywhere then cycle it will come back all alphabetical") is exactly what this tuple produces
+// WHEN NEITHER due_date NOR priority IS SET ON ANY COMPARED ROW (his inbox's own case, measured
+// against the live server) — but the true default is a THREE-KEY composite, due_date first,
+// priority second, title only as the final tiebreak. A row that gains a due_date or a priority
+// stops sorting alphabetically at all, and a browser that hardcoded "alphabetical" would then
+// place it wrongly and be corrected by the next cycle — the exact "second jump" the operator's
+// own brief warns against.
+//
+// Pinned against a LIVE IMPORT of the engine's own tuple (never transcribed twice) by
+// `tests/resolution-default-ordering-agreement.test.mjs`, via `scripts/resolution-agreement.py`
+// importing `qntm_md.render.section_builder._DEFAULT_ORDERING` directly.
+export const ENGINE_DEFAULT_ORDERING = Object.freeze([
+  Object.freeze({ field: "due_date", direction: "asc" }),
+  Object.freeze({ field: "priority", direction: "desc" }),
+  Object.freeze({ field: "title", direction: "asc" }),
+]);
+
+// Mirrors section_builder.py:31-37 (`_PRIORITY_RANK`) — the same engine-fact posture and the same
+// pinning as `ENGINE_DEFAULT_ORDERING` above. FOUR NUMBERS FOR FIVE NAMES, not simplified to five:
+// `normal` and `medium` really do share rank 2 in the engine's own dict, read verbatim.
+export const ENGINE_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
+
+// The non-'title' field names `ENGINE_DEFAULT_ORDERING` itself names. 'title' is excluded: it is
+// never marker-based (see `readOrderingFieldMarkers`'s own header — a title is the printed line's
+// own chrome-free text, not a glyph to search for), so asking `readOrderingFieldMarkers` to find a
+// marker for it would always and vacuously drop.
+const ENGINE_DEFAULT_ORDERING_MARKER_FIELDS = new Set(
+  ENGINE_DEFAULT_ORDERING.map((entry) => entry.field).filter((field) => field !== "title"),
+);
+
 const CAPTURE_FIELDS_NOTE =
   "a new line carries its resolved node type, the schema's declared field defaults and its " +
   "section's own 'defaults:' block, and nothing else";
@@ -499,7 +543,17 @@ export function compile(files, ledger = new Ledger()) {
     return out;
   }
 
-  // ── 6. vocabulary/markers.yaml -> ordering field name -> its trailing-token marker ─────────────
+  // ── 6. vocabulary/markers.yaml -> ordering field name -> how its value is spelled ──────────────
+  //
+  // TWO MARKER SHAPES, NOT ONE. `due_date`/`available_date`/`queue_position` are TRAILING-TOKEN
+  // markers (`extraction_hint:`, this generator's original shape: a glyph followed by a value that
+  // varies line to line). `priority` — needed once `ENGINE_DEFAULT_ORDERING_MARKER_FIELDS` widens
+  // the candidate set below — is a FIXED-`value:` (value-match) marker instead: `markers.yaml`'s
+  // `🔽`/`⏫` rows each spell ONE literal value, and unlike a trailing marker, MORE THAN ONE token
+  // legitimately owning the SAME field is the NORMAL shape for an enum (every value needs its own
+  // glyph), not DROP PATH 12's collision. Published as `{ kind: "enum", values: { token: value } }`
+  // — `app/present/ordering.ts` reads it by scanning a line for ANY of `values`' own keys, never by
+  // treating "enum" as a fourth cousin of `date`/`int`/`float`'s single-glyph shape.
 
   function readOrderingFieldMarkers(fields, ledger) {
     if (fields.size === 0) return {};
@@ -509,13 +563,78 @@ export function compile(files, ledger = new Ledger()) {
       throw new GenerationError(`${MARKERS_KEY}: no 'markers:' list`);
     }
     const out = {};
+    // A field once claimed by a TRAILING marker (kind date/int/float) — an enum row arriving later
+    // for the SAME field is a real conflict (one field, two irreconcilable reading strategies), not
+    // a second value the way two enum rows for one field are.
+    const trailingOwner = new Set();
+    // Field -> { token: value }, assembled separately from `out` so a LATER trailing-marker row for
+    // a field already claimed by an enum row can still be detected as a conflict (see below).
+    const enumValues = {};
     for (const entry of markers) {
       // NOT A DROP: a non-mapping marker declares no field. If it was the only marker for a named ordering field, DROP PATH 13 below records that field as unmarked.
       if (!entry || typeof entry !== "object") continue;
-      const { token, field, extraction_hint: hint, render_only: renderOnly } = entry;
-      // NOT A DROP: this table is restricted to the fields the operator's own ordering declares; a marker outside that set was never a candidate.
+      const { token, field, extraction_hint: hint, value, render_only: renderOnly } = entry;
+      // NOT A DROP: this table is restricted to the fields the operator's own ordering declares
+      // plus the engine's own default-ordering fields; a marker outside that set was never a candidate.
       if (typeof field !== "string" || !fields.has(field)) continue;
       const what = `ordering field '${field}'`;
+
+      // ── THE ENUM BRANCH — a fixed `value:` row (markers.yaml's OTHER shape), never a trailing
+      // token. Checked FIRST, on `value !== undefined`, because a value-match row carries no
+      // `extraction_hint` at all — falling through to the trailing branch would read `hint` as
+      // `undefined` and mis-file it as DROP PATH 10 rather than what it actually is.
+      if (value !== undefined) {
+        if (renderOnly === true) {
+          ledger.drop(
+            what,
+            `its marker '${token}' is 'render_only: true' — the engine never ingests a value from ` +
+              "that glyph, so no ordering preview can be offered for this field",
+          );
+          continue;
+        }
+        if (!isNonEmptyString(token)) {
+          ledger.drop(what, "its marker declares no 'token:' string, so there is no glyph to find on a line");
+          continue;
+        }
+        if (trailingOwner.has(field)) {
+          ledger.drop(
+            what,
+            `its marker '${token}' declares a fixed 'value:', but another marker already claimed ` +
+              "this field with a trailing extraction_hint — a field cannot be read both ways at " +
+              "once, so neither is published",
+          );
+          continue;
+        }
+        if (!isScalar(value) || value === null) {
+          ledger.drop(what, `its marker '${token}' declares 'value:' ${JSON.stringify(value)}, not a scalar`);
+          continue;
+        }
+        const values = enumValues[field] ?? (enumValues[field] = {});
+        const spelled = String(value);
+        if (values[token] !== undefined && values[token] !== spelled) {
+          ledger.drop(
+            what,
+            `its marker '${token}' redeclares field '${field}' with a different value ` +
+              `(${JSON.stringify(values[token])} vs ${JSON.stringify(spelled)}); the first one read wins`,
+          );
+          continue;
+        }
+        values[token] = spelled;
+        continue;
+      }
+
+      // The trailing-marker twin of the enum conflict just above: an extraction_hint row arriving
+      // for a field an enum row already claimed.
+      if (field in enumValues) {
+        ledger.drop(
+          what,
+          `its marker '${token}' declares an extraction_hint, but another marker already claimed ` +
+            "this field with a fixed 'value:' — a field cannot be read both ways at once, so " +
+            "neither is published",
+        );
+        continue;
+      }
+
       // DROP PATH 9. Documented, deliberate — and until now unrecorded.
       if (renderOnly === true) {
         ledger.drop(
@@ -540,7 +659,7 @@ export function compile(files, ledger = new Ledger()) {
         ledger.drop(what, "its marker declares no 'token:' string, so there is no glyph to find on a line");
         continue;
       }
-      // DROP PATH 12. Two markers for one ordering field: the later one silently won.
+      // DROP PATH 12. Two TRAILING markers for one ordering field: the later one silently won.
       if (out[field] !== undefined) {
         ledger.drop(
           what,
@@ -548,15 +667,20 @@ export function compile(files, ledger = new Ledger()) {
             "the other is not published",
         );
       }
+      trailingOwner.add(field);
       out[field] = { token, kind };
+    }
+    for (const [field, values] of Object.entries(enumValues)) {
+      out[field] = { kind: "enum", values };
     }
     // DROP PATH 13. A field the ordering table NAMES and this loop found no marker for at all.
     for (const field of fields) {
       if (out[field] === undefined && ledger.toJSON()[`ordering field '${field}'`] === undefined) {
         ledger.drop(
           `ordering field '${field}'`,
-          "a section's 'ordering:' names it, but vocabulary/markers.yaml declares no marker for it " +
-            "at all, so nothing can read its value off a line",
+          "named by a section's 'ordering:' and/or the engine's own default ordering, but " +
+            "vocabulary/markers.yaml declares no marker for it at all, so nothing can read its " +
+            "value off a line",
         );
       }
     }
@@ -793,7 +917,15 @@ export function compile(files, ledger = new Ledger()) {
   const registration = readRegistration(viewFiles);
   const candidates = collectDefaultNodeTypeCandidates(registration, viewFiles);
   const ordering = readOrdering(viewFiles, ledger);
-  const orderingFields = readOrderingFieldMarkers(orderingFieldNames(ordering), ledger);
+  // WIDENED: the candidate set is no longer only the fields a DECLARED `ordering:` names — the
+  // engine's own default ordering (`ENGINE_DEFAULT_ORDERING`, applied to every section that
+  // declares neither `ordering:` nor `ordering_mode:`) names `due_date` and `priority` too, and a
+  // marker for either must be looked up for EVERY config, not only one that happens to already use
+  // them in a declared section. `title` is excluded — see `ENGINE_DEFAULT_ORDERING_MARKER_FIELDS`.
+  const orderingFields = readOrderingFieldMarkers(
+    new Set([...orderingFieldNames(ordering), ...ENGINE_DEFAULT_ORDERING_MARKER_FIELDS]),
+    ledger,
+  );
   const chromeShapes = readChromeShapes(candidates, ledger);
   const sectionRegistration = readSectionRegistration(viewFiles, registration, ledger);
 
@@ -805,6 +937,11 @@ export function compile(files, ledger = new Ledger()) {
     dayBoundary: readDayBoundary(),
     chromeShapes,
     sectionRegistration,
+    // ENGINE FACTS, published unconditionally — see this file's own header. `defaultOrdering` is
+    // what every section with NEITHER `ordering` NOR `orderingMode` above sorts by; `priorityRank`
+    // is the numeric rank `defaultOrdering`'s own `priority` key compares.
+    defaultOrdering: ENGINE_DEFAULT_ORDERING,
+    priorityRank: ENGINE_PRIORITY_RANK,
   };
   // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
   const dropped = ledger.toJSON();

@@ -72,17 +72,22 @@
  *                                    commit (the NEW section whose qualification names an
  *                                    unresolvable field) abstains "no-section-declaration" — visibly
  *                                    different, through `#membershipBadge`, the real DOM sink.
- *   ORDERING              ANSWERED for the positive case (a rank change), proven BOTH through the
- *                                    pure function directly AND through `#freshness`, the real DOM
- *                                    sink. COULD NOT TELL for the negative case — §3 shows, on this
- *                                    brand-new declaration, that an abstention (no ordering
- *                                    declared) and a confident "nothing moved" answer are BYTE-
- *                                    IDENTICAL on `#freshness`, which is `roadmap-the-road-ahead.md`
- *                                    §4's own gap ("177 of 186 sections abstain, invisibly")
- *                                    reproduced on a config nobody has ever typed, not merely
- *                                    quoted from his instance. The true answer IS established, but
- *                                    only by importing `orderingFor` directly and reading `.kind` —
- *                                    a path no person watching the screen has.
+ *   ORDERING              ANSWERED for the DECLARED positive case (a rank change), proven BOTH
+ *                                    through the pure function directly AND through `#freshness`,
+ *                                    the real DOM sink — unchanged from the original run of this
+ *                                    file. RESTATED 2026-08-04, `roadmap-the-road-ahead.md`'s "the
+ *                                    engine's own default ordering, made explicit" step: the
+ *                                    "COULD NOT TELL" gap this section used to report — an
+ *                                    abstention and a confident "nothing moved" answer landing
+ *                                    BYTE-IDENTICAL on `#freshness` for `done`/`archived`, the two
+ *                                    sections THIS view declares no ordering for — is CLOSED. §3
+ *                                    now also shows `done` ANSWERING through the real DOM sink for
+ *                                    a genuine title-driven rank change (the engine's own default,
+ *                                    on a config this app has never seen before this file ran), and
+ *                                    a *different*, still-real abstention (`nested-section`) made
+ *                                    VISIBLE for `archived` rather than silently indistinguishable
+ *                                    from "nothing moved" — proven through `#orderingBadge`, not
+ *                                    only by reading `.kind` off the pure function.
  *   SECTION ADDRESSING   ANSWERED for all three new sections, including `archived`, which
  *                                    MEMBERSHIP cannot judge — §4 shows addressing and membership
  *                                    are genuinely separate resolutions, the first surviving where
@@ -113,7 +118,7 @@ import { generateStructural } from "../scripts/generate-structural-declaration.m
 import { generateRules } from "../scripts/generate-rules-declaration.mjs";
 import { DEFAULT_CONFIG_DIR } from "../scripts/monorepo-config.mjs";
 import { Ledger } from "../scripts/ledger.mjs";
-import { orderingFor, sectionAt, sectionForInsertAt } from "../dist/present.js";
+import { orderingFor, resolveOrderingFor, resolveOrderingPlacementFor, sectionAt, sectionForInsertAt } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -483,10 +488,15 @@ describe("2. PLACEMENT/MEMBERSHIP — answered AND abstained, proven DIFFERENT, 
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 3. ORDERING — ANSWERED for the positive case, through the pure function AND the real DOM sink.
-//    COULD NOT TELL for the negative case, through the DOM — the invisibility
-//    roadmap-the-road-ahead.md §4 names, reproduced on a declaration nobody has typed before,
-//    established as a genuine gap (not a guess) by reading the pure function's own `.kind`.
+// 3. ORDERING — ANSWERED for the DECLARED positive case, through the pure function AND the real
+//    DOM sink (unchanged since this file's original run). RESTATED 2026-08-04: the raw
+//    `orderingFor` function still abstains "no-section-declaration" for `done`/`archived` — that
+//    low-level contract has not changed and is still worth pinning on its own — but the PAGE no
+//    longer calls that function for an undeclared section; it calls `resolveOrderingFor`, which
+//    routes to the NEW `defaultOrderingFor`. The tests below prove, on THIS SAME never-seen
+//    declaration, that the gap closes: an undeclared section now ANSWERS (through #freshness) for
+//    a genuine default-ordering move, and ABSTAINS VISIBLY (through #orderingBadge) rather than
+//    being indistinguishable from "nothing moved".
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 describe("3. ORDERING", { skip }, () => {
@@ -521,25 +531,80 @@ describe("3. ORDERING", { skip }, () => {
     assert.doesNotMatch(elements.get("freshness").textContent, /this line will move within/);
   });
 
-  test("COULD NOT TELL, from the DOM: an ABSTENTION (no ordering declared for `done`) ALSO carries no ordering sentence — identical to the confident case above", async () => {
-    const { page, elements } = await freshPage("gentest-ordering-abstain", postStub());
-    const after = "- [ ] widget shipped edited";
-    // Establish the TRUE answer first — this IS an abstention, not a confident non-move, and the
-    // only way to know that is reading `.kind` directly. The DOM cannot distinguish it.
-    const reading = orderingFor(VIEW.id, "done", SOURCE, 5, after, RESOLUTION.ordering, RESOLUTION.orderingFields);
+  test("THE RAW FUNCTION'S OWN CONTRACT IS UNCHANGED: orderingFor still abstains \"no-section-declaration\" for `done`", () => {
+    // `orderingFor` itself was not touched by this step — only `app/index.html`'s call sites moved
+    // to `resolveOrderingFor`. This pins that the low-level function's own behaviour did not shift
+    // underneath the page-level change.
+    const reading = orderingFor(VIEW.id, "done", SOURCE, 5, "- [ ] widget shipped edited", RESOLUTION.ordering, RESOLUTION.orderingFields);
     assert.equal(reading.kind, "abstains");
     assert.equal(reading.because, "no-section-declaration", "`done` declares no `ordering:` at all");
-    page.commitLine(VIEW, { lineIndex: 5, text: after, markdown: SOURCE.replace("- [ ] widget shipped", after), source: SOURCE, kind: "set-line" });
-    const abstainFreshness = elements.get("freshness").textContent;
-    assert.doesNotMatch(abstainFreshness, /this line will move within/);
-    // THE GAP, STATED AS AN ASSERTION RATHER THAN A COMMENT: the abstention's freshness text and a
-    // confident non-move's freshness text are the SAME SHAPE (neither carries an ordering clause).
-    // This is `roadmap-the-road-ahead.md` §4's "ordering abstentions are invisible" reproduced on a
-    // declaration this app has never seen before this test file ran — not merely quoted from his.
-    assert.ok(
-      !/this line will move within/.test(abstainFreshness),
-      "if this ever starts matching, ordering grew a visible abstention register — update this test's own claim, do not just delete it",
+  });
+
+  test("THE GAP CLOSES, PART 1: through the SAME real DOM sink, `done` now ANSWERS instead of abstaining invisibly", () => {
+    // `resolveOrderingFor` routes `done` to `defaultOrderingFor` (the engine's own fallback), which
+    // is a REAL answer, not the raw function's own abstention — established directly first, off
+    // the SAME declaration the page reads, before trusting the DOM.
+    const reading = resolveOrderingFor(
+      VIEW.id, "done", SOURCE, 5, "- [ ] widget shipped edited",
+      RESOLUTION.ordering, RESOLUTION.orderingFields, RESOLUTION.defaultOrdering, RESOLUTION.priorityRank,
     );
+    assert.equal(reading.kind, "answer", "the page-level resolver must ANSWER here, not abstain the way the raw function does");
+    assert.equal(reading.answer.moved, false, "a lone row has nothing to rank against — a real answer, not a guess");
+  });
+
+  test("THE GAP CLOSES, PART 2: a genuine default-ordering MOVE reaches #freshness for an undeclared section, on a config this app has never seen", async () => {
+    // A LOCAL source, not the shared module-level SOURCE (whose 'done' carries only one row and so
+    // can never demonstrate a rank change) — 'gentest_widget' has no due_date/priority default, so
+    // two bare titles decide the order by the engine's own final tiebreak, title, ascending.
+    // ALL THREE headings, in the view's own declared order — `sectionAt` resolves by ORDINAL
+    // heading position within a view, not by heading TEXT (`address.ts`'s own model, the same
+    // "ordinal 0 -> queue" convention `tests/app-ordering-note.test.mjs` documents) — a two-heading
+    // fragment would put 'Done' at ordinal 0, resolving to 'queued' instead.
+    const twoWidgetSource = [
+      "## Queued",
+      "## Done",
+      "- [ ] zzz widget",
+      "- [ ] aaa widget",
+      "## Archived",
+    ].join("\n");
+    const { page, elements } = await freshPage("gentest-ordering-default-moves", postStub());
+    page.commitLine(VIEW, {
+      lineIndex: 2, // "## Queued"=0, "## Done"=1, "zzz widget"=2
+      // 'zzz' -> 'AAA': was rank 2 (behind 'aaa widget'), now rank 1 — uppercase sorts before
+      // lowercase in codepoint order ('A' = 65 < 'a' = 97), the SAME rule the operator's own
+      // measured inbox order follows.
+      text: "- [ ] AAA widget",
+      markdown: twoWidgetSource.replace("- [ ] zzz widget", "- [ ] AAA widget"),
+      source: twoWidgetSource,
+      kind: "set-line",
+    });
+    assert.match(
+      elements.get("freshness").textContent,
+      /this line will move within done/,
+      "an undeclared section on a NEVER-SEEN config now places and narrates a real move — the operator's own acceptance criterion",
+    );
+  });
+
+  test("THE GAP CLOSES, PART 3: a genuine ABSTENTION for an undeclared section is now VISIBLE through #orderingBadge, not silent", async () => {
+    // 'archived' with an indented child — nested-section, the same refusal orderingFor's own
+    // header already documents, now reachable for a section that declares no ordering at all.
+    // ALL THREE headings, in order — see PART 2's own comment for why (`sectionAt` is ORDINAL).
+    const nestedSource = [
+      "## Queued",
+      "## Done",
+      "## Archived",
+      "- [ ] widget old",
+      "    - [ ] widget child, indented",
+    ].join("\n");
+    const { page, elements } = await freshPage("gentest-ordering-default-abstains", postStub());
+    page.__updateOrderingBadge(VIEW, {
+      lineIndex: 3, // "## Queued"=0, "## Done"=1, "## Archived"=2, "widget old"=3
+      text: "- [ ] widget old edited",
+      markdown: "irrelevant",
+      source: nestedSource,
+      kind: "set-line",
+    });
+    assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — nested-section");
   });
 });
 

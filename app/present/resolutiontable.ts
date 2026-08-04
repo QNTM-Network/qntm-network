@@ -118,14 +118,20 @@ export interface SectionOrdering {
   readonly name: string | undefined;
 }
 
-/** How an ordering field's value is spelled on a printed line — `markers.yaml`'s own shape. */
-export type OrderingFieldKind = "date" | "int" | "float";
+/** How an ordering field's value is spelled on a printed line — `markers.yaml`'s own two shapes:
+ * a TRAILING-TOKEN marker (`date`/`int`/`float` — a glyph followed by a value that varies line to
+ * line) or an ENUM (value-match) marker (`priority`'s `🔽`/`⏫` — one glyph PER value, never a
+ * trailing value at all). */
+export type OrderingFieldKind = "date" | "int" | "float" | "enum";
 
-/** One field's trailing-token marker: the glyph, and the shape its value must have. */
-export interface OrderingFieldMarker {
-  readonly token: string;
-  readonly kind: OrderingFieldKind;
-}
+/** One field's marker — a discriminated union on `kind`, mirroring
+ * `scripts/compile-resolution.mjs`'s own two published shapes exactly. A trailing marker carries
+ * ONE glyph (`token`); an enum marker carries MANY, each mapped to the value it spells (`values`,
+ * token -> value) — reading it is "does the line contain any of these glyphs", never a single
+ * `token` lookup. */
+export type OrderingFieldMarker =
+  | { readonly kind: "date" | "int" | "float"; readonly token: string }
+  | { readonly kind: "enum"; readonly values: Readonly<Record<string, string>> };
 
 /** `day_boundary.yaml`'s 3 keys, verbatim. */
 export interface DayBoundary {
@@ -188,6 +194,22 @@ export interface ConfigResolutionTable {
    */
   readonly sectionRegistration: Readonly<Record<string, Readonly<Record<string, SectionRegistration>>>>;
   /**
+   * THE ENGINE'S OWN DEFAULT ORDERING — `apps/qntm-md/src/qntm_md/render/section_builder.py`'s
+   * `_DEFAULT_ORDERING`, the sort spec applied to EVERY section that declares neither `ordering`
+   * nor `orderingMode` above (171 of 186 sections, measured against the operator's real config).
+   * Published UNCONDITIONALLY — it is a fact about the engine, true for every qntm-md instance,
+   * never read out of this config's own YAML — so it is never absent and never per-view. See
+   * `app/present/ordering.ts`'s `resolveOrderingPlacementFor` for where this is actually consumed.
+   */
+  readonly defaultOrdering: readonly OrderingKey[];
+  /**
+   * THE ENGINE'S OWN PRIORITY RANK — `section_builder.py`'s `_PRIORITY_RANK`, the numeric rank
+   * `defaultOrdering`'s own `priority` key compares by. Also unconditional, also never per-view.
+   * Four numbers for five names (`normal`/`medium` share rank 2) — read verbatim from the engine,
+   * not simplified.
+   */
+  readonly priorityRank: Readonly<Record<string, number>>;
+  /**
    * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. The two comments
    * above ("a field absent here has no known marker", "a type absent here is one whose chrome this
    * app does not know how to produce") described a refusal the operator had no way to see: absence
@@ -214,14 +236,17 @@ const TOP_KEYS = [
   "dayBoundary",
   "chromeShapes",
   "sectionRegistration",
+  "defaultOrdering",
+  "priorityRank",
   "dropped",
 ] as const;
 const SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
 const SECTION_ORDERING_KEYS = ["ordering", "orderingMode", "name"] as const;
-const ORDERING_FIELD_MARKER_KEYS = ["token", "kind"] as const;
-const ORDERING_FIELD_KINDS = ["date", "int", "float"] as const;
+const TRAILING_MARKER_KEYS = ["token", "kind"] as const;
+const ENUM_MARKER_KEYS = ["kind", "values"] as const;
+const TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"] as const;
 const DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"] as const;
 const DIRECTIONS = ["asc", "desc"] as const;
 const CHROME_SHAPES = ["checkbox", "plain_line"] as const;
@@ -234,6 +259,8 @@ const EMPTY: ConfigResolutionTable = {
   dayBoundary: undefined,
   chromeShapes: {},
   sectionRegistration: {},
+  defaultOrdering: [],
+  priorityRank: {},
   dropped: {},
 };
 
@@ -525,6 +552,13 @@ function readOrdering(
   return out;
 }
 
+/**
+ * One field's marker — TWO shapes, dispatched on `kind` the same way `readSectionOrdering`
+ * dispatches on which of `ordering`/`orderingMode` a section carries. `kind: "enum"` reads
+ * `values` (token -> value, `priority`'s `🔽`/`⏫`); the three trailing kinds read `token` (one
+ * glyph, `due_date`'s `📅`) — see `OrderingFieldMarker`'s own header for why these are genuinely
+ * different shapes rather than one shape with an optional field.
+ */
 function readOrderingFieldMarker(
   path: string,
   value: unknown,
@@ -534,12 +568,30 @@ function readOrderingFieldMarker(
     problems.push(`'${path}' is ${shapeOf(value)}, not an object — this field's marker is unknown`);
     return undefined;
   }
+  if (value.kind === "enum") {
+    for (const key of Object.keys(value)) {
+      if (!(ENUM_MARKER_KEYS as readonly string[]).includes(key)) {
+        problems.push(`'${path}.${key}' is not a recognised key — the keys are ${ENUM_MARKER_KEYS.join(", ")}`);
+      }
+    }
+    const { values } = value;
+    if (!isPlainObject(values) || Object.keys(values).length === 0) {
+      problems.push(`'${path}.values' is ${shapeOf(values)}, not a non-empty object of token -> value`);
+      return undefined;
+    }
+    const read: Record<string, string> = {};
+    for (const [token, spelled] of Object.entries(values)) {
+      if (token === "" || typeof spelled !== "string" || spelled === "") {
+        problems.push(`'${path}.values["${token}"]' is ${JSON.stringify(spelled)}, not a non-empty string`);
+        return undefined;
+      }
+      read[token] = spelled;
+    }
+    return { kind: "enum", values: read };
+  }
   for (const key of Object.keys(value)) {
-    if (!(ORDERING_FIELD_MARKER_KEYS as readonly string[]).includes(key)) {
-      problems.push(
-        `'${path}.${key}' is not a recognised key — the keys are ` +
-          `${ORDERING_FIELD_MARKER_KEYS.join(", ")}`,
-      );
+    if (!(TRAILING_MARKER_KEYS as readonly string[]).includes(key)) {
+      problems.push(`'${path}.${key}' is not a recognised key — the keys are ${TRAILING_MARKER_KEYS.join(", ")}`);
     }
   }
   const { token, kind } = value;
@@ -547,13 +599,14 @@ function readOrderingFieldMarker(
     problems.push(`'${path}.token' is ${JSON.stringify(token)}, not a non-empty string`);
     return undefined;
   }
-  if (!(ORDERING_FIELD_KINDS as readonly string[]).includes(kind as string)) {
+  if (!(TRAILING_ORDERING_FIELD_KINDS as readonly string[]).includes(kind as string)) {
     problems.push(
-      `'${path}.kind' is ${JSON.stringify(kind)}, not one of ${ORDERING_FIELD_KINDS.join(", ")}`,
+      `'${path}.kind' is ${JSON.stringify(kind)}, not one of ` +
+        `${[...TRAILING_ORDERING_FIELD_KINDS, "enum"].join(", ")}`,
     );
     return undefined;
   }
-  return { token, kind: kind as OrderingFieldKind };
+  return { token, kind: kind as "date" | "int" | "float" };
 }
 
 function readOrderingFieldMarkers(
@@ -641,6 +694,46 @@ function readChromeShapes(value: unknown, problems: string[]): Record<string, Ch
 }
 
 /**
+ * `resolution.defaultOrdering` — a bare LIST of ordering keys (not `view -> section ->` keyed:
+ * this is the SAME tuple for every section that has no declaration of its own, so there is
+ * nothing to key it by). Reuses `readOrderingKey` — the shape of one entry is identical to one
+ * entry of a declared section's own `ordering:` list.
+ */
+function readDefaultOrdering(value: unknown, problems: string[]): readonly OrderingKey[] {
+  const path = `${RESOLUTION_TABLE_KEY}.defaultOrdering`;
+  if (!Array.isArray(value) || value.length === 0) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not a non-empty array — the engine default stays unknown`);
+    return [];
+  }
+  const keys: OrderingKey[] = [];
+  for (const [i, entry] of value.entries()) {
+    const read = readOrderingKey(`${path}[${i}]`, entry, problems);
+    if (read === undefined) return [];
+    keys.push(read);
+  }
+  return keys;
+}
+
+/** `resolution.priorityRank` — field VALUE (`"urgent"`) -> its numeric rank. Every value here is
+ * a positive integer; the ENGINE decides the numbers, this reader only checks the shape. */
+function readPriorityRank(value: unknown, problems: string[]): Record<string, number> {
+  const path = `${RESOLUTION_TABLE_KEY}.priorityRank`;
+  if (!isPlainObject(value) || Object.keys(value).length === 0) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not a non-empty object — the priority rank stays unknown`);
+    return {};
+  }
+  const out: Record<string, number> = {};
+  for (const [name, rank] of Object.entries(value)) {
+    if (typeof rank !== "number" || !Number.isInteger(rank) || rank < 1) {
+      problems.push(`'${path}.${name}' is ${JSON.stringify(rank)}, not a positive integer`);
+      return {};
+    }
+    out[name] = rank;
+  }
+  return out;
+}
+
+/**
  * Read the `resolution` key of a served presentation declaration.
  *
  * Same posture every reader in this directory takes: no key at all is silence, not a problem; a
@@ -683,6 +776,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
       sectionRegistration:
         "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
+      defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],
+      priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
     problems,

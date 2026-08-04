@@ -3624,3 +3624,31 @@ backlog:
     not after.
   kind: null
   state: unscoped
+- id: declare-the-default-ordering-in-config
+  title: >-
+    [ordering] [PROPOSAL, NOT BUILT] `roadmap-the-road-ahead.md`'s "the engine's own default
+    ordering, made explicit" step published `resolution.defaultOrdering`/`priorityRank`
+    (`due_date` asc, `priority` desc, `title` asc, plus the `_PRIORITY_RANK` numbers) as ENGINE
+    FACTS — hardcoded in `scripts/compile-resolution.mjs` (`ENGINE_DEFAULT_ORDERING`/
+    `ENGINE_PRIORITY_RANK`) and pinned against a LIVE IMPORT of
+    `qntm_md.render.section_builder._DEFAULT_ORDERING`/`_PRIORITY_RANK` by
+    `tests/resolution-default-ordering-agreement.test.mjs` (via `scripts/resolution-agreement.py`),
+    NEVER written into `apps/qntm-md/config/` or this repo's own `config/` — the operator's own
+    instruction for this step, because a config change there freezes his vault until a deploy
+    lands and this step's brief was explicit that declaring it IN config is separate, later work.
+    THIS ROW EXISTS ONLY TO FLAG THE FOLLOW-UP, NOT TO RESOLVE IT — the same posture
+    `flow-trace-derives-a-time-axis-from-enforcer-git-history` (immediately above) takes for a gap
+    this repo can see but not close today. The eventual, correct home for this fact is a real
+    `default_ordering:` (or equivalent) key in the monorepo's own schema/config — probably at the
+    GLOBAL registration rung, cascading STRUCTURAL_NODE -> VIEW -> GLOBAL the same way
+    `default_node_type` already does — with `scripts/compile-resolution.mjs` reading it the way it
+    already reads every DECLARED `ordering:`/`ordering_mode:`, and the hardcoded
+    `ENGINE_DEFAULT_ORDERING`/`ENGINE_PRIORITY_RANK` constants retired once that key exists to read
+    instead. Two open questions for whoever picks this up: (1) whether the engine's own
+    `_DEFAULT_ORDERING` should become the schema's OWN default (so an instance with no override
+    still gets the current three-key tuple) or whether every instance should be REQUIRED to
+    declare it explicitly; (2) whether `priority`'s rank table (`urgent`/`high`/`normal`/`medium`/
+    `low` -> 4/3/2/2/1) belongs beside it as config or stays an engine constant — it is currently
+    NOT settable per-instance at all, unlike the ordering tuple's own field/direction pairs.
+  kind: capability
+  state: unscoped

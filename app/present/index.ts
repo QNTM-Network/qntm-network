@@ -23,6 +23,7 @@ export {
   carriesContent,
   chromeOf,
   classifyLine,
+  cleanTitleFor,
   markerSpans,
   qntmIdSpans,
   stampSpans,
@@ -31,6 +32,8 @@ export {
   wikiLinkSpans,
 } from "./rendition.js";
 export type {
+  CleanTitleAbstention,
+  CleanTitleReading,
   Contribution,
   LineShape,
   Rendition,
@@ -80,7 +83,15 @@ export type {
   SectionOrdering,
 } from "./resolutiontable.js";
 
-export { markerValue, orderingFor, orderingPlacementFor } from "./ordering.js";
+export {
+  markerValue,
+  orderingFor,
+  orderingPlacementFor,
+  defaultOrderingFor,
+  defaultOrderingPlacementFor,
+  resolveOrderingFor,
+  resolveOrderingPlacementFor,
+} from "./ordering.js";
 export type {
   OrderingAbstention,
   OrderingAnswer,

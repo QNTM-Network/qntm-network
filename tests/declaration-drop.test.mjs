@@ -373,6 +373,43 @@ describe("1c. resolution — every path that discards a declaration records it",
     );
     assertDropped(dropped, "ordering field 'invented_field'", /declares no marker for it at all/);
   });
+
+  test("DROP 28: priority (an ENGINE DEFAULT ORDERING field, not a declared one) with no marker at all drops too", () => {
+    // The candidate set fed to readOrderingFieldMarkers is no longer only what a section's own
+    // `ordering:` names — ENGINE_DEFAULT_ORDERING_MARKER_FIELDS adds `due_date`/`priority`
+    // unconditionally, so removing priority's ONLY markers must still be recorded, even though no
+    // section in this fixture ever names 'priority' in an `ordering:` list.
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(
+        c,
+        "vocabulary/markers.yaml",
+        '  - token: "🔽"\n    field: priority\n    value: low\n  - token: "⏫"\n    field: priority\n    value: high\n',
+        "",
+      ),
+    );
+    assertDropped(dropped, "ordering field 'priority'", /declares no marker for it at all/);
+  });
+
+  test("NOT A DROP: two enum tokens for the SAME field is the enum's normal shape, not DROP 26's collision", () => {
+    // The unmutated fixture already declares two markers for 'priority' (🔽=low, ⏫=high) — if this
+    // were read the same way as a TRAILING marker, DROP 26's "two markers claim it" would fire.
+    // It must not: an enum field legitimately owns more than one token, one per value.
+    const dropped = generateResolution(FIXTURE_CONFIG).dropped;
+    assert.ok(!("ordering field 'priority'" in dropped), JSON.stringify(dropped));
+  });
+
+  test("DROP 29: an enum marker and a trailing marker claiming the SAME field conflict, and neither is published", () => {
+    const dropped = droppedFrom(generateResolution, (c) =>
+      edit(
+        c,
+        "vocabulary/markers.yaml",
+        '  - token: "⏫"\n    field: priority\n    value: high\n',
+        '  - token: "⏫"\n    field: priority\n    value: high\n' +
+          '  - token: "🕒"\n    field: priority\n    extraction_hint: trailing_int\n',
+      ),
+    );
+    assertDropped(dropped, "ordering field 'priority'", /cannot be read both ways at once/);
+  });
 });
 
 // ── 2. the mutation proof: a guard that cannot go red is decoration ───────────────────────────
@@ -587,11 +624,22 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
 // ── 4. no wolf ────────────────────────────────────────────────────────────────────────────────
 
 describe("4. NO WOLF — the ledger records what was dropped, and nothing else", () => {
-  test("the unmutated fixture drops exactly two things, both real", () => {
+  test("the unmutated fixture drops exactly four things, all real", () => {
+    // RESTATED — two -> four, when the fixture's markers.yaml gained priority's own two
+    // value-match rows (🔽/⏫, needed so `readOrderingFieldMarkers` has something real to find once
+    // it always looks for a `priority` marker — see this file's own resolution-side tests below).
+    // `compile-qualification.mjs` reads markers.yaml too and drops any token whose `field` is
+    // outside `RESOLVABLE_FIELDS` — `priority` is not one of them, so BOTH new tokens drop here.
+    // The operator's own real config already carries this exact drop pair for the exact same
+    // reason (verified: `priority` is not in `RESOLVABLE_FIELDS` there either) — this is the
+    // fixture catching up to what generateQualification already does against real config, not a
+    // new wolf.
     const dropped = generateQualification(FIXTURE_CONFIG).dropped;
     assert.deepEqual(Object.keys(dropped).sort(), [
       "section 'main.nested'",
+      "vocabulary token '⏫'",
       "vocabulary token '📅'",
+      "vocabulary token '🔽'",
     ]);
     assert.deepEqual(generateStructural(FIXTURE_CONFIG).dropped, {});
     assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {});
@@ -619,15 +667,16 @@ describe("4. NO WOLF — the ledger records what was dropped, and nothing else",
 
   test("a generate NEVER fails on a drop — a generator that cries wolf gets --force'd", () => {
     // The design decision, asserted rather than left in a comment: `generateQualification` returns
-    // normally with 230 drops against the operator's config and 2 against the fixture. Only
-    // DISAGREEING with the committed record is an error, and that is `--check`'s job (section 3).
+    // normally with 230 drops against the operator's config and 4 against the fixture (RESTATED
+    // alongside the "four things" test above, same cause). Only DISAGREEING with the committed
+    // record is an error, and that is `--check`'s job (section 3).
     assert.doesNotThrow(() =>
       withMutatedConfig(
         FIXTURE_CONFIG,
         (c) => put(c, "vocabulary/many.yaml", 'many:\n  - token: "#a"\n    field: alpha\n    value: 1\n  - token: "#b"\n    field: beta\n    value: 2\n'),
         (configDir) => {
           const result = generateQualification(configDir);
-          assert.equal(Object.keys(result.dropped).length, 4);
+          assert.equal(Object.keys(result.dropped).length, 6);
           return result;
         },
       ),

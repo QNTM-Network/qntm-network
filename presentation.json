@@ -1,5 +1,5 @@
 {
-  "note": "The GLOBAL level of the presentation cascade \u2014 this instance's default rendition for each token family the app can show more than one way. 'wired' is the app's rendition (a checkbox you can click, an <h3>, a rendered sentence, a tag as a chip); 'raw' is the characters, verbatim. GLOBAL is the LEAST specific of the seven levels, so anything a more specific level says beats it \u2014 in particular the cursor: put the cursor on a line and it shows its source characters whatever this file says. A key left out of this file stays silent and falls through to the built-in default; a key MISSPELLED here is reported as a problem rather than ignored, because a declaration nobody reads is the bug this level exists to disprove. 'tags' is the one key whose built-in default is 'raw' and whose value here is 'wired': the floor is what the app did before the key existed, and the chip is a decision this INSTANCE makes. Flip it to 'raw', or delete it, and the chips become characters with nothing rebuilt. Served with the app from the site root and read by app/present/declaration.ts. See docs/implementation-artifacts/design-presentation-cascade.md. 'indentUnit' is the OUTPUT half of the structural language (design-the-structural-language.md section 3): how many leading spaces one nesting level is. It is a citation of apps/qntm-md/src/qntm_md/render/renderer.py lines 947 to 950, transcribed by hand because the engine has no config key of its own yet to generate it from; read by app/present/declaration.ts and app/present/indent.ts. 'structural' is the INGEST half (same design, item 1): what a gesture like indent means, generated from the monorepo's config by scripts/generate-structural-declaration.mjs, never hand-written; read by app/present/structural.ts. Both are read alongside GLOBAL but are not renditions themselves and do not cascade the way checkbox/heading/prose/tags do. 'stamp' is the FIFTH key and the second whose subject is a token rather than a line: the identity stamp the engine prints on every node line, '[[qntm:3]]'. Its wired rendition is a small mark in the stamp's place, carrying the id in a title attribute for a hover, so the line stops gaining twelve characters when the cycle catches up but still says the model has it. It is DELIBERATELY NARROWER than the presentation-cascade design's 'links' key: it matches only the identity form (the engine's parse_qntm_id.py grammar) and never the wider wiki-link form, because a title-form link like '[[JB to send over Sarasin]]' is the operator's own words and hiding it would remove his content. Its built-in default is 'raw' for the same reason 'tags' is, plus one more that matters here: if this file fails to load or this key is misspelled, the app must fall back to SHOWING the stamp, never to hiding it. Whether the mark is a dot or nothing at all is a stylesheet decision in app/index.html, not a decision here.",
+  "note": "The GLOBAL level of the presentation cascade — this instance's default rendition for each token family the app can show more than one way. 'wired' is the app's rendition (a checkbox you can click, an <h3>, a rendered sentence, a tag as a chip); 'raw' is the characters, verbatim. GLOBAL is the LEAST specific of the seven levels, so anything a more specific level says beats it — in particular the cursor: put the cursor on a line and it shows its source characters whatever this file says. A key left out of this file stays silent and falls through to the built-in default; a key MISSPELLED here is reported as a problem rather than ignored, because a declaration nobody reads is the bug this level exists to disprove. 'tags' is the one key whose built-in default is 'raw' and whose value here is 'wired': the floor is what the app did before the key existed, and the chip is a decision this INSTANCE makes. Flip it to 'raw', or delete it, and the chips become characters with nothing rebuilt. Served with the app from the site root and read by app/present/declaration.ts. See docs/implementation-artifacts/design-presentation-cascade.md. 'indentUnit' is the OUTPUT half of the structural language (design-the-structural-language.md section 3): how many leading spaces one nesting level is. It is a citation of apps/qntm-md/src/qntm_md/render/renderer.py lines 947 to 950, transcribed by hand because the engine has no config key of its own yet to generate it from; read by app/present/declaration.ts and app/present/indent.ts. 'structural' is the INGEST half (same design, item 1): what a gesture like indent means, generated from the monorepo's config by scripts/generate-structural-declaration.mjs, never hand-written; read by app/present/structural.ts. Both are read alongside GLOBAL but are not renditions themselves and do not cascade the way checkbox/heading/prose/tags do. 'stamp' is the FIFTH key and the second whose subject is a token rather than a line: the identity stamp the engine prints on every node line, '[[qntm:3]]'. Its wired rendition is a small mark in the stamp's place, carrying the id in a title attribute for a hover, so the line stops gaining twelve characters when the cycle catches up but still says the model has it. It is DELIBERATELY NARROWER than the presentation-cascade design's 'links' key: it matches only the identity form (the engine's parse_qntm_id.py grammar) and never the wider wiki-link form, because a title-form link like '[[JB to send over Sarasin]]' is the operator's own words and hiding it would remove his content. Its built-in default is 'raw' for the same reason 'tags' is, plus one more that matters here: if this file fails to load or this key is misspelled, the app must fall back to SHOWING the stamp, never to hiding it. Whether the mark is a dot or nothing at all is a stylesheet decision in app/index.html, not a decision here.",
   "checkbox": "wired",
   "heading": "wired",
   "prose": "wired",
@@ -2497,19 +2497,19 @@
       "vocabulary token '#weekdays'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#weekends'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#weekly'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\u23eb'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\u2611\ufe0f'": "sets 'done_task_count', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\u26d4'": "sets 'blocked_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\u2705'": "sets 'completed_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83c\udd95'": "sets 'created_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83c\udfaf'": "sets 'par', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83c\udff3\ufe0f'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83d\udca4'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83d\udcc5'": "sets 'due_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83d\udccc'": "sets 'lead_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83d\udd22'": "sets 'queue_position', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83d\udd3d'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '\ud83d\udeeb'": "sets 'available_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)"
+      "vocabulary token '⏫'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '☑️'": "sets 'done_task_count', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '⛔'": "sets 'blocked_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '✅'": "sets 'completed_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '🆕'": "sets 'created_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '🎯'": "sets 'par', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '🏳️'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '💤'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '📅'": "sets 'due_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '📌'": "sets 'lead_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '🔢'": "sets 'queue_position', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '🔽'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
+      "vocabulary token '🛫'": "sets 'available_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)"
     }
   },
   "resolution": {
@@ -2570,7 +2570,7 @@
               "direction": "asc"
             }
           ],
-          "name": "Yesterday \u2014 Due"
+          "name": "Yesterday — Due"
         },
         "available-yesterday": {
           "ordering": [
@@ -2579,7 +2579,7 @@
               "direction": "asc"
             }
           ],
-          "name": "Yesterday \u2014 Available"
+          "name": "Yesterday — Available"
         },
         "due-today": {
           "ordering": [
@@ -2588,7 +2588,7 @@
               "direction": "asc"
             }
           ],
-          "name": "Today \u2014 Due"
+          "name": "Today — Due"
         },
         "available-today": {
           "ordering": [
@@ -2597,7 +2597,7 @@
               "direction": "asc"
             }
           ],
-          "name": "Today \u2014 Available"
+          "name": "Today — Available"
         },
         "due-tomorrow": {
           "ordering": [
@@ -2606,7 +2606,7 @@
               "direction": "asc"
             }
           ],
-          "name": "Tomorrow \u2014 Due"
+          "name": "Tomorrow — Due"
         },
         "available-tomorrow": {
           "ordering": [
@@ -2615,7 +2615,7 @@
               "direction": "asc"
             }
           ],
-          "name": "Tomorrow \u2014 Available"
+          "name": "Tomorrow — Available"
         },
         "overdue": {
           "ordering": [
@@ -2668,16 +2668,23 @@
     },
     "orderingFields": {
       "due_date": {
-        "token": "\ud83d\udcc5",
+        "token": "📅",
         "kind": "date"
       },
       "available_date": {
-        "token": "\ud83d\udeeb",
+        "token": "🛫",
         "kind": "date"
       },
       "queue_position": {
-        "token": "\ud83d\udd22",
+        "token": "🔢",
         "kind": "int"
+      },
+      "priority": {
+        "kind": "enum",
+        "values": {
+          "🔽": "low",
+          "⏫": "high"
+        }
       }
     },
     "dayBoundary": {
@@ -2694,6 +2701,7 @@
       "defect": "checkbox",
       "film": "checkbox",
       "group": "plain_line",
+      "note": "plain_line",
       "person": "plain_line",
       "routine": "checkbox",
       "task": "checkbox",
@@ -2754,6 +2762,18 @@
           "tokens": [
             "#task",
             "#arts"
+          ]
+        }
+      },
+      "all-family": {
+        "tasks": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "family"
+          },
+          "tokens": [
+            "#task",
+            "#family"
           ]
         }
       },
@@ -3925,6 +3945,18 @@
           ]
         }
       },
+      "notes-work": {
+        "work-notes": {
+          "nodeType": "note",
+          "defaults": {
+            "domain": "work"
+          },
+          "tokens": [
+            "#note",
+            "#work"
+          ]
+        }
+      },
       "operator-flowtrace": {
         "tasks": {
           "nodeType": "task",
@@ -4261,6 +4293,18 @@
           ]
         }
       },
+      "people-family": {
+        "people": {
+          "nodeType": "person",
+          "defaults": {
+            "domain": "family"
+          },
+          "tokens": [
+            "#person",
+            "#family"
+          ]
+        }
+      },
       "people": {
         "people": {
           "nodeType": "person",
@@ -4580,6 +4624,21 @@
           "tokens": []
         }
       },
+      "routines-family": {
+        "family-routines": {
+          "nodeType": "routine",
+          "defaults": {
+            "domain": "family"
+          },
+          "tokens": [
+            "#family"
+          ]
+        },
+        "upcoming": {
+          "nodeType": "routine",
+          "tokens": []
+        }
+      },
       "routines-life-admin": {
         "life-admin-routines": {
           "nodeType": "routine",
@@ -4709,6 +4768,16 @@
           "tokens": [
             "#task",
             "#personal"
+          ]
+        },
+        "family-routines": {
+          "nodeType": "task",
+          "defaults": {
+            "domain": "family"
+          },
+          "tokens": [
+            "#task",
+            "#family"
           ]
         },
         "program-routines": {
@@ -4963,6 +5032,27 @@
         }
       }
     },
+    "defaultOrdering": [
+      {
+        "field": "due_date",
+        "direction": "asc"
+      },
+      {
+        "field": "priority",
+        "direction": "desc"
+      },
+      {
+        "field": "title",
+        "direction": "asc"
+      }
+    ],
+    "priorityRank": {
+      "urgent": 4,
+      "high": 3,
+      "normal": 2,
+      "medium": 2,
+      "low": 1
+    },
     "dropped": {
       "rule 'auto-habit-without-routine-children-reverts-to-task'": "its pattern 'auto-habits-without-routine-children' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'auto-outcome-without-open-children-reverts-to-task'": "its pattern 'auto-outcomes-without-open-children' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
@@ -5039,31 +5129,33 @@
       "section 'qntm-queue.queue' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'qntm-queue.queue' default 'stage'": "no vocabulary tag spells stage=\"unscoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'qntm-sinks.sinks' default 'project'": "no vocabulary tag spells project=\"qntm-md\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
-      "section 'routine-cascade-dojo.governed'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routine-cascade-dojo.governed'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'routine-cascade-dojo.governed' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'routine-cascade-dojo.governed' default 'project'": "no vocabulary tag spells project=\"routine-cascade-dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
-      "section 'routines-admin.admin-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-admin.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-life-admin.life-admin-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-life-admin.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-personal.personal-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-personal.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-program.program-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-program.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-qntm.qntm-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-qntm.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-spirit.spirit-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-spirit.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-work.upcoming'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
-      "section 'routines-work.work-routines'": "its type tag is not seeded \u2014 rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-admin.admin-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-admin.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-family.family-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-family.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-life-admin.life-admin-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-life-admin.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-personal.personal-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-personal.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-program.program-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-program.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-qntm.qntm-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-qntm.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-spirit.spirit-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-spirit.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-work.upcoming'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
+      "section 'routines-work.work-routines'": "its type tag is not seeded — rule 'routine-without-cadence-becomes-task' retypes a 'routine' to 'task' for a line whose fields it matches, and a new line carries its resolved node type, the schema's declared field defaults and its section's own 'defaults:' block, and nothing else",
       "section 'termination-dojo.fragments' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'termination-dojo.fragments' default 'project'": "no vocabulary tag spells project=\"termination-dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'trace-orchestration-queue.queue' default 'project'": "no vocabulary tag spells project=\"trace-orchestration\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'trace-orchestration-queue.queue' default 'stage'": "no vocabulary tag spells stage=\"unscoped\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'unlocks-dojo.chain' default 'domain'": "no vocabulary tag spells domain=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
       "section 'unlocks-dojo.chain' default 'project'": "no vocabulary tag spells project=\"dojo\", so it cannot be written into a line the operator types (the engine prints no tag for it either)",
-      "vocabulary token '\u2611\ufe0f'": "spells 'done_task_count' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip",
-      "vocabulary token '\ud83c\udfaf'": "spells 'par' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip"
+      "vocabulary token '☑️'": "spells 'done_task_count' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip",
+      "vocabulary token '🎯'": "spells 'par' but is 'render_only: true', so the engine never reads that field back from that glyph and a seeded line would not round-trip"
     }
   },
   "rules": {
@@ -5093,7 +5185,7 @@
         "writer-defaults-to-arts-domain",
         "clear-routine-reset-cascade-marker"
       ],
-      "derivedFrom": "priority, descending, stable \u2014 ties broken by the compiled-list order the bundle loader's config-tree walk produces (file name) \u2014 computed over every rule this grammar published; a rule this grammar dropped is not part of this ordering. See compile-rules.mjs's header, 'THE ORDER'."
+      "derivedFrom": "priority, descending, stable — ties broken by the compiled-list order the bundle loader's config-tree walk produces (file name) — computed over every rule this grammar published; a rule this grammar dropped is not part of this ordering. See compile-rules.mjs's header, 'THE ORDER'."
     },
     "rules": {
       "stamp-interval-days-1": {
@@ -5344,15 +5436,15 @@
       "rule 'age-of-intent-personal'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'age-of-intent-program'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'age-of-intent-work'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'auto-habit-without-routine-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'auto-outcome-without-open-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'cancelled-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'cancelled-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'change-type-carrying-node-becomes-ticket'": "2 modelled actions (verbs: set_node_type, set_field) \u2014 this grammar publishes exactly one action per rule",
+      "rule 'auto-habit-without-routine-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'auto-outcome-without-open-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'cancelled-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'cancelled-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'change-type-carrying-node-becomes-ticket'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'clamp-completed-at-to-cycle-today'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'clear-completion-stamp-when-not-done'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'completed-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'completed-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'completed-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'completed-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'completed_effort_sum_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'completed_effort_sum_7d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'completed_priority_weight_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
@@ -5363,45 +5455,45 @@
       "rule 'coverage-work'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'evening-review'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'free_trial'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'fulfill-mandate-when-all-sponsors-committed'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'fulfill-mandate-when-all-sponsors-committed'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'migrate-cadence-days-to-cadence'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'migrate-clear-retired-auto-routine'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'migrate-clear-retired-cluster-satisfied'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'migrate-clear-retired-auto-routine'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'migrate-clear-retired-cluster-satisfied'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'migrate-recurs-on-to-cadence'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'next-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'next-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'node-with-live-requires-gets-status-waiting'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'obsolete-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'obsolete-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'onboard_client'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'onboarding_followups'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'outcome-with-routine-child-becomes-habit'": "3 modelled actions (verbs: set_node_type, set_field, unset_field) \u2014 this grammar publishes exactly one action per rule",
-      "rule 'parallel-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'part-of-child-of-ticket-becomes-spike'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'outcome-with-routine-child-becomes-habit'": "3 modelled actions (verbs: set_node_type, set_field, unset_field) — this grammar publishes exactly one action per rule",
+      "rule 'parallel-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'part-of-child-of-ticket-becomes-spike'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'promote-scheduled-routine-to-open'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'resolved-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'resolved-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'routine-complete-reset-available-date'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'routine-reset-cascades-to-descendants'": "3 modelled actions (verbs: set_field, unset_field, unset_field) \u2014 this grammar publishes exactly one action per rule",
+      "rule 'routine-reset-cascades-to-descendants'": "3 modelled actions (verbs: set_field, unset_field, unset_field) — this grammar publishes exactly one action per rule",
       "rule 'stamp-available-date-on-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'stamp-completed-at-on-done-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'stamp-dev-ticket-number'": "'for_each' is a list of 2 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'stamp-expected-contribution'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'stamp-outcome-done-task-count'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'stamp-expected-contribution'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'stamp-outcome-done-task-count'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'stamp-task-intent-planned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-intent-unplanned'": "an action verb this closed grammar does not model: \"subtract\"",
-      "rule 'stamp-task-overdue-drag'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'stamp-task-overdue-drag'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'target-of-open-waiter-gets-status-waiting'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
       "rule 'target-reopens-when-no-open-waiters-remain'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'task-with-open-part-of-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) \u2014 this grammar publishes exactly one action per rule",
-      "rule 'task-with-open-waiting-for-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) \u2014 this grammar publishes exactly one action per rule",
-      "rule 'task-with-routine-child-becomes-habit'": "2 modelled actions (verbs: set_node_type, set_field) \u2014 this grammar publishes exactly one action per rule",
+      "rule 'task-with-open-part-of-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
+      "rule 'task-with-open-waiting-for-child-becomes-outcome'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
+      "rule 'task-with-routine-child-becomes-habit'": "2 modelled actions (verbs: set_node_type, set_field) — this grammar publishes exactly one action per rule",
       "rule 'termination'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'unblock-node-when-all-requires-done'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'unlocks-descendant-becomes-held'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'unlocks-held-marker-becomes-cleared'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'unlocks-link-becomes-held'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'unlocks-link-becomes-locked'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'unlocks-link-becomes-unlocked'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'unlocks-node-becomes-released'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'update-scorecard-done-count'": "1 is not a '$current.node.fields.<name>' reference \u2014 this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unblock-node-when-all-requires-done'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unlocks-descendant-becomes-held'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unlocks-held-marker-becomes-cleared'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unlocks-link-becomes-held'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unlocks-link-becomes-locked'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unlocks-link-becomes-unlocked'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'unlocks-node-becomes-released'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'update-scorecard-done-count'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'upset'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model"
     }
   }
