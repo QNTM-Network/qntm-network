@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 
 import { handleDeclarations } from "../worker/src/declarations.js";
 import { compile as compileStructural } from "../scripts/compile-structural.mjs";
+import { compile as compileRules } from "../scripts/compile-rules.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_CONFIG = resolve(HERE, "fixtures", "config");
@@ -50,6 +51,17 @@ function readStructuralFixtureFiles() {
   const viewsDir = join(FIXTURE_CONFIG, "views");
   for (const f of readdirSync(viewsDir).filter((f) => f.endsWith(".yaml")).sort()) {
     files[`views/${f}`] = readFileSync(join(viewsDir, f), "utf8");
+  }
+  return files;
+}
+
+/** Read the committed fixture's `rules/*.yaml` — the same reader
+ * `tests/worker-config-compile.test.mjs` uses for the identical fixture. */
+function readRulesFixtureFiles() {
+  const files = {};
+  const rulesDir = join(FIXTURE_CONFIG, "rules");
+  for (const f of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    files[`rules/${f}`] = readFileSync(join(rulesDir, f), "utf8");
   }
   return files;
 }
@@ -271,5 +283,73 @@ describe("5. THE POINTER MOVES; THE OLD VERSION SURVIVES", () => {
     assert.notDeepEqual(stillA.body.declaration, current.body.declaration);
 
     assert.equal(env.DB._rows.size, 2, "both versions must coexist in storage");
+  });
+});
+
+describe("6. THE FOURTH KIND — 'rules' is not a special case; the same generic route serves it", () => {
+  test("unauthenticated POST to /config/declaration/rules is refused, 401, nothing written", async () => {
+    const env = makeEnv();
+    const files = readRulesFixtureFiles();
+    const noToken = await post(env, "rules", files, null);
+    assert.equal(noToken.status, 401);
+    assert.equal(env.DB._rows.size, 0, "an unauthenticated write reached the store");
+    assert.equal(env.DB._pointers.size, 0, "an unauthenticated write moved the pointer");
+  });
+
+  test("authorised store -> 200 with a real version; both reads (by version, and 'current') round-trip byte-identical", async () => {
+    const env = makeEnv();
+    const files = readRulesFixtureFiles();
+    const direct = compileRules(files);
+
+    const stored = await post(env, "rules", files);
+    assert.equal(stored.status, 200);
+    assert.equal(stored.body.receipt.compiled, true);
+    assert.equal(stored.body.receipt.version, direct.version);
+    assert.match(stored.body.receipt.version, /^sha256-[0-9a-f]{64}$/);
+    assert.equal(stored.body.receipt.stored, true);
+    assert.equal(stored.body.receipt.engineAccepted, null);
+
+    const byVersion = await get(env, "rules", direct.version);
+    assert.equal(byVersion.status, 200);
+    assert.deepEqual(byVersion.body.declaration, direct.declaration);
+    assert.deepEqual(byVersion.body.dropped, direct.dropped);
+    assert.equal(byVersion.headers.get("Cache-Control"), "public, max-age=31536000, immutable");
+
+    const byCurrent = await get(env, "rules", "current");
+    assert.equal(byCurrent.status, 200);
+    assert.equal(byCurrent.body.version, direct.version);
+    assert.deepEqual(byCurrent.body.declaration, direct.declaration);
+    assert.equal(byCurrent.headers.get("Cache-Control"), "no-cache", "the pointer must never be served stale");
+  });
+
+  test("an unknown version 404s, and posting the same bytes twice is idempotent (one row, not two)", async () => {
+    const env = makeEnv();
+    const neverStored = await get(env, "rules", "sha256-" + "0".repeat(64));
+    assert.equal(neverStored.status, 404);
+
+    const files = readRulesFixtureFiles();
+    const first = await post(env, "rules", files);
+    assert.equal(env.DB._rows.size, 1);
+    const second = await post(env, "rules", files);
+    assert.equal(first.body.receipt.version, second.body.receipt.version, "identical input minted a new version");
+    assert.equal(second.body.receipt.stored, true, "a repeat store must still report stored: true");
+    assert.equal(env.DB._rows.size, 1, "storing the same bytes twice created a duplicate row");
+  });
+
+  test("'structural' and 'rules' are stored under separate (kind) keys — no cross-talk between kinds", async () => {
+    const env = makeEnv();
+    const structuralFiles = readStructuralFixtureFiles();
+    const rulesFiles = readRulesFixtureFiles();
+
+    await post(env, "structural", structuralFiles);
+    await post(env, "rules", rulesFiles);
+    assert.equal(env.DB._rows.size, 2, "two different kinds must occupy two separate rows");
+    assert.equal(env.DB._pointers.size, 2, "two different kinds must occupy two separate pointers");
+
+    const structuralCurrent = await get(env, "structural", "current");
+    const rulesCurrent = await get(env, "rules", "current");
+    assert.equal(structuralCurrent.body.kind, "structural");
+    assert.equal(rulesCurrent.body.kind, "rules");
+    assert.notDeepEqual(structuralCurrent.body.declaration, rulesCurrent.body.declaration);
   });
 });

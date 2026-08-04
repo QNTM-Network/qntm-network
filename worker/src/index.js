@@ -4,6 +4,7 @@
 //   POST /config/compile/structural       Gate 1 only, no persistence (config.js)
 //   POST /config/compile/qualification    Gate 1 only, no persistence (config.js)
 //   POST /config/compile/resolution       Gate 1 only, no persistence (config.js)
+//   POST /config/compile/rules            Gate 1 only, no persistence (config.js)
 //   POST /config/declaration/<kind>          operator-only — compile + durably store (declarations.js)
 //   GET  /config/declaration/<kind>/current  the latest stored version's body (declarations.js)
 //   GET  /config/declaration/<kind>/<version> one immutable stored version's body (declarations.js)

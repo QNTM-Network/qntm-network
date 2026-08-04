@@ -1,0 +1,12 @@
+# A second, independent rule — a different id, so the fixture's default state compiles cleanly.
+# The mutation proof (tests/worker-config-compile.test.mjs, scripts/check-isolate-conformance.mjs)
+# renames this rule's id to 'mark-in-progress', colliding with primary.yaml's own id — the one
+# shape compile-rules.mjs still refuses outright (see that file's header, "duplicate rule ids").
+- id: note-in-progress
+  for_each:
+    pattern: local-tasks
+  actions:
+    - verb: set_field
+      node_id: $current.node.id
+      field: title
+      value: reviewed
