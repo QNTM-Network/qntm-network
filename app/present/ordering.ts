@@ -409,13 +409,37 @@ export interface OrderingPlacement {
   /** Whether the row's position actually changes — the same fact `OrderingAnswer.moved` states,
    * recomputed independently rather than threaded through, so a caller driving this function alone
    * (without also calling `orderingFor`) gets a self-contained answer, and so a test can assert the
-   * two never disagree rather than trust that they were computed once and shared. */
+   * two never disagree rather than trust that they were computed once and shared.
+   *
+   * A RANK COMPARISON, NOT A POSITION COMPARISON — it answers "would this edit change the VALUE
+   * this row ranks by", which is the right question for an existing row whose PHYSICAL slot in
+   * `source` is already trusted (the file was sorted before this edit; only the edit could have
+   * desynced it). It is the WRONG question for a row with no before-state at all — see
+   * `currentBeforeLineIndex`'s own header, and `roadmap-the-road-ahead.md`'s "settle fires for a
+   * newly added line" step, for the row this field alone cannot answer for. */
   readonly moved: boolean;
   /** The CURRENT line index (in `source`, before this edit is painted) of the sibling the edited
    * line should sit immediately BEFORE once its new value has sorted in. `null` — nothing in the
    * section sorts after it: the edited line becomes the last ranked row. Meaningless when `moved`
    * is `false`; a caller that places on `moved` must not read this when it is not. */
   readonly beforeLineIndex: number | null;
+  /**
+   * THE SIBLING `lineIndex` ALREADY SITS IMMEDIATELY BEFORE, IN `source`, RIGHT NOW — `null` when
+   * nothing ranked follows it there. A POSITION fact, not a rank one: computed from the same
+   * file-order walk `beforeLineIndex` sorts, read BEFORE that sort is applied, so it costs nothing
+   * extra and can never disagree about which siblings exist.
+   *
+   * THIS IS WHAT MAKES "IS THE ROW WHERE IT BELONGS" ANSWERABLE FOR A ROW `moved` CANNOT ANSWER
+   * FOR. A freshly `insert-line`d row has no rank-changing edit to compare — `evaluateSection`'s
+   * own before/after tuple would be identical (the row's one and only value), so `moved` is always
+   * `false` for it, which is the exact defect `armOrderingSettle` (app/index.html) had: a new row's
+   * destination was computed correctly and never acted on, because `moved` asked the wrong
+   * question. `currentBeforeLineIndex !== beforeLineIndex` asks the right one for ANY row,
+   * inserted or edited: does its actual neighbour already match its correct one. `armOrderingSettle`
+   * uses `moved` for `set-line` (unchanged, proven behaviour) and this comparison for
+   * `insert-line` (see that function's own header for why the two need different gates).
+   */
+  readonly currentBeforeLineIndex: number | null;
 }
 
 /** Either a placement, or the same reason `OrderingReading` would abstain — see this module's
@@ -489,6 +513,10 @@ export function orderingPlacementFor(
   // `lineIndex` belongs is one linear scan, not a second sort.
   const entries: RankedSibling[] = [...siblings];
   const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  // READ BEFORE THE SPLICE — `currentBeforeLineIndex`'s own header. `entries[insertAt]` right now
+  // is the sibling FILE ORDER already has immediately after `lineIndex`; the splice below is what
+  // puts the edited/inserted line's own entry there instead.
+  const currentBeforeLineIndex = insertAt === -1 ? null : (entries[insertAt]?.lineIndex ?? null);
   const selfEntry: RankedSibling = { lineIndex, tuple: afterTuple };
   if (insertAt === -1) {
     entries.push(selfEntry);
@@ -503,7 +531,7 @@ export function orderingPlacementFor(
   const next = at === -1 ? undefined : sorted[at + 1];
   const beforeLineIndex = next === undefined ? null : next.lineIndex;
 
-  return { kind: "answer", placement: { moved, beforeLineIndex } };
+  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -856,6 +884,9 @@ export function defaultOrderingPlacementFor(
 
   const entries: RankedDefaultSibling[] = [...siblings];
   const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  // READ BEFORE THE SPLICE — see `currentBeforeLineIndex`'s own header on `OrderingPlacement`, and
+  // `orderingPlacementFor`'s twin of this same line above.
+  const currentBeforeLineIndex = insertAt === -1 ? null : (entries[insertAt]?.lineIndex ?? null);
   const selfEntry: RankedDefaultSibling = { lineIndex, tuple: afterTuple };
   if (insertAt === -1) {
     entries.push(selfEntry);
@@ -868,7 +899,7 @@ export function defaultOrderingPlacementFor(
   const next = at === -1 ? undefined : sorted[at + 1];
   const beforeLineIndex = next === undefined ? null : next.lineIndex;
 
-  return { kind: "answer", placement: { moved, beforeLineIndex } };
+  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
