@@ -1,8 +1,8 @@
 /**
  * compile-capture-rules — the PURE compile step for the capture-rules declaration: the closed
- * grammar of the two rules a bare capture reaches, and — where it can be defended — the order
- * between them. See "THE ORDER" below for why, today, it cannot: this publishes the two rules
- * with confidence and marks their firing order EXPLICITLY UNESTABLISHED rather than guess at it.
+ * grammar of the two rules a bare capture reaches, and the order between them — published because
+ * the derivation is now established end to end. See "THE ORDER" below for the full chain and, for
+ * exactly two lines in it, who read them.
  *
  * ── WHAT THIS PUBLISHES, AND WHY ONLY THESE TWO ──
  *
@@ -10,12 +10,13 @@
  * 186 sections and found a bare capture reaches exactly TWO of his 94 rules, never more:
  * `routine-without-cadence-becomes-task` (13 sections) and `stamp-created-at-on-task` (132
  * sections). §3.3 is the finding that makes publishing them non-optional: neither rule declares a
- * `priority:`, so both sit in the same band as 74 others, and which one actually fires first is
- * decided by code this file traces as far as it is permitted to (see "THE ORDER" below) rather
- * than by anything the config itself states. Without publishing at least the two rules, a browser
- * that only knows rung 1 (registration) stamps `routine` on a bare capture in 13 of his sections
- * and is contradicted, silently, the moment a cycle runs. §11 row 4 prices this exact deliverable
- * at `½` and calls it "the smallest possible rule mirror: 2 of 94 rules."
+ * `priority:` in the operator's config today, so both compile to the engine's default (0), and
+ * which one actually fires first is decided by the rule engine's own priority sort with the
+ * compiled-list order as its tiebreak — see "THE ORDER" below for the full chain. Without
+ * publishing it, a browser that only knows rung 1 (registration) stamps `routine` on a bare
+ * capture in 13 of his sections and is contradicted, silently, the moment a cycle runs. §11 row 4
+ * prices this exact deliverable at `½` and calls it "the smallest possible rule mirror: 2 of 94
+ * rules."
  *
  * `docs/implementation-artifacts/roadmap-the-road-ahead.md` step 3 states the boundary this file
  * does not cross: this is a published grammar of two rules with a generated fixture, NOT an
@@ -37,34 +38,39 @@
  *
  * Each rule's `for_each.pattern`, its `when` predicate (only the two shapes the operator's real
  * rules use — `{"null": [$current.node.fields.<f>]}` and `{eq: [$current.node.fields.<f>, null]}`
- * — anything else throws), and the one data-mutating action it takes (`set_node_type` for the
- * retype, `set_field` for the stamp). `emit_event` actions are recognised and EXCLUDED ON PURPOSE,
- * not silently: design-the-rule-mirror.md §5.3 measured that 0 of the 2 rules a capture reaches
- * read the event log, so publishing what they write to it would name a fact the browser has no use
- * for and no way to verify. Any OTHER action verb is unmodelled and throws — this grammar never
- * guesses at a shape it has not been shown.
+ * — anything else throws), its `priority` (absent -> 0, matching the compiler default — see "THE
+ * ORDER"), and the one data-mutating action it takes (`set_node_type` for the retype, `set_field`
+ * for the stamp). `emit_event` actions are recognised and EXCLUDED ON PURPOSE, not silently:
+ * design-the-rule-mirror.md §5.3 measured that 0 of the 2 rules a capture reaches read the event
+ * log, so publishing what they write to it would name a fact the browser has no use for and no way
+ * to verify. Any OTHER action verb is unmodelled and throws — this grammar never guesses at a
+ * shape it has not been shown.
  *
- * ── THE ORDER — INVESTIGATED, AND DELIBERATELY NOT PUBLISHED ──
+ * ── THE ORDER — A THREE-STAGE CHAIN, TRACED END TO END, TWO LINES OF IT NOT BY THIS FILE'S AUTHOR ──
  *
- * An earlier version of this file derived `order` by sorting the two rule files' own basenames and
- * cited that as a plausible proxy for "the alphabetical position... in config/rules/" design-the-
- * rule-mirror.md §3.3 names. Review caught that this was a coincidence stated as a fact: two
- * independent orderings (file name, rule_id) happened to agree for this one pair, and neither had
- * been traced to the code that actually decides firing order. What follows is that trace, done
- * read-only over `apps/qntm-md/src/qntm_md/**` — the one boundary this investigation was permitted
- * to widen into (never `core/rule-engine`, never the config directory beyond the two files this
- * generator already reads, never a write, never a `cd`).
+ * Two earlier versions of this section got this wrong in two different ways, and both corrections
+ * are worth keeping visible. Version 1 derived `order` by sorting the two rule files' own
+ * basenames and called that "the alphabetical position... in config/rules/" design-the-rule-
+ * mirror.md §3.3 names — a coincidence (file name, `rule_id`, both agreeing for this one pair)
+ * stated as a fact, traced to neither the loader nor the rule engine. Version 2 traced the loader
+ * precisely, found it could not reach the rule engine's own file from the granted read boundary,
+ * and REFUSED to publish an order at all rather than guess past the gap. This version closes that
+ * gap, because a second, wider read — done by the coordinator reviewing this PR, not by this
+ * file's author — reached the missing link. What follows is the full chain; each stage says who
+ * verified it.
  *
- * RULED OUT: `apps/qntm-md/src/qntm_md/lifecycle/rule_loader.py:48`'s `CompiledRuleSet.rules_for`
- * sorts by `rule_id` — but `rules_for(` has no caller anywhere in `src/` (confirmed independently
- * by grep, not taken on trust), and `qntm_md.lifecycle` itself is referenced only by its own
- * `__init__.py`. This is a parallel, unused compilation path — its own `CompiledRule` /
- * `CompiledRuleSet` dataclasses, distinct from `qntm_rule_engine.CompiledRule` — not the mechanism
- * the orchestrator's rules phase actually uses.
+ * STAGE 0 — RULED OUT, verified by this file's author, read-only, over `apps/qntm-md/src/
+ * qntm_md/**`: `apps/qntm-md/src/qntm_md/lifecycle/rule_loader.py:48`'s `CompiledRuleSet.rules_for`
+ * sorts by `rule_id` — but `rules_for(` has no caller anywhere in `src/` (grepped, not taken on
+ * trust), and `qntm_md.lifecycle` itself is referenced only by its own `__init__.py`. A parallel,
+ * unused compilation path — its own `CompiledRule` / `CompiledRuleSet` dataclasses, distinct from
+ * `qntm_rule_engine.CompiledRule` — never the mechanism the orchestrator's rules phase uses. DEAD.
+ * Do not mistake it for the authority.
  *
- * TRACED, AND THIS IS THE REAL MECHANISM UP TO THE BOUNDARY: the list `qntm_rule_engine.execute()`
- * receives is built by `apps/qntm-md/src/qntm_md/bundle/loader.py`, in three steps that each
- * PRESERVE an order rather than impose one of their own:
+ * STAGE 1 — THE COMPILED-LIST ORDER, verified by this file's author, read-only, over the same
+ * boundary: the list `qntm_rule_engine.execute()` receives is built by `apps/qntm-md/src/qntm_md/
+ * bundle/loader.py`, in three steps that each PRESERVE an order rather than impose one of their
+ * own:
  *
  *   1. `_iter_registered_yaml_files` (loader.py:1257-1290) walks each registered config root via
  *      `sorted(root.path.rglob("*"))` (loader.py:1269) — every YAML file in the tree, in full
@@ -85,29 +91,43 @@
  * `_compile_runtime_rule_bundle` UNCHANGED when there are no shell rules — true for these two —
  * (`return _RuntimeRuleBundle(list(operator_rules), rule_triggers)`, orchestrator.py:1859); and
  * reaches `_run_rules_phase` as `rules=runtime_rules` (orchestrator.py:4809-4834), which calls
- * `qntm_rule_engine.execute(rules, ...)` (orchestrator.py:2199-2206) with that list, unmodified.
+ * `qntm_rule_engine.execute(rules, ...)` (orchestrator.py:2199-2206) with that list, unmodified. So
+ * the list `execute()` receives has `cadence_auto_routine.yaml`'s rules ahead of
+ * `stamp_created_at.yaml`'s, mechanically — `routine-without-cadence-becomes-task` before
+ * `stamp-created-at-on-task`.
  *
- * So the list handed to `execute()` genuinely does have the retype ahead of the stamp —
- * `cadence_auto_routine.yaml` sorts before `stamp_created_at.yaml` in `_iter_registered_yaml_
- * files`'s walk, mechanically, not by a naming coincidence this file merely noticed. And nothing
- * anywhere in `apps/qntm-md/src/qntm_md/**` reads a compiled rule's `priority` field for execution
- * purposes — grepped across the whole tree; every other hit on "priority" is the unrelated
- * node-field marker (`#p1`), never a rule attribute.
+ * STAGE 2 — WHAT `execute()` DOES WITH THAT LIST, verified by the coordinator, read-only, over
+ * `core/rule-engine/src/qntm_rule_engine` — OUTSIDE the boundary this file's author was granted for
+ * either investigation, and NOT independently re-read by this file's author. Taken as reported, not
+ * re-derived:
  *
- * WHAT REMAINS UNESTABLISHED, AND WHY THIS FILE STILL REFUSES TO PUBLISH AN ORDER: whether
- * `qntm_rule_engine.execute()` (and `compile_rules()`, which produces the `CompiledRule` objects
- * `execute` consumes) FIRES rules in the list order it receives, or re-derives its own — from the
- * compiled `priority` field design-the-rule-mirror.md's own census shows exists on every compiled
- * rule, or from something else entirely. That code is defined in `core/rule-engine/src/
- * qntm_rule_engine`, OUTSIDE the boundary this investigation was permitted to widen into
- * (`apps/qntm-md/src/qntm_md/**` only), and it was NOT read. The absence of any priority-consuming
- * code in `apps/qntm-md/src/qntm_md/**` is EVIDENCE the list survives unchanged into firing order —
- * it is not proof, and "probably right, derived by inference" is exactly the standard this
- * investigation was told is not good enough. So: an honest gap beats a confident coincidence. This
- * closed grammar does not publish `order` as a sequence. It publishes `order: {established: false,
- * reason: ORDER_UNESTABLISHED_REASON}` — one string, in one place, so a future reader who closes
- * the remaining gap (a read of `core/rule-engine`'s `execute`/`compile_rules`) has exactly one
- * constant to update, not a comment to rediscover.
+ *   - `executor/core.py:74` — `sorted(enabled_rules, key=lambda r: r.priority, reverse=True)`, a
+ *     STABLE sort by priority, highest first. The docstring at line 57: "Equal priorities maintain
+ *     insertion order (stable sort)." The executor does not invent its own order; it sorts by
+ *     priority only, and for ties, keeps the order it was handed — which STAGE 1 established.
+ *   - `compiler/core.py:114` — `priority = rule_dict.get("priority", 0)`. A rule with no `priority:`
+ *     key compiles to priority `0`.
+ *
+ * THE CLOSED CHAIN: bundle order (STAGE 1, alphabetical file order — the retype's file sorts
+ * first) -> executor stable-sort by priority descending (STAGE 2) -> both rules compile to
+ * priority 0 (neither `cadence_auto_routine.yaml` nor `stamp_created_at.yaml` declares a
+ * `priority:` key — grepped by this file's author, independently, over the two files this
+ * generator already reads) -> the tie holds -> STAGE 1's order decides ->
+ * `routine-without-cadence-becomes-task` fires before `stamp-created-at-on-task`.
+ *
+ * PRIORITY FIRST, FILE ORDER AS THE DOCUMENTED TIEBREAK — NOT FILE ORDER ALONE. Publishing only
+ * the resulting sequence would repeat version 1's mistake one level up: a correct answer with an
+ * indefensible derivation. So this file publishes each rule's `priority` (extracted from its own
+ * YAML, defaulting to 0 exactly as `compiler/core.py:114` does) as data on the rule itself, and
+ * computes `order.sequence` from priority (descending) with file order as the tiebreak — the same
+ * two-key sort STAGE 2 performs, run here in JS over the same inputs. If either rule ever gains a
+ * `priority:` that changes the relative order, this generator's own computation follows it — see
+ * `tests/present-capture-rules.test.mjs`'s mutation section for the proof that it actually does.
+ *
+ * IF THE CHAIN EVER BREAKS: `ORDER_UNESTABLISHED_REASON` below is kept, unused but ready, so a
+ * future reader who finds STAGE 2's citations no longer hold what this comment says they hold can
+ * revert `compile()` to publishing `{established: false, reason: ORDER_UNESTABLISHED_REASON}`
+ * without re-deriving the refusal from nothing.
  *
  * ── THE PURE/SHELL SPLIT — the same shape `compile-structural.mjs` and `compile-qualification.mjs`
  *    already use, for the same reason: this module must be safe to import in a context with no
@@ -129,8 +149,9 @@ const SELF_NODE = "$current.node.id";
 const FIELD_REF = /^\$current\.node\.fields\.([A-Za-z0-9_]+)$/;
 
 // Which rule id lives in which file, and what this grammar expects that rule's one meaningful
-// action to be. Order in this array carries NO meaning — see this file's header ("THE ORDER") for
-// why publication order is not derived from it, or from anything else this file can defend.
+// action to be. THIS ARRAY'S OWN ORDER CARRIES NO MEANING — `computeOrder` below sorts a copy of
+// it by file name first (STAGE 1) and priority second (the JS side of the STAGE 1/STAGE 2 join),
+// never by this list's declaration order. See this file's header ("THE ORDER").
 const RULE_SOURCES = Object.freeze([
   Object.freeze({
     fileKey: CADENCE_RULES_KEY,
@@ -149,8 +170,10 @@ const RULE_SOURCES = Object.freeze([
 // guesses at.
 const IGNORED_VERBS = new Set(["emit_event"]);
 
-// The one place the ordering investigation's conclusion is written down. See this file's header
-// ("THE ORDER — INVESTIGATED, AND DELIBERATELY NOT PUBLISHED") for the full trace this summarises.
+// KEPT, UNUSED TODAY, ON PURPOSE. `compile()` no longer publishes this — the chain is closed, see
+// this file's header ("THE ORDER"), STAGE 2. It stays exported and accurate so a future reader who
+// finds STAGE 2's citations no longer hold can revert `compile()`'s `order` to
+// `{established: false, reason: ORDER_UNESTABLISHED_REASON}` without re-deriving the refusal.
 export const ORDER_UNESTABLISHED_REASON =
   "the compiled rule list these two rules feed into is built, in alphabetical config-tree file " +
   "order, by apps/qntm-md/src/qntm_md/bundle/loader.py (traced: _iter_registered_yaml_files -> " +
@@ -198,6 +221,21 @@ function normaliseWhen(when, context) {
     `${context}: 'when' is ${JSON.stringify(when)} — not one of the two predicate shapes this ` +
       "closed grammar models ({null: [...]} or {eq: [..., null]})",
   );
+}
+
+/**
+ * A rule's `priority`, matching `core/rule-engine/src/qntm_rule_engine/compiler/core.py:114`'s own
+ * default: `rule_dict.get("priority", 0)`. Absent -> 0. Present but not an integer throws — this
+ * closed grammar refuses to guess at a shape the compiler itself would not accept as a priority.
+ */
+function priorityOf(entry, context) {
+  if (!("priority" in entry) || entry.priority === undefined) return 0;
+  if (typeof entry.priority !== "number" || !Number.isInteger(entry.priority)) {
+    throw new GenerationError(
+      `${context}: 'priority' is ${JSON.stringify(entry.priority)}, not an integer`,
+    );
+  }
+  return entry.priority;
 }
 
 /** `for_each: {pattern: <name>}` -> `<name>`. Throws if the shape does not match. */
@@ -264,17 +302,41 @@ function has(files, key) {
   return files instanceof Map ? files.has(key) : Object.prototype.hasOwnProperty.call(files, key);
 }
 
+const basenameOf = (key) => key.split("/").pop();
+
+/**
+ * The two rules' firing order — STAGE 1 (file order) and STAGE 2 (priority) joined, in JS, over
+ * the same inputs the real chain uses. See this file's header ("THE ORDER").
+ *
+ * `entries` must already be a copy; this function sorts it. First by `fileKey`'s basename
+ * (STAGE 1 — what the bundle loader's directory walk would produce, the only order that ever
+ * reaches the rule engine), THEN — because `Array.prototype.sort` is a STABLE sort in every engine
+ * this repo targets — a second pass by `priority` descending reproduces exactly what STAGE 2's
+ * `sorted(enabled_rules, key=lambda r: r.priority, reverse=True)` does to that same list: rules
+ * that tie on priority keep the order they arrived in, which is STAGE 1's.
+ *
+ * @param {{ruleId: string, fileKey: string, priority: number}[]} entries
+ * @returns {string[]}
+ */
+function computeOrderSequence(entries) {
+  const byFileOrder = entries
+    .slice()
+    .sort((a, b) => basenameOf(a.fileKey).localeCompare(basenameOf(b.fileKey)));
+  return byFileOrder.sort((a, b) => b.priority - a.priority).map((e) => e.ruleId);
+}
+
 /**
  * Compile the capture-rules declaration from an in-memory map of path -> contents. PURE: no
  * filesystem, no command line, no clock, no randomness.
  *
  * @param {Record<string, string> | Map<string, string>} files recognised keys: `CADENCE_RULES_KEY`,
  *   `STAMP_RULES_KEY`.
- * @returns {{declaration: {order: {established: false, reason: string}, rules: object}, dropped: {},
- *   version: string}}
+ * @returns {{declaration: {order: {established: true, sequence: string[], derivedFrom: string},
+ *   rules: object}, dropped: {}, version: string}}
  */
 export function compile(files) {
   const rules = {};
+  const orderEntries = [];
   for (const source of RULE_SOURCES) {
     if (!has(files, source.fileKey)) {
       throw new GenerationError(`${source.fileKey} does not exist`);
@@ -284,25 +346,40 @@ export function compile(files) {
     const entry = findRule(parsed, source.ruleId, source.fileKey);
     const pattern = patternOf(entry.for_each, context);
     const when = normaliseWhen(entry.when, context);
+    const priority = priorityOf(entry, context);
     const action = primaryAction(entry.actions, source, context);
 
     if (source.actionVerb === "set_node_type") {
       if (typeof action.node_type !== "string") {
         throw new GenerationError(`${context}: 'set_node_type' has no string 'node_type'`);
       }
-      rules[source.ruleId] = { pattern, when, retypesTo: action.node_type };
+      rules[source.ruleId] = { pattern, when, priority, retypesTo: action.node_type };
     } else {
       if (typeof action.field !== "string") {
         throw new GenerationError(`${context}: 'set_field' has no string 'field'`);
       }
-      rules[source.ruleId] = { pattern, when, setsField: action.field, setsFieldTo: action.value ?? null };
+      rules[source.ruleId] = {
+        pattern,
+        when,
+        priority,
+        setsField: action.field,
+        setsFieldTo: action.value ?? null,
+      };
     }
+    orderEntries.push({ ruleId: source.ruleId, fileKey: source.fileKey, priority });
   }
 
-  // NOT a computed sequence — see this file's header ("THE ORDER"). `established: false` is a
-  // constant, not derived from `files`, because the gap it names is a gap in what this generator
-  // is permitted to read, not a fact about the two rule files' current content.
-  const declaration = { order: { established: false, reason: ORDER_UNESTABLISHED_REASON }, rules };
+  const declaration = {
+    order: {
+      established: true,
+      sequence: computeOrderSequence(orderEntries),
+      derivedFrom:
+        "priority, descending, stable — ties broken by the compiled-list order the bundle " +
+        "loader's config-tree walk produces (file name, since both rules' files are otherwise " +
+        "unordered relative to each other). See compile-capture-rules.mjs's header, 'THE ORDER'.",
+    },
+    rules,
+  };
   const dropped = {}; // Always empty by construction — see this file's header.
   return { declaration, dropped, version: versionKey({ declaration, dropped }) };
 }

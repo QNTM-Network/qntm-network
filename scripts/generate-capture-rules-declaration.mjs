@@ -111,8 +111,8 @@ async function main() {
   }
 
   writeFileSync(presentationPath, JSON.stringify({ ...current, captureRules }, null, 2) + "\n");
-  // `order` is an object, not a sequence — see compile-capture-rules.mjs's header ("THE ORDER") for
-  // why this generator does not (yet) claim to know which of the two rules fires first.
+  // `order` is an object, not a bare sequence — see compile-capture-rules.mjs's header ("THE
+  // ORDER") for the full chain and for the fallback shape if that chain is ever found to be wrong.
   const orderLine = captureRules.order.established
     ? `order: ${captureRules.order.sequence.join(" -> ")}`
     : "order: UNESTABLISHED — see captureRules.order.reason";

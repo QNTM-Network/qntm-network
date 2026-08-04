@@ -10,24 +10,28 @@
  * (`routine` -> `task`) is coming in 13 of 186 sections, and a silent swap ten seconds later would
  * be a lie told twice.
  *
- * THE ORDER BETWEEN THEM IS DELIBERATELY NOT PUBLISHED AS A SEQUENCE. An earlier version of this
- * grammar derived `order` from the two source files' basenames and called that "the alphabetical
- * position... in config/rules/" — a review caught that this was two independent naming schemes
- * (file name, `rule_id`) agreeing by coincidence, traced to neither the loader nor the rule
- * engine. `scripts/compile-capture-rules.mjs`'s header records the full re-investigation: the
- * loader mechanism IS traced, precisely, as far as `apps/qntm-md/src/qntm_md/**` reaches — but the
- * final link, whether `qntm_rule_engine.execute()` (in `core/rule-engine`, outside that boundary)
- * preserves the traced list order or re-derives its own, is not established. So `captureRules.
- * order` is `{established: false, reason: ...}`, not an array — an honest gap, not a confident
- * coincidence restated with better citations.
+ * THE ORDER IS NOW PUBLISHED, AND IT TOOK THREE PASSES TO GET THE DERIVATION RIGHT. Pass 1 derived
+ * `order` from the two source files' basenames and called that "the alphabetical position... in
+ * config/rules/" — two independent naming schemes (file name, `rule_id`) agreeing by coincidence,
+ * traced to neither the loader nor the rule engine. Pass 2 traced the loader precisely, hit the
+ * boundary of what it was permitted to read, and REFUSED to publish an order at all —
+ * `{established: false, reason: ORDER_UNESTABLISHED_REASON}` — rather than guess past the gap.
+ * Pass 3 closes the gap: `scripts/compile-capture-rules.mjs`'s header ("THE ORDER") records the
+ * full three-stage chain — bundle order (verified by this repo), executor priority sort (STAGE 2,
+ * verified by the coordinator reviewing this PR, over `core/rule-engine`, outside the boundary
+ * this repo's own investigation was granted — cited, not re-derived here), both rules compiling to
+ * priority 0 (verified by this repo, by reading the two rule files this generator already reads).
+ * `captureRules.order` is now `{established: true, sequence: [...], derivedFrom: ...}`, and each
+ * rule in `captureRules.rules` now carries its own `priority` as a published fact, so a future
+ * `priority:` addition to either rule is visible in the grammar itself, not only in a comment.
  *
  * This is a published fact, not an evaluator. Nothing here (or in `scripts/compile-capture-
  * rules.mjs`) tests a `when` clause against a real node — see that file's header.
  *
  * Six sections:
  *
- *   1. THE SHIPPED DECLARATION is a closed grammar of exactly two rules, with `order` an honest
- *      "unestablished" rather than a guessed sequence.
+ *   1. THE SHIPPED DECLARATION is a closed grammar of exactly two rules, each carrying a
+ *      `priority`, with `order.sequence` derived from priority-then-file-order, not guessed.
  *   2. `declaration.ts` DOES NOT MISREPORT `captureRules` as an unrecognised key — and the
  *      detector that would have fired on it before it was taught the key is shown still alive.
  *   3. THE SERVED VALUE IS WHAT THE MONOREPO'S TWO RULE FILES ACTUALLY DECLARE — generated, not
@@ -40,8 +44,10 @@
  *   5. THE MUTATION PROOF — the grammar is CLOSED: a shape it does not model throws, it is never
  *      silently approximated. Five mutants, each on a real anchor string, each asserted to change
  *      the source before it is fed back in.
- *   6. THE ORDER IS AN HONEST GAP, NOT A GUESS — `established` is a hard `false`, and the reason
- *      names both the ruled-out mechanism and the one boundary that still blocks closing it.
+ *   6. THE ORDER FOLLOWS PRIORITY, NOT JUST FILE NAME — a rule gaining a `priority:` that outranks
+ *      the other flips `order.sequence`, proved by mutating the fixture in both directions; the
+ *      refusal shape (`ORDER_UNESTABLISHED_REASON`) is confirmed still correct and still exported,
+ *      kept ready rather than deleted.
  */
 
 import { test, describe } from "node:test";
@@ -98,29 +104,36 @@ const EXPECTED_RULES = {
   "routine-without-cadence-becomes-task": {
     pattern: "routines",
     when: { op: "null", field: "cadence" },
+    priority: 0,
     retypesTo: "task",
   },
   "stamp-created-at-on-task": {
     pattern: "tasks",
     when: { op: "eq", field: "created_at", value: null },
+    priority: 0,
     setsField: "created_at",
     setsFieldTo: "$cycle_today",
   },
 };
-const EXPECTED_ORDER = { established: false, reason: ORDER_UNESTABLISHED_REASON };
+const EXPECTED_SEQUENCE = ["routine-without-cadence-becomes-task", "stamp-created-at-on-task"];
 
 // ── 1 ────────────────────────────────────────────────────────────────────────────────────────
 
 describe("1. the shipped declaration is a closed grammar of exactly two rules", () => {
-  test("order is explicitly unestablished — not a guessed sequence", () => {
-    assert.deepEqual(SERVED.captureRules.order, EXPECTED_ORDER);
-    assert.equal(SERVED.captureRules.order.established, false);
-    assert.equal(typeof SERVED.captureRules.order.reason, "string");
-    assert.ok(SERVED.captureRules.order.reason.length > 0);
+  test("order is established, and the sequence is retype before stamp", () => {
+    assert.strictEqual(SERVED.captureRules.order.established, true);
+    assert.deepEqual(SERVED.captureRules.order.sequence, EXPECTED_SEQUENCE);
+    assert.equal(typeof SERVED.captureRules.order.derivedFrom, "string");
+    assert.ok(SERVED.captureRules.order.derivedFrom.length > 0);
   });
 
-  test("each rule's pattern/predicate/action match what the authored YAML declares", () => {
+  test("each rule's pattern/predicate/priority/action match what the authored YAML declares", () => {
     assert.deepEqual(SERVED.captureRules.rules, EXPECTED_RULES);
+  });
+
+  test("both rules carry priority 0 — neither declares 'priority:' in the authored YAML", () => {
+    assert.equal(SERVED.captureRules.rules["routine-without-cadence-becomes-task"].priority, 0);
+    assert.equal(SERVED.captureRules.rules["stamp-created-at-on-task"].priority, 0);
   });
 
   test("exactly two rule ids are published — this is the whole grammar, not a sample of it", () => {
@@ -290,43 +303,79 @@ describe("5. THE MUTATION PROOF — a shape this closed grammar does not model i
 
 // ── 6 ────────────────────────────────────────────────────────────────────────────────────────
 
-describe("6. the order is an honest gap, not a guess", () => {
-  test("'established' is a hard false, not an absent key or a falsy placeholder", () => {
-    assert.strictEqual(SERVED.captureRules.order.established, false);
-    assert.notEqual(SERVED.captureRules.order.established, undefined);
+describe("6. the order follows priority, not just file name", () => {
+  test("CONTROL: with neither rule declaring a priority, the sequence is retype-then-stamp", () => {
+    const { declaration } = compile(goodFiles());
+    assert.deepEqual(declaration.order.sequence, EXPECTED_SEQUENCE);
   });
 
-  test("no 'sequence' is published while unestablished — nothing to mistake for an answer", () => {
-    assert.equal("sequence" in SERVED.captureRules.order, false);
+  test("MUTANT: giving the retype a LOWER priority than the stamp's default (0) flips the sequence", () => {
+    const mutated = mutateAfter(
+      CADENCE_TEXT,
+      "routine-without-cadence-becomes-task",
+      "  for_each:\n    pattern: routines",
+      "  priority: -1\n  for_each:\n    pattern: routines",
+    );
+    const { declaration } = compile({ ...goodFiles(), [CADENCE_RULES_KEY]: mutated });
+    assert.equal(declaration.rules["routine-without-cadence-becomes-task"].priority, -1);
+    assert.deepEqual(declaration.order.sequence, [
+      "stamp-created-at-on-task",
+      "routine-without-cadence-becomes-task",
+    ]);
   });
 
-  test("the reason names the mechanism that WAS traced and ruled out (rule_id sort, dead code)", () => {
-    assert.match(SERVED.captureRules.order.reason, /rule_loader\.py/);
-    assert.match(SERVED.captureRules.order.reason, /dead code/);
-    assert.match(SERVED.captureRules.order.reason, /no callers/);
+  test("MUTANT: giving the stamp a HIGHER priority than the retype's default (0) flips the sequence", () => {
+    const mutated = mutateAfter(
+      STAMP_TEXT,
+      "stamp-created-at-on-task",
+      "  for_each:\n    pattern: tasks",
+      "  priority: 10\n  for_each:\n    pattern: tasks",
+    );
+    const { declaration } = compile({ ...goodFiles(), [STAMP_RULES_KEY]: mutated });
+    assert.equal(declaration.rules["stamp-created-at-on-task"].priority, 10);
+    assert.deepEqual(declaration.order.sequence, [
+      "stamp-created-at-on-task",
+      "routine-without-cadence-becomes-task",
+    ]);
   });
 
-  test("the reason names the mechanism that WAS traced and DOES feed the compiled rule list (the loader)", () => {
-    assert.match(SERVED.captureRules.order.reason, /bundle\/loader\.py/);
-    assert.match(SERVED.captureRules.order.reason, /alphabetical config-tree file order/);
+  test("MUTANT: raising the retype's priority ABOVE the stamp's keeps it first, for a different reason", () => {
+    // Distinguishes "still first because file order" from "still first because priority now says
+    // so too" — without this, a bug that dropped priority from the sort entirely could still pass
+    // the two mutants above by accident (file order alone still 'wins' in the LOWER-priority case
+    // if the comparison were backwards) — this pins the sign of the comparison.
+    const mutated = mutateAfter(
+      CADENCE_TEXT,
+      "routine-without-cadence-becomes-task",
+      "  for_each:\n    pattern: routines",
+      "  priority: 5\n  for_each:\n    pattern: routines",
+    );
+    const { declaration } = compile({ ...goodFiles(), [CADENCE_RULES_KEY]: mutated });
+    assert.equal(declaration.rules["routine-without-cadence-becomes-task"].priority, 5);
+    assert.deepEqual(declaration.order.sequence, EXPECTED_SEQUENCE);
   });
 
-  test("the reason names the one boundary that still blocks closing the gap (core/rule-engine)", () => {
-    assert.match(SERVED.captureRules.order.reason, /qntm_rule_engine\.execute\(\)/);
-    assert.match(SERVED.captureRules.order.reason, /core\/rule-engine/);
-    assert.match(SERVED.captureRules.order.reason, /outside this generator's permitted read boundary/);
+  test("MUTANT: a non-integer priority is refused, matching compiler/core.py's own contract", () => {
+    const mutated = mutateAfter(
+      CADENCE_TEXT,
+      "routine-without-cadence-becomes-task",
+      "  for_each:\n    pattern: routines",
+      '  priority: "soon"\n  for_each:\n    pattern: routines',
+    );
+    assert.throws(
+      () => compile({ ...goodFiles(), [CADENCE_RULES_KEY]: mutated }),
+      /'priority' is "soon", not an integer/,
+    );
   });
 
-  test(
-    "MUTATION CHECK: if the reason string were emptied, this section's own detectors would catch it",
-    () => {
-      // Not a mutation of shipped code — a demonstration that the assertions above are not
-      // vacuously matching an empty string, by running the same regexes against "" and confirming
-      // every one of them fails first.
-      const empty = "";
-      assert.equal(/rule_loader\.py/.test(empty), false);
-      assert.equal(/bundle\/loader\.py/.test(empty), false);
-      assert.equal(/qntm_rule_engine\.execute\(\)/.test(empty), false);
-    },
-  );
+  test("the refusal shape is still exported and still names the right chain, kept ready — not deleted", () => {
+    assert.equal(typeof ORDER_UNESTABLISHED_REASON, "string");
+    assert.match(ORDER_UNESTABLISHED_REASON, /rule_loader\.py/);
+    assert.match(ORDER_UNESTABLISHED_REASON, /dead code/);
+    assert.match(ORDER_UNESTABLISHED_REASON, /bundle\/loader\.py/);
+    assert.match(ORDER_UNESTABLISHED_REASON, /core\/rule-engine/);
+    // And the shipped declaration does NOT use it today — establishing that fallback is live
+    // machinery, not the current published shape.
+    assert.strictEqual(SERVED.captureRules.order.established, true);
+  });
 });

@@ -5068,8 +5068,12 @@
   },
   "captureRules": {
     "order": {
-      "established": false,
-      "reason": "the compiled rule list these two rules feed into is built, in alphabetical config-tree file order, by apps/qntm-md/src/qntm_md/bundle/loader.py (traced: _iter_registered_yaml_files -> _choose_winning_candidates -> validate_rules), and apps/qntm-md/src/qntm_md/lifecycle/rule_loader.py's rule_id sort is confirmed dead code (no callers in src/). But whether qntm_rule_engine.execute() and compile_rules() -- defined in core/rule-engine/src/qntm_rule_engine, outside this generator's permitted read boundary -- fire rules in that list order or re-derive their own from the compiled priority field is not established."
+      "established": true,
+      "sequence": [
+        "routine-without-cadence-becomes-task",
+        "stamp-created-at-on-task"
+      ],
+      "derivedFrom": "priority, descending, stable — ties broken by the compiled-list order the bundle loader's config-tree walk produces (file name, since both rules' files are otherwise unordered relative to each other). See compile-capture-rules.mjs's header, 'THE ORDER'."
     },
     "rules": {
       "routine-without-cadence-becomes-task": {
@@ -5078,6 +5082,7 @@
           "op": "null",
           "field": "cadence"
         },
+        "priority": 0,
         "retypesTo": "task"
       },
       "stamp-created-at-on-task": {
@@ -5087,6 +5092,7 @@
           "field": "created_at",
           "value": null
         },
+        "priority": 0,
         "setsField": "created_at",
         "setsFieldTo": "$cycle_today"
       }
