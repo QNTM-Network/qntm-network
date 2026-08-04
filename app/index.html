@@ -1081,6 +1081,7 @@ import {
   applyGraphAwareRules,
   tagSpans,
   stampSpans,
+  existingLineCommit,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -4638,7 +4639,11 @@ document.addEventListener("keydown", (e) => {
           checked: !shape.done,
         });
         if (markdown !== null) {
-          commitLine(v, { lineIndex: current, text: line, markdown });
+          // `existingLineCommit` (app/present/paint.ts), not a hand-built object — see its own
+          // header for why: this line and the indent handler below are the two call sites that
+          // shipped f448da2's regression by hand-rolling a `LineCommit` with `kind`/`source` left
+          // out, in the one file (`app/index.html`) TypeScript never checks.
+          commitLine(v, existingLineCommit(v.markdown, current, markdown));
         }
       }
     } else if (effect.kind === "indent") {
@@ -4654,7 +4659,9 @@ document.addEventListener("keydown", (e) => {
       const text = indentedLine(line, effect.direction, effect.count, indentUnit);
       const markdown = applyEdit(v.markdown, { kind: "set-line", lineIndex: current, text });
       if (markdown !== null) {
-        commitLine(v, { lineIndex: current, text, markdown });
+        // `existingLineCommit` — see the comment on the `x` handler above for why this no longer
+        // builds the object by hand.
+        commitLine(v, existingLineCommit(v.markdown, current, markdown));
       }
     } else if (effect.kind === "word") {
       // `w`/`b`/`e` — `wordCaret` (app/present/word.ts) decides the column, from the SAME source

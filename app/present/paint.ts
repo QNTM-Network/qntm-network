@@ -185,6 +185,60 @@ export interface LineCommit {
  * means when it is a property rather than a promise.
  */
 
+/**
+ * Build a `LineCommit` for an edit to a line that ALREADY EXISTS — the one shape every gesture
+ * outside a `<input>`'s own blur/Enter settlement needs (`x`'s checkbox flip, `>`/`<`'s indent,
+ * and any future one-keystroke edit to the selected line), and the one shape `f448da2` got wrong.
+ *
+ * ── WHY THIS FUNCTION EXISTS RATHER THAN A COMMENT TELLING CALLERS WHAT TO WRITE ──
+ *
+ * `commit.kind`/`commit.source` are NOT OPTIONAL on `LineCommit` — TypeScript already refuses a
+ * literal missing them, everywhere TypeScript is watching. It was not watching `app/index.html`:
+ * that page is outside `tsconfig.json`'s `include` (hand-authored HTML, no build step, see this
+ * file's own header on why the bundle exists at all), so a hand-built object literal there is
+ * checked by nothing until it runs. `f448da2` shipped exactly that — `x` and `>`/`<` each wrote
+ * `{ lineIndex, text, markdown }` and left `kind`/`source` out — and the omission was silent for
+ * months, because `armOrderingSettle`'s old gate (`commit.kind !== "set-line"` returns early)
+ * incidentally treated `undefined` as "not set-line" and skipped the broken object entirely. The
+ * gate widening for `insert-line` (this same commit) removed that accident, `commit.kind` reached
+ * `sectionAt`/`sectionOrdinalAt` as `undefined`, and `undefined.split` threw three frames deep —
+ * three functions and one type-checked module away from the two lines that actually forgot a key.
+ *
+ * THE FIX IS NOT A GUARD IN `commitLine` THAT CATCHES A PARTIAL OBJECT — that keeps the mistake
+ * possible and merely answers it later, which is exactly how this shipped: the crash three frames
+ * down FAILED LOUDLY, not this omission ITSELF, so nothing local to the actual mistake told anyone
+ * about it. The fix removes the object-literal construction from `app/index.html` altogether. A
+ * caller there hands this function the pieces it already has — the pre-edit source, which line,
+ * and what `applyEdit` returned — and gets back a `LineCommit` with `kind`/`source` filled in by
+ * this function's own body, which IS type-checked. There is no key left at the untyped call site
+ * for a future gesture to forget, because there is no object literal left at the untyped call site
+ * at all. A third gesture that edits an existing line calls this function exactly as `x` and
+ * `>`/`<` now do; it cannot reintroduce this shape of bug by leaving a field out, because leaving
+ * a field out is not an action available to it any more.
+ *
+ * `kind` IS ALWAYS `"set-line"`. `set-checkbox` edits (this function's other caller, `x`) are not
+ * a third `LineCommit.kind` — see that field's own header (above): it is provenance for which
+ * `applyEdit` CASE produced the commit, "does a real BEFORE line exist to compare", and a checkbox
+ * flip edits a line that was already there exactly as a typed `set-line` edit does. Both belong on
+ * one side of that question; `insert-line` (a row that did not exist a moment ago) is the other,
+ * and it is not this function's concern — paint.ts's own `draftInput.settle` (below) builds that
+ * shape directly, already correctly, because it is inside this type-checked module.
+ *
+ * `text` IS READ OUT OF `markdown` (THE POST-EDIT FILE), NEVER PASSED IN BY THE CALLER, because
+ * `membershipReadingFor` (app/index.html) reads `commit.text` as the AFTER answer directly — see
+ * its own call to `membershipFor(view.id, sectionId, commit.text, qualification)`. `x`'s old call
+ * site passed the PRE-toggle line as `text` (the characters read before `applyEdit` ran), which
+ * would have made every membership/rules/prediction pass reason from the wrong side of the edit
+ * even once `kind`/`source` were fixed by hand — a second bug the same hand-rolling produced,
+ * caught here rather than shipped a second time. `markdown ?? source` covers the refusal case
+ * (`markdown === null`): `commitLine` returns before reading `commit.text` when that happens, so
+ * the value is unobserved, but a well-defined one costs nothing and needs no caller-side branch.
+ */
+export function existingLineCommit(source: string, lineIndex: number, markdown: string | null): LineCommit {
+  const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
+  return { lineIndex, text, markdown, source, kind: "set-line" };
+}
+
 export interface PaintDeps {
   readonly markdown: InlineMarkdown;
   /**

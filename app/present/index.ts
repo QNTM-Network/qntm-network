@@ -212,7 +212,7 @@ export type { Resolved } from "./cascade.js";
 export { applyEdit } from "./source.js";
 export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
-export { paint } from "./paint.js";
+export { paint, existingLineCommit } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";
 
 export { SettleSurface } from "./settle.js";
