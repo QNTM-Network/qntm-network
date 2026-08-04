@@ -1,29 +1,30 @@
 /**
- * A WRITE CARRIES A TOKEN, AND THE ECHO IS WHAT RELEASES A HELD ROW.
+ * A WRITE CARRIES A TOKEN, AND THE ECHO IS WHAT PROVES IT LANDED.
  *
  *   node --test tests/app-write-correlation.test.mjs
  *
- * ── THE MEASURED DEFECT THIS IS EVIDENCE FOR ──
+ * ── THE MEASURED DEFECT THIS WAS ORIGINALLY EVIDENCE FOR ──
  *
- * A real browser run on 2026-08-01 found the recovery strip carrying FIVE rows, THREE of which were
- * lines that had saved perfectly. The cause is in the data rather than in the strip: the cycle
- * REWRITES the line it ingests — the identity stamp, the defaults, the marker — and the only signal
- * the page had for "is this line back" was its TEXT (`HeldSurface.settle`). Text matching cannot
- * find a line the cycle rewrote, so the row stayed up claiming work was lost when none was. A strip
- * full of rows that are not losses is a strip nobody reads, which makes the rows that ARE losses
- * invisible.
+ * A real browser run on 2026-08-01 found a since-removed recovery strip carrying FIVE rows, THREE
+ * of which were lines that had saved perfectly. The cause was in the data rather than in the strip:
+ * the cycle REWRITES the line it ingests — the identity stamp, the defaults, the marker — and the
+ * only signal the page had for "is this line back" was its TEXT. Text matching cannot find a line
+ * the cycle rewrote, so the row stayed up claiming work was lost when none was.
  *
- * TEXT IS NOT IDENTITY. A TOKEN IS. §2 below reproduces the exact shape of the false positive —
- * a line committed, the write accepted, the cycle stamping and MOVING it so no text comparison can
- * find it — and asserts the row is not held.
+ * TEXT IS NOT IDENTITY. A TOKEN IS. The recovery strip itself was removed as legacy
+ * (`remove-held-panel`) once the browser's placement of a line stopped needing a stand-in — but the
+ * distinction this file proves did not go with it. `reportCursorReading`'s `proved` argument still
+ * decides whether the freshness line reassures the operator that the cycle rewrote his line, or
+ * only reports that the line is gone, and §2 below proves that decision is made on the server's own
+ * word and nothing weaker.
  *
  * ── THE SHIPPING CONDITION, WHICH IS §3 AND IS THE ARM THAT MATTERS MOST TODAY ──
  *
  * The server half is merged and NOT DEPLOYED; the `deployed` tag is eight commits behind main. So
  * this change ships to a server that ignores the token, and "behaves exactly as today" is not a
  * nicety, it is the condition of shipping at all. §3 drives the identical gestures against an
- * envelope with no `writes` key and asserts the page does what it did before: the row is held, the
- * freshness line says what it always said, and the register never speaks.
+ * envelope with no `writes` key and asserts the page does what it did before: the freshness line
+ * only reports the line as gone, and the register never speaks.
  *
  * ── WHAT THIS SUITE DOES NOT VERIFY ──
  *
@@ -52,7 +53,7 @@ import {
 
 const HERE = resolve(fileURLToPath(import.meta.url), "..");
 
-const { mintWriteToken, readWriteEcho, WriteRegister, WRITE_ECHO_KEY, HeldSurface, heldFrom } =
+const { mintWriteToken, readWriteEcho, WriteRegister, WRITE_ECHO_KEY } =
   await import(join(REPO, "dist", "present.js"));
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -77,8 +78,8 @@ describe("0. mintWriteToken — opaque, unguessable, and honest when it cannot b
 
   test("IT COMES FROM THE CSPRNG AND NOWHERE ELSE — `Math.random` is made to throw", () => {
     // Unguessability is the second of the token's two properties and the one a weaker source would
-    // silently give up. If the token could be predicted, an envelope from anywhere could release a
-    // held row by naming one — the false positive this change removes, restored through a side door.
+    // silently give up. If the token could be predicted, an envelope from anywhere could prove a
+    // write it never carried — the false positive this change removes, restored through a side door.
     const savedRandom = Math.random;
     try {
       Math.random = () => {
@@ -150,8 +151,8 @@ describe("1. readWriteEcho — one declared shape, and no guessing at any other"
 
   test("UNRECOGNISED — a shape the contract does not declare is REPORTED, never guessed", () => {
     // Four surprises, one answer each. The reader could "helpfully" coerce every one of these; what
-    // it would buy is a held row released on a shape nobody agreed, which is the operator's
-    // characters gone. Silence is legal; a shape nobody agreed is not silence.
+    // it would buy is a write proved landed on a shape nobody agreed, which is a false reassurance
+    // handed to the operator. Silence is legal; a shape nobody agreed is not silence.
     for (const bad of [
       withEcho(["w1-aaa"]),
       withEcho(null),
@@ -219,7 +220,7 @@ describe("1b. WriteRegister — MY write landed, not that some write did", () =>
 
   test("MATCHING IS PER PATH — the same token under another file's key acknowledges another write", () => {
     // The narrowing the server's own claim requires: it says "accepted a write carrying this token
-    // FOR THIS PATH". Loosening this is how a write to one file would clear a held row of another.
+    // FOR THIS PATH". Loosening this is how a write to one file would prove a write of another.
     const register = new WriteRegister();
     register.open("w1-mine", PATH);
     assert.deepEqual(register.arrive(new Map([[OTHER, ["w1-mine"]]])).matched, []);
@@ -281,52 +282,20 @@ describe("1b. WriteRegister — MY write landed, not that some write did", () =>
   });
 });
 
-describe("1c. HeldSurface.landed — release on evidence, and on nothing weaker", () => {
-  const row = (over = {}) => ({
-    text: "- [ ] Ring the dentist",
-    view: "inbox",
-    path: "inbox.md",
-    instance: null,
-    node: null,
-    base: null,
-    token: "w1-mine",
-    ...over,
-  });
-
-  test("RELEASED — the row whose write the server acknowledged", () => {
-    const held = new HeldSurface();
-    held.hold(heldFrom("vanished", row()));
-    assert.equal(held.landed(["w1-mine"]).length, 1);
-    assert.equal(held.count, 0);
-  });
-
-  test("NOT RELEASED — a row carrying no token, however many tokens are named", () => {
-    // Every REFUSED row and every UNPLACED one. No token, no evidence, no release — stated as code
-    // rather than as a promise.
-    const held = new HeldSurface();
-    held.hold(heldFrom("refused", row({ token: null })));
-    assert.equal(held.landed(["w1-mine", "w1-anything"]).length, 0);
-    assert.equal(held.count, 1);
-  });
-
-  test("NOT RELEASED — an empty echo is a no-op, which is the shipping condition at this layer", () => {
-    const held = new HeldSurface();
-    held.hold(heldFrom("vanished", row()));
-    assert.deepEqual(held.landed([]), []);
-    assert.equal(held.count, 1);
-  });
-
-  test("NOT RELEASED — another write's token", () => {
-    const held = new HeldSurface();
-    held.hold(heldFrom("vanished", row()));
-    assert.equal(held.landed(["w1-somebody-else"]).length, 0);
-    assert.equal(held.count, 1);
-  });
-});
-
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 2. THROUGH THE REAL PAGE — the false positive, reproduced and then removed
+// 2. THROUGH THE REAL PAGE — a write's own echo governs `proved`, the freshness line follows it
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// THIS SECTION USED TO DRIVE A RECOVERY STRIP THAT NO LONGER EXISTS. It held a row for every line
+// that went absent from a projection, released one when the file demonstrably owned the text again
+// (`HeldSurface.settle`), and — as of this suite's original §2 — released one early on the
+// server's own word (`HeldSurface.landed`) once a browser run measured the false positive at the
+// top of this file. The panel itself was removed (`remove-held-panel`) as legacy: the operator's
+// judgement was that a panel narrating uncertainty is not the fix for a browser that could not
+// place a line, and the placement capability that stand-in existed for now works directly. What
+// survives from all of that, unchanged, is the REASSURANCE this section still proves: when a
+// vanished line's own write is proved landed by the server's echo, the freshness line says the
+// cycle rewrote it rather than merely saying it is gone.
 
 const OTHER_PATH = "work/inbox.md";
 
@@ -335,10 +304,9 @@ const BARE = ["# This Week", "", "## Overdue", "- [ ] Ring the dentist", ""].joi
 const TYPED = "- [ ] Ring the dentist #work";
 
 /**
- * WHAT A REAL CYCLE DOES TO IT, AND WHY NO TEXT COMPARISON CAN FIND IT AGAIN. The node is minted and
- * the line leaves this view — the exact shape `tests/present-replay.test.mjs` §1 measures against the
- * operator's own vault. `HeldSurface.settle` sees a file that does not contain his characters, so
- * before write correlation this held a row for a line that saved perfectly.
+ * WHAT A REAL CYCLE DOES TO IT. The node is minted and the line leaves this view — the exact shape
+ * `tests/present-replay.test.mjs` §1 measures against the operator's own vault, and text matching
+ * alone cannot find it again once the cycle has rewritten it.
  */
 const STAMPED_ELSEWHERE = ["# This Week", "", "## Overdue", ""].join("\n");
 
@@ -416,15 +384,8 @@ function makeDriver(page, browser, control) {
     envelope,
     control,
     freshness: () => elements.get("freshness").textContent,
-    heldTexts: () =>
-      walk(elements.get("heldRows"))
-        .filter((el) => el.tagName === "input")
-        .map((el) => el.value),
-    stripHidden: () => elements.get("heldStrip").classList.contains("hidden"),
     arm: () => {
       land("# Inbox\n", "inbox");
-      page.__held().clear();
-      page.__paintHeldRows();
       page.__writes().clear();
       control.refuseWith = null;
       control.nextProjection = null;
@@ -470,7 +431,7 @@ async function standUpPage(workDir, mutate) {
 /** The echoing server: it names back exactly the token it was posted, under the path it was posted. */
 const echoesTheToken = (body) => (body.token ? { [body.path]: [body.token] } : {});
 
-describe("2. THE FALSE POSITIVE — a line that saved perfectly is NOT held", () => {
+describe("2. THE ECHO PROVES THE WRITE LANDED, AND THE FRESHNESS LINE SAYS SO", () => {
   let d;
 
   before(async () => {
@@ -490,83 +451,47 @@ describe("2. THE FALSE POSITIVE — a line that saved perfectly is NOT held", ()
     assert.equal(posted.path, PATH);
   });
 
-  test("AND THE ROW IS NOT HELD — the cycle rewrote the line, the server acknowledged the write", () => {
-    // THE DEFECT, GONE. `STAMPED_ELSEWHERE` does not contain his characters in any form, so
-    // `HeldSurface.settle` cannot release the row and never could. What released it is the server
-    // naming the token this write went out on.
-    assert.deepEqual(d.heldTexts(), [], "a line that saved perfectly is on the recovery strip");
-    assert.equal(d.page.__held().count, 0);
-    assert.equal(d.stripHidden(), true, "the strip is showing with nothing in it");
-  });
-
   test("AND THE FRESHNESS LINE SAYS SO WITHOUT CLAIMING THE LINE WAS WRITTEN", () => {
     const said = d.freshness();
     assert.match(said, /the cycle rewrote the line you saved/);
     assert.match(said, /the server recorded it/);
-    assert.doesNotMatch(said, /held above/, "the page said the characters are held when they are not");
     assert.doesNotMatch(said, /\bwritten\b/, "the page claimed written when it means recorded");
   });
 
-  test("THE ECHO ARRIVING LATER RELEASES A ROW THAT IS ALREADY HELD", async () => {
-    // The other half of the contract: the acknowledgement can arrive on a `GET /graph` served after
-    // the write's own answer. The row is held by the write's answer (no echo on it) and released by
-    // the next projection that names the token.
+  // ── THE REMAINING ARMS CHECK THE REGISTER RATHER THAN THE FRESHNESS LINE ──
+  //
+  // `proved` is read from `landedTokens`, a ONE-TURN set `paintView` consumes whether or not it is
+  // used (see that variable's own declaration) — so a token that lands on some LATER envelope, with
+  // no fresh vanish for it to prove, has nothing left to show on screen: the sentence for the
+  // original vanish was already said and is not retroactively rewritten. What is still real and
+  // still worth proving is that `WriteRegister` — the thing `proved` is built on — keeps matching
+  // correctly: per token, per path, and only while the write is genuinely outstanding. §1b above
+  // proves the register in isolation; these arms prove it through the real page's own `__correlate`.
+
+  test("AN UNMATCHED WRITE STAYS OUTSTANDING, THEN GIVES UP — never matched by a stranger's token", async () => {
     d.arm();
     d.control.echo = () => ({});
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
-    assert.deepEqual(d.heldTexts(), [TYPED], "the arm did not set up — nothing was held");
-
     const token = d.control.posted[d.control.posted.length - 1].token;
-    d.page.__correlate(PATH, d.envelope(STAMPED_ELSEWHERE, { [PATH]: [token] }));
+    assert.equal(d.page.__writes().waiting(token), true, "the arm did not set up");
 
-    assert.deepEqual(d.heldTexts(), [], "a later echo did not clear the row it acknowledged");
-    assert.equal(d.stripHidden(), true);
-  });
-
-  test("AN UNMATCHED WRITE KEEPS ITS ROW HELD — for as long as the register waits, and after", async () => {
-    // The whole safety argument in one arm. The server never names this write; the row stays.
-    d.arm();
-    d.control.echo = () => ({});
-    d.control.nextProjection = STAMPED_ELSEWHERE;
-    await d.typeAndCommit(BARE, TYPED);
-    assert.deepEqual(d.heldTexts(), [TYPED]);
-
-    // Four more arrivals that NAME the file without naming the token — past the grace, so the
-    // register has given the write up entirely.
-    for (let i = 0; i < 4; i += 1) {
+    // Three arrivals that NAME the file without naming the token do not touch it.
+    // Two arrivals naming the file without naming the token do not touch it.
+    for (let i = 0; i < 2; i += 1) {
       d.page.__correlate(PATH, d.envelope(STAMPED_ELSEWHERE, { [PATH]: ["w1-somebody-else"] }));
+      assert.equal(d.page.__writes().waiting(token), true);
     }
-    assert.equal(d.page.__writes().outstanding(), 0, "the arm did not reach the give-up");
-    assert.deepEqual(d.heldTexts(), [TYPED], "GIVING UP RELEASED A ROW — his characters were dropped");
+    // The third is past the grace — the register gives it up.
+    d.page.__correlate(PATH, d.envelope(STAMPED_ELSEWHERE, { [PATH]: ["w1-somebody-else"] }));
+    assert.equal(d.page.__writes().waiting(token), false, "the arm did not reach the give-up");
   });
 
-  test("A ROW HELD FOR A DIFFERENT REASON IS UNTOUCHED BY ANY ECHO", () => {
-    // A REFUSED row carries no token because a 409 means nothing was written, so no echo can exist
-    // for it. It must survive an echo that names every token in the world.
-    d.arm();
-    d.page.__held().hold(
-      heldFrom("refused", {
-        text: "- [ ] Something the server declined",
-        view: "this-week",
-        path: PATH,
-        instance: null,
-        node: null,
-        base: "sha256-x",
-        token: null,
-      }),
-    );
-    d.page.__paintHeldRows();
-    d.page.__correlate(PATH, d.envelope(BARE, { [PATH]: ["w1-aaa", "w1-bbb"] }));
-    assert.deepEqual(d.heldTexts(), ["- [ ] Something the server declined"]);
-  });
-
-  test("AN UNRECOGNISED ECHO IS REPORTED AND RELEASES NOTHING", async () => {
+  test("AN UNRECOGNISED ECHO IS REPORTED AND MATCHES NOTHING", async () => {
     d.arm();
     d.control.echo = () => ({});
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
-    assert.deepEqual(d.heldTexts(), [TYPED], "the arm did not set up");
     const token = d.control.posted[d.control.posted.length - 1].token;
 
     const warnings = [];
@@ -574,7 +499,7 @@ describe("2. THE FALSE POSITIVE — a line that saved perfectly is NOT held", ()
     try {
       console.warn = (message) => warnings.push(String(message));
       // The token IS in there — under a shape the reader does not declare. A reader that guessed
-      // would release the row; this one refuses and says why.
+      // would match it; this one refuses and says why.
       d.page.__correlate(PATH, d.envelope(STAMPED_ELSEWHERE, { [PATH]: token }));
     } finally {
       console.warn = savedWarn;
@@ -582,36 +507,34 @@ describe("2. THE FALSE POSITIVE — a line that saved perfectly is NOT held", ()
 
     assert.equal(warnings.length, 1, `expected one reported problem, got ${JSON.stringify(warnings)}`);
     assert.match(warnings[0], /is not a list of write tokens/);
-    assert.deepEqual(d.heldTexts(), [TYPED], "a shape nobody agreed released the operator's characters");
+    assert.equal(d.page.__writes().waiting(token), true, "a shape nobody agreed matched the write anyway");
   });
 
-  test("TWO WRITES TO ONE PATH — the tick's echo does not answer for the line commit", async () => {
+  test("TWO WRITES TO ONE PATH — each is matched on its own token, not the file's", async () => {
     d.arm();
     d.control.echo = () => ({});
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
     const lineToken = d.control.posted[d.control.posted.length - 1].token;
-    assert.deepEqual(d.heldTexts(), [TYPED], "the arm did not set up");
 
-    // A DIFFERENT write of the SAME file is acknowledged. The row must not move.
+    // A DIFFERENT write of the SAME file is acknowledged. It must not match this one.
     d.page.__correlate(PATH, d.envelope(STAMPED_ELSEWHERE, { [PATH]: ["w1-a-different-write"] }));
-    assert.deepEqual(d.heldTexts(), [TYPED], "another write of the same file cleared this row");
+    assert.equal(d.page.__writes().waiting(lineToken), true, "another write of the same file matched this one");
 
     // And now its own.
     d.page.__correlate(PATH, d.envelope(STAMPED_ELSEWHERE, { [PATH]: ["w1-a-different-write", lineToken] }));
-    assert.deepEqual(d.heldTexts(), []);
+    assert.equal(d.page.__writes().waiting(lineToken), false);
   });
 
-  test("THE SAME TOKEN UNDER ANOTHER FILE'S KEY RELEASES NOTHING", async () => {
+  test("THE SAME TOKEN UNDER ANOTHER FILE'S KEY MATCHES NOTHING", async () => {
     d.arm();
     d.control.echo = () => ({});
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
     const token = d.control.posted[d.control.posted.length - 1].token;
-    assert.deepEqual(d.heldTexts(), [TYPED], "the arm did not set up");
 
     d.page.__correlate(OTHER_PATH, d.envelope(STAMPED_ELSEWHERE, { [OTHER_PATH]: [token] }));
-    assert.deepEqual(d.heldTexts(), [TYPED], "an acknowledgement for another file released this row");
+    assert.equal(d.page.__writes().waiting(token), true, "an acknowledgement for another file matched this write");
   });
 });
 
@@ -626,19 +549,18 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     d = await standUpPage(WORK_SILENT);
   });
 
-  test("THE ROW IS HELD, exactly as it was before correlation existed", async () => {
+  test("THE FRESHNESS LINE ONLY SAYS THE LINE IS GONE — nothing proves the write", async () => {
     d.arm();
     d.control.echo = null; // no `writes` key on the answer at all — the deployed server
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
 
-    assert.deepEqual(d.heldTexts(), [TYPED], "the recovery strip stopped catching a vanished line");
-    assert.equal(d.stripHidden(), false);
+    assert.match(d.freshness(), /^as of .* · the line you were on is not in this view any more$/);
   });
 
   test("AND THE FRESHNESS LINE SAYS WHAT IT ALWAYS SAID — no new sentence appears", () => {
     const said = d.freshness();
-    assert.match(said, /the line you were on is not in this view any more — what was on it is held above this view/);
+    assert.match(said, /the line you were on is not in this view any more/);
     assert.doesNotMatch(said, /the server recorded your save/);
     assert.doesNotMatch(said, /the server took your save/);
     assert.doesNotMatch(said, /the cycle rewrote the line you saved/);
@@ -688,7 +610,7 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     // there is none, the other is a request about the SERVER'S sequencing and is true either way.
     assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "markdown", "path"]);
     assert.equal("token" in posted, false, "an empty token reached the wire");
-    assert.deepEqual(d.heldTexts(), [TYPED], "the row stopped being held without a token to hold it by");
+    assert.match(d.freshness(), /the line you were on is not in this view any more/, "with no token, the line still gets reported gone");
   });
 });
 
@@ -775,15 +697,16 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 5. THE MUTATION PROOF — break the matching, and §2's own assertion goes red
+// 5. THE MUTATION PROOF — break the match, and §2's own assertion goes red
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-describe("5. MUTATION PROOF — neuter the match, and the false positive comes straight back", () => {
+describe("5. MUTATION PROOF — neuter the match, and the reassurance stops firing when it should", () => {
   let d;
 
   before(async () => {
-    // ONE EXPRESSION, AND IT IS THE MATCH ITSELF. `proved` is what decides whether the vanished row
-    // is held at all; forcing it false is exactly "the browser cannot recognise its own write".
+    // ONE EXPRESSION, AND IT IS THE MATCH ITSELF. `proved` is what decides whether the freshness
+    // line may say the cycle rewrote the line; forcing it false is exactly "the browser cannot
+    // recognise its own write".
     d = await standUpPage(WORK_MUTANT, (source) =>
       assertMutated(
         source,
@@ -793,17 +716,20 @@ describe("5. MUTATION PROOF — neuter the match, and the false positive comes s
     );
   });
 
-  test("with the match broken, a line that saved perfectly is held again", async () => {
+  test("with the match broken, a line that saved perfectly is reported only as gone", async () => {
     d.arm();
     d.control.echo = echoesTheToken;
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
 
-    assert.throws(
-      () => assert.deepEqual(d.heldTexts(), []),
-      /Expected values to be loosely deep-equal|Expected values to be strictly deep-equal/,
+    // §2's own assertion, run against the mutated page: with `proved` forced false, the reassurance
+    // never fires, even though the server named the write's token in the exact same envelope.
+    assert.doesNotMatch(
+      d.freshness(),
+      /the cycle rewrote the line you saved/,
       "the matching was removed and §2's assertion still passed — the guard proves nothing",
     );
+    assert.match(d.freshness(), /the line you were on is not in this view any more/);
     // AND THE PAGE IS OTHERWISE UNHARMED, which is what makes this a mutation of the MATCH rather
     // than of the app: the write still carries its token, so it is genuinely the recognition that
     // went and not the whole correlation path.

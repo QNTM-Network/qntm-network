@@ -96,8 +96,6 @@ before(async () => {
 
 const inputs = () =>
   walk(elements.get("viewBody")).filter((el) => el.tagName === "input" && el.type === "text");
-const heldRows = () =>
-  walk(elements.get("heldRows")).filter((el) => el.tagName === "input" && el.type === "text");
 const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
 
 /**
@@ -291,13 +289,6 @@ describe("2. a view change still destroys the row, unchanged", () => {
     assert.equal(page.__draft().draft, null, "the row followed an arrival into another view");
   });
 
-  test("nothing is held by a view change — a dropped row is not a lost one; he chose to leave", () => {
-    page.__held().clear();
-    const row = openRow();
-    type(row, "- [ ] Call the bank");
-    page.paintView("this-week", "chosen");
-    assert.equal(page.__held().count, 0);
-  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -305,8 +296,7 @@ describe("2. a view change still destroys the row, unchanged", () => {
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 describe("3. a projection carrying his line releases the row", () => {
-  test("the row goes, nothing is held, and the view is not showing his line twice", () => {
-    page.__held().clear();
+  test("the row goes, and the view is not showing his line twice", () => {
     // The inbox the moment before he typed it, so the arriving INBOX has GAINED his line.
     const beforeHeTyped = [
       "## Inbox",
@@ -327,18 +317,23 @@ describe("3. a projection carrying his line releases the row", () => {
     arrives(INBOX); // the cycle ingested it while he was still typing
 
     assert.equal(page.__draft().draft, null, "the row was re-placed, so the line is on screen twice");
-    assert.equal(page.__held().count, 0, "the file owns the characters — holding them would be a third copy");
     assert.equal(inputs().length, 0);
   });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 4. IT CANNOT BE RE-PLACED — held, not dropped.
+// 4. IT CANNOT BE RE-PLACED — dropped, not held.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// A ROW THIS SECTION USED TO PRESERVE ON A RECOVERY STRIP (app/present/held.ts) THAT NO LONGER
+// EXISTS. The panel was removed as legacy (`remove-held-panel`) once the browser's placement of a
+// line stopped needing a stand-in, and nothing replaced the preservation it did for an UNPLACED
+// row — the operator's own instruction was full removal, not a reworded variant. What is proven
+// here now is the honest, current behaviour: a row the cycle leaves nowhere to put back is DROPPED,
+// cleanly and without leaving a second editable row or a stuck mode behind.
 
-describe("4. an un-replaceable row is held", () => {
-  test("the neighbour left the view, so the characters go to the held strip", () => {
-    page.__held().clear();
+describe("4. an un-replaceable row is dropped, cleanly", () => {
+  test("the neighbour left the view, so the row is dropped rather than kept at a meaningless index", () => {
     const row = openRow();
     type(row, "- [ ] Call the bank");
 
@@ -353,17 +348,11 @@ describe("4. an un-replaceable row is held", () => {
     );
 
     assert.equal(page.__draft().draft, null, "an un-placeable row was kept at an index that means nothing");
-    assert.equal(page.__held().count, 1, "his characters were destroyed rather than held");
-    const held = page.__held().rows[0];
-    assert.equal(held.text, "- [ ] Call the bank");
-    assert.equal(held.reason, "unplaced");
-    assert.equal(held.instance, null, "a row in no file has no identity — and must carry no index");
-    assert.equal(heldRows()[0]?.value, "- [ ] Call the bank", "the strip did not redraw");
+    assert.equal(inputs().length, 0, "a dropped row left a second editable line on screen");
     assert.equal(page.__vimMode(), "NORMAL", "INSERT survived a row that no longer exists");
   });
 
-  test("a row holding only its own chrome is dropped silently — there was never a line to lose", () => {
-    page.__held().clear();
+  test("a row holding only its own chrome drops the same way — there was never a line to lose", () => {
     openRow(); // `o`, and nothing typed
     arrives(
       [
@@ -374,23 +363,6 @@ describe("4. an un-replaceable row is held", () => {
       ].join("\n"),
     );
     assert.equal(page.__draft().draft, null);
-    assert.equal(page.__held().count, 0, "`- [ ] ` was put on the strip as if it were work");
-  });
-
-  test("the page says what happened, in the line it already uses to say what happened", () => {
-    page.__held().clear();
-    const row = openRow();
-    type(row, "- [ ] Call the bank");
-    arrives(
-      [
-        "## Inbox",
-        "## Domain Empty",
-        "- [ ] Matt's coverage updates from Adam [[qntm:2602]] #task 🆕 2026-07-31",
-        "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
-      ].join("\n"),
-    );
-    page.__sayAsOf({ snapshot: { generated_at: "2026-08-01T09:00:00Z" }, pending_edits: 0 });
-    assert.match(elements.get("freshness").textContent, /held above this view/);
   });
 });
 
@@ -503,13 +475,12 @@ describe("6. break the survival and the suite goes red", () => {
     );
   });
 
-  test("breaking the hold destroys his characters instead, and section 4 would fail", async () => {
+  test("breaking the un-placed drop leaves a stuck row and a stuck mode, and section 4 would fail", async () => {
     await withMutant(
-      "app-open-line-survives-mutant-hold",
-      'placement.outcome === "unplaced" && carried.typed !== carried.seed',
-      "false",
+      "app-open-line-survives-mutant-drop-unplaced",
+      '      } else {\n        draftLine.drop();\n        mode.enterNormal();\n      }',
+      "      } else {\n      }",
       () => {
-        page.__held().clear();
         const row = openRow();
         type(row, "- [ ] Call the bank");
         arrives(
@@ -520,11 +491,10 @@ describe("6. break the survival and the suite goes red", () => {
             "- [ ] Remove zoe from all coverage [[qntm:2598]] #task 🆕 2026-07-31",
           ].join("\n"),
         );
-        assert.equal(page.__draft().draft, null, "precondition: the row could not be placed");
-        assert.equal(
-          page.__held().count,
-          0,
-          "the mutation did not reach the behaviour — section 4 proves nothing",
+        assert.notEqual(
+          page.__draft().draft,
+          null,
+          "the drop was removed and section 4's own assertion still passed — the guard proves nothing",
         );
       },
     );

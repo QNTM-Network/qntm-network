@@ -426,14 +426,12 @@ describe("7. and it reaches the screen — through app/index.html's own script",
     const said = land(ABSENT);
 
     // The failure this also guards against is the refusal being reported into a line that is
-    // overwritten one statement later — the same silence, one layer up.
-    //
-    // THE SENTENCE GAINED ITS SECOND CLAUSE WITH `a-refused-edit-is-held-unanchored`, and it is
-    // still ONE sentence, which is what this arm is about. Where the characters WENT is proven in
-    // tests/app-held-edit.test.mjs; this stays a test of the freshness line's shape.
+    // overwritten one statement later — the same silence, one layer up. Still ONE sentence, which
+    // is what this arm is about — see tests/app-write-correlation.test.mjs for the sentence's other
+    // half, said only when the server's own echo proves the write landed.
     assert.match(
       said,
-      /^as of .* · 0 queued · the line you were on is not in this view any more — what was on it is held above this view$/,
+      /^as of .* · 0 queued · the line you were on is not in this view any more$/,
       said,
     );
   });

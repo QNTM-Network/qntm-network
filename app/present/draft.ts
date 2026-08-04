@@ -119,9 +119,9 @@ export interface Draft {
 
 /**
  * WHAT SHOULD HAPPEN TO THE ROW when a projection lands — the judgement, separate from the
- * storage, exactly as `held.ts` splits `heldFrom` from `HeldSurface` and for the same reason: this
- * is the part worth checking against a replayed projection, and a test harness can only check what
- * it can call without a page.
+ * storage, split for the same reason a pure decision is always kept apart from the surface that
+ * stores its result: this is the part worth checking against a replayed projection, and a test
+ * harness can only check what it can call without a page.
  *
  *   placed    the neighbour was re-found; the row goes back at `lineIndex`, on the same side.
  *   arrived   THE PROJECTION ALREADY CARRIES HIS CHARACTERS — the cycle ingested the line while he

@@ -27,14 +27,16 @@
  * destroying what he typed. The day `POST /vault/file` learns to compare, all of it wakes up with
  * no further change in this repository. Every arm below is a FIXTURE. No live server was contacted.
  *
- * AMENDED 2026-08-01 — THE HOLDING HALF NOW EXISTS, and the paragraph above it is amended rather
- * than deleted because its ARGUMENT is what sequenced the work. `a-refused-edit-is-held-unanchored`
- * shipped `app/present/held.ts`: a refused edit's characters go into a surface no file owns, so
- * they survive the next projection rather than only the current screen, and the sentence this
- * suite asserts gained the clause that says so. THE REFUSAL IS STILL NOT SWITCHED ON — that is
- * `vault-file-accepts-a-precondition`, in the other repository, and enabling it is the operator's
- * decision. What changed is that the precondition for enabling it is met. See
- * tests/app-held-edit.test.mjs for the evidence.
+ * AMENDED 2026-08-01, THEN AMENDED AGAIN 2026-08-04 — THE HOLDING HALF EXISTED BRIEFLY AND WAS
+ * REMOVED. `a-refused-edit-is-held-unanchored` shipped `app/present/held.ts`: a refused edit's
+ * characters went into a surface no file owns, so they survived the next projection and the view
+ * could safely adopt the server's file out from under them. The panel that surfaced that surface
+ * was removed as legacy (`remove-held-panel`) once the browser's placement of a line stopped
+ * needing a stand-in, and nothing replaced the preservation it did for a REFUSED write. So the
+ * adoption reverted to the original, more conservative rule: a refusal with real typed text at
+ * stake never adopts the server's file, whatever `current` says — see `refusedLineSentence`'s own
+ * header. THE REFUSAL IS STILL NOT SWITCHED ON — that is `vault-file-accepts-a-precondition`, in
+ * the other repository, and enabling it is the operator's decision.
  *
  * ── THE PROPERTY THAT MATTERS MOST IS A NEGATIVE ONE ──
  *
@@ -309,6 +311,8 @@ const V1 = [
 const TYPED = "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task";
 const REFUSED =
   "this save was computed from an out-of-date copy of this file — the server refused it and nothing was written";
+/** `REFUSED_NOT_ADOPTED` — the app's own constant for a refusal with `current` and real text at stake. */
+const REFUSED_NOT_ADOPTED = REFUSED + " · press re-read when you have finished this line";
 
 /**
  * WHAT THE SERVER ACTUALLY HOLDS BY THE TIME A REFUSAL COMES BACK, IN THE SCENARIO THAT DESTROYS A
@@ -359,12 +363,6 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
 
   const taskText = () =>
     walk(elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
-
-  /** The characters on the recovery strip — where a refused edit lives once it is held. */
-  const heldTexts = () =>
-    walk(elements.get("heldRows"))
-      .filter((el) => el.tagName === "input")
-      .map((el) => el.value);
 
   /**
    * Open the first task's line for typing, whatever the view is currently showing.
@@ -425,7 +423,6 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
   beforeEach(() => {
     refuseWith = null;
     posted = [];
-    page.__held().clear();
   });
 
   /**
@@ -446,20 +443,14 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
   }
 
   test("THE FALSIFIER'S OTHER HALF — the client reports the refusal and keeps what he typed", async () => {
-    // AMENDED BY `the-view-heals-itself`, AND THE AMENDMENT IS TO WHERE THE CHARACTERS ARE, NEVER
-    // TO WHETHER THEY SURVIVE. This arm used to read them off the painted body, because a 409
-    // deliberately did not repaint. It now reads them off the recovery strip, because `holdEdit`
-    // puts them there BEFORE anything adopts — see the page's `refusedLineSentence`. The property
-    // under test is unchanged and is still the one that matters: a refusal never costs him a
-    // character.
-    //
-    // WHAT THE OLD VERSION OF THIS ARM ASSERTED, AND WHY IT WAS WRONG. It pinned
-    // `page.__served().markdown === V1` and argued that adopting `current` as the base "would make
-    // the NEXT save a clobber with a blessing". That is true of adopting the BASE ALONE and false
-    // of adopting both — and adopting the base alone was never on the table, because the
-    // precondition that goes on the wire is `baseOf(source)` computed from THE PAINTER'S STRING
-    // (see `writeFile`), not from `BaseSurface`. Moving the base by itself would have changed a
-    // sentence and no request. The arm below measures the wire and settles it.
+    // THE RECOVERY STRIP THIS ARM ONCE READ FROM (`the-view-heals-itself`) WAS REMOVED AS LEGACY
+    // (`remove-held-panel`) — the operator's characters are no longer copied anywhere else, so the
+    // one thing that may never happen is the screen losing them with nothing to fall back on.
+    // `refusedLineSentence` answers that by declining to adopt the server's file at all whenever
+    // there is real typed text: `safeToAdopt` is `typed.trim() === ""` alone now, with no held-row
+    // exception, so this is the ORIGINAL, more conservative behaviour restored — screen unmoved,
+    // characters exactly where he left them, and the operator told to press re-read himself once he
+    // is done with the line.
     refuseWith = {
       status: 409,
       body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: MOVED_ON },
@@ -468,18 +459,21 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     typeAndCommit();
     await settle();
 
-    assert.deepEqual(heldTexts(), [TYPED], "the refusal deleted the characters he typed");
-    assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through · what you typed is held above this view");
-    // AND THE VIEW IS NOW THE FILE THE SERVER ACTUALLY HOLDS — text and base together, never one
-    // without the other. `#blocked` is the cycle's own output, which is what he was refused for
-    // not having.
-    assert.match(onScreen(), /#blocked/, "the view is still showing a file the server has left");
-    assert.equal(page.__served().markdown, MOVED_ON, "the base did not follow the screen");
+    assert.match(onScreen(), /BY FRIDAY/, "the refusal deleted the characters he typed");
+    assert.equal(freshness(), REFUSED_NOT_ADOPTED);
+    // AND THE VIEW DID NOT ADOPT THE SERVER'S FILE — `current` was available but there was real
+    // typed text at stake, so `healFromRefusal` never ran.
+    assert.doesNotMatch(onScreen(), /#blocked/, "the view adopted a file it had no safe reason to adopt");
+    assert.equal(page.__served().markdown, V1, "the base moved with characters still at stake");
   });
 
-  test("AND THE NEXT SAVE GOES THROUGH — the whole point, measured on the wire", async () => {
-    // THE MEASURED DEFECT, END TO END: 409, retry 409, manual Refresh, 200. This arm is that
-    // sequence with the Refresh taken out, because nothing needs it any more.
+  test("A SECOND EDIT WITHOUT A HEAL STILL POSTS THE SCREEN'S OWN BASE — never a stale one silently reused", async () => {
+    // WITHOUT THE HOLDING HALF, THE VIEW NO LONGER HEALS ITSELF OVER LIVE TYPING (see the arm
+    // above). 409, and the operator is on his own to press re-read once he is done with the line —
+    // the ORIGINAL behaviour `the-view-heals-itself` amended, restored by removing the panel that
+    // amendment leaned on. What this arm proves is narrower and still real: the base a SECOND edit
+    // carries is always computed from what the painter is actually showing, never from a digest the
+    // server has already refused, whether or not a heal ran.
     refuseWith = {
       status: 409,
       body: { ok: false, error: "stale base", refused: "stale-base", path: PATH, current: MOVED_ON },
@@ -488,19 +482,21 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     await settle();
     assert.equal(posted.length, 1, "the arm did not set up");
     assert.equal(posted[0].base, baseOf(V1), "the refused save did not carry the stale base");
+    assert.equal(freshness(), REFUSED_NOT_ADOPTED, "the view healed when it had a reason not to");
 
-    // The second edit, typed into the healed view — no re-read, no reload, no gesture but typing.
+    // He keeps typing on the same line — no re-read, no reload — and commits again. The graph
+    // server would answer this on its own merits; the fixture stands in for "it accepts".
     refuseWith = null;
     const input = openTheLine();
-    input.value = "- [ ] Draft the launch note NEXT WEEK [[qntm:121]] #task #blocked";
+    input.value = "- [ ] Draft the launch note NEXT WEEK [[qntm:121]] #task";
     input.dispatch("blur");
     await settle();
 
     assert.equal(posted.length, 2, "the second save never left");
-    assert.equal(
+    assert.notEqual(
       posted[1].base,
       baseOf(MOVED_ON),
-      "the second save posted the digest of a copy the server had already refused — the heal is cosmetic",
+      "the second save posted a digest of a file the server holds but the screen never adopted",
     );
     assert.match(freshness(), /^as of /, "the second save did not land");
   });
@@ -518,7 +514,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     await settle();
 
     assert.match(onScreen(), /BY FRIDAY/, "nothing was adopted, so nothing may have repainted");
-    assert.equal(freshness(), REFUSED + " · your characters are still on this line · what you typed is held above this view");
+    assert.equal(freshness(), REFUSED + " · your characters are still on this line");
     assert.equal(page.__served().markdown, V1, "the base moved with no text to move with it");
   });
 
@@ -566,7 +562,6 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     assert.match(onScreen(), /#blocked/, "the view did not heal itself");
     assert.equal(page.__served().markdown, MOVED_ON);
     assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through");
-    assert.equal(page.__held().count, 0, "a tick has no characters, so it may hold none");
   });
 
   test("A HEAL MUST NOT CLOBBER A NEIGHBOUR — the cursor is re-found by identity, not carried as a raw index", async () => {
@@ -674,7 +669,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     input.dispatch("blur");
     await settle();
 
-    assert.equal(freshness(), REFUSED + " · your characters are still on this line · what you typed is held above this view");
+    assert.equal(freshness(), REFUSED + " · your characters are still on this line");
     assert.doesNotMatch(freshness(), /is overwritten/, "two verdicts about one save");
   });
 

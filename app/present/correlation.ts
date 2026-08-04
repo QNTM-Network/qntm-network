@@ -11,20 +11,19 @@
  *
  * ── THE MEASURED DEFECT THIS EXISTS TO FIX ──
  *
- * A browser run on 2026-08-01 found the recovery strip (`held.ts`) carrying FIVE rows, of which
- * THREE were lines that had saved perfectly. The cause is visible in the data and is not a bug in
- * the strip: the cycle REWRITES the line it ingests — it appends the identity stamp, the defaults
- * and the marker — so the browser, trying to recognise its own line in the projection that comes
- * back, is matching on TEXT. `HeldSurface.settle` matches a line exactly or as a prefix with a
- * token appended, which is the shape the cycle usually produces and is NOT the shape it always
- * produces: a re-sorted line, a re-worded title, a line the cycle moved into another view all read
- * as "the file does not own these characters", and the row stays on the strip claiming work was
- * lost when none was.
+ * A browser run on 2026-08-01 found a since-removed recovery strip carrying FIVE rows, of which
+ * THREE were lines that had saved perfectly. The cause was visible in the data and was not a bug
+ * in the strip: the cycle REWRITES the line it ingests — it appends the identity stamp, the
+ * defaults and the marker — so the browser, trying to recognise its own line in the projection
+ * that comes back, was matching on TEXT. Matching a line exactly or as a prefix with a token
+ * appended is the shape the cycle usually produces and is NOT the shape it always produces: a
+ * re-sorted line, a re-worded title, a line the cycle moved into another view all read as "the
+ * file does not own these characters" under text matching alone.
  *
  * TEXT IS NOT IDENTITY. A TOKEN IS. The browser mints one opaque token per write, sends it beside
  * `{path, markdown, base}`, and the server records it and names it back in the envelope it later
- * serves. That is POSITIVE EVIDENCE, which is the only kind of evidence this app is allowed to
- * release a held row on.
+ * serves. That is POSITIVE EVIDENCE, and this module's whole design is built on requiring it before
+ * this app treats a write as landed.
  *
  * ── THE NARROW CLAIM, WHICH IS THE ONLY ONE ANYTHING HERE IS BUILT ON ──
  *
@@ -576,7 +575,7 @@ export class WriteRegister {
     return this.#open.has(token);
   }
 
-  /** Forget everything. Sign-out only, for the same reason `HeldSurface.clear` exists. */
+  /** Forget everything. Sign-out only — the same posture every other per-session surface takes. */
   clear(): void {
     this.#open.clear();
   }

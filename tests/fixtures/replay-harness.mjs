@@ -18,7 +18,7 @@
  * cycle's real output, or — since no cycle runs anywhere near this repo — a fixture built the way
  * a real cycle transforms a real line), and report what converged.
  *
- * ── THE SEVEN THINGS THE HARNESS MUST BE ABLE TO SAY, AND WHERE EACH ONE COMES FROM ──
+ * ── THE SIX THINGS THE HARNESS MUST BE ABLE TO SAY, AND WHERE EACH ONE COMES FROM ──
  *
  * Every fact below is derived from an ALREADY-BUILT, ALREADY-TESTED pure function
  * (`app/present/instance.ts`, `membership.ts`, `ordering.ts`, `address.ts`, `base.ts`) — this
@@ -72,16 +72,8 @@
  *    no new logic, the harness merely wires the same surface `app/index.html`'s `writeFile` already
  *    uses into one fixture call.
  *
- * 6. HELD — WOULD THE OPERATOR'S CHARACTERS SURVIVE THIS ARRIVAL, and which characters would they
- *    be? Added with `a-refused-edit-is-held-unanchored`. It is the same posture as the five above:
- *    the decision is `app/present/held.ts`'s own `heldFrom`, called with the facts this harness
- *    already computed, and NO new judgement is added here. It matters because points 1-5 all report
- *    what happened to a ROW, and every one of them goes `unknown` for exactly the arrivals that
- *    cost him work — `absent` is where the harness ran out of things to say, and this is what it
- *    can say instead.
- *
- * 7. DRAFT — WOULD A LINE HE HAS OPEN AND HAS NOT COMMITTED SURVIVE THIS ARRIVAL, and where would
- *    it land? Added with `a-line-being-made-survives-a-projection-too`. The other six all describe
+ * 6. DRAFT — WOULD A LINE HE HAS OPEN AND HAS NOT COMMITTED SURVIVE THIS ARRIVAL, and where would
+ *    it land? Added with `a-line-being-made-survives-a-projection-too`. The other five all describe
  *    a line that IS in a source string, at one end or the other; this one describes the row that is
  *    in NEITHER — not in `before` (nothing is written until it settles) and not in `after` (the
  *    cycle never saw it). It is the last state the operator's own gesture passes through that the
@@ -95,7 +87,6 @@
 import {
   applyEdit,
   BaseSurface,
-  heldFrom,
   instanceAnchorFor,
   instancesOf,
   membershipFor,
@@ -265,35 +256,7 @@ function preservedFor(gesture, after, reading) {
 }
 
 /**
- * WOULD THIS ARRIVAL HOLD THE OPERATOR'S CHARACTERS, AND WHICH ONES? See this file's header,
- * point 6. `null` when nothing is held, which is every outcome but `absent`.
- *
- * IT MIRRORS `app/index.html`'s OWN CHOICE OF CHARACTERS RATHER THAN INVENTING ONE, and the choice
- * is the part worth checking: the TYPED text when there was a gesture (that is what he wrote), the
- * line as it stood in `before` when there was not (he was parked on a line the world removed). The
- * page makes exactly this choice from `sentEdit` and `paintedSource`; here the same two facts are
- * `gesture.text` and `before`.
- *
- * `ambiguous` HOLDS NOTHING, and that is a real assertion rather than an omission — the line is
- * still in the arrived source, printed more than once, so the characters are not at risk.
- */
-function heldFor(view, before, gesture, anchor, reading) {
-  if (reading.outcome !== "absent") {
-    return null;
-  }
-  const text = gesture.kind === "none" ? (before.split("\n")[gesture.lineIndex] ?? "") : gesture.text;
-  return heldFrom("vanished", {
-    text,
-    view: view.id,
-    path: view.path,
-    instance: anchor.instance,
-    node: anchor.node,
-    base: null,
-  });
-}
-
-/**
- * WHAT WOULD HAPPEN TO A ROW HE HAS OPEN AND HAS NOT COMMITTED. See this file's header, point 7.
+ * WHAT WOULD HAPPEN TO A ROW HE HAS OPEN AND HAS NOT COMMITTED. See this file's header, point 6.
  * `null` when the fixture names no `drafting`, which is every fixture written before this existed.
  *
  * THE PLACE IS TAKEN AGAINST `before` AND THE PLACEMENT RESOLVED AGAINST `after`, which is exactly
@@ -332,7 +295,7 @@ function draftFor(view, before, after, drafting) {
  * `qualification`, `resolution`: the same declaration tables `app/index.html` reads once at load —
  *   real, taken from the shipped `presentation.json` unless a fixture overrides them.
  * `drafting`: `{ lineIndex, seed, typed? }` — a row he has OPEN and has not committed, at the index
- *   it would occupy in `before`. Omit it and the `draft` reading is `null`. See point 7.
+ *   it would occupy in `before`. Omit it and the `draft` reading is `null`. See point 6.
  */
 export function replay({ view, before, editBase, gesture, after, qualification, resolution, drafting }) {
   const base = editBase ?? before;
@@ -384,9 +347,7 @@ export function replay({ view, before, editBase, gesture, after, qualification, 
   served.take(view.path, before);
   const baseReading = served.read(view.path, base);
 
-  const held = heldFor(view, before, gesture, anchor, cursor);
-
   const draft = draftFor(view, before, after, drafting);
 
-  return { cursor, membership, ordering, preserved, base: baseReading, anchor, sectionId, held, draft };
+  return { cursor, membership, ordering, preserved, base: baseReading, anchor, sectionId, draft };
 }
