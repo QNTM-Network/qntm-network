@@ -4001,6 +4001,10 @@ function applyEdit(source, edit) {
 }
 
 // app/present/paint.ts
+function existingLineCommit(source, lineIndex, markdown) {
+  const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
+  return { lineIndex, text, markdown, source, kind: "set-line" };
+}
 function rawText(source) {
   const div = document.createElement("div");
   div.textContent = source;
@@ -4605,6 +4609,7 @@ export {
   defaultOrderingFor,
   defaultOrderingPlacementFor,
   evaluateWhen,
+  existingLineCommit,
   extendsLine,
   indentedLine,
   instanceAnchorFor,
