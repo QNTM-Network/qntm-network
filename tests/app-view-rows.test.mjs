@@ -492,6 +492,38 @@ describe("one row geometry, two renditions", () => {
     }
   });
 
+  test("the predict affordance's own chip is held to the chip's row-safety rule too", () => {
+    // THE FOURTH WAY IN, and the same argument as the tag chip's own test above: `.row-prediction`
+    // is a PILL (padding, border, a background), appended onto a row that already exists, so its
+    // whole row-safety claim rests on being an ATOMIC INLINE whose box is its own content area —
+    // exactly the chip's own measured argument, reused rather than re-derived unmeasured.
+    const CHIP = ".viewbody .row-prediction";
+    assert.ok(rulesFor(CHIP).length > 0, "the predict chip has no rule at all");
+
+    assert.equal(declared(CHIP, "display"), "inline-block");
+    assert.ok(
+      rulesFor(".viewbody .task.done span .row-prediction").length > 0,
+      "the predict chip is atomic for the sake of a rule that no longer exists — remove one, remove both",
+    );
+
+    const lineHeight = declared(CHIP, "line-height");
+    assert.match(String(lineHeight), /^[\d.]+$/, `${CHIP} line-height must be a unitless number`);
+    assert.ok(Number(lineHeight) <= 1, `${CHIP} line-height is ${lineHeight}, which can outgrow the row`);
+
+    for (const property of ["margin", "margin-top", "margin-bottom", "height", "min-height"]) {
+      assert.equal(declared(CHIP, property), undefined, `${CHIP} sets ${property}, which the row cannot absorb`);
+    }
+
+    // AND IT MUST NOT LOOK LIKE THE TAG CHIP OR THE STAMP MARK — the operator's own principle for
+    // this whole feature is "the browser's first answer is a claim, not a fact", so a prediction
+    // sharing either token's own colour would let a claim pass as something the engine confirmed.
+    assert.notEqual(
+      declared(CHIP, "border"), declared(".viewbody .tagchip", "border"),
+      "the predict chip must not share the confirmed tag chip's own border",
+    );
+    assert.match(String(declared(CHIP, "border")), /dashed/, "a dashed border is this chip's own claim-not-fact marker");
+  });
+
   test("the identity mark is held to the chip's rule, not to a second opinion", () => {
     // THE THIRD WAY IN, and the one that arrives on EVERY node line rather than only on tagged
     // ones — the engine stamps every node it prints, so a mark that cost the row a fraction of a
@@ -621,9 +653,17 @@ describe("one row geometry, two renditions", () => {
     // printed `[[qntm:3]]` (app/present/paint.ts's `stampMark`). It holds ONE CHARACTER and
     // declares no box of its own, so it is held to the chip's own rule by the test below — the
     // same rule, not a second opinion.
+    // `row-prediction` is a FOURTH TOKEN, the same shape as the chip/mark/block-cursor trio above:
+    // an inline span INSIDE a line, this time carrying the predict affordance's own claim
+    // (app/present/paint.ts's `appendPrediction`, app/present/predict.ts). `row-prediction-
+    // withdrawn` is the same token in its one-shot "this did not happen" state — a second class
+    // ADDED to the same span (`paint.ts` joins them with a space), never a second element, so it is
+    // registered here rather than folded into TOKENS: the test below holds the base class to the
+    // chip's own row-safety rule, and the withdrawn modifier only ever touches `border`/`color`/
+    // `text-decoration`/`opacity`, none of which are BOX_PROPERTIES either.
     const LINES = ["task", "done", "syncing", "rawline", "vim-selected"];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
-    const TOKENS = ["tagchip", "vim-block", "stampmark"];
+    const TOKENS = ["tagchip", "vim-block", "stampmark", "row-prediction", "row-prediction-withdrawn"];
     const known = new Set([...LINES, ...TRAILING, ...TOKENS]);
 
     const strays = new Set();
