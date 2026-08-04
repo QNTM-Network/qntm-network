@@ -1438,6 +1438,7 @@ function orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, o
   const moved = beforeRank !== afterRank;
   const entries = [...siblings];
   const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const currentBeforeLineIndex = insertAt === -1 ? null : entries[insertAt]?.lineIndex ?? null;
   const selfEntry = { lineIndex, tuple: afterTuple };
   if (insertAt === -1) {
     entries.push(selfEntry);
@@ -1448,7 +1449,7 @@ function orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, o
   const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
   const next = at === -1 ? void 0 : sorted[at + 1];
   const beforeLineIndex = next === void 0 ? null : next.lineIndex;
-  return { kind: "answer", placement: { moved, beforeLineIndex } };
+  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
 }
 function compareCodepoints(a, b) {
   const ac = Array.from(a);
@@ -1602,6 +1603,7 @@ function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
   const moved = beforeRank !== afterRank;
   const entries = [...siblings];
   const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const currentBeforeLineIndex = insertAt === -1 ? null : entries[insertAt]?.lineIndex ?? null;
   const selfEntry = { lineIndex, tuple: afterTuple };
   if (insertAt === -1) {
     entries.push(selfEntry);
@@ -1612,7 +1614,7 @@ function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
   const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
   const next = at === -1 ? void 0 : sorted[at + 1];
   const beforeLineIndex = next === void 0 ? null : next.lineIndex;
-  return { kind: "answer", placement: { moved, beforeLineIndex } };
+  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
 }
 function resolveOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank) {
   if (ordering[viewId]?.[sectionId] !== void 0) {

@@ -611,6 +611,133 @@ describe("7. orderingPlacementFor agrees with an independently-built expectation
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7b. `currentBeforeLineIndex` — the fix for "the settle never fires for a newly added line"
+// (roadmap-the-road-ahead.md). A freshly `insert-line`d row has no before-state: `source` and
+// `afterText` name the SAME value (the row was never edited, only just typed), so `moved`
+// (beforeRank !== afterRank) is trivially FALSE, always — proven directly below as the FALSIFIER,
+// not assumed. `currentBeforeLineIndex` answers the question that actually matters for a row with
+// no history: does its ACTUAL neighbour (read straight from `source`, before any sort) already
+// match its CORRECT one (`beforeLineIndex`).
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("7b. currentBeforeLineIndex — is a row's ACTUAL neighbour its CORRECT one", () => {
+  // A queue section (declared, ascending queue_position) with a gap at 🔢 3 — a fourth row is
+  // ABOUT TO exist there, exactly the `insert-line` shape: `source` already holds it (this
+  // function has no idea whether the caller's row is new or edited), and `afterText` repeats the
+  // SAME text, because a freshly typed line has nothing else to compare against.
+  const source = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] d [[qntm:4]] 🔢 4"].join(
+    "\n",
+  );
+
+  test("THE FALSIFIER: moved is FALSE for a same-text call, even though the row is badly out of place", () => {
+    // 'd' (🔢 4) sits LAST in the file and ranks LAST too, by coincidence — swap it for a value that
+    // ranks FIRST while staying physically last, and `moved` must still read false, because
+    // `beforeTuple` and `afterTuple` are computed from the IDENTICAL text.
+    const misplaced = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] d [[qntm:4]] 🔢 0"].join(
+      "\n",
+    );
+    const reading = orderingPlacementFor(
+      "flowtrace-queue",
+      "queue",
+      misplaced,
+      3,
+      "- [ ] d [[qntm:4]] 🔢 0",
+      ORDERING,
+      ORDERING_FIELDS,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, false, "moved must be trivially false — this is the defect, restated");
+    // AND YET the row plainly needs to move: it ranks first (🔢 0 < 1 < 2) but sits last in the
+    // file. `currentBeforeLineIndex` is what still catches this.
+    assert.equal(reading.placement.beforeLineIndex, 1, "the CORRECT neighbour — 'a', the new lowest-but-one");
+    assert.equal(reading.placement.currentBeforeLineIndex, null, "the ACTUAL neighbour — nothing, it sits last");
+    assert.notEqual(reading.placement.currentBeforeLineIndex, reading.placement.beforeLineIndex);
+  });
+
+  test("a row ALREADY in its correct slot: currentBeforeLineIndex equals beforeLineIndex", () => {
+    // 'c' (🔢 3) fills the gap between b(2) and d(4) EXACTLY where it already sits in the file —
+    // nothing should move.
+    const filled = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] c [[qntm:3]] 🔢 3", "- [ ] d [[qntm:4]] 🔢 4"].join(
+      "\n",
+    );
+    const reading = orderingPlacementFor(
+      "flowtrace-queue",
+      "queue",
+      filled,
+      3,
+      "- [ ] c [[qntm:3]] 🔢 3",
+      ORDERING,
+      ORDERING_FIELDS,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.currentBeforeLineIndex, reading.placement.beforeLineIndex);
+    assert.equal(reading.placement.beforeLineIndex, 4, "'d', the row 'c' already sits immediately before");
+  });
+
+  test("a row misplaced in the MIDDLE of the file (not merely appended): currentBeforeLineIndex still names its true neighbour", () => {
+    // 'c' (🔢 3) is typed between a(1) and b(2) in the FILE — so it physically sits before b, but
+    // it ranks (by value) after b. The two must disagree.
+    const middled = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] c [[qntm:3]] 🔢 3", "- [ ] b [[qntm:2]] 🔢 2"].join(
+      "\n",
+    );
+    const reading = orderingPlacementFor(
+      "flowtrace-queue",
+      "queue",
+      middled,
+      2,
+      "- [ ] c [[qntm:3]] 🔢 3",
+      ORDERING,
+      ORDERING_FIELDS,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.currentBeforeLineIndex, 3, "'b' — the row 'c' physically sits before, right now");
+    assert.equal(reading.placement.beforeLineIndex, null, "'c' (🔢 3) correctly ranks LAST — nothing sorts after it");
+    assert.notEqual(reading.placement.currentBeforeLineIndex, reading.placement.beforeLineIndex);
+  });
+
+  test("the DEFAULT-ordering twin, defaultOrderingPlacementFor, carries the same field", () => {
+    // His inbox's own shape — title only, no due_date/priority. 'Zzz' is typed LAST and must also
+    // RANK last (codepoint order) — both facts agree, so nothing should move.
+    const inboxSource = ["## Inbox", "- [ ] Apple task", "- [ ] Zzz task"].join("\n");
+    const reading = defaultOrderingPlacementFor(
+      "v",
+      "s",
+      inboxSource,
+      2,
+      "- [ ] Zzz task",
+      {},
+      DEFAULT_ORDERING,
+      ORDERING_FIELDS,
+      PRIORITY_RANK,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.placement.moved, false, "same falsifier as the declared path — no before-state to compare");
+    assert.equal(reading.placement.beforeLineIndex, null, "'Zzz' correctly ranks last, after 'Apple'");
+    assert.equal(reading.placement.currentBeforeLineIndex, null, "'Zzz' also physically sits last already");
+    // Now the same source, but the row TYPED LAST is "Aaa task" — it must rank BEFORE "Apple task"
+    // (title order) even though it was typed after it (file order). `lineIndex: 2` and `afterText`
+    // both name the row exactly where `source` already holds it — the same "no before-state, the
+    // row is simply THERE" shape `armOrderingSettle` hands this function for a real `insert-line`
+    // commit (source = `commit.markdown`, which already contains the new row).
+    const outOfPlace = defaultOrderingPlacementFor(
+      "v",
+      "s",
+      ["## Inbox", "- [ ] Apple task", "- [ ] Aaa task"].join("\n"),
+      2,
+      "- [ ] Aaa task",
+      {},
+      DEFAULT_ORDERING,
+      ORDERING_FIELDS,
+      PRIORITY_RANK,
+    );
+    assert.equal(outOfPlace.kind, "answer");
+    assert.equal(outOfPlace.placement.currentBeforeLineIndex, null, "'Aaa' sits last in the file");
+    assert.equal(outOfPlace.placement.beforeLineIndex, 1, "'Aaa' correctly ranks BEFORE 'Apple', at line 1");
+    assert.notEqual(outOfPlace.placement.currentBeforeLineIndex, outOfPlace.placement.beforeLineIndex);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
 // 8. orderingPlacementFor abstains for the IDENTICAL reason orderingFor does, every time
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 

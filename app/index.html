@@ -3110,42 +3110,56 @@ function updateOrderingBadge(view, commit) {
  * `resolveOrderingPlacementFor`, and the one place `settle.arm` is ever called — "one write, one
  * function" for this register, the same discipline every gated write on this page keeps.
  *
- * ONLY WHEN THE PLACEMENT ANSWERS AND `moved` IS TRUE. `resolveOrderingPlacementFor` shares every
- * abstention `resolveOrderingFor` has (ordering.ts's own header — the declared half calls the same
- * private `evaluateSection` for both of ITS functions, and the default half calls the same private
- * `evaluateDefaultSection` for both of ITS OWN), so this can never disagree with `orderingNoteFor`
- * about WHETHER something moved; it only ever adds WHERE, for the exact edits the freshness line
- * already narrates as "this line will move within X" — including, since 2026-08-04, an undeclared
- * section: the operator adds a line to his inbox, and THIS is the call that places it.
+ * TWO KINDS, TWO GATES — `LineCommit.kind` (paint.ts) is `"set-line"` for a row that already
+ * existed a moment ago and `"insert-line"` for one that did not, and the two cannot share a gate:
  *
- * ARMED AGAINST `commit.markdown`, NOT `commit.source`. `commit.markdown` is what
- * `paint.ts`'s own `rawInput.settle` repaints INTO the instant this function returns — the very
- * next statement in that function, before `commitLine`'s own `await` below ever resumes — so
- * arming against anything else would describe a paint that has already happened by the time the
- * placement could be read, and `SettleSurface.take` would never see it match.
+ *   `"set-line"`: gated on `reading.placement.moved`, UNCHANGED from before this comment —
+ *   `moved` compares the row's rank BEFORE this edit against its rank AFTER, which is the right
+ *   question exactly when a real "before" exists and the file's physical order already agreed
+ *   with it (the ordinary case: nothing but this edit could have desynced it).
  *
- * `commit.kind !== "set-line"` REFUSES OUTRIGHT, the same guard `orderingNoteFor` already applies
- * and for the same reason: a freshly inserted row has no established position, only a seed value,
- * and "move a row that did not exist a moment ago" is a different claim this step does not make.
+ *   `"insert-line"`: a row with no before-state has no rank to compare — `evaluateSection`'s own
+ *   before/after tuple would be identical (there is only ever the one, freshly-typed value), so
+ *   `moved` is trivially `false` FOR EVERY INSERT, which was the exact defect this comment used to
+ *   describe as a refusal ("a freshly inserted row has no established position") when it was
+ *   actually a silent no-op: `resolveOrderingPlacementFor` computed the correct destination every
+ *   time and this function discarded the answer. `reading.placement.currentBeforeLineIndex` (see
+ *   `OrderingPlacement`'s own header, ordering.ts) is the row's ACTUAL neighbour, read at the same
+ *   moment `beforeLineIndex` (its CORRECT one) is computed — "is the row where it belongs" is
+ *   `currentBeforeLineIndex !== beforeLineIndex`, answerable for a row that was never edited at
+ *   all, only just typed.
+ *
+ * ARMED AGAINST `commit.markdown`, NOT `commit.source`, FOR BOTH KINDS — `commit.markdown` is what
+ * `paint.ts`'s own `rawInput.settle`/`draftInput.settle` repaints INTO the instant this function
+ * returns — the very next statement in that function, before `commitLine`'s own `await` below ever
+ * resumes — so arming against anything else would describe a paint that has already happened by
+ * the time the placement could be read, and `SettleSurface.take` would never see it match.
+ *
+ * `commit.markdown` IS ALSO WHAT THE PLACEMENT ITSELF IS COMPUTED AGAINST FOR `"insert-line"` —
+ * deliberately NOT `commit.source`. `LineCommit.source`'s own header (paint.ts) states why:
+ * `commit.source` is the file BEFORE the insertion, so `commit.source.split("\n")[commit.lineIndex]`
+ * is a DIFFERENT, unrelated line about to be pushed down, not the new row. `commit.markdown`
+ * already holds the new row at `commit.lineIndex` (that is what `applyEdit`'s `insert-line` case
+ * put there), so it is the only string this function can read the row's own siblings, its own
+ * value and its own actual neighbour from without comparing two different lines and calling it
+ * one. `"set-line"` keeps reading `commit.source`, unchanged — the row is already there, and
+ * `commit.source` is the base the freshness-line note (`orderingNoteFor`) was itself computed
+ * against, so the two stay in agreement about which copy of the file "before" names.
  */
 function armOrderingSettle(view, commit) {
-  if (
-    resolution === undefined ||
-    qualification === undefined ||
-    commit.kind !== "set-line" ||
-    commit.markdown === null
-  ) {
+  if (resolution === undefined || qualification === undefined || commit.markdown === null) {
     return;
   }
   const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+  const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
+  const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
   if (sectionId === null) {
     return;
   }
   const reading = resolveOrderingPlacementFor(
     view.id,
     sectionId,
-    commit.source,
+    addressSource,
     commit.lineIndex,
     commit.text,
     resolution.ordering,
@@ -3153,7 +3167,14 @@ function armOrderingSettle(view, commit) {
     resolution.defaultOrdering,
     resolution.priorityRank,
   );
-  if (reading.kind !== "answer" || !reading.placement.moved) {
+  if (reading.kind !== "answer") {
+    return;
+  }
+  const needsPlacement =
+    commit.kind === "insert-line"
+      ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex
+      : reading.placement.moved;
+  if (!needsPlacement) {
     return;
   }
   settle.arm(commit.markdown, view.id, {

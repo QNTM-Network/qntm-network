@@ -354,14 +354,57 @@ describe("5. armOrderingSettle arms the settle surface, and agrees with ordering
     assert.equal(page.__settle().take(noMove.markdown, DEMO_VIEW.id), null);
   });
 
-  test("an INSERTED line never arms the surface — the same guard orderingNoteFor already applies", () => {
+  // A NEWLY INSERTED LINE NOW ARMS TOO — 2026-08-04, the fix for the settle-never-fires-for-a-
+  // new-line defect. `commit.kind !== "set-line"` used to refuse this outright, and `moved`
+  // (a rank comparison) would have stayed `false` for every insert even if that guard were lifted
+  // alone — there is no BEFORE state a freshly typed line can compare against. See
+  // `armOrderingSettle`'s own header (app/index.html) and `OrderingPlacement.currentBeforeLineIndex`
+  // (ordering.ts) for the fix; §9 below covers the operator's own undeclared-section shape.
+  // `d` (🔢 0) sorts before every existing row — appended at `lineIndex: 4` (DEMO_SOURCE has 4
+  // lines, so this is `lines.length`, the append position — see `InsertLine`'s own header,
+  // source.ts), it lands LAST in the file but ranks FIRST, so it must move.
+  test("an INSERTED line, out of position, arms the surface with the correct beforeLineIndex", () => {
     page.__applyPresentation(FAKE_DECLARATION);
-    // A MARKDOWN STRING NO EARLIER TEST IN THIS FILE HAS EVER ARMED — `take()` returning `null`
-    // must mean THIS call armed nothing, not merely that some earlier test's still-live instruction
-    // (the surface is one page-level singleton, shared across every test in this describe block)
-    // happens not to match. Reusing `COMMIT.markdown` here would prove nothing: the first test in
-    // this block already armed exactly that string, and `take()` would return ITS instruction.
-    const insertCommit = { ...COMMIT, kind: "insert-line", markdown: COMMIT.markdown + "\nunique-marker" };
+    const insertCommit = {
+      lineIndex: 4,
+      text: "- [ ] d [[qntm:4]] 🔢 0",
+      markdown: DEMO_SOURCE + "\n- [ ] d [[qntm:4]] 🔢 0",
+      source: DEMO_SOURCE,
+      kind: "insert-line",
+    };
+    page.__armOrderingSettle(DEMO_VIEW, insertCommit);
+    const instruction = page.__settle().take(insertCommit.markdown, DEMO_VIEW.id);
+    assert.notEqual(instruction, null, "the settle surface was never armed for a newly inserted line");
+    // `a` (🔢 1) is the row `d` (🔢 0) now ranks immediately ahead of.
+    assert.deepEqual(instruction.placement, { lineIndex: 4, beforeLineIndex: 1 });
+
+    const direct = resolveOrderingPlacementFor(
+      DEMO_VIEW.id,
+      "queue",
+      insertCommit.markdown,
+      insertCommit.lineIndex,
+      insertCommit.text,
+      FAKE_DECLARATION.resolution.ordering,
+      FAKE_DECLARATION.resolution.orderingFields,
+    );
+    assert.equal(direct.kind, "answer");
+    assert.equal(direct.placement.beforeLineIndex, 1);
+    assert.notEqual(direct.placement.currentBeforeLineIndex, direct.placement.beforeLineIndex);
+  });
+
+  // `e` (🔢 10) sorts after every existing row too — it is ALREADY last once appended, so nothing
+  // should move. The same "does not arm" proof block5's other tests already give the SET-LINE case,
+  // restated for INSERT: a unique markdown string no earlier test has armed, so `take()` returning
+  // `null` proves THIS call armed nothing.
+  test("an INSERTED line that already lands in its correct (last) slot does not arm the surface", () => {
+    page.__applyPresentation(FAKE_DECLARATION);
+    const insertCommit = {
+      lineIndex: 4,
+      text: "- [ ] e [[qntm:5]] 🔢 10",
+      markdown: DEMO_SOURCE + "\n- [ ] e [[qntm:5]] 🔢 10",
+      source: DEMO_SOURCE,
+      kind: "insert-line",
+    };
     page.__armOrderingSettle(DEMO_VIEW, insertCommit);
     assert.equal(page.__settle().take(insertCommit.markdown, DEMO_VIEW.id), null);
   });
@@ -632,5 +675,136 @@ describe("8. THE DEFAULT ORDERING — an undeclared section now speaks, through 
     });
     assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — nested-section");
     assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 9. THE HEADLINE DEFECT, FIXED — a newly ADDED line, in a section with NO declared ordering, is
+//    placed at its correct position IMMEDIATELY, not ten seconds later. This is the exact clunk
+//    named in the defect report: the operator adds a line to his inbox, it used to sit at the end
+//    until the next cycle moved it, because `armOrderingSettle` refused every `insert-line` commit
+//    outright (`commit.kind !== "set-line"`) and, even past that guard, `moved` (a rank comparison)
+//    is trivially FALSE for a line with no before-state to compare — see `armOrderingSettle`'s own
+//    header (app/index.html) for the fix.
+//
+//    THIS SUITE MUST FAIL AGAINST `main` AS IT STANDS TODAY, and does: `main`'s `armOrderingSettle`
+//    returns before `resolveOrderingPlacementFor` is ever called for an `insert-line` commit, so
+//    `page.__settle().take(...)` is `null` for every case here, including the two that must arm.
+//
+//    THE SHAPE — his own real inbox, reproduced from the diagnosis: four rows, "Family domain",
+//    "Micu lunch", "Open day close day", "account opening form per ca", none carrying a
+//    `due_date`/`priority`, so `title` (codepoint order, the engine's own final tiebreak) is the
+//    only live key. Uppercase sorts before lowercase in raw codepoints, so these four already sit
+//    in correctly sorted order relative to EACH OTHER (F < M < O < a) — only the fifth, newly typed
+//    row can be out of place, which is exactly the shape the diagnosis measured against the shipped
+//    bundle.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+const INBOX_DECLARATION = {
+  qualification: {
+    ...FAKE_DECLARATION.qualification,
+    sectionOrder: { inboxview: ["inbox"] },
+  },
+  resolution: {
+    ordering: {}, // undeclared — the exact "no-section-declaration" shape his real inbox has
+    orderingFields: {
+      due_date: { token: "📅", kind: "date" },
+      priority: { kind: "enum", values: { "🔽": "low", "⏫": "high" } },
+    },
+    defaultOrdering: [
+      { field: "due_date", direction: "asc" },
+      { field: "priority", direction: "desc" },
+      { field: "title", direction: "asc" },
+    ],
+    priorityRank: { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 },
+  },
+};
+
+const INBOX_VIEW = { id: "inboxview", path: "inbox.md" };
+
+const INBOX4_SOURCE = [
+  "## Inbox",
+  "- [ ] Family domain", // line 1
+  "- [ ] Micu lunch", // line 2
+  "- [ ] Open day close day", // line 3
+  "- [ ] account opening form per ca", // line 4
+].join("\n");
+
+// ONE insert-line commit appending `title` as a fifth row — the exact gesture the operator makes:
+// press Enter at the end of the section, type a title, leave the line. `lineIndex: 5` is
+// `INBOX4_SOURCE`'s own `lines.length` (5 lines, indices 0-4) — the append position (`InsertLine`'s
+// own header, source.ts). `source` is the file BEFORE the insertion (`LineCommit`'s own header,
+// paint.ts); `markdown` is AFTER, with the new row spliced in at `lineIndex`, pushing nothing down
+// because it lands at the very end.
+const insertLast = (title) => ({
+  lineIndex: 5,
+  text: `- [ ] ${title}`,
+  markdown: INBOX4_SOURCE + `\n- [ ] ${title}`,
+  source: INBOX4_SOURCE,
+  kind: "insert-line",
+});
+
+describe("9. THE HEADLINE DEFECT — a newly INSERTED line is placed, in a section with no declared ordering", () => {
+  let page;
+
+  before(async () => {
+    installBrowser();
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+    page = await importPage(WORK);
+    page.__applyPresentation(INBOX_DECLARATION);
+  });
+
+  test('"I Just Added This One" sorts between "Family domain" and "Micu lunch" — the settle arms, placing it before "Micu lunch"', () => {
+    const commit = insertLast("I Just Added This One");
+    page.__armOrderingSettle(INBOX_VIEW, commit);
+    const instruction = page.__settle().take(commit.markdown, INBOX_VIEW.id);
+    assert.notEqual(instruction, null, "the settle surface was never armed for a newly inserted line");
+    assert.deepEqual(instruction.placement, { lineIndex: 5, beforeLineIndex: 2 });
+  });
+
+  test('"Aaa goes first" sorts before "Family domain" — the settle arms, placing it first', () => {
+    const commit = insertLast("Aaa goes first");
+    page.__armOrderingSettle(INBOX_VIEW, commit);
+    const instruction = page.__settle().take(commit.markdown, INBOX_VIEW.id);
+    assert.notEqual(instruction, null, "the settle surface was never armed for a newly inserted line");
+    assert.deepEqual(instruction.placement, { lineIndex: 5, beforeLineIndex: 1 });
+  });
+
+  // THE THIRD CASE FROM THE DIAGNOSIS TABLE — a row that ALREADY belongs last must NOT arm the
+  // surface. `moved` was `false` here even before this fix, by coincidence (the trivial
+  // before-equals-after tuple) rather than by a real "is it already correct" check; this proves the
+  // NEW check (`currentBeforeLineIndex !== beforeLineIndex`) still answers "no" for the right reason.
+  test('"zzz stays last" already sorts after every existing row — the settle correctly does NOT arm', () => {
+    const commit = insertLast("zzz stays last");
+    page.__armOrderingSettle(INBOX_VIEW, commit);
+    assert.equal(page.__settle().take(commit.markdown, INBOX_VIEW.id), null);
+  });
+
+  test("agrees with resolveOrderingPlacementFor called directly against commit.markdown", () => {
+    const commit = insertLast("I Just Added This One");
+    page.__armOrderingSettle(INBOX_VIEW, commit);
+    const instruction = page.__settle().take(commit.markdown, INBOX_VIEW.id);
+    assert.notEqual(instruction, null, "the settle surface was never armed");
+    const direct = resolveOrderingPlacementFor(
+      INBOX_VIEW.id,
+      "inbox",
+      commit.markdown,
+      commit.lineIndex,
+      commit.text,
+      INBOX_DECLARATION.resolution.ordering,
+      INBOX_DECLARATION.resolution.orderingFields,
+      INBOX_DECLARATION.resolution.defaultOrdering,
+      INBOX_DECLARATION.resolution.priorityRank,
+    );
+    assert.equal(direct.kind, "answer");
+    assert.notEqual(
+      direct.placement.currentBeforeLineIndex,
+      direct.placement.beforeLineIndex,
+      "currentBeforeLineIndex must differ from beforeLineIndex for a row that needs to move",
+    );
+    assert.deepEqual(instruction.placement, {
+      lineIndex: commit.lineIndex,
+      beforeLineIndex: direct.placement.beforeLineIndex,
+    });
   });
 });
