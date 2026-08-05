@@ -673,21 +673,26 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);
   });
 
-  test("THE REGISTER IS REACHED IN EXACTLY FIVE PLACES, and none of them is a write of a file", () => {
-    // FIVE RATHER THAN SIX — `writes.outstanding` DROPPED (chore/retire-the-status-line). It was
-    // `correlate`'s own count of outstanding writes for a path, read once, only to choose between
-    // two freshness-line sentences (WRITE_RECORDED/WRITE_ACCEPTED) that are gone along with it; the
-    // release `correlate` performs via `writes.arrive` is unchanged and unaffected.
+  test("THE REGISTER IS REACHED IN EXACTLY SIX PLACES, and none of them is a write of a file", () => {
+    // FIVE RATHER THAN SEVEN (chore/retire-the-status-line dropped `writes.outstanding`) — SIX,
+    // NOW, WITH `writes.concludeGiveUp` (design-the-two-rules.md §2.2, AN OPERATION COMPLETES).
+    // `concludeGiveUp` is the same shape as `giveUp`, one token in, one answer out — a `GiveUpAct`
+    // string or `null` rather than a boolean — so it inherits the same argument this test has
+    // always made for `giveUp`: it cannot open a write, cannot reach a path, a markdown or a POST.
+    // Two callers now use it instead of the bare `giveUp` — `commitLine`'s 409 branch (item 11) and
+    // `collect`'s pickup-exhausted branch (item 4) — and `giveUp` itself stays, reached once more,
+    // by `toggleTask`'s own 409 branch, which has no characters at stake and does not need the
+    // named act.
     //
     // `writes.waiting(token)` IS STILL ASKED TWICE BY `collect` — once before the read, so a pickup
     // that is no longer owed costs no request, and once after it, to tell the schedule whether the
     // answer arrived. It takes a token and returns a boolean: it cannot open a write, cannot close
     // one, and cannot reach a path, a markdown or a POST. The name is asserted rather than the
-    // count, so a sixth reach has to be justified here rather than absorbed by a number.
+    // count, so a seventh reach has to be justified here rather than absorbed by a number.
     const reads = codeOf(APP_SOURCE).match(/\bwrites\.[A-Za-z]\w*/g) ?? [];
     assert.deepEqual(
       [...new Set(reads)].sort(),
-      ["writes.arrive", "writes.clear", "writes.giveUp", "writes.open", "writes.waiting"],
+      ["writes.arrive", "writes.clear", "writes.concludeGiveUp", "writes.giveUp", "writes.open", "writes.waiting"],
       "a new way to reach the write register appeared — check it cannot reach a POST",
     );
   });

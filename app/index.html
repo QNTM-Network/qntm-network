@@ -1051,7 +1051,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=827454cbad";
+} from "/dist/present.js?v=e5c43d2ce8";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1949,14 +1949,29 @@ async function collect(path) {
   const next = pickups.answered(path, cycled && stamped);
   if (next.outcome === "again") {
     armPickup(path, next.delayMs);
+  } else if (next.outcome === "exhausted") {
+    // ── AN OPERATION COMPLETES (design-the-two-rules.md §2.2, §3 item 4) ──────────────────────
+    //
+    // WHO STARTED THIS: `accept()`, the instant a write is ack'd (`startPickup`). BOUND:
+    // `PickupSchedule`'s own three attempts (`pickup.ts`'s `PICKUP_DELAYS`) — unchanged; this is
+    // not a fourth read. TERMINAL ACT: the token this pickup was collecting for is CONCLUDED —
+    // formally, through `WriteRegister.concludeGiveUp` — where before this branch did nothing at
+    // all (`next.outcome === "exhausted"` used to fall through with no action, "SILENT, ON
+    // PURPOSE, DOCUMENTED"). Nothing is restored and nothing is re-read: the write itself already
+    // landed (the ack proved it, which is why `startPickup` ran at all) — what may never arrive is
+    // the engine's STAMP, and a line MAY legitimately never gain one (see the pickup-bound comment
+    // above `collect`, and `correlation.ts`'s own header). Concluding the token is the honest
+    // completion of "I was waiting to hear about this write" — not a claim that the line is safe
+    // (it already was) and not a claim that a stamp will never come (a LATER, unrelated arrival
+    // can still stamp it; nothing here stops that).
+    //
+    // WITH NO TOKEN (no CSPRNG on this platform), there is nothing this register can conclude —
+    // the series still ends here, exactly as it did before, because there was never anything to
+    // formally close.
+    if (going.token !== null) {
+      writes.concludeGiveUp(going.token);
+    }
   }
-  // `next.outcome === "exhausted"` FALLS THROUGH WITH NO ACTION — SILENT, ON PURPOSE, DOCUMENTED
-  // RATHER THAN LEFT TO BE DISCOVERED. The series stops for two different reasons that used to be
-  // two different sentences (PICKUP_LOST/PICKUP_UNSTAMPED, chore/retire-the-status-line): the
-  // cycle's answer never arrived at all, or it arrived and left this write's line without a stamp
-  // (a line MAY legitimately never gain one — see the pickup-bound comment above `collect`). Neither
-  // case is handled here any further; the operator's own re-read is still there to press, it is
-  // simply no longer prompted. See the PR body's silent-failure list for this path.
 }
 
 /**
@@ -2752,17 +2767,35 @@ async function commitLine(view, commit) {
     // distance — the clobber this row exists to stop loses work nobody typed, and a refusal that
     // answered it by deleting work he DID type would be strictly worse than the defect.
     if (e?.status === 409) {
-      // NOTHING WAS WRITTEN, SO THE TOKEN IS CLOSED. See `toggleTask`'s own 409 branch for why this
-      // is the one answer that closes one.
+      // ── AN OPERATION COMPLETES (design-the-two-rules.md §2.2, §3 item 11) ─────────────────────
+      //
+      // WHO STARTED THIS: the operator, committing this line. BOUND: ZERO automatic retries — see
+      // `WriteRegister.concludeGiveUp`'s own header for why a blind repost here would risk
+      // clobbering whatever changed server-side, and why a SAFE retry needs a rebase this change
+      // does not build. TERMINAL ACT, EVERY TIME: `concludeGiveUp` — NOTHING WAS WRITTEN, SO THE
+      // TOKEN IS CLOSED, formally now rather than silently (`giveUp` used to do this and say
+      // nothing about it; see `toggleTask`'s own 409 branch for the one caller that still uses
+      // `giveUp` — a tick has no characters at stake, so a bare release is already the complete
+      // answer there).
       if (token !== null) {
-        writes.giveUp(token);
+        writes.concludeGiveUp(token);
       }
       // `healFromRefusal` ONLY ADOPTS THE SERVER'S FILE WHEN `commit.text` IS EMPTY — nothing his
-      // own typing produced is on screen to lose in that case. Otherwise the screen simply keeps
-      // showing what he typed, which is what NOT repainting above already guarantees.
+      // own typing produced is on screen to lose in that case.
       if (commit.text.trim() === "") {
         healFromRefusal(view.path, e.current);
       }
+      // OTHERWISE: "return-to-row", THE ONLY ACT LEFT WHEN HEALING WOULD LOSE HIS CHARACTERS. Not
+      // a new write, not a repaint — the row already holds what he typed (`paint.ts`'s optimistic
+      // settle called `rows.edited` with this exact string before this write was ever posted;
+      // NOT repainting here, unchanged from before this change, is what keeps it there). THE
+      // PERCEPTION RULE governs what happens on screen: nothing does, on purpose — no badge, no
+      // sentence says this write was abandoned, because the row is indistinguishable from an
+      // ordinary open edit and that is the correct terminal appearance, not a gap. A reload before
+      // his next edit loses it, same as any unsent edit — the accepted, stated limit
+      // (`state-edits-are-ephemeral`, docs/architecture/state.yaml:197). See
+      // `tests/app-operation-completes.test.mjs` §2 for the driven proof that the characters and
+      // the row's editability both survive this branch.
       return;
     }
     // The painter has already repainted this view from the edited source, so the page is showing
@@ -2849,6 +2882,67 @@ async function enterGraph() {
   const graph = readGraph();
   await loadPresentation();
   await loadGraph(null, "chosen", graph);
+}
+
+// HOW MANY AUTOMATIC ATTEMPTS `bootRead` BUYS BEYOND THE FIRST, AND HOW LONG IT WAITS BETWEEN THEM.
+//
+// SHORT, BECAUSE NOTHING HERE IS WAITING ON THE ENGINE CYCLE. `pickup.ts`'s `PICKUP_DELAYS`
+// (10 s/10 s/20 s) are placed where a ~10 s cycle is expected to have finished; a boot read has no
+// cycle to wait for, only a network or a cold Worker/Fly machine, both of which answer or fail in
+// well under a second once they are actually reachable. Two short waits (0.3 s, 0.9 s) catch
+// exactly that class of blip without making a person who really has no connection watch a boot
+// screen for the better part of a minute before "unreadable" tells them so.
+const BOOT_READ_DELAYS = [300, 900];
+
+/**
+ * BOOT'S READ, BOUNDED-RETRIED — `design-the-two-rules.md` §2.2, §3 item 14.
+ *
+ * WHO STARTS THIS OPERATION: the boot IIFE below, once, the instant it finds a stored session
+ * token. TERMINAL STATES, all reached by the boot IIFE's own existing `try`/`catch` — nothing
+ * about that catch changes, only what it is now given time to not need:
+ *
+ *   ENTERS THE GRAPH. `enterGraph()` resolved — a view painted, ordinarily, on this attempt or a
+ *     retried one. The commonest case, unchanged in every way a person could see.
+ *   A 401. Re-thrown on the FIRST attempt that reports one, never retried — a 401 means the
+ *     session itself is gone, and reading again cannot make it not be. The boot IIFE's own catch
+ *     still ends the session exactly as it always has.
+ *   EVERY OTHER FAILURE, AFTER `BOOT_READ_DELAYS.length` AUTOMATIC ATTEMPTS BEYOND THE FIRST. Re-
+ *     thrown, so the boot IIFE's existing catch falls to `showEmpty("unreadable", …)` — the
+ *     already-correct terminal display (§3 marks this NOT a gap; a session that is "still good"
+ *     and a button that is "still pressable" is the honest answer once retrying has not helped).
+ *     This function does not touch that display; it only decides how many times to try first.
+ *
+ * ATTEMPTS: `1 + BOOT_READ_DELAYS.length` — bounded, so a genuinely unreachable server costs a
+ * fixed, short wait rather than an unbounded one.
+ *
+ * THE PERCEPTION RULE: NOTHING VISIBLE CHANGES BETWEEN ATTEMPTS. `enterGraph()` itself reveals the
+ * shell before it reads (unchanged, and idempotent across retries — hiding and showing the same
+ * classes again is not a new state), and nothing in the loop below touches the DOM at all: no
+ * spinner, no "retrying" text, no `aria-busy`. The screen is either mid-boot (`#boot` is still
+ * shown; the boot IIFE's own `finally` is what hides it, only once this function has finally
+ * settled one way or the other) or it is the correct final state. There is no third, visible,
+ * in-between one.
+ *
+ * WHY RETRYING IS SAFE HERE AND WAS DELIBERATELY REFUSED AT `commitLine`'s 409 (item 11,
+ * `WriteRegister.concludeGiveUp`'s own header): this is a GET. Nothing was typed and nothing can be
+ * clobbered by asking again — repeating it costs a round trip and nothing else, which is exactly
+ * why boot's own gap could be closed with a plain retry and item 11's could not.
+ *
+ * `delays` IS A PARAMETER, DEFAULTED TO THE REAL SCHEDULE, so a test can drive the bound itself
+ * (`tests/app-operation-completes.test.mjs` §4) without waiting out real seconds.
+ */
+async function bootRead(delays = BOOT_READ_DELAYS) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await enterGraph();
+      return;
+    } catch (e) {
+      if (e?.status === 401 || attempt >= delays.length) {
+        throw e;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
 }
 
 /**
@@ -3333,7 +3427,10 @@ $("captureBox").addEventListener("keydown", async (e) => {
   try {
     if (!token) { show("entry"); return; }
     try {
-      await enterGraph();
+      // BOUNDED-RETRIED — see `bootRead`'s own header for the lifecycle (design-the-two-rules.md
+      // §2.2, §3 item 14). Every branch below is unchanged: `bootRead` re-throws exactly what
+      // `enterGraph` would have thrown, once retrying could not turn it into a success.
+      await bootRead();
     } catch (e) {
       if (e?.status === 401) { localStorage.removeItem(tokenKey); token = null; show("entry"); return; }
       // `enterGraph` has already revealed the shell and the graph section before the read that

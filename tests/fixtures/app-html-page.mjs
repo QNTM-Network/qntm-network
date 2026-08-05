@@ -127,7 +127,7 @@ export const __declarationUrl = () => DECLARATION_URL;
 export const __served = () => served;
 export { writeFile as __writeFile };
 export { buildDrawer, openDrawer, closeDrawer, folderOf, foldersOf, drawerStops, viewButtons };
-export { landOn, loadGraph, refresh, showShell };
+export { landOn, loadGraph, refresh, showShell, bootRead };
 export { register, login, logout, friendlyAuthError, showEmpty, hideEmpty, HANDLE_RE, api };
 export const __token = () => token;
 export function __setToken(next) { token = next; }

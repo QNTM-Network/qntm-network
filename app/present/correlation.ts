@@ -87,6 +87,35 @@
  * the content rather than of the ledger, which is why it sits here and not in `pickup.ts`. The
  * schedule stays a policy about attempts and delays that holds its inputs opaquely; this module
  * stays the place where "mine" is decided.
+ *
+ * ── THE FOURTH FACT: AN OPERATION COMPLETES (`design-the-two-rules.md` §2.2) ──
+ *
+ * `WriteRegister.concludeGiveUp` is the terminal state this class was measured (§2.2 of that
+ * document) to be missing: `giveUp` and `arrive`'s own `gaveUp` branch have always RELEASED a
+ * token without saying what releasing it means. Two real call sites now go through
+ * `concludeGiveUp` instead of the bare release, and this is the whole of what each one is:
+ *
+ *   `collect()` (`app/index.html`), A PICKUP'S BOUNDED RETRIES RAN OUT. STARTED BY: `accept()`,
+ *     the moment a write is ack'd (`startPickup`). BOUND: `PickupSchedule`'s own three attempts
+ *     (`pickup.ts`'s `PICKUP_DELAYS`), unchanged — this does not add a fourth. TERMINAL ACT: the
+ *     token this pickup was collecting for is concluded here, formally, where before nothing at
+ *     all happened on exhaustion. Nothing is restored and nothing is re-read, because the write
+ *     the token names ALREADY LANDED (the ack proved it); what may never have landed is the
+ *     engine's STAMP, and `correlation.ts`'s own header already states a line may legitimately
+ *     never gain one — that is not a failure this rule is for.
+ *
+ *   `commitLine`'s 409 branch (`app/index.html`), A REFUSAL WITH REAL TYPED TEXT AT STAKE, WHERE
+ *     `healFromRefusal` CANNOT SAFELY ADOPT THE SERVER'S FILE. STARTED BY: the operator committing
+ *     a line. BOUND: ZERO AUTOMATIC RETRIES, DELIBERATELY — a 409 means the base was stale, and
+ *     blindly reposting `commit.markdown` (computed against the OLD base) over
+ *     `e.current` (the NEW one) would silently discard whatever changed server-side, which is the
+ *     exact clobber this whole token/base mechanism exists to refuse. A SAFE retry needs a rebase —
+ *     reconciling the operator's one edit against `e.current` — which is real recovery machinery
+ *     this change does not build; `docs/implementation-artifacts/design-the-two-rules.md`'s own
+ *     backlog names it as follow-up. TERMINAL ACT: `"return-to-row"` — and the row already holds
+ *     the operator's characters by construction (`paint.ts`'s optimistic repaint calls
+ *     `rows.edited` before this write is even posted), so the act this class performs is naming
+ *     that fact and releasing the token, not moving anything.
  */
 
 import { stampSpans } from "./rendition.js";
@@ -427,6 +456,16 @@ export interface WriteEcho {
 }
 
 /**
+ * THE ONE TERMINAL ACT `WriteRegister.concludeGiveUp` EVER NAMES — see that method's own header for
+ * why this class can never answer "reread" or "restore", only this one.
+ *
+ * `"return-to-row"` — the operator's characters were never anywhere but the row
+ * (`app/present/rows.ts`'s `RowStore`) and stay there, in memory, unpersisted. Nothing here
+ * MOVES anything; the name is what the register now says about a fact that was already true.
+ */
+export type GiveUpAct = "return-to-row";
+
+/**
  * HOW MANY ARRIVALS THAT SPEAK ABOUT A WRITE'S OWN FILE MAY GO BY WITHOUT NAMING IT.
  *
  * THREE, AND "SPEAK ABOUT" IS THE LOAD-BEARING PART. A projection whose echo does not mention the
@@ -550,9 +589,48 @@ export class WriteRegister {
    *
    * IT RELEASES NOTHING AND PROVES NOTHING. Same as `arrive`'s `gaveUp`: this is the register
    * forgetting, never the strip letting go. Returns whether the token was outstanding.
+   *
+   * KEPT, UNCHANGED, FOR THE CALLER THAT HAS NOTHING AT STAKE. `toggleTask`'s own 409 branch
+   * (`app/index.html`) puts the checkbox back BEFORE this runs — a tick has no characters to lose,
+   * so "releases nothing and proves nothing" was already the complete, correct answer there and
+   * `design-the-two-rules.md` §3 does not name it as a gap. `concludeGiveUp`, below, is for the two
+   * callers where something IS at stake and a silent forget is exactly the gap that document names.
    */
   giveUp(token: string): boolean {
     return this.#open.delete(token);
+  }
+
+  /**
+   * A WRITE'S WAIT ENDED WITH NO MATCH — THE TERMINAL ACT, NAMED, WHERE `giveUp` ABOVE ONLY EVER
+   * NAMED THE FORGETTING.
+   *
+   * `design-the-two-rules.md` §2.2: AN OPERATION COMPLETES, and a token that gives up is one of
+   * the two places this class used to let that happen silently — the other was `collect()`
+   * (`app/index.html`) not calling anything at all when a pickup's own bounded retries ran out.
+   * Both callers now go through here, and both now get the same answer to "what happened", rather
+   * than one silent `Map.delete` and one nothing.
+   *
+   * ── WHY THE ANSWER IS ALWAYS `"return-to-row"`, NEVER "reread" OR "restore" ──
+   *
+   * `design-the-two-rules.md` §2.2 names three ACTS in order — re-read, restore last-known-good,
+   * hand back to the row — but this class only ever knows the THIRD one, because it holds nothing
+   * a "re-read" or a "restore" could be computed from: no markdown, no view, no DOM. Its one fact is
+   * "this token will never be matched", and the only thing that follows from that fact ALONE is
+   * that whatever the operator typed is not going anywhere new — it stays exactly where it already
+   * is, `app/present/rows.ts`'s `RowStore`, which is why this never needs a payload: the row already
+   * holds the string (`paint.ts`'s own optimistic repaint records it there before the write is even
+   * sent), and closing the token here changes nothing about that. A caller that wanted "re-read" or
+   * "restore" instead has to decide that itself, with facts this register does not have — which is
+   * exactly the shape `commitLine`'s 409 branch and `collect`'s exhausted branch already are:
+   * neither needed a NEW way to keep the operator's characters, both needed this class to stop being
+   * silent about the token.
+   *
+   * `null` MEANS THERE WAS NOTHING TO CONCLUDE — the token was never opened here, or something
+   * already matched or gave it up. A caller that gets `null` has learned nothing new and does
+   * nothing further; there is no second write to make this true retroactively.
+   */
+  concludeGiveUp(token: string): GiveUpAct | null {
+    return this.#open.delete(token) ? "return-to-row" : null;
   }
 
   /** How many writes are outstanding — all of them, or just those for `path`. */
