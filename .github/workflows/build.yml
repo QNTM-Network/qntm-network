@@ -53,8 +53,13 @@ jobs:
 
       - name: fail if a committed bundle is stale
         run: |
-          if ! git diff --exit-code -- demo/ dist/; then
-            echo "::error::demo/ or dist/ is out of date with app/ — run 'npm run build' and commit the result."
+          # app/index.html is IN this check now, alongside demo/ and dist/: scripts/build.mjs
+          # writes a `?v=<hash of the built bytes>` onto this file's two bundle imports (its own
+          # header explains why — GitHub Pages cannot be told to shorten its cache lifetime, so
+          # the cache-buster is the fix instead of a header), so a bundle changing without this
+          # file being regenerated is exactly the staleness this step exists to catch.
+          if ! git diff --exit-code -- demo/ dist/ app/index.html; then
+            echo "::error::demo/, dist/ or app/index.html is out of date with app/ — run 'npm run build' and commit the result."
             exit 1
           fi
 

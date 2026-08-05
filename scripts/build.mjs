@@ -17,6 +17,8 @@
  */
 
 import { build } from "esbuild";
+import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 await build({
   // boot.ts, not main.ts — the bootstrap is the only module with a top-level side effect, and
@@ -76,3 +78,46 @@ await build({
   outfile: "dist/vendor.js",
   logLevel: "info",
 });
+
+/**
+ * CACHE-BUST THE TWO IMPORTS `app/index.html` LOADS AT FIXED URLS.
+ *
+ * GitHub Pages serves this whole repo with `Cache-Control: max-age=600` on every file and gives
+ * this repo no way to change it — no `_headers` file, no server config, and no Worker in front of
+ * this domain to rewrite the response (docs/architecture/capabilities.yaml: "GitHub Pages serves
+ * this repo verbatim with no rewrite rules"; the zone's nameservers are Google Cloud DNS, not
+ * Cloudflare, so there is no Cloudflare zone to attach a route to either). That is a platform
+ * limit, not an oversight left uncorrected — there is nowhere in this repo to set a header, so
+ * "just set no-cache" is not an available fix.
+ *
+ * A RELOAD ONLY REVALIDATES THE TOP DOCUMENT. Chromium sends `Cache-Control: max-age=0` for the
+ * navigation itself on a plain reload, which is why a freshly-deployed `app/index.html` DOES
+ * reach the browser on the next reload — but every subresource the page then imports (both
+ * `<script type="module">` imports below) is fetched from the browser's OWN disk cache under its
+ * ordinary freshness rules, unaffected by the reload, for as long as ten minutes after it was
+ * first cached. A page that revalidated correctly can still hand the reader a stale
+ * `dist/present.js` — same defect the max-age itself causes, one layer down.
+ *
+ * THE FIX THAT NEEDS NO HEADER: a URL the browser has never cached is always fetched over the
+ * network, regardless of any max-age attached to a DIFFERENT, earlier URL. `?v=<hash of the built
+ * bytes>` on the import specifier is that URL. The files on disk keep their stable names
+ * (`dist/present.js`, `dist/vendor.js`) — nothing here renames them — because roughly fifty node
+ * tests import them directly by that path, and `.github/workflows/build.yml`'s staleness check
+ * diffs `dist/` by directory. Only the two import lines in `app/index.html` change, and only when
+ * the bytes they point at do — same content in, same hash out, so a rebuild with no source change
+ * leaves `app/index.html` byte-identical (see that same staleness check, extended to this file
+ * below).
+ */
+function versionImport(html, path, bytes) {
+  const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 10);
+  const pattern = new RegExp(`"${path.replace(/\./g, "\\.")}(?:\\?v=[0-9a-f]+)?"`);
+  if (!pattern.test(html)) {
+    throw new Error(`build.mjs: app/index.html no longer imports "${path}" — cannot version it`);
+  }
+  return html.replace(pattern, `"${path}?v=${hash}"`);
+}
+
+let page = readFileSync("app/index.html", "utf8");
+page = versionImport(page, "/dist/present.js", readFileSync("dist/present.js"));
+page = versionImport(page, "/dist/vendor.js", readFileSync("dist/vendor.js"));
+writeFileSync("app/index.html", page);

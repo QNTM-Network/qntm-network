@@ -1024,7 +1024,7 @@
 // docs/implementation-artifacts/research-state-and-speed.md §2.2. SITE-ROOT-ABSOLUTE for the same
 // reason as the presentation-cascade import below: this page is served at /app/, so a relative
 // "./dist/vendor.js" would resolve to /app/dist/vendor.js and 404.
-import { MarkdownIt, startRegistration, startAuthentication } from "/dist/vendor.js";
+import { MarkdownIt, startRegistration, startAuthentication } from "/dist/vendor.js?v=2a190475fe";
 
 // THE PRESENTATION CASCADE. Built from app/present/ by scripts/build.mjs and committed, because
 // Pages serves this repo from main:/ with no build step. This page used to decide how a line was
