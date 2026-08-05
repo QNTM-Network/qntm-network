@@ -23,7 +23,7 @@
  */
 
 import type { PresentationLevel } from "./levels.js";
-import { readDeclaration } from "./declaration.js";
+import { readDeclaration, DEFAULT_INDENT_UNIT } from "./declaration.js";
 import { readStructuralDeclaration } from "./structural.js";
 import type { StructuralLanguage } from "./structural.js";
 import { readQualificationDeclaration } from "./qualification.js";
@@ -173,5 +173,113 @@ export function presentationFromDeclaration(document: unknown): DeclaredPresenta
       ...resolutionReading.problems,
       ...rulesReading.problems,
     ],
+  };
+}
+
+/**
+ * Declaration — the six facts `app/index.html` reads out of ONE served document, held as ONE
+ * value instead of six independent `let`s. `research-the-store.md` §7.1 names this the one
+ * concrete piece of work its survey of the app's state layer found: unlike the eleven mutable
+ * surfaces under `app/present/` — each of which argues in its own header why it must NOT merge
+ * with its neighbour — these six have no such argument, because they are not six facts. They are
+ * one fact (`presentationFromDeclaration`'s return value) that the page used to destructure back
+ * apart.
+ *
+ * ── THE UNIT: THE NEWEST DECLARATION, WHOLE — NO PER-KEY COMPARISON ──
+ *
+ * Every one of the eleven surfaces this app already has needs its own comparison logic —
+ * `sameView`, `isNewer`, `extendsLine`, `ANCHOR_TRUST` — because each holds a fact that can be
+ * newer or older than what is on screen. A `Declaration` has no such question: there is exactly
+ * one writer (`applyPresentation`, `app/index.html`), exactly one source (`/presentation.json`),
+ * and no notion of "stale" independent of "not the one most recently fetched". So this is a plain
+ * `interface`, not a class — nothing here needs a method, because "the newest one, whole" is not
+ * a comparison, it is a replacement.
+ *
+ * ── ATOMICITY IS STRUCTURAL, NOT A CONVENTION FOLLOWED CAREFULLY ──
+ *
+ * The six-`let` shape this replaces had no barrier between assigning `structural` and assigning
+ * `rulesTable` — a throw between the two (or a future edit that inserts one) would leave some axes
+ * describing a new document and some the old, with nothing to catch it. A `Declaration` cannot tear
+ * for a structural reason, not merely an unlikely one: `declarationFrom` below builds the whole
+ * object as ONE expression before it is ever assigned to anything, so either every field is read
+ * off the SAME `DeclaredPresentation` (which is itself built as one object literal by
+ * `presentationFromDeclaration` above, off one call to each of five pure readers, before that
+ * function returns), or the assignment that would have replaced `declaration` never runs at all —
+ * there is no intermediate state a caller synchronously in between two field writes could observe,
+ * because there are no longer two field writes. `applyPresentation` becomes ONE assignment,
+ * `declaration = declarationFrom(declared);`, and an object reference swap is not divisible the
+ * way six sequential statements are.
+ *
+ * ── WHAT THIS DOES NOT HOLD, AND WHY ──
+ *
+ * NO SUBSCRIPTION. Nothing here notifies a reader when `applyPresentation` runs — the same PULL
+ * discipline `research-the-store.md` §5 invariant 4 names for the eleven surfaces applies here
+ * without qualification: a reader takes `declaration` (or one of its fields) as an argument, fresh,
+ * the same way `paint()` already takes `presentation`, never as something it subscribed to.
+ *
+ * NO CACHE OF ANYTHING DERIVED FROM IT. `globalRegistrationFor`/`resolverContextFor`
+ * (`app/index.html`) still build their own fresh object literal on every call, per invariant 3 —
+ * this value changes what they read FROM, never whether they memoise, and they still do not.
+ *
+ * NO `problems`. `DeclaredPresentation.problems` is consumed once, by `applyPresentation`'s
+ * `console.warn` loop, at the moment a document is read — it is a report about THAT READ, not a
+ * fact about the current state of the page, and holding it past that loop would be a stale problem
+ * list sitting beside a since-corrected declaration. `declarationFrom` below drops it on purpose.
+ *
+ * ── THE SENTINEL: "NOT YET DECLARED" IS A DIFFERENT FACT FROM "DECLARED EMPTY" ──
+ *
+ * `presentationFromDeclaration` never returns `undefined` for `structural`/`qualification`/`rules`
+ * — a document that is missing, malformed, or simply absent from the network yields each axis's own
+ * `EMPTY` constant (see `structural.ts`/`qualification.ts`/`rules.ts`), because THOSE readers are
+ * only ever called with an ACTUAL document, even if that document turns out to be `{}`. But
+ * `app/index.html` can be in a state that document never describes: no document has been read yet
+ * — before the boot-time `loadPresentation()` resolves, or forever, if its `fetch` throws (that
+ * catch block warns and returns without ever calling `applyPresentation` — see `loadPresentation`'s
+ * own header). Two resolvers (`resolvers/membership.ts`, `resolvers/promotion.ts`) gate on
+ * `declared.qualification === undefined` specifically to mean "nothing has ever answered this
+ * question", which `EMPTY` does not mean — `EMPTY` is a real, if content-free, answer.
+ * `NOT_YET_DECLARED` below reproduces exactly the values the six original `let`s were initialised
+ * to, `undefined` included, so that distinction — never collapsed into `EMPTY` by this change — is
+ * carried across the consolidation rather than quietly erased by it.
+ */
+export interface Declaration {
+  readonly context: PresentationContext;
+  readonly indentUnit: number;
+  readonly structural: StructuralLanguage | undefined;
+  readonly qualification: QualificationLanguage | undefined;
+  readonly resolution: ConfigResolutionTable | undefined;
+  readonly rules: RulesLanguage | undefined;
+}
+
+/**
+ * The page's declaration before any document has ever been read. Every field reproduces, exactly,
+ * what the six `let`s this replaces were each initialised to — an empty `PresentationContext`
+ * (every level silent), the engine's own indent-unit literal, and `undefined` for the three axes
+ * whose readers `presentationFromDeclaration` has not yet been asked to run. See this file's own
+ * header ("THE SENTINEL") for why `undefined` here, and not `EMPTY`, is the fact this state needs.
+ */
+export const NOT_YET_DECLARED: Declaration = {
+  context: new PresentationContext(),
+  indentUnit: DEFAULT_INDENT_UNIT,
+  structural: undefined,
+  qualification: undefined,
+  resolution: undefined,
+  rules: undefined,
+};
+
+/**
+ * The one place a `DeclaredPresentation` (a reading OF a document, plus its problems) becomes a
+ * `Declaration` (the page's current, held fact). `applyPresentation` is the only caller — see this
+ * file's own header for why the whole of `app/index.html`'s six-`let` replacement is exactly one
+ * call to this function followed by exactly one assignment.
+ */
+export function declarationFrom(declared: DeclaredPresentation): Declaration {
+  return {
+    context: declared.context,
+    indentUnit: declared.indentUnit,
+    structural: declared.structural,
+    qualification: declared.qualification,
+    resolution: declared.resolution,
+    rules: declared.rules,
   };
 }

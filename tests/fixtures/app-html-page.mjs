@@ -120,6 +120,12 @@ export { applyPresentation as __applyPresentation };
 // hand-written "/presentation.json" would go on passing after the page moved the document — this
 // reads the page's own constant.
 export const __declarationUrl = () => DECLARATION_URL;
+// THE DECLARATION ITSELF — a getter, the same reason \`__served\`/\`__rows\` below are: a suite
+// reads what the page is holding NOW, not a snapshot from import time, and \`declaration\` is
+// reassigned wholesale by \`applyPresentation\` rather than mutated in place (app/present/
+// context.ts's \`Declaration\` header). A suite proving that reassignment is atomic reads this
+// getter before and after an interrupted load; see tests/app-declaration-atomicity.test.mjs.
+export const __declaration = () => declaration;
 // THE BASE. \`served\` is the page's own BaseSurface (app/present/base.ts) — a getter, like the vim
 // pair below, so a suite reads what the page is holding NOW rather than a snapshot from import
 // time. \`writeFile\` is exported for the one thing a driven affordance cannot show: that the write

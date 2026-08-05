@@ -2429,6 +2429,24 @@ function presentationFromDeclaration(document2) {
     ]
   };
 }
+var NOT_YET_DECLARED = {
+  context: new PresentationContext(),
+  indentUnit: DEFAULT_INDENT_UNIT,
+  structural: void 0,
+  qualification: void 0,
+  resolution: void 0,
+  rules: void 0
+};
+function declarationFrom(declared) {
+  return {
+    context: declared.context,
+    indentUnit: declared.indentUnit,
+    structural: declared.structural,
+    qualification: declared.qualification,
+    resolution: declared.resolution,
+    rules: declared.rules
+  };
+}
 
 // app/present/relative.ts
 function extendsLine(held, arrived) {
@@ -5650,6 +5668,7 @@ export {
   INDENT_UNIT,
   ModeSurface,
   NOT_EVALUATED,
+  NOT_YET_DECLARED,
   OWED_LIMIT,
   PICKUP_DELAYS,
   PickupSchedule,
@@ -5687,6 +5706,7 @@ export {
   cleanTitleFor,
   closeDrawer,
   coverageOf,
+  declarationFrom,
   defaultOrderingFor,
   defaultOrderingPlacementFor,
   defineResolver,

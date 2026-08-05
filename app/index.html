@@ -1017,9 +1017,9 @@ import {
   FocusSurface,
   ModeSurface,
   clampLine,
-  PresentationContext,
   presentationFromDeclaration,
-  DEFAULT_INDENT_UNIT,
+  declarationFrom,
+  NOT_YET_DECLARED,
   SettleSurface,
   PredictSurface,
   RowStore,
@@ -1052,58 +1052,41 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=9a3d65822c";
+} from "/dist/present.js?v=d761128061";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
 
-// THE GLOBAL LEVEL (migration stage 2). Until the declaration is fetched every level is silent
-// and every key falls through to DEFAULT, which is exactly what this page painted before there
-// was a cascade — so a slow, missing or broken presentation.json costs nothing but a warning.
-// The other levels arrive one stage at a time: MODE at stage 4, USER at stage 5 (from the user
-// record behind the session, never from browser storage), VIEW and STRUCTURAL_NODE at stage 7
-// once the snapshot envelope carries them.
-let presentation = new PresentationContext();
-
-// THE INSTANCE'S INDENT UNIT — how many leading spaces `>`/`<` add or remove per level. Read from
-// the SAME document as `presentation` above; falls back to the engine's own current literal
-// (design-the-structural-language.md §3) until a declaration says otherwise. Threaded into
-// `indentedLine` below so the source-edit arithmetic never carries its own copy of this number.
-let indentUnit = DEFAULT_INDENT_UNIT;
-
-// THE STRUCTURAL LANGUAGE (design-the-structural-language.md, item 1 of that design) — what a
-// gesture like `>`/`<` MEANS: which edge type an indent creates, that edge's cardinality (which
-// decides move-vs-add), and any section's own override. A LOOKUP TABLE, not a resolver — nothing
-// in this page or in app/present/ interprets it yet. It is read and validated here, alongside
-// `presentation`, so a future narration surface (item 3 of the same design — "tell the operator
-// what `>` will do before they press it") has one already-fetched, already-validated source to
-// read rather than a second fetch or a second parser. Until that surface exists, this variable is
-// read by nothing, which is the honest state of "published, not yet consumed".
-let structural = undefined;
-
-// THE MEMBERSHIP AXIS (design-the-resolution-architecture.md, L5 EVALUATION) — which section a
-// declared predicate says a line belongs in, and the full declared section order per view that L3
-// ADDRESSING (app/present/address.ts's sectionAt) indexes. Read and validated here, the same
-// posture as `structural` above. STEP 4 GAVE THIS A READER: `membershipNoteFor` below calls
-// `sectionAt`/`membershipFor` against it from `commitLine`, so a committed edit can say whether the
-// line it just changed still belongs in the section it is in.
-let qualification = undefined;
-
-// THE CONFIG-ONLY RESOLUTION TABLE (design-the-resolution-architecture.md step 5) — registration's
-// two names, ordering, line grammars, the day boundary, and (step 6) which node types are
-// checkbox-shaped. Read and validated here, the same posture as `structural`/`qualification` above.
-// STEP 6 GAVE `chromeShapes` A READER: `globalRegistrationFor` below joins it against
-// `qualification.sections`/`sectionOrder` so `newline.ts`'s GLOBAL rung can answer for a view that
-// has printed no node line, instead of refusing outright.
-let resolution = undefined;
-
-// THE RULES-CATEGORY AXIS (`scripts/compile-rules.mjs`) — every rule under the operator's `rules/`
-// directory a closed grammar can model, in fire order, plus the pattern find-clauses and field
-// marker spellings needed to APPLY it to a fresh capture. Read and validated here, the same
-// posture as `structural`/`qualification`/`resolution` above. `rulesReadingFor` (below) is what
-// finally reads it — the axis every OTHER category already had a call site for and this one did
-// not, until now.
-let rulesTable = undefined;
+// THE DECLARATION — ONE SERVED DOCUMENT, HELD AS ONE VALUE. `presentation`/`indentUnit`/
+// `structural`/`qualification`/`resolution`/`rulesTable` used to be six independent `let`s, all
+// six fed by nothing but `applyPresentation` below, all six read off the SAME document
+// (`/presentation.json`) by the SAME function (`presentationFromDeclaration`, app/present/
+// context.ts). Six variables with one writer is not six facts, it is one fact that happened to be
+// destructured apart — see `research-the-store.md` §7.1, the one piece of concrete work its survey
+// of this app's whole state layer recommended, and `Declaration`'s own header
+// (app/present/context.ts) for the full case: the unit, what it deliberately does not hold, and
+// exactly how a partial six-way update is now structurally impossible rather than merely unlikely.
+//
+// WHAT EACH FIELD IS, FOR A READER WHO WANTS THE OLD PER-AXIS DESIGN-DOC POINTERS RATHER THAN THE
+// SHAPE ARGUMENT: `.context` is the GLOBAL cascade level (migration stage 2 — the other levels
+// arrive one stage at a time: MODE at stage 4, USER at stage 5, VIEW/STRUCTURAL_NODE at stage 7).
+// `.indentUnit` is how many leading spaces `>`/`<` add or remove per level
+// (design-the-structural-language.md §3), read into `indentedLine` below. `.structural` is the
+// INGEST axis — what an indent gesture MEANS (design-the-structural-language.md, item 1) — read
+// and validated here, ahead of the narration surface (item 3 of the same design) that will
+// eventually consume it; nothing does yet, which is the honest state of "published, not yet
+// consumed", not a defect. `.qualification` is the MEMBERSHIP axis — which section a line belongs
+// in (design-the-resolution-architecture.md, L5 EVALUATION). `.resolution` is the CONFIG-ONLY
+// RESOLUTION TABLE — registration's two names, ordering, line grammars, the day boundary, and
+// which node types are checkbox-shaped (design-the-resolution-architecture.md steps 5-6).
+// `.rules` is the RULES-CATEGORY AXIS (`scripts/compile-rules.mjs`) — every rule a closed grammar
+// can model, in fire order.
+//
+// `NOT_YET_DECLARED` (app/present/context.ts) is what this holds before the first document is
+// ever read, and forever, if `loadPresentation`'s fetch never succeeds — see that constant's own
+// header for why its three `undefined` fields are a different fact from a document that parsed to
+// nothing, and why collapsing that distinction would be a real, not cosmetic, behaviour change.
+let declaration = NOT_YET_DECLARED;
 
 // THE PAGE FETCHES; IT DOES NOT HOLD A COPY. Turning the document into levels is still
 // presentationFromDeclaration's job, in a TS module, where flow-trace can see the edge — a
@@ -1137,12 +1120,11 @@ function applyPresentation(document) {
   for (const problem of declared.problems) {
     console.warn("presentation.json: " + problem);
   }
-  presentation = declared.context;
-  indentUnit = declared.indentUnit;
-  structural = declared.structural;
-  qualification = declared.qualification;
-  resolution = declared.resolution;
-  rulesTable = declared.rules;
+  // ONE ASSIGNMENT, ATOMIC BY CONSTRUCTION — see `Declaration`'s own header (app/present/
+  // context.ts) for why this single reference swap cannot land five-of-six axes: `declarationFrom`
+  // builds the whole replacement object before this line ever runs, so there is no instant at
+  // which some fields describe the new document and some the old.
+  declaration = declarationFrom(declared);
 }
 
 /**
@@ -1153,10 +1135,11 @@ function applyPresentation(document) {
  * happen, not a branch here.
  *
  * BUILT FRESH, NEVER CACHED. Cheap object literal, and caching it would be one more piece of state
- * that could drift from `qualification`/`resolution` after a projection lands — the same reasoning
- * `applyPresentation` itself follows for not memoising `presentation`.
+ * that could drift from `declaration.qualification`/`.resolution` after a projection lands — the
+ * same reasoning `applyPresentation` itself follows for not memoising `declaration`.
  */
 function globalRegistrationFor(viewId) {
+  const { qualification, resolution } = declaration;
   if (qualification === undefined || resolution === undefined) {
     return undefined;
   }
@@ -2305,7 +2288,7 @@ function repaintCurrentView() {
       v.id,
     );
   }
-  paint(body, source, presentation, {
+  paint(body, source, declaration.context, {
     markdown: md,
     view: v.id,
     focus,
@@ -2505,14 +2488,19 @@ function healFromRefusal(path, current) {
  * always been.
  *
  * BUILT FRESH, NEVER CACHED — the same reason `globalRegistrationFor` above is not memoised. A
- * cached context is one more thing that can drift from `qualification`/`resolution`/`graphData`
- * after a projection lands.
+ * cached context is one more thing that can drift from `declaration`/`graphData` after a
+ * projection lands.
  */
 function resolverContextFor(view, commit) {
   return {
     view,
     commit,
-    declared: { structural, qualification, resolution, rules: rulesTable },
+    declared: {
+      structural: declaration.structural,
+      qualification: declaration.qualification,
+      resolution: declaration.resolution,
+      rules: declaration.rules,
+    },
     // READ, NEVER REQUESTED. `graphSnapshotOf` (resolve.ts) narrows whatever `graphData` is holding
     // to the `{nodes, edges}` shape the graph-aware pass needs, and answers `null` — honestly —
     // for a brand-new account whose snapshot is genuinely absent.
@@ -3408,7 +3396,7 @@ document.addEventListener("keydown", (e) => {
       // rule (source.ts) is what turns that into "post nothing" — no second no-op check is needed
       // here, same posture as `x` above.
       const line = source.split("\n")[current] ?? "";
-      const text = indentedLine(line, effect.direction, effect.count, indentUnit);
+      const text = indentedLine(line, effect.direction, effect.count, declaration.indentUnit);
       const markdown = applyEdit(source, { kind: "set-line", lineIndex: current, text });
       if (markdown !== null) {
         // `existingLineCommit` — see the comment on the `x` handler above for why this no longer
