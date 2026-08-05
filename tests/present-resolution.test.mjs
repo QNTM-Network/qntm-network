@@ -180,18 +180,30 @@ describe("1a. wired into the app's one reader (presentationFromDeclaration)", ()
 
   test("a document with no resolution key at all still wires cleanly — silence, not a crash", () => {
     const declared = presentationFromDeclaration({ checkbox: "wired" });
-    assert.equal(declared.resolution.registration, undefined);
-    assert.deepEqual(declared.resolution.ordering, {});
+    // `undefined`, not an empty table. There is no empty table any more: a resolution without a
+    // day boundary is not a lesser table, it is one no reader may hold. See section 2a.
+    assert.equal(declared.resolution, undefined);
+    assert.deepEqual(declared.problems, [], "silence must stay silent — this is not a problem");
   });
 });
 
 describe("2. a malformed declaration is reported, never guessed", () => {
-  const read = (resolution) => readConfigResolutionDeclaration({ resolution });
+  /**
+   * A VALID DAY BOUNDARY RIDES ON EVERY FIXTURE BELOW, and none of these tests is about the clock.
+   *
+   * The reader now refuses to produce a table at all without one (section 2a proves that
+   * directly), so a fixture that omitted it would make every assertion here fail for the same
+   * uninteresting reason instead of testing the key it names. A test that wants the boundary
+   * ABSENT passes `dayBoundary: undefined` explicitly and says so.
+   */
+  const DAY_BOUNDARY = { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" };
+  const read = (resolution) =>
+    readConfigResolutionDeclaration({ resolution: { dayBoundary: DAY_BOUNDARY, ...resolution } });
 
   test("no `resolution` key at all is silence, not a problem", () => {
     const { resolution, problems } = readConfigResolutionDeclaration({ checkbox: "wired" });
     assert.deepEqual(problems, []);
-    assert.equal(resolution.registration, undefined);
+    assert.equal(resolution, undefined);
   });
 
   test("an unrecognised top-level key is reported and NOT applied", () => {
@@ -215,18 +227,19 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     assert.deepEqual(resolution.ordering, {});
   });
 
-  test("dayStartHour outside 0..23 is reported and the day boundary drops", () => {
+  test("dayStartHour outside 0..23 is reported and the WHOLE TABLE drops, not just the boundary", () => {
     const { resolution, problems } = read({
       dayBoundary: { timezone: "Europe/London", dayStartHour: 24, weekStartsOn: "monday" },
     });
     assert.ok(problems.some((p) => p.includes("dayStartHour")), problems.join("\n"));
-    assert.equal(resolution.dayBoundary, undefined);
+    // The boundary is the ONE key that takes the table down with it — see section 2a.
+    assert.equal(resolution, undefined);
   });
 
   test("a `resolution` key of the wrong shape blinds the reader loudly, not silently", () => {
     const { resolution, problems } = readConfigResolutionDeclaration({ resolution: [] });
     assert.equal(problems.length, 1);
-    assert.equal(resolution.registration, undefined);
+    assert.equal(resolution, undefined);
   });
 
   test("chromeShapes: an unrecognised shape is reported and that node type drops", () => {

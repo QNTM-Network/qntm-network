@@ -36,6 +36,20 @@ import { orderingPlacementFor, resolveOrderingPlacementFor } from "../dist/prese
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-ordering-note");
 
+/**
+ * EVERY `resolution` FIXTURE IN THIS FILE CARRIES THIS, AND NONE OF THEM IS ABOUT THE CLOCK.
+ *
+ * `readConfigResolutionDeclaration` refuses to produce a resolution table at all without a valid
+ * day boundary — the boundary is the one field whose absence would crash a reader rather than
+ * quiet it, so it is required rather than optional (see `ConfigResolutionTable.dayBoundary`). A
+ * fixture that omits it leaves `resolution === undefined`, and the ordering resolver then abstains
+ * at its first gate instead of answering, so every assertion below would fail for a reason that
+ * has nothing to do with ordering. This is the cost of the whole-table refusal, made visible: the
+ * ordering axis does not read the clock (measured — see `ordering.ts`'s header) but it now shares
+ * a declaration that will not load without one.
+ */
+const DAY_BOUNDARY = { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" };
+
 const FAKE_DECLARATION = {
   qualification: {
     defaultNodeType: "task",
@@ -51,6 +65,7 @@ const FAKE_DECLARATION = {
       demo: { queue: { ordering: [{ field: "queue_position", direction: "asc" }], orderingMode: undefined, name: "Queue" } },
     },
     orderingFields: { queue_position: { token: "🔢", kind: "int" } },
+    dayBoundary: DAY_BOUNDARY,
   },
 };
 
@@ -185,6 +200,7 @@ const BOTH_DECLARATION = {
       demo2: { "domain-empty": { ordering: [{ field: "queue_position", direction: "asc" }], orderingMode: undefined, name: "Domain Empty" } },
     },
     orderingFields: { queue_position: { token: "🔢", kind: "int" } },
+    dayBoundary: DAY_BOUNDARY,
   },
 };
 
@@ -447,6 +463,7 @@ const BADGE_DECLARATION = {
       "daily-work": { capture: { ordering: undefined, orderingMode: "insertion_order", name: "Work Capture" } },
     },
     orderingFields: FAKE_DECLARATION.resolution.orderingFields,
+    dayBoundary: DAY_BOUNDARY,
   },
 };
 
@@ -588,6 +605,7 @@ const DEFAULT_DECLARATION = {
       { field: "title", direction: "asc" },
     ],
     priorityRank: { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 },
+    dayBoundary: DAY_BOUNDARY,
   },
 };
 
@@ -736,6 +754,7 @@ const INBOX_DECLARATION = {
       { field: "title", direction: "asc" },
     ],
     priorityRank: { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 },
+    dayBoundary: DAY_BOUNDARY,
   },
 };
 
