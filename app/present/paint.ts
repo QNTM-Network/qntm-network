@@ -103,6 +103,7 @@ import { openLine } from "./newline.js";
 import type { GlobalRegistration } from "./newline.js";
 import { classifyLine, stampSpans, tagSpans } from "./rendition.js";
 import type { Rendition } from "./rendition.js";
+import type { RowSink } from "./rows.js";
 import type { SettleSurface } from "./settle.js";
 import type { PredictSurface } from "./predict.js";
 import { applyEdit } from "./source.js";
@@ -340,6 +341,21 @@ export interface PaintDeps {
    * that distinction is made, once, before either ever reaches this file.
    */
   readonly predict?: PredictSurface;
+  /**
+   * WHERE THE ROWS OF THIS VIEW ARE HELD — optional, and its absence is a real configuration
+   * exactly as `focus`'s is: without it this painter says nothing about what it drew, which is
+   * every test written before `rows.ts` existed and the golden master's own comparison.
+   *
+   * IT IS WRITE-ONLY HERE, AND THAT IS THE POINT OF THE NARROWED TYPE. `RowSink` (rows.ts) carries
+   * `edited` and nothing else, so this file cannot read back a row identity it is in the middle of
+   * producing. The painter's output must not re-enter the reasoning that produced it — the same
+   * refusal `app/index.html`'s `aLineIsOpen` states for reading the document.
+   *
+   * IT IS TOLD ONLY BY `repaint`, THE ONE PLACE THIS FILE PUTS A NEW STRING ON THE SCREEN. A paint
+   * that was CALLED with a source (the page's own `repaintCurrentView`) needs no telling: the page
+   * got that string from the store in the first place.
+   */
+  readonly rows?: RowSink;
 }
 
 /**
@@ -1243,6 +1259,20 @@ export function paint(
    * a second copy of the precedence order, in the painter, which is the thing the design forbids.
    */
   const repaint = (nextSource: string): void => {
+    // ── THE ONE PLACE THIS FILE PUTS A STRING ON THE SCREEN THAT NOBODY ELSE HAS SEEN ───────────
+    //
+    // A settlement computes its own next source (`applyEdit`, above) and repaints into it
+    // optimistically. Until `rows.ts` existed that string lived in the DOM and NOWHERE ELSE, so
+    // the page's own `repaintCurrentView` — which re-derives its source from the server's copy —
+    // painted a different file a moment later and called it the same view. That is the operator's
+    // "we can't select it while it's resolving", and this statement is what closes it.
+    //
+    // TOLD, NOT ASKED. The store is handed what this frame is ABOUT to draw; it decides nothing
+    // here and answers nothing back. `deps.view` gates it for the same reason `stampInstance` is
+    // gated on it: a row key is meaningless without the view it is namespaced by.
+    if (deps.view !== undefined) {
+      deps.rows?.edited(deps.view, nextSource);
+    }
     paint(body, nextSource, context, deps);
   };
 
@@ -1721,5 +1751,20 @@ export function paint(
       repaint(source);
     });
     body.append(below);
+  }
+
+  // ── WHAT THIS FRAME DREW, AND WHERE IT DREW THE CURSOR ────────────────────────────────────────
+  //
+  // LAST, AND ONLY IN A FRAME THAT WAS NOT SUPERSEDED — every `superseded()` gate above returns
+  // before reaching here, so the seat this records belongs to the paint whose rows are actually on
+  // the page. A superseded frame records nothing, which is the whole reason this is at the bottom
+  // rather than beside the `focus` reads at the top.
+  //
+  // IT IS THE ONE PLACE THE SELECTION IS RECORDED, and `rows.ts`'s `seat` states why: six gestures
+  // move the cursor and every one of them ends in a paint, so recording it in each of them would be
+  // six things to keep in step with one fact. The store refuses a seat that does not describe what
+  // it is holding, so this call needs to know nothing about that.
+  if (deps.view !== undefined) {
+    deps.rows?.seat(deps.view, source, focus?.lineIndex ?? null);
   }
 }

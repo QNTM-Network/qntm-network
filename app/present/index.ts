@@ -221,6 +221,14 @@ export type { RowPlacement, SettleInstruction } from "./settle.js";
 export { PredictSurface } from "./predict.js";
 export type { PredictInstruction, RowPrediction, WithdrawnPrediction } from "./predict.js";
 
+// ── THE ROWS OF THE VIEW ON SCREEN, HELD OUTSIDE THE DOM ──
+//
+// The string the painter walked, one row per printed line, each with a handle that outlives the
+// string it came from, and which row is selected. See rows.ts's own header for the defect it ends
+// and for why the identity is a two-arm union rather than a nullable field.
+export { RowStore, engineOf } from "./rows.js";
+export type { EngineRowId, LocalRowId, Row, RowIdentity, RowSink } from "./rows.js";
+
 // ── WHAT A RESOLVER IS, AND THE FOUR THIS APP HAS ──
 //
 // The page used to hold four hand-written functions per axis and name every one of them inside

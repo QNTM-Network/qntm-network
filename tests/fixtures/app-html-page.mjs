@@ -159,7 +159,15 @@ export function __enterInsert() { mode.enterInsert(); repaintCurrentView(); }
 // \`paintView\` lands the anchor in the SAME instance-id space \`paintView\`'s own reanchoring will
 // resolve it against — and \`__sayAsOf\` is the page's real freshness writer, exported so a test can
 // prove a refusal survives the line every write path overwrites it with.
-export function __setFocus(lineIndex, source) { focus.focus(lineIndex, source, 0, currentViewId); }
+// IT SEATS THE ROW STORE TOO, because putting the cursor somewhere IS both facts. In the shipping
+// app the two are never apart: every gesture that moves the cursor is followed by a paint, and
+// \`paint()\` records the seat (app/present/rows.ts). This hook has no paint, so without the second
+// statement it would leave the page in a state no gesture can produce — the cursor on one row and
+// the store seated on another — and every suite using it would be measuring that instead of the app.
+export function __setFocus(lineIndex, source) {
+  focus.focus(lineIndex, source, 0, currentViewId);
+  rows.seat(currentViewId ?? "", source, lineIndex);
+}
 export const __focusAnchor = () => focus.anchor;
 export { sayAsOf as __sayAsOf };
 // ── THE RESOLVER SEAM, AND WHY IT IS A COMPATIBILITY SHIM RATHER THAN AN API ──
@@ -265,6 +273,12 @@ export { correlate as __correlate };
 // could only wait ten seconds could prove neither.
 export const __pickups = () => pickups;
 export const __accepted = () => accepted;
+// THE ROWS OF THE VIEW ON SCREEN (app/present/rows.ts). A getter, the same reason \`__accepted\`
+// and \`__draft\` are: a suite reads the table the page is holding NOW, and what changes under it
+// is which rows survived, what they are called and which one is selected. It is the ONLY way to
+// tell "the row the operator typed is still that row" apart from "a row with the same characters
+// is on screen", which are the same pixels and different facts.
+export const __rows = () => rows;
 export { collect as __collect, startPickup as __startPickup };
 `;
 
