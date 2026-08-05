@@ -801,18 +801,6 @@ var TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"];
 var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
 var DIRECTIONS2 = ["asc", "desc"];
 var CHROME_SHAPES = ["checkbox", "plain_line"];
-var EMPTY3 = {
-  registration: void 0,
-  lineGrammars: {},
-  ordering: {},
-  orderingFields: {},
-  dayBoundary: void 0,
-  chromeShapes: {},
-  sectionRegistration: {},
-  defaultOrdering: [],
-  priorityRank: {},
-  dropped: {}
-};
 var isScalarOrNull = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
 function readSectionRegistrationEntry(path, value, problems) {
   if (!isPlainObject3(value)) {
@@ -1203,10 +1191,10 @@ function readPriorityRank(value, problems) {
 }
 function readConfigResolutionDeclaration(document2) {
   if (!isPlainObject3(document2)) {
-    return { resolution: EMPTY3, problems: [] };
+    return { resolution: void 0, problems: [] };
   }
   if (!(RESOLUTION_TABLE_KEY in document2)) {
-    return { resolution: EMPTY3, problems: [] };
+    return { resolution: void 0, problems: [] };
   }
   const raw = document2[RESOLUTION_TABLE_KEY];
   const problems = [];
@@ -1214,7 +1202,7 @@ function readConfigResolutionDeclaration(document2) {
     problems.push(
       `'${RESOLUTION_TABLE_KEY}' is ${shapeOf2(raw)}, not an object \u2014 the whole resolution table stays unknown`
     );
-    return { resolution: EMPTY3, problems };
+    return { resolution: void 0, problems };
   }
   for (const key of Object.keys(raw)) {
     if (!TOP_KEYS2.includes(key)) {
@@ -1223,13 +1211,22 @@ function readConfigResolutionDeclaration(document2) {
       );
     }
   }
+  const dayBoundary = "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0;
+  if (dayBoundary === void 0) {
+    if (!("dayBoundary" in raw)) {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}' declares no 'dayBoundary' \u2014 the whole resolution table is NOT applied, because a table without a day boundary is a table this app cannot resolve a date against. Ordering, promotion and new-line seeding stay silent until one is declared.`
+      );
+    }
+    return { resolution: void 0, problems };
+  }
   return {
     resolution: {
       registration: "registration" in raw ? readRegistration(raw.registration, problems) : void 0,
       lineGrammars: "lineGrammars" in raw ? readLineGrammars(raw.lineGrammars, problems) : {},
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
       orderingFields: "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
-      dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : void 0,
+      dayBoundary,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
       sectionRegistration: "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
       defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],
@@ -1847,7 +1844,7 @@ function membershipFor(viewId, sectionId, line, language) {
 
 // app/present/rules.ts
 var RULES_KEY2 = "rules";
-var EMPTY4 = {
+var EMPTY3 = {
   orderEstablished: false,
   order: [],
   rules: {},
@@ -2119,13 +2116,13 @@ function readReasons2(key, value, problems) {
 }
 function readRulesDeclaration(document2) {
   if (!isPlainObject4(document2) || !(RULES_KEY2 in document2)) {
-    return { rules: EMPTY4, problems: [] };
+    return { rules: EMPTY3, problems: [] };
   }
   const raw = document2[RULES_KEY2];
   const problems = [];
   if (!isPlainObject4(raw)) {
     problems.push(`'${RULES_KEY2}' is ${shapeOf3(raw)}, not an object`);
-    return { rules: EMPTY4, problems };
+    return { rules: EMPTY3, problems };
   }
   const rulesRaw = raw.rules;
   const rules = {};

@@ -102,9 +102,16 @@ export interface DeclaredPresentation {
   readonly qualification: QualificationLanguage;
   /** The CONFIG-ONLY RESOLUTION TABLE — registration's two names, ordering, line grammars, the
    * day boundary. See `resolutiontable.ts`'s header for what it deliberately does not carry
-   * (defaults and the per-view minting default, already published on `qualification` above) and
-   * why none of it has a production consumer yet. */
-  readonly resolution: ConfigResolutionTable;
+   * (defaults and the per-view minting default, already published on `qualification` above).
+   *
+   * `undefined` WHEN THE DOCUMENT DECLARED NO USABLE TABLE, and unlike `structural`/
+   * `qualification`/`rules` beside it there is no empty-object form of this one to fall back to:
+   * a table without a valid `dayBoundary` is refused whole, because the boundary is the one field
+   * whose absence crashes a reader rather than quieting it. See
+   * `readConfigResolutionDeclaration`'s own header for what that refusal costs and why it is
+   * still the right trade. Consumers already gate on this — `resolvers/{rules,ordering,
+   * promotion}.ts` and the page's `globalRegistrationFor` each open by checking it. */
+  readonly resolution: ConfigResolutionTable | undefined;
   /** THE RULES-CATEGORY GRAMMAR — `scripts/compile-rules.mjs`'s own published pattern/predicate/
    * priority/action table, plus the pattern find-clauses and field-marker spellings needed to
    * APPLY it to a fresh capture's own resolved fields. See `rules.ts`'s header for what reads it

@@ -167,7 +167,16 @@ export interface SectionRegistration {
   readonly tokens: readonly string[];
 }
 
-/** The whole published table. A lookup, not a resolver. */
+/**
+ * The whole published table. A lookup, not a resolver.
+ *
+ * A VALUE OF THIS TYPE IS COMPLETE IN THE ONE FIELD THAT CANNOT DEGRADE — see `dayBoundary`
+ * below. Every OTHER absence here is a per-key refusal a reader must handle by ABSTAINING, and
+ * each one is typed `| undefined` or is a record whose entry may simply be missing. `dayBoundary`
+ * is not, and the difference is not taste: it is the only field whose consumer (`today.ts`'s
+ * `todayFor`) takes it as a REQUIRED parameter, so an absent one is not an abstention a caller
+ * chooses — it is a `TypeError` a caller cannot see coming.
+ */
 export interface ConfigResolutionTable {
   readonly registration: RegistrationTable | undefined;
   /** grammar name -> the shape names it admits. */
@@ -177,7 +186,28 @@ export interface ConfigResolutionTable {
    * absent here has no known marker (a fixed-`value:` marker, a `render_only` one, or none at
    * all) — see this module's header for why that is a refusal, never a guess. */
   readonly orderingFields: Readonly<Record<string, OrderingFieldMarker>>;
-  readonly dayBoundary: DayBoundary | undefined;
+  /**
+   * THE DECLARED DAY BOUNDARY, AND IT IS NEVER ABSENT — the one field on this table with no
+   * `| undefined`, so that no reader anywhere can hold one that is missing.
+   *
+   * WHY THIS FIELD AND NOT THE OTHERS. `todayFor` (today.ts) takes `DayBoundary`, not
+   * `DayBoundary | undefined`, and it dereferences `boundary.timezone` immediately. Every call
+   * site that reaches it does so inside `commitLine`'s SYNCHRONOUS prefix, in an `async` function
+   * no keydown handler awaits — so an `undefined` here does not degrade a preview, it throws into
+   * an unhandled rejection and the operator's capture disappears with no POST and nothing on
+   * screen. That is `f448da2`'s exact shape, the defect that silently discarded his `x` and `>`
+   * gestures for five hours.
+   *
+   * The previous shape typed this `DayBoundary | undefined` and left the whole table readable
+   * without it, which put the burden on every resolver to remember a guard. One already forgot
+   * (`resolvers/rules.ts` carried a documented `!`), and the page GUARDED the same case twelve
+   * lines from where it did not — the codebase disagreeing with itself about whether this can
+   * happen. Making it required moves the decision to the one place that can actually make it:
+   * `readConfigResolutionDeclaration` REFUSES TO PRODUCE A TABLE AT ALL without a valid boundary,
+   * so the state is unrepresentable rather than guarded, and a future resolver inherits the
+   * guarantee without knowing it exists. See that function's header for what "refuses" costs.
+   */
+  readonly dayBoundary: DayBoundary;
   /** node type -> its render-form family, for every `default_node_type` candidate this config
    * declares and every shape `newline.ts` knows how to seed. A type absent here is a type whose
    * chrome this app does not know how to produce — see this module's header. */
@@ -219,9 +249,18 @@ export interface ConfigResolutionTable {
   readonly dropped: Readonly<Record<string, string>>;
 }
 
-/** Mirrors `StructuralReading` / `QualificationReading`: the value, plus what was wrong with it. */
+/**
+ * Mirrors `StructuralReading` / `QualificationReading`: the value, plus what was wrong with it.
+ *
+ * `resolution: undefined` IS AN ANSWER, AND IT IS THE SAME ANSWER THE APP ALREADY HANDLES —
+ * "this axis said nothing usable". It is the state the page is in before `presentation.json`
+ * arrives at all, so every consumer already gates on it (`resolvers/{rules,ordering,promotion}
+ * .ts` each open with `resolution === undefined`, and the page's own `globalRegistrationFor` does
+ * the same). Adding a second way to be incomplete would have meant a second gate; reusing this one
+ * means no caller changes and no future caller has to be told.
+ */
 export interface ConfigResolutionReading {
-  readonly resolution: ConfigResolutionTable;
+  readonly resolution: ConfigResolutionTable | undefined;
   readonly problems: readonly string[];
 }
 
@@ -251,18 +290,12 @@ const DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"] as const;
 const DIRECTIONS = ["asc", "desc"] as const;
 const CHROME_SHAPES = ["checkbox", "plain_line"] as const;
 
-const EMPTY: ConfigResolutionTable = {
-  registration: undefined,
-  lineGrammars: {},
-  ordering: {},
-  orderingFields: {},
-  dayBoundary: undefined,
-  chromeShapes: {},
-  sectionRegistration: {},
-  defaultOrdering: [],
-  priorityRank: {},
-  dropped: {},
-};
+// THERE IS NO `EMPTY` TABLE, AND THERE CANNOT BE ONE. This module used to keep a constant with
+// every field at its "nothing to say" value and hand it back for a document that declared no
+// `resolution` key at all. `dayBoundary: undefined` was one of those fields — which is precisely
+// how a table with no day boundary became an ordinary, returnable value that passed every
+// resolver's `resolution === undefined` gate and then threw on the next line. The empty table is
+// now `undefined` itself: the same silence, spelled the one way every caller already checks.
 
 const isScalarOrNull = (value: unknown): value is string | number | boolean | null =>
   value === null || ["string", "number", "boolean"].includes(typeof value);
@@ -736,17 +769,49 @@ function readPriorityRank(value: unknown, problems: string[]): Record<string, nu
 /**
  * Read the `resolution` key of a served presentation declaration.
  *
- * Same posture every reader in this directory takes: no key at all is silence, not a problem; a
- * key of the wrong shape is reported and the sub-fact that could not be read falls back to
- * "unknown" rather than aborting the whole read, so one bad section does not blind the app to the
- * rest of the table.
+ * Same posture every reader in this directory takes, FOR EVERY FIELD BUT ONE: no key at all is
+ * silence, not a problem; a key of the wrong shape is reported and the sub-fact that could not be
+ * read falls back to "unknown" rather than aborting the whole read, so one bad section does not
+ * blind the app to the rest of the table.
+ *
+ * ── THE ONE EXCEPTION, AND WHY THE REFUSAL LIVES HERE ──
+ *
+ * A table WITHOUT A VALID DAY BOUNDARY IS NOT ADOPTED AT ALL. This function returns
+ * `resolution: undefined`, and every consumer's existing `resolution === undefined` gate takes it
+ * from there. See `ConfigResolutionTable.dayBoundary`'s own comment for the defect class this
+ * closes; what belongs here is why the DECLARATION BOUNDARY is the right place for it.
+ *
+ * The alternative was a guard at the use site (`resolvers/rules.ts`). It was rejected for a
+ * reason that is about the next change rather than this one: the next resolver to read the
+ * boundary would have to remember the same guard, and "remember" is exactly what failed the first
+ * time. A refusal here is checked once, by the compiler, for every reader that will ever exist.
+ *
+ * ── WHAT THIS COSTS, STATED RATHER THAN GLOSSED ──
+ *
+ * It is a WIDER refusal than the boundary alone. A document whose `ordering`/`chromeShapes`/
+ * `sectionRegistration` are perfectly good but whose `dayBoundary` is missing or malformed now
+ * yields NO resolution table, so the ordering preview, the parent-promotion axis and the page's
+ * `globalRegistrationFor` new-line seeding all go quiet too — where today they would still work.
+ *
+ * That trade is deliberate. What they lose is a PREVIEW; what the old shape lost was the
+ * OPERATOR'S CAPTURE — no POST, no line, no message. A quiet preview is a state this app already
+ * has a name and a behaviour for (it is the state before `presentation.json` arrives); a
+ * vanished keystroke is the one failure this codebase treats as unacceptable. The refusal is also
+ * LOUD: an absent boundary under a present `resolution` key is reported as a problem, so
+ * `applyPresentation` prints it and the operator can see why the previews stopped.
+ *
+ * NOT A HARD FAILURE AT BOOT. Nothing here throws, and nothing downstream does either — the app
+ * boots, paints, moves the cursor and WRITES with `resolution: undefined`, which is precisely the
+ * "a missing or broken presentation.json costs nothing but a warning" posture the page's own
+ * `loadPresentation` header states. This function widens what falls into that posture; it does
+ * not turn any part of it into a crash.
  */
 export function readConfigResolutionDeclaration(document: unknown): ConfigResolutionReading {
   if (!isPlainObject(document)) {
-    return { resolution: EMPTY, problems: [] }; // declaration.ts's own guard already reports this
+    return { resolution: undefined, problems: [] }; // declaration.ts's own guard already reports this
   }
   if (!(RESOLUTION_TABLE_KEY in document)) {
-    return { resolution: EMPTY, problems: [] };
+    return { resolution: undefined, problems: [] };
   }
   const raw = document[RESOLUTION_TABLE_KEY];
   const problems: string[] = [];
@@ -755,7 +820,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       `'${RESOLUTION_TABLE_KEY}' is ${shapeOf(raw)}, not an object — the whole resolution table ` +
         "stays unknown",
     );
-    return { resolution: EMPTY, problems };
+    return { resolution: undefined, problems };
   }
   for (const key of Object.keys(raw)) {
     if (!(TOP_KEYS as readonly string[]).includes(key)) {
@@ -765,6 +830,24 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       );
     }
   }
+  // READ FIRST, THEN DECIDE WHETHER TO ADOPT. `readDayBoundary` reports its own malformed-shape
+  // problems into `problems` either way, so a broken boundary is described in the operator's
+  // console with the same detail it always was — the difference is only that the table it would
+  // have ridden on is no longer handed out.
+  const dayBoundary = "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : undefined;
+  if (dayBoundary === undefined) {
+    if (!("dayBoundary" in raw)) {
+      // An ABSENT boundary published no problem of its own until now — absence carried the
+      // meaning, and absence looks exactly like nothing-to-say. It is not: it is the whole table
+      // declining to load, and the operator must be able to read why.
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}' declares no 'dayBoundary' — the whole resolution table is NOT ` +
+          "applied, because a table without a day boundary is a table this app cannot resolve a " +
+          "date against. Ordering, promotion and new-line seeding stay silent until one is declared.",
+      );
+    }
+    return { resolution: undefined, problems };
+  }
   return {
     resolution: {
       registration: "registration" in raw ? readRegistration(raw.registration, problems) : undefined,
@@ -772,7 +855,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       ordering: "ordering" in raw ? readOrdering(raw.ordering, problems) : {},
       orderingFields:
         "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
-      dayBoundary: "dayBoundary" in raw ? readDayBoundary(raw.dayBoundary, problems) : undefined,
+      dayBoundary,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
       sectionRegistration:
         "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},

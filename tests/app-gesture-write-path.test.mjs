@@ -131,6 +131,13 @@ const DECLARATION = {
       },
     },
     orderingFields: { queue_position: { token: "🔢", kind: "int" } },
+    // REQUIRED FOR THIS FIXTURE TO BE ADOPTED AT ALL, and not incidental to the ordering axis it
+    // otherwise describes: `readConfigResolutionDeclaration` refuses to produce a resolution table
+    // without a valid day boundary, so a fixture that omits one leaves `resolution === undefined`
+    // and EVERY resolver abstains at its first gate. This suite's mutation proof (section 3) is a
+    // POSITIVE CONTROL that depends on the resolvers actually running — without this key it stops
+    // reproducing the defect it exists to reproduce, and passes for the wrong reason.
+    dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" },
   },
 };
 

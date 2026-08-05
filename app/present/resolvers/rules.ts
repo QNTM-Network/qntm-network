@@ -98,22 +98,23 @@ export const rulesSpec: ResolverSpec<RulesCommitReading> = {
     // rolls over at a declared hour in a declared zone, not at local midnight). The instant comes
     // from `ctx.now`, which the PAGE supplies — nothing in `app/present/` reads the clock itself.
     //
-    // ── A DEFECT THIS PORT FOUND AND DELIBERATELY DID NOT FIX ──
+    // ── THE DEFECT THIS LINE USED TO CARRY, AND WHERE IT WENT ──
     //
-    // `resolution.dayBoundary` is `DayBoundary | undefined` — `readConfigResolutionDeclaration`
-    // leaves it `undefined` when the document publishes no day boundary or a malformed one, and
-    // still returns a resolution table. `todayFor` then reads `boundary.timezone` off `undefined`
-    // and throws a TypeError, inside `commitLine`'s SYNCHRONOUS prefix, in an `async` function no
-    // keydown call site awaits — the operator's capture disappears with no POST and nothing on
-    // screen. Exactly the shape of the `f448da2` defect, and it has been live on this line since the
-    // rules axis was wired; the page could not see it because the page is outside `tsconfig.json`.
-    // The shipped `presentation.json` publishes a valid boundary, so it does not fire today.
+    // This read was `resolution.dayBoundary!` — a non-null assertion over a `DayBoundary |
+    // undefined`. `readConfigResolutionDeclaration` left the boundary `undefined` for a document
+    // that published none or a malformed one and STILL returned a resolution table, so the gate
+    // above passed and `todayFor` read `boundary.timezone` off `undefined`: a TypeError inside
+    // `commitLine`'s SYNCHRONOUS prefix, in an `async` function no keydown call site awaits, and
+    // the operator's capture disappeared with no POST and nothing on screen — `f448da2`'s exact
+    // shape.
     //
-    // THE `!` IS HERE TO KEEP THIS PORT HONEST, NOT TO SILENCE THE COMPILER. Guarding it would
-    // change behaviour — an abstention where there is a crash today — and this change's whole claim
-    // is that it changes none. The assertion is the marker: one line a reviewer can find, in the
-    // file the compiler now reads, instead of an implication in a page it does not.
-    const today = todayFor(ctx.now(), resolution.dayBoundary!);
+    // NO GUARD WAS ADDED HERE, ON PURPOSE. A guard would have closed this INSTANCE and left the
+    // CLASS open: the next resolver to read the boundary would have had to remember the same one.
+    // `ConfigResolutionTable.dayBoundary` is now `DayBoundary` with no `| undefined`, and
+    // `readConfigResolutionDeclaration` refuses to produce a table without a valid one — so the
+    // `resolution === undefined` gate this resolver ALREADY opens with is now the whole guard, and
+    // there is no assertion left to make. See both of those for the full account.
+    const today = todayFor(ctx.now(), resolution.dayBoundary);
     const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : undefined);
     if (pass.applied.length === 0) {
       // UNDECIDABLE, NOT "DECIDED: NOTHING APPLIES" — at least one rule this candidate reached
