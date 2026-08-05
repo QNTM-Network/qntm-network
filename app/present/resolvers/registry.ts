@@ -13,10 +13,21 @@
  * runner never mutates, so no resolver can see another's answer and no permutation of this array
  * changes a single reading, note, badge string or placement.
  *
- * DOES, and only these two: the order the freshness-line sentences are JOINED in, and the order the
- * predictions reach `PredictSurface.arm` in. Both are visible to the operator and both are declared
- * HERE and nowhere else. `tests/app-resolver-registry.test.mjs` is the falsifier — it shuffles this
- * array and asserts exactly those two outputs move and nothing else does.
+ * DOES, and these are all of them:
+ *
+ *   1. The order the freshness-line sentences are JOINED in.
+ *   2. The order the predictions reach `PredictSurface.arm` in — one list, one arm, painted in the
+ *      order given.
+ *   3. LATENT, AND STATED RATHER THAN LEFT TO BE DISCOVERED: which placement wins, if two resolvers
+ *      ever arm `settle` for the same commit. `SettleSurface.arm` OVERWRITES (one cursor, one
+ *      pending settle), so `armSettle` applying them in registry order means the LAST one wins.
+ *      Exactly one resolver arms settle today, so this cannot fire — but "the order decides only
+ *      two things" would have been false the day a second one landed, and a claim that quietly
+ *      stops being true is worse than a caveat nobody needs yet.
+ *
+ * All three are declared HERE and nowhere else. `tests/app-resolver-registry.test.mjs` is the
+ * falsifier for the first two — it reverses this array and asserts every badge, every reading and
+ * the POST body are byte-identical while the joined sentence reverses.
  *
  * THE ORDER IS THE ONE THAT SHIPPED. membership, ordering, rules, parent — the sequence
  * `commitLine`'s own `notes` array and its four `update*Badge` calls were written in, preserved

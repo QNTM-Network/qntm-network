@@ -37,10 +37,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  REPO,
   importPage,
   installBrowser,
   makeEvent,
@@ -579,6 +580,52 @@ describe("7. REGISTRY ORDER decides the joined sentence and the prediction order
     const reversed = await capture(work, mutatingBundle(REVERSED)(work));
     assert.match(straight, /this line sets demo_flag · the row above .*becomes outcome/);
     assert.match(reversed, /the row above .*becomes outcome.*· this line sets demo_flag/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7b. THE ONE FRAGILITY THE GENERALISATION INTRODUCED, CLOSED BY PROOF RATHER THAN BY PROMISE
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("7b. every resolver's abstention sentence carries its own id — the badge class depends on it", () => {
+  /**
+   * `diagnosticOf` derives `abstained` from `text.startsWith(`${spec.id}: abstained`)` — one rule,
+   * where four hand-written `update*Badge` functions each had their own copy of the same prefix
+   * check. That is a real simplification and it introduced a real fragility: a resolver whose
+   * sentence did not begin with its own id would be reported as a DECIDED answer while saying it
+   * abstained, silently, with the wrong badge class and no test to notice.
+   *
+   * SO THE COUPLING IS PROVEN, NOT ASSUMED. Every spec, driven with an abstention reading — the one
+   * reading shape every `show` handles identically, because it only reads `.kind` and `.because` —
+   * must produce a diagnostic flagged `abstained`. A fifth resolver that words its sentence
+   * differently fails here rather than shipping a badge that lies.
+   */
+  test("an abstention from ANY spec is flagged as one", async () => {
+    const bundle = await import(pathToFileURL(join(REPO, "dist", "present.js")).href);
+    const specs = [bundle.membershipSpec, bundle.orderingSpec, bundle.rulesSpec, bundle.promotionSpec];
+    assert.equal(specs.length, bundle.RESOLVERS.length, "a resolver exists that this test does not drive");
+    for (const spec of specs) {
+      const diagnostic = bundle.diagnosticOf(spec, { kind: "abstains", because: "a-reason-nobody-publishes" });
+      assert.ok(diagnostic, `${spec.id} says nothing at all for an abstention`);
+      assert.equal(diagnostic.badge, spec.badge);
+      assert.equal(
+        diagnostic.abstained,
+        true,
+        `${spec.id}'s abstention sentence does not start with "${spec.id}: abstained" — the badge class is wrong`,
+      );
+      assert.match(diagnostic.text, new RegExp(`^${spec.id}: abstained`));
+    }
+  });
+
+  test("and a NOT-EVALUATED reading from any spec writes no badge at all", () => {
+    // THE OTHER HALF. A resolver this gesture never asked must leave the badge showing the last
+    // real evaluation rather than blanking it — which `diagnosticOf` expresses as `null`, and which
+    // `commitLine` expresses by simply not iterating over it.
+    return import(pathToFileURL(join(REPO, "dist", "present.js")).href).then((bundle) => {
+      for (const spec of [bundle.membershipSpec, bundle.orderingSpec, bundle.rulesSpec, bundle.promotionSpec]) {
+        assert.equal(bundle.diagnosticOf(spec, { kind: "not-evaluated" }), null, `${spec.id} wrote a badge it should not`);
+      }
+    });
   });
 });
 
