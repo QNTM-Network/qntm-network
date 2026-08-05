@@ -2625,19 +2625,6 @@ async function writeFile(view, markdown, source, token = null) {
 // glyph changed, computed by app/present/source.js#applyEdit, and `null` means the edit did not
 // apply — the same refusal the old inline regex expressed by returning early, with the same
 // consequence: no optimistic UI change and no POST. The DOM is never read to produce it.
-// ── SCRATCH MUTATION — MUTATION PROOF ONLY, REVERTED IMMEDIATELY AFTER THIS COMMIT ──────────────
-// A brand-new write path, added the way a real defect would be: no registration anywhere, no
-// try/catch around the write at all. If the server refuses this one, nothing on this page ever
-// hears about it, and the token opened for it sits in WriteRegister forever — the exact "path
-// where the app knows something did not finish and has nothing defined to do" design-the-two-
-// rules.md exists to name and this checker exists to catch automatically, with no registry entry
-// required for a NEW site to be caught.
-async function scratchQuickPin(view, markdown, source) {
-  const token = mintWriteToken();
-  const data = await writeFile(view, markdown, source, token);
-  arrive(view.path, data, { markdown, token, source });
-}
-
 async function toggleTask(view, toggle) {
   const { box, row, markdown: next } = toggle;
   if (next === null) return;
