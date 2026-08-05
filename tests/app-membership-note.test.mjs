@@ -50,7 +50,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importPage, installBrowser, makeEvent, makeWorkDir, walk, withDeclaration, SERVED_DECLARATION } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeEvent, makeWorkDir, walk, withDeclaration, SERVED_DECLARATION, RESOLVER_SOURCES, resolverSource } from "./fixtures/app-html-page.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-membership-note");
@@ -414,18 +414,26 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
     assert.equal(paintCalls.length, 3);
   });
 
-  test("`.markdown` is never ASSIGNED in app/ — only compared, read or passed through", () => {
+  test("`.markdown` is never ASSIGNED in app/ — only compared, read or passed through — the page, the painter, AND every resolver", () => {
     const assignments = (source) => source.match(/\.markdown\s*=(?!=)/g) ?? [];
     assert.deepEqual(assignments(APP_SOURCE), []);
     assert.deepEqual(assignments(PAINT_SOURCE), []);
+    // WIDENED WHEN THE RESOLVERS MOVED OFF THE PAGE. Two files was the whole of `app/`'s decision
+    // code when this guard was written; a grep left pointing at two files while the code it
+    // protects moved into a third would go on passing and stop meaning anything.
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.deepEqual(assignments(source), [], `${name} assigns .markdown`);
+    }
   });
 
-  test("membershipNoteFor imports nothing from source.ts — it cannot produce a SourceEdit", () => {
+  test("the membership resolver imports nothing from source.ts — it cannot produce a SourceEdit", () => {
     // The same posture tests/flow_scenarios/section_membership.ts already proves for membership.ts
-    // itself, restated for the ONE new function this step adds to the page.
-    const fn = /function membershipNoteFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.ok(fn, "membershipNoteFor was not found — this test is checking the wrong source");
-    assert.ok(!/\bapplyEdit\(/.test(fn), "membershipNoteFor calls applyEdit");
+    // itself. `membershipNoteFor` is `membershipSpec.say` now
+    // (app/present/resolvers/membership.ts), so the claim is made against the WHOLE module — every
+    // one of `read`/`say`/`show`, not one extracted function body.
+    const source = resolverSource("membership");
+    assert.doesNotMatch(source, /\bapplyEdit\b/, "the membership resolver reaches applyEdit");
+    assert.doesNotMatch(source, /source\.js/, "the membership resolver imports source.ts");
   });
 
   test("the sentence shown is absent from the write it describes — proven on the wire, not inferred", async () => {

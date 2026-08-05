@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importPage, installBrowser, makeWorkDir } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeWorkDir, RESOLVER_SOURCES, resolverSource } from "./fixtures/app-html-page.mjs";
 import { orderingPlacementFor, resolveOrderingPlacementFor } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -273,16 +273,25 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor'
     assert.equal(pageCalls.length + paintCalls.length, 5, "orderingNoteFor must reach applyEdit zero times");
   });
 
-  test("`.markdown` is still never ASSIGNED in app/", () => {
+  test("`.markdown` is still never ASSIGNED in app/ — the page, the painter, AND every resolver", () => {
     const assignments = (source) => source.match(/\.markdown\s*=(?!=)/g) ?? [];
     assert.deepEqual(assignments(APP_SOURCE), []);
     assert.deepEqual(assignments(PAINT_SOURCE), []);
+    // WIDENED WHEN THE RESOLVERS MOVED OFF THE PAGE. Two files was the whole of `app/`'s decision
+    // code when this guard was written; a grep left pointing at two files while the code it
+    // protects moved into a third would go on passing and stop meaning anything.
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.deepEqual(assignments(source), [], `${name} assigns .markdown`);
+    }
   });
 
-  test("orderingNoteFor imports nothing from source.ts and produces no Contribution", () => {
-    const fn = /function orderingNoteFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.ok(fn, "orderingNoteFor was not found — this test is checking the wrong source");
-    assert.ok(!/\bapplyEdit\(/.test(fn), "orderingNoteFor calls applyEdit");
+  test("the ordering resolver imports nothing from source.ts and produces no Contribution", () => {
+    // `orderingNoteFor` is `orderingSpec.say` now (app/present/resolvers/ordering.ts). Asserted
+    // against the whole module, which also covers `read`, `show` and `arm` — a wider claim than the
+    // one function this used to extract.
+    const source = resolverSource("ordering");
+    assert.doesNotMatch(source, /\bapplyEdit\b/, "the ordering resolver reaches applyEdit");
+    assert.doesNotMatch(source, /source\.js/, "the ordering resolver imports source.ts");
   });
 
   test("ordering.ts (the module orderingNoteFor calls into) imports nothing from source.ts", () => {
@@ -519,18 +528,28 @@ describe("7. NOTHING NEW REACHES A WRITE — armOrderingSettle and orderingDiagn
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
   const SETTLE_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "settle.ts"), "utf8");
 
-  test("armOrderingSettle calls applyEdit zero times — it only ever calls settle.arm", () => {
-    const fn = /function armOrderingSettle[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.ok(fn, "armOrderingSettle was not found — this test is checking the wrong source");
-    assert.ok(!/\bapplyEdit\(/.test(fn), "armOrderingSettle calls applyEdit");
-    assert.ok(!/\bwriteFile\(/.test(fn), "armOrderingSettle calls writeFile");
-    assert.ok(/\bsettle\.arm\(/.test(fn), "armOrderingSettle no longer arms the settle surface at all");
+  test("the ordering resolver's arm produces a placement and reaches no write path", () => {
+    // `armOrderingSettle` is `orderingSpec.arm` now, and it does NOT call `settle.arm` itself —
+    // that is the one place the four resolvers did not fit a per-resolver `arm`, and the reason is
+    // in resolve.ts's own header: `PredictSurface.arm` OVERWRITES and two resolvers contribute to
+    // one arm, so every `arm` returns descriptions and the page makes the calls. What this asserts
+    // is therefore split in two: the resolver produces a settle arming, and `armSettle` (the only
+    // thing that touches the surface) still touches nothing else.
+    const source = resolverSource("ordering");
+    assert.doesNotMatch(source, /\bapplyEdit\b/, "the ordering resolver reaches applyEdit");
+    assert.doesNotMatch(source, /\bwriteFile\b/, "the ordering resolver reaches writeFile");
+    assert.match(source, /surface: "settle"/, "the ordering resolver no longer produces a placement at all");
+    const runner = RESOLVER_SOURCES["app/present/resolve.ts"];
+    const armSettle = /export function armSettle\([\s\S]*?\n}\n/.exec(runner)?.[0];
+    assert.ok(armSettle, "armSettle was not found — this test is checking the wrong source");
+    assert.match(armSettle, /surface\.arm\(base, viewId, placement\)/, "armSettle no longer arms the surface");
+    assert.doesNotMatch(armSettle, /\bapplyEdit\b|\bwriteFile\b/, "armSettle reaches a write path");
   });
 
-  test("orderingDiagnosticFor calls applyEdit zero times, the same proof orderingNoteFor already has", () => {
-    const fn = /function orderingDiagnosticFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.ok(fn, "orderingDiagnosticFor was not found — this test is checking the wrong source");
-    assert.ok(!/\bapplyEdit\(/.test(fn), "orderingDiagnosticFor calls applyEdit");
+  test("the ordering resolver's show calls applyEdit zero times, the same proof say already has", () => {
+    // One module, one grep — `say` and `show` are the same file now, so the claim the previous two
+    // tests made separately is made once and covers both.
+    assert.doesNotMatch(resolverSource("ordering"), /\bapplyEdit\b/);
   });
 
   test("settle.ts imports nothing from source.ts — it holds an instruction, it never builds one", () => {

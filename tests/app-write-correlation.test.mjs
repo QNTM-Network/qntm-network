@@ -48,8 +48,7 @@ import {
   makeEvent,
   makeWorkDir,
   walk,
-  REPO,
-} from "./fixtures/app-html-page.mjs";
+  REPO, RESOLVER_SOURCES } from "./fixtures/app-html-page.mjs";
 
 const HERE = resolve(fileURLToPath(import.meta.url), "..");
 
@@ -651,11 +650,14 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     assert.equal((PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 3);
   });
 
-  test("`.markdown` is STILL never ASSIGNED in app/", () => {
+  test("`.markdown` is STILL never ASSIGNED in app/ — the page, the painter, correlation.ts AND every resolver", () => {
     const assignments = (source) => source.match(/\.markdown\s*=(?!=)/g) ?? [];
     assert.deepEqual(assignments(APP_SOURCE), []);
     assert.deepEqual(assignments(PAINT_SOURCE), []);
     assert.deepEqual(assignments(CORRELATION_TS), []);
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.deepEqual(assignments(source), [], `${name} assigns .markdown`);
+    }
   });
 
   test("correlation.ts IMPORTS ONLY THE STAMP GRAMMAR and names no edit constructor", () => {

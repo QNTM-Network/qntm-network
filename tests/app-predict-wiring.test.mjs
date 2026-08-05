@@ -47,6 +47,8 @@ import {
   walk,
   withDeclaration,
   SERVED_DECLARATION,
+  mutatingBundle,
+  RESOLVER_SOURCES,
 } from "./fixtures/app-html-page.mjs";
 import { todayFor } from "../dist/present.js";
 
@@ -424,15 +426,20 @@ describe("6. THE WRITE PATH IS UNTOUCHED", () => {
     assert.ok(!stub.posted[0].body.markdown.includes("#outcome"), "the write path must never carry the predicted retype");
   });
 
-  test("`.markdown`/`.text` are never assigned by armPrediction/childPredictionFor/parentPredictionFor — the positive grep", () => {
+  test("`.markdown`/`.text` are never assigned by anything that produces a prediction — the positive grep", () => {
+    // `childPredictionFor`/`parentPredictionFor`/`armPrediction` are `rulesSpec.arm`,
+    // `promotionSpec.arm` and `armPredict` now. The grep runs against the WHOLE of every resolver
+    // module plus `resolve.ts` — a wider claim than the hand-sliced page block it replaces, and one
+    // that cannot go stale by being pointed at a region that moved.
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.doesNotMatch(source, /\.markdown\s*=(?!=)/, `${name} assigns .markdown`);
+      assert.doesNotMatch(source, /\.text\s*=(?!=)/, `${name} assigns .text`);
+      assert.doesNotMatch(source, /\bonLineCommit\b|\bonCheckboxToggle\b/, `${name} reaches a write callback`);
+    }
+    // AND THE ONE CALL SITE ON THE PAGE. `armPredict` is reached from exactly one place, in
+    // `commitLine`, synchronously, before the write leaves.
     const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
-    const start = APP_SOURCE.indexOf("function childPredictionFor(");
-    const end = APP_SOURCE.indexOf("function armPrediction(") + APP_SOURCE.slice(APP_SOURCE.indexOf("function armPrediction(")).indexOf("\n}\n") + 3;
-    assert.ok(start > 0 && end > start, "could not locate this leg's own block in app/index.html");
-    const block = APP_SOURCE.slice(start, end);
-    assert.doesNotMatch(block, /\.markdown\s*=(?!=)/, "the predict block must not assign .markdown");
-    assert.doesNotMatch(block, /\.text\s*=(?!=)/, "the predict block must not assign .text");
-    assert.doesNotMatch(block, /\bonLineCommit\b|\bonCheckboxToggle\b/, "the predict block must never reach a write callback");
+    assert.equal((APP_SOURCE.match(/\barmPredict\(/g) ?? []).length, 1, "predict is armed from more than one place");
   });
 });
 
@@ -442,9 +449,16 @@ describe("6. THE WRITE PATH IS UNTOUCHED", () => {
 
 describe("7. MUTATION PROOFS — this leg's own tests are not vacuously green", () => {
   test("MUTATION: skip armPrediction entirely — the headline scenario 1 goes red", async () => {
+    // THE ONE MUTATION IN THIS SECTION STILL AIMED AT THE PAGE — `armPredict` is called from
+    // `commitLine`, which is still hand-authored HTML. The other two moved into the bundle with the
+    // resolvers whose `arm` they target.
     const workDir = makeWorkDir("predict-mutation-skip-arm");
     const mutate = (source) =>
-      assertMutated(source, "armPrediction(view, commit, rulesReading, parentReading);", "/* armPrediction skipped */");
+      assertMutated(
+        source,
+        "armPredict(predict, commit.markdown, view.id, outcome.predictions);",
+        "/* the predict arm skipped */",
+      );
     const { elements } = installBrowser();
     globalThis.fetch = withDeclaration(async () => ({
       ok: true, json: async () => ({ ok: true, handle: "luke", pending_edits: 0, snapshot: { generated_at: "x", views: [] } }),
@@ -467,12 +481,10 @@ describe("7. MUTATION PROOFS — this leg's own tests are not vacuously green", 
 
   test("MUTATION: childPredictionFor stops trimming the delta — the chip carries the whole line, not just the marker", async () => {
     const workDir = makeWorkDir("predict-mutation-no-slice");
-    const mutate = (source) =>
-      assertMutated(
-        source,
-        "const delta = rulesReading.text.slice(line.length).trim();",
-        "const delta = rulesReading.text;",
-      );
+    const mutate = mutatingBundle([
+      "const delta = reading.text.slice(line.length).trim();",
+      "const delta = reading.text;",
+    ])(workDir);
     installBrowser();
     globalThis.fetch = withDeclaration(async () => ({
       ok: true, json: async () => ({ ok: true, handle: "luke", pending_edits: 0, snapshot: { generated_at: "x", views: [] } }),
@@ -498,12 +510,10 @@ describe("7. MUTATION PROOFS — this leg's own tests are not vacuously green", 
     // with an unrenderable auto_outcome/auto_habit set) abstains, and the headline scenario 2 goes
     // red exactly the way it did before this leg's own instinct was corrected.
     const workDir = makeWorkDir("predict-mutation-no-retype-filter");
-    const mutate = (source) =>
-      assertMutated(
-        source,
-        "const retypes = parentReading.applied.filter((effect) => effect.verb === \"retype\");",
-        "const retypes = parentReading.applied;",
-      );
+    const mutate = mutatingBundle([
+      'const retypes = reading.applied.filter((effect) => effect.verb === "retype");',
+      "const retypes = reading.applied;",
+    ])(workDir);
     const { elements } = installBrowser();
     globalThis.fetch = echoStub(PROMOTION_VIEW);
     const page = await importPage(workDir, mutate);

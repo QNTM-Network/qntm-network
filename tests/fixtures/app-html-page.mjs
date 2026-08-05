@@ -22,7 +22,7 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -50,6 +50,7 @@ export function extractPageScript(workDir, mutate = (source) => source) {
   const match = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
   assert.ok(match, "app/index.html no longer contains a module script");
   let source = match[1];
+  const bundle = JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href);
 
   const swapped = [];
   const swap = (pattern, replacement, label) => {
@@ -156,65 +157,75 @@ export function __enterInsert() { mode.enterInsert(); repaintCurrentView(); }
 export function __setFocus(lineIndex, source) { focus.focus(lineIndex, source, 0, currentViewId); }
 export const __focusAnchor = () => focus.anchor;
 export { sayAsOf as __sayAsOf };
-// THE MEMBERSHIP NOTE (design-the-resolution-architecture.md step 4). Exported on its own, the
-// same reason \`__writeFile\` and \`__sayAsOf\` are: a suite proving "every refusal path produces
-// silence" wants to drive THIS ONE COMPUTATION directly, without also entangling \`served\`'s base
-// reading (a separate, separately-tested fact — tests/present-base.test.mjs) into every assertion.
-export { membershipNoteFor as __membershipNoteFor };
-// THE ABSTENTION REGISTER (docs/implementation-artifacts/roadmap-the-road-ahead.md step 2).
-// \`__membershipDiagnosticFor\` is exported on its own, same reasoning as \`__membershipNoteFor\`
-// above: a suite proving "abstains" and "answer" produce different text wants to drive THIS
-// COMPUTATION directly. \`__updateMembershipBadge\` is exported separately so a suite can also
-// prove the DOM SINK itself (\`#membershipBadge\`) rather than only the pure function's return
-// value — see that function's own header for why it is kept this small.
-export { membershipDiagnosticFor as __membershipDiagnosticFor };
-export { updateMembershipBadge as __updateMembershipBadge };
-// THE ORDERING NOTE (design-the-resolution-architecture.md step 7). Same reasoning as
-// __membershipNoteFor immediately above — its own separate computation, exported on its own.
-export { orderingNoteFor as __orderingNoteFor };
-// THE ORDERING ABSTENTION REGISTER AND THE PLACEMENT ARM (roadmap-the-road-ahead.md step 3).
-// Same reasoning as __membershipDiagnosticFor/__updateMembershipBadge above, plus the one function
-// unique to this step: __armOrderingSettle is exported so a suite can drive "did this edit arm the
-// settle surface" directly, without also standing up a whole commitLine write.
-export { orderingDiagnosticFor as __orderingDiagnosticFor };
-export { updateOrderingBadge as __updateOrderingBadge };
-export { armOrderingSettle as __armOrderingSettle };
-// THE RULES AXIS (\`app/present/rules.ts\`, wired for the first time). Same reasoning as
-// __membershipNoteFor/__orderingNoteFor above — \`__rulesReadingFor\` is the ONE evaluation the
-// other two are computed from, exported so a suite can assert the abstention/answer split
-// directly. THERE IS NO \`__applyRulesToCommit\` — read \`app/index.html\`'s own comment where that
-// function would have been (right after \`updateRulesBadge\`) for why: it would have reassigned
-// \`commit.markdown\`, which \`tests/app-membership-note.test.mjs\`'s own '.markdown is never
-// ASSIGNED in app/' invariant (and seven other files pinning the same check) exists to refuse.
-export { rulesReadingFor as __rulesReadingFor };
-export { rulesNoteFor as __rulesNoteFor };
-export { rulesDiagnosticFor as __rulesDiagnosticFor };
-export { updateRulesBadge as __updateRulesBadge };
+// ── THE RESOLVER SEAM, AND WHY IT IS A COMPATIBILITY SHIM RATHER THAN AN API ──
+//
+// The four axes were four hand-written functions each ON THE PAGE, and the exports below are the
+// names roughly fifty existing assertions already call. The page no longer has those functions:
+// they are \`ResolverSpec\`s in \`app/present/resolvers/\`, driven by one registry walk.
+//
+// THE ALIASES ARE KEPT, VERBATIM IN SIGNATURE, ON PURPOSE. They are how the restructure proves
+// itself: every assertion written against the old functions still runs, with the same arguments,
+// against the ported code, and any behaviour difference shows up as a red test rather than as a
+// claim in a PR body. That is the only proof of "no behaviour change" worth anything, and it costs
+// exactly the twenty aliasing lines below.
+//
+// THEY ARE NOT THE SHAPE TO WRITE NEW TESTS AGAINST. A new test drives \`page.commitLine\` (the real
+// registry walk, which is what a keystroke does) or reads \`__resolverContextFor\` and calls
+// \`runResolvers\` itself. Retiring these aliases and re-pointing the suites that use them is
+// follow-up work, deliberately not folded into the same diff as the move.
+import {
+  membershipSpec as __membershipSpec,
+  orderingSpec as __orderingSpec,
+  rulesSpec as __rulesSpec,
+  promotionSpec as __promotionSpec,
+  diagnosticOf as __diagnosticOf,
+  defineResolver as __defineResolver,
+  runResolvers as __runResolvers,
+  armSettle as __armSettleWith,
+} from ${bundle};
+export { resolverContextFor as __resolverContextFor, paintBadge as __paintBadge };
+const __ctx = (view, commit) => resolverContextFor(view, commit);
+const __showBadge = (spec, reading) => {
+  const diagnostic = __diagnosticOf(spec, reading);
+  if (diagnostic !== null) paintBadge(diagnostic);
+};
+export const __membershipNoteFor = (v, c) => __membershipSpec.say(__membershipSpec.read(__ctx(v, c)));
+export const __membershipDiagnosticFor = (v, c) => __membershipSpec.show(__membershipSpec.read(__ctx(v, c)));
+export const __updateMembershipBadge = (v, c) => __showBadge(__membershipSpec, __membershipSpec.read(__ctx(v, c)));
+export const __orderingNoteFor = (v, c) => __orderingSpec.say(__orderingSpec.read(__ctx(v, c)));
+export const __orderingDiagnosticFor = (v, c) => __orderingSpec.show(__orderingSpec.read(__ctx(v, c)));
+export const __updateOrderingBadge = (v, c) => __showBadge(__orderingSpec, __orderingSpec.read(__ctx(v, c)));
+// ORDERING'S ARM ALONE, applied to the settle surface alone — the page's own \`commitLine\` also arms
+// \`predict\` on every commit, and a suite asserting what THIS gesture armed must not have the
+// predict surface moved under it as a side effect.
+const __orderingOnly = [__defineResolver(__orderingSpec)];
+export const __armOrderingSettle = (v, c) => {
+  const outcome = __runResolvers(__orderingOnly, __ctx(v, c));
+  __armSettleWith(settle, c.markdown, v.id, outcome.placements);
+};
+export const __rulesReadingFor = (v, c) => __rulesSpec.read(__ctx(v, c));
+export const __rulesNoteFor = (reading) => __rulesSpec.say(reading);
+export const __rulesDiagnosticFor = (reading) => __rulesSpec.show(reading);
+export const __updateRulesBadge = (reading) => __showBadge(__rulesSpec, reading);
 export const __rulesTable = () => rulesTable;
-// PARENT PROMOTION (\`app/present/graphmatch.ts\`, wired for the first time this leg). Same
-// reasoning as \`__rulesReadingFor\` immediately above — \`__parentPromotionFor\` is the ONE
-// evaluation \`__parentPromotionNoteFor\`/\`__parentPromotionDiagnosticFor\`/\`__updateParentBadge\`
-// are all computed from, exported so a suite can assert the abstention/answer split directly
-// without also standing up a whole \`commitLine\` write.
-export { parentPromotionFor as __parentPromotionFor };
-export { parentPromotionNoteFor as __parentPromotionNoteFor };
-export { parentPromotionDiagnosticFor as __parentPromotionDiagnosticFor };
-export { updateParentBadge as __updateParentBadge };
+export const __parentPromotionFor = (v, c) => __promotionSpec.read(__ctx(v, c));
+export const __parentPromotionNoteFor = (reading) => __promotionSpec.say(reading);
+export const __parentPromotionDiagnosticFor = (reading) => __promotionSpec.show(reading);
+export const __updateParentBadge = (reading) => __showBadge(__promotionSpec, reading);
 // THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __served
 // are: a suite reads what the page is holding NOW, and what changes under it is which placement
 // (if any) is armed.
 export const __settle = () => settle;
 // THE PREDICT SURFACE (app/present/predict.ts) — same reasoning as __settle immediately above.
-// __armPrediction/__childPredictionFor/__parentPredictionFor are exported on their own, the same
-// reason __armOrderingSettle is: a suite can drive "what would this commit arm" directly, without
-// also standing up a whole commitLine write. __repaintCurrentView is exported so a suite can drive
-// an ACTUAL paint of the current view (the same function every real projection and every real
+// THERE ARE NO \`__armPrediction\`/\`__childPredictionFor\`/\`__parentPredictionFor\` ANY MORE: those
+// three page functions are the rules and promotion resolvers' own \`arm\`, and the arming they
+// produce is applied by \`armPredict\` (resolve.ts) from ONE call in \`commitLine\`. A suite asking
+// "what would this commit arm" drives \`page.commitLine\` and reads \`__predict()\`, which is the
+// real path and was always the stronger proof. \`__repaintCurrentView\` is exported so a suite can
+// drive an ACTUAL paint of the current view (the same function every real projection and every real
 // keystroke eventually calls) and inspect \`#viewBody\`'s own children — the only way to prove a
 // prediction lands in the ROW it belongs to, rather than merely that it was armed.
 export const __predict = () => predict;
-export { armPrediction as __armPrediction };
-export { childPredictionFor as __childPredictionFor };
-export { parentPredictionFor as __parentPredictionFor };
 export { repaintCurrentView as __repaintCurrentView };
 // THE TODAY NOTE (design-the-resolution-architecture.md step 8's call site). Same reasoning as
 // __membershipNoteFor and __orderingNoteFor above — its own separate computation, exported on its
@@ -268,6 +279,82 @@ export function assertMutated(source, pattern, replacement) {
   const occurrences = source.split(pattern).length - 1;
   assert.equal(occurrences, 1, `the mutation pattern must appear exactly once, found ${occurrences}: ${pattern}`);
   return source.replace(pattern, replacement);
+}
+
+/**
+ * EVERY RESOLVER'S SOURCE, READ OFF DISK — the ground the "nothing in app/ does X" invariants have
+ * to cover now that the resolvers are not on the page any more.
+ *
+ * THE DIRECTORY IS ENUMERATED, NOT LISTED. Eight test files pin `` `.markdown` is never ASSIGNED in
+ * app/ `` and its siblings, and every one of them used to read exactly two files: the page and
+ * paint.ts. If those greps had stayed pointed at two files while the code they protect moved into a
+ * third, the invariant would have kept passing and stopped meaning anything — which is the same
+ * failure a hand-written list of resolver files would reintroduce the day a fifth one lands. So
+ * this reads whatever is in the directory.
+ */
+export const RESOLVER_SOURCES = (() => {
+  const dir = join(REPO, "app", "present", "resolvers");
+  const sources = { "app/present/resolve.ts": readFileSync(join(REPO, "app", "present", "resolve.ts"), "utf8") };
+  for (const name of readdirSync(dir).sort()) {
+    if (name.endsWith(".ts")) {
+      sources[`app/present/resolvers/${name}`] = readFileSync(join(dir, name), "utf8");
+    }
+  }
+  assert.ok(Object.keys(sources).length > 1, "app/present/resolvers/ holds no modules — the greps below are vacuous");
+  return sources;
+})();
+
+/** One resolver module's source, by spec name (`membership`, `ordering`, `rules`, `promotion`). */
+export function resolverSource(name) {
+  const source = RESOLVER_SOURCES[`app/present/resolvers/${name}.ts`];
+  assert.ok(source, `app/present/resolvers/${name}.ts does not exist — this test is checking the wrong source`);
+  return source;
+}
+
+/**
+ * Point the lifted page at a MUTATED COPY of `dist/present.js` instead of the real one.
+ *
+ * WHY THIS IS NOT `assertMutated(source, was, url)` ANY MORE. The page names the bundle TWICE
+ * since the resolvers moved into it: once in its own `import` statement, and once in the test seam
+ * this fixture appends (which imports the four `ResolverSpec`s). `assertMutated` refuses anything
+ * other than exactly one occurrence, on purpose — a mutation proof whose pattern has drifted is a
+ * green test reporting the opposite of what it claims. Here BOTH occurrences must move, or the
+ * page would run the mutant while the seam kept reading the real bundle and the two would disagree
+ * about what the code under test says. So this replaces every occurrence and refuses zero.
+ */
+export function repointBundle(source, mutantUrl) {
+  const was = JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href);
+  const occurrences = source.split(was).length - 1;
+  assert.ok(occurrences > 0, `the lifted page names no bundle to repoint: ${was}`);
+  return source.split(was).join(JSON.stringify(mutantUrl));
+}
+
+/**
+ * A page rewriter that points the lifted page at a MUTATED COPY of the bundle.
+ *
+ * `mutatingBundle(...pairs)(workDir)` returns the `mutate` function `importPage` takes. It writes
+ * the mutant beside the lifted page and repoints BOTH bundle references (the page's own import and
+ * this fixture's resolver seam) at it.
+ *
+ * WHY THIS IS SHARED RATHER THAN COPIED. Three suites cut this seam and a fourth now needs it,
+ * because the code their mutation proofs target moved out of `app/index.html` and into
+ * `app/present/`. Four copies of a mutation harness is four things to keep in step with the page —
+ * the exact failure this whole fixture exists to prevent.
+ *
+ * THE PATTERNS ARE THE BUNDLE'S OWN TEXT. esbuild escapes non-ASCII on the way out (an em dash
+ * becomes `\u2014`), so a pattern carrying the literal character matches nothing — and
+ * `assertMutated` fails loudly rather than producing a green proof against unmodified code.
+ */
+export function mutatingBundle(...pairs) {
+  return (workDir) => {
+    let mutated = readFileSync(join(REPO, "dist", "present.js"), "utf8");
+    for (const [pattern, replacement] of pairs) {
+      mutated = assertMutated(mutated, pattern, replacement);
+    }
+    const file = join(workDir, "present.mutated.js");
+    writeFileSync(file, mutated);
+    return (source) => repointBundle(source, pathToFileURL(file).href);
+  };
 }
 
 /** A temp directory that removes itself when the process exits. */

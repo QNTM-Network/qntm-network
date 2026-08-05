@@ -1067,21 +1067,21 @@ import {
   PresentationContext,
   presentationFromDeclaration,
   DEFAULT_INDENT_UNIT,
-  sectionAt,
-  sectionOrderFor,
-  membershipFor,
-  resolveLineFields,
-  resolveOrderingFor,
-  resolveOrderingPlacementFor,
   todayFor,
   SettleSurface,
   PredictSurface,
-  applyRules,
-  renderRuleEffects,
-  applyGraphAwareRules,
-  tagSpans,
-  stampSpans,
   existingLineCommit,
+  // ── THE RESOLVERS ──
+  // `RESOLVERS` is the ordered registry (app/present/resolvers/registry.ts) and it is the ONLY
+  // place any of the four is named. This page walks it; it does not know what is in it. Every
+  // reader those resolvers need — `sectionAt`, `membershipFor`, `resolveOrderingFor`, `applyRules`,
+  // `applyGraphAwareRules`, `renderRuleEffects`, `tagSpans`, `stampSpans` — is imported by the
+  // MODULES that use them now, and this page imports none of them any more.
+  RESOLVERS,
+  runResolvers,
+  armSettle,
+  armPredict,
+  graphSnapshotOf,
 } from "/dist/present.js";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
@@ -2948,1014 +2948,98 @@ function refusedLineSentence(path, current, typed) {
   return typeof current === "string" ? REFUSED_NOT_ADOPTED : REFUSED_KEEPING_TYPING;
 }
 
-/**
- * THE ONE EVALUATION `membershipNoteFor` (narration) AND `membershipDiagnosticFor` (the abstention
- * register — see that function's own header) ARE BOTH COMPUTED FROM, so the two registers cannot
- * disagree about what this module actually decided. `design-the-compiler-and-the-bands.md` §3.1's
- * own finding — three independently hand-typed copies of one list drift apart because nothing
- * ties them together — is exactly the failure a second, separately-written evaluation here would
- * risk; this function is the tie.
- *
- * THREE OUTCOMES, NAMED RATHER THAN COLLAPSED TO A STRING HERE:
- *   "not-evaluated"  the declaration is not loaded, the commit is not a text edit, or the cursor
- *                     line is not inside any published section — a precondition this MODULE never
- *                     gets to judge, not a refusal it made. See §8 of this step's own PR body for
- *                     why this is left out of the abstention register rather than folded into it.
- *   "abstains"        `membershipFor` refused on the BEFORE line, the AFTER line, or both — one of
- *                     its five published `Abstention` reasons, carried through unchanged.
- *   "answer"          both sides resolved. `membershipNoteFor` below still only NARRATES the
- *                     leaving transition; `membershipDiagnosticFor` reports that a decision was
- *                     reached at all, which is the fact the freshness line has never carried.
- */
-function membershipReadingFor(view, commit) {
-  if (qualification === undefined || commit.kind !== "set-line") {
-    return { kind: "not-evaluated" };
-  }
-  // STEP 11 (design-the-resolution-architecture.md, narrowed — see address.ts's own header for
-  // why): prefer a served `view.sections` order over the static declaration when the server ever
-  // carries one. `server/app.py` carries none today, so `sectionOrderFor` returns
-  // `qualification.sectionOrder` UNCHANGED and this line behaves exactly as it did before this
-  // step — additive, not a behaviour change.
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
-  if (sectionId === null) {
-    return { kind: "not-evaluated" };
-  }
-  const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
-  const before = membershipFor(view.id, sectionId, beforeLine, qualification);
-  if (before.kind !== "answer") {
-    return { kind: "abstains", because: before.because };
-  }
-  const after = membershipFor(view.id, sectionId, commit.text, qualification);
-  if (after.kind !== "answer") {
-    return { kind: "abstains", because: after.because };
-  }
-  return { kind: "answer", before: before.answer, after: after.answer };
-}
-
-/**
- * AFTER THIS COMMIT, DOES THE LINE STILL BELONG IN THE SECTION IT IS IN — design doc step 4, L6
- * PROJECTION. Tonight's proven-but-invisible layers (L3 `sectionAt`, L5 `membershipFor`) SAID from
- * here for the first time. Returns the sentence to show, or `""` when nothing is said.
- *
- * ── ONLY THE LEAVING TRANSITION IS SAID, AND THAT IS THE WHOLE OF RULE 4 ──
- *
- * The operator's own two cases: a bare line under "Domain Empty" belongs and stays — say nothing,
- * because a message on every keystroke is noise. The same line with `#work` acquires a domain and
- * leaves — say that. So this compares the line's membership answer BEFORE the commit (its own text
- * a moment ago, at this same index) against AFTER (`commit.text`), and speaks only when it went
- * from belonging to not: the transition his own example is about. Belonging -> belonging, absent
- * -> belonging (a fresh capture that stays), and not-belonging -> belonging are all silence too —
- * "only speak about a change" names the transition, and the operator's own example is that only
- * ONE of the two directions is worth narrating: the direction that costs him something if he does
- * not see it. Confirming the safe direction on every keystroke would be exactly the noise refused.
- *
- * ── REFUSE RATHER THAN GUESS, APPLIED TWICE ──
- *
- * EITHER SIDE ABSTAINING IS SILENCE, HERE. `membershipFor`'s five `Abstention` values already
- * refuse an unpublished qualification, a stamped line, a non-checkbox line, an empty line and an
- * ambiguous token; this function adds no judgement on top — an abstention on either side of the
- * comparison means there is nothing to compare, not that the missing side is assumed to agree or
- * disagree. THE SAME ABSTENTION IS NO LONGER INVISIBLE ELSEWHERE — `membershipDiagnosticFor`
- * below reads the identical `membershipReadingFor` result and says so, in the abstention register
- * rather than in this narration.
- *
- * AN INSERTED LINE HAS NO "BEFORE", AND GUESSING ONE WOULD MISATTRIBUTE A DIFFERENT LINE'S
- * ANSWER. `commit.kind !== "set-line"` (a new row from `draftInput`) is refused outright, never by
- * reading `commit.source` at `commit.lineIndex` — that index, for an insertion, is the row about
- * to be pushed down, a different line entirely (see `LineCommit.kind`'s own header in paint.ts).
- */
-function membershipNoteFor(view, commit) {
-  const reading = membershipReadingFor(view, commit);
-  if (reading.kind !== "answer") {
-    return "";
-  }
-  if (reading.before.belongs && !reading.after.belongs) {
-    return `this line will leave ${reading.after.sectionName}`;
-  }
-  return "";
-}
-
-/**
- * THE ABSTENTION REGISTER — docs/implementation-artifacts/roadmap-the-road-ahead.md step 2, "make
- * an abstention visible". Read that document's §2 before changing this function; it is the
- * argument for why this exists as a SECOND function and a SECOND DOM sink rather than a branch
- * inside `membershipNoteFor` above.
- *
- * THE DEFECT THIS FUNCTION CLOSES, STATED EXACTLY. Before this step, an abstention (`before` or
- * `after` refusing to resolve) and a confident "nothing changed" (both resolved, no leaving
- * transition) both made `membershipNoteFor` return `""`. Joined into the freshness line and
- * filtered, the two states were BYTE-IDENTICAL on screen — "I do not know" and "yes, nothing
- * needed saying" produced the same nothing. `roadmap-the-road-ahead.md` §2's own falsifier: drive
- * one line in a section whose qualification is refused, and one line in a section that publishes
- * cleanly and does not move; the two must produce different output. `tests/app-membership-
- * diagnostic.test.mjs` §2 proves it against `#membershipBadge`, the DOM sink this function feeds.
- *
- * WHY A SECOND REGISTER RATHER THAN A FIFTH FRESHNESS CLAUSE. `membershipNoteFor`'s own header
- * refuses to narrate the safe transition because "a message on every keystroke is noise" — and
- * `design-the-rule-mirror.md` §11 row 6 (cited by the roadmap doc) counts 137 of 186 sections as
- * inside that refusal today. Routing an abstention into the SAME sentence, on the SAME cadence,
- * reintroduces exactly the noise the refusal exists to prevent. `#membershipBadge` is a LEVEL
- * indicator instead — it reports the LAST commit's answer and is overwritten by the next one,
- * never appended to, the same shape `.vim-badge` already uses for NORMAL/INSERT. A level indicator
- * that changes state costs nothing extra per keystroke; a sentence that grows one does.
- *
- * "not-evaluated" IS DELIBERATELY LEFT OUT OF THIS REGISTER TOO. It is a real third state — the
- * declaration has not loaded, the commit is not a text edit, or the cursor is outside any
- * published section — but it is not the defect this step closes: it is a precondition the module
- * never got to judge, not a refusal it made, and the falsifier above does not ask for it. Returning
- * "" here leaves `#membershipBadge` showing whatever the last REAL evaluation said, which is
- * honest — a gesture this module was never asked about should not overwrite the answer to one it
- * was. Filed as a known, named gap rather than silently widened into "abstained".
- *
- * THE ONE TEXT SERVES TWO READERS, DELIBERATELY, RATHER THAN TWO SEPARATE ONES. The operator at
- * the keyboard and an agent driving this page to run the generality test (design-the-compiler-and-
- * the-bands.md §6) both read this line, and they want the same thing from it: which of the five
- * published `Abstention` reasons fired, verbatim, not a paraphrase a person finds friendlier and an
- * agent then has to pattern-match around. `todayNoteFor`'s own `console.warn` already sets this
- * precedent — `` `today: ${reading.because} — the logical-day note is not shown` `` — a raw reason
- * token in an English sentence, read by both. This function repeats that choice rather than
- * inventing a second one.
- */
-function membershipDiagnosticFor(view, commit) {
-  const reading = membershipReadingFor(view, commit);
-  if (reading.kind === "not-evaluated") {
-    return "";
-  }
-  if (reading.kind === "abstains") {
-    return `membership: abstained — ${reading.because}`;
-  }
-  return "membership: decided";
-}
-
-/**
- * WRITE `membershipDiagnosticFor`'s answer to `#membershipBadge` — the one DOM-touching line this
- * step adds, kept as small and as separate from `membershipNoteFor`'s own DOM write as
- * `updateVimBadge` is from everything else on the page. A no-op on "not-evaluated" (see that
- * function's own header) leaves the badge showing the last real evaluation rather than clearing it.
- */
-function updateMembershipBadge(view, commit) {
-  const text = membershipDiagnosticFor(view, commit);
-  if (text === "") {
-    return;
-  }
-  const badge = $("membershipBadge");
-  badge.textContent = text;
-  const abstained = text.startsWith("membership: abstained");
-  badge.classList.toggle("diagnostic-badge-abstains", abstained);
-  badge.classList.toggle("diagnostic-badge-answer", !abstained);
-}
-
-/**
- * AFTER THIS COMMIT, WILL THE LINE SORT TO A DIFFERENT POSITION WITHIN ITS SECTION — design doc
- * step 7, L5 EVALUATION. Same posture as `membershipNoteFor` above, and deliberately a SEPARATE
- * function rather than a branch inside it: `app/present/ordering.ts` answers a different question
- * (rank among siblings, never "does it belong") from a different published table
- * (`resolution.ordering`/`resolution.orderingFields`, not `qualification`), and keeping the two
- * apart is what lets `tests/app-membership-note.test.mjs`'s own pinned-count proof extend to this
- * function unmodified — see `tests/app-ordering-note.test.mjs` for the restated version.
- *
- * ONLY THE NINE SECTIONS THAT DECLARE AN `ordering:` SAY ANYTHING — the other 177 abstain
- * `no-section-declaration` inside `orderingFor` itself, silence by construction rather than a
- * branch here. "Say it, never move it" applies exactly as it does to membership: this function
- * returns a sentence for the freshness line, and nothing it calls touches `viewBody` or
- * `paint.ts`'s row order — `orderingFor` is PURE and produces no `Contribution`, no `SourceEdit`.
- */
-function orderingNoteFor(view, commit) {
-  if (resolution === undefined || qualification === undefined || commit.kind !== "set-line") {
-    return "";
-  }
-  // Same preference as membershipNoteFor above, and for the same reason — see that function's own
-  // comment and address.ts's `sectionOrderFor` header.
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
-  if (sectionId === null) {
-    return "";
-  }
-  // `resolveOrderingFor` (ordering.ts), NOT `orderingFor` directly — 2026-08-04,
-  // `roadmap-the-road-ahead.md`'s "the engine's own default ordering, made explicit" step. Routes
-  // to `orderingFor` unchanged for the 15 sections that declare `ordering`/`orderingMode`, and to
-  // the NEW `defaultOrderingFor` for every OTHER section — `due_date`/`priority`/`title`, the
-  // engine's own fallback (`section_builder.py`'s `_DEFAULT_ORDERING`), not a browser guess. This
-  // is the one line that makes an edit to an undeclared section (his inbox, `dev/qntm/backlog`,
-  // most of his vault) say something here for the first time.
-  const reading = resolveOrderingFor(
-    view.id,
-    sectionId,
-    commit.source,
-    commit.lineIndex,
-    commit.text,
-    resolution.ordering,
-    resolution.orderingFields,
-    resolution.defaultOrdering,
-    resolution.priorityRank,
-  );
-  if (reading.kind !== "answer" || !reading.answer.moved) {
-    return "";
-  }
-  const sectionName = resolution.ordering[view.id]?.[sectionId]?.name ?? sectionId;
-  return `this line will move within ${sectionName}`;
-}
-
-/**
- * THE ABSTENTION REGISTER FOR ORDERING — `roadmap-the-road-ahead.md` step 2's own gap, named at
- * the time in `commitLine`'s own comment ("Ordering has no register of its own yet") and closed
- * here, the same shape `membershipDiagnosticFor` already gives membership. Hazard 3 of the PR that
- * added this function states the reason plainly: `orderingFor` already REFUSES honestly — five
- * named `OrderingAbstention` reasons — and every one of them used to reach exactly as far as
- * `orderingNoteFor`'s own `return ""`, indistinguishable from "nothing changed." A section that
- * declares `orderingMode: insertion_order` (`daily-work`/`daily-personal`'s `capture`) abstains on
- * EVERY edit, forever, and said nothing about it until this function existed.
- *
- * "NO-SECTION-DECLARATION" WAS STILL SILENT — RESTATED, 2026-08-04, NOW THAT IT NEVER FIRES HERE
- * AT ALL. Before this step, 177 of 186 sections never declared an `ordering:`, and reporting "I
- * could not decide" about a question nobody asked would have been its own kind of noise. That
- * premise is gone: `resolveOrderingFor` (below) routes an undeclared section to
- * `defaultOrderingFor`, which ALWAYS has a real question to answer (the engine's own default) —
- * `no-section-declaration` is `orderingFor`'s OWN abstention, reachable only by calling that
- * function directly (as `tests/present-ordering.test.mjs` still does, unchanged), never through
- * this page's own dispatch. So every section now gets a word: "decided" or one of the SEVEN named
- * abstentions the default path can also give — `field-not-published` (this config publishes no
- * `due_date`/`priority` marker at all), `nested-section`, `container-ordering-directive`,
- * `style-ambiguous-title`, or (for the 15 DECLARED sections, unchanged) `insertion-order`/
- * `field-not-published`/`nested-section`/`no-value`.
- */
-function orderingDiagnosticFor(view, commit) {
-  if (resolution === undefined || qualification === undefined || commit.kind !== "set-line") {
-    return "";
-  }
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
-  if (sectionId === null) {
-    return "";
-  }
-  const reading = resolveOrderingFor(
-    view.id,
-    sectionId,
-    commit.source,
-    commit.lineIndex,
-    commit.text,
-    resolution.ordering,
-    resolution.orderingFields,
-    resolution.defaultOrdering,
-    resolution.priorityRank,
-  );
-  if (reading.kind === "abstains") {
-    return `ordering: abstained — ${reading.because}`;
-  }
-  return "ordering: decided";
-}
-
-/**
- * WRITE `orderingDiagnosticFor`'s answer to `#orderingBadge` — the same one-DOM-touching-line
- * shape `updateMembershipBadge` already established, kept as small and as separate from
- * `orderingNoteFor`'s own freshness-line write as that function is from everything else on the
- * page. A no-op on `""` (see that function's own header) leaves the badge showing the last real
- * evaluation rather than clearing it.
- */
-function updateOrderingBadge(view, commit) {
-  const text = orderingDiagnosticFor(view, commit);
-  if (text === "") {
-    return;
-  }
-  const badge = $("orderingBadge");
-  badge.textContent = text;
-  const abstained = text.startsWith("ordering: abstained");
-  badge.classList.toggle("diagnostic-badge-abstains", abstained);
-  badge.classList.toggle("diagnostic-badge-answer", !abstained);
-}
-
-/**
- * ARM THE SETTLE SURFACE — the PLACEMENT half of design-the-resolution-architecture.md step 7,
- * added by `roadmap-the-road-ahead.md` step 3. `orderingNoteFor`/`orderingDiagnosticFor` above only
- * SAY what `resolveOrderingFor` decided; this is the one place this page calls
- * `resolveOrderingPlacementFor`, and the one place `settle.arm` is ever called — "one write, one
- * function" for this register, the same discipline every gated write on this page keeps.
- *
- * TWO KINDS, TWO GATES — `LineCommit.kind` (paint.ts) is `"set-line"` for a row that already
- * existed a moment ago and `"insert-line"` for one that did not, and the two cannot share a gate:
- *
- *   `"set-line"`: gated on `reading.placement.moved`, UNCHANGED from before this comment —
- *   `moved` compares the row's rank BEFORE this edit against its rank AFTER, which is the right
- *   question exactly when a real "before" exists and the file's physical order already agreed
- *   with it (the ordinary case: nothing but this edit could have desynced it).
- *
- *   `"insert-line"`: a row with no before-state has no rank to compare — `evaluateSection`'s own
- *   before/after tuple would be identical (there is only ever the one, freshly-typed value), so
- *   `moved` is trivially `false` FOR EVERY INSERT, which was the exact defect this comment used to
- *   describe as a refusal ("a freshly inserted row has no established position") when it was
- *   actually a silent no-op: `resolveOrderingPlacementFor` computed the correct destination every
- *   time and this function discarded the answer. `reading.placement.currentBeforeLineIndex` (see
- *   `OrderingPlacement`'s own header, ordering.ts) is the row's ACTUAL neighbour, read at the same
- *   moment `beforeLineIndex` (its CORRECT one) is computed — "is the row where it belongs" is
- *   `currentBeforeLineIndex !== beforeLineIndex`, answerable for a row that was never edited at
- *   all, only just typed.
- *
- * ARMED AGAINST `commit.markdown`, NOT `commit.source`, FOR BOTH KINDS — `commit.markdown` is what
- * `paint.ts`'s own `rawInput.settle`/`draftInput.settle` repaints INTO the instant this function
- * returns — the very next statement in that function, before `commitLine`'s own `await` below ever
- * resumes — so arming against anything else would describe a paint that has already happened by
- * the time the placement could be read, and `SettleSurface.take` would never see it match.
- *
- * `commit.markdown` IS ALSO WHAT THE PLACEMENT ITSELF IS COMPUTED AGAINST FOR `"insert-line"` —
- * deliberately NOT `commit.source`. `LineCommit.source`'s own header (paint.ts) states why:
- * `commit.source` is the file BEFORE the insertion, so `commit.source.split("\n")[commit.lineIndex]`
- * is a DIFFERENT, unrelated line about to be pushed down, not the new row. `commit.markdown`
- * already holds the new row at `commit.lineIndex` (that is what `applyEdit`'s `insert-line` case
- * put there), so it is the only string this function can read the row's own siblings, its own
- * value and its own actual neighbour from without comparing two different lines and calling it
- * one. `"set-line"` keeps reading `commit.source`, unchanged — the row is already there, and
- * `commit.source` is the base the freshness-line note (`orderingNoteFor`) was itself computed
- * against, so the two stay in agreement about which copy of the file "before" names.
- */
-function armOrderingSettle(view, commit) {
-  if (resolution === undefined || qualification === undefined || commit.markdown === null) {
-    return;
-  }
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
-  const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
-  if (sectionId === null) {
-    return;
-  }
-  const reading = resolveOrderingPlacementFor(
-    view.id,
-    sectionId,
-    addressSource,
-    commit.lineIndex,
-    commit.text,
-    resolution.ordering,
-    resolution.orderingFields,
-    resolution.defaultOrdering,
-    resolution.priorityRank,
-  );
-  if (reading.kind !== "answer") {
-    return;
-  }
-  const needsPlacement =
-    commit.kind === "insert-line"
-      ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex
-      : reading.placement.moved;
-  if (!needsPlacement) {
-    return;
-  }
-  settle.arm(commit.markdown, view.id, {
-    lineIndex: commit.lineIndex,
-    beforeLineIndex: reading.placement.beforeLineIndex,
-  });
-}
-
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// RULES — `rules.ts`'s own axis, wired for the first time. `presentation.json`'s `structural`,
-// `qualification` and `resolution` keys are read across the call sites above; `rules` was read at
-// zero, until this block. The gap this closes, in the operator's own words: "it gets the default
-// tag added of new (i imagine that will come from rules?)" — `🆕`, `stamp-created-at-on-task`,
-// ten seconds late every time, until now.
+// THE RESOLVERS — AND WHERE THIS PAGE STOPPED KNOWING THEM BY NAME
 //
-// SCOPED TO A FRESH CAPTURE (`commit.kind === "insert-line"`), NEVER AN EXISTING LINE — see
-// `rulesReadingFor`'s own header for why: `resolveLineFields` (membership.ts) already refuses to
-// resolve fields for a line carrying a `[[qntm:N]]` stamp, so a "set-line" commit on an existing
-// node abstains here by construction, never by a branch this file adds.
+// This block used to be ~1,000 lines: four axes (membership, ordering, rules, parent promotion),
+// four hand-written functions each, and a `commitLine` that named every one of them in sequence.
+// Six more axes are declared and unwired. At that shape they would have been twenty-four more
+// hand-written functions HERE, in a file `tsconfig.json` cannot read — a `<script type="module">`
+// inside an HTML document is checked by nothing until it runs, and three defects in three days
+// lived in exactly that blind spot. `f448da2` is the sharpest of them: `x` and `>`/`<` hand-built
+// `{ lineIndex, text, markdown }` and left out `kind`/`source`, two fields `LineCommit` (paint.ts)
+// declares REQUIRED everywhere TypeScript is watching. It shipped, stayed silent for months, and
+// surfaced as a keystroke that vanished with no POST and nothing on screen.
+//
+// WHAT IS LEFT HERE IS THE PAGE'S OWN HALF, AND ONLY THAT: one context built from what this page
+// is holding, one badge writer, and the write path. Every answer is decided in `app/present/`,
+// where the compiler reads it and flow-trace can see the edge. See `app/present/resolve.ts` for
+// what a resolver IS, and `app/present/resolvers/registry.ts` for which four there are and what
+// their order decides.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * THE ONE EVALUATION `rulesNoteFor` (narration) AND `rulesDiagnosticFor` (the abstention
- * register) ARE BOTH COMPUTED FROM — the same tie `membershipReadingFor` already is for its own
- * axis, and for the same reason: two separately written evaluations of "what does this line's
- * rules pass decide" is exactly the drift `design-the-compiler-and-the-bands.md` §3.1 already
- * found once. Read-only — see the comment above `updateRulesBadge`, below `rulesDiagnosticFor`,
- * for why this reading is never used to rewrite `commit`.
+ * EVERYTHING A RESOLVER MAY READ, BUILT ONCE PER COMMIT.
  *
- * `"answer"` carries `text: string | null` — the committed line's characters WITH every rendered
- * effect appended, or `null` when a rules pass ran and fired nothing at all (a legitimate answer:
- * no published rule matched this candidate). `"abstains"` covers two different refusals, named
- * rather than conflated: `resolveLineFields`'s own five reasons (an existing node, an empty line,
- * …) and, prefixed `rendering-`, `renderRuleEffects`'s own two (`unrenderable-effect`,
- * `conflicting-token-present`) — a rule matched and fired, but this app cannot spell its effect
- * onto a line without inventing characters or overwriting ones the operator typed.
+ * The four module-scoped declaration axes, the graph this page is holding, the view, the commit,
+ * and a way to ask the time. A resolver cannot reach page state that is not on this object — which
+ * is what makes "build a context and walk the registry" a complete description of what `commitLine`
+ * does rather than a summary of it.
+ *
+ * `now` IS A READER, NOT A VALUE, AND THAT KEEPS THE CLOCK RULE EXACTLY WHERE IT WAS. A value would
+ * be read on every commit, including the ones no resolver asks the time for; a reader is called
+ * precisely where `Date.now()` was called before this block shrank — inside the rules axis, after
+ * its own gates, once. `app/present/` still reads no clock of its own (`today.ts`'s own rule, and
+ * tests/app-today-note.test.mjs proves it): the two call sites are here, on this page, as they have
+ * always been.
+ *
+ * BUILT FRESH, NEVER CACHED — the same reason `globalRegistrationFor` above is not memoised. A
+ * cached context is one more thing that can drift from `qualification`/`resolution`/`graphData`
+ * after a projection lands.
  */
-function rulesReadingFor(view, commit) {
-  if (rulesTable === undefined || qualification === undefined || resolution === undefined) {
-    return { kind: "not-evaluated" };
-  }
-  if (commit.kind !== "insert-line" || commit.markdown === null) {
-    return { kind: "not-evaluated" };
-  }
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const sectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
-  if (sectionId === null) {
-    return { kind: "not-evaluated" };
-  }
-  const section = qualification.sections[view.id]?.[sectionId];
-  if (section === undefined) {
-    return { kind: "not-evaluated" };
-  }
-  const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
-  const fields = resolveLineFields(line, section, qualification);
-  if (typeof fields === "string") {
-    // membership.ts's own `Abstention` vocabulary — not this axis's to invent a second one for.
-    return { kind: "abstains", because: fields };
-  }
-  // `$cycle_today`/`$cycle_week_end` — the day boundary, resolved the way the engine resolves it,
-  // NEVER the system clock read directly (`today.ts`'s own header states why: the operator's
-  // logical day rolls over at a declared hour in a declared zone, not at local midnight). A
-  // boundary this app cannot resolve (a malformed `dayBoundary`) still lets `applyRules` run —
-  // every rule not naming a cycle variable is unaffected — it just cannot resolve `$cycle_today`
-  // itself, which `applyRules`'s own per-candidate refusal already covers (see that function's
-  // header).
-  const today = todayFor(Date.now(), resolution.dayBoundary);
-  const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : undefined);
-  if (pass.applied.length === 0) {
-    // UNDECIDABLE, NOT "DECIDED: NOTHING APPLIES" — `applyRules`'s own header: at least one rule
-    // this candidate reached could not be checked at all (its pattern needs a graph this app does
-    // not have), so "no rule fired" is not a confident answer this app can stand behind. Checked
-    // only in the applied-nothing case — see that header for why a fired rule elsewhere in the
-    // same pass is not blocked by this and does not report it.
-    if (pass.undecidable.length > 0) {
-      return { kind: "abstains", because: "rule-pattern-needs-graph-traversal" };
-    }
-    return { kind: "answer", applied: [], text: null };
-  }
-  const rendered = renderRuleEffects(
-    line,
-    pass.applied,
-    qualification.tokens.node_type ?? {},
-    qualification.tokens,
-    rulesTable.fieldMarkers,
-  );
-  if (rendered.kind === "abstains") {
-    return { kind: "abstains", because: `rendering-${rendered.because}` };
-  }
+function resolverContextFor(view, commit) {
   return {
-    kind: "answer",
-    applied: pass.applied,
-    text: rendered.kind === "rendered" ? rendered.text : null,
-    // TRUE when a rule that fired ALSO carries an unmodelled `emit_event` — `applyRules`'s own
-    // header ("PARTIAL"). The rendered text is still correct; this says the rule's real effect is
-    // bigger than what got rendered, so a reader must not treat this answer as the whole story.
-    partial: pass.partial.length > 0,
+    view,
+    commit,
+    declared: { structural, qualification, resolution, rules: rulesTable },
+    // READ, NEVER REQUESTED. `graphSnapshotOf` (resolve.ts) narrows whatever `graphData` is holding
+    // to the `{nodes, edges}` shape the graph-aware pass needs, and answers `null` — honestly —
+    // for a brand-new account whose snapshot is genuinely absent.
+    graph: graphSnapshotOf(graphData),
+    now: () => Date.now(),
   };
 }
 
 /**
- * ONE SENTENCE, IN THE FRESHNESS LINE — the same "only speak about a change" posture
- * `membershipNoteFor`/`orderingNoteFor` already take. Silent unless a rule actually fired AND its
- * effect could be rendered (an abstention is `rulesDiagnosticFor`'s to say, not this function's —
- * the same split membership/ordering already draw between narration and the abstention register).
+ * THE ABSTENTION REGISTER'S ONE DOM SINK — every badge, one function.
  *
- * TAKES THE ALREADY-COMPUTED `reading`, NOT `(view, commit)` — `commitLine` computes
- * `rulesReadingFor` exactly once and threads that ONE answer through this function,
- * `rulesDiagnosticFor` and `updateRulesBadge` alike, the same reason `membershipReadingFor` is
- * computed once for its own two readers.
+ * There used to be four of these, one per axis, each four lines long and each deriving its own
+ * `abstained` flag from its own string prefix. `Diagnostic` (resolve.ts) already carries the
+ * element id and the flag, so this is the whole of what the page has to do with an answer: write
+ * it. A resolver that says nothing produces no `Diagnostic` at all and this is never called for
+ * it — which is what leaves a badge showing the last REAL evaluation rather than blanking it.
  */
-function rulesNoteFor(reading) {
-  if (reading.kind !== "answer" || reading.applied.length === 0 || reading.text === null) {
-    return "";
-  }
-  const words = reading.applied.map((effect) => {
-    if (effect.verb === "retype") return `becomes ${effect.to}`;
-    if (effect.verb === "set") return `sets ${effect.field}`;
-    return `clears ${effect.field}`;
-  });
-  return `this line ${words.join(", ")}`;
+function paintBadge(diagnostic) {
+  const badge = $(diagnostic.badge);
+  badge.textContent = diagnostic.text;
+  badge.classList.toggle("diagnostic-badge-abstains", diagnostic.abstained);
+  badge.classList.toggle("diagnostic-badge-answer", !diagnostic.abstained);
 }
 
 /**
- * THE ABSTENTION REGISTER FOR RULES — the same shape `membershipDiagnosticFor`/
- * `orderingDiagnosticFor` already give their own axis, and the one the operator's own brief asks
- * for by name: "the 79 dropped rules must abstain visibly … the browser must not attempt them,
- * must not silently ignore them." A rule this closed grammar never modelled at all is never IN
- * `rulesTable.rules` — this register's job is the DIFFERENT case: a rule that IS published,
- * WOULD fire, and still cannot be shown (`rendering-unrenderable-effect`,
- * `rendering-conflicting-token-present`), which used to be indistinguishable from "nothing
- * applies here" before this function existed. Takes the shared `reading` — see `rulesNoteFor`'s
- * own header for why it is not recomputed here.
- */
-function rulesDiagnosticFor(reading) {
-  if (reading.kind === "not-evaluated") {
-    return "";
-  }
-  if (reading.kind === "abstains") {
-    return `rules: abstained — ${reading.because}`;
-  }
-  // PARTIAL, NOT ABSTAINED — the rendered text is real and correct (`rulesReadingFor`'s own
-  // header); this says so rather than presenting it as the complete effect, "never silently
-  // complete" applied to the one axis that can be right AND incomplete at once.
-  return reading.partial ? "rules: decided (partial — action(s) not modelled)" : "rules: decided";
-}
-
-/**
- * WRITE `rulesDiagnosticFor`'s answer to `#rulesBadge` — the same one-DOM-touching-line shape
- * `updateMembershipBadge`/`updateOrderingBadge` already establish. Takes the shared `reading`.
- */
-function updateRulesBadge(reading) {
-  const text = rulesDiagnosticFor(reading);
-  if (text === "") {
-    return;
-  }
-  const badge = $("rulesBadge");
-  badge.textContent = text;
-  const abstained = text.startsWith("rules: abstained");
-  badge.classList.toggle("diagnostic-badge-abstains", abstained);
-  badge.classList.toggle("diagnostic-badge-answer", !abstained);
-}
-
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-// PARENT PROMOTION — `app/present/graphmatch.ts`'s own wire half. Two rules `presentation.json`'s
-// `rules` key already publishes — `task-with-open-part-of-child-becomes-outcome` and its
-// `#waiting-for` sibling, plus the routine/habit pair that already existed beside them — carry a
-// one-hop `children:` edge step, and `rulesReadingFor` (above) abstains on every one of them
-// (`rule-pattern-needs-graph-traversal`) because it only ever has ONE line's own fields, never a
-// graph. This block is what closes that gap for the ONE shape the operator asked for by name: he
-// indents a task beneath another task (or a `#waiting-for` line beneath one), and the PARENT — not
-// the line he just committed — is the candidate a graph-aware rule now has to answer for.
-//
-// THE EFFECT LANDS ON A DIFFERENT ROW FROM THE ONE COMMITTED, AND IT IS NEVER WRITTEN THERE. Every
-// other axis in this file (membership, ordering, rules) answers for the line `commit` itself
-// carries, and `rulesNoteFor`'s own comment (above `writeFile`) already states why NOTHING in this
-// bundle reassigns `commit.markdown`/`commit.text`: that string is what reaches the POST body,
-// unconditionally, and the write-path invariant seven other test files pin
-// ("`.markdown` is never ASSIGNED in app/") exists so a write carries nothing beyond what the
-// operator typed on THAT line. A promotion decided for the PARENT cannot ride this write at all —
-// there is no POST for a row that was not edited — so it is SURFACED, through `#parentBadge`
-// (the same one-DOM-touching-line register `#rulesBadge` already is), and never written anywhere.
-// If the operator wants it on the page for real, the engine's own next cycle writes it, the same
-// way it always has; this badge is the browser saying, honestly, what that cycle is about to do.
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-
-/**
- * THE ONE EDGE BINDING THIS APP KNOWS BY NAME, AND WHY IT IS NOT A SECOND `structural.indent`.
+ * WHY `commit.markdown`/`commit.text` ARE NEVER ASSIGNED ANYWHERE IN THIS FILE OR IN ANY RESOLVER,
+ * NAMED HERE RATHER THAN LEFT FOR SOMEONE TO REDISCOVER BY BREAKING A TEST.
  *
- * `structural.ts`'s published wire carries only the GLOBAL indent default (`structural.indent` —
- * which edge type an ORDINARY indent creates, and which end is which; see that module's own
- * header) — never the PER-TAG overrides `vocabulary/structural_tokens.yaml`'s own `bindings:` list
- * declares (`#waiting-for`, `#requires`, `#unlocks`, `#sponsors`, `#next`, `#parallel`), because
- * that generator was scoped, on purpose, to exactly what a render narration needed (structural.ts's
- * own header: "nothing else is wired to a reader yet"). Widening `generate-structural-declaration.mjs`
- * to publish the full token vocabulary — including the edge TYPE each tag claims, which is declared
- * in a THIRD file, `edge_tags.yaml`, `structural_tokens.yaml` does not even carry itself — is real,
- * separately-scoped work this change does not attempt.
+ * The first shape the rules feature took DID reassign them: it wrote the stamp into
+ * `commit.markdown` in place before the write, so the glyph would ride the same POST the operator's
+ * own edit made. `tests/app-membership-note.test.mjs`'s own `` `.markdown` is never ASSIGNED in
+ * app/ `` caught it, and seven OTHER test files pin the identical invariant. That is not incidental
+ * scope; it is the guarantee "what he typed is what gets saved" — the same guarantee `writeFile`'s
+ * own header states for `source`, extended to `markdown`. A rules pass with any bug in it must
+ * never be able to silently change what a write carries.
  *
- * What THIS leg's own acceptance criterion needs is narrower: ONE tag,
- * `task-with-open-waiting-for-child-becomes-outcome`'s own `#waiting-for`, mapped to the edge type
- * and direction `vocabulary/structural_tokens.yaml`'s own comment states in as many words:
- * "`#waiting-for` (bare, indented) -> WAITING_FOR parent->child (parent waits for the child) and
- * claims the indent slot (no PART_OF)". `edge_source: position` there is `structural.ts`'s own
- * `IndentBinding.edgeSource` vocabulary — the POSITIONAL node (the parent slot) is the edge's
- * source — read directly off that config file rather than derived, the same class of engine-
- * mirroring literal `membership.ts`'s own `CHECKBOX` regex and `rules.ts`'s `$cycle_today` name
- * already are. It is NOT a generalised reader: a second graph-aware rule keyed to a DIFFERENT bare
- * tag next year needs a second line here, and `edgeSourceOf`/`prospectiveEdgeBinding` below say so
- * rather than pretending this table is the whole vocabulary.
- */
-const WAITING_FOR_TAG_BINDING = { tag: "#waiting-for", edgeType: "WAITING_FOR", edgeSource: "position" };
-
-/**
- * `edgeType -> "self" | "position" | undefined` — `graphmatch.ts`'s own `EdgeSourceOf` contract.
- * The GLOBAL indent binding's edge type is answered from the PUBLISHED declaration
- * (`structural.indent`, generic — follows whatever the operator declares, no hardcode); the one
- * extra binding is `WAITING_FOR_TAG_BINDING` above; anything else is honestly `undefined`, and
- * `graphmatch.ts`'s own functions abstain rather than guess a direction for it.
- */
-function edgeSourceOf(edgeType) {
-  if (structural?.indent !== undefined && structural.indent.edgeType === edgeType) {
-    return structural.indent.edgeSource;
-  }
-  if (WAITING_FOR_TAG_BINDING.edgeType === edgeType) {
-    return WAITING_FOR_TAG_BINDING.edgeSource;
-  }
-  return undefined;
-}
-
-/**
- * Which edge this freshly-committed LINE's own gesture creates to its structural parent — the
- * global indent default UNLESS the line's own tags claim the slot for `WAITING_FOR_TAG_BINDING`'s
- * one tag instead. `undefined` when there is no published indent binding to fall back to at all
- * (no `structural` declaration read yet).
- */
-function prospectiveEdgeBinding(line) {
-  if (tagSpans(line).some((span) => span.text === WAITING_FOR_TAG_BINDING.tag)) {
-    return { edgeType: WAITING_FOR_TAG_BINDING.edgeType };
-  }
-  if (structural?.indent === undefined) {
-    return undefined;
-  }
-  return { edgeType: structural.indent.edgeType };
-}
-
-/**
- * The nearest PRECEDING line, strictly less indented than `lines[lineIndex]`, skipping blank lines
- * — the standard nesting rule `indent.ts`'s own header cites from the engine's differ
- * (`content_diff.py`: `depth = len(normalised) - len(normalised.lstrip())`, a raw leading-space
- * count popped by `stack[-1][0] >= depth`). `null` when nothing shallower precedes this line at
- * all — a root-level line, which is not a structural child of anything and has no promotion to
- * compute. Works uniformly whether the line found is a real content line, a heading, or anything
- * else this app does not recognise as a node — `parentCandidateFor`'s own call into
- * `resolveLineFields` is what refuses a shape that is not actually a checkbox line, never this
- * function, which only ever measures whitespace.
- */
-function structuralParentLineIndex(lines, lineIndex) {
-  const leadingWhitespace = (line) => (/^\s*/.exec(line) ?? [""])[0].length;
-  const childIndent = leadingWhitespace(lines[lineIndex] ?? "");
-  for (let i = lineIndex - 1; i >= 0; i -= 1) {
-    const line = lines[i] ?? "";
-    if (line.trim() === "") continue; // blank — keep scanning upward, same as a heading would be skipped past
-    if (leadingWhitespace(line) < childIndent) return i;
-  }
-  return null;
-}
-
-/** `[[qntm:N]]` -> `N`, and `qntm:N` -> `N` — normalises whichever spelling a graph node's own `id`
- * turns out to carry (unconfirmed which one the real payload uses; see this PR's own description)
- * against the bare id `stampSpans` already extracts from a line's stamp, so a real match is never
- * missed over a prefix this app is not certain about either way. */
-const bareId = (id) => String(id).replace(/^qntm:/i, "");
-
-/** `graphData.snapshot.graph`, narrowed to exactly the `{nodes, edges}` shape `graphmatch.ts`
- * needs — `null` when the graph has not been read yet, or was read but carries neither array (the
- * D1-fallback `snapshot: null` shape `worker/src/app.js`'s own header documents for a brand-new
- * account). Never a fetch of its own — `graphData` is read, never requested, here. */
-function graphSnapshot() {
-  const g = graphData?.snapshot?.graph;
-  if (g === undefined || g === null || !Array.isArray(g.nodes) || !Array.isArray(g.edges)) {
-    return null;
-  }
-  return { nodes: g.nodes, edges: g.edges };
-}
-
-/**
- * The structural parent's own id + resolved fields — from the LIVE GRAPH when the parent line
- * already carries a `[[qntm:N]]` stamp (an existing node; the graph, never a re-derivation off the
- * line, is this app's source of truth for it — the same posture `membership.ts`'s own
- * `resolveLineFields` already takes, refusing "already-a-node"), or resolved the SAME way a fresh
- * candidate's own fields already are (`resolveLineFields`) when the parent line carries no stamp
- * yet — because an unstamped parent is ITSELF not yet a node the graph can answer for; see this
- * leg's own brief, "the two hard parts", part 2. Returns `{ abstain }` rather than guessing when
- * neither source can answer.
- */
-function parentCandidateFor(parentLine, parentSection, snapshot) {
-  const stamped = stampSpans(parentLine);
-  if (stamped.length > 0) {
-    if (snapshot === null) {
-      return { abstain: "graph-not-loaded" };
-    }
-    const wanted = bareId(stamped[0].id);
-    const node = snapshot.nodes.find((n) => bareId(n.id) === wanted);
-    if (node === undefined) {
-      return { abstain: "parent-not-in-graph" };
-    }
-    return { id: node.id, fields: { node_type: node.type, ...node.fields } };
-  }
-  const fields = resolveLineFields(parentLine, parentSection, qualification);
-  if (typeof fields === "string") {
-    return { abstain: `parent-${fields}` };
-  }
-  return { id: null, fields };
-}
-
-/**
- * DID `commit`'s OWN LINE GAIN A STRUCTURAL PARENT IT DID NOT HAVE A MOMENT AGO, LOSE ONE IT DID,
- * OR IS ITS RELATIONSHIP TO WHATEVER PRECEDES IT UNCHANGED — the one fact `parentPromotionFor`
- * gates on, in place of the enumeration (`commit.kind !== "insert-line"`) that shipped instead of
- * it and missed the operator's own commonest gesture: type the child, THEN indent it (a `set-line`
- * commit, never `insert-line`). "Did the relationship change" is decided by comparing
- * `afterParentLineIndex` (the caller's own `structuralParentLineIndex` reading, off
- * `commit.markdown` — the file this commit PRODUCES) against a BEFORE reading this function takes
- * for itself, off whichever string actually holds this line's own history.
+ * THE INVARIANT NOW COVERS MORE GROUND THAN IT DID, NOT LESS. The resolvers moved into
+ * `app/present/resolvers/`, so the same greps read those files too — a resolver cannot assign
+ * `.markdown` either, and nothing in `app/present/` can: `arm` returns descriptions, the runner
+ * concatenates them, and this page makes the only calls.
  *
- * `commit.kind === "set-line"` (`LineCommit.kind`'s own header, paint.ts): `commit.source` IS this
- * line's own file a moment ago — a `set-line` commit replaces exactly one line and shifts nothing
- * else, so the SAME `commit.lineIndex` names the SAME physical line on both sides. The before
- * reading is real, and this is what makes `>`/`<` and a hand-typed change to a line's own leading
- * whitespace both reachable here — NEITHER is `commit.kind === "insert-line"`, and neither needs to
- * be for this rule to see them: both are `set-line` commits whose relationship genuinely changed.
- *
- * EVERY OTHER `kind` (today, only `"insert-line"` — `LineCommit.kind`'s own closed TypeScript union
- * is what stops a third one arriving here unnoticed, see paint.ts): `commit.source` at this SAME
- * index is a DIFFERENT, unrelated line about to be pushed down, never this line's own before
- * (`LineCommit.kind`'s own header states this explicitly). A line still being minted has no honest
- * "before" to read, so this reads as "no relationship a moment ago" — simply true for a captured
- * line that did not exist a moment ago — rather than mis-reading an unrelated line's indentation as
- * this one's own history. A hypothetical future `kind` this function has never heard of gets the
- * SAME safe default: no fabricated before, which can only ever under-report a LOST relationship
- * (never invent a GAINED one, since `after` is always read for real) — the worst a truly novel kind
- * can do here is fall back to the same honest "no history to compare" `insert-line` already gets.
+ * WHAT SHIPS INSTEAD, WITHOUT WEAKENING THAT GUARANTEE AT ALL: the literal glyph DOES reach the
+ * screen — `armPredict` below primes `PredictSurface` with characters the rules and promotion axes
+ * already computed, and `paint.ts` paints them as a DOM-only decoration the instant the optimistic
+ * repaint runs. `PredictSurface.arm` never touches `commit`, `appendPrediction` only ever calls
+ * `row.append(span)`, and nothing in either file calls `applyEdit`, reads `innerHTML` back, or
+ * reaches `deps.onLineCommit`/`deps.onCheckboxToggle` a second time.
  */
-function structuralRelationshipChangeFor(commit, afterParentLineIndex) {
-  const beforeParentLineIndex =
-    commit.kind === "set-line" ? structuralParentLineIndex(commit.source.split("\n"), commit.lineIndex) : null;
-  if (beforeParentLineIndex === afterParentLineIndex) {
-    return { kind: "unchanged" };
-  }
-  return { kind: afterParentLineIndex === null ? "lost" : "gained" };
-}
-
-/**
- * THE ONE EVALUATION `parentPromotionNoteFor` AND `parentPromotionDiagnosticFor` ARE BOTH COMPUTED
- * FROM — the same tie `rulesReadingFor` already is for its own two readers, and for the same
- * reason. Scoped to WHATEVER COMMIT ACTUALLY CHANGED THIS LINE'S STRUCTURAL RELATIONSHIP —
- * `structuralRelationshipChangeFor`, above — never to a specific `commit.kind`: a line settling
- * with no change to its relationship (an unindented edit, a checkbox flip, a root-level capture) is
- * `not-evaluated`, the same silence `rulesReadingFor` gives a commit with nothing to say.
- *
- * `"answer"` carries `applied` (`RuleEffect[]`, possibly empty — "the parent was checked and
- * nothing about it changes" is a real, decided answer, not a lesser one than a promotion firing)
- * and `parentLineIndex`, so a caller can say WHICH row the effect is about without re-deriving it.
- * `"abstains"` covers every reason this leg's own brief asks to be visible: the relationship was
- * REMOVED rather than gained (`structural-relationship-removed` — see
- * `structuralRelationshipChangeFor`'s own "lost" case, and the comment on that branch below for why
- * this is a refusal to guess, not caution for its own sake), the graph has not loaded, the parent's
- * stamp names a node this app's own snapshot does not carry, the parent LINE itself cannot be
- * resolved to fields at all (`resolveLineFields`'s own abstentions, prefixed `parent-`), or the
- * graph-aware pass itself could not decide (`graph-match-undecidable` — `graphmatch.ts`'s own
- * `undecidable`, non-empty, with nothing else in the pass having fired either — the exact same
- * "only when NOTHING else answered" posture `rulesReadingFor` already takes for its own
- * `rule-pattern-needs-graph-traversal`).
- */
-function parentPromotionFor(view, commit) {
-  if (rulesTable === undefined || qualification === undefined || resolution === undefined) {
-    return { kind: "not-evaluated" };
-  }
-  if (commit.markdown === null) {
-    return { kind: "not-evaluated" };
-  }
-  const lines = commit.markdown.split("\n");
-  const parentLineIndex = structuralParentLineIndex(lines, commit.lineIndex);
-  const relationship = structuralRelationshipChangeFor(commit, parentLineIndex);
-  if (relationship.kind === "unchanged") {
-    return { kind: "not-evaluated" };
-  }
-  if (relationship.kind === "lost") {
-    // THE RELATIONSHIP WAS REMOVED (an outdent, or any edit that un-indents this line past its
-    // former parent), NEVER GAINED — see `structuralRelationshipChangeFor`'s own header.
-    // Abstaining here rather than running the graph-aware pass below is not caution for its own
-    // sake: `applyGraphAwareRules`/`graphmatch.ts` can only ever ADD a prospective child to a
-    // candidate's existing neighbours (`ProspectiveChild`, folded in by `edgeStepIsSatisfied`) — it
-    // has no way to SUBTRACT one the live graph still names, so asking it "does the OLD parent
-    // still qualify" would silently score against a graph state that still contains the child this
-    // very commit is removing. That would produce a confidently wrong "no change" rather than an
-    // honest unknown, which is worse than saying nothing — this file's own "agree with the engine,
-    // or abstain" rule. (Separately, and not the reason for this abstention: today's published
-    // grammar carries no revert-shaped rule for this pattern at all — see this PR's own
-    // description for which one, and why. So even a perfect removal model would have nothing
-    // published to apply here yet. This abstention would hold regardless of that — it is about what
-    // this app can honestly MODEL, not about what happens to be published this week.)
-    return { kind: "abstains", because: "structural-relationship-removed" };
-  }
-  // relationship.kind === "gained" — `afterParentLineIndex` (== `parentLineIndex`) is real here by
-  // construction (see `structuralRelationshipChangeFor`'s own return), so everything below reads
-  // exactly as it always has, now simply reachable from more than one `commit.kind`.
-
-  const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-  const childSectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
-  const childSection = childSectionId === null ? undefined : qualification.sections[view.id]?.[childSectionId];
-  if (childSection === undefined) {
-    return { kind: "abstains", because: "no-section-declaration" };
-  }
-  const childLine = lines[commit.lineIndex] ?? "";
-  const childFieldsRaw = resolveLineFields(childLine, childSection, qualification);
-  if (typeof childFieldsRaw === "string") {
-    return { kind: "abstains", because: `child-${childFieldsRaw}` };
-  }
-
-  const binding = prospectiveEdgeBinding(childLine);
-  if (binding === undefined) {
-    return { kind: "not-evaluated" };
-  }
-
-  const parentSectionId = sectionAt(commit.markdown, parentLineIndex, view.id, sectionOrder);
-  const parentSection = parentSectionId === null ? undefined : qualification.sections[view.id]?.[parentSectionId];
-  if (parentSection === undefined) {
-    return { kind: "abstains", because: "no-section-declaration" };
-  }
-  const parentLine = lines[parentLineIndex] ?? "";
-  const snapshot = graphSnapshot();
-  const parentCandidate = parentCandidateFor(parentLine, parentSection, snapshot);
-  if ("abstain" in parentCandidate) {
-    return { kind: "abstains", because: parentCandidate.abstain };
-  }
-
-  // NO THIRD CLOCK READ — `tests/app-today-note.test.mjs` pins `Date.now()` to EXACTLY two call
-  // sites in this file (`sayAsOf`, `rulesReadingFor`), and this function does not need a third: none
-  // of the four graph-aware rules this leg closes (the outcome pair, the habit pair) name
-  // `$cycle_today`/`$cycle_week_end` in their actions. `applyRules`/`applyGraphAwareRules` both
-  // already handle an unresolved cycle variable by SKIPPING just that one action (see their own
-  // headers) — never guessing a value and never blocking every other action in the same rule — so
-  // passing `undefined` here costs exactly nothing for the rules this block exists to decide, and
-  // costs one narrow, honestly-scoped gap for any FUTURE graph-aware rule that stamps a date: its
-  // date-setting action would not resolve. Threading `rulesReadingFor`'s own already-read instant
-  // through instead would remove even that gap, and is real, separately-scoped follow-up work.
-  const childPass = applyRules(childFieldsRaw, rulesTable, undefined);
-  const prospective = { edgeType: binding.edgeType, fields: childPass.fields };
-
-  const pass = applyGraphAwareRules(
-    parentCandidate.fields,
-    parentCandidate.id,
-    rulesTable,
-    snapshot ?? { nodes: [], edges: [] },
-    edgeSourceOf,
-    prospective,
-    undefined,
-  );
-  if (pass.applied.length === 0 && pass.undecidable.length > 0) {
-    return { kind: "abstains", because: "graph-match-undecidable" };
-  }
-  return {
-    kind: "answer",
-    parentLineIndex,
-    applied: pass.applied,
-    partial: pass.partial.length > 0,
-  };
-}
-
-/**
- * ONE SENTENCE, IN THE FRESHNESS LINE — the same "only speak about a change" posture
- * `rulesNoteFor` already takes. Silent unless something actually fired; "the parent was checked and
- * nothing changes" is `parentPromotionDiagnosticFor`'s to say, through the badge, not this note's.
- */
-function parentPromotionNoteFor(reading) {
-  if (reading.kind !== "answer" || reading.applied.length === 0) {
-    return "";
-  }
-  const words = reading.applied.map((effect) => {
-    if (effect.verb === "retype") return `becomes ${effect.to}`;
-    if (effect.verb === "set") return `sets ${effect.field}`;
-    return `clears ${effect.field}`;
-  });
-  return `the row above ${words.join(", ")}`;
-}
-
-/**
- * THE ABSTENTION REGISTER FOR PARENT PROMOTION — the same shape `rulesDiagnosticFor` already gives
- * its own axis. "parent: decided — no change" is a REAL, DECIDED answer (the graph-aware pass ran
- * and nothing in it fired), never conflated with an abstention.
- */
-function parentPromotionDiagnosticFor(reading) {
-  if (reading.kind === "not-evaluated") {
-    return "";
-  }
-  if (reading.kind === "abstains") {
-    return `parent: abstained — ${reading.because}`;
-  }
-  if (reading.applied.length === 0) {
-    return "parent: decided — no change";
-  }
-  return reading.partial ? "parent: decided (partial — action(s) not modelled)" : "parent: decided";
-}
-
-/**
- * WRITE `parentPromotionDiagnosticFor`'s answer to `#parentBadge` — the same one-DOM-touching-line
- * shape `updateRulesBadge` already establishes, and a DELIBERATELY SEPARATE element from
- * `#rulesBadge` (see this block's own header, "the effect lands on a different row") rather than a
- * second sentence squeezed into that badge's own text — the two answer genuinely different
- * questions (what does THIS line decide, vs what does the row ABOVE it decide) and conflating them
- * into one string would make the two indistinguishable the moment either one is silent.
- */
-function updateParentBadge(reading) {
-  const text = parentPromotionDiagnosticFor(reading);
-  if (text === "") {
-    return;
-  }
-  const badge = $("parentBadge");
-  badge.textContent = text;
-  const abstained = text.startsWith("parent: abstained");
-  badge.classList.toggle("diagnostic-badge-abstains", abstained);
-  badge.classList.toggle("diagnostic-badge-answer", !abstained);
-}
-
-/**
- * WHY `commit.markdown`/`commit.text` ARE NEVER ASSIGNED ANYWHERE IN THIS FILE, NAMED HERE RATHER
- * THAN LEFT FOR SOMEONE TO REDISCOVER BY BREAKING A TEST.
- *
- * The first shape the rules feature took DID reassign them: it wrote the stamp into `commit.markdown`
- * in place before the write, so the glyph would ride the same POST the operator's own edit made.
- * `tests/app-membership-note.test.mjs`'s own `` `.markdown` is never ASSIGNED in app/ — only
- * compared, read or passed through `` — caught it, and seven OTHER test files pin the identical
- * invariant (`app-membership-diagnostic`, `app-ordering-note`, `app-today-note`, `app-write-
- * correlation`, `app-seed-from-cascade`, `app-generality-acceptance`, `graph-sync-guards`). That is
- * not incidental scope; it is the guarantee "what he typed is what gets saved" — the same guarantee
- * `writeFile`'s own header states for `source` ("never re-derived here"), extended to `markdown`. A
- * rules pass with any bug in it must never be able to silently change what a write carries beyond
- * what the operator's own keystrokes and the painter's own `applyEdit` produced.
- *
- * WHAT SHIPS NOW, WITHOUT WEAKENING THAT GUARANTEE AT ALL: the literal glyph DOES reach the screen —
- * `armPrediction`, below, arms `predict` (`app/present/predict.ts`'s `PredictSurface`) with the
- * characters `rulesReadingFor`/`parentPromotionFor` already computed, and `paint.ts` paints them as a
- * DOM-only decoration the instant the optimistic repaint that follows this function runs. The
- * invariant above is exactly why it had to be built this way: `predict.arm` never touches `commit`,
- * `paint.ts`'s `appendPrediction` only ever calls `row.append(span)`, and nothing in either file
- * calls `applyEdit`, reads `innerHTML` back, or reaches `deps.onLineCommit`/`deps.onCheckboxToggle` a
- * second time. `tests/app-html-write-path.test.mjs` and the seven files named above are UNCHANGED by
- * this leg and still pass unmodified — the positive proof, not an inference from a missing call site,
- * lives in `tests/app-predict-wiring.test.mjs` section 5.
- */
-
-/**
- * THE CHILD'S OWN PREDICTION — the row `commit` itself just became, decorated with whatever
- * `rulesReadingFor` decided it will carry once the cycle answers.
- *
- * SCOPED TO EXACTLY THE CASES `rulesReadingFor` ALREADY CALLS "answer", NEVER TO AN ABSTENTION —
- * `reading.kind !== "answer"` covers BOTH `not-evaluated` (a "set-line" commit, no declaration yet)
- * and `abstains` (`needs-graph-traversal`, `rendering-unrenderable-effect`, …); this function reads
- * neither differently, and paints nothing for either, because `rulesReadingFor` itself already
- * refuses to tell them apart from "no claim to make" — see that function's own header. `reading.text
- * === null` is the THIRD silent case: a rules pass ran and genuinely decided nothing (an `unset` on a
- * field that was never set), which is a real, complete answer with no characters to show.
- *
- * THE TEXT IS THE DELTA, NOT THE WHOLE LINE — `reading.text` is `renderRuleEffects`'s own
- * `line + appended` (rules.ts), so the characters the operator already typed are sliced back off
- * before this ever reaches a row: the row already shows them, from `source`, and repeating them in
- * the decoration would be the chip doubling the line rather than adding to it.
- */
-function childPredictionFor(commit, rulesReading) {
-  if (commit.kind !== "insert-line" || commit.markdown === null) {
-    return null;
-  }
-  if (rulesReading.kind !== "answer" || rulesReading.text === null) {
-    return null;
-  }
-  const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
-  const delta = rulesReading.text.slice(line.length).trim();
-  return delta === "" ? null : { lineIndex: commit.lineIndex, text: delta };
-}
-
-/**
- * THE PARENT'S OWN PREDICTION — the row ABOVE `commit`, decorated with the retype a graph-aware
- * promotion rule decided for it, when this app can spell that retype onto a line at all.
- *
- * WHY THIS RENDERS ONLY THE `retype` EFFECTS, NEVER THE WHOLE OF `parentReading.applied` —
- * `task-with-open-part-of-child-becomes-outcome` and its three siblings (`presentation.json`) ALWAYS
- * pair their retype with a `set_field` targeting `auto_outcome`/`auto_habit`, and
- * `vocabulary/markers.yaml` declares no trailing marker for either — `renderRuleEffects`'s own
- * ALL-OR-NOTHING rule (rules.ts, "never show a line half-corrected") would therefore abstain on
- * EVERY real promotion this app will ever see, silencing the one scenario this whole leg exists to
- * paint. That rule protects a claim about what a LINE'S OWN CHARACTERS will become; `auto_outcome`
- * never becomes characters at all, in this app's decoration OR in the engine's own real, eventual
- * content — there is no marker for it anywhere, ever. Filtering to `retype` before rendering is not
- * routing around the all-or-nothing guard; it is asking the guard the question it can actually
- * answer ("can this app spell 'becomes outcome' onto this line"), which `parentPromotionDiagnosticFor`
- * (the badge) already answers separately, in words, for the retype AND the un-renderable set
- * together — this decoration is the SAME retype fact, painted where it happens, not a substitute for
- * that badge's fuller account.
- *
- * NO NEW VOCABULARY. `renderRuleEffects` is the same governed function `rulesReadingFor` already
- * calls for the child; this call site differs only in WHICH `line` and WHICH slice of `applied` it is
- * handed. `qualification.tokens.node_type` is the same table `rulesReadingFor` reads too.
- */
-function parentPredictionFor(commit, parentReading) {
-  if (parentReading.kind !== "answer" || parentReading.applied.length === 0) {
-    return null;
-  }
-  if (qualification === undefined || commit.markdown === null) {
-    return null;
-  }
-  const retypes = parentReading.applied.filter((effect) => effect.verb === "retype");
-  if (retypes.length === 0) {
-    return null;
-  }
-  const parentLine = commit.markdown.split("\n")[parentReading.parentLineIndex] ?? "";
-  const rendered = renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
-  if (rendered.kind !== "rendered") {
-    return null;
-  }
-  const text = rendered.text.slice(parentLine.length).trim();
-  return text === "" ? null : { lineIndex: parentReading.parentLineIndex, text };
-}
-
-/**
- * ARM THE PREDICT SURFACE — the one place `predict.arm` (`app/present/predict.ts`) is ever called,
- * the same "one write, one function" discipline `armOrderingSettle` already keeps for `settle`.
- *
- * CALLED UNCONDITIONALLY, EVEN WHEN NEITHER PREDICTION FIRES — deliberately NOT mirroring
- * `armOrderingSettle`'s own "only arm when there is a real placement" posture. A single placement
- * left un-rearmed simply keeps describing the same still-correct claim; an EMPTY predict arm still
- * has to happen, because leaving a stale, unrelated one in place would let a LATER, unrelated
- * commit's own optimistic repaint reconcile it — `predict.ts`'s own `take` would see a NEW source and
- * treat the earlier claim as contradicted, when nothing has actually answered it yet. That was the
- * first shape this function took, and it produced exactly that false "withdrawn" the moment a second,
- * unrelated line was committed before the first cycle answered — see this PR's own description for
- * where that was caught and why the rule changed.
- *
- * ARMED AGAINST `commit.markdown`, THE SAME BASE `armOrderingSettle` uses and for the identical
- * reason: it is what `paint.ts`'s own `rawInput.settle`/`draftInput.settle` repaints INTO the instant
- * this function returns, so arming against anything else would describe a paint that has already
- * happened by the time `PredictSurface.take` could ever see it.
- */
-function armPrediction(view, commit, rulesReading, parentReading) {
-  if (commit.markdown === null) {
-    return;
-  }
-  const predictions = [];
-  const child = childPredictionFor(commit, rulesReading);
-  if (child !== null) {
-    predictions.push(child);
-  }
-  const parent = parentPredictionFor(commit, parentReading);
-  if (parent !== null) {
-    predictions.push(parent);
-  }
-  predict.arm(commit.markdown, view.id, predictions);
-}
 
 /**
  * THE ONE PLACE A FILE IS POSTED — the base measured, said, and carried.
@@ -4149,44 +3233,44 @@ async function commitLine(view, commit) {
     queueMicrotask(drainPainted);
     return;
   }
-  // THE RULES PASS — computed EXACTLY ONCE and threaded through every function below that needs
-  // it, the same reason `membershipReadingFor` is computed once for its own two readers.
-  // READ-ONLY: `commit.markdown`/`commit.text` are NEVER rewritten from this answer — see the
-  // comment above `updateRulesBadge`'s own definition for why, and what would be needed to go
-  // further.
-  const rulesReading = rulesReadingFor(view, commit);
-  // THE GRAPH-AWARE PASS, FOR THE STRUCTURAL PARENT — see the block above `WAITING_FOR_TAG_BINDING`
-  // for the whole account. Computed exactly once, same reason `rulesReading` is. READ-ONLY, same
-  // guarantee: this answer is never written into `commit.markdown`/`commit.text`, and it names a
-  // DIFFERENT row than either of those ever could.
-  const parentReading = parentPromotionFor(view, commit);
-  // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone — see membershipNoteFor's and
-  // orderingNoteFor's own headers for what each says, when, and why only the LEAVING transition
-  // and a RANK CHANGE (never an unchanged answer) are said at all. Joined into one string here,
-  // never inside writeFile — see that function's own header for why one slot holds both.
-  const notes = [
-    membershipNoteFor(view, commit),
-    orderingNoteFor(view, commit),
-    rulesNoteFor(rulesReading),
-    parentPromotionNoteFor(parentReading),
-  ].filter((n) => n !== "");
-  const note = notes.join(" · ");
-  // THE ABSTENTION REGISTER, WRITTEN BESIDE THE NARRATION AND NOT INTO IT — see
-  // `membershipDiagnosticFor`'s own header for why this is a second DOM sink, `#membershipBadge`,
-  // rather than a third element of `notes` above. ORDERING, RULES AND PARENT PROMOTION EACH HAVE
-  // THEIR OWN — `#orderingBadge`/`#rulesBadge`/`#parentBadge`, `orderingDiagnosticFor`'s own
-  // header — closing the gap this comment used to name.
-  updateMembershipBadge(view, commit);
-  updateOrderingBadge(view, commit);
-  updateRulesBadge(rulesReading);
-  updateParentBadge(parentReading);
-  // THE SETTLE SURFACE, ARMED BEFORE THE OPTIMISTIC REPAINT THAT FOLLOWS THIS FUNCTION RETURNS —
-  // `armOrderingSettle`'s own header for why it must run here, synchronously, and not after the
-  // `await` below. `roadmap-the-road-ahead.md` step 3: "make it place the row," not merely say so.
-  armOrderingSettle(view, commit);
-  // THE PREDICT SURFACE, ARMED THE SAME WAY AND FOR THE SAME REASON — see `armPrediction`'s own
-  // header for why it runs unconditionally, synchronously, here, and never after the `await` below.
-  armPrediction(view, commit, rulesReading, parentReading);
+  // ── ONE CONTEXT, ONE WALK, AND THIS FUNCTION NAMES NO RESOLVER ──
+  //
+  // What used to be here: four readings computed by name, four notes assembled by name, four badge
+  // writers called by name, and two arming functions called by name. Fourteen names for four axes,
+  // and six more axes declared. This is the whole of it now — and adding a tenth axis is a spec
+  // module and one line in `app/present/resolvers/registry.ts`, with nothing to change here.
+  //
+  // EVERY `read` RUNS EXACTLY ONCE PER COMMIT, which is the tie each axis's own header already
+  // argued for: two separately-written evaluations of one question drift apart. Ordering was the
+  // one axis that did NOT have that tie — its note and its badge each recomputed the same pure
+  // function and threw the other's answer away — and the walk gives it the tie for free.
+  //
+  // READ-ONLY, AND STILL: nothing below assigns `commit.markdown`/`commit.text`. See the comment
+  // above `resolverContextFor` for the invariant and for how far it now reaches.
+  const outcome = runResolvers(RESOLVERS, resolverContextFor(view, commit));
+  // COMPUTED BEFORE THE WRITE LEAVES, from the declaration alone. Only a CHANGE is ever narrated —
+  // each resolver's `say` decides that for its own axis. Joined into one string here, never inside
+  // `writeFile`; see that function's own header for why one slot holds all of them.
+  const note = outcome.notes.join(" · ");
+  // THE ABSTENTION REGISTER, WRITTEN BESIDE THE NARRATION AND NOT INTO IT — a second set of DOM
+  // sinks rather than more clauses in the sentence above. A LEVEL indicator that changes state
+  // costs nothing extra per keystroke; a sentence that grows one does. A resolver that produced no
+  // diagnostic is simply absent from this list, which leaves its badge showing the last real
+  // evaluation rather than blanking it.
+  for (const diagnostic of outcome.diagnostics) {
+    paintBadge(diagnostic);
+  }
+  // THE TWO SURFACES, ARMED BEFORE THE OPTIMISTIC REPAINT THAT FOLLOWS THIS FUNCTION RETURNS — and
+  // never after the `await` below, because `paint.ts`'s own `settle` repaints into
+  // `commit.markdown` the instant this returns. Armed against that same string for the same reason:
+  // anything else would describe a paint that has already happened by the time it could be read.
+  //
+  // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST. See `armSettle`
+  // and `armPredict` (resolve.ts) for why the two differ — an un-rearmed placement keeps describing
+  // a still-correct claim, whereas a stale predict arm gets reconciled by a LATER, unrelated
+  // commit's repaint and reported as "withdrawn" when nothing has contradicted it.
+  armSettle(settle, commit.markdown, view.id, outcome.placements);
+  armPredict(predict, commit.markdown, view.id, outcome.predictions);
   // WHICH VIEW THIS WRITE WAS MADE IN, remembered until the projection it causes lands — see
   // `sentEdit`'s own declaration. Set BEFORE the await, because the answer arrives after it.
   //
