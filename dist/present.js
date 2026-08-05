@@ -3837,9 +3837,47 @@ var WriteRegister = class {
    *
    * IT RELEASES NOTHING AND PROVES NOTHING. Same as `arrive`'s `gaveUp`: this is the register
    * forgetting, never the strip letting go. Returns whether the token was outstanding.
+   *
+   * KEPT, UNCHANGED, FOR THE CALLER THAT HAS NOTHING AT STAKE. `toggleTask`'s own 409 branch
+   * (`app/index.html`) puts the checkbox back BEFORE this runs — a tick has no characters to lose,
+   * so "releases nothing and proves nothing" was already the complete, correct answer there and
+   * `design-the-two-rules.md` §3 does not name it as a gap. `concludeGiveUp`, below, is for the two
+   * callers where something IS at stake and a silent forget is exactly the gap that document names.
    */
   giveUp(token) {
     return this.#open.delete(token);
+  }
+  /**
+   * A WRITE'S WAIT ENDED WITH NO MATCH — THE TERMINAL ACT, NAMED, WHERE `giveUp` ABOVE ONLY EVER
+   * NAMED THE FORGETTING.
+   *
+   * `design-the-two-rules.md` §2.2: AN OPERATION COMPLETES, and a token that gives up is one of
+   * the two places this class used to let that happen silently — the other was `collect()`
+   * (`app/index.html`) not calling anything at all when a pickup's own bounded retries ran out.
+   * Both callers now go through here, and both now get the same answer to "what happened", rather
+   * than one silent `Map.delete` and one nothing.
+   *
+   * ── WHY THE ANSWER IS ALWAYS `"return-to-row"`, NEVER "reread" OR "restore" ──
+   *
+   * `design-the-two-rules.md` §2.2 names three ACTS in order — re-read, restore last-known-good,
+   * hand back to the row — but this class only ever knows the THIRD one, because it holds nothing
+   * a "re-read" or a "restore" could be computed from: no markdown, no view, no DOM. Its one fact is
+   * "this token will never be matched", and the only thing that follows from that fact ALONE is
+   * that whatever the operator typed is not going anywhere new — it stays exactly where it already
+   * is, `app/present/rows.ts`'s `RowStore`, which is why this never needs a payload: the row already
+   * holds the string (`paint.ts`'s own optimistic repaint records it there before the write is even
+   * sent), and closing the token here changes nothing about that. A caller that wanted "re-read" or
+   * "restore" instead has to decide that itself, with facts this register does not have — which is
+   * exactly the shape `commitLine`'s 409 branch and `collect`'s exhausted branch already are:
+   * neither needed a NEW way to keep the operator's characters, both needed this class to stop being
+   * silent about the token.
+   *
+   * `null` MEANS THERE WAS NOTHING TO CONCLUDE — the token was never opened here, or something
+   * already matched or gave it up. A caller that gets `null` has learned nothing new and does
+   * nothing further; there is no second write to make this true retroactively.
+   */
+  concludeGiveUp(token) {
+    return this.#open.delete(token) ? "return-to-row" : null;
   }
   /** How many writes are outstanding — all of them, or just those for `path`. */
   outstanding(path = null) {
