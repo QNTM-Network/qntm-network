@@ -5434,6 +5434,147 @@ var RESOLVERS = [
   defineResolver(rulesSpec),
   defineResolver(promotionSpec)
 ];
+
+// app/shell/drawer.ts
+var folderOf = (path) => {
+  const at = String(path ?? "").lastIndexOf("/");
+  return at === -1 ? "" : String(path).slice(0, at);
+};
+function foldersOf(views) {
+  const root = { name: "", folders: /* @__PURE__ */ new Map(), views: [] };
+  for (const v of views) {
+    const segments = String(v.path ?? "").split("/");
+    let node = root;
+    for (const segment of segments.slice(0, -1)) {
+      let child = node.folders.get(segment);
+      if (!child) {
+        child = { name: segment, folders: /* @__PURE__ */ new Map(), views: [] };
+        node.folders.set(segment, child);
+      }
+      node = child;
+    }
+    node.views.push(v);
+  }
+  return root;
+}
+var viewsUnder = (node) => node.views.length + [...node.folders.values()].reduce((n, f) => n + viewsUnder(f), 0);
+var holdsView = (node, id) => node.views.some((v) => v.id === id) || [...node.folders.values()].some((f) => holdsView(f, id));
+var drawerStops = [];
+var viewButtons = /* @__PURE__ */ new Map();
+var drawerIsOpen = false;
+function treeRow(className, glyph, name, count) {
+  const button = document.createElement("button");
+  button.className = className;
+  button.type = "button";
+  if (glyph !== null) {
+    const chev = document.createElement("span");
+    chev.className = "chev";
+    chev.textContent = glyph;
+    button.append(chev);
+  }
+  const label = document.createElement("span");
+  label.className = "rowname";
+  label.textContent = name;
+  button.append(label);
+  if (count !== null) {
+    const tally = document.createElement("span");
+    tally.className = "count";
+    tally.textContent = String(count);
+    button.append(tally);
+  }
+  return button;
+}
+function paintFolder(deps, node, into, currentViewId) {
+  for (const folder of [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+    const box = document.createElement("div");
+    const open = holdsView(folder, currentViewId);
+    box.className = open ? "fold" : "fold shut";
+    const head = treeRow("foldbtn", "\u203A", folder.name, viewsUnder(folder));
+    head.setAttribute("aria-expanded", open ? "true" : "false");
+    head.addEventListener("click", () => {
+      const shut = box.classList.toggle("shut");
+      head.setAttribute("aria-expanded", shut ? "false" : "true");
+    });
+    const kids = document.createElement("div");
+    kids.className = "foldkids";
+    box.append(head, kids);
+    into.append(box);
+    drawerStops.push(head);
+    paintFolder(deps, folder, kids, currentViewId);
+  }
+  for (const v of [...node.views].sort((a, b) => a.title.localeCompare(b.title))) {
+    const button = treeRow("viewbtn", null, v.title, null);
+    button.addEventListener("click", () => {
+      deps.onChoose(v.id);
+      closeDrawer(deps);
+    });
+    into.append(button);
+    drawerStops.push(button);
+    viewButtons.set(v.id, button);
+  }
+}
+function buildDrawer(deps, views, currentViewId) {
+  drawerStops.length = 0;
+  viewButtons.clear();
+  drawerStops.push(deps.closeButton);
+  deps.tree.innerHTML = "";
+  if (views.length === 0) {
+    const note = document.createElement("p");
+    note.className = "treenote";
+    note.textContent = "No views yet.";
+    deps.tree.append(note);
+    deps.note.textContent = "";
+  } else {
+    const root = foldersOf(views);
+    paintFolder(deps, root, deps.tree, currentViewId);
+    const folders = root.folders.size;
+    deps.note.textContent = `${views.length} views \xB7 ${folders} folder${folders === 1 ? "" : "s"} \xB7 \\ opens, Esc closes`;
+  }
+  drawerStops.forEach((stop, index) => stop.addEventListener("keydown", (e) => drawerKey(deps, e, index)));
+  markWhereWeAre(deps, views, currentViewId);
+}
+function drawerKey(deps, e, index) {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeDrawer(deps);
+    return;
+  }
+  if (e.key !== "Tab" || drawerStops.length === 0) return;
+  const last = drawerStops.length - 1;
+  if (e.shiftKey && index === 0) {
+    e.preventDefault();
+    drawerStops[last]?.focus();
+  } else if (!e.shiftKey && index === last) {
+    e.preventDefault();
+    drawerStops[0]?.focus();
+  }
+}
+function openDrawer(deps, currentViewId) {
+  drawerIsOpen = true;
+  deps.panel.classList.add("open");
+  deps.scrim.classList.add("open");
+  deps.panel.setAttribute("aria-hidden", "false");
+  deps.openButton.setAttribute("aria-expanded", "true");
+  document.body.classList.add("noscroll");
+  const target = (currentViewId === null ? void 0 : viewButtons.get(currentViewId)) ?? drawerStops[0] ?? deps.panel;
+  target.focus();
+}
+function closeDrawer(deps) {
+  const wasOpen = drawerIsOpen;
+  drawerIsOpen = false;
+  deps.panel.classList.remove("open");
+  deps.scrim.classList.remove("open");
+  deps.panel.setAttribute("aria-hidden", "true");
+  deps.openButton.setAttribute("aria-expanded", "false");
+  document.body.classList.remove("noscroll");
+  if (wasOpen) deps.openButton.focus();
+}
+function markWhereWeAre(deps, views, currentViewId) {
+  const v = views.find((x) => x.id === currentViewId) ?? null;
+  deps.barFolder.textContent = v ? folderOf(v.path) : "";
+  deps.barView.textContent = v ? v.title : "";
+  for (const [id, button] of viewButtons) button.classList.toggle("current", id === currentViewId);
+}
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -5474,22 +5615,28 @@ export {
   armSettle,
   baseOf,
   boundaryLine,
+  buildDrawer,
   carriesContent,
   chromeOf,
   clampColumn,
   clampLine,
   classifyLine,
   cleanTitleFor,
+  closeDrawer,
   coverageOf,
   defaultOrderingFor,
   defaultOrderingPlacementFor,
   defineResolver,
   diagnosticOf,
+  drawerIsOpen,
+  drawerStops,
   edgeSourceOfFor,
   engineOf,
   evaluateWhen,
   existingLineCommit,
   extendsLine,
+  folderOf,
+  foldersOf,
   graphSnapshotOf,
   indentedLine,
   instanceAnchorFor,
@@ -5497,6 +5644,7 @@ export {
   instancesOf,
   isSilent,
   lineBody,
+  markWhereWeAre,
   markerSpans,
   markerValue,
   matchesFindClause,
@@ -5505,6 +5653,7 @@ export {
   membershipFor,
   membershipSpec,
   mintWriteToken,
+  openDrawer,
   openLine,
   orderingFor,
   orderingPlacementFor,
@@ -5548,6 +5697,7 @@ export {
   tagSpans,
   titleSpans,
   todayFor,
+  viewButtons,
   wikiLinkSpans,
   wordCaret
 };

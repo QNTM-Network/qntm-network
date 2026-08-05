@@ -6,6 +6,12 @@
  * that each touch the DOM a little is how a painter acquires decisions, and decisions in a
  * painter is the condition this whole change exists to end.
  *
+ * THE VIEW DRAWER (app/shell/drawer.ts) ALSO TOUCHES THE DOCUMENT, AND THAT IS WHY IT IS NOT IN
+ * THIS DIRECTORY. It builds the app's chrome, never a view's body, and is never reached through
+ * `repaintCurrentView`/`paintView` — so it does not put a second opinion beside this one about how
+ * a VIEW paints. Keeping it out of app/present/ rather than rewording the claim above is the
+ * decision; see that module's own header for the full argument.
+ *
  * ── WHAT THIS FUNCTION MAY AND MAY NOT DO ──
  *
  * It may build DOM. It may NOT decide. Every rendition question goes to the cascade and the

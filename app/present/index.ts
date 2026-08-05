@@ -284,6 +284,28 @@ export {
 } from "./resolvers/promotion.js";
 export type { PromotionCommitReading, PromotionOutcome, RelationshipChange } from "./resolvers/promotion.js";
 
+// ── THE VIEW DRAWER — THE ONE RE-EXPORT THAT CROSSES OUT OF app/present/ ──
+//
+// `app/shell/drawer.ts`, not `./drawer.js`. This barrel is still nothing but re-exports — the rule
+// this file's own header states — but the module underneath sits beside `app/present/`, not inside
+// it, because it is the one thing here that touches the document, and `paint.ts`'s own header
+// claims `app/present/` has exactly one of those. See `drawer.ts`'s own header for the full
+// argument; the short version is that `app/index.html` still imports everything from this one
+// bundle, so the drawer's public surface is re-exported here rather than the page growing a second
+// site-root-absolute import.
+export {
+  buildDrawer,
+  closeDrawer,
+  folderOf,
+  foldersOf,
+  markWhereWeAre,
+  openDrawer,
+  drawerStops,
+  viewButtons,
+  drawerIsOpen,
+} from "../shell/drawer.js";
+export type { DrawerDeps, DrawerView, FolderNode } from "../shell/drawer.js";
+
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
 //
 // `app/present/embedded-declaration.ts` used to `import presentationJson from
