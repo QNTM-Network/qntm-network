@@ -63,11 +63,12 @@
  *
  * ── WHAT THIS GRAMMAR MODELS ──
  *
- *   for_each     `{pattern: <name>}` (extra keys such as `bind`/`iterates` are ignored — every
- *                published action targets `$current.node.id` regardless of what the binding is
- *                named). A `for_each` expressed as a LIST of pattern bindings (a multi-source join
- *                — 39 of the operator's rules use this shape for aggregate metrics) is a different
- *                grammar entirely and is dropped, not guessed at.
+ *   for_each     `{pattern: <name>}`, or a SINGLE-ELEMENT LIST of the same (extra keys such as
+ *                `bind`/`iterates`/`params` are ignored in both forms alike — every published
+ *                action targets `$current.node.id` regardless of what the binding is named). A
+ *                list of TWO OR MORE bindings is a multi-source join, carries an iteration
+ *                variable this grammar cannot express, and is dropped rather than guessed at.
+ *                21 of the operator's rules use the arity-1 list; 21 use arity 2+.
  *   when         absent (always true — matches `compile-resolution.mjs`'s own `evaluateWhen`),
  *                `{"null": [$current.node.fields.<f>]}`, `{eq: [$current.node.fields.<f>, <v>]}`,
  *                or `{not: [<one of the above>]}`. `and`/`or`/`in`/`exists` — all real, in real
@@ -258,15 +259,45 @@ function priorityOf(entry) {
 }
 
 /**
- * `for_each: {pattern: <name>}` -> `<name>`. A `for_each` expressed as a LIST (a multi-source
- * join — the shape every aggregate/metric rule in the operator's config uses) is a different
- * grammar this file does not read; refused, not guessed at.
+ * `for_each: {pattern: <name>}` -> `<name>`.
+ *
+ * ── A LIST OF ONE IS NOT A JOIN ──
+ *
+ * This guard used to be `Array.isArray(forEach)` — list-NESS, never list LENGTH. The length was
+ * read only to interpolate a digit into the message, so a list of one and a list of three took the
+ * same path and got the same words: "a list of 1 pattern binding(s) (a multi-source join)". A join
+ * of one source is not a join, and 21 of the operator's rules were told it was.
+ *
+ * The two forms are equivalent HERE because this grammar reads exactly one key off a `for_each`,
+ * `pattern`, and ignores `bind`, `iterates` and `params` in both forms alike. `stamp-outcome-done-
+ * task-count` is already a published SCALAR carrying `bind: current` and `iterates: true`, so
+ * "the extra keys are ignored" is the existing posture, not a new one.
+ *
+ * The engine says the same in its own words. `apps/qntm-md/src/qntm_md/bundle/validators/
+ * rules.py`, on the multi-bind iterator rule: "Single-bind shapes (`for_each` is a dict, or a
+ * single-entry list) are exempt — iteration is unambiguous." Two or more bindings need exactly one
+ * `iterates: true` to say which source the rule walks; one binding needs nothing, because there is
+ * nothing to choose between.
+ *
+ * ── WHAT THIS UNLOCKS: NOTHING. THAT IS THE POINT ──
+ *
+ * Measured against the operator's config, this widening publishes ZERO further rules. All 21 go on
+ * to drop, and every one of them drops for a reason that was TRUE all along and hidden behind a
+ * reason that was not: 7 use `create_subtree`, 8 use `sum`/`weighted_sum`, 4 use a `when` operator
+ * outside null/eq/not, 1 has a predicate that is not over the candidate's own fields. The value is
+ * not capability. It is that the ledger now names the gap the operator would have to close, rather
+ * than sending him to rewrite a `for_each` that was never the obstacle.
+ *
+ * A list of TWO OR MORE is still refused, unchanged: that IS a multi-source join, it carries an
+ * iteration variable this grammar has no way to express, and it is not guessed at.
  */
 function patternOf(forEach) {
+  // A single-element list unwraps to the scalar it is equivalent to, BEFORE the join guard.
+  if (Array.isArray(forEach) && forEach.length === 1) forEach = forEach[0];
   if (Array.isArray(forEach)) {
     refuse(
-      `'for_each' is a list of ${forEach.length} pattern binding(s) (a multi-source join), which ` +
-        "this closed grammar does not model",
+      `'for_each' joins ${forEach.length} pattern bindings (a multi-source join), which this ` +
+        "closed grammar does not model",
     );
   }
   if (!forEach || typeof forEach !== "object" || typeof forEach.pattern !== "string" || forEach.pattern === "") {
