@@ -648,7 +648,6 @@ async function standUpPage(label, mutate) {
       body()
         .map((el) => `${el.textContent || ""}${el.innerHTML || ""}${el.value || ""}`)
         .join("\n"),
-    freshness: () => elements.get("freshness").textContent,
   };
 }
 
@@ -716,7 +715,6 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
 
     assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph"]);
     assert.match(d.onScreen(), /🛫 2026-08-04/, "the projection did not reach the screen");
-    assert.match(d.freshness(), /^as of /, "the arrival did not say when it was generated");
     assert.equal(d.page.__pickups().waiting(PATH), false, "an answered pickup is still waiting");
   });
 
@@ -739,7 +737,6 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
       "the unbidden projection sourced his open line's characters");
     assert.equal(d.page.__queued().size, 1, "the projection was not held");
     assert.doesNotMatch(d.onScreen(), /🛫 2026-08-04/, "it reached the screen mid-edit");
-    assert.match(d.freshness(), /it lands on this view when the line you are in settles/);
   });
 
   test("AND IT IS INSTALLED THE MOMENT THE LINE SETTLES — the other half of the same gate", async () => {
@@ -997,7 +994,6 @@ describe("3b. A PICKUP STOPS ON THE LINE BEING STAMPED, NOT ON A NEWER PROJECTIO
 
     assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph"], "the tick cost more than one read");
     assert.equal(d.page.__pickups().waiting(PATH), false, "the tick's pickup is still waiting");
-    assert.match(d.freshness(), /^as of /, "the tick's arrival did not say when it was generated");
   });
 
   test("AND THE LINE MAY BE STAMPED IN ANOTHER VIEW — the engine moves lines, and it is still his", async () => {
@@ -1065,24 +1061,27 @@ describe("3b. A PICKUP STOPS ON THE LINE BEING STAMPED, NOT ON A NEWER PROJECTIO
     );
     assert.equal(d.timers.length, 0, "THE SERIES DID NOT TERMINATE — it re-armed itself on an unstamped line");
     assert.equal(d.page.__pickups().waiting(PATH), false, "the exhausted record was not dropped");
-    assert.match(
-      d.freshness(),
-      /your save landed — the engine has not given this line an id/,
-      "an unstampable line was reported as a lost cycle, which is false in both halves",
-    );
-    assert.doesNotMatch(d.freshness(), /press re-read/, "he was sent to fetch a stamp that is never coming");
+    // "your save landed — the engine has not given this line an id" (`PICKUP_UNSTAMPED`) is retired
+    // (chore/retire-the-status-line) — the `next.outcome === "exhausted"` branch that used to choose
+    // between it and `PICKUP_LOST` now does nothing at all, for either ending. The functional state
+    // above (the series terminated, the record was dropped) is what is left to prove; see this
+    // file's own PR body for the silent-failure entry this collapses into.
   });
 
   test("AND A CYCLE THAT REALLY DID NOT ANSWER STILL SAYS SO — the other ending, unchanged", async () => {
-    // The two endings must stay two. A read that brings nothing past the write is the case
-    // `PICKUP_LOST` was written for, and the stamp test must not have swallowed it.
+    // The two endings used to be told apart by two different sentences (`PICKUP_LOST` here,
+    // `PICKUP_UNSTAMPED` above) — both retired (chore/retire-the-status-line), and from outside the
+    // app nothing distinguishes them any more: both now exhaust silently. What is still real, and
+    // still checked here, is that THIS ending — a cycle that never answered at all — also correctly
+    // exhausts and drops its record, the same as the sibling arm above.
     d.land();
     await createLine(d);
     d.control.readAnswer = () => envelope(V1, T1);
     for (let i = 0; i < PICKUP_DELAYS.length; i += 1) {
       await d.fireTimers();
     }
-    assert.match(d.freshness(), /press re-read to ask for it again/, "a cycle that never answered was reported as an id refusal");
+    assert.equal(d.timers.length, 0, "THE SERIES DID NOT TERMINATE");
+    assert.equal(d.page.__pickups().waiting(PATH), false, "the exhausted record was not dropped");
   });
 
   test("AND THE SKIP-THE-FETCH SHORTCUT ASKS THE STAMP TOO — a newer projection is not an answer", async () => {
@@ -1137,7 +1136,7 @@ describe("4. IT IS NOT A POLL — the guard on what this costs him", () => {
     assert.equal(d.timers.length, 0, "a timer was placed with no write behind it");
   });
 
-  test("THE SERIES ENDS, AND SAYS SO — three reads, then the operator is told to ask", async () => {
+  test("THE SERIES ENDS — three reads, then it stops", async () => {
     d.land();
     d.boxes()[0].checked = true;
     d.boxes()[0].dispatch("change");
@@ -1154,7 +1153,8 @@ describe("4. IT IS NOT A POLL — the guard on what this costs him", () => {
     const reads = d.control.calls.filter((c) => c === "GET /app/graph").length;
     assert.equal(reads, 3, `the series read ${reads} times rather than three`);
     assert.equal(d.page.__pickups().waiting(PATH), false, "the series did not end");
-    assert.match(d.freshness(), /the cycle's answer did not arrive — press re-read/);
+    // "the cycle's answer did not arrive — press re-read to ask for it again" (`PICKUP_LOST`) is
+    // retired (chore/retire-the-status-line); the series correctly ending, above, is what is left.
 
     // AND IT DOES NOT RE-ARM. This assertion is the poll guard: after the last attempt there is no
     // timer left, so nothing can wake the Fly machine again until he writes.

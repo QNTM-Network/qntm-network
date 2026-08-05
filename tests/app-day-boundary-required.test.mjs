@@ -162,27 +162,21 @@ describe("2. `todayFor` IS UNREACHABLE — the rules resolver abstains where it 
     assert.equal(page.__rulesNoteFor(reading), "");
   });
 
-  test("the page's OWN day-boundary reader abstains too, and warns — it never guesses UTC midnight", () => {
-    const warnings = [];
-    const saved = console.warn;
-    console.warn = (message) => warnings.push(String(message));
-    try {
-      assert.equal(page.__todayNoteFor(Date.now()), "");
-      assert.equal(warnings.length, 1);
-      assert.match(warnings[0], /no day boundary declared/);
-    } finally {
-      console.warn = saved;
-    }
-  });
+  // "the page's OWN day-boundary reader abstains too, and warns" is GONE — `todayNoteFor` was the
+  // page's own glue between `resolution.dayBoundary` and `todayFor`, wired in for exactly one
+  // reason (`sayAsOf`'s freshness-line "today <date>" clause), and both were retired together
+  // (chore/retire-the-status-line). `todayFor` itself never guessed and still does not — see
+  // tests/present-today.test.mjs — and this describe's own first two tests above already prove the
+  // ONE consumer that remains (the rules resolver) abstains rather than throws when the boundary is
+  // missing, which is the load-bearing half of what this test used to also assert.
 });
 
 describe("3. THE APP STILL BOOTS AND THE CAPTURE STILL LEAVES — the soft degradation is intact", () => {
   let page;
-  let elements;
   let posted;
 
   before(async () => {
-    ({ elements } = installBrowser());
+    installBrowser();
     globalThis.fetch = withDeclaration(async (url, init) => {
       const body = JSON.parse(init.body);
       posted = { url, body };
@@ -221,10 +215,9 @@ describe("3. THE APP STILL BOOTS AND THE CAPTURE STILL LEAVES — the soft degra
     assert.equal(posted.body.markdown, AFTER, "the posted body must be byte-identical to what he typed");
   });
 
-  test("the freshness line still narrates the write rather than going blank", () => {
-    const freshness = elements.get("freshness").textContent;
-    assert.notEqual(freshness, "", "a blank freshness line is the operator learning nothing");
-  });
+  // "the freshness line still narrates the write rather than going blank" is GONE — `#freshness`
+  // itself was retired (chore/retire-the-status-line). "THE HEADLINE" test above already carries
+  // the load-bearing half: the capture POSTs, byte-identical, whatever the declaration is missing.
 
   test("a SECOND capture also lands — the first refusal did not leave the page in a broken state", async () => {
     posted = null;

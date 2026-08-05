@@ -176,12 +176,16 @@ describe("1. THE FALSIFIER — an abstention and a confident 'nothing changed' p
 //    `sayAsOf`/`#freshness`, restated here for `#membershipBadge`.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-describe("2. THE SCENARIO — commitLine writes the abstention register to #membershipBadge, driven end to end", () => {
+// `#membershipBadge` ITSELF WAS RETIRED (chore/retire-the-status-line, the abstention register).
+// These two tests used to read its `textContent` after `commitLine`; they now ask the membership
+// resolver directly, over the SAME commit `commitLine` just walked — `page.__membershipDiagnosticFor`
+// calls the real `membershipSpec.read`/`.show` this page's own `commitLine` still runs on every
+// commit. The DOM sink is gone, the decision it used to display is not.
+describe("2. THE SCENARIO — commitLine decides membership, driven end to end", () => {
   let page;
-  let elements;
 
   before(async () => {
-    ({ elements } = installBrowser());
+    installBrowser();
     globalThis.fetch = async (url, init) => {
       const body = JSON.parse(init.body);
       return {
@@ -198,31 +202,28 @@ describe("2. THE SCENARIO — commitLine writes the abstention register to #memb
     page.__applyPresentation(FAKE_DECLARATION);
   });
 
-  const badge = () => elements.get("membershipBadge").textContent;
-
-  test("a commit in the published, unchanged section writes 'membership: decided' to #membershipBadge", () => {
-    // READ SYNCHRONOUSLY, BEFORE THE WRITE'S OWN AWAIT SETTLES — `updateMembershipBadge` runs
-    // before `writeFile`'s await, the same instant `notes`/`note` are computed, so the badge is
-    // already written by the time this synchronous call returns its (unawaited) promise.
-    page.commitLine(DEMO_VIEW, {
+  test("a commit in the published, unchanged section decides 'membership: decided'", () => {
+    const commit = {
       lineIndex: 1,
       text: "- [ ] Ring the dentist today",
       markdown: DEMO_SOURCE.replace("- [ ] Ring the dentist", "- [ ] Ring the dentist today"),
       source: DEMO_SOURCE,
       kind: "set-line",
-    });
-    assert.equal(badge(), "membership: decided");
+    };
+    page.commitLine(DEMO_VIEW, commit);
+    assert.equal(page.__membershipDiagnosticFor(DEMO_VIEW, commit), "membership: decided");
   });
 
-  test("a commit in the UNPUBLISHED section writes 'membership: abstained — no-section-declaration' — DIFFERENT from the confident case above", () => {
-    page.commitLine(DEMO_VIEW, {
+  test("a commit in the UNPUBLISHED section decides 'membership: abstained — no-section-declaration' — DIFFERENT from the confident case above", () => {
+    const commit = {
       lineIndex: 3,
       text: "- [ ] Anything else",
       markdown: DEMO_SOURCE.replace("- [ ] Anything", "- [ ] Anything else"),
       source: DEMO_SOURCE,
       kind: "set-line",
-    });
-    assert.equal(badge(), "membership: abstained — no-section-declaration");
+    };
+    page.commitLine(DEMO_VIEW, commit);
+    assert.equal(page.__membershipDiagnosticFor(DEMO_VIEW, commit), "membership: abstained — no-section-declaration");
   });
 });
 

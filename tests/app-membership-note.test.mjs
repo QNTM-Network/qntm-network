@@ -55,9 +55,6 @@ import { importPage, installBrowser, makeEvent, makeWorkDir, walk, withDeclarati
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-membership-note");
 
-/** Flush the microtask queue — the same one-liner tests/present-base.test.mjs already uses. */
-const settle = () => new Promise((r) => setImmediate(r));
-
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // 1 & 2 — THE OPERATOR'S OWN CASES, through the real declaration and the real page
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -100,8 +97,6 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     await page.loadPresentation();
   });
 
-  const freshness = () => elements.get("freshness").textContent;
-
   /**
    * Paint the real "inbox" view against the real, shipped declaration — nothing hand-built —
    * with the cursor PARKED on line 0, the heading. Not cosmetic: the cursor's own line renders its
@@ -134,18 +129,21 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     assert.equal(input.value, "- [ ] Ring the dentist", "the cursor did not reach the real capture");
-    input.value = "- [ ] Ring the dentist today";
+    const text = "- [ ] Ring the dentist today";
+    input.value = text;
     posted = null;
     input.dispatch("blur");
 
     assert.ok(posted, "the edit was never posted");
+    // `#freshness` WAS RETIRED (chore/retire-the-status-line) — this used to read its `textContent`
+    // after `blur`. The resolver's own answer, over the same commit that was just posted, is asked
+    // directly instead.
+    const commit = { lineIndex: 2, text, markdown: posted.body.markdown, source: VIEW.markdown, kind: "set-line" };
     assert.doesNotMatch(
-      freshness(),
+      page.__membershipNoteFor(VIEW, commit),
       /leave/,
-      `an edit that did not change the answer narrated itself: ${freshness()}`,
+      "an edit that did not change the answer narrated itself",
     );
-    await settle();
-    assert.doesNotMatch(freshness(), /leave/, `the answer after the cycle landed: ${freshness()}`);
   });
 
   test('the SAME line, edited to add #work, says "this line will leave Domain Empty"', async () => {
@@ -155,35 +153,24 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    input.value = "- [ ] Ring the dentist #work";
+    const text = "- [ ] Ring the dentist #work";
+    input.value = text;
     posted = null;
     input.dispatch("blur");
 
-    // SAID THE INSTANT THE WRITE LEAVES, beside "syncing…" — the same register the stale-save
-    // report already uses, and the same reason: the operator is still looking at the line he just
-    // left, not at whatever the freshness line says ~14 s later when the cycle answers.
+    // THIS USED TO BE SAID THE INSTANT THE WRITE LEFT, beside "syncing…", in the freshness line —
+    // retired along with that line (chore/retire-the-status-line). What is still true, and still
+    // proven here, is that the resolver's own answer for this exact commit IS "this line will leave
+    // Domain Empty" — the fact the sentence used to carry.
+    const commit = { lineIndex: 2, text, markdown: posted.body.markdown, source: VIEW.markdown, kind: "set-line" };
     assert.equal(
-      freshness(),
-      "syncing… · this line will leave Domain Empty",
-      "the operator's own case was not said while the write was in flight",
+      page.__membershipNoteFor(VIEW, commit),
+      "this line will leave Domain Empty",
+      "the operator's own case is not decided the way the retired sentence said it was",
     );
-
-    // AND GONE THE INSTANT THE CYCLE'S ANSWER LANDS. This app has not built the machinery (design
-    // doc steps 11/12) to CONFIRM a prediction against what the cycle actually did, so holding it
-    // past this one write would let it stand as if confirmed. Letting it lapse is the honest
-    // middle: "a stale prediction is worse than none."
-    //
-    // (The freshness line DOES say something else once the answer lands — "the line you were on
-    // is not in this view any more". That is `reportCursorReading`, an UNRELATED, correct report:
-    // an unstamped line's identity is its own exact text, this edit changed the text, so the
-    // pre-existing anchor honestly cannot find it again. It is evidence the membership note is not
-    // piggy-backing on that mechanism — the two notes are independent and this proves it.)
-    await settle();
-    assert.doesNotMatch(freshness(), /leave/, `the prediction outlived its own write: ${freshness()}`);
-    assert.match(freshness(), /^as of .* · 0 queued/, freshness());
   });
 
-  test("the CONTROL — an edit computed against a current base says nothing extra at all", async () => {
+  test("the CONTROL — an edit computed against a current base decides nothing extra at all", async () => {
     // Without this, the two tests above are decoration: an assertion that cannot come out the
     // other way is not a check. This edit changes the FILE (so it really does post) without
     // changing the MEMBERSHIP ANSWER either side of it.
@@ -193,11 +180,13 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    input.value = "- [ ] Ring the dentist tomorrow";
+    const text = "- [ ] Ring the dentist tomorrow";
+    input.value = text;
     posted = null;
     input.dispatch("blur");
-    assert.equal(freshness(), "syncing…", `an unchanged answer narrated itself: ${freshness()}`);
-    await settle();
+    assert.ok(posted, "the edit was never posted");
+    const commit = { lineIndex: 2, text, markdown: posted.body.markdown, source: VIEW.markdown, kind: "set-line" };
+    assert.equal(page.__membershipNoteFor(VIEW, commit), "", "an unchanged answer narrated itself");
   });
 });
 
@@ -469,8 +458,13 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
     input.value = "- [ ] Ring the dentist #work";
     input.dispatch("blur");
 
-    assert.equal(elements.get("freshness").textContent, "syncing… · this line will leave Domain Empty");
+    // `#freshness` WAS RETIRED (chore/retire-the-status-line) — this used to read its `textContent`
+    // ("syncing… · this line will leave Domain Empty"). The resolver's own answer, over the same
+    // commit that was just posted, is asked directly instead: the safety property under test is
+    // "the sentence never reaches the write", not "the sentence is shown".
     assert.ok(posted, "the edit was never posted");
+    const commit = { lineIndex: 2, text: "- [ ] Ring the dentist #work", markdown: posted.markdown, source: VIEW.markdown, kind: "set-line" };
+    assert.match(page.__membershipNoteFor(VIEW, commit), /will leave/);
     assert.doesNotMatch(
       posted.markdown,
       /will leave/,

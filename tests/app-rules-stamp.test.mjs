@@ -111,15 +111,14 @@ describe("1. THE HEADLINE — a fresh capture under Domain Empty is decided the 
     kind: "insert-line",
   };
 
-  test("THE OPERATOR'S OWN SCENARIO: stamp-created-at-on-task is decided, and named, beside 'syncing…' — not 10s later", async () => {
+  test("THE OPERATOR'S OWN SCENARIO: stamp-created-at-on-task is decided, and named, the instant the write leaves", async () => {
     posted = null;
     const write = page.commitLine(VIEW, { ...CAPTURE });
-    // READ BESIDE "syncing…" — the same moment `tests/app-ordering-note.test.mjs`'s own §2 reads,
-    // before the `await` below lets the stubbed cycle answer land and overwrite the freshness line.
-    const freshness = elements.get("freshness").textContent;
-    assert.match(freshness, /^syncing…/, freshness);
-    assert.match(freshness, /this line sets created_at/, freshness);
-    assert.equal(elements.get("rulesBadge").textContent, "rules: decided");
+    // `#rulesBadge`/`#freshness` WERE RETIRED (chore/retire-the-status-line) — the resolver's own
+    // answer, over the exact commit `commitLine` just walked, is asked directly instead.
+    const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    assert.match(page.__rulesNoteFor(reading), /this line sets created_at/);
+    assert.equal(page.__rulesDiagnosticFor(reading), "rules: decided");
     await write;
     assert.ok(posted, "the capture was never posted");
   });
@@ -167,8 +166,8 @@ describe("2. THE PUBLISHED ORDER, RESPECTED — retype fires, then the retyped c
       json: async () => ({ ok: true, handle: "luke", pending_edits: 0, snapshot: { generated_at: "2026-08-01T12:00:00Z", views: [] } }),
     }));
     const write = page.commitLine(VIEW, { ...CAPTURE });
-    // READ BESIDE "syncing…", before the `await` lets the stubbed cycle answer overwrite it.
-    assert.match(elements.get("freshness").textContent, /becomes task, sets created_at/);
+    // `#freshness` WAS RETIRED (chore/retire-the-status-line) — asked of the resolver directly.
+    assert.match(page.__rulesNoteFor(page.__rulesReadingFor(VIEW, { ...CAPTURE })), /becomes task, sets created_at/);
     await write;
   });
 
@@ -259,13 +258,14 @@ describe("3. ABSTAIN VISIBLY — a rule that fires but cannot be rendered says s
   const AFTER = "## Capture\n- [ ] Try this\n";
   const CAPTURE = { lineIndex: 1, text: "- [ ] Try this", markdown: AFTER, source: BEFORE, kind: "insert-line" };
 
-  test("the rule MATCHES and FIRES but has no glyph to write — the badge says so", () => {
+  test("the rule MATCHES and FIRES but has no glyph to write — the resolver's own diagnostic says so", () => {
     const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
     assert.equal(reading.kind, "abstains");
     assert.equal(reading.because, "rendering-unrenderable-effect");
 
-    page.__updateRulesBadge(reading);
-    assert.equal(elements.get("rulesBadge").textContent, "rules: abstained — rendering-unrenderable-effect");
+    // `#rulesBadge`/`page.__updateRulesBadge` WERE RETIRED (chore/retire-the-status-line) —
+    // `__rulesDiagnosticFor` is the same `.show()` call that used to feed the badge, asked directly.
+    assert.equal(page.__rulesDiagnosticFor(reading), "rules: abstained — rendering-unrenderable-effect");
     assert.equal(page.__rulesNoteFor(reading), "", "an abstention must not also narrate as if it were an answer");
   });
 
@@ -478,9 +478,9 @@ describe("6. GRAPH-DEPENDENT PATTERNS — undecidable, never silently skipped, n
     // changes what he reads, which is a separate, separately reviewable change; making the state
     // representable is what stops the next change having to invent a place to put it.
     const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    // `#rulesBadge`/`page.__updateRulesBadge` were retired (chore/retire-the-status-line); the
+    // resolver's own diagnostic, unchanged, is the same string that used to reach the badge.
     assert.equal(page.__rulesDiagnosticFor(reading), "rules: decided");
-    page.__updateRulesBadge(reading);
-    assert.equal(elements.get("rulesBadge").textContent, "rules: decided");
   });
 
   test("A PASS THAT CONSULTED EVERYTHING SAYS SO TOO — `complete` is a measurement, not a default", () => {
@@ -507,8 +507,8 @@ describe("6. GRAPH-DEPENDENT PATTERNS — undecidable, never silently skipped, n
     assert.equal(reading.kind, "abstains");
     assert.equal(reading.because, "rule-pattern-needs-graph-traversal");
 
-    page.__updateRulesBadge(reading);
-    assert.equal(elements.get("rulesBadge").textContent, "rules: abstained — rule-pattern-needs-graph-traversal");
+    // `#rulesBadge`/`page.__updateRulesBadge` were retired (chore/retire-the-status-line).
+    assert.equal(page.__rulesDiagnosticFor(reading), "rules: abstained — rule-pattern-needs-graph-traversal");
 
     page.__applyPresentation(DECLARATION); // restore, so later tests in this file see the original
   });

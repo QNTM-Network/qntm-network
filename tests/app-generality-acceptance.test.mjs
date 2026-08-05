@@ -454,54 +454,63 @@ describe("1. REGISTRATION + DEFAULTS — `o` on a line under a section declared 
 //    `app-membership-diagnostic.test.mjs` §2 drives, on a declaration nobody hand-typed.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-describe("2. PLACEMENT/MEMBERSHIP — answered AND abstained, proven DIFFERENT, through #membershipBadge", { skip }, () => {
-  let page, elements;
+// `#membershipBadge` ITSELF WAS RETIRED (chore/retire-the-status-line, the abstention register).
+// The three tests below used to read its `textContent`; they now ask the SAME question — what did
+// the membership resolver decide for this commit, answered or abstained, and are the two
+// DIFFERENT — through `page.__membershipDiagnosticFor(view, commit)`, the resolver-level accessor
+// that used to feed `paintBadge`. That function calls the real `membershipSpec.read`/`.show` this
+// page's own `commitLine` still runs on every commit (see the resolver-registry note above §2); the
+// DOM sink is gone, the decision it used to display is not.
+describe("2. PLACEMENT/MEMBERSHIP — answered AND abstained, proven DIFFERENT, through the membership resolver", { skip }, () => {
+  let page;
 
   before(async () => {
-    ({ page, elements } = await freshPage("gentest-membership", postStub()));
+    ({ page } = await freshPage("gentest-membership", postStub()));
   });
 
-  const badge = () => elements.get("membershipBadge").textContent;
-
   test("a `queued` commit — the NEW `not` operator over a NEW node type — answers \"membership: decided\"", () => {
-    page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 1,
       text: "- [ ] widget alpha edited 🧮 30",
       markdown: SOURCE.replace("- [ ] widget alpha 🧮 30", "- [ ] widget alpha edited 🧮 30"),
       source: SOURCE,
       kind: "set-line",
-    });
-    assert.equal(badge(), "membership: decided");
+    };
+    page.commitLine(VIEW, commit);
+    assert.equal(page.__membershipDiagnosticFor(VIEW, commit), "membership: decided");
   });
 
   test("an `archived` commit — the NEW unpublished section — abstains \"no-section-declaration\", visibly different", () => {
-    page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 7,
       text: "- [ ] widget old edited",
       markdown: SOURCE.replace("- [ ] widget old", "- [ ] widget old edited"),
       source: SOURCE,
       kind: "set-line",
-    });
-    assert.equal(badge(), "membership: abstained — no-section-declaration");
+    };
+    page.commitLine(VIEW, commit);
+    assert.equal(page.__membershipDiagnosticFor(VIEW, commit), "membership: abstained — no-section-declaration");
   });
 
-  test("THE FALSIFIER ITSELF, on this new declaration: the two badges above are not the same text", () => {
-    page.commitLine(VIEW, {
+  test("THE FALSIFIER ITSELF, on this new declaration: the two answers are not the same text", () => {
+    const decided = {
       lineIndex: 1,
       text: "- [ ] widget alpha 🧮 30",
       markdown: SOURCE,
       source: SOURCE,
       kind: "set-line",
-    });
-    const answered = badge();
-    page.commitLine(VIEW, {
+    };
+    page.commitLine(VIEW, decided);
+    const answered = page.__membershipDiagnosticFor(VIEW, decided);
+    const abstains = {
       lineIndex: 7,
       text: "- [ ] widget old",
       markdown: SOURCE,
       source: SOURCE,
       kind: "set-line",
-    });
-    const abstained = badge();
+    };
+    page.commitLine(VIEW, abstains);
+    const abstained = page.__membershipDiagnosticFor(VIEW, abstains);
     assert.notEqual(answered, abstained, `an answer and an abstention read identically: "${answered}"`);
   });
 });
@@ -527,27 +536,32 @@ describe("3. ORDERING", { skip }, () => {
     assert.equal(reading.answer.afterRank, 1, "alpha=5 should rank ahead of both");
   });
 
-  test("ANSWERED, established through the real DOM sink: #freshness carries the ordering sentence", async () => {
-    const { page, elements } = await freshPage("gentest-ordering-moved", postStub());
-    page.commitLine(VIEW, {
+  test("ANSWERED, established through the real resolver sink: the ordering resolver's own sentence names the move", async () => {
+    // `#freshness` was retired (chore/retire-the-status-line) — this used to read its `textContent`
+    // after `commitLine`; it now asks the ordering resolver directly, the same `say()` that used to
+    // feed that sentence, over the SAME commit `commitLine` just walked.
+    const { page } = await freshPage("gentest-ordering-moved", postStub());
+    const commit = {
       lineIndex: 1,
       text: "- [ ] widget alpha 🧮 5",
       markdown: SOURCE.replace("- [ ] widget alpha 🧮 30", "- [ ] widget alpha 🧮 5"),
       source: SOURCE,
       kind: "set-line",
-    });
-    assert.match(elements.get("freshness").textContent, /this line will move within Queued/);
+    };
+    page.commitLine(VIEW, commit);
+    assert.match(page.__orderingNoteFor(VIEW, commit), /this line will move within Queued/);
   });
 
-  test("COULD NOT TELL, from the DOM: a confident 'nothing moved' answer carries no ordering sentence", async () => {
-    const { page, elements } = await freshPage("gentest-ordering-nomove", postStub());
+  test("COULD NOT TELL: a confident 'nothing moved' answer carries no ordering sentence", async () => {
+    const { page } = await freshPage("gentest-ordering-nomove", postStub());
     const after = "- [ ] widget alpha text changed only 🧮 30"; // same rank field, value unchanged
     // Establish the TRUE answer first, off the pure function — this is not a guess.
     const reading = orderingFor(VIEW.id, "queued", SOURCE, 1, after, RESOLUTION.ordering, RESOLUTION.orderingFields);
     assert.equal(reading.kind, "answer");
     assert.equal(reading.answer.moved, false, "the fixture's own premise is gone — this edit was supposed to not move");
-    page.commitLine(VIEW, { lineIndex: 1, text: after, markdown: SOURCE.replace("- [ ] widget alpha 🧮 30", after), source: SOURCE, kind: "set-line" });
-    assert.doesNotMatch(elements.get("freshness").textContent, /this line will move within/);
+    const commit = { lineIndex: 1, text: after, markdown: SOURCE.replace("- [ ] widget alpha 🧮 30", after), source: SOURCE, kind: "set-line" };
+    page.commitLine(VIEW, commit);
+    assert.doesNotMatch(page.__orderingNoteFor(VIEW, commit), /this line will move within/);
   });
 
   test("THE RAW FUNCTION'S OWN CONTRACT IS UNCHANGED: orderingFor still abstains \"no-section-declaration\" for `done`", () => {
@@ -571,7 +585,7 @@ describe("3. ORDERING", { skip }, () => {
     assert.equal(reading.answer.moved, false, "a lone row has nothing to rank against — a real answer, not a guess");
   });
 
-  test("THE GAP CLOSES, PART 2: a genuine default-ordering MOVE reaches #freshness for an undeclared section, on a config this app has never seen", async () => {
+  test("THE GAP CLOSES, PART 2: a genuine default-ordering MOVE is narrated by the resolver for an undeclared section, on a config this app has never seen", async () => {
     // A LOCAL source, not the shared module-level SOURCE (whose 'done' carries only one row and so
     // can never demonstrate a rank change) — 'gentest_widget' has no due_date/priority default, so
     // two bare titles decide the order by the engine's own final tiebreak, title, ascending.
@@ -586,8 +600,8 @@ describe("3. ORDERING", { skip }, () => {
       "- [ ] aaa widget",
       "## Archived",
     ].join("\n");
-    const { page, elements } = await freshPage("gentest-ordering-default-moves", postStub());
-    page.commitLine(VIEW, {
+    const { page } = await freshPage("gentest-ordering-default-moves", postStub());
+    const commit = {
       lineIndex: 2, // "## Queued"=0, "## Done"=1, "zzz widget"=2
       // 'zzz' -> 'AAA': was rank 2 (behind 'aaa widget'), now rank 1 — uppercase sorts before
       // lowercase in codepoint order ('A' = 65 < 'a' = 97), the SAME rule the operator's own
@@ -596,15 +610,16 @@ describe("3. ORDERING", { skip }, () => {
       markdown: twoWidgetSource.replace("- [ ] zzz widget", "- [ ] AAA widget"),
       source: twoWidgetSource,
       kind: "set-line",
-    });
+    };
+    page.commitLine(VIEW, commit);
     assert.match(
-      elements.get("freshness").textContent,
+      page.__orderingNoteFor(VIEW, commit),
       /this line will move within done/,
-      "an undeclared section on a NEVER-SEEN config now places and narrates a real move — the operator's own acceptance criterion",
+      "an undeclared section on a NEVER-SEEN config still places and narrates a real move — the operator's own acceptance criterion",
     );
   });
 
-  test("THE GAP CLOSES, PART 3: a genuine ABSTENTION for an undeclared section is now VISIBLE through #orderingBadge, not silent", async () => {
+  test("THE GAP CLOSES, PART 3: a genuine ABSTENTION for an undeclared section is still visible through the ordering resolver, not silent", async () => {
     // 'archived' with an indented child — nested-section, the same refusal orderingFor's own
     // header already documents, now reachable for a section that declares no ordering at all.
     // ALL THREE headings, in order — see PART 2's own comment for why (`sectionAt` is ORDINAL).
@@ -615,15 +630,15 @@ describe("3. ORDERING", { skip }, () => {
       "- [ ] widget old",
       "    - [ ] widget child, indented",
     ].join("\n");
-    const { page, elements } = await freshPage("gentest-ordering-default-abstains", postStub());
-    page.__updateOrderingBadge(VIEW, {
+    const { page } = await freshPage("gentest-ordering-default-abstains", postStub());
+    const commit = {
       lineIndex: 3, // "## Queued"=0, "## Done"=1, "## Archived"=2, "widget old"=3
       text: "- [ ] widget old edited",
       markdown: "irrelevant",
       source: nestedSource,
       kind: "set-line",
-    });
-    assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — nested-section");
+    };
+    assert.equal(page.__orderingDiagnosticFor(VIEW, commit), "ordering: abstained — nested-section");
   });
 });
 

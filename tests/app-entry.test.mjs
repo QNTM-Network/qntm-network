@@ -416,9 +416,12 @@ describe("5. what a brand-new account is shown", () => {
     }
   });
 
-  test("a failed read keeps its machine detail on its own line, in its own register", () => {
+  test("a failed read reads as a sign-out again, not a hard failure", () => {
+    // `detail` ("request failed (503)") used to keep its own line, in the freshness register
+    // (`#freshness`, retired — chore/retire-the-status-line). `showEmpty` still takes the
+    // parameter (its boot-failure caller still passes it) but nothing shows it any more — see
+    // this branch's own PR body for the silent-failure entry this collapses into.
     page.showEmpty("unreadable", "request failed (503)");
-    assert.equal(el("freshness").textContent, "request failed (503)");
     assert.match(el("emptyBody").textContent, /still good/i, "it reads as a sign-out again");
   });
 

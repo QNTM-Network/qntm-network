@@ -266,23 +266,24 @@ describe("1. THE HEADLINE: a task, indented beneath a task neither of which has 
   });
 
   test("indenting a CHILD beneath it promotes the parent to outcome, auto_outcome true — immediately, on commit", async () => {
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] Draft the copy #task",
       markdown: AFTER_CHILD,
       source: AFTER_PARENT,
       kind: "insert-line",
-    });
-    // READ BESIDE "syncing…" — before the `await` lets the stubbed write's answer land and
-    // overwrite the freshness line, the same moment `app-rules-stamp.test.mjs` §1 reads its own
-    // freshness assertion.
-    const freshness = elements.get("freshness").textContent;
-    assert.match(freshness, /^syncing…/, freshness);
-    assert.match(freshness, /the row above becomes outcome, sets auto_outcome/, freshness);
+    };
+    const write = page.commitLine(VIEW, commit);
+    // READ SYNCHRONOUSLY — before the `await` lets the stubbed write's answer land and overwrite
+    // `graphData` with a snapshot that carries no `.graph` (`#parentBadge`/`#freshness` themselves
+    // are retired, chore/retire-the-status-line, but the timing they used to be read at still
+    // matters for a "decided" answer, which needs the graph).
+    const reading = page.__parentPromotionFor(VIEW, commit);
     // "(partial — action(s) not modelled)" — the real published rule ALSO carries an `emit_event`
     // this closed grammar excludes (`presentation.json`'s own `partial: true`, mirrored in this
     // file's DECLARATION); the retype/set are still the real, correct, decided answer.
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided (partial — action(s) not modelled)");
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided (partial — action(s) not modelled)");
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome, sets auto_outcome/);
     await write;
     assert.equal(posted.length, 2, "both commits above must have posted");
     // THE POSTED BODY FOR THE CHILD'S OWN COMMIT NAMES ONLY THE CHILD — see section 5 for the full
@@ -324,16 +325,18 @@ describe("2. an EXISTING parent (a real [[qntm:N]] stamp, fields read from the g
   const AFTER = "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy #task\n";
 
   test("the STAMPED parent's OWN graph fields decide the match, not a re-derivation of its line", async () => {
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] Draft the copy #task",
       markdown: AFTER,
       source: BEFORE,
       kind: "insert-line",
-    });
-    // READ BESIDE "syncing…", before the stubbed write's answer lands and overwrites it.
-    assert.match(elements.get("freshness").textContent, /the row above becomes outcome, sets auto_outcome/);
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided (partial — action(s) not modelled)");
+    };
+    const write = page.commitLine(VIEW, commit);
+    // READ SYNCHRONOUSLY — see section 1's own comment on why the timing still matters.
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome, sets auto_outcome/);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided (partial — action(s) not modelled)");
     await write;
   });
 });
@@ -356,16 +359,18 @@ describe("3. THE WAITING-FOR ARM: an open #waiting-for child promotes its parent
   const AFTER = "## Capture\n- [ ] Ship the launch note [[qntm:502]] #task\n    - [ ] #waiting-for Vendor reply\n";
 
   test("a #waiting-for child (not a PART_OF one) still promotes the parent to outcome", async () => {
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] #waiting-for Vendor reply",
       markdown: AFTER,
       source: BEFORE,
       kind: "insert-line",
-    });
-    // READ BESIDE "syncing…", before the stubbed write's answer lands and overwrites it.
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided (partial — action(s) not modelled)");
-    assert.match(elements.get("freshness").textContent, /the row above becomes outcome, sets auto_outcome/);
+    };
+    const write = page.commitLine(VIEW, commit);
+    // READ SYNCHRONOUSLY — see section 1's own comment on why the timing still matters.
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided (partial — action(s) not modelled)");
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome, sets auto_outcome/);
     await write;
   });
 
@@ -441,17 +446,18 @@ describe("4. HABIT WINS OVER OUTCOME: an existing qualifying child PLUS a freshl
   const AFTER = "## Capture\n- [ ] Umbrella task [[qntm:700]] #task\n    - [ ] Weekly review #routine\n";
 
   test("the parent becomes habit, NEVER outcome, in the same commit that indents the routine child", async () => {
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] Weekly review #routine",
       markdown: AFTER,
       source: BEFORE,
       kind: "insert-line",
-    });
-    // READ BESIDE "syncing…", before the stubbed write's answer lands and overwrites it.
-    const freshness = elements.get("freshness").textContent;
-    assert.match(freshness, /the row above becomes habit, sets auto_habit/);
-    assert.doesNotMatch(freshness, /becomes outcome/, "the routine child must block the outcome rule, not merely race it");
+    };
+    const write = page.commitLine(VIEW, commit);
+    // READ SYNCHRONOUSLY — see section 1's own comment on why the timing still matters.
+    const note = page.__parentPromotionNoteFor(page.__parentPromotionFor(VIEW, commit));
+    assert.match(note, /the row above becomes habit, sets auto_habit/);
+    assert.doesNotMatch(note, /becomes outcome/, "the routine child must block the outcome rule, not merely race it");
     await write;
   });
 
@@ -508,18 +514,19 @@ describe("6. ABSTAINS VISIBLY — an id that does not exist is refused, never gu
     const { page, elements } = await freshPage("parent-promotion-abstain-missing-id", { nodes: [], edges: [] });
     const BEFORE = "## Capture\n- [ ] Ship the launch note [[qntm:999]] #task\n";
     const AFTER = "## Capture\n- [ ] Ship the launch note [[qntm:999]] #task\n    - [ ] Draft the copy #task\n";
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] Draft the copy #task",
       markdown: AFTER,
       source: BEFORE,
       kind: "insert-line",
-    });
-    // READ BESIDE "syncing…", before the stubbed write's answer lands and overwrites the freshness
-    // line — `#parentBadge` itself persists either way, but read both at the same honest moment.
-    assert.equal(elements.get("parentBadge").textContent, "parent: abstained — parent-not-in-graph");
+    };
+    const write = page.commitLine(VIEW, commit);
+    // READ SYNCHRONOUSLY — see section 1's own comment on why the timing still matters.
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: abstained — parent-not-in-graph");
     assert.doesNotMatch(
-      elements.get("freshness").textContent,
+      page.__parentPromotionNoteFor(reading),
       /becomes outcome/,
       "an id this app cannot find must never be guessed into a promotion",
     );

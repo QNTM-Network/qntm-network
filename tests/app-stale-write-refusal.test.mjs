@@ -309,10 +309,9 @@ const V1 = [
 ].join("\n");
 
 const TYPED = "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task";
-const REFUSED =
-  "this save was computed from an out-of-date copy of this file — the server refused it and nothing was written";
-/** `REFUSED_NOT_ADOPTED` — the app's own constant for a refusal with `current` and real text at stake. */
-const REFUSED_NOT_ADOPTED = REFUSED + " · press re-read when you have finished this line";
+// `REFUSED`/`REFUSED_NOT_ADOPTED` — the freshness-line sentences this file used to check against —
+// are retired along with `#freshness` itself (chore/retire-the-status-line). Every arm below now
+// checks the functional state `healFromRefusal` actually changes instead.
 
 /**
  * WHAT THE SERVER ACTUALLY HOLDS BY THE TIME A REFUSAL COMES BACK, IN THE SCENARIO THAT DESTROYS A
@@ -341,7 +340,6 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
   let posted;
 
   const settle = () => new Promise((r) => setImmediate(r));
-  const freshness = () => elements.get("freshness").textContent;
 
   /** Everything the painted body is showing, as one string. */
   const onScreen = () =>
@@ -459,8 +457,10 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     typeAndCommit();
     await settle();
 
+    // `REFUSED_NOT_ADOPTED` — the freshness-line sentence this arm used to check — is retired
+    // (chore/retire-the-status-line). What it reported is still checked below, functionally: the
+    // characters stayed, and the base did not move (proof `healFromRefusal` never ran).
     assert.match(onScreen(), /BY FRIDAY/, "the refusal deleted the characters he typed");
-    assert.equal(freshness(), REFUSED_NOT_ADOPTED);
     // AND THE VIEW DID NOT ADOPT THE SERVER'S FILE — `current` was available but there was real
     // typed text at stake, so `healFromRefusal` never ran.
     assert.doesNotMatch(onScreen(), /#blocked/, "the view adopted a file it had no safe reason to adopt");
@@ -482,7 +482,8 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     await settle();
     assert.equal(posted.length, 1, "the arm did not set up");
     assert.equal(posted[0].base, baseOf(V1), "the refused save did not carry the stale base");
-    assert.equal(freshness(), REFUSED_NOT_ADOPTED, "the view healed when it had a reason not to");
+    // `REFUSED_NOT_ADOPTED` — retired (chore/retire-the-status-line); `posted[0].base` above is the
+    // functional proof no heal ran (a heal would have moved the base to `current`).
 
     // He keeps typing on the same line — no re-read, no reload — and commits again. The graph
     // server would answer this on its own merits; the fixture stands in for "it accepts".
@@ -498,7 +499,9 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
       baseOf(MOVED_ON),
       "the second save posted a digest of a file the server holds but the screen never adopted",
     );
-    assert.match(freshness(), /^as of /, "the second save did not land");
+    // "the second save did not land" — the freshness sentence that used to say so is retired; the
+    // base surface landing on the second save's own markdown is the functional proof it did.
+    assert.equal(page.__served().markdown, posted[1].markdown, "the second save's projection never installed");
   });
 
   test("A REFUSAL WITH NOTHING TO ADOPT CHANGES NOTHING — the older behaviour, intact", async () => {
@@ -513,8 +516,9 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     typeAndCommit();
     await settle();
 
+    // The sentence that used to say so is retired (chore/retire-the-status-line); the functional
+    // proof is below — the screen kept his characters and the base did not move.
     assert.match(onScreen(), /BY FRIDAY/, "nothing was adopted, so nothing may have repainted");
-    assert.equal(freshness(), REFUSED + " · your characters are still on this line");
     assert.equal(page.__served().markdown, V1, "the base moved with no text to move with it");
   });
 
@@ -537,7 +541,9 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     box.dispatch("change");
     await settle();
 
-    assert.equal(freshness(), REFUSED + " · the box is back as the server has it", "the tick was not refused");
+    // The sentence that used to confirm "the tick was not refused" is retired
+    // (chore/retire-the-status-line); the box reverting is the functional proof it was.
+    assert.equal(box.checked, false, "the tick was not refused");
     assert.equal(input.value, "- [ ] Water the plants HALF TYPED", "the adoption repainted an open line");
     assert.equal(page.__served().markdown, V1, "the base moved while a line was open");
     assert.doesNotMatch(onScreen(), /#blocked/, "the server's copy reached the screen mid-typing");
@@ -559,9 +565,10 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     box.dispatch("change");
     await settle();
 
+    // "this view now shows the file as the server has it..." — the sentence retired
+    // (chore/retire-the-status-line); the two checks above are the functional proof it healed.
     assert.match(onScreen(), /#blocked/, "the view did not heal itself");
     assert.equal(page.__served().markdown, MOVED_ON);
-    assert.equal(freshness(), REFUSED + " · this view now shows the file as the server has it, so your next save will go through");
   });
 
   test("A HEAL MUST NOT CLOBBER A NEIGHBOUR — the cursor is re-found by identity, not carried as a raw index", async () => {
@@ -627,16 +634,18 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     typeAndCommit();
     await settle();
 
+    // "sync failed: write failed" — retired (chore/retire-the-status-line); the repaint away from
+    // his typed characters, below, is the functional proof the failure path ran.
     assert.doesNotMatch(onScreen(), /BY FRIDAY/, "a failed write kept claiming an edit the vault lacks");
-    assert.match(freshness(), /^sync failed: write failed/);
   });
 
   test("THE OTHER CONTROL — a save that is not refused still lands, unchanged", async () => {
     typeAndCommit();
     await settle();
 
+    // "an ordinary save narrated itself as a refusal" — the sentence that used to prove this is
+    // retired; his characters staying on screen (nothing repainted them away) is the proof left.
     assert.match(onScreen(), /BY FRIDAY/);
-    assert.match(freshness(), /^as of /, "an ordinary save narrated itself as a refusal");
   });
 
   test("A REFUSED TICK PUTS THE BOX BACK — no characters at stake, and the box tells the truth", async () => {
@@ -650,50 +659,15 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
 
     assert.equal(box.checked, false, "the page kept showing a tick the vault does not have");
     assert.equal(box.disabled, false, "and it must be clickable again — he has to be able to retry");
-    assert.equal(freshness(), REFUSED + " · the box is back as the server has it");
   });
 
-  test("ONE SENTENCE, NOT TWO THAT CONTRADICT EACH OTHER", async () => {
-    // The client's own detector fires on this gesture too (`BASE_REFUSALS.stale`, "…is
-    // overwritten"). The server has just answered the same question better, so its word wins and
-    // the guess is dropped — otherwise one line says both "nothing was written" and "is
-    // overwritten" about one save.
-    refuseWith = { status: 409, body: { ok: false, error: "stale base", refused: "stale-base" } };
-
-    open(V1);
-    taskText().dispatch("click", makeEvent());
-    page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    input.value = TYPED;
-    land(MOVED_ON); // the world moves under the open line — the client detects it by itself
-    input.dispatch("blur");
-    await settle();
-
-    assert.equal(freshness(), REFUSED + " · your characters are still on this line");
-    assert.doesNotMatch(freshness(), /is overwritten/, "two verdicts about one save");
-  });
-
-  test("AND THE DROPPED GUESS DOES NOT SURFACE AGAINST THE NEXT SAVE", async () => {
-    refuseWith = { status: 409, body: { ok: false, error: "stale base", refused: "stale-base" } };
-    open(V1);
-    taskText().dispatch("click", makeEvent());
-    page.__enterInsert();
-    const first = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    first.value = TYPED;
-    land(MOVED_ON);
-    first.dispatch("blur");
-    await settle();
-    assert.match(freshness(), /the server refused it/, "the arm did not set up");
-
-    refuseWith = null;
-    open(V1);
-    taskText().dispatch("click", makeEvent());
-    page.__enterInsert();
-    const second = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    second.value = "- [ ] Draft the launch note NEXT WEEK [[qntm:121]] #task";
-    second.dispatch("blur");
-    await settle();
-
-    assert.doesNotMatch(freshness(), /refused|overwritten/, "a refusal followed the next save");
-  });
+  // "ONE SENTENCE, NOT TWO THAT CONTRADICT EACH OTHER" and "AND THE DROPPED GUESS DOES NOT SURFACE
+  // AGAINST THE NEXT SAVE" ARE GONE. Both proved a specific freshness-line behaviour: the client's
+  // own stale-base guess (`BASE_REFUSALS.stale`, `writeNote`) was dropped rather than shown beside
+  // the server's own, stronger refusal, and that dropped guess never leaked into a LATER save's own
+  // sentence. `writeNote`, `refusalNote`, `takeNotes`, `BASE_REFUSALS` and the freshness line itself
+  // are all deleted (chore/retire-the-status-line) — there is no longer a sentence for a guess to
+  // contradict or leak into, so there is nothing left for either test to observe. The write path
+  // itself (`served.read` no longer even runs — see writeFile's own header) is otherwise unchanged
+  // and is covered by the other arms in this file.
 });

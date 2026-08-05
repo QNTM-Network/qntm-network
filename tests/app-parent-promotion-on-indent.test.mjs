@@ -194,19 +194,17 @@ async function freshPage(label, markdown = SOURCE, graph = GRAPH, mutateFor) {
 
 describe("1. THE HEADLINE: an existing task, indented beneath another task with `>`", () => {
   test("the parent's promotion is predicted in the browser on that commit — no round trip needed", async () => {
-    const { press, elements, posted } = await freshPage("indent-headline");
+    const { page, press, posted } = await freshPage("indent-headline");
     press("j"); // line 1: the parent
     press("j"); // line 2: "- [ ] Draft the copy #task" — the line about to be indented
 
     press(">");
-    // READ BESIDE "syncing…" — `commitLine`'s synchronous prefix (badge + freshness) runs and
-    // returns before its own `await writeFile(...)`, and the keydown handler never awaits
-    // `commitLine` either, so this is the instant `tests/app-parent-promotion.test.mjs`'s own
-    // headline test reads at too: before the stubbed write's answer lands and overwrites it.
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided");
-    assert.match(elements.get("freshness").textContent, /the row above becomes outcome, sets auto_outcome/);
-
-    await new Promise((r) => setImmediate(r));
+    // READ SYNCHRONOUSLY, BEFORE THE WRITE'S OWN ANSWER LANDS — `#parentBadge`/`#freshness` were
+    // retired (chore/retire-the-status-line), but the timing they used to be read at still matters:
+    // the stubbed answer's `graphData` carries no `.graph`, so a read taken after it lands would
+    // abstain "graph-not-loaded" instead of answering — a fact about the FIXTURE, not the resolver.
+    // `posted[0]` already exists at this point: `fetch` runs synchronously up to its own first
+    // `await`, and pushing onto `posted` happens before that.
     const write = posted[0];
     assert.ok(write, "> never reached the write endpoint");
     assert.equal(
@@ -214,6 +212,11 @@ describe("1. THE HEADLINE: an existing task, indented beneath another task with 
       "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy #task",
       "the indent itself did not post the expected file",
     );
+    const commit = { lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: write.body.markdown, source: SOURCE, kind: "set-line" };
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided");
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome, sets auto_outcome/);
+    await new Promise((r) => setImmediate(r));
   });
 });
 
@@ -240,32 +243,46 @@ const withOldInsertLineOnlyGate = mutatingBundle([
   ),
 ]);
 
+// `#parentBadge`/`#freshness` WERE RETIRED (chore/retire-the-status-line). Both arms below now ask
+// the promotion resolver directly, over the SAME reconstructed commit section 1 already proved —
+// against the MUTATED bundle in the RED arm (the mutant is what `page` was built from, so
+// `page.__parentPromotionFor` runs the mutated `read()`) and the real one in the GREEN arm.
+const GAIN_COMMIT = {
+  lineIndex: 2,
+  text: "    - [ ] Draft the copy #task",
+  markdown: "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy #task",
+  source: SOURCE,
+  kind: "set-line",
+};
+
 describe("2. MUTATION PROOF — the pre-fix `insert-line`-only gate reproduces the defect, and only that gate", () => {
   test("RED: with the old gate restored, indenting an EXISTING line answers nothing", async () => {
-    const { press, elements } = await freshPage("indent-mutation-red", SOURCE, GRAPH, withOldInsertLineOnlyGate);
+    const { page, press } = await freshPage("indent-mutation-red", SOURCE, GRAPH, withOldInsertLineOnlyGate);
     press("j");
     press("j");
     press(">");
     await new Promise((r) => setImmediate(r));
-    assert.ok(
-      !elements.get("parentBadge")?.textContent,
-      "the pre-fix gate must silence the parent badge for a `set-line` indent — this is main's own defect, reproduced",
+    const reading = page.__parentPromotionFor(VIEW, GAIN_COMMIT);
+    assert.equal(
+      reading.kind,
+      "not-evaluated",
+      "the pre-fix gate must silence the parent reading for a `set-line` indent — this is main's own defect, reproduced",
     );
     assert.doesNotMatch(
-      elements.get("freshness").textContent,
+      page.__parentPromotionNoteFor(reading),
       /becomes outcome/,
       "the pre-fix gate must never mention a promotion for an indented EXISTING line",
     );
   });
 
   test("GREEN: the unmutated page (this branch) answers for the identical gesture", async () => {
-    const { press, elements } = await freshPage("indent-mutation-green");
+    const { page, press } = await freshPage("indent-mutation-green");
     press("j");
     press("j");
     press(">");
-    // READ BESIDE "syncing…" — see section 1's own comment for why this is the honest moment.
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided");
-    assert.match(elements.get("freshness").textContent, /the row above becomes outcome, sets auto_outcome/);
+    const reading = page.__parentPromotionFor(VIEW, GAIN_COMMIT);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided");
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome, sets auto_outcome/);
   });
 });
 
@@ -277,9 +294,17 @@ const INDENTED = ["## Capture", "- [ ] Ship the launch note [[qntm:501]] #task",
   "\n",
 );
 
+const OUTDENT_COMMIT = {
+  lineIndex: 2,
+  text: "- [ ] Draft the copy #task",
+  markdown: "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n- [ ] Draft the copy #task",
+  source: INDENTED,
+  kind: "set-line",
+};
+
 describe("3. THE OUTDENT: `<` removes a structural relationship — abstained, not guessed", () => {
   test("through the real page: outdenting the child abstains 'structural-relationship-removed', and the write still goes", async () => {
-    const { press, elements, posted } = await freshPage("outdent-abstain", INDENTED);
+    const { page, press, posted } = await freshPage("outdent-abstain", INDENTED);
     press("j");
     press("j"); // line 2: the indented child
 
@@ -293,13 +318,16 @@ describe("3. THE OUTDENT: `<` removes a structural relationship — abstained, n
       "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n- [ ] Draft the copy #task",
       "the outdent itself did not post the expected file",
     );
+    // `#parentBadge`/`#freshness` WERE RETIRED (chore/retire-the-status-line) — asked directly of
+    // the resolver instead, over the same commit the real gesture above just posted.
+    const reading = page.__parentPromotionFor(VIEW, OUTDENT_COMMIT);
     assert.equal(
-      elements.get("parentBadge").textContent,
+      page.__parentPromotionDiagnosticFor(reading),
       "parent: abstained — structural-relationship-removed",
       "a lost relationship must abstain visibly, not fall silent (that would read as 'nothing to ask' rather than 'checked, and I cannot say')",
     );
     assert.doesNotMatch(
-      elements.get("freshness").textContent,
+      page.__parentPromotionNoteFor(reading),
       /becomes|clears|sets/,
       "an abstention must never carry a promotion sentence — the matcher used here can only ADD a prospective child, never subtract a real one",
     );
@@ -307,15 +335,7 @@ describe("3. THE OUTDENT: `<` removes a structural relationship — abstained, n
 
   test("THE PURE ANSWER, driven directly: the same outdent, off a hand-built commit", async () => {
     const { page } = await freshPage("outdent-abstain-pure");
-    const BEFORE = INDENTED;
-    const AFTER = "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n- [ ] Draft the copy #task";
-    const reading = page.__parentPromotionFor(VIEW, {
-      lineIndex: 2,
-      text: "- [ ] Draft the copy #task",
-      markdown: AFTER,
-      source: BEFORE,
-      kind: "set-line",
-    });
+    const reading = page.__parentPromotionFor(VIEW, OUTDENT_COMMIT);
     assert.deepEqual(reading, { kind: "abstains", because: "structural-relationship-removed" });
   });
 });
@@ -327,24 +347,27 @@ const withoutLossAbstention = mutatingBundle([LOST_ABSTENTION, "return NOT_EVALU
 
 describe("MUTATION PROOF — removing the 'lost' branch stops the outdent from abstaining", () => {
   test("RED: without the abstention, the outdent falls silent instead of saying it cannot check", async () => {
-    const { press, elements } = await freshPage("outdent-mutation-red", INDENTED, GRAPH, withoutLossAbstention);
+    const { page, press } = await freshPage("outdent-mutation-red", INDENTED, GRAPH, withoutLossAbstention);
     press("j");
     press("j");
     press("<");
     await new Promise((r) => setImmediate(r));
-    assert.ok(
-      !elements.get("parentBadge")?.textContent,
+    const reading = page.__parentPromotionFor(VIEW, OUTDENT_COMMIT);
+    assert.equal(
+      reading.kind,
+      "not-evaluated",
       "with the abstention removed, an outdent must go silent (not-evaluated) rather than abstain — this is the mutant's own, weaker behaviour",
     );
   });
 
   test("GREEN: the unmutated page abstains, as section 3 above already proved live", async () => {
-    const { press, elements } = await freshPage("outdent-mutation-green", INDENTED);
+    const { page, press } = await freshPage("outdent-mutation-green", INDENTED);
     press("j");
     press("j");
     press("<");
     await new Promise((r) => setImmediate(r));
-    assert.equal(elements.get("parentBadge").textContent, "parent: abstained — structural-relationship-removed");
+    const reading = page.__parentPromotionFor(VIEW, OUTDENT_COMMIT);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: abstained — structural-relationship-removed");
   });
 });
 
@@ -354,17 +377,22 @@ describe("MUTATION PROOF — removing the 'lost' branch stops the outdent from a
 
 describe("4. THE CONTROL: a same-indent edit is not-evaluated — the fix does not fire on every set-line", () => {
   test("toggling the checkbox on an already-indented child changes nothing about its parent reading", async () => {
-    const { press, elements, posted } = await freshPage("control-toggle-done", INDENTED);
+    const { page, press, posted } = await freshPage("control-toggle-done", INDENTED);
     press("j");
     press("j"); // the indented child
 
     press("x");
     await new Promise((r) => setImmediate(r));
 
-    assert.ok(posted[0], "x never reached the write endpoint");
-    assert.ok(
-      !elements.get("parentBadge")?.textContent,
-      "a checkbox flip changes no leading whitespace, so the relationship is unchanged and the badge must stay silent",
+    const write = posted[0];
+    assert.ok(write, "x never reached the write endpoint");
+    // `#parentBadge` WAS RETIRED (chore/retire-the-status-line) — asked of the resolver directly.
+    const commit = { lineIndex: 2, text: "    - [x] Draft the copy #task", markdown: write.body.markdown, source: INDENTED, kind: "set-line" };
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(
+      reading.kind,
+      "not-evaluated",
+      "a checkbox flip changes no leading whitespace, so the relationship is unchanged and the reading must stay not-evaluated",
     );
   });
 
@@ -389,24 +417,26 @@ describe("4. THE CONTROL: a same-indent edit is not-evaluated — the fix does n
 
 describe("5. THE GENERALITY: hand-typed leading whitespace, never `>`, still reaches the promotion", () => {
   test("typing the line back in with four leading spaces (no indent motion) promotes the parent the same way", async () => {
-    const { page, elements } = await freshPage("generality-typed-indent");
+    const { page } = await freshPage("generality-typed-indent");
     // Enter INSERT on line 2 directly, the same seam `tests/app-gesture-write-path.test.mjs`'s own
     // `enter-insert` case uses, then type the SAME line back with four leading spaces — no
     // `indentedLine`, no `>`, nothing about this edit is indent-motion-shaped at all.
     page.__setFocus(2, SOURCE);
     page.__enterInsert();
-    const AFTER = "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy #task";
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] Draft the copy #task",
-      markdown: AFTER,
+      markdown: "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy #task",
       source: SOURCE,
       kind: "set-line",
-    });
-    // READ BESIDE "syncing…" — before `await write` lets the stubbed answer land and overwrite the
-    // freshness line, the same moment section 1's own headline test reads at.
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided");
-    assert.match(elements.get("freshness").textContent, /the row above becomes outcome, sets auto_outcome/);
+    };
+    const write = page.commitLine(VIEW, commit);
+    // `#parentBadge`/`#freshness` WERE RETIRED (chore/retire-the-status-line) — asked of the
+    // resolver directly, over the exact commit just walked, rather than read off the DOM before
+    // `await write` let the stubbed answer land.
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided");
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome, sets auto_outcome/);
     await write;
   });
 });
@@ -454,36 +484,47 @@ test("6.0 every NormalEffect kind motions.ts declares is accounted for in the pr
   );
 });
 
+// `#parentBadge` WAS RETIRED (chore/retire-the-status-line) — every test below now asks the
+// promotion resolver directly, over a commit reconstructed from the same before/after text the
+// real gesture just posted (`posted[0].body.markdown`), rather than reading a DOM element.
 describe("6.1 the four commit-producing kinds, driven through the real page, wherever the relationship changes", () => {
   test("indent (>) — relationship gained — promotion reached", async () => {
-    const { press, elements } = await freshPage("enum-indent-gain");
+    const { page, press, posted } = await freshPage("enum-indent-gain");
     press("j");
     press("j");
     press(">");
+    // READ SYNCHRONOUSLY, BEFORE THE WRITE'S OWN ANSWER LANDS — see section 1's own comment: the
+    // stubbed answer's `graphData` carries no `.graph`, so a "decided" read must happen before it.
+    const commit = { lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: posted[0].body.markdown, source: SOURCE, kind: "set-line" };
+    assert.equal(page.__parentPromotionDiagnosticFor(page.__parentPromotionFor(VIEW, commit)), "parent: decided");
     await new Promise((r) => setImmediate(r));
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided");
   });
 
   test("indent (<) — relationship lost — abstains, never a false 'decided'", async () => {
-    const { press, elements } = await freshPage("enum-indent-loss", INDENTED);
+    const { page, press, posted } = await freshPage("enum-indent-loss", INDENTED);
     press("j");
     press("j");
     press("<");
     await new Promise((r) => setImmediate(r));
-    assert.equal(elements.get("parentBadge").textContent, "parent: abstained — structural-relationship-removed");
+    const commit = { lineIndex: 2, text: "- [ ] Draft the copy #task", markdown: posted[0].body.markdown, source: INDENTED, kind: "set-line" };
+    assert.equal(
+      page.__parentPromotionDiagnosticFor(page.__parentPromotionFor(VIEW, commit)),
+      "parent: abstained — structural-relationship-removed",
+    );
   });
 
   test("toggle-done (x) — relationship unchanged — not evaluated at all", async () => {
-    const { press, elements } = await freshPage("enum-toggle-done", INDENTED);
+    const { page, press, posted } = await freshPage("enum-toggle-done", INDENTED);
     press("j");
     press("j");
     press("x");
     await new Promise((r) => setImmediate(r));
-    assert.ok(!elements.get("parentBadge")?.textContent);
+    const commit = { lineIndex: 2, text: "    - [x] Draft the copy #task", markdown: posted[0].body.markdown, source: INDENTED, kind: "set-line" };
+    assert.equal(page.__parentPromotionFor(VIEW, commit).kind, "not-evaluated");
   });
 
   test("enter-insert (i) — typed text changes leading whitespace — relationship gained — promotion reached", async () => {
-    const { page, elements, press } = await freshPage("enum-enter-insert-gain");
+    const { page, elements, press, posted } = await freshPage("enum-enter-insert-gain");
     press("j");
     press("j");
     assert.doesNotThrow(() => press("i"));
@@ -495,12 +536,14 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
     assert.ok(input, "i did not open an editable line");
     input.value = "    - [ ] Draft the copy #task";
     input.dispatch("blur");
+    // READ SYNCHRONOUSLY — see section 1's own comment on `graphData`'s stubbed shape.
+    const commit = { lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: posted[0].body.markdown, source: SOURCE, kind: "set-line" };
+    assert.equal(page.__parentPromotionDiagnosticFor(page.__parentPromotionFor(VIEW, commit)), "parent: decided");
     await new Promise((r) => setImmediate(r));
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided");
   });
 
   test("enter-insert (i) — typed text keeps the same leading whitespace — relationship unchanged — not evaluated", async () => {
-    const { elements, press } = await freshPage("enum-enter-insert-no-change");
+    const { page, elements, press, posted } = await freshPage("enum-enter-insert-no-change");
     press("j");
     press("j");
     assert.doesNotThrow(() => press("i"));
@@ -513,11 +556,13 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
     input.value = "- [ ] Draft the copy, retyped #task";
     input.dispatch("blur");
     await new Promise((r) => setImmediate(r));
-    assert.ok(!elements.get("parentBadge")?.textContent);
+    const commit = { lineIndex: 2, text: "- [ ] Draft the copy, retyped #task", markdown: posted[0].body.markdown, source: SOURCE, kind: "set-line" };
+    assert.equal(page.__parentPromotionFor(VIEW, commit).kind, "not-evaluated");
   });
 
   test("open (o) — a new line typed at a deeper indent than the line above it — relationship gained — promotion reached", async () => {
-    const { elements, press } = await freshPage("enum-open-gain", "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task");
+    const parentOnly = "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task";
+    const { page, elements, press, posted } = await freshPage("enum-open-gain", parentOnly);
     press("j"); // line 1: the parent
     assert.doesNotThrow(() => press("o"));
     const input = [...(elements.get("viewBody").children ?? [])]
@@ -528,7 +573,9 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
     assert.ok(input, "o did not open a draft line");
     input.value = "    - [ ] Draft the copy #task";
     input.dispatch("blur");
+    // READ SYNCHRONOUSLY — see section 1's own comment on `graphData`'s stubbed shape.
+    const commit = { lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: posted[0].body.markdown, source: parentOnly, kind: "insert-line" };
+    assert.equal(page.__parentPromotionDiagnosticFor(page.__parentPromotionFor(VIEW, commit)), "parent: decided");
     await new Promise((r) => setImmediate(r));
-    assert.equal(elements.get("parentBadge").textContent, "parent: decided");
   });
 });

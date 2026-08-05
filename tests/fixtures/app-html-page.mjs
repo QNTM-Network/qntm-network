@@ -157,8 +157,7 @@ export function __enterInsert() { mode.enterInsert(); repaintCurrentView(); }
 // AND the view it belongs to — \`currentViewId\`, the same id \`paintView\`'s own \`focus.focus\`/
 // \`focus.reanchor\` calls already namespace the anchor by, so a test that calls this after
 // \`paintView\` lands the anchor in the SAME instance-id space \`paintView\`'s own reanchoring will
-// resolve it against — and \`__sayAsOf\` is the page's real freshness writer, exported so a test can
-// prove a refusal survives the line every write path overwrites it with.
+// resolve it against.
 // IT SEATS THE ROW STORE TOO, because putting the cursor somewhere IS both facts. In the shipping
 // app the two are never apart: every gesture that moves the cursor is followed by a paint, and
 // \`paint()\` records the seat (app/present/rows.ts). This hook has no paint, so without the second
@@ -169,7 +168,6 @@ export function __setFocus(lineIndex, source) {
   rows.seat(currentViewId ?? "", source, lineIndex);
 }
 export const __focusAnchor = () => focus.anchor;
-export { sayAsOf as __sayAsOf };
 // ── THE RESOLVER SEAM, AND WHY IT IS A COMPATIBILITY SHIM RATHER THAN AN API ──
 //
 // The four axes were four hand-written functions each ON THE PAGE, and the exports below are the
@@ -191,23 +189,23 @@ import {
   orderingSpec as __orderingSpec,
   rulesSpec as __rulesSpec,
   promotionSpec as __promotionSpec,
-  diagnosticOf as __diagnosticOf,
   defineResolver as __defineResolver,
   runResolvers as __runResolvers,
   armSettle as __armSettleWith,
 } from ${bundle};
-export { resolverContextFor as __resolverContextFor, paintBadge as __paintBadge };
+export { resolverContextFor as __resolverContextFor };
 const __ctx = (view, commit) => resolverContextFor(view, commit);
-const __showBadge = (spec, reading) => {
-  const diagnostic = __diagnosticOf(spec, reading);
-  if (diagnostic !== null) paintBadge(diagnostic);
-};
+// \`__paintBadge\`/\`__showBadge\`/\`__updateMembershipBadge\`/\`__updateOrderingBadge\`/
+// \`__updateRulesBadge\`/\`__updateParentBadge\` ARE GONE — \`paintBadge\` and the four abstention-
+// badge elements it wrote to (\`#membershipBadge\`/\`#orderingBadge\`/\`#rulesBadge\`/\`#parentBadge\`)
+// were retired from the page (\`chore/retire-the-status-line\`). \`__membershipDiagnosticFor\` and its
+// three siblings below still answer the same question (what did this axis decide, and did it
+// abstain) by calling the resolver spec's own \`.show\` directly — the DOM sink is gone, the
+// resolver-level answer is not.
 export const __membershipNoteFor = (v, c) => __membershipSpec.say(__membershipSpec.read(__ctx(v, c)));
 export const __membershipDiagnosticFor = (v, c) => __membershipSpec.show(__membershipSpec.read(__ctx(v, c)));
-export const __updateMembershipBadge = (v, c) => __showBadge(__membershipSpec, __membershipSpec.read(__ctx(v, c)));
 export const __orderingNoteFor = (v, c) => __orderingSpec.say(__orderingSpec.read(__ctx(v, c)));
 export const __orderingDiagnosticFor = (v, c) => __orderingSpec.show(__orderingSpec.read(__ctx(v, c)));
-export const __updateOrderingBadge = (v, c) => __showBadge(__orderingSpec, __orderingSpec.read(__ctx(v, c)));
 // ORDERING'S ARM ALONE, applied to the settle surface alone — the page's own \`commitLine\` also arms
 // \`predict\` on every commit, and a suite asserting what THIS gesture armed must not have the
 // predict surface moved under it as a side effect.
@@ -219,12 +217,10 @@ export const __armOrderingSettle = (v, c) => {
 export const __rulesReadingFor = (v, c) => __rulesSpec.read(__ctx(v, c));
 export const __rulesNoteFor = (reading) => __rulesSpec.say(reading);
 export const __rulesDiagnosticFor = (reading) => __rulesSpec.show(reading);
-export const __updateRulesBadge = (reading) => __showBadge(__rulesSpec, reading);
 export const __rulesTable = () => rulesTable;
 export const __parentPromotionFor = (v, c) => __promotionSpec.read(__ctx(v, c));
 export const __parentPromotionNoteFor = (reading) => __promotionSpec.say(reading);
 export const __parentPromotionDiagnosticFor = (reading) => __promotionSpec.show(reading);
-export const __updateParentBadge = (reading) => __showBadge(__promotionSpec, reading);
 // THE SETTLE SURFACE (app/present/settle.ts). A getter, the same reason __focusAnchor and __served
 // are: a suite reads what the page is holding NOW, and what changes under it is which placement
 // (if any) is armed.
@@ -240,12 +236,13 @@ export const __settle = () => settle;
 // prediction lands in the ROW it belongs to, rather than merely that it was armed.
 export const __predict = () => predict;
 export { repaintCurrentView as __repaintCurrentView };
-// THE TODAY NOTE (design-the-resolution-architecture.md step 8's call site). Same reasoning as
-// __membershipNoteFor and __orderingNoteFor above — its own separate computation, exported on its
-// own so a suite can drive \`todayFor\`'s wiring directly, with an arbitrary instant, without also
-// standing up a whole projection arrival.
-export { todayNoteFor as __todayNoteFor };
-export const __sentEdit = () => sentEdit;
+// \`__todayNoteFor\`/\`__sentEdit\` ARE GONE. \`todayNoteFor\` was wired into the page for exactly one
+// reason — \`sayAsOf\`'s freshness-line "today <date>" clause — and both were retired together
+// (\`chore/retire-the-status-line\`); \`sentEdit\` existed only to feed \`reportCursorReading\`'s
+// \`proved\` argument, also retired. \`todayFor\` itself (app/present/today.ts) is untouched and still
+// reachable directly from \`dist/present.js\` for any suite that wants it — see
+// tests/present-today.test.mjs — and it is still called for real by the rules resolver
+// (app/present/resolvers/rules.ts), unrelated to the page's own freshness wiring.
 // THE LINE BEING MADE (app/present/draft.ts). A getter, the same reason \`__served\` is one: a
 // suite reads the row the page is holding NOW, and \`draftLine\` is a module-scoped const whose
 // CONTENTS change under it. It is the only way to tell "the row survived and was re-placed" apart

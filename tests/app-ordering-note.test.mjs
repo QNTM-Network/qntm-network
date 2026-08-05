@@ -216,13 +216,12 @@ const BOTH_SOURCE = [
 
 const BOTH_VIEW = { id: "demo2", path: "demo2.md" };
 
-describe("2. BOTH NOTES SHARE ONE SLOT — joined with ' · ' through the real commitLine", () => {
+describe("2. BOTH NOTES ANSWER INDEPENDENTLY, FOR THE SAME COMMIT — through the real commitLine", () => {
   let page;
-  let elements;
   let posted;
 
   before(async () => {
-    ({ elements } = installBrowser());
+    installBrowser();
     globalThis.fetch = async (url, init) => {
       const body = JSON.parse(init.body);
       posted = { url, body };
@@ -232,30 +231,25 @@ describe("2. BOTH NOTES SHARE ONE SLOT — joined with ' · ' through the real c
     page.__applyPresentation(BOTH_DECLARATION);
   });
 
-  test("an edit that both LEAVES the section AND changes rank says both, joined with ' · '", async () => {
+  test("an edit that both LEAVES the section AND changes rank is answered by both notes, neither crowding out the other", async () => {
     // "Ring the dentist" leaves domain-empty (acquires #work) AND its queue_position moves
     // 3 -> 1 (now the section's smallest), so both membershipNoteFor and orderingNoteFor answer.
-    const write = page.commitLine(BOTH_VIEW, {
+    //
+    // `writeFile`'s single `note` PARAMETER, and the "syncing…" freshness line it joined both
+    // predictions into with " · ", are retired (chore/retire-the-status-line) — `commitLine` no
+    // longer builds or passes a joined `note` at all (see that function's own comment). What
+    // survives, and is proven here, is the claim the joined string used to carry: both resolvers
+    // still answer independently for the SAME commit, and one answering does not silence the other.
+    const commit = {
       lineIndex: 1,
       text: "- [ ] Ring the dentist #work 🔢 1",
       markdown: BOTH_SOURCE.replace("- [ ] Ring the dentist 🔢 3", "- [ ] Ring the dentist #work 🔢 1"),
       source: BOTH_SOURCE,
       kind: "set-line",
-    });
-    // READ BEFORE THE AWAIT SETTLES — the same "beside syncing…" register step 4's own test reads,
-    // because this is exactly the moment the operator is still looking at the line he just left.
-    // Asserted as a SUBSTRING, not an exact match: this fixture never primed `served` with a prior
-    // read, so the base note ALSO fires ("could not be checked against the copy the server sent")
-    // ahead of the two predictions — a separate, separately-tested fact (tests/present-base.test.mjs)
-    // this test does not need to entangle with the ONE thing it exists to prove: both prediction
-    // notes land in the same freshness line, joined by " · ", neither one crowding out the other.
-    const freshness = elements.get("freshness").textContent;
-    assert.match(freshness, /^syncing…/, freshness);
-    assert.match(freshness, /this line will leave Domain Empty/, freshness);
-    assert.match(freshness, /this line will move within Domain Empty/, freshness);
-    // 4 parts: "syncing…", the base note (this fixture never primed a prior read, so it is
-    // genuinely "unknown" — a separate, separately-tested fact), and the two predictions.
-    assert.equal(freshness.split(" · ").length, 4, `expected 4 parts joined by ' · ', got: ${freshness}`);
+    };
+    const write = page.commitLine(BOTH_VIEW, commit);
+    assert.match(page.__membershipNoteFor(BOTH_VIEW, commit), /this line will leave Domain Empty/);
+    assert.match(page.__orderingNoteFor(BOTH_VIEW, commit), /this line will move within Domain Empty/);
     await write;
     assert.ok(posted, "the edit was never posted");
   });
@@ -467,28 +461,31 @@ const BADGE_DECLARATION = {
   },
 };
 
-describe("6. updateOrderingBadge writes #orderingBadge — decided, abstained, or left alone", () => {
+// `#orderingBadge`/`page.__updateOrderingBadge` WERE RETIRED (chore/retire-the-status-line, the
+// abstention register). `page.__orderingDiagnosticFor(view, commit)` is the same `orderingSpec.show`
+// call that used to feed the badge, asked directly — decided, abstained, or "" (not-evaluated,
+// which used to mean the badge was left showing its last real answer; there is no DOM element left
+// to leave alone, so that third case is now checked as "answers empty" rather than "keeps the old
+// text").
+describe("6. the ordering resolver's own diagnostic — decided, abstained, or not-evaluated", () => {
   let page;
-  let elements;
 
   before(async () => {
-    ({ elements } = installBrowser());
+    installBrowser();
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
     page = await importPage(WORK);
     page.__applyPresentation(BADGE_DECLARATION);
   });
 
   test('a section that declared ordering and answered says "ordering: decided"', () => {
-    page.__updateOrderingBadge(DEMO_VIEW, {
+    const commit = {
       lineIndex: 3,
       text: "- [ ] c [[qntm:3]] 🔢 1",
       markdown: "irrelevant",
       source: DEMO_SOURCE,
       kind: "set-line",
-    });
-    assert.equal(elements.get("orderingBadge").textContent, "ordering: decided");
-    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-answer"));
-    assert.ok(!elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
+    };
+    assert.equal(page.__orderingDiagnosticFor(DEMO_VIEW, commit), "ordering: decided");
   });
 
   test('a section that declared ordering but could not decide says "ordering: abstained — insertion-order"', () => {
@@ -496,43 +493,31 @@ describe("6. updateOrderingBadge writes #orderingBadge — decided, abstained, o
     // exactly the case hazard 3 of this step's own brief names by name: "sections with
     // orderingMode: insertion_order have no field to compare at all," and a silent no-op for it
     // is the failure this register exists to remove.
-    page.__updateOrderingBadge(
-      { id: "daily-work", path: "x.md" },
-      {
-        lineIndex: 1,
-        text: "- [ ] x #work",
-        markdown: "irrelevant",
-        source: "## Work Capture\n- [ ] x",
-        kind: "set-line",
-      },
+    const commit = {
+      lineIndex: 1,
+      text: "- [ ] x #work",
+      markdown: "irrelevant",
+      source: "## Work Capture\n- [ ] x",
+      kind: "set-line",
+    };
+    assert.equal(
+      page.__orderingDiagnosticFor({ id: "daily-work", path: "x.md" }, commit),
+      "ordering: abstained — insertion-order",
     );
-    assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — insertion-order");
-    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
-    assert.ok(!elements.get("orderingBadge").classList.contains("diagnostic-badge-answer"));
   });
 
-  test('a section outside the published table ("no-section-declaration") leaves the badge as it was', () => {
-    page.__updateOrderingBadge(DEMO_VIEW, {
-      lineIndex: 3,
-      text: "- [ ] c [[qntm:3]] 🔢 1",
-      markdown: "irrelevant",
-      source: DEMO_SOURCE,
-      kind: "set-line",
-    });
-    const before = elements.get("orderingBadge").textContent;
-    assert.equal(before, "ordering: decided");
-    // THE SAME POSTURE `membershipBadge` ALREADY ESTABLISHED: a LEVEL indicator says what the last
-    // REAL evaluation found and stays exactly that until the next one — "no-section-declaration"
-    // is not a question anyone asked (177 of 186 sections never declare ordering at all), so
-    // reporting it would be noise, not honesty, and the badge is left showing the prior answer.
-    page.__updateOrderingBadge(DEMO_VIEW, {
+  test('a section outside the published table ("no-section-declaration") answers nothing at all', () => {
+    const commit = {
       lineIndex: 10,
       text: "- [ ] x",
       markdown: "irrelevant",
       source: "## Somewhere Else\n- [ ] x",
       kind: "set-line",
-    });
-    assert.equal(elements.get("orderingBadge").textContent, before);
+    };
+    // "no-section-declaration" is not a question anyone asked (177 of 186 sections never declare
+    // ordering at all), so the resolver says nothing — `not-evaluated`, the same reading that used
+    // to leave the (now-gone) badge showing whatever it last held rather than blanking it.
+    assert.equal(page.__orderingDiagnosticFor(DEMO_VIEW, commit), "");
   });
 });
 
@@ -649,16 +634,17 @@ describe("8. THE DEFAULT ORDERING — an undeclared section now speaks, through 
     assert.equal(said, "", "still last alphabetically — 'Zebra task edited' > 'Apple task'");
   });
 
-  test("updateOrderingBadge: the SAME undeclared section now says \"ordering: decided\" instead of staying silent", () => {
-    page.__updateOrderingBadge(DEMO3_VIEW, {
+  test("orderingDiagnosticFor: the SAME undeclared section now says \"ordering: decided\" instead of staying silent", () => {
+    // `page.__updateOrderingBadge`/`#orderingBadge` were retired (chore/retire-the-status-line);
+    // `__orderingDiagnosticFor` is the same underlying `.show()` call, asked directly.
+    const commit = {
       lineIndex: 1,
       text: "- [ ] AAA task",
       markdown: "irrelevant",
       source: INBOX_SOURCE,
       kind: "set-line",
-    });
-    assert.equal(elements.get("orderingBadge").textContent, "ordering: decided");
-    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-answer"));
+    };
+    assert.equal(page.__orderingDiagnosticFor(DEMO3_VIEW, commit), "ordering: decided");
   });
 
   test("armOrderingSettle: places the row, and agrees with defaultOrderingPlacementFor/resolveOrderingPlacementFor called directly", () => {
@@ -695,23 +681,23 @@ describe("8. THE DEFAULT ORDERING — an undeclared section now speaks, through 
     });
   });
 
-  test("a NESTED section (indentation present) abstains \"nested-section\", VISIBLY, through #orderingBadge", () => {
+  test("a NESTED section (indentation present) abstains \"nested-section\", VISIBLY, through the resolver's own diagnostic", () => {
     // 'shelved' is ALSO undeclared, but its printed range carries indentation — the same refusal
     // the DECLARED path already had (ordering.ts's own header, measurement 2), now reachable for
     // an undeclared section too rather than silently returning nothing.
     // BOTH headings, in declared order — `sectionAt` resolves by ORDINAL heading position within
     // a view (`address.ts`'s own model), not by heading TEXT; a lone '## Shelved' heading would
     // resolve to ordinal 0 ('inbox'), not 'shelved' (ordinal 1).
+    // `page.__updateOrderingBadge`/`#orderingBadge` were retired (chore/retire-the-status-line).
     const nestedSource = ["## Inbox", "## Shelved", "- [ ] Parent item", "    - [ ] Child item"].join("\n");
-    page.__updateOrderingBadge(DEMO3_VIEW, {
+    const commit = {
       lineIndex: 2, // "## Inbox"=0, "## Shelved"=1, "Parent item"=2
       text: "- [ ] Parent item edited",
       markdown: "irrelevant",
       source: nestedSource,
       kind: "set-line",
-    });
-    assert.equal(elements.get("orderingBadge").textContent, "ordering: abstained — nested-section");
-    assert.ok(elements.get("orderingBadge").classList.contains("diagnostic-badge-abstains"));
+    };
+    assert.equal(page.__orderingDiagnosticFor(DEMO3_VIEW, commit), "ordering: abstained — nested-section");
   });
 });
 
