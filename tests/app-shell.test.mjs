@@ -570,10 +570,11 @@ describe("6. what the shell replaced is gone", () => {
 //
 // The operator asked for "another menu bar, on bottom for mobile and equivalent for Mac, with
 // icons". What he did NOT ask for, and what this deliberately is not, is a tab bar: `#entry` is a
-// gate rather than a place, `#app` is unreachable (`loadState` is defined and never called), and
-// so `#graph` is the only section a reader can be in. The 76 destinations this app really has are
-// views in nested folders, and they already have the drawer. So the rail holds ACTIONS — which is
-// also the shape of the bar along the bottom of his own phone: all 23 of `app.json`'s
+// gate rather than a place, and `#graph` is the only section a reader can be in — the dead `#app`
+// to-do screen this comment used to name as the unreachable second one is gone entirely
+// (chore/retire-the-dead-landing-app). The 76 destinations this app really has are views in
+// nested folders, and they already have the drawer. So the rail holds ACTIONS — which is also
+// the shape of the bar along the bottom of his own phone: all 23 of `app.json`'s
 // `mobileToolbarCommands` are commands and none of them is a destination.
 //
 // The sibling who built the top bar refused a desktop rail on the grounds that it would be "two
@@ -754,10 +755,14 @@ describe("7. the rail is one element, and it holds actions", () => {
     for (const forbidden of ["/app/new", "/app/rename", "/app/move", "/app/delete"]) {
       assert.ok(!CODE.includes(forbidden), `the chrome grew a write path: ${forbidden}`);
     }
+    // "/app/capture", "/app/done" and "/app/state" left this list when the dead `#app` to-do
+    // screen that was their only caller was removed (chore/retire-the-dead-landing-app) — the
+    // worker still serves those routes (out of scope for that change), this page just never
+    // calls them any more.
     const writes = [...CODE.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(
       [...new Set(writes)].sort(),
-      ["/app/capture", "/app/done", "/app/edit-file", "/app/graph", "/app/state",
+      ["/app/edit-file", "/app/graph",
        "/auth/login/options", "/auth/login/verify", "/auth/logout",
        "/auth/register/options", "/auth/register/verify"],
       "the page calls an endpoint it did not before",
