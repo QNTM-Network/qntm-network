@@ -10,6 +10,7 @@
     "test": "node --test \"tests/**/*.test.mjs\"",
     "check": "npm run typecheck && npm run build && npm test",
     "check:declarations": "node scripts/checkdeclarations.mjs",
+    "check:operations": "node scripts/check-operation-completeness.mjs",
     "generate:structural": "node scripts/generate-structural-declaration.mjs",
     "generate:structural:check": "node scripts/generate-structural-declaration.mjs --check",
     "generate:qualification": "node scripts/generate-qualification-declaration.mjs",
