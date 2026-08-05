@@ -62,6 +62,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+import monorepo_config
 import structlog
 
 # `bundle.load()` emits ~50KB of `compiling_rule` debug records. This script's output IS its stdout
@@ -73,7 +74,9 @@ from qntm_graph.patterns.engine import matches_pattern  # noqa: E402
 from qntm_md.bundle import load as bundle_load  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG_DIR = REPO_ROOT.parents[2] / "qntm" / "apps" / "qntm-md" / "config"
+# LOCATED, not counted to. See scripts/monorepo_config.py: a fixed `parents[2]` was right from a
+# worktree and one level too far from the trunk clone, where it resolved to $HOME/qntm — the vault.
+DEFAULT_CONFIG_DIR = monorepo_config.config_dir(REPO_ROOT)
 DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "qualification-agreement.json"
 
 # The three fields every published predicate ranges over. GENERATED from `RESOLVABLE_FIELDS` in

@@ -35,12 +35,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import monorepo_config
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "day-boundary-agreement.json"
 
-# The engine source lives in the monorepo, read-only, three levels up from this worktree — the
-# same relative shape `scripts/resolution-agreement.py`'s own `DEFAULT_CONFIG_DIR` uses.
-ENGINE_SRC = REPO_ROOT.parents[2] / "qntm" / "apps" / "qntm-md" / "src"
+# The engine source lives in the monorepo, read-only. LOCATED, not counted to: the fixed
+# `parents[2]` this replaced was right from a worktree and one level too far from the trunk clone,
+# where it resolved to $HOME/qntm — the operator's live vault. See scripts/monorepo_config.py.
+ENGINE_SRC = monorepo_config.engine_src(REPO_ROOT)
 if str(ENGINE_SRC) not in sys.path:
     sys.path.insert(0, str(ENGINE_SRC))
 

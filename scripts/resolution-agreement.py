@@ -55,6 +55,7 @@ import logging
 import sys
 from pathlib import Path
 
+import monorepo_config
 import structlog
 import yaml
 
@@ -82,7 +83,9 @@ from qntm_md.render.section_builder import (  # noqa: E402
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG_DIR = REPO_ROOT.parents[2] / "qntm" / "apps" / "qntm-md" / "config"
+# LOCATED, not counted to. See scripts/monorepo_config.py: a fixed `parents[2]` was right from a
+# worktree and one level too far from the trunk clone, where it resolved to $HOME/qntm — the vault.
+DEFAULT_CONFIG_DIR = monorepo_config.config_dir(REPO_ROOT)
 DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "resolution-agreement.json"
 
 

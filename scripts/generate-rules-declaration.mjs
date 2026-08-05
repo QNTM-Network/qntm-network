@@ -26,11 +26,12 @@
  *   node scripts/generate-rules-declaration.mjs                 write presentation.json
  *   node scripts/generate-rules-declaration.mjs --check         diff only, exit 1 if stale
  *   node scripts/generate-rules-declaration.mjs --config-dir X  override the monorepo config path
+ *   node scripts/generate-rules-declaration.mjs --check --require-config  ... and FAIL if there is no config to check
  */
 
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
+import { DEFAULT_CONFIG_DIR, REPO_ROOT, notCheckedReport } from "./monorepo-config.mjs";
 import { Ledger, reportDropped } from "./ledger.mjs";
 import { compile, GenerationError, RULES_PREFIX, PATTERNS_PREFIX, MARKERS_KEY } from "./compile-rules.mjs";
 
@@ -99,9 +100,13 @@ export function generateRules(configDir, ledger = new Ledger()) {
 // ── CLI ──────────────────────────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const args = { check: false, configDir: DEFAULT_CONFIG_DIR };
+  const args = { check: false, requireConfig: false, configDir: DEFAULT_CONFIG_DIR };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--check") args.check = true;
+    // --require-config turns "there was nothing to check" from exit 3 into exit 1. CI never passes
+    // it, so the runner keeps its green tick on a genuinely absent monorepo; a local caller that
+    // MEANT to check the operator's config passes it and finds out when the check did not run.
+    else if (argv[i] === "--require-config") args.requireConfig = true;
     else if (argv[i] === "--config-dir") args.configDir = resolve(argv[++i]);
     else throw new GenerationError(`unknown flag: ${argv[i]}`);
   }
@@ -111,9 +116,8 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!existsSync(args.configDir)) {
-    console.error(`config dir not found: ${args.configDir}`);
-    console.error("(this is expected in CI, which does not check out the monorepo)");
-    process.exit(3);
+    for (const line of notCheckedReport(args.configDir, args.requireConfig)) console.error(line);
+    process.exit(args.requireConfig ? 1 : 3);
   }
 
   const ledger = new Ledger();
