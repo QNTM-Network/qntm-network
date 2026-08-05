@@ -450,6 +450,53 @@ describe("6. GRAPH-DEPENDENT PATTERNS — undecidable, never silently skipped, n
     assert.equal(reading.partial, false, "nothing partial fired — only the fully-decidable rule did");
   });
 
+  test("AND THE PASS SAYS WHAT IT COULD NOT CONSULT — the answer is not silently treated as complete", () => {
+    // ── THE MEASUREMENT THIS CLOSES, IN THE OPERATOR'S OWN INBOX ──
+    //
+    // For one freshly typed `- [ ] something #task` the published table holds 25 rules: 1 fires, 7
+    // are structurally undecidable in a browser (a one-hop `children:`/`parents:` edge step), 2
+    // match with a false `when`, 15 do not match. `applyRules` has always reported the seven in
+    // `RulePassResult.undecidable`. The READER threw them away: the old `rulesReadingFor` surfaced
+    // that list only when `applied.length === 0`, which is unreachable the moment anything fires.
+    // So the register printed "rules: decided" while 28% of the table went unconsulted. He reported
+    // it as "rules not reliable" and he was right.
+    //
+    // THIS FIXTURE IS THE SAME SHAPE IN MINIATURE — one rule fires, one is undecidable — which is
+    // exactly the case the old reader was silent about.
+    const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.coverage.kind, "partial", "an answer reached with a rule left unconsulted must say so");
+    assert.deepEqual(
+      reading.coverage.unconsulted,
+      ["graph-dependent-promotes"],
+      "the unconsulted rules are NAMED, never counted — a reader that cannot say which cannot act on it",
+    );
+  });
+
+  test("BUT NOTHING THE OPERATOR SEES CHANGED — the badge is byte-identical to what shipped", () => {
+    // COVERAGE IS EXPRESSIBLE, NOT SURFACED, AND THAT SPLIT IS THE WHOLE OF THIS STEP. Showing it
+    // changes what he reads, which is a separate, separately reviewable change; making the state
+    // representable is what stops the next change having to invent a place to put it.
+    const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    assert.equal(page.__rulesDiagnosticFor(reading), "rules: decided");
+    page.__updateRulesBadge(reading);
+    assert.equal(elements.get("rulesBadge").textContent, "rules: decided");
+  });
+
+  test("A PASS THAT CONSULTED EVERYTHING SAYS SO TOO — `complete` is a measurement, not a default", () => {
+    // THE FALSIFIER FOR THE TEST ABOVE. If `coverage` were hardcoded to "partial", or derived from
+    // anything other than the pass's own `undecidable` list, this would fail: the same candidate
+    // against a table with the undecidable rule removed must report FULL coverage.
+    const DECIDABLE_ONLY = JSON.parse(JSON.stringify(DECLARATION));
+    delete DECIDABLE_ONLY.rules.rules["graph-dependent-promotes"];
+    DECIDABLE_ONLY.rules.order.sequence = ["stamps-a-field"];
+    page.__applyPresentation(DECIDABLE_ONLY);
+    const reading = page.__rulesReadingFor(VIEW, { ...CAPTURE });
+    assert.equal(reading.kind, "answer");
+    assert.deepEqual(reading.coverage, { kind: "complete" });
+    page.__applyPresentation(DECLARATION); // restore, so later tests in this file see the original
+  });
+
   test("WITH THE DECIDABLE RULE REMOVED, THE SAME CANDIDATE ABSTAINS VISIBLY — never a confident 'nothing applies'", () => {
     const UNDECIDABLE_ONLY = JSON.parse(JSON.stringify(DECLARATION));
     delete UNDECIDABLE_ONLY.rules.rules["stamps-a-field"];

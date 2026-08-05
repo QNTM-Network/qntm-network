@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importPage, installBrowser, makeWorkDir } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeWorkDir, RESOLVER_SOURCES, resolverSource } from "./fixtures/app-html-page.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-today-note");
@@ -258,10 +258,13 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
     assert.equal(pageCalls.length + paintCalls.length, 5, "todayNoteFor must reach applyEdit zero times");
   });
 
-  test("`.markdown` is still never ASSIGNED in app/", () => {
+  test("`.markdown` is still never ASSIGNED in app/ — the page, the painter, AND every resolver", () => {
     const assignments = (source) => source.match(/\.markdown\s*=(?!=)/g) ?? [];
     assert.deepEqual(assignments(APP_SOURCE), []);
     assert.deepEqual(assignments(PAINT_SOURCE), []);
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.deepEqual(assignments(source), [], `${name} assigns .markdown`);
+    }
   });
 
   test("todayNoteFor imports nothing from source.ts and produces no Contribution", () => {
@@ -303,19 +306,37 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
   // above already proves for the module: the instant is read ONCE per call, at the page, and
   // handed to a PURE function (`todayFor`/`applyRules`) as a parameter — neither `today.ts` nor
   // `rules.ts` ever reads the clock itself. Two audited call sites, not an unbounded one.
-  test("Date.now() is called from exactly two places in app/index.html's CODE — sayAsOf and rulesReadingFor", () => {
+  test("Date.now() is called from exactly two places in app/index.html's CODE — sayAsOf and resolverContextFor", () => {
     const appCode = codeOnly(APP_SOURCE);
     const fn = /function sayAsOf[\s\S]*?\n\}\n/.exec(appCode)?.[0];
     assert.ok(fn, "sayAsOf was not found — this test is checking the wrong source");
     assert.match(fn, /Date\.now\(\)/, "sayAsOf must call Date.now() itself — one of the two legitimate call sites");
-    const rulesFn = /function rulesReadingFor[\s\S]*?\n\}\n/.exec(appCode)?.[0];
-    assert.ok(rulesFn, "rulesReadingFor was not found — this test is checking the wrong source");
+    // THE SECOND SITE MOVED AND THE RULE DID NOT. `rulesReadingFor` is `rulesSpec.read` now
+    // (app/present/resolvers/rules.ts), and a module reading the clock is exactly what today.ts's
+    // own rule refuses. So the page supplies `now` on the `CommitContext` and the resolver calls
+    // `ctx.now()` at the identical point `Date.now()` was called before — after its own gates,
+    // once, per commit. The clock is still read at the PAGE and handed to a pure function; what
+    // changed is which page function does the reading, not the discipline.
+    const contextFn = /function resolverContextFor[\s\S]*?\n\}\n/.exec(appCode)?.[0];
+    assert.ok(contextFn, "resolverContextFor was not found — this test is checking the wrong source");
     assert.match(
-      rulesFn,
-      /Date\.now\(\)/,
-      "rulesReadingFor must call Date.now() itself — the other legitimate call site, for $cycle_today at commit time",
+      contextFn,
+      /now: \(\) => Date\.now\(\)/,
+      "resolverContextFor must supply the clock reader — the other legitimate call site",
     );
     const allCalls = appCode.match(/Date\.now\(\)/g) ?? [];
     assert.equal(allCalls.length, 2, "Date.now() must be called from exactly two places in app/index.html's code");
+  });
+
+  test("NO RESOLVER READS THE CLOCK ITSELF — the rule today.ts keeps, kept by every module that moved", () => {
+    // THE HALF OF THE OLD ASSERTION THAT WOULD OTHERWISE HAVE BEEN LOST. Counting the page's own
+    // call sites proves nothing once code can leave the page; this is what stops a resolver
+    // reaching for `Date.now()` directly now that it is a module like any other.
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.doesNotMatch(codeOnly(source), /Date\.now\(\)/, `${name} reads the clock itself`);
+    }
+    // AND THE INSTANT IS STILL HANDED TO A PURE FUNCTION. `rulesSpec.read` calls `ctx.now()` and
+    // passes the result to `todayFor`, exactly as the page used to.
+    assert.match(resolverSource("rules"), /todayFor\(ctx\.now\(\)/);
   });
 });

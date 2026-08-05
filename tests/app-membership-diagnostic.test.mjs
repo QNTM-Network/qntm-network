@@ -37,11 +37,11 @@
 
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { importPage, installBrowser, makeWorkDir, assertMutated } from "./fixtures/app-html-page.mjs";
+import { importPage, installBrowser, makeWorkDir, assertMutated, RESOLVER_SOURCES, resolverSource, repointBundle, REPO } from "./fixtures/app-html-page.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-membership-diagnostic");
@@ -289,14 +289,25 @@ describe("4. MUTATION PROOF — neuter the abstains branch's text, and the falsi
   before(async () => {
     installBrowser();
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
-    page = await importPage(
-      WORK_MUTANT,
-      (source) =>
-        assertMutated(
-          source,
-          'return `membership: abstained — ${reading.because}`;',
-          'return "membership: decided";',
-        ),
+    // THE SEAM IS THE BUNDLE, NOT THE PAGE — `membershipSpec.show` lives in
+    // `app/present/resolvers/membership.ts`, which the page imports as `/dist/present.js`, so the
+    // mutant is a copy of the bundle with the page (and the fixture's own resolver seam) pointed at
+    // it. Exactly the seam tests/app-vim-wiring.test.mjs cuts, and for the same reason.
+    //
+    // THE PATTERN IS THE BUNDLE'S OWN TEXT, `\u2014` AND ALL. esbuild escapes the em dash on the
+    // way out; a pattern carrying the literal character would silently match nothing, and
+    // `assertMutated` refuses that rather than producing a green proof against unmodified code.
+    const mutantBundle = join(WORK_MUTANT, "present.mutated.js");
+    writeFileSync(
+      mutantBundle,
+      assertMutated(
+        readFileSync(join(REPO, "dist", "present.js"), "utf8"),
+        "membership: abstained \\u2014 ${reading.because}",
+        "membership: decided",
+      ),
+    );
+    page = await importPage(WORK_MUTANT, (source) =>
+      repointBundle(source, pathToFileURL(mutantBundle).href),
     );
     page.__applyPresentation(FAKE_DECLARATION);
   });
@@ -364,18 +375,28 @@ describe("5. NOTHING LOCAL REACHES A WRITE — re-verified, and the new function
     assert.equal(pageCalls.length + paintCalls.length, 5, "the abstention register must reach applyEdit zero times");
   });
 
-  test("`.markdown` is still never ASSIGNED in app/", () => {
+  test("`.markdown` is still never ASSIGNED in app/ — the page, the painter, AND every resolver", () => {
     const assignments = (source) => source.match(/\.markdown\s*=(?!=)/g) ?? [];
     assert.deepEqual(assignments(APP_SOURCE), []);
     assert.deepEqual(assignments(PAINT_SOURCE), []);
+    // WIDENED WHEN THE RESOLVERS MOVED OFF THE PAGE. Two files was the whole of `app/`'s decision
+    // code when this guard was written; the axes that could plausibly rewrite a commit now live in
+    // `app/present/resolvers/`, and a grep that had stayed pointed at two files would have gone on
+    // passing while protecting nothing. `RESOLVER_SOURCES` enumerates the directory rather than
+    // listing it, so a fifth resolver is covered the day it lands.
+    for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
+      assert.deepEqual(assignments(source), [], `${name} assigns .markdown`);
+    }
   });
 
-  test("membershipReadingFor, membershipDiagnosticFor and updateMembershipBadge import nothing from source.ts", () => {
-    for (const name of ["membershipReadingFor", "membershipDiagnosticFor", "updateMembershipBadge"]) {
-      const fn = new RegExp(`function ${name}[\\s\\S]*?\\n}\\n`).exec(APP_SOURCE)?.[0];
-      assert.ok(fn, `${name} was not found — this test is checking the wrong source`);
-      assert.ok(!/\bapplyEdit\(/.test(fn), `${name} calls applyEdit`);
-    }
+  test("the membership resolver imports nothing from source.ts — no read, say or show can produce a SourceEdit", () => {
+    // THE THREE FUNCTIONS THIS TEST NAMED ARE ONE `ResolverSpec` NOW (`membershipSpec`,
+    // app/present/resolvers/membership.ts), so the grep is against the whole module rather than
+    // three extracted function bodies — a strictly wider claim than the one it replaces, and one a
+    // fourth function added to that spec cannot slip past.
+    const source = resolverSource("membership");
+    assert.doesNotMatch(source, /\bapplyEdit\b/, "the membership resolver reaches applyEdit");
+    assert.doesNotMatch(source, /source\.js/, "the membership resolver imports source.ts");
   });
 
   test("membershipDiagnosticFor and membershipNoteFor agree on when a decision was reached — same underlying reading, never two", () => {
@@ -384,9 +405,16 @@ describe("5. NOTHING LOCAL REACHES A WRITE — re-verified, and the new function
     // `membershipDiagnosticFor` two SEPARATE evaluations instead of sharing
     // `membershipReadingFor`, this is the test that would catch them disagreeing about whether an
     // abstention occurred, not merely about the words used to report it.
-    const fn = /function membershipNoteFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.match(fn, /membershipReadingFor\(view, commit\)/);
-    const diagFn = /function membershipDiagnosticFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.match(diagFn, /membershipReadingFor\(view, commit\)/);
+    // THE TIE IS STRUCTURAL NOW, NOT A CONVENTION TWO FUNCTIONS HAPPEN TO KEEP. `defineResolver`
+    // (app/present/resolve.ts) calls `read` ONCE and hands that ONE value to `say` and `show`
+    // alike, so the two cannot be given separate evaluations without changing the runner itself —
+    // which is what this asserts, in place of grepping two page functions for the same call.
+    const runner = /run\(ctx: CommitContext\): ResolverRun \{[\s\S]*?\n    \},/.exec(
+      RESOLVER_SOURCES["app/present/resolve.ts"],
+    )?.[0];
+    assert.ok(runner, "defineResolver's run() was not found — this test is checking the wrong source");
+    assert.equal((runner.match(/spec\.read\(/g) ?? []).length, 1, "read must be called exactly once per commit");
+    assert.match(runner, /spec\.say\(reading\)/);
+    assert.match(runner, /diagnosticOf\(spec, reading\)/);
   });
 });

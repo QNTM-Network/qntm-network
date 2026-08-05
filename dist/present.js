@@ -4567,16 +4567,553 @@ var PredictSurface = class {
     return { predictions: [], withdrawn, animate: true };
   }
 };
+
+// app/present/resolve.ts
+function graphSnapshotOf(graphData) {
+  const graph = graphData?.snapshot?.graph;
+  if (graph === void 0 || graph === null) {
+    return null;
+  }
+  const { nodes, edges } = graph;
+  if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+    return null;
+  }
+  return { nodes, edges };
+}
+var COMPLETE = { kind: "complete" };
+function coverageOf(unconsulted) {
+  return unconsulted.length === 0 ? COMPLETE : { kind: "partial", unconsulted };
+}
+var NOT_EVALUATED = { kind: "not-evaluated" };
+function diagnosticOf(spec, reading) {
+  const text = spec.show(reading);
+  if (text === "") {
+    return null;
+  }
+  return { badge: spec.badge, text, abstained: text.startsWith(`${spec.id}: abstained`) };
+}
+function defineResolver(spec) {
+  return {
+    id: spec.id,
+    run(ctx) {
+      const reading = spec.read(ctx);
+      return {
+        id: spec.id,
+        note: spec.say(reading),
+        diagnostic: diagnosticOf(spec, reading),
+        armings: spec.arm === void 0 ? [] : spec.arm(ctx, reading)
+      };
+    }
+  };
+}
+function runResolvers(resolvers, ctx) {
+  const runs = [];
+  const notes = [];
+  const diagnostics = [];
+  const placements = [];
+  const predictions = [];
+  for (const resolver of resolvers) {
+    const run = resolver.run(ctx);
+    runs.push(run);
+    if (run.note !== "") {
+      notes.push(run.note);
+    }
+    if (run.diagnostic !== null) {
+      diagnostics.push(run.diagnostic);
+    }
+    for (const arming of run.armings) {
+      if (arming.surface === "settle") {
+        placements.push(arming.placement);
+      } else {
+        predictions.push(arming.prediction);
+      }
+    }
+  }
+  return { runs, notes, diagnostics, placements, predictions };
+}
+function armSettle(surface, base, viewId, placements) {
+  if (base === null) {
+    return;
+  }
+  for (const placement of placements) {
+    surface.arm(base, viewId, placement);
+  }
+}
+function armPredict(surface, base, viewId, predictions) {
+  if (base === null) {
+    return;
+  }
+  surface.arm(base, viewId, predictions);
+}
+
+// app/present/resolvers/membership.ts
+var membershipSpec = {
+  id: "membership",
+  badge: "membershipBadge",
+  read(ctx) {
+    const { view, commit } = ctx;
+    const qualification = ctx.declared.qualification;
+    if (qualification === void 0 || commit.kind !== "set-line") {
+      return NOT_EVALUATED;
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return NOT_EVALUATED;
+    }
+    const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
+    const before = membershipFor(view.id, sectionId, beforeLine, qualification);
+    if (before.kind !== "answer") {
+      return { kind: "abstains", because: before.because };
+    }
+    const after = membershipFor(view.id, sectionId, commit.text, qualification);
+    if (after.kind !== "answer") {
+      return { kind: "abstains", because: after.because };
+    }
+    return { kind: "answer", coverage: COMPLETE, before: before.answer, after: after.answer };
+  },
+  say(reading) {
+    if (reading.kind !== "answer") {
+      return "";
+    }
+    if (reading.before.belongs && !reading.after.belongs) {
+      return `this line will leave ${reading.after.sectionName}`;
+    }
+    return "";
+  },
+  show(reading) {
+    if (reading.kind === "not-evaluated") {
+      return "";
+    }
+    if (reading.kind === "abstains") {
+      return `membership: abstained \u2014 ${reading.because}`;
+    }
+    return "membership: decided";
+  }
+};
+
+// app/present/resolvers/ordering.ts
+var SIBLINGS_DROPPED_UNREPORTED = {
+  kind: "unknown",
+  because: "ordering-drops-unreadable-siblings-without-reporting-them"
+};
+var orderingSpec = {
+  id: "ordering",
+  badge: "orderingBadge",
+  read(ctx) {
+    const { view, commit } = ctx;
+    const { qualification, resolution } = ctx.declared;
+    if (resolution === void 0 || qualification === void 0 || commit.kind !== "set-line") {
+      return NOT_EVALUATED;
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return NOT_EVALUATED;
+    }
+    const reading = resolveOrderingFor(
+      view.id,
+      sectionId,
+      commit.source,
+      commit.lineIndex,
+      commit.text,
+      resolution.ordering,
+      resolution.orderingFields,
+      resolution.defaultOrdering,
+      resolution.priorityRank
+    );
+    if (reading.kind === "abstains") {
+      return { kind: "abstains", because: reading.because };
+    }
+    return {
+      kind: "answer",
+      coverage: SIBLINGS_DROPPED_UNREPORTED,
+      answer: reading.answer,
+      sectionName: resolution.ordering[view.id]?.[sectionId]?.name ?? sectionId
+    };
+  },
+  say(reading) {
+    if (reading.kind !== "answer" || !reading.answer.moved) {
+      return "";
+    }
+    return `this line will move within ${reading.sectionName}`;
+  },
+  show(reading) {
+    if (reading.kind === "not-evaluated") {
+      return "";
+    }
+    if (reading.kind === "abstains") {
+      return `ordering: abstained \u2014 ${reading.because}`;
+    }
+    return "ordering: decided";
+  },
+  /**
+   * THE PLACEMENT — computed from `ctx`, NOT from `reading`, and that asymmetry is real rather than
+   * an oversight. `read` answers "did the rank change" (`resolveOrderingFor`); this answers "which
+   * row does it now sit before" (`resolveOrderingPlacementFor`) — a different published function
+   * against a different address source for an insert. The two questions do not reduce to one, so
+   * `arm` takes the context and asks its own. It is still PURE, and it still runs exactly once per
+   * commit, which is what the shared-reading rule is actually protecting.
+   */
+  arm(ctx) {
+    const { view, commit } = ctx;
+    const { qualification, resolution } = ctx.declared;
+    if (resolution === void 0 || qualification === void 0 || commit.markdown === null) {
+      return [];
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
+    const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return [];
+    }
+    const reading = resolveOrderingPlacementFor(
+      view.id,
+      sectionId,
+      addressSource,
+      commit.lineIndex,
+      commit.text,
+      resolution.ordering,
+      resolution.orderingFields,
+      resolution.defaultOrdering,
+      resolution.priorityRank
+    );
+    if (reading.kind !== "answer") {
+      return [];
+    }
+    const needsPlacement = commit.kind === "insert-line" ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex : reading.placement.moved;
+    if (!needsPlacement) {
+      return [];
+    }
+    return [
+      {
+        surface: "settle",
+        placement: { lineIndex: commit.lineIndex, beforeLineIndex: reading.placement.beforeLineIndex }
+      }
+    ];
+  }
+};
+
+// app/present/resolvers/rules.ts
+var rulesSpec = {
+  id: "rules",
+  badge: "rulesBadge",
+  read(ctx) {
+    const { view, commit } = ctx;
+    const { qualification, resolution, rules: rulesTable } = ctx.declared;
+    if (rulesTable === void 0 || qualification === void 0 || resolution === void 0) {
+      return NOT_EVALUATED;
+    }
+    if (commit.kind !== "insert-line" || commit.markdown === null) {
+      return NOT_EVALUATED;
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const sectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return NOT_EVALUATED;
+    }
+    const section = qualification.sections[view.id]?.[sectionId];
+    if (section === void 0) {
+      return NOT_EVALUATED;
+    }
+    const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
+    const fields = resolveLineFields(line, section, qualification);
+    if (typeof fields === "string") {
+      return { kind: "abstains", because: fields };
+    }
+    const today = todayFor(ctx.now(), resolution.dayBoundary);
+    const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : void 0);
+    if (pass.applied.length === 0) {
+      if (pass.undecidable.length > 0) {
+        return { kind: "abstains", because: "rule-pattern-needs-graph-traversal" };
+      }
+      return { kind: "answer", coverage: COMPLETE, applied: [], text: null, partial: false };
+    }
+    const rendered = renderRuleEffects(
+      line,
+      pass.applied,
+      qualification.tokens.node_type ?? {},
+      qualification.tokens,
+      rulesTable.fieldMarkers
+    );
+    if (rendered.kind === "abstains") {
+      return { kind: "abstains", because: `rendering-${rendered.because}` };
+    }
+    return {
+      kind: "answer",
+      // THE SEVEN THIS PASS COULD NOT CONSULT, CARRIED RATHER THAN DROPPED — see this module's
+      // header for the measurement, and `Coverage`'s own header for why it rides on the answer.
+      coverage: coverageOf(pass.undecidable),
+      applied: pass.applied,
+      text: rendered.kind === "rendered" ? rendered.text : null,
+      partial: pass.partial.length > 0
+    };
+  },
+  say(reading) {
+    if (reading.kind !== "answer" || reading.applied.length === 0 || reading.text === null) {
+      return "";
+    }
+    const words = reading.applied.map((effect) => {
+      if (effect.verb === "retype") return `becomes ${effect.to}`;
+      if (effect.verb === "set") return `sets ${effect.field}`;
+      return `clears ${effect.field}`;
+    });
+    return `this line ${words.join(", ")}`;
+  },
+  show(reading) {
+    if (reading.kind === "not-evaluated") {
+      return "";
+    }
+    if (reading.kind === "abstains") {
+      return `rules: abstained \u2014 ${reading.because}`;
+    }
+    return reading.partial ? "rules: decided (partial \u2014 action(s) not modelled)" : "rules: decided";
+  },
+  /**
+   * THE CHILD'S OWN PREDICTION — the row `commit` just became, decorated with what this pass says
+   * it will carry once the cycle answers.
+   *
+   * SCOPED TO EXACTLY THE CASES `read` ALREADY CALLS "answer", NEVER TO AN ABSTENTION.
+   * `reading.text === null` is the third silent case: a pass ran and genuinely decided nothing (an
+   * `unset` on a field that was never set), a real answer with no characters to show.
+   *
+   * THE TEXT IS THE DELTA, NOT THE WHOLE LINE. `reading.text` is `renderRuleEffects`'s own
+   * `line + appended`, so the characters the operator already typed are sliced back off — the row
+   * already shows them, and repeating them would be the chip doubling the line rather than adding.
+   */
+  arm(ctx, reading) {
+    const { commit } = ctx;
+    if (commit.kind !== "insert-line" || commit.markdown === null) {
+      return [];
+    }
+    if (reading.kind !== "answer" || reading.text === null) {
+      return [];
+    }
+    const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
+    const delta = reading.text.slice(line.length).trim();
+    return delta === "" ? [] : [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }];
+  }
+};
+
+// app/present/resolvers/promotion.ts
+var WAITING_FOR_TAG_BINDING = {
+  tag: "#waiting-for",
+  edgeType: "WAITING_FOR",
+  edgeSource: "position"
+};
+function edgeSourceOfFor(structural) {
+  return (edgeType) => {
+    const indent = structural?.indent;
+    if (indent !== void 0 && indent.edgeType === edgeType) {
+      return indent.edgeSource;
+    }
+    if (WAITING_FOR_TAG_BINDING.edgeType === edgeType) {
+      return WAITING_FOR_TAG_BINDING.edgeSource;
+    }
+    return void 0;
+  };
+}
+function prospectiveEdgeBinding(line, structural) {
+  if (tagSpans(line).some((span) => span.text === WAITING_FOR_TAG_BINDING.tag)) {
+    return { edgeType: WAITING_FOR_TAG_BINDING.edgeType };
+  }
+  const indent = structural?.indent;
+  if (indent === void 0) {
+    return void 0;
+  }
+  return { edgeType: indent.edgeType };
+}
+function structuralParentLineIndex(lines, lineIndex) {
+  const leadingWhitespace = (line) => (/^\s*/.exec(line) ?? [""])[0].length;
+  const childIndent = leadingWhitespace(lines[lineIndex] ?? "");
+  for (let i = lineIndex - 1; i >= 0; i -= 1) {
+    const line = lines[i] ?? "";
+    if (line.trim() === "") continue;
+    if (leadingWhitespace(line) < childIndent) return i;
+  }
+  return null;
+}
+var bareId = (id) => String(id).replace(/^qntm:/i, "");
+function parentCandidateFor(parentLine, parentSection, snapshot, qualification) {
+  const stamped = stampSpans(parentLine);
+  const first = stamped[0];
+  if (first !== void 0) {
+    if (snapshot === null) {
+      return { abstain: "graph-not-loaded" };
+    }
+    const wanted = bareId(first.id);
+    const node = snapshot.nodes.find((n) => bareId(n.id) === wanted);
+    if (node === void 0) {
+      return { abstain: "parent-not-in-graph" };
+    }
+    return { id: node.id, fields: { node_type: node.type, ...node.fields } };
+  }
+  const fields = resolveLineFields(parentLine, parentSection, qualification);
+  if (typeof fields === "string") {
+    return { abstain: `parent-${fields}` };
+  }
+  return { id: null, fields };
+}
+function structuralRelationshipChangeFor(commit, afterParentLineIndex) {
+  const beforeParentLineIndex = commit.kind === "set-line" ? structuralParentLineIndex(commit.source.split("\n"), commit.lineIndex) : null;
+  if (beforeParentLineIndex === afterParentLineIndex) {
+    return { kind: "unchanged" };
+  }
+  if (afterParentLineIndex === null) {
+    return { kind: "lost" };
+  }
+  return { kind: "gained", parentLineIndex: afterParentLineIndex };
+}
+var promotionSpec = {
+  id: "parent",
+  badge: "parentBadge",
+  read(ctx) {
+    const { view, commit } = ctx;
+    const { structural, qualification, resolution, rules: rulesTable } = ctx.declared;
+    if (rulesTable === void 0 || qualification === void 0 || resolution === void 0) {
+      return NOT_EVALUATED;
+    }
+    if (commit.markdown === null) {
+      return NOT_EVALUATED;
+    }
+    const lines = commit.markdown.split("\n");
+    const parentLineIndex = structuralParentLineIndex(lines, commit.lineIndex);
+    const relationship = structuralRelationshipChangeFor(commit, parentLineIndex);
+    if (relationship.kind === "unchanged") {
+      return NOT_EVALUATED;
+    }
+    if (relationship.kind === "lost") {
+      return { kind: "abstains", because: "structural-relationship-removed" };
+    }
+    const parentAt = relationship.parentLineIndex;
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const childSectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
+    const childSection = childSectionId === null ? void 0 : qualification.sections[view.id]?.[childSectionId];
+    if (childSection === void 0) {
+      return { kind: "abstains", because: "no-section-declaration" };
+    }
+    const childLine = lines[commit.lineIndex] ?? "";
+    const childFieldsRaw = resolveLineFields(childLine, childSection, qualification);
+    if (typeof childFieldsRaw === "string") {
+      return { kind: "abstains", because: `child-${childFieldsRaw}` };
+    }
+    const binding = prospectiveEdgeBinding(childLine, structural);
+    if (binding === void 0) {
+      return NOT_EVALUATED;
+    }
+    const parentSectionId = sectionAt(commit.markdown, parentAt, view.id, sectionOrder);
+    const parentSection = parentSectionId === null ? void 0 : qualification.sections[view.id]?.[parentSectionId];
+    if (parentSection === void 0) {
+      return { kind: "abstains", because: "no-section-declaration" };
+    }
+    const parentLine = lines[parentAt] ?? "";
+    const snapshot = ctx.graph;
+    const parentCandidate = parentCandidateFor(parentLine, parentSection, snapshot, qualification);
+    if ("abstain" in parentCandidate) {
+      return { kind: "abstains", because: parentCandidate.abstain };
+    }
+    const childPass = applyRules(childFieldsRaw, rulesTable, void 0);
+    const prospective = { edgeType: binding.edgeType, fields: childPass.fields };
+    const pass = applyGraphAwareRules(
+      parentCandidate.fields,
+      parentCandidate.id,
+      rulesTable,
+      snapshot ?? { nodes: [], edges: [] },
+      edgeSourceOfFor(structural),
+      prospective,
+      void 0
+    );
+    if (pass.applied.length === 0 && pass.undecidable.length > 0) {
+      return { kind: "abstains", because: "graph-match-undecidable" };
+    }
+    return {
+      kind: "answer",
+      coverage: coverageOf(pass.undecidable),
+      parentLineIndex: parentAt,
+      applied: pass.applied,
+      partial: pass.partial.length > 0
+    };
+  },
+  say(reading) {
+    if (reading.kind !== "answer" || reading.applied.length === 0) {
+      return "";
+    }
+    const words = reading.applied.map((effect) => {
+      if (effect.verb === "retype") return `becomes ${effect.to}`;
+      if (effect.verb === "set") return `sets ${effect.field}`;
+      return `clears ${effect.field}`;
+    });
+    return `the row above ${words.join(", ")}`;
+  },
+  show(reading) {
+    if (reading.kind === "not-evaluated") {
+      return "";
+    }
+    if (reading.kind === "abstains") {
+      return `parent: abstained \u2014 ${reading.because}`;
+    }
+    if (reading.applied.length === 0) {
+      return "parent: decided \u2014 no change";
+    }
+    return reading.partial ? "parent: decided (partial \u2014 action(s) not modelled)" : "parent: decided";
+  },
+  /**
+   * THE PARENT'S OWN PREDICTION — the row ABOVE `commit`, decorated with the retype a promotion rule
+   * decided for it, when this app can spell that retype onto a line at all.
+   *
+   * WHY ONLY THE `retype` EFFECTS. `task-with-open-part-of-child-becomes-outcome` and its three
+   * siblings ALWAYS pair their retype with a `set_field` targeting `auto_outcome`/`auto_habit`, and
+   * `vocabulary/markers.yaml` declares no trailing marker for either — `renderRuleEffects`'s
+   * ALL-OR-NOTHING rule ("never show a line half-corrected") would therefore abstain on EVERY real
+   * promotion this app will ever see, silencing the one scenario this whole axis exists to paint.
+   * That rule protects a claim about what a LINE'S OWN CHARACTERS will become; `auto_outcome` never
+   * becomes characters at all, in this decoration OR in the engine's own eventual content. Filtering
+   * to `retype` before rendering is not routing around the guard; it is asking the guard the
+   * question it can answer, and `show` above still reports the retype AND the un-renderable set
+   * together, in words.
+   */
+  arm(ctx, reading) {
+    const { commit } = ctx;
+    const qualification = ctx.declared.qualification;
+    if (reading.kind !== "answer" || reading.applied.length === 0) {
+      return [];
+    }
+    if (qualification === void 0 || commit.markdown === null) {
+      return [];
+    }
+    const retypes = reading.applied.filter((effect) => effect.verb === "retype");
+    if (retypes.length === 0) {
+      return [];
+    }
+    const parentLine = commit.markdown.split("\n")[reading.parentLineIndex] ?? "";
+    const rendered = renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
+    if (rendered.kind !== "rendered") {
+      return [];
+    }
+    const text = rendered.text.slice(parentLine.length).trim();
+    return text === "" ? [] : [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text } }];
+  }
+};
+
+// app/present/resolvers/registry.ts
+var RESOLVERS = [
+  defineResolver(membershipSpec),
+  defineResolver(orderingSpec),
+  defineResolver(rulesSpec),
+  defineResolver(promotionSpec)
+];
 export {
   ANCHOR_TRUST,
   AcceptedSource,
   BaseSurface,
+  COMPLETE,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
   DraftSurface,
   FocusSurface,
   INDENT_UNIT,
   ModeSurface,
+  NOT_EVALUATED,
   OWED_LIMIT,
   PICKUP_DELAYS,
   PickupSchedule,
@@ -4588,16 +5125,20 @@ export {
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,
   RESOLVABLE_FIELDS,
+  RESOLVERS,
   RULES_KEY2 as RULES_KEY,
   SPECIFICITY,
   STRUCTURAL_KEY,
   SettleSurface,
+  WAITING_FOR_TAG_BINDING,
   WRITE_ECHO_KEY,
   WriteRegister,
   applyEdit,
   applyGraphAwareRules,
   applyRuleActions,
   applyRules,
+  armPredict,
+  armSettle,
   baseOf,
   boundaryLine,
   carriesContent,
@@ -4606,11 +5147,16 @@ export {
   clampLine,
   classifyLine,
   cleanTitleFor,
+  coverageOf,
   defaultOrderingFor,
   defaultOrderingPlacementFor,
+  defineResolver,
+  diagnosticOf,
+  edgeSourceOfFor,
   evaluateWhen,
   existingLineCommit,
   extendsLine,
+  graphSnapshotOf,
   indentedLine,
   instanceAnchorFor,
   instanceOf,
@@ -4623,14 +5169,19 @@ export {
   matchesQualifier,
   matchesQualifierGraphAware,
   membershipFor,
+  membershipSpec,
   mintWriteToken,
   openLine,
   orderingFor,
   orderingPlacementFor,
+  orderingSpec,
   paint,
+  parentCandidateFor,
   placeDraft,
   placeFor,
   presentationFromDeclaration,
+  promotionSpec,
+  prospectiveEdgeBinding,
   qntmIdSpans,
   qualifierNeedsGraph,
   readConfigResolutionDeclaration,
@@ -4648,6 +5199,8 @@ export {
   resolveOrderingPlacementFor,
   resolveRelativeAnchor,
   resolveWeekEnd,
+  rulesSpec,
+  runResolvers,
   sectionAt,
   sectionForInsertAt,
   sectionOrderFor,
@@ -4656,6 +5209,8 @@ export {
   stampSpans,
   stampsLanded,
   stampsOwed,
+  structuralParentLineIndex,
+  structuralRelationshipChangeFor,
   tagSpans,
   titleSpans,
   todayFor,

@@ -49,8 +49,7 @@ import {
   makeEvent,
   makeWorkDir,
   REPO,
-  walk,
-} from "./fixtures/app-html-page.mjs";
+  walk, repointBundle } from "./fixtures/app-html-page.mjs";
 
 /**
  * THE MUTATION SEAM, AND WHY IT IS THE BUNDLE RATHER THAN THE PAGE — the same seam
@@ -67,8 +66,7 @@ function mutating(...pairs) {
     const file = join(workDir, "present.mutated.js");
     writeFileSync(file, mutated);
     const url = pathToFileURL(file).href;
-    const was = pathToFileURL(join(REPO, "dist", "present.js")).href;
-    return (source) => assertMutated(source, JSON.stringify(was), JSON.stringify(url));
+    return (source) => repointBundle(source, url);
   };
 }
 

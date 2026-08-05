@@ -46,7 +46,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertMutated, importPage, installBrowser, makeEvent, makeWorkDir } from "./fixtures/app-html-page.mjs";
+import { assertMutated, importPage, installBrowser, makeEvent, makeWorkDir, mutatingBundle } from "./fixtures/app-html-page.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -169,12 +169,16 @@ function postStub() {
  * caller starts from a deterministic line 0 regardless of how many keys came before it in the
  * same test.
  */
-async function freshPage(label, markdown = SOURCE, graph = GRAPH, mutate) {
+async function freshPage(label, markdown = SOURCE, graph = GRAPH, mutateFor) {
   const work = makeWorkDir(label);
   const { elements, document: doc } = installBrowser();
   const fetchImpl = postStub();
   globalThis.fetch = fetchImpl;
-  const page = await importPage(work, mutate);
+  // `mutateFor` IS A FACTORY, NOT A REWRITER, AND THE REASON IS THE MOVE. The code this file's
+  // mutation proofs target is `promotionSpec` (app/present/resolvers/promotion.ts) now, which the
+  // page imports as `/dist/present.js` — so a mutant is a COPY OF THE BUNDLE written beside the
+  // lifted page, and writing it needs the work directory. See `mutatingBundle` in the fixture.
+  const page = await importPage(work, mutateFor === undefined ? undefined : mutateFor(work));
   page.__applyPresentation(DECLARATION);
   page.__setGraphData({ snapshot: { generated_at: "2026-08-05T00:00:00Z", views: [{ ...VIEW, markdown }], graph } });
   page.paintView(VIEW.id);
@@ -218,25 +222,23 @@ describe("1. THE HEADLINE: an existing task, indented beneath another task with 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * The precise text `parentPromotionFor` reads today, right after its declaration/markdown guards —
- * matched exactly so a drift in either function's own wording fails this file loudly rather than
- * silently mutating nothing (`tests/fixtures/app-html-page.mjs`'s own `assertMutated` already
- * refuses that for us; this is what makes the refusal exact).
+ * The precise text `promotionSpec.read` reads today, right after its declaration/markdown guards,
+ * AS THE BUNDLE SPELLS IT — matched exactly so a drift in the module's own wording fails this file
+ * loudly rather than silently mutating nothing (`assertMutated` already refuses that for us; this
+ * is what makes the refusal exact).
  */
 const MARKDOWN_GUARD =
-  'if (commit.markdown === null) {\n    return { kind: "not-evaluated" };\n  }\n  const lines = commit.markdown.split("\\n");';
+  'if (commit.markdown === null) {\n      return NOT_EVALUATED;\n    }\n    const lines = commit.markdown.split("\\n");';
 
 /** The ORIGINAL gate, reinstated — `commit.kind !== "insert-line"` refuses BEFORE the relationship
  * is ever read, which is the exact shape of the defect this whole leg exists to close. */
-const withOldInsertLineOnlyGate = (source) =>
-  assertMutated(
-    source,
-    MARKDOWN_GUARD,
-    MARKDOWN_GUARD.replace(
-      'const lines = commit.markdown.split("\\n");',
-      'if (commit.kind !== "insert-line") {\n    return { kind: "not-evaluated" };\n  }\n  const lines = commit.markdown.split("\\n");',
-    ),
-  );
+const withOldInsertLineOnlyGate = mutatingBundle([
+  MARKDOWN_GUARD,
+  MARKDOWN_GUARD.replace(
+    'const lines = commit.markdown.split("\\n");',
+    'if (commit.kind !== "insert-line") {\n      return NOT_EVALUATED;\n    }\n    const lines = commit.markdown.split("\\n");',
+  ),
+]);
 
 describe("2. MUTATION PROOF — the pre-fix `insert-line`-only gate reproduces the defect, and only that gate", () => {
   test("RED: with the old gate restored, indenting an EXISTING line answers nothing", async () => {
@@ -321,8 +323,7 @@ describe("3. THE OUTDENT: `<` removes a structural relationship — abstained, n
 // ── MUTATION PROOF FOR THE LOSS — remove the "lost" abstention, watch the outdent stop abstaining ──
 
 const LOST_ABSTENTION = 'return { kind: "abstains", because: "structural-relationship-removed" };';
-const withoutLossAbstention = (source) =>
-  assertMutated(source, LOST_ABSTENTION, 'return { kind: "not-evaluated" };');
+const withoutLossAbstention = mutatingBundle([LOST_ABSTENTION, "return NOT_EVALUATED;"]);
 
 describe("MUTATION PROOF — removing the 'lost' branch stops the outdent from abstaining", () => {
   test("RED: without the abstention, the outdent falls silent instead of saying it cannot check", async () => {
