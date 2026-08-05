@@ -53,7 +53,7 @@
  * stops below `$HOME` without ever proposing a vault path.
  */
 
-import { statSync } from "node:fs";
+import { statSync, realpathSync } from "node:fs";
 import { resolve, dirname, join, parse } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -94,6 +94,26 @@ const isFile = (path) => {
 };
 
 /**
+ * A path's real location when it exists, and the path itself when it does not.
+ *
+ * The ceiling in `searchAncestors` is a STRING COMPARISON, and a string comparison between two
+ * spellings of the same directory is a comparison that says "different". This was not theoretical:
+ * a CI simulation with `$HOME=/tmp/ci-home` walked straight past its own ceiling, because macOS
+ * spells that directory `/private/tmp/ci-home` once Node has resolved the module path through the
+ * symlink. Both sides are normalised here so the guard compares directories, not spellings.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+function realOrSelf(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
  * Is `candidate` a checkout of the monorepo, as opposed to some other directory named `qntm`?
  *
  * @param {string} candidate
@@ -116,7 +136,8 @@ export function isMonorepoCheckout(candidate, fileExists = isFile) {
  * @returns {string[]}
  */
 export function searchAncestors(from, home) {
-  const ceiling = resolve(home);
+  // BOTH spellings of the ceiling, because either side of the comparison may arrive symlinked.
+  const ceilings = new Set([resolve(home), realOrSelf(resolve(home))]);
   const { root } = parse(resolve(from));
   const ancestors = [];
   let current = dirname(resolve(from));
@@ -124,7 +145,7 @@ export function searchAncestors(from, home) {
     // THE GUARD. `$HOME/qntm` is the operator's live vault. A walk that reaches `$HOME` is a walk
     // that can propose the vault as config, so it stops one short — and stops there whether or not
     // the vault currently holds anything that would match the markers.
-    if (current === ceiling) break;
+    if (ceilings.has(current) || ceilings.has(realOrSelf(current))) break;
     ancestors.push(current);
     const next = dirname(current);
     if (next === current) break;

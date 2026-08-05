@@ -46,11 +46,14 @@ def search_ancestors(start: Path, home: Path) -> list[Path]:
     The stop condition is the whole safety argument. `home` is excluded from the list rather than
     filtered out later: what this returns IS the complete set of places the search may look.
     """
-    ceiling = home.resolve()
+    # BOTH spellings of the ceiling. A ceiling comparison is a string comparison, and two
+    # spellings of one directory compare "different" — a CI simulation with `$HOME=/tmp/ci-home`
+    # walked past its own ceiling because macOS also spells that `/private/tmp/ci-home`.
+    ceilings = {home, home.resolve()}
     ancestors: list[Path] = []
     current = start.resolve().parent
     while True:
-        if current == ceiling or current == current.parent:
+        if current in ceilings or current.resolve() in ceilings or current == current.parent:
             break
         ancestors.append(current)
         current = current.parent

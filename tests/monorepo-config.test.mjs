@@ -20,7 +20,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -205,6 +205,30 @@ test("even a $HOME/qntm that SATISFIES every marker is not reachable", () => {
     ]) {
       assert.equal(locate(w.path(from), w.path("Users/op")), null, `reached the vault from ${from}`);
     }
+  } finally {
+    w.cleanup();
+  }
+});
+
+test("the ceiling holds when $HOME is reached through a SYMLINK", () => {
+  // FOUND BY REFUTATION, not by design. A CI simulation with `$HOME=/tmp/ci-home` walked straight
+  // past its own ceiling: macOS spells that directory `/private/tmp/ci-home` once Node has resolved
+  // the module path, and `"/private/tmp/ci-home" === "/tmp/ci-home"` is false. The guard compared
+  // spellings, not directories. It now compares both.
+  const w = world({ home: "real-home", monorepos: [] });
+  try {
+    const home = w.path("real-home");
+    mkdirSync(join(home, "projects", "qntm-network"), { recursive: true });
+    symlinkSync(home, w.path("link-to-home"));
+    const viaLink = w.path("link-to-home/projects/qntm-network/qntm.network");
+    // The ceiling is named by its REAL path; the start is reached through the link, so every
+    // ancestor spells itself `link-to-home/...`. A literal comparison never matches.
+    const ancestors = searchAncestors(viaLink, home);
+    assert.equal(
+      ancestors.some((a) => realpathSync(a) === realpathSync(home)),
+      false,
+      `the walk stepped onto $HOME: ${ancestors.join(", ")}`,
+    );
   } finally {
     w.cleanup();
   }
