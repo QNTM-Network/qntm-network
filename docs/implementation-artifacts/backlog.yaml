@@ -3697,3 +3697,103 @@ backlog:
     written convention for a NEW general-purpose surface to follow, rather than extracting a
     shared base class — was explicitly left unbuilt pending its own traced scenario.
   state: diagnose-ready
+
+- id: the-cascade-terminates-for-a-new-line
+  title: >-
+    [design-the-two-rules] `docs/implementation-artifacts/design-the-two-rules.md` §2.1: THE
+    CASCADE TERMINATES — the GLOBAL rung of `app/present/newline.ts`'s new-line-seeding cascade
+    must never return `null`. VERIFIED DIRECTLY, `newline.ts:67-83`: it still refuses when the
+    named section is not in `qualification.sections[view]` (one of 118 of 159 real sections, per
+    that header's own measurement) or the resolved node type is not in `resolution.chromeShapes`
+    — both are CONFIG-COMPLETENESS gaps, not browser logic bugs. This is the mechanism behind PR
+    #115's item 13 (`openLine`'s decline, `app/index.html:2311-2319`, `:3217` — the `o`/`O`
+    handler, narrated no more since the status line's retirement). THE FIX IS NOT A BROWSER-SIDE
+    CODE CHANGE: it needs the generator (`scripts/generate-qualification-declaration.mjs`/
+    `generate-resolution-declaration.mjs`) to publish every section's qualification and every
+    resolved node type's chrome shape, closing the gap `newline.ts`'s own header already measures
+    as real rather than hypothetical. `sectionForInsertAt` failing to name a `(view, section)` for
+    a genuinely unaddressable insertion index is explicitly OUT of this row's scope — that is a
+    positional fact about the file, not a missing declaration (design-the-two-rules.md §2.1's own
+    stated limit).
+  driving_capability: the-cascade-terminates-for-a-new-line
+  kind: capability
+  state: unscoped
+
+- id: write-register-gains-a-terminal-state
+  title: >-
+    [design-the-two-rules] `docs/implementation-artifacts/design-the-two-rules.md` §2.2: AN
+    OPERATION COMPLETES — extend `WriteRegister` (`app/present/correlation.ts:479`), never build a
+    second layer, with a bounded-retry-then-ACT terminal state for a token that gives up.
+    VERIFIED DIRECTLY: `giveUp`/`arrive`'s `gaveUp` branch already release the token and do
+    nothing else (`correlation.ts:551-556`, own words: "IT RELEASES NOTHING AND PROVES NOTHING…
+    this is the register forgetting, never the strip letting go"). CLOSES PR #115's item 4 —
+    `collect()`'s pickup-exhausted path, which today "FALLS THROUGH WITH NO ACTION — SILENT, ON
+    PURPOSE, DOCUMENTED" (`app/index.html:1949-1959`, the comment's own words) — the clearest,
+    most-measured instance of the operation rule's absence. THE TERMINAL ACT, IN ORDER, BOUNDED:
+    (1) re-read, automatic, no operator action — the read `collect()` already knows how to place;
+    (2) restore last-known-good — `commitLine`'s own non-409 failure path already does exactly
+    this, automatically, today (`app/index.html:2768-2776`), the working instance of the rule this
+    row generalises; (3) hand the content back to the row, IN MEMORY — the row store already holds
+    a handle that outlives the string it came from (`app/present/rows.ts`), NO persistence API
+    (`state-edits-are-ephemeral`, `docs/architecture/state.yaml:197`, fails the build on one).
+    Sizing left open: how many attempts, what backoff, whether it shares code with
+    `PickupSchedule`'s existing `attempt`/`answered` lifecycle — a design pass this row's own
+    document did not do, per the brief's instruction that pinning the decision is separate from
+    building it.
+  driving_capability: write-register-gains-a-terminal-state
+  kind: capability
+  state: unscoped
+
+- id: refused-write-hands-content-back
+  title: >-
+    [design-the-two-rules] `docs/implementation-artifacts/design-the-two-rules.md` §2.2/§3: PR
+    #115's item 11 — `commitLine`'s 409 branch with real typed text at stake, where
+    `healFromRefusal` cannot safely run. VERIFIED DIRECTLY, `app/index.html:2754-2766`:
+    `commit.text.trim() === ""` gates the heal (`:2763`); when text is NOT empty, nothing further
+    happens — no retry, no explicit hand-back signal, the row is left indistinguishable from an
+    ordinary open edit, and a later, unrelated repaint could in principle clobber it silently.
+    NEEDS the "hand back to the row, in memory" ACT from `write-register-gains-a-terminal-state`
+    (filed alongside this row) applied specifically at this call site — the token is already
+    closed correctly (`writes.giveUp(token)`, `:2757-2759`); what is missing is the explicit,
+    bounded landing this row's sibling document specifies, not a new mechanism.
+  driving_capability: refused-write-hands-content-back
+  kind: capability
+  state: unscoped
+
+- id: boot-and-refresh-reads-retry-before-giving-up
+  title: >-
+    [design-the-two-rules] `docs/implementation-artifacts/design-the-two-rules.md` §3, items 14
+    and 15: neither a failed boot read (`app/index.html:3336-3346`, `showEmpty("unreadable", …)`,
+    generic heading only) nor a failed manual re-read (`app/index.html:2938-2958`, `refresh()`,
+    `aria-busy` simply clears) currently attempts an automatic bounded retry before falling back
+    to its own already-correct terminal display state. FILED AS ONE ROW because both are the SAME
+    read operation (`readGraph`/`loadGraph`) failing at two different call sites (`enterGraph`'s
+    boot path vs. the operator-pressed refresh button), not two independent mechanisms — a fix to
+    the read path's own retry behaviour should cover both call sites at once. Item 15 is the
+    WEAKER of the two (design-the-two-rules.md §3's own caveat: the view is already left at
+    last-known-good on failure, which trivially satisfies the ACT half of the operation rule) —
+    what both currently lack is the AUTOMATIC-RETRY half, bounded, before falling back.
+  driving_capability: boot-and-refresh-reads-retry-before-giving-up
+  kind: capability
+  state: unscoped
+
+- id: a-one-hop-graph-agreement-fixture-for-parent-promotion
+  title: >-
+    [design-the-two-rules] [PROPOSAL, NOT BUILT] `docs/implementation-artifacts/
+    design-the-two-rules.md` §5.4.1: no fixture in this repo can measure `app/present/
+    graphmatch.ts` against the engine, so the divergence measurement's parent-promotion axis is
+    reported NOT MEASURED rather than a fabricated number. VERIFIED DIRECTLY:
+    `scripts/qualification-agreement.py`'s own header excludes every ONE-HOP graph-dependent
+    pattern (`GRAPH_DEPENDENT`) by name, because its method — key the fixture on one node's own
+    (node_type, domain, status) triple, prove one triple gets one answer — is invalid by
+    construction for a predicate whose answer depends on a NEIGHBOUR's fields, which is exactly
+    what a parent-promotion decision is. THIS ROW EXISTS ONLY TO FLAG THE GAP, NOT TO RESOLVE IT —
+    the same posture `stage-three-does-not-tenant-ize-config` and
+    `flow-trace-derives-a-time-axis-from-enforcer-git-history` take for gaps this repo can see but
+    not close. Needs a NEW engine-side generator, Python, against a read-only copy of `state.db`
+    (the same posture `qualification-agreement.py` already takes), keyed per-NODE rather than
+    per-triple, calling whatever the engine's own one-hop verdict function is (`matches_pattern`
+    against a real graph, or its successor) for every node a one-hop pattern could plausibly
+    reach.
+  kind: null
+  state: unscoped
