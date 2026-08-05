@@ -805,8 +805,9 @@ property of his config, not a property of the system.**
 ### 8.1 The whole path is single-tenant by construction
 
 **[OBS]** `presentation.json` is **one tracked file** at the repo root, imported into **one committed
-bundle**, deployed by **one push**. `scripts/monorepo-config.mjs:22-31` is a hard-coded relative path
-to **his** monorepo checkout. `server/app.py:43` is `CONFIG = Path(os.environ.get("QNTM_CONFIG",
+bundle**, deployed by **one push**. `scripts/monorepo-config.mjs` LOCATES **his** monorepo
+checkout (it was a hard-coded relative path until that path was found to resolve into his vault from
+the trunk clone). `server/app.py:43` is `CONFIG = Path(os.environ.get("QNTM_CONFIG",
 "/data/config"))` — **one directory**, and `worker/src/app.js:74` says the same: *"qntm-graph.fly.dev
 holds ONE /data/state.db, ONE /data/vault and ONE /data/config"*.
 

@@ -35,8 +35,10 @@
  *
  * ── THE FOURTH UNAVAILABILITY, NAMED SO IT CANNOT GO SILENT A SECOND TIME ──
  *
- * `scripts/monorepo-config.mjs`'s `DEFAULT_CONFIG_DIR` is a path guessed from this worktree's own
- * depth. Get the depth wrong and `existsSync` just returns false — every test that gates on it
+ * `scripts/monorepo-config.mjs`'s `DEFAULT_CONFIG_DIR` is a LOCATED path — it was a guess from this
+ * checkout's own depth until that guess was found to be right from a worktree and one level too far
+ * from the trunk, where it named a directory inside the operator's vault. Wrong either way, and when
+ * it is wrong `existsSync` just returns false — every test that gates on it
  * (`present-structural.test.mjs` and eight siblings) skips, quietly, and the CI log still says
  * "68 passed, 0 failed." This script does not let that happen twice: the resolved path and
  * whether it exists are printed UNCONDITIONALLY, on every run, pass or fail, so a wrong depth is

@@ -25,6 +25,9 @@
  *           byte diff for a human to find.
  *   exit 3  the config directory is absent, so NOTHING WAS CHECKED. The caller must treat this as
  *           "not checked", never as "checked and fine" — build.yml raises a ::warning:: on it.
+ *           `--require-config` turns this same case into exit 1. CI never passes it, so the runner
+ *           keeps its warning-but-green posture; a local caller that MEANT to compare against the
+ *           operator's config passes it, and finds out when the comparison did not happen.
  *
  * What DOES run in CI unconditionally is `tests/declaration-drop.test.mjs`, which drives this same
  * script against the committed `tests/fixtures/config/` tree. That catches the case CI can catch:
@@ -34,12 +37,13 @@
  * ── USAGE ──
  *
  *   node scripts/checkdeclarations.mjs
+ *   node scripts/checkdeclarations.mjs --require-config          fail if there is nothing to check
  *   node scripts/checkdeclarations.mjs --config-dir X --presentation Y
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { DEFAULT_CONFIG_DIR, REPO_ROOT } from "./monorepo-config.mjs";
+import { DEFAULT_CONFIG_DIR, REPO_ROOT, notCheckedReport } from "./monorepo-config.mjs";
 import { generateQualification } from "./generate-qualification-declaration.mjs";
 import { generateStructural } from "./generate-structural-declaration.mjs";
 import { generateResolution } from "./generate-resolution-declaration.mjs";
@@ -98,10 +102,14 @@ export function checkDeclarations(configDir, served) {
 function parseArgs(argv) {
   const args = {
     configDir: DEFAULT_CONFIG_DIR,
+    requireConfig: false,
     presentation: join(REPO_ROOT, "presentation.json"),
   };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--config-dir") args.configDir = resolve(argv[++i]);
+    // See the four generators' own `--require-config`: absent in CI, so exit 3 stays a warning
+    // there; passed locally, so "nothing was checked" becomes a failure rather than a silence.
+    else if (argv[i] === "--require-config") args.requireConfig = true;
     else if (argv[i] === "--presentation") args.presentation = resolve(argv[++i]);
     else throw new Error(`unknown flag: ${argv[i]}`);
   }
@@ -111,9 +119,8 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!existsSync(args.configDir)) {
-    console.error(`NOTHING WAS CHECKED: config dir not found at ${args.configDir}.`);
-    console.error("Treat this as 'not checked'. It is NOT a pass.");
-    process.exit(3);
+    for (const line of notCheckedReport(args.configDir, args.requireConfig)) console.error(line);
+    process.exit(args.requireConfig ? 1 : 3);
   }
   const served = JSON.parse(readFileSync(args.presentation, "utf8"));
   const { stale, lines } = checkDeclarations(args.configDir, served);
