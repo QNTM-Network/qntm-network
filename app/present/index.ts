@@ -206,6 +206,15 @@ export type { EchoReading, WriteEcho } from "./correlation.js";
 export { seedFor, openLine } from "./newline.js";
 export type { GlobalRegistration, NewLine } from "./newline.js";
 
+// ── THE ONE-LINE REBASE — A REFUSED WRITE'S SAFE RETRY (design-the-two-rules.md §2.2) ──
+//
+// Is the operator's own edit still applicable to the file the server just refused him with, and
+// where. Composes `instance.ts`'s anchor walk with `source.ts`'s `applyEdit`; see rebase.ts's own
+// header for the prior decision (backlog.yaml's `the-cursor-anchors-to-a-node-not-a-line-number`)
+// this engages with and why its blocking fact does not hold here.
+export { rebaseLineEdit } from "./rebase.js";
+export type { RebaseOutcome } from "./rebase.js";
+
 export { PresentationCascade } from "./cascade.js";
 export type { Resolved } from "./cascade.js";
 

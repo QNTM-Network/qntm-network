@@ -710,8 +710,11 @@ describe("7. NOTHING LOCAL IS WRITTEN beyond the seed characters themselves", ()
     );
   });
 
-  test("`writeFile(` is called in exactly three places, and every argument is the server's own", () => {
-    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 3, "the seed fix must not add a write");
+  test("`writeFile(` is called in exactly four places, and every argument is the server's own", () => {
+    // Declaration + toggleTask + commitLine's own attempt + commitLine's bounded rebase retry
+    // (`app/present/rebase.ts`, `feat/a-refusal-rebases`) — one more OCCURRENCE, the same two
+    // CALLERS. Unrelated to the seed fix this suite is about.
+    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 4, "the seed fix must not add a write");
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {

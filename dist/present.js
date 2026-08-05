@@ -3964,35 +3964,6 @@ function openLine(from, lineIndex, draft, onDeclined, declared, view) {
   return true;
 }
 
-// app/present/cascade.ts
-var PresentationCascade = class {
-  #context;
-  constructor(context) {
-    this.#context = context;
-  }
-  /**
-   * Resolve one key. Most specific level that says anything wins; DEFAULT if none does.
-   *
-   * Deliberately the same shape as the engine's `ResolutionCascade.resolve` on the ingest side.
-   * A reader who has understood one has understood both, and divergence between the two halves is
-   * the failure this whole arc exists to avoid.
-   */
-  resolve(key) {
-    for (const level of SPECIFICITY) {
-      const contribution = this.#context.at(level);
-      if (isSilent(contribution)) {
-        continue;
-      }
-      const rendition = contribution?.[key];
-      if (rendition === void 0) {
-        continue;
-      }
-      return { rendition, level };
-    }
-    return { rendition: DEFAULT[key], level: "GLOBAL" };
-  }
-};
-
 // app/present/source.ts
 var CHECKBOX_GLYPH2 = /^(\s*- \[)[ xX](\] .*)$/;
 function applyEdit(source, edit) {
@@ -4034,6 +4005,60 @@ function applyEdit(source, edit) {
   lines[edit.lineIndex] = (match[1] ?? "") + (edit.checked ? "x" : " ") + (match[2] ?? "");
   return lines.join("\n");
 }
+
+// app/present/rebase.ts
+function rebaseLineEdit(view, base, lineIndex, edited, current) {
+  const anchor = instanceAnchorFor(base, lineIndex, view);
+  if (anchor === null) {
+    return { outcome: "refused", reason: "no-anchor" };
+  }
+  const reading = resolveInstanceAnchor(anchor, current, view);
+  if (reading.outcome === "ambiguous") {
+    return { outcome: "refused", reason: "ambiguous" };
+  }
+  if (reading.outcome !== "found") {
+    return { outcome: "refused", reason: "not-found" };
+  }
+  const original = base.split("\n")[lineIndex] ?? "";
+  const serverLine = current.split("\n")[reading.lineIndex] ?? "";
+  if (serverLine !== original) {
+    return { outcome: "refused", reason: "line-changed" };
+  }
+  const markdown = applyEdit(current, { kind: "set-line", lineIndex: reading.lineIndex, text: edited });
+  if (markdown === null) {
+    return { outcome: "refused", reason: "no-edit" };
+  }
+  return { outcome: "rebased", markdown };
+}
+
+// app/present/cascade.ts
+var PresentationCascade = class {
+  #context;
+  constructor(context) {
+    this.#context = context;
+  }
+  /**
+   * Resolve one key. Most specific level that says anything wins; DEFAULT if none does.
+   *
+   * Deliberately the same shape as the engine's `ResolutionCascade.resolve` on the ingest side.
+   * A reader who has understood one has understood both, and divergence between the two halves is
+   * the failure this whole arc exists to avoid.
+   */
+  resolve(key) {
+    for (const level of SPECIFICITY) {
+      const contribution = this.#context.at(level);
+      if (isSilent(contribution)) {
+        continue;
+      }
+      const rendition = contribution?.[key];
+      if (rendition === void 0) {
+        continue;
+      }
+      return { rendition, level };
+    }
+    return { rendition: DEFAULT[key], level: "GLOBAL" };
+  }
+};
 
 // app/present/paint.ts
 function existingLineCommit(source, lineIndex, markdown) {
@@ -5711,6 +5736,7 @@ export {
   readRulesDeclaration,
   readStructuralDeclaration,
   readWriteEcho,
+  rebaseLineEdit,
   relativeAnchorFor,
   renderRuleEffects,
   resolveInstanceAnchor,

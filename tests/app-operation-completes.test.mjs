@@ -113,6 +113,13 @@ describe("1. WriteRegister.concludeGiveUp — the terminal act, named, where giv
 
 const BARE = ["# This Week", "", "## Overdue", "- [ ] Ring the dentist", ""].join("\n");
 const TYPED = "- [ ] Ring the dentist #work";
+// THE SERVER'S ANSWER TO THE 409, FOR THIS SUITE'S OWN SCENARIO — the SAME line the operator
+// edited, changed server-side, so `rebaseLineEdit` (rebase.ts, `feat/a-refusal-rebases`) declines
+// rather than silently reapplying his edit over it. Before that module existed this suite used
+// `control.current = BARE` (nothing changed at all) to reach "return-to-row"; that scenario is now
+// a WIN (`tests/app-refusal-rebases.test.mjs` drives it) and no longer belongs to a suite whose own
+// name is the give-up act, so this fixture was narrowed to the case that still gives up.
+const SERVER_MOVED = BARE.replace("- [ ] Ring the dentist", "- [ ] Ring the dentist #urgent");
 
 /** A page stood up with a fetch stub that refuses the NEXT write with a 409, then answers normally. */
 async function standUp409Page(workDir, mutate) {
@@ -168,7 +175,7 @@ async function drive409GiveUp(d) {
   page.__enterInsert();
   input().value = TYPED;
   control.refuseNext = true;
-  control.current = BARE;
+  control.current = SERVER_MOVED;
   input().dispatch("blur");
   await settle();
   return { row, input };
@@ -207,8 +214,22 @@ describe("2. ITEM 11 — a 409 with real text at stake reaches 'return-to-row'",
   });
 
   test("MUTATION PROOF: without the new call, the token is never concluded — the fix is what closes it", async () => {
+    // THREE call sites now read `writes.concludeGiveUp(token);` verbatim (the empty-text heal, the
+    // landed-rebase handoff, and this test's own branch — no safe rebase, `rebase.ts` §"the-refusal-
+    // rebases"), so the bare literal is no longer unique. This scenario (SERVER_MOVED) always takes
+    // the "no rebase was possible" branch, so the mutation targets that block by its own comment.
     const mutate = (source) =>
-      assertMutated(source, "writes.concludeGiveUp(token);", "/* MUTATED FOR THE TEST: not called */ void 0;");
+      assertMutated(
+        source,
+        "      // NO REBASE WAS POSSIBLE — refused, not guessed (`rebase?.reason`, unread here: THE\n" +
+          "      // PERCEPTION RULE governs, and nothing on screen may say why). BOUND: ZERO further retries.\n" +
+          "      if (token !== null) {\n" +
+          "        writes.concludeGiveUp(token);\n" +
+          "      }",
+        "      if (token !== null) {\n" +
+          "        /* MUTATED FOR THE TEST: not called */ void 0;\n" +
+          "      }",
+      );
     const d = await standUp409Page(makeWorkDir("op-completes-409-mutant"), mutate);
     await drive409GiveUp(d);
 

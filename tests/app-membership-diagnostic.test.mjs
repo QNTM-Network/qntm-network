@@ -365,9 +365,13 @@ describe("5. NOTHING LOCAL REACHES A WRITE — re-verified, and the new function
     assert.equal(sites.length, 4, "the abstention register must not add a client-computed graphData write");
   });
 
-  test("`writeFile` still has exactly two callers — its declaration plus toggleTask and commitLine", () => {
+  test("`writeFile` still has exactly two CALLERS — toggleTask and commitLine, now four occurrences", () => {
+    // Declaration (1) + toggleTask (1) + commitLine's own attempt (1) + commitLine's bounded
+    // rebase retry (1) — `app/present/rebase.ts`, `feat/a-refusal-rebases`. The retry reuses
+    // `writeFile`, the one write path, rather than inventing a second; the CALLER count (two
+    // functions) is what this assertion is really protecting, and it is unchanged.
     const occurrences = APP_SOURCE.match(/\bwriteFile\(/g) ?? [];
-    assert.equal(occurrences.length, 3, "a new call site would mean a third write path exists");
+    assert.equal(occurrences.length, 4, "a new call site outside toggleTask/commitLine would mean a third write path exists");
   });
 
   test("`applyEdit` is still reached from exactly five sites outside its own module", () => {
