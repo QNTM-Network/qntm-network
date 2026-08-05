@@ -385,68 +385,54 @@ describe("7. and it reaches the screen — through app/index.html's own script",
   });
 
   /**
-   * Land a projection on the page and read the freshness line the way the operator gets it.
+   * Land a projection on the page — `paintView`'s own reanchoring, wired end to end.
    *
-   * THROUGH `sayAsOf`, ALWAYS, because that is what every write path in the page does one statement
-   * after `paintView` — `toggleTask`, `commitLine`, `refresh` and `applySnapshot` all do it. Reading
-   * the element between the two would be reading a line the app never leaves on the screen.
+   * `sayAsOf`/`#freshness` are retired (chore/retire-the-status-line) — what this used to also
+   * prove (a cursor loss reaching the DOM as one sentence, never repeated, never confused with a
+   * view change) is gone with them. What paintView actually DOES with a reanchor answer —
+   * following the line, or reseeding when it cannot — is unchanged and is what the tests below
+   * check directly, on `page.__focusIndex()`/`page.__focusAnchor()`.
    */
   function land(markdown) {
     const fresh = snapshot(markdown);
     page.__setGraphData(fresh);
     page.paintView("this-week");
-    page.__sayAsOf(fresh);
-    return elements.get("freshness").textContent;
   }
 
-  test("a projection inserting a line above the cursor moves it, and says nothing about it", () => {
+  test("a projection inserting a line above the cursor moves it", () => {
     land(NOW);
     page.__setFocus(CURSOR, NOW);
 
-    const said = land(INSERTED_ABOVE);
+    land(INSERTED_ABOVE);
 
     assert.equal(page.__focusIndex(), CURSOR + 1, "the cursor did not follow its line");
-    assert.match(said, /^as of .* · 0 queued$/, `an ordinary re-anchor narrated itself: ${said}`);
   });
 
   test("THE REGRESSION RISK, END TO END — a node moving section keeps the cursor through the real page", () => {
     land(NOW);
     page.__setFocus(3, NOW); // qntm:1986, under "## Due This Week"
 
-    const said = land(MOVED_BETWEEN_SECTIONS);
+    land(MOVED_BETWEEN_SECTIONS);
 
     assert.equal(page.__focusIndex(), 1, "the cursor did not follow its node across the section move");
-    assert.match(said, /^as of .* · 0 queued$/, `a successful node-follow narrated itself as a loss: ${said}`);
   });
 
-  test("a projection without the cursor's line puts ONE SENTENCE in the freshness line", () => {
+  test("a projection without the cursor's line reseeds the cursor rather than leaving it stuck", () => {
     land(NOW);
     page.__setFocus(CURSOR, NOW);
+    assert.equal(page.__focusAnchor()?.node, "qntm:1232", "the arm did not anchor the line it means to lose");
 
-    const said = land(ABSENT);
-
-    // The failure this also guards against is the refusal being reported into a line that is
-    // overwritten one statement later — the same silence, one layer up. Still ONE sentence, which
-    // is what this arm is about — see tests/app-write-correlation.test.mjs for the sentence's other
-    // half, said only when the server's own echo proves the write landed.
-    assert.match(
-      said,
-      /^as of .* · 0 queued · the line you were on is not in this view any more$/,
-      said,
-    );
-  });
-
-  test("the sentence describes ONE arrival — the next projection does not repeat it", () => {
-    land(NOW);
-    page.__setFocus(CURSOR, NOW);
     land(ABSENT);
 
-    const said = land(ABSENT);
-
-    assert.match(said, /^as of .* · 0 queued$/, `a stale note followed the next projection: ${said}`);
+    // qntm:1232 is gone from ABSENT entirely — identity cannot survive this, and the old
+    // `reportCursorReading` sentence that used to say so is retired (chore/retire-the-status-line).
+    // What paintView actually does is unchanged: it falls back to the clamped seeding every view's
+    // first paint already uses — ABSENT has 5 lines (indices 0-4), so the cursor lands on the last.
+    assert.notEqual(page.__focusAnchor()?.node, "qntm:1232", "the cursor kept an identity that is gone");
+    assert.equal(page.__focusIndex(), 4, "the cursor was not reseeded to the clamped fallback line");
   });
 
-  test("CHANGING VIEW is not a projection arriving, and is not reported as one", () => {
+  test("CHANGING VIEW seeds a fresh cursor rather than inheriting the previous view's", () => {
     const both = {
       snapshot: {
         generated_at: "2026-07-31T00:00:00Z",
@@ -462,12 +448,11 @@ describe("7. and it reaches the screen — through app/index.html's own script",
     page.__setFocus(CURSOR, NOW);
 
     page.paintView("habits");
-    page.__sayAsOf(both);
 
-    assert.match(
-      elements.get("freshness").textContent,
-      /^as of .* · 0 queued$/,
-      "choosing another view was reported as having lost the cursor",
-    );
+    // "habits" was never anchored a cursor of its own — a view change is `why !== "arrived"`, so
+    // `cursorReading` reads `unanchored` and the same clamp every view's first paint uses applies:
+    // the PREVIOUS index (`CURSOR`, 5), clamped into "## Work Habits\n" (two lines, indices 0-1).
+    // Not an exception, and not `CURSOR` itself, which this file (one line) could not even hold.
+    assert.equal(page.__focusIndex(), 1, "choosing another view did not seed it a cursor of its own");
   });
 });

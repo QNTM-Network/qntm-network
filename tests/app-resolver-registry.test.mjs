@@ -203,15 +203,17 @@ async function freshPage(label, markdown = SOURCE, mutate) {
   const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
   press("g");
   press("g");
-  // `?? ""` BECAUSE AN UNWRITTEN BADGE HAS NO ELEMENT AT ALL. The DOM stub mints an element on the
-  // first `getElementById`, so a register that stayed silent for this gesture never created one —
-  // and "" is exactly what a silent register means. Reading it as a crash would make every
-  // assertion below about silence untestable.
-  const badges = () => ({
-    membership: elements.get("membershipBadge")?.textContent ?? "",
-    ordering: elements.get("orderingBadge")?.textContent ?? "",
-    rules: elements.get("rulesBadge")?.textContent ?? "",
-    parent: elements.get("parentBadge")?.textContent ?? "",
+  // `#membershipBadge`/`#orderingBadge`/`#rulesBadge`/`#parentBadge` WERE RETIRED
+  // (chore/retire-the-status-line, the abstention register) — `badges(commit)` now asks each
+  // resolver directly, over the SAME commit `commitLine` walked, the same registry walk that used
+  // to feed those four DOM sinks. A resolver that stayed silent for this gesture still returns ""
+  // from its own `.show()` (`not-evaluated` produces no diagnostic, `diagnosticOf` reads as `""`
+  // via `__xDiagnosticFor`'s own shape), so "" is still exactly what a silent register means.
+  const badges = (commit) => ({
+    membership: page.__membershipDiagnosticFor(VIEW, commit),
+    ordering: page.__orderingDiagnosticFor(VIEW, commit),
+    rules: page.__rulesDiagnosticFor(page.__rulesReadingFor(VIEW, commit)),
+    parent: page.__parentPromotionDiagnosticFor(page.__parentPromotionFor(VIEW, commit)),
   });
   return { page, elements, doc, press, badges, posted: fetchImpl.posted, work };
 }
@@ -235,38 +237,49 @@ describe("1. `x` — the checkbox toggle reaches the write path and every regist
     assert.ok(write, "`x` never reached the write endpoint");
     assert.match(write.body.markdown, /- \[x\] Draft the copy #task/, "the tick did not reach the wire");
 
+    const commit = { lineIndex: 2, text: "- [x] Draft the copy #task", markdown: write.body.markdown, source: SOURCE, kind: "set-line" };
     // THE MEMBERSHIP AXIS ANSWERED — a `set-line` commit inside a published section, which is
     // exactly the shape it evaluates. That it says "decided" rather than "" is the evidence the
     // walk reached it: a gesture that skipped the registry leaves this badge empty.
-    assert.equal(badges().membership, "membership: decided");
+    assert.equal(badges(commit).membership, "membership: decided");
     // AND THE ORDERING AXIS ANSWERED TOO, off the engine's own default ordering.
-    assert.match(badges().ordering, /^ordering: (decided|abstained — )/);
+    assert.match(badges(commit).ordering, /^ordering: (decided|abstained — )/);
   });
 
   test("a tick that changes no structural relationship leaves the parent register alone", async () => {
     // THE CONTROL. `x` is a `set-line` commit like `>` is, and if promotion fired on every
     // `set-line` this badge would carry an answer it has no business having.
-    const { press, badges } = await freshPage("registry-x-control");
+    const { press, badges, posted } = await freshPage("registry-x-control");
     press("j");
     press("j");
     press("x");
     await settled();
-    assert.equal(badges().parent, "", "a tick must not make the promotion axis answer for the row above");
+    const commit = { lineIndex: 2, text: "- [x] Draft the copy #task", markdown: posted[0].body.markdown, source: SOURCE, kind: "set-line" };
+    assert.equal(badges(commit).parent, "", "a tick must not make the promotion axis answer for the row above");
   });
 });
 
 describe("2. `>` — indent reaches the write path and the promotion register answers for the row above", () => {
   test("the indent posts, and the parent's promotion is decided on that commit", async () => {
-    const { press, badges, posted, elements } = await freshPage("registry-indent");
+    const { page, press, badges, posted } = await freshPage("registry-indent");
     press("j");
     press("j");
     assert.doesNotThrow(() => press(">"), "`>` threw in commitLine's synchronous prefix");
 
-    // READ BEFORE THE AWAIT RESOLVES — `commitLine`'s synchronous prefix runs the whole walk and
-    // writes every badge before its own `await writeFile(...)`, and the keydown handler never
-    // awaits `commitLine`. This is the instant the operator sees.
-    assert.equal(badges().parent, "parent: decided");
-    assert.match(elements.get("freshness")?.textContent ?? "", /the row above .*becomes outcome/);
+    // READ SYNCHRONOUSLY — `#parentBadge`/`#freshness` are retired (chore/retire-the-status-line),
+    // but the timing they used to be read at still matters: the stubbed answer's `graphData`
+    // carries no `.graph`, so a "decided" read must happen before `commitLine`'s own
+    // `await writeFile(...)` lets it land. `posted[0]` already exists here (`fetch` runs
+    // synchronously up to its own first `await`).
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy #task",
+      markdown: posted[0].body.markdown,
+      source: SOURCE,
+      kind: "set-line",
+    };
+    assert.equal(badges(commit).parent, "parent: decided");
+    assert.match(page.__parentPromotionNoteFor(page.__parentPromotionFor(VIEW, commit)), /the row above .*becomes outcome/);
 
     await settled();
     const write = posted[0];
@@ -287,7 +300,14 @@ describe("3. `<` — outdent reaches the write path and the promotion register a
 
     // A REMOVED RELATIONSHIP IS AN HONEST UNKNOWN, NOT A CONFIDENT "NO CHANGE" — the graph-aware
     // pass can only ever ADD a prospective child, never subtract one the live graph still names.
-    assert.equal(badges().parent, "parent: abstained — structural-relationship-removed");
+    const commit = {
+      lineIndex: 2,
+      text: "- [ ] Draft the copy #task",
+      markdown: posted[0].body.markdown,
+      source: INDENTED,
+      kind: "set-line",
+    };
+    assert.equal(badges(commit).parent, "parent: abstained — structural-relationship-removed");
 
     await settled();
     const write = posted[0];
@@ -304,17 +324,18 @@ describe("4. A HAND-TYPED LEADING-WHITESPACE CHANGE — no gesture at all, same 
     // NO KEYSTROKE GRAMMAR IS INVOLVED. This is `commitLine` called with the commit the painter's
     // own settlement produces when the operator edits an existing row's text — the case a fix
     // scoped to the indent MOTION would have missed entirely.
-    const { page, elements, posted } = await freshPage("registry-typed-indent");
+    const { page, badges, posted } = await freshPage("registry-typed-indent");
     const AFTER = "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy #task";
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 2,
       text: "    - [ ] Draft the copy #task",
       markdown: AFTER,
       source: SOURCE,
       kind: "set-line",
-    });
+    };
+    const write = page.commitLine(VIEW, commit);
     assert.equal(
-      elements.get("parentBadge")?.textContent ?? "",
+      badges(commit).parent,
       "parent: decided",
       "a typed indent must reach the promotion axis — it is the same relationship change `>` makes",
     );
@@ -326,20 +347,21 @@ describe("4. A HAND-TYPED LEADING-WHITESPACE CHANGE — no gesture at all, same 
 
 describe("5. Enter — a new line, captured and settled, walks the registry too", () => {
   test("the capture posts, and the rules axis decides for the freshly typed row", async () => {
-    const { page, elements, posted } = await freshPage("registry-enter");
+    const { page, badges, posted } = await freshPage("registry-enter");
     const AFTER = `${SOURCE}\n- [ ] Book the venue #task`;
-    const write = page.commitLine(VIEW, {
+    const commit = {
       lineIndex: 3,
       text: "- [ ] Book the venue #task",
       markdown: AFTER,
       source: SOURCE,
       kind: "insert-line",
-    });
+    };
+    const write = page.commitLine(VIEW, commit);
     // THE RULES AXIS IS THE ONE SCOPED TO A FRESH CAPTURE — `insert-line` is the only commit kind
     // it evaluates at all, so this badge answering is the evidence the walk reached it on THIS
     // gesture and not merely on the four above.
-    assert.equal(elements.get("rulesBadge")?.textContent ?? "", "rules: decided");
-    assert.match(elements.get("freshness")?.textContent ?? "", /this line sets demo_flag/);
+    assert.equal(badges(commit).rules, "rules: decided");
+    assert.match(page.__rulesNoteFor(page.__rulesReadingFor(VIEW, commit)), /this line sets demo_flag/);
     await write;
     await settled();
     assert.equal(posted[0]?.body.markdown, AFTER, "the capture never reached the write endpoint");
@@ -502,7 +524,7 @@ describe("7. REGISTRY ORDER decides the joined sentence and the prediction order
 
   const driveIndent = async (label, mutate) => {
     const work = makeWorkDir(label);
-    const { elements, document: doc } = installBrowser();
+    const { document: doc } = installBrowser();
     const fetchImpl = postStub();
     globalThis.fetch = fetchImpl;
     const page = await importPage(work, mutate === undefined ? undefined : mutate(work));
@@ -517,12 +539,22 @@ describe("7. REGISTRY ORDER decides the joined sentence and the prediction order
     press("j");
     press("j");
     press(">");
+    // READ SYNCHRONOUSLY — `#membershipBadge`/`#orderingBadge`/`#rulesBadge`/`#parentBadge`/
+    // `#freshness` are retired (chore/retire-the-status-line); every axis is asked directly
+    // instead, over the exact commit `commitLine` walked, before the stubbed answer's graph-less
+    // `graphData` lands.
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy #task",
+      markdown: fetchImpl.posted[0].body.markdown,
+      source: SOURCE,
+      kind: "set-line",
+    };
     const seen = {
-      membership: elements.get("membershipBadge")?.textContent ?? "",
-      ordering: elements.get("orderingBadge")?.textContent ?? "",
-      rules: elements.get("rulesBadge")?.textContent ?? "",
-      parent: elements.get("parentBadge")?.textContent ?? "",
-      freshness: elements.get("freshness")?.textContent ?? "",
+      membership: page.__membershipDiagnosticFor(VIEW, commit),
+      ordering: page.__orderingDiagnosticFor(VIEW, commit),
+      rules: page.__rulesDiagnosticFor(page.__rulesReadingFor(VIEW, commit)),
+      parent: page.__parentPromotionDiagnosticFor(page.__parentPromotionFor(VIEW, commit)),
     };
     await settled();
     return { seen, posted: fetchImpl.posted };
@@ -543,44 +575,14 @@ describe("7. REGISTRY ORDER decides the joined sentence and the prediction order
     assert.deepEqual(withoutToken(reversed.posted[0].body), withoutToken(straight.posted[0].body));
   });
 
-  test("and it DOES move the one thing the order is declared to decide — the joined sentence", async () => {
-    // THE OTHER HALF OF THE CLAIM. If reversing changed nothing at all, the assertion above would
-    // be vacuous — the mutation would not have landed anywhere observable. This fixture's `>` makes
-    // exactly one axis speak, so the proof is taken on a commit that makes two speak instead.
-    const work = makeWorkDir("order-sentence");
-    const straightWork = makeWorkDir("order-sentence-straight");
-
-    const capture = async (dir, mutate) => {
-      const { elements } = installBrowser();
-      globalThis.fetch = postStub();
-      const page = await importPage(dir, mutate);
-      page.__applyPresentation(DECLARATION);
-      page.__setGraphData({
-        snapshot: { generated_at: "2026-08-05T00:00:00Z", views: [{ ...VIEW, markdown: SOURCE }], graph: GRAPH },
-      });
-      page.paintView(VIEW.id);
-      // AN INSERTED, ALREADY-INDENTED CHILD — the rules axis speaks for the new row and the
-      // promotion axis speaks for the row above, so the joined sentence has two clauses whose order
-      // is the registry's to decide.
-      const AFTER = `${SOURCE}\n    - [ ] Book the venue #task`;
-      const write = page.commitLine(VIEW, {
-        lineIndex: 3,
-        text: "    - [ ] Book the venue #task",
-        markdown: AFTER,
-        source: SOURCE,
-        kind: "insert-line",
-      });
-      const said = elements.get("freshness")?.textContent ?? "";
-      await write;
-      await settled();
-      return said;
-    };
-
-    const straight = await capture(straightWork);
-    const reversed = await capture(work, mutatingBundle(REVERSED)(work));
-    assert.match(straight, /this line sets demo_flag · the row above .*becomes outcome/);
-    assert.match(reversed, /the row above .*becomes outcome.*· this line sets demo_flag/);
-  });
+  // "and it DOES move the one thing the order is declared to decide — the joined sentence" is
+  // GONE. It proved that reversing the registry moved the ORDER of the freshness line's clauses —
+  // `outcome.notes.join(" · ")`, written into `#freshness`. `commitLine` no longer joins
+  // `outcome.notes` into anything (chore/retire-the-status-line): the field is still produced by
+  // the walk (bundled with `.placements`/`.predictions`, which do real work) but nothing on the
+  // page reads it, so there is no DOM sentence left for the order to move. `registry.ts`'s own
+  // header still names "the order the freshness-line sentences are joined in" as one of two things
+  // order decides; that claim is now stale prose in a file this branch does not otherwise touch.
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -652,11 +654,18 @@ describe("8. `commitLine` names no resolver — it builds a context, walks the r
     }
   });
 
-  test("it walks the registry exactly once and joins exactly what comes back", () => {
+  test("it walks the registry exactly once and arms exactly what does real work with what comes back", () => {
     assert.match(commitLineBody, /runResolvers\(RESOLVERS, resolverContextFor\(view, commit\)\)/);
     assert.equal((commitLineBody.match(/runResolvers\(/g) ?? []).length, 1);
-    assert.match(commitLineBody, /outcome\.notes\.join\(" · "\)/);
-    assert.match(commitLineBody, /for \(const diagnostic of outcome\.diagnostics\)/);
+    // `outcome.notes.join(" · ")` (the freshness line's prediction clause) and
+    // `for (const diagnostic of outcome.diagnostics)` (the four abstention badges) are GONE
+    // (chore/retire-the-status-line) — commitLine no longer consumes either field. `.placements`/
+    // `.predictions` still do real work (row settling/prediction) and are still armed.
+    // CODE ONLY — commitLine's own comment explains what used to be here, in prose, and a bare
+    // string search would mistake that sentence for the code it describes.
+    const codeOnly = commitLineBody.replace(/\/\/.*$/gm, "");
+    assert.doesNotMatch(codeOnly, /outcome\.notes\b/, "commitLine still reads outcome.notes — the retired narration is back");
+    assert.doesNotMatch(codeOnly, /outcome\.diagnostics\b/, "commitLine still reads outcome.diagnostics — the retired badges are back");
     assert.match(commitLineBody, /armSettle\(settle, commit\.markdown, view\.id, outcome\.placements\)/);
     assert.match(commitLineBody, /armPredict\(predict, commit\.markdown, view\.id, outcome\.predictions\)/);
   });

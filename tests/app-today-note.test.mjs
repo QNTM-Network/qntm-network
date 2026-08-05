@@ -1,250 +1,54 @@
 /**
- * SAY WHAT DAY IT IS — design-the-resolution-architecture.md step 8's call site, through
- * app/index.html's OWN LIFTED SCRIPT, not through a reconstruction of it.
+ * WHAT IS LEFT OF THIS FILE, AFTER `todayNoteFor`/`sayAsOf` WERE RETIRED
+ * (chore/retire-the-status-line).
  *
  *   node --test tests/app-today-note.test.mjs
  *
- * Same shape `tests/app-ordering-note.test.mjs` and `tests/app-membership-note.test.mjs` already
- * established, restated for `todayNoteFor`/`sayAsOf`:
+ * This file used to prove `todayNoteFor` — the page's own glue between `resolution.dayBoundary`
+ * and `app/present/today.ts`'s `todayFor` — landed the operator's logical day in the freshness
+ * line (`sayAsOf`, `#freshness`). Both functions and that element are gone: `todayNoteFor` was
+ * wired into the page for exactly one reason, per its own former header, and that reason no
+ * longer exists. `todayFor` itself is untouched and still proven directly, exhaustively, against
+ * the engine's own day-boundary resolver in tests/present-today.test.mjs — nothing about ITS
+ * correctness depended on this file.
  *
- *   1. THE FALSIFIER, AT THE CALL SITE — the same three instants
- *      `tests/present-today.test.mjs` §1 proves against `todayFor` directly, now proven through
- *      `todayNoteFor`, the wrapper the page actually calls: 03:59 Europe/London says yesterday,
- *      04:01 says today, a Sunday resolves into the week that started the preceding Monday.
- *   2. THE SCENARIO — a full projection arrival, through the real `sayAsOf`, lands the logical
- *      day in the freshness line the operator actually reads. This is the traced execution the
- *      brief asked for: the declaration reaching the DOM sink, not only a function returning a
- *      value.
- *   3. THE ABSTENTION IS VISIBLE — no declared boundary, and a malformed one, both produce no
- *      today clause AND a console warning naming why, never a silent guess at UTC midnight.
- *   4. NOTHING LOCAL REACHES A WRITE — the SAME pinned counts `tests/app-membership-note.test.mjs`
- *      §4 and `tests/app-ordering-note.test.mjs` §4 already prove, re-verified here so a reviewer
- *      of THIS file alone sees the invariant this step's own change must not break, plus the one
- *      check unique to this function: it calls `Date.now()` exactly where the design requires —
- *      inside `sayAsOf`, never inside `app/present/today.ts`.
+ * THREE SECTIONS ARE GONE ENTIRELY, NOT WEAKENED:
+ *
+ *   1. THE FALSIFIER, AT THE CALL SITE — called `page.__todayNoteFor` directly; that export is
+ *      gone because the function is gone.
+ *   2. THE SCENARIO — called `page.__sayAsOf` and read `#freshness`; both gone.
+ *   3. THE ABSTENTION IS VISIBLE — same shape, same two gone symbols.
+ *
+ * WHAT REMAINS is section 4's clock-discipline invariant, which was never really ABOUT the
+ * freshness line — `todayNoteFor` was simply the SECOND legitimate call site for `Date.now()` in
+ * this page, alongside `resolverContextFor`'s. With `todayNoteFor` gone there is exactly one
+ * legitimate call site left, and that is still worth guarding against a future resolver reaching
+ * for the wall clock directly (today.ts's own rule: read once, at the page, handed to a pure
+ * function as a parameter). The `graphData`/`writeFile`/`applyEdit`/`.markdown` invariants below
+ * are UNCHANGED from this file's own former shape and are pinned again here on purpose — they are
+ * ALSO pinned in tests/app-membership-note.test.mjs §4 and tests/app-ordering-note.test.mjs §4, by
+ * those files' own admission, so removing them from here loses no unique coverage; they are kept
+ * anyway so a reviewer of this file alone still sees them.
  */
 
-import { test, describe, before } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { importPage, installBrowser, makeWorkDir, RESOLVER_SOURCES, resolverSource } from "./fixtures/app-html-page.mjs";
+import { RESOLVER_SOURCES, resolverSource } from "./fixtures/app-html-page.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const WORK = makeWorkDir("app-today-note");
 
-// The operator's REAL declared boundary — the same three keys `tests/present-today.test.mjs`
-// reads off the shipped `presentation.json`, restated by hand here so this suite does not take a
-// second dependency on that file's presence.
-const REAL_BOUNDARY = { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" };
-
-const DECLARATION_WITH_BOUNDARY = {
-  resolution: { dayBoundary: REAL_BOUNDARY },
-};
-
-const isoToMs = (iso) => new Date(iso).getTime();
-
-describe("1. THE FALSIFIER, AT THE CALL SITE — todayNoteFor against the real declared boundary", () => {
-  let page;
-
-  before(async () => {
-    installBrowser();
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
-    page = await importPage(WORK);
-    page.__applyPresentation(DECLARATION_WITH_BOUNDARY);
-  });
-
-  test("03:59 Europe/London says yesterday's date", () => {
-    // 2026-06-23T02:59:00Z is 03:59 BST.
-    const said = page.__todayNoteFor(isoToMs("2026-06-23T02:59:00Z"));
-    assert.match(said, /^today 2026-06-22 · week ends /);
-  });
-
-  test("04:01 Europe/London says today's date", () => {
-    // 2026-06-23T03:01:00Z is 04:01 BST.
-    const said = page.__todayNoteFor(isoToMs("2026-06-23T03:01:00Z"));
-    assert.match(said, /^today 2026-06-23 · week ends /);
-  });
-
-  test("a Sunday resolves into the week that started the preceding Monday", () => {
-    // 2026-07-05 is a Sunday; Sunday is the last day of its own week under monday-start.
-    const said = page.__todayNoteFor(isoToMs("2026-07-05T12:00:00Z"));
-    assert.equal(said, "today 2026-07-05 · week ends 2026-07-05");
-  });
-
-  test("the exact boundary instant (04:00:00 local) belongs to the NEW day", () => {
-    const said = page.__todayNoteFor(isoToMs("2026-06-23T03:00:00Z"));
-    assert.match(said, /^today 2026-06-23 · week ends /);
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-// 2. THE SCENARIO — a real projection arrival, through sayAsOf, lands in the freshness line
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-
-describe("2. THE SCENARIO — sayAsOf carries the logical day to the DOM sink the operator reads", () => {
-  let page;
-  let elements;
-
-  before(async () => {
-    ({ elements } = installBrowser());
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
-    page = await importPage(WORK);
-    page.__applyPresentation(DECLARATION_WITH_BOUNDARY);
-  });
-
-  test("a projection generated just after the 04:00 rollover carries TODAY'S logical date to #freshness", () => {
-    const savedNow = Date.now;
-    try {
-      // 04:05 Europe/London on 2026-06-23 — just past the rollover, the boundary case the brief
-      // asks for: an instant between midnight and 04:00 would still read as YESTERDAY, so this
-      // instant (just the other side of it) is the one that proves the rollover is honoured, not
-      // merely a mid-afternoon instant no boundary logic could get wrong.
-      Date.now = () => isoToMs("2026-06-23T03:05:00Z");
-      page.__sayAsOf({
-        snapshot: { generated_at: "2026-06-23T03:05:00Z" },
-        pending_edits: 0,
-      });
-    } finally {
-      Date.now = savedNow;
-    }
-    const freshness = elements.get("freshness").textContent;
-    assert.match(freshness, /today 2026-06-23 · week ends 2026-06-28/, freshness);
-    assert.match(freshness, /^as of /, freshness);
-    assert.match(freshness, / · 0 queued$/, freshness);
-  });
-
-  test("THE BOUNDARY CASE ITSELF — an instant BEFORE 04:00 local carries YESTERDAY'S date to #freshness", () => {
-    const savedNow = Date.now;
-    try {
-      // 03:30 Europe/London on 2026-06-23 — inside the late-night grace the boundary exists to
-      // give the operator. The engine would stamp a completion made at this instant for
-      // 2026-06-22; this proves the browser's freshness line agrees.
-      Date.now = () => isoToMs("2026-06-23T02:30:00Z");
-      page.__sayAsOf({
-        snapshot: { generated_at: "2026-06-23T02:30:00Z" },
-        pending_edits: 2,
-      });
-    } finally {
-      Date.now = savedNow;
-    }
-    const freshness = elements.get("freshness").textContent;
-    assert.match(freshness, /today 2026-06-22 · week ends 2026-06-28/, freshness);
-    assert.match(freshness, / · 2 queued$/, freshness);
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-// 3. THE ABSTENTION IS VISIBLE — no boundary, or a malformed one, warns and says nothing
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-
-describe("3. THE ABSTENTION IS VISIBLE — never a silent guess at UTC midnight", () => {
-  let page;
-
-  before(async () => {
-    installBrowser();
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
-    page = await importPage(WORK);
-  });
-
-  test("no declaration loaded at all: todayNoteFor says nothing AND warns why", () => {
-    page.__applyPresentation({});
-    const warnings = [];
-    const saved = console.warn;
-    console.warn = (message) => warnings.push(String(message));
-    try {
-      const said = page.__todayNoteFor(Date.now());
-      assert.equal(said, "");
-      assert.equal(warnings.length, 1);
-      assert.match(warnings[0], /no day boundary declared/);
-    } finally {
-      console.warn = saved;
-    }
-  });
-
-  test("a declaration with every OTHER resolution key but no dayBoundary: same abstention", () => {
-    page.__applyPresentation({
-      resolution: { ordering: { demo: {} }, orderingFields: {} },
-    });
-    const warnings = [];
-    const saved = console.warn;
-    console.warn = (message) => warnings.push(String(message));
-    try {
-      const said = page.__todayNoteFor(Date.now());
-      assert.equal(said, "");
-      assert.equal(warnings.length, 1);
-      assert.match(warnings[0], /no day boundary declared/);
-    } finally {
-      console.warn = saved;
-    }
-  });
-
-  test("an unresolvable timezone: todayNoteFor says nothing AND warns the refusal's own name", () => {
-    page.__applyPresentation({
-      resolution: { dayBoundary: { timezone: "Not/A_Real_Zone", dayStartHour: 4, weekStartsOn: "monday" } },
-    });
-    const warnings = [];
-    const saved = console.warn;
-    console.warn = (message) => warnings.push(String(message));
-    try {
-      const said = page.__todayNoteFor(Date.now());
-      assert.equal(said, "");
-      assert.equal(warnings.length, 1);
-      assert.match(warnings[0], /unresolvable-timezone/);
-    } finally {
-      console.warn = saved;
-    }
-  });
-
-  test("an unrecognised weekStartsOn: todayNoteFor says nothing AND warns the refusal's own name", () => {
-    page.__applyPresentation({
-      resolution: { dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "someday" } },
-    });
-    const warnings = [];
-    const saved = console.warn;
-    console.warn = (message) => warnings.push(String(message));
-    try {
-      const said = page.__todayNoteFor(Date.now());
-      assert.equal(said, "");
-      assert.equal(warnings.length, 1);
-      assert.match(warnings[0], /unknown-week-start/);
-    } finally {
-      console.warn = saved;
-    }
-  });
-
-  test("with no boundary declared, sayAsOf's freshness line carries no today clause at all", () => {
-    page.__applyPresentation({});
-    const { elements } = installBrowser();
-    const saved = console.warn;
-    console.warn = () => {};
-    try {
-      page.__sayAsOf({ snapshot: { generated_at: "2026-06-23T12:00:00Z" }, pending_edits: 1 });
-    } finally {
-      console.warn = saved;
-    }
-    const freshness = elements.get("freshness").textContent;
-    assert.doesNotMatch(freshness, /today \d{4}-\d{2}-\d{2}/, freshness);
-    assert.match(freshness, /^as of .* · 1 queued$/, freshness);
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-// 4. NOTHING LOCAL REACHES A WRITE — re-verified for this step's own change
-// ══════════════════════════════════════════════════════════════════════════════════════════════
-
-describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's own posture", () => {
+describe("NOTHING LOCAL REACHES A WRITE, AND THE CLOCK IS READ IN EXACTLY ONE PLACE", () => {
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
   const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
   const TODAY_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "today.ts"), "utf8");
 
-  // UNCHANGED FROM tests/app-ordering-note.test.mjs §4 — this step adds no assignment, no new
-  // write path, only a read (`resolution?.dayBoundary`) and a call into a PURE module.
   test("`graphData` is still assigned in exactly four places", () => {
     const sites = APP_SOURCE.match(/\bgraphData\s*=(?!=)/g) ?? [];
-    assert.equal(sites.length, 4, "todayNoteFor must not add a client-computed graphData write");
+    assert.equal(sites.length, 4);
   });
 
   test("`writeFile` still has exactly two callers — its declaration plus toggleTask and commitLine", () => {
@@ -255,7 +59,7 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
   test("`applyEdit` is still reached from exactly five sites outside its own module", () => {
     const pageCalls = APP_SOURCE.match(/\bapplyEdit\(/g) ?? [];
     const paintCalls = PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? [];
-    assert.equal(pageCalls.length + paintCalls.length, 5, "todayNoteFor must reach applyEdit zero times");
+    assert.equal(pageCalls.length + paintCalls.length, 5);
   });
 
   test("`.markdown` is still never ASSIGNED in app/ — the page, the painter, AND every resolver", () => {
@@ -267,22 +71,9 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
     }
   });
 
-  test("todayNoteFor imports nothing from source.ts and produces no Contribution", () => {
-    const fn = /function todayNoteFor[\s\S]*?\n}\n/.exec(APP_SOURCE)?.[0];
-    assert.ok(fn, "todayNoteFor was not found — this test is checking the wrong source");
-    assert.ok(!/\bapplyEdit\(/.test(fn), "todayNoteFor calls applyEdit");
-  });
-
-  // THE ONE CHECK UNIQUE TO THIS STEP — the design's own constraint, verified rather than trusted:
-  // today.ts never calls Date.now() itself, so every legitimate call is in the page, not the
-  // module — `sayAsOf` (this step) and `rulesReadingFor` (`rules.ts`'s own consumer, added
-  // later — see that test's own header for why a second, equally audited site is correct rather
-  // than a widening to route around). Comment lines are stripped before counting — this codebase's
-  // own prose
-  // names `Date.now()` repeatedly (that is the whole point being documented), and a bare string
-  // search would mistake a sentence about the rule for a violation of it. Every comment line in
-  // this repo starts with `//` or `*` once trimmed, so filtering on that is exact, not a heuristic
-  // that happens to work here.
+  // Comment lines are stripped before counting — this codebase's own prose names `Date.now()`
+  // repeatedly (that is the whole point being documented), and a bare string search would mistake
+  // a sentence about the rule for a violation of it.
   const codeOnly = (source) =>
     source
       .split(/\r?\n/)
@@ -296,47 +87,27 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and todayNoteFor's o
     assert.doesNotMatch(codeOnly(TODAY_SOURCE), /Date\.now\(\)/);
   });
 
-  // WIDENED TO TWO, NOT LOOSENED TO "SOME" — `rules.ts`'s own consumer (`rulesReadingFor`) is a
-  // SECOND legitimate need for "now", answering a DIFFERENT question at a DIFFERENT moment:
-  // `sayAsOf` reads it when a PROJECTION arrives (to caption the freshness line); `rulesReadingFor`
-  // reads it at COMMIT time, because `stamp-created-at-on-task`'s `$cycle_today` has to be
-  // resolved before the write leaves, not after the server answers — reusing `sayAsOf`'s own
-  // instant would either be stale (a commit made before the first projection ever landed) or from
-  // the wrong moment entirely. Both call sites keep the SAME discipline `today.ts`'s own test
-  // above already proves for the module: the instant is read ONCE per call, at the page, and
-  // handed to a PURE function (`todayFor`/`applyRules`) as a parameter — neither `today.ts` nor
-  // `rules.ts` ever reads the clock itself. Two audited call sites, not an unbounded one.
-  test("Date.now() is called from exactly two places in app/index.html's CODE — sayAsOf and resolverContextFor", () => {
+  test("Date.now() is called from exactly one place in app/index.html's CODE — resolverContextFor", () => {
+    // `sayAsOf` was the other legitimate call site; it is gone (chore/retire-the-status-line), and
+    // this count moved from two to one along with it, in the safe direction.
     const appCode = codeOnly(APP_SOURCE);
-    const fn = /function sayAsOf[\s\S]*?\n\}\n/.exec(appCode)?.[0];
-    assert.ok(fn, "sayAsOf was not found — this test is checking the wrong source");
-    assert.match(fn, /Date\.now\(\)/, "sayAsOf must call Date.now() itself — one of the two legitimate call sites");
-    // THE SECOND SITE MOVED AND THE RULE DID NOT. `rulesReadingFor` is `rulesSpec.read` now
-    // (app/present/resolvers/rules.ts), and a module reading the clock is exactly what today.ts's
-    // own rule refuses. So the page supplies `now` on the `CommitContext` and the resolver calls
-    // `ctx.now()` at the identical point `Date.now()` was called before — after its own gates,
-    // once, per commit. The clock is still read at the PAGE and handed to a pure function; what
-    // changed is which page function does the reading, not the discipline.
     const contextFn = /function resolverContextFor[\s\S]*?\n\}\n/.exec(appCode)?.[0];
     assert.ok(contextFn, "resolverContextFor was not found — this test is checking the wrong source");
     assert.match(
       contextFn,
       /now: \(\) => Date\.now\(\)/,
-      "resolverContextFor must supply the clock reader — the other legitimate call site",
+      "resolverContextFor must supply the clock reader — the one legitimate call site left",
     );
     const allCalls = appCode.match(/Date\.now\(\)/g) ?? [];
-    assert.equal(allCalls.length, 2, "Date.now() must be called from exactly two places in app/index.html's code");
+    assert.equal(allCalls.length, 1, "Date.now() must be called from exactly one place in app/index.html's code");
   });
 
   test("NO RESOLVER READS THE CLOCK ITSELF — the rule today.ts keeps, kept by every module that moved", () => {
-    // THE HALF OF THE OLD ASSERTION THAT WOULD OTHERWISE HAVE BEEN LOST. Counting the page's own
-    // call sites proves nothing once code can leave the page; this is what stops a resolver
-    // reaching for `Date.now()` directly now that it is a module like any other.
     for (const [name, source] of Object.entries(RESOLVER_SOURCES)) {
       assert.doesNotMatch(codeOnly(source), /Date\.now\(\)/, `${name} reads the clock itself`);
     }
     // AND THE INSTANT IS STILL HANDED TO A PURE FUNCTION. `rulesSpec.read` calls `ctx.now()` and
-    // passes the result to `todayFor`, exactly as the page used to.
+    // passes the result to `todayFor`, exactly as the page used to (through `sayAsOf`, now gone).
     assert.match(resolverSource("rules"), /todayFor\(ctx\.now\(\)/);
   });
 });

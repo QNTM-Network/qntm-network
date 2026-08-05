@@ -248,8 +248,9 @@ const V2 = [
   "",
 ].join("\n");
 
-const STALE = "this save was computed from an out-of-date copy of this file — whatever changed in it since is overwritten";
-const WRITING = "this save left while an earlier save of this file was still running — the earlier one is overwritten";
+// `STALE`/`WRITING` — the freshness-line sentences this file used to check against — are retired
+// along with `#freshness` itself (chore/retire-the-status-line). Every arm below now checks
+// `served.read`/`served.writing` directly instead.
 
 const view = (markdown) => ({ id: "this-week", path: PATH, title: "This Week", domain: "work", markdown });
 
@@ -260,7 +261,6 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
   let holds;
 
   const settle = () => new Promise((r) => setImmediate(r));
-  const freshness = () => elements.get("freshness").textContent;
 
   /** Install a projection and paint it — what `refresh` and every write's answer do. */
   function land(markdown) {
@@ -345,11 +345,11 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     await settle();
 
     assert.ok(posted, "the edit was never posted");
-    assert.equal(
-      freshness(),
-      `as of ${new Date("2026-07-31T12:00:00Z").toLocaleString()} · 0 queued · ${STALE}`,
-      "the divergence was not reported, or did not survive the line every write path overwrites",
-    );
+    // The freshness-line sentence (`STALE`) this arm used to check is retired
+    // (chore/retire-the-status-line) — `served.read` itself, unchanged, is asked directly instead:
+    // the save this page just posted was computed against V1, and the base it now holds is V2
+    // (the projection that landed while the line was open), so a fresh read against V1 is `stale`.
+    assert.equal(page.__served().read(PATH, V1).outcome, "stale", "the divergence was not detected");
   });
 
   test("ARM 1 — and the base on the wire is the copy it was computed from, not the one on screen", async () => {
@@ -405,48 +405,22 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     posted = null;
+    // READ BEFORE THE GESTURE LEAVES — the freshness-line sentence this arm used to check is
+    // retired (chore/retire-the-status-line); `served.read` against the exact string the edit is
+    // about to be computed against (V1, still on screen and still `served`'s own base — nothing has
+    // moved it) is asked directly instead: it must read `current`, not `stale` or `writing`.
+    assert.equal(page.__served().read(PATH, V1).outcome, "current", "an ordinary save was detected as a divergence");
     input.dispatch("blur");
     await settle();
-
-    assert.equal(
-      freshness(),
-      `as of ${new Date("2026-07-31T12:00:00Z").toLocaleString()} · 0 queued`,
-      "an ordinary save narrated itself as a divergence",
-    );
     assert.equal(posted.body.base, baseOf(V1), "the base was not the file the edit was computed from");
   });
 
-  test("the sentence describes ONE save — the next one does not repeat it", async () => {
-    open(V1);
-    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
-    // `i` that arms it for typing.
-    taskText().dispatch("click", makeEvent());
-    page.__enterInsert();
-    const first = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    first.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
-    land(V2);
-    first.dispatch("blur");
-    await settle();
-    assert.match(freshness(), /out-of-date copy/, "the arm did not set up");
-
-    // The answer to that save re-painted the view from what the server returned, so the next edit
-    // is computed against a served copy again.
-    park(posted.body.markdown);
-    // A click positions only (paint.ts's `focusable`); `page.__enterInsert()` is the state-level
-    // `i` that arms it for typing.
-    taskText().dispatch("click", makeEvent());
-    page.__enterInsert();
-    const second = walk(elements.get("viewBody")).find((el) => el.type === "text");
-    second.value = "- [ ] Draft the launch note tomorrow [[qntm:121]] #task";
-    second.dispatch("blur");
-    await settle();
-
-    assert.equal(
-      freshness(),
-      `as of ${new Date("2026-07-31T12:00:00Z").toLocaleString()} · 0 queued`,
-      "a stale note followed the next save",
-    );
-  });
+  // "the sentence describes ONE save — the next one does not repeat it" is GONE. It proved a
+  // freshness-line NARRATION did not leak from one save's report into the next save's own line —
+  // `writeNote`/`refusalNote`/`takeNotes`/`#freshness` are all retired (chore/retire-the-status-
+  // line), so there is no longer a sentence for anything to leak into. `served.read` itself has no
+  // memory across calls (proven directly in section 2 above, "BaseSurface — what the server last
+  // sent"), so there is nothing left this arm could still observe.
 
   test("ARM 2 — TWO TICKS INSIDE ONE CYCLE, which is the checkbox's own way of losing the file", async () => {
     /**
@@ -476,9 +450,10 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
       boxes[1].dispatch("change");
       await settle();
 
-      // SAID AT THE GESTURE, while he is still looking at the box he just ticked — not only ~14 s
-      // later when the answer lands.
-      assert.equal(freshness(), `syncing… · ${WRITING}`, "the second tick was not reported when it left");
+      // The freshness-line sentence this arm used to check is retired (chore/retire-the-status-
+      // line) — `served.writing(PATH)` is the functional fact it reported: both ticks are still in
+      // the air (neither `fetch` call has resolved), so the register counts two.
+      assert.equal(page.__served().writing(PATH), 2, "the second tick was not counted as in flight");
 
       holds.shift()?.();
       await settle();
@@ -497,13 +472,11 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // refuse on: the second write claims a file state the first write has already replaced.
     assert.equal(posts[0].base, baseOf(V1));
     assert.equal(posts[1].base, baseOf(V1));
-    // AND THE SENTENCE FOLLOWED ITS OWN SAVE. The first save's answer says nothing (its base was
-    // current); the second one's carries the report. Without that, two saves in the air swap
-    // sentences and the one that matters is consumed by the wrong freshness line — measured.
-    assert.equal(
-      freshness(),
-      `as of ${new Date("2026-07-31T12:00:00Z").toLocaleString()} · 0 queued · ${WRITING}`,
-      "the report did not follow the save it describes",
-    );
+    // "AND THE SENTENCE FOLLOWED ITS OWN SAVE" — a claim about which of two freshness-line writes
+    // carried which report — is retired along with the freshness line itself
+    // (chore/retire-the-status-line). Both writes' bases are proven above; `served.writing(PATH)`
+    // is back to 0 once both answers have landed, which the arm's own `holds.shift()` calls (and
+    // the absence of any exception here) already exercise.
+    assert.equal(page.__served().writing(PATH), 0, "a write was left counted as in flight");
   });
 });

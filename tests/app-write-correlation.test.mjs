@@ -12,11 +12,14 @@
  * the cycle rewrote, so the row stayed up claiming work was lost when none was.
  *
  * TEXT IS NOT IDENTITY. A TOKEN IS. The recovery strip itself was removed as legacy
- * (`remove-held-panel`) once the browser's placement of a line stopped needing a stand-in — but the
- * distinction this file proves did not go with it. `reportCursorReading`'s `proved` argument still
- * decides whether the freshness line reassures the operator that the cycle rewrote his line, or
- * only reports that the line is gone, and §2 below proves that decision is made on the server's own
- * word and nothing weaker.
+ * (`remove-held-panel`) once the browser's placement of a line stopped needing a stand-in.
+ * `reportCursorReading`'s `proved` argument used to decide whether the freshness line reassured
+ * the operator that the cycle rewrote his line, or only reported that the line is gone — that
+ * whole narration (`reportCursorReading`, `#freshness`) is retired now too
+ * (chore/retire-the-status-line), and §2/§3/§5 below were rewritten to prove what is LEFT: the
+ * `WriteRegister` itself still matches a token to the write it was minted for, per path, only
+ * while genuinely outstanding, and releases it correctly on the server's own echo — the mechanism
+ * `proved` was built on, which still runs even though nothing narrates its answer any more.
  *
  * ── THE SHIPPING CONDITION, WHICH IS §3 AND IS THE ARM THAT MATTERS MOST TODAY ──
  *
@@ -42,7 +45,6 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  assertMutated,
   importPage,
   installBrowser,
   makeEvent,
@@ -291,10 +293,12 @@ describe("1b. WriteRegister — MY write landed, not that some write did", () =>
 // server's own word (`HeldSurface.landed`) once a browser run measured the false positive at the
 // top of this file. The panel itself was removed (`remove-held-panel`) as legacy: the operator's
 // judgement was that a panel narrating uncertainty is not the fix for a browser that could not
-// place a line, and the placement capability that stand-in existed for now works directly. What
-// survives from all of that, unchanged, is the REASSURANCE this section still proves: when a
-// vanished line's own write is proved landed by the server's echo, the freshness line says the
-// cycle rewrote it rather than merely saying it is gone.
+// place a line, and the placement capability that stand-in existed for now works directly. THE
+// REASSURANCE ITSELF (the freshness line saying the cycle rewrote a vanished line rather than
+// merely saying it is gone) is ALSO retired now (chore/retire-the-status-line, `reportCursorReading`
+// deleted) — what this section still proves is the mechanism that reassurance was built on: a
+// write's own echo releases its token from `WriteRegister`, correctly, per path, only while
+// genuinely outstanding.
 
 const OTHER_PATH = "work/inbox.md";
 
@@ -311,7 +315,6 @@ const STAMPED_ELSEWHERE = ["# This Week", "", "## Overdue", ""].join("\n");
 
 const WORK_ECHOING = makeWorkDir("write-correlation-echoing");
 const WORK_SILENT = makeWorkDir("write-correlation-silent");
-const WORK_MUTANT = makeWorkDir("write-correlation-mutant");
 
 /**
  * ONE DRIVER FOR EVERY ARM, so the echoing page, the silent page and the mutated page are driven by
@@ -345,8 +348,6 @@ function makeDriver(page, browser, control) {
     const data = envelope(markdown, writes);
     page.__setGraphData(data);
     page.paintView(id);
-    page.__sayAsOf(data);
-    return elements.get("freshness").textContent;
   };
 
   const taskText = () =>
@@ -382,7 +383,6 @@ function makeDriver(page, browser, control) {
     typeAndCommit,
     envelope,
     control,
-    freshness: () => elements.get("freshness").textContent,
     arm: () => {
       land("# Inbox\n", "inbox");
       page.__writes().clear();
@@ -450,22 +450,22 @@ describe("2. THE ECHO PROVES THE WRITE LANDED, AND THE FRESHNESS LINE SAYS SO", 
     assert.equal(posted.path, PATH);
   });
 
-  test("AND THE FRESHNESS LINE SAYS SO WITHOUT CLAIMING THE LINE WAS WRITTEN", () => {
-    const said = d.freshness();
-    assert.match(said, /the cycle rewrote the line you saved/);
-    assert.match(said, /the server recorded it/);
-    assert.doesNotMatch(said, /\bwritten\b/, "the page claimed written when it means recorded");
+  test("AND THE ECHO RELEASES THE TOKEN — the register agrees the write landed", () => {
+    // "AND THE FRESHNESS LINE SAYS SO WITHOUT CLAIMING THE LINE WAS WRITTEN" tested
+    // `reportCursorReading`'s narration directly ("the cycle rewrote the line you saved — the
+    // server recorded it", never "written"); that function and `#freshness` are both retired
+    // (chore/retire-the-status-line). What is still real, and still checked here, is the mechanism
+    // that sentence was built on: the token the previous test proved was posted is matched by the
+    // echoing server's answer and released from the outstanding-write register.
+    const posted = d.control.posted[d.control.posted.length - 1];
+    assert.equal(d.page.__writes().waiting(posted.token), false, "the echoed token is still outstanding");
   });
 
-  // ── THE REMAINING ARMS CHECK THE REGISTER RATHER THAN THE FRESHNESS LINE ──
+  // ── THE REMAINING ARMS CHECK THE REGISTER, THE ONLY PLACE THIS EVIDENCE STILL SURFACES ──
   //
-  // `proved` is read from `landedTokens`, a ONE-TURN set `paintView` consumes whether or not it is
-  // used (see that variable's own declaration) — so a token that lands on some LATER envelope, with
-  // no fresh vanish for it to prove, has nothing left to show on screen: the sentence for the
-  // original vanish was already said and is not retroactively rewritten. What is still real and
-  // still worth proving is that `WriteRegister` — the thing `proved` is built on — keeps matching
-  // correctly: per token, per path, and only while the write is genuinely outstanding. §1b above
-  // proves the register in isolation; these arms prove it through the real page's own `__correlate`.
+  // `WriteRegister` keeps matching correctly: per token, per path, and only while the write is
+  // genuinely outstanding. §1b above proves the register in isolation; these arms prove it through
+  // the real page's own `__correlate`.
 
   test("AN UNMATCHED WRITE STAYS OUTSTANDING, THEN GIVES UP — never matched by a stranger's token", async () => {
     d.arm();
@@ -548,24 +548,16 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     d = await standUpPage(WORK_SILENT);
   });
 
-  test("THE FRESHNESS LINE ONLY SAYS THE LINE IS GONE — nothing proves the write", async () => {
+  // "THE FRESHNESS LINE ONLY SAYS THE LINE IS GONE" and "AND THE FRESHNESS LINE SAYS WHAT IT
+  // ALWAYS SAID" tested `reportCursorReading`'s narration directly against `#freshness`; both are
+  // retired (chore/retire-the-status-line). The test below (unchanged) still proves the shipping
+  // condition that mattered: a silent server's answer never touches the outstanding-write register.
+
+  test("AND THE REGISTER NEVER SPOKE — nothing was matched and nothing was expired", async () => {
     d.arm();
     d.control.echo = null; // no `writes` key on the answer at all — the deployed server
     d.control.nextProjection = STAMPED_ELSEWHERE;
     await d.typeAndCommit(BARE, TYPED);
-
-    assert.match(d.freshness(), /^as of .* · the line you were on is not in this view any more$/);
-  });
-
-  test("AND THE FRESHNESS LINE SAYS WHAT IT ALWAYS SAID — no new sentence appears", () => {
-    const said = d.freshness();
-    assert.match(said, /the line you were on is not in this view any more/);
-    assert.doesNotMatch(said, /the server recorded your save/);
-    assert.doesNotMatch(said, /the server took your save/);
-    assert.doesNotMatch(said, /the cycle rewrote the line you saved/);
-  });
-
-  test("AND THE REGISTER NEVER SPOKE — nothing was matched and nothing was expired", () => {
     // `correlate` returns on `silent` before the register is touched. The write stays outstanding
     // because the server never said anything about it, which is the truth.
     assert.equal(d.page.__writes().outstanding(PATH), 1, "a silent server moved the register");
@@ -609,7 +601,6 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     // there is none, the other is a request about the SERVER'S sequencing and is true either way.
     assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "markdown", "path"]);
     assert.equal("token" in posted, false, "an empty token reached the wire");
-    assert.match(d.freshness(), /the line you were on is not in this view any more/, "with no token, the line still gets reported gone");
   });
 });
 
@@ -682,59 +673,32 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);
   });
 
-  test("THE REGISTER IS REACHED IN EXACTLY SIX PLACES, and none of them is a write of a file", () => {
-    // SIX RATHER THAN FIVE SINCE THE PICKUP, AND THE SIXTH IS A QUESTION. `writes.waiting(token)` is
-    // asked twice by `collect` — once before the read, so a pickup that is no longer owed costs no
-    // request, and once after it, to tell the schedule whether the answer arrived. It takes a token
-    // and returns a boolean: it cannot open a write, cannot close one, and cannot reach a path, a
-    // markdown or a POST. The name is asserted rather than the count, so a seventh reach has to be
-    // justified here rather than absorbed by a number.
+  test("THE REGISTER IS REACHED IN EXACTLY FIVE PLACES, and none of them is a write of a file", () => {
+    // FIVE RATHER THAN SIX — `writes.outstanding` DROPPED (chore/retire-the-status-line). It was
+    // `correlate`'s own count of outstanding writes for a path, read once, only to choose between
+    // two freshness-line sentences (WRITE_RECORDED/WRITE_ACCEPTED) that are gone along with it; the
+    // release `correlate` performs via `writes.arrive` is unchanged and unaffected.
+    //
+    // `writes.waiting(token)` IS STILL ASKED TWICE BY `collect` — once before the read, so a pickup
+    // that is no longer owed costs no request, and once after it, to tell the schedule whether the
+    // answer arrived. It takes a token and returns a boolean: it cannot open a write, cannot close
+    // one, and cannot reach a path, a markdown or a POST. The name is asserted rather than the
+    // count, so a sixth reach has to be justified here rather than absorbed by a number.
     const reads = codeOf(APP_SOURCE).match(/\bwrites\.[A-Za-z]\w*/g) ?? [];
     assert.deepEqual(
       [...new Set(reads)].sort(),
-      ["writes.arrive", "writes.clear", "writes.giveUp", "writes.open", "writes.outstanding", "writes.waiting"],
+      ["writes.arrive", "writes.clear", "writes.giveUp", "writes.open", "writes.waiting"],
       "a new way to reach the write register appeared — check it cannot reach a POST",
     );
   });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 5. THE MUTATION PROOF — break the match, and §2's own assertion goes red
+// 5. THE MUTATION PROOF THAT USED TO LIVE HERE IS GONE
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-
-describe("5. MUTATION PROOF — neuter the match, and the reassurance stops firing when it should", () => {
-  let d;
-
-  before(async () => {
-    // ONE EXPRESSION, AND IT IS THE MATCH ITSELF. `proved` is what decides whether the freshness
-    // line may say the cycle rewrote the line; forcing it false is exactly "the browser cannot
-    // recognise its own write".
-    d = await standUpPage(WORK_MUTANT, (source) =>
-      assertMutated(
-        source,
-        "const proved = mine && sent.token !== null && landed.has(sent.token);",
-        "const proved = false && mine && sent.token !== null && landed.has(sent.token);",
-      ),
-    );
-  });
-
-  test("with the match broken, a line that saved perfectly is reported only as gone", async () => {
-    d.arm();
-    d.control.echo = echoesTheToken;
-    d.control.nextProjection = STAMPED_ELSEWHERE;
-    await d.typeAndCommit(BARE, TYPED);
-
-    // §2's own assertion, run against the mutated page: with `proved` forced false, the reassurance
-    // never fires, even though the server named the write's token in the exact same envelope.
-    assert.doesNotMatch(
-      d.freshness(),
-      /the cycle rewrote the line you saved/,
-      "the matching was removed and §2's assertion still passed — the guard proves nothing",
-    );
-    assert.match(d.freshness(), /the line you were on is not in this view any more/);
-    // AND THE PAGE IS OTHERWISE UNHARMED, which is what makes this a mutation of the MATCH rather
-    // than of the app: the write still carries its token, so it is genuinely the recognition that
-    // went and not the whole correlation path.
-    assert.match(d.control.posted[d.control.posted.length - 1].token, /^w1-[0-9a-f]{32}$/);
-  });
-});
+//
+// It mutated `const proved = mine && sent.token !== null && landed.has(sent.token);` and proved
+// the freshness line's reassurance stopped firing once the match was broken. `proved`, `mine`,
+// `sent`, `landed` and `reportCursorReading` — the whole expression and its one consumer — are
+// deleted from app/index.html (chore/retire-the-status-line): there is no longer a line to mutate,
+// because there is no longer a decision it fed.

@@ -231,7 +231,6 @@ let answers;
 let posted;
 
 const settle = () => new Promise((r) => setImmediate(r));
-const freshness = () => elements.get("freshness").textContent;
 
 /** Everything the painted body is showing, as one string. */
 const onScreen = () =>
@@ -352,7 +351,9 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
       for (const marker of markers) {
         assert.doesNotMatch(onScreen(), new RegExp(marker), `${marker} reached the screen mid-edit`);
       }
-      assert.match(freshness(), /^the cycle answered/, "the page did not say the arrival was held");
+      // "the cycle answered — it lands on this view when the line you are in settles"
+      // (`ARRIVAL_HELD`) is retired (chore/retire-the-status-line); `page.__queued()` above is
+      // already the functional proof the arrival was held rather than installed.
     });
   }
 
@@ -377,7 +378,6 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     assert.equal(page.__queued().size, 0, "the projection was still held after the line settled");
     assert.match(onScreen(), /#blocked/, "the line above did not arrive");
     assert.match(onScreen(), /🛫 2026-08-04/, "the line below did not arrive");
-    assert.match(freshness(), /^as of /, "the freshness line did not report the projection landing");
     assert.equal(posted.length, 1, "an unchanged line posted a second write");
   });
 
@@ -397,7 +397,6 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
 
     assert.equal(page.__queued().size, 0, "a projection was held with nothing open");
     assert.match(onScreen(), /#blocked/);
-    assert.match(freshness(), /^as of /);
   });
 
   test("A ROW BEING MADE COUNTS AS AN OPEN LINE TOO — draft and edit are one gate", () => {
@@ -500,15 +499,19 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     boxes()[1].dispatch("change");
     await settle();
 
-    assert.match(
-      freshness(),
-      /out-of-date copy|overwritten/,
-      "a second write against a superseded base said nothing",
-    );
+    // "this save was computed from an out-of-date copy of this file — whatever changed in it since
+    // is overwritten" (`BASE_REFUSALS.stale`, the freshness-line sentence this arm used to check)
+    // is retired (chore/retire-the-status-line) along with `served.read`'s ONE call site — nothing
+    // in the shipping page asks the detector this question any more. The detector itself
+    // (`app/present/base.ts`, untouched) still answers it correctly, which is what this now checks
+    // directly: a write computed against `V1` — what the screen was still showing when the second
+    // box was toggled, the held projection never having repainted it — reads `stale` against the
+    // base the held projection already moved.
+    assert.equal(page.__served().read(PATH, V1).outcome, "stale", "the detector stopped firing");
     void input;
   });
 
-  test("AND IT STAYS SILENT WHEN IT SHOULD — one write, nothing queued, no sentence", async () => {
+  test("AND IT STAYS SILENT WHEN IT SHOULD — one write, nothing queued, no false positive", async () => {
     land(V1);
     answers = [envelope(ABOVE, T2)];
 
@@ -516,8 +519,9 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     boxes()[0].dispatch("change");
     await settle();
 
-    assert.match(freshness(), /^as of /);
-    assert.doesNotMatch(freshness(), /out-of-date copy|overwritten/, "a clean write was reported stale");
+    // A write computed against the base the page is NOW holding must read `current` — the negative
+    // half of the same detector, checked the same direct way as the arm above.
+    assert.equal(page.__served().read(PATH, page.__served().markdown).outcome, "current", "a clean write was reported stale");
   });
 
   test("the base a HELD projection sets is SERVER markdown, never a string this page computed", async () => {
@@ -638,12 +642,10 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     assert.equal(page.__served().markdown, posted[0].markdown, "the base did not follow the ack");
     assert.notEqual(page.__served().markdown, V1, "the base is still the pre-write projection");
     assert.equal(page.__accepted().sourceFor(PATH), posted[0].markdown);
-    // AND THE PAGE STILL DOES NOT CLAIM `as of <when>` FOR IT. `sayAsOf` reads
-    // `data.snapshot.generated_at`; an ack carries no snapshot, so a page that said "as of" here
-    // would be claiming WRITTEN when it means ACCEPTED — and would throw doing it.
-    assert.equal(freshness(), "the server took your save — the cycle's answer follows");
-    assert.doesNotMatch(freshness(), /^as of /);
-    assert.doesNotMatch(freshness(), /written/);
+    // "the server took your save — the cycle's answer follows" (`ARRIVAL_ACCEPTED`) is retired
+    // (chore/retire-the-status-line); the base/accepted-source checks above are the functional
+    // proof an ack was handled as ACCEPTED (not claimed as WRITTEN, and not claimed as landed via
+    // an `as of <when>` this page never had a snapshot to compute).
   });
 
   test("TWO EDITS INSIDE ONE CYCLE CARRY BOTH, WITH ASYNC ON — the acceptance test", async () => {
@@ -688,8 +690,10 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     boxes()[1].checked = true;
     boxes()[1].dispatch("change");
     await settle();
-    assert.equal(freshness(), "the server took your save — the cycle's answer follows");
-    assert.doesNotMatch(freshness(), /out-of-date copy|overwritten|could not be checked/);
+    // The freshness-line sentences this arm used to check are retired (chore/retire-the-status-
+    // line); the detector's own answer, asked directly, is the functional proof — a write against
+    // the base the second ack left is `current`, not `stale`.
+    assert.equal(page.__served().read(PATH, page.__served().markdown).outcome, "current");
   });
 
   test("A QUEUED PROJECTION REFUSES THE ACK'S BASE — §4's one statement is not undone", async () => {
@@ -714,7 +718,9 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
 
     assert.equal(page.__accepted().sourceFor(PATH), null, "the ack overwrote a held projection's base");
     assert.equal(page.__served().markdown, BOTH, "the ack overwrote a held projection's base");
-    assert.match(freshness(), /out-of-date copy/, "the second write against a superseded base said nothing");
+    // The freshness-line sentence this arm used to check is retired (chore/retire-the-status-line);
+    // the detector's own answer, asked directly against the screen's still-V1 source, is the proof.
+    assert.equal(page.__served().read(PATH, V1).outcome, "stale", "the second write against a superseded base was not flagged");
     assert.equal(input.value, V1.split("\n")[3], "the open line was re-sourced by an ack");
   });
 

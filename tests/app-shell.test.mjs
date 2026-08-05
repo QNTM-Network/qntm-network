@@ -810,7 +810,6 @@ describe("8. a re-read keeps your place", () => {
     assert.equal(page.__currentViewId(), "flowtrace-queue", "the re-read moved the reader");
     assert.deepEqual(calls.map((c) => c.method), ["GET"], "the re-read wrote something");
     assert.match(calls[0].url, /\/app\/graph$/);
-    assert.match(el("freshness").textContent, /^as of /, "the freshness line was not renewed");
   });
 
   test("it says it is working, and stops saying so when it lands", async () => {
@@ -826,12 +825,14 @@ describe("8. a re-read keeps your place", () => {
     assert.equal(el("refreshBtn").getAttribute("aria-busy"), null, "it stayed busy after landing");
   });
 
-  test("a failed read says so and leaves the view standing", async () => {
+  test("a failed read leaves the view standing", async () => {
+    // "could not read: <message>" — the sentence this arm used to check — is retired
+    // (chore/retire-the-status-line); `refresh`'s `catch` is now silent. The functional recovery
+    // below (the view holds, the button un-busies) is unchanged and is what is left to prove.
     globalThis.fetch = async () => { throw new Error("offline"); };
     page.__setGraphData({ snapshot: { generated_at: "x", views: VIEWS } });
     page.__setCurrentViewId("all-work");
     await page.refresh();
-    assert.match(el("freshness").textContent, /could not read/);
     assert.equal(page.__currentViewId(), "all-work", "a failed read moved the reader anyway");
     assert.equal(el("refreshBtn").getAttribute("aria-busy"), null, "it stayed busy after failing");
   });

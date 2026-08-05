@@ -130,19 +130,22 @@ describe("the panel does not render for any of the three conditions that used to
     };
     page.__setGraphData(data);
     page.paintView(id);
-    page.__sayAsOf(data);
   };
 
   test("VANISHED — the cursor's own line disappears from an arriving projection", () => {
     refuseWith = null;
     land(V1);
     page.__setFocus(CURSOR, V1);
+    assert.equal(page.__focusAnchor()?.node, "qntm:121", "the arm did not anchor the line it means to lose");
 
     land(DELETED);
 
-    assert.match(
-      elements.get("freshness").textContent,
-      /the line you were on is not in this view any more/,
+    // "the line you were on is not in this view any more" (`reportCursorReading`) is retired
+    // (chore/retire-the-status-line) — the arm's setup is confirmed functionally instead: the
+    // cursor's identity could not survive DELETED (qntm:121 is gone from it entirely).
+    assert.notEqual(
+      page.__focusAnchor()?.node,
+      "qntm:121",
       "the arm did not set up — the vanish was not detected at all",
     );
     assert.deepEqual(panelTraces(elements), [], "a vanished line rendered panel markup somewhere in the page");
@@ -166,9 +169,12 @@ describe("the panel does not render for any of the three conditions that used to
     input.dispatch("blur");
     await new Promise((r) => setImmediate(r));
 
-    assert.match(
-      elements.get("freshness").textContent,
-      /the server refused it and nothing was written/,
+    // "...the server refused it and nothing was written" (`WRITE_REFUSED`) is retired
+    // (chore/retire-the-status-line) — the arm's setup is confirmed functionally instead: a 409
+    // does not repaint, so his characters must still be exactly where he left them.
+    assert.equal(
+      input.value,
+      "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task",
       "the arm did not set up — the refusal was not detected at all",
     );
     assert.deepEqual(panelTraces(elements), [], "a refused write rendered panel markup somewhere in the page");
