@@ -3652,3 +3652,48 @@ backlog:
     NOT settable per-instance at all, unlike the ordering tuple's own field/direction pairs.
   kind: capability
   state: unscoped
+
+- id: consolidate-declaration-lets-into-one-value
+  title: >-
+    [research-the-store] [UNDER AN HOUR] `docs/implementation-artifacts/research-the-store.md`'s
+    one concrete recommendation: `app/index.html`'s six declaration-axis `let`s (`presentation`,
+    `indentUnit`, `structural`, `qualification`, `resolution`, `rulesTable`, all assigned only in
+    `applyPresentation`, `:1097-1177`) are ONE FACT — one served document, one parse function, one
+    assignment site — artificially split into six variables with no documented reason to be six,
+    unlike every one of the eleven mutable state surfaces in `app/present/`, each of which argues
+    in its own header why it must NOT merge with its neighbour. MEASURED, NOT ASSUMED: a full
+    inventory of all 29 named holders (eleven surfaces + eighteen `let`s) plus two more found in
+    the survey (`drawerStops`, `viewButtons`) found no other undocumented overlap of this shape.
+    Consolidating into one readonly `Declaration` value (the shape `DeclaredPresentation`,
+    `context.ts:88-121`, already has) makes the six-way assignment atomic, costs a page of code,
+    and changes no behaviour today — `loadPresentation()` is called from exactly one site
+    (`index.html:3461`), so nothing can observe five-of-six landing. It is the kind of thing that
+    is free now and expensive later: the file's own comment already anticipates a second call site
+    re-fetching the declaration mid-session (`:1240-1246`, `cache: "no-cache"`, ETag
+    revalidation), and that is the moment a torn six-way assignment becomes a real hazard rather
+    than a hypothetical one.
+  record: >-
+    NOT SHIPPED. This is a research branch (`research/the-store`) with no application source
+    changes — filed so the recommendation is tracked as a backlog row rather than only as a
+    paragraph in a research document, the same posture `research-state-and-speed.md`'s own arc
+    rows take. THE BROADER ASK THIS ROW ANSWERS ("a well-architected store generally, for general
+    components and future") WAS ALSO CONSIDERED AND DECLINED: the eleven existing surfaces
+    (`app/present/{rows,base,accepted,focus,draft,motions,settle,predict,queue,pickup,
+    correlation}.ts`) were checked against eight named invariants — one path to the screen, the
+    `paintGeneration` re-entrancy guard (verified live: `commitLine`'s resolver walk can run
+    synchronously inside an active `paint()` call, via a nested blur), nothing derived is ever
+    cached, pull-not-push, wholesale replacement never accumulation, a view change vs. a
+    projection arrival, `graphData`'s test-pinned 4-site assignment, and (at least) two distinct,
+    non-cached pull points rather than one — and every surveyed state-management library (Zustand
+    vanilla 486 B, `@tanstack/store` 2.2 KB, nanostores 2.16 KB, `@preact/signals-core` 1.95 KB,
+    `alien-signals` 1.95 KB, Valtio 5.78 KB, Redux Toolkit 13.58 KB, `@tanstack/query-core`
+    11.8 KB, Yjs 28.16 KB, Automerge ~1.2 MB, Loro ~1.06 MB gzip, all measured live against
+    `bundlephobia`/`bundlejs`) either fails the architecture's own gravity test (does truth end up
+    living in the store/component tree instead of the markdown source) or, for the CRDT family,
+    solves concurrent multi-writer merge — a problem this app's whole `base.ts`/`accepted.ts`
+    design explicitly detects and refuses rather than needing to merge. No dependency is
+    recommended. A second, softer recommendation — naming the eleven surfaces' shared shape
+    (bounded value, own key, own drop rule, no subscription, read call is the reconcile) as a
+    written convention for a NEW general-purpose surface to follow, rather than extracting a
+    shared base class — was explicitly left unbuilt pending its own traced scenario.
+  state: diagnose-ready
