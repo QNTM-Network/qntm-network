@@ -28,7 +28,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -598,10 +598,44 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
   test("NOT CHECKED is not a pass: an absent config dir exits 3, never 0", () => {
     // build.yml reads this exit code and raises a ::warning:: rather than a green tick, because a
     // check that could not run must never look like a check that ran and passed.
-    const { code, output } = runCheck(join(tmpdir(), "no-such-config-dir"), join(REPO, "presentation.json"));
+    const absent = join(tmpdir(), "no-such-config-dir");
+    const { code, output } = runCheck(absent, join(REPO, "presentation.json"));
     assert.equal(code, 3);
     assert.match(output, /NOTHING WAS CHECKED/);
     assert.match(output, /It is NOT a pass/);
+    // The report must not explain a SEARCH it did not make. `--config-dir` named this directory,
+    // so a line about where the ancestor walk looked would be a true sentence about the wrong
+    // thing — which is exactly how the wording this replaced ("expected in CI", printed on the
+    // operator's own laptop) came to be read as reassurance.
+    assert.match(output, /named explicitly by --config-dir/);
+    assert.doesNotMatch(output, /monorepo checkout located at/);
+  });
+
+  test("--require-config turns the same absence into a FAILURE, and only when passed", () => {
+    // The distinction the exit codes carry: CI never passes the flag, so an absent monorepo stays
+    // exit 3 and the workflow stays green-with-a-warning. A local caller who MEANT to compare
+    // against the operator's config passes it, and finds out that the comparison did not happen.
+    const absent = join(tmpdir(), "no-such-config-dir");
+    const presentation = join(REPO, "presentation.json");
+    const relaxed = runCheck(absent, presentation);
+    const strict = spawnSync(
+      process.execPath,
+      [
+        join(REPO, "scripts", "checkdeclarations.mjs"),
+        "--config-dir",
+        absent,
+        "--presentation",
+        presentation,
+        "--require-config",
+      ],
+      { encoding: "utf8" },
+    );
+    assert.equal(relaxed.code, 3, "without the flag, an absence is 'not checked'");
+    assert.equal(strict.status, 1, "with the flag, the same absence is a failure");
+    assert.match(strict.stderr, /--require-config was passed/);
+    // Three outcomes, three codes: a MATCH is 0, a STALE declaration is 1, an absence is 3 — and
+    // the absence only becomes 1 when a caller asked for it to.
+    assert.notEqual(relaxed.code, 0, "an absence must never share an exit code with a match");
   });
 
   test("the in-process comparison agrees with the subprocess, so a test can use either", () => {

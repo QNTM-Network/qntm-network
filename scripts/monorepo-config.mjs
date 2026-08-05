@@ -241,10 +241,18 @@ export function configDirDiagnostic() {
  * @returns {string[]} lines for stderr
  */
 export function notCheckedReport(configDir, required = false) {
+  // Only explain the SEARCH when the missing directory is the one the search produced. When a
+  // caller named the directory with `--config-dir`, describing where the search would have looked
+  // is a true sentence about the wrong thing — and a true sentence about the wrong thing is how
+  // the line this replaces ("expected in CI") came to be read as reassurance.
+  const why =
+    resolve(configDir) === resolve(DEFAULT_CONFIG_DIR)
+      ? configDirDiagnostic()
+      : "named explicitly by --config-dir, so no search was made for it.";
   return [
     `NOTHING WAS CHECKED: no config dir at ${configDir}.`,
-    `  ${configDirDiagnostic()}`,
-    "  This is NOT a pass — no declaration was compared against anything.",
+    `  ${why}`,
+    "  It is NOT a pass — no declaration was compared against anything.",
     required
       ? "  --require-config was passed, so this is a FAILURE (exit 1)."
       : "  Exit 3 says so. CI does not clone the private monorepo and treats 3 as 'not checked'.\n" +
