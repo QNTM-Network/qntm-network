@@ -149,8 +149,8 @@ export type {
   ProspectiveChild,
 } from "./graphmatch.js";
 
-export { PresentationContext, presentationFromDeclaration } from "./context.js";
-export type { DeclaredPresentation } from "./context.js";
+export { PresentationContext, presentationFromDeclaration, declarationFrom, NOT_YET_DECLARED } from "./context.js";
+export type { DeclaredPresentation, Declaration } from "./context.js";
 
 export { FocusSurface } from "./focus.js";
 export type { ReanchorReading } from "./focus.js";
