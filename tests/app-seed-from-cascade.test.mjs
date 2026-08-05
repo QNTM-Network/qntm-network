@@ -581,8 +581,19 @@ describe("6. THE MUTATION PROOF — a guard that cannot go red is decoration", (
       // bundle imports no JSON at all now (design-config-is-content.md step 2), so the shape is
       // kept because a mutant that differs from the repo in TWO ways proves less than one that
       // differs in one — not because the bundler still requires it.
+      //
+      // `app/shell/` COPIED TOO, AS OF THE DRAWER'S EXTRACTION. `app/present/index.ts` re-exports
+      // the view drawer from `../shell/drawer.js` — a relative import that leaves this directory —
+      // because the drawer touches the document and `app/present/` is, by its own header, the one
+      // directory in this repo where exactly one module (`paint.ts`) may do that (see
+      // `app/shell/drawer.ts`'s own header for the full argument). "The repo's own shape" now
+      // includes that sibling, so the copy does too; a scratch build that omitted it would fail on
+      // `Could not resolve "../shell/drawer.js"` for every mutant here, regardless of the mutation,
+      // which is not a signal about `address.ts`/`newline.ts` and would make this suite red for a
+      // reason that has nothing to do with what it exists to prove.
       const present = join(scratch, "app", "present");
       cpSync(join(REPO, "app", "present"), present, { recursive: true });
+      cpSync(join(REPO, "app", "shell"), join(scratch, "app", "shell"), { recursive: true });
       cpSync(join(REPO, "presentation.json"), join(scratch, "presentation.json"));
       const path = join(present, module);
       const source = readFileSync(path, "utf8");
