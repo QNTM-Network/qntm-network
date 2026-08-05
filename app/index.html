@@ -3614,35 +3614,97 @@ function parentCandidateFor(parentLine, parentSection, snapshot) {
 }
 
 /**
+ * DID `commit`'s OWN LINE GAIN A STRUCTURAL PARENT IT DID NOT HAVE A MOMENT AGO, LOSE ONE IT DID,
+ * OR IS ITS RELATIONSHIP TO WHATEVER PRECEDES IT UNCHANGED — the one fact `parentPromotionFor`
+ * gates on, in place of the enumeration (`commit.kind !== "insert-line"`) that shipped instead of
+ * it and missed the operator's own commonest gesture: type the child, THEN indent it (a `set-line`
+ * commit, never `insert-line`). "Did the relationship change" is decided by comparing
+ * `afterParentLineIndex` (the caller's own `structuralParentLineIndex` reading, off
+ * `commit.markdown` — the file this commit PRODUCES) against a BEFORE reading this function takes
+ * for itself, off whichever string actually holds this line's own history.
+ *
+ * `commit.kind === "set-line"` (`LineCommit.kind`'s own header, paint.ts): `commit.source` IS this
+ * line's own file a moment ago — a `set-line` commit replaces exactly one line and shifts nothing
+ * else, so the SAME `commit.lineIndex` names the SAME physical line on both sides. The before
+ * reading is real, and this is what makes `>`/`<` and a hand-typed change to a line's own leading
+ * whitespace both reachable here — NEITHER is `commit.kind === "insert-line"`, and neither needs to
+ * be for this rule to see them: both are `set-line` commits whose relationship genuinely changed.
+ *
+ * EVERY OTHER `kind` (today, only `"insert-line"` — `LineCommit.kind`'s own closed TypeScript union
+ * is what stops a third one arriving here unnoticed, see paint.ts): `commit.source` at this SAME
+ * index is a DIFFERENT, unrelated line about to be pushed down, never this line's own before
+ * (`LineCommit.kind`'s own header states this explicitly). A line still being minted has no honest
+ * "before" to read, so this reads as "no relationship a moment ago" — simply true for a captured
+ * line that did not exist a moment ago — rather than mis-reading an unrelated line's indentation as
+ * this one's own history. A hypothetical future `kind` this function has never heard of gets the
+ * SAME safe default: no fabricated before, which can only ever under-report a LOST relationship
+ * (never invent a GAINED one, since `after` is always read for real) — the worst a truly novel kind
+ * can do here is fall back to the same honest "no history to compare" `insert-line` already gets.
+ */
+function structuralRelationshipChangeFor(commit, afterParentLineIndex) {
+  const beforeParentLineIndex =
+    commit.kind === "set-line" ? structuralParentLineIndex(commit.source.split("\n"), commit.lineIndex) : null;
+  if (beforeParentLineIndex === afterParentLineIndex) {
+    return { kind: "unchanged" };
+  }
+  return { kind: afterParentLineIndex === null ? "lost" : "gained" };
+}
+
+/**
  * THE ONE EVALUATION `parentPromotionNoteFor` AND `parentPromotionDiagnosticFor` ARE BOTH COMPUTED
  * FROM — the same tie `rulesReadingFor` already is for its own two readers, and for the same
- * reason. Scoped to a fresh, INDENTED capture (`commit.kind === "insert-line"`, and a real
- * structural parent above it) — an existing line, or a root-level line with nothing shallower
- * above it, is `not-evaluated`, the same silence `rulesReadingFor` gives a "set-line" commit.
+ * reason. Scoped to WHATEVER COMMIT ACTUALLY CHANGED THIS LINE'S STRUCTURAL RELATIONSHIP —
+ * `structuralRelationshipChangeFor`, above — never to a specific `commit.kind`: a line settling
+ * with no change to its relationship (an unindented edit, a checkbox flip, a root-level capture) is
+ * `not-evaluated`, the same silence `rulesReadingFor` gives a commit with nothing to say.
  *
  * `"answer"` carries `applied` (`RuleEffect[]`, possibly empty — "the parent was checked and
  * nothing about it changes" is a real, decided answer, not a lesser one than a promotion firing)
  * and `parentLineIndex`, so a caller can say WHICH row the effect is about without re-deriving it.
- * `"abstains"` covers every reason this leg's own brief asks to be visible: the graph has not
- * loaded, the parent's stamp names a node this app's own snapshot does not carry, the parent LINE
- * itself cannot be resolved to fields at all (`resolveLineFields`'s own abstentions, prefixed
- * `parent-`), or the graph-aware pass itself could not decide (`graph-match-undecidable` —
- * `graphmatch.ts`'s own `undecidable`, non-empty, with nothing else in the pass having fired
- * either — the exact same "only when NOTHING else answered" posture `rulesReadingFor` already
- * takes for its own `rule-pattern-needs-graph-traversal`).
+ * `"abstains"` covers every reason this leg's own brief asks to be visible: the relationship was
+ * REMOVED rather than gained (`structural-relationship-removed` — see
+ * `structuralRelationshipChangeFor`'s own "lost" case, and the comment on that branch below for why
+ * this is a refusal to guess, not caution for its own sake), the graph has not loaded, the parent's
+ * stamp names a node this app's own snapshot does not carry, the parent LINE itself cannot be
+ * resolved to fields at all (`resolveLineFields`'s own abstentions, prefixed `parent-`), or the
+ * graph-aware pass itself could not decide (`graph-match-undecidable` — `graphmatch.ts`'s own
+ * `undecidable`, non-empty, with nothing else in the pass having fired either — the exact same
+ * "only when NOTHING else answered" posture `rulesReadingFor` already takes for its own
+ * `rule-pattern-needs-graph-traversal`).
  */
 function parentPromotionFor(view, commit) {
   if (rulesTable === undefined || qualification === undefined || resolution === undefined) {
     return { kind: "not-evaluated" };
   }
-  if (commit.kind !== "insert-line" || commit.markdown === null) {
+  if (commit.markdown === null) {
     return { kind: "not-evaluated" };
   }
   const lines = commit.markdown.split("\n");
   const parentLineIndex = structuralParentLineIndex(lines, commit.lineIndex);
-  if (parentLineIndex === null) {
+  const relationship = structuralRelationshipChangeFor(commit, parentLineIndex);
+  if (relationship.kind === "unchanged") {
     return { kind: "not-evaluated" };
   }
+  if (relationship.kind === "lost") {
+    // THE RELATIONSHIP WAS REMOVED (an outdent, or any edit that un-indents this line past its
+    // former parent), NEVER GAINED — see `structuralRelationshipChangeFor`'s own header.
+    // Abstaining here rather than running the graph-aware pass below is not caution for its own
+    // sake: `applyGraphAwareRules`/`graphmatch.ts` can only ever ADD a prospective child to a
+    // candidate's existing neighbours (`ProspectiveChild`, folded in by `edgeStepIsSatisfied`) — it
+    // has no way to SUBTRACT one the live graph still names, so asking it "does the OLD parent
+    // still qualify" would silently score against a graph state that still contains the child this
+    // very commit is removing. That would produce a confidently wrong "no change" rather than an
+    // honest unknown, which is worse than saying nothing — this file's own "agree with the engine,
+    // or abstain" rule. (Separately, and not the reason for this abstention: today's published
+    // grammar carries no revert-shaped rule for this pattern at all — see this PR's own
+    // description for which one, and why. So even a perfect removal model would have nothing
+    // published to apply here yet. This abstention would hold regardless of that — it is about what
+    // this app can honestly MODEL, not about what happens to be published this week.)
+    return { kind: "abstains", because: "structural-relationship-removed" };
+  }
+  // relationship.kind === "gained" — `afterParentLineIndex` (== `parentLineIndex`) is real here by
+  // construction (see `structuralRelationshipChangeFor`'s own return), so everything below reads
+  // exactly as it always has, now simply reachable from more than one `commit.kind`.
 
   const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
   const childSectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
