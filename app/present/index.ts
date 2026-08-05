@@ -226,7 +226,7 @@ export type { PredictInstruction, RowPrediction, WithdrawnPrediction } from "./p
 // The string the painter walked, one row per printed line, each with a handle that outlives the
 // string it came from, and which row is selected. See rows.ts's own header for the defect it ends
 // and for why the identity is a two-arm union rather than a nullable field.
-export { RowStore, engineOf, localOf } from "./rows.js";
+export { RowStore, engineOf } from "./rows.js";
 export type { EngineRowId, LocalRowId, Row, RowIdentity, RowSink } from "./rows.js";
 
 // ── WHAT A RESOLVER IS, AND THE FOUR THIS APP HAS ──

@@ -10,9 +10,9 @@
  * The operator's own words: "we can't select it while it's resolving". Driven through
  * `app/index.html` (tests/app-row-store.test.mjs §1, with §6 reverting this surface's two readers
  * on a separate copy of the page so the defect can be reproduced on demand): he types a capture,
- * presses Enter, and the write leaves. The
- * painter has already repainted the view optimistically — `paint.ts`'s own `settle` calls
- * `repaint(markdown)` — so the row is on screen and the cursor is on it. He then presses `k`.
+ * presses Enter, and the write leaves. The painter has already repainted the view optimistically —
+ * `paint.ts`'s own `settle` calls `repaint(markdown)` — so the row is on screen and the cursor is
+ * on it. He then presses `k`.
  *
  * THE ROW VANISHES. `repaintCurrentView` re-derives its source as `accepted.sourceFor(path) ??
  * v.markdown`, and until the server answers BOTH of those are the file WITHOUT his line in it. The
@@ -147,11 +147,6 @@ export type RowIdentity =
   /** The same handle, now also carrying the engine's own id. */
   | { readonly kind: "reconciled"; readonly local: LocalRowId; readonly engine: EngineRowId };
 
-/** The local handle, whichever arm the identity is on — the one key that is unique across a table. */
-export function localOf(identity: RowIdentity): LocalRowId {
-  return identity.local;
-}
-
 /** The engine's id if this row has one yet, `null` while it is still only this browser's. */
 export function engineOf(identity: RowIdentity): EngineRowId | null {
   return identity.kind === "reconciled" ? identity.engine : null;
@@ -180,6 +175,18 @@ interface Claim {
   readonly row: Row;
   readonly at: number;
   readonly rank: number;
+  /**
+   * HOW MUCH OF ITSELF THE ROW STILL RECOGNISES IN THAT LINE — the tie-break, and it only ever
+   * decides anything at the `text` rung.
+   *
+   * `extendsLine` (relative.ts) is satisfied by an EXTENSION, so on a line the cycle has just
+   * stamped BOTH `- [ ] pay` and `- [ ] pay the bill` are true claims about
+   * `- [ ] pay the bill [[qntm:9]]`. They are not equally good ones: the evidence at this rung is
+   * "the arriving line still carries my characters", and more characters is strictly more evidence.
+   * Without this the two would be separated by array order, which is a fact about where they
+   * happened to sit rather than about which of them the line is.
+   */
+  readonly evidence: number;
 }
 
 /**
@@ -236,11 +243,6 @@ export class RowStore {
       return null;
     }
     return this.#rows.find((row) => row.id.local === local) ?? null;
-  }
-
-  /** Where the selected row sits now, or `null` when there is no selection to place. */
-  get selectedLineIndex(): number | null {
-    return this.selected?.lineIndex ?? null;
   }
 
   /** The row printed at `lineIndex` of the held source, or `null` (out of range, or a blank line). */
@@ -470,8 +472,10 @@ export class RowStore {
    * `resolveInstanceAnchor` itself makes on `ambiguous`: a rung that finds too many stops rather
    * than picking.
    *
-   * TIES ARE BROKEN BY THE ORDER THE ROWS ARE HELD IN, which is line order in the previous source.
-   * `Array.prototype.sort` is stable in every engine this ships to (ES2019 requires it), so this is
+   * TIES ARE BROKEN BY EVIDENCE, NOT BY ARRAY ORDER — see `Claim.evidence`. Where even that ties
+   * (two rows with the same characters, which `instancesOf` has already separated with a `#N`
+   * suffix so they cannot both reach the text rung anyway) the held order stands;
+   * `Array.prototype.sort` is stable in every engine this ships to, ES2019 requires it, so that is
    * a stated property rather than a hope.
    */
   #carryInto(held: readonly Row[], source: string, view: string): Map<number, Row> {
@@ -479,10 +483,10 @@ export class RowStore {
     for (const row of held) {
       const reading = resolveInstanceAnchor(row.anchor, source, view);
       if (reading.outcome === "found") {
-        claims.push({ row, at: reading.lineIndex, rank: trustOf(reading.via) });
+        claims.push({ row, at: reading.lineIndex, rank: trustOf(reading.via), evidence: row.text.length });
       }
     }
-    claims.sort((a, b) => a.rank - b.rank);
+    claims.sort((a, b) => (a.rank === b.rank ? b.evidence - a.evidence : a.rank - b.rank));
     const taken = new Map<number, Row>();
     const spent = new Set<LocalRowId>();
     for (const claim of claims) {

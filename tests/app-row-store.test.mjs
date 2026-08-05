@@ -392,8 +392,10 @@ describe("4. the identity race, built rather than assumed away", () => {
     page.__setGraphData({ snapshot: { generated_at: "t", views: [{ ...view(before) }] } });
     page.__setCurrentViewId("inbox");
     page.paintView("inbox", "chosen");
-    const held = rows().rows.map((r) => [r.lineIndex, r.id.local]);
+    const held = rows().rows;
     assert.equal(held.length, 3);
+    const shorter = held[1].id.local; // `- [ ] pay`
+    const longer = held[2].id.local; // `- [ ] pay the bill`
 
     page.__setGraphData({ snapshot: { generated_at: "t2", views: [{ ...view(after) }] } });
     page.paintView("inbox", "arrived");
@@ -402,6 +404,11 @@ describe("4. the identity race, built rather than assumed away", () => {
     assert.equal(now.length, 2, "the arriving view has two printed lines");
     assert.equal(new Set(now.map((r) => r.id.local)).size, 2, "two rows landed on one line");
     assert.equal(now[1].id.engine, "qntm:9");
+    // AND THE LINE WENT TO THE ROW WITH MORE OF ITSELF IN IT, not to whichever sat higher up. Both
+    // claims are true at the `text` rung — `extendsLine` is satisfied by an extension — and array
+    // order is a fact about where they happened to sit, not about which of them the line is.
+    assert.equal(now[1].id.local, longer, "the arriving line was given to the weaker text claim");
+    assert.equal(rows().rowOf(shorter), null, "the losing claimant kept a row it does not name");
   });
 
   test("A ROW ALREADY BOUND TO AN ENGINE ID IS DROPPED RATHER THAN RE-POINTED AT ANOTHER", () => {

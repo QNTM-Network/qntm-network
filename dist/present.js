@@ -4572,9 +4572,6 @@ var PredictSurface = class {
 };
 
 // app/present/rows.ts
-function localOf(identity) {
-  return identity.local;
-}
 function engineOf(identity) {
   return identity.kind === "reconciled" ? identity.engine : null;
 }
@@ -4623,10 +4620,6 @@ var RowStore = class {
       return null;
     }
     return this.#rows.find((row) => row.id.local === local) ?? null;
-  }
-  /** Where the selected row sits now, or `null` when there is no selection to place. */
-  get selectedLineIndex() {
-    return this.selected?.lineIndex ?? null;
   }
   /** The row printed at `lineIndex` of the held source, or `null` (out of range, or a blank line). */
   rowAt(lineIndex) {
@@ -4844,8 +4837,10 @@ var RowStore = class {
    * `resolveInstanceAnchor` itself makes on `ambiguous`: a rung that finds too many stops rather
    * than picking.
    *
-   * TIES ARE BROKEN BY THE ORDER THE ROWS ARE HELD IN, which is line order in the previous source.
-   * `Array.prototype.sort` is stable in every engine this ships to (ES2019 requires it), so this is
+   * TIES ARE BROKEN BY EVIDENCE, NOT BY ARRAY ORDER — see `Claim.evidence`. Where even that ties
+   * (two rows with the same characters, which `instancesOf` has already separated with a `#N`
+   * suffix so they cannot both reach the text rung anyway) the held order stands;
+   * `Array.prototype.sort` is stable in every engine this ships to, ES2019 requires it, so that is
    * a stated property rather than a hope.
    */
   #carryInto(held, source, view) {
@@ -4853,10 +4848,10 @@ var RowStore = class {
     for (const row of held) {
       const reading = resolveInstanceAnchor(row.anchor, source, view);
       if (reading.outcome === "found") {
-        claims.push({ row, at: reading.lineIndex, rank: trustOf(reading.via) });
+        claims.push({ row, at: reading.lineIndex, rank: trustOf(reading.via), evidence: row.text.length });
       }
     }
-    claims.sort((a, b) => a.rank - b.rank);
+    claims.sort((a, b) => a.rank === b.rank ? b.evidence - a.evidence : a.rank - b.rank);
     const taken = /* @__PURE__ */ new Map();
     const spent = /* @__PURE__ */ new Set();
     for (const claim of claims) {
@@ -5502,7 +5497,6 @@ export {
   instancesOf,
   isSilent,
   lineBody,
-  localOf,
   markerSpans,
   markerValue,
   matchesFindClause,
