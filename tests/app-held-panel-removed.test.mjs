@@ -26,10 +26,11 @@
  *
  * ── NO OTHER MEANING OF "HELD" IS TOUCHED ──
  *
- * The word is overloaded elsewhere on this page — `#oneThing`/`#doneBtn` (a separate to-do capture
- * panel), `ProjectionQueue` (a projection arriving mid-edit is HELD until a line settles) — and
- * none of that is this suite's subject. Only the recovery-strip meaning ("characters no file
- * owns") is asserted absent here.
+ * The word was overloaded elsewhere on this page — `#oneThing`/`#doneBtn` were a separate to-do
+ * capture panel (`#app`, itself dead and removed whole in chore/retire-the-dead-landing-app) —
+ * and `ProjectionQueue` still is: a projection arriving mid-edit is HELD until a line settles.
+ * Neither is this suite's subject. Only the recovery-strip meaning ("characters no file owns")
+ * is asserted absent here.
  */
 
 import { test, describe, before } from "node:test";
@@ -64,15 +65,16 @@ const view = (markdown, id = "this-week", path = PATH) => ({ id, path, title: id
 
 /**
  * EVERY NODE THE PAGE HAS ACTUALLY APPENDED, ANYWHERE — not one container guessed in advance.
- * `#graph` (the reading view, freshness line, badges) and `#app` (the unrelated to-do capture
- * panel) are the two top-level sections `document.getElementById` would have handed a real caller
- * something to attach into; walking both and their own container `body` is what makes "nowhere in
- * the rendered page" a claim about the whole tree rather than one guessed corner of it.
+ * `#graph` (the reading view, freshness line, badges) is the one top-level section
+ * `document.getElementById` would have handed a real caller something to attach into now that
+ * `#app` (the unrelated to-do capture panel this comment used to name here) is gone entirely
+ * (chore/retire-the-dead-landing-app); walking it and its own container `body` is what makes
+ * "nowhere in the rendered page" a claim about the whole tree rather than one guessed corner.
  */
 function renderedTree(elements) {
   const seen = new Set();
   const out = [];
-  for (const id of ["body", "graph", "app"]) {
+  for (const id of ["body", "graph"]) {
     const root = elements.get(id);
     if (root === undefined || seen.has(root)) continue;
     seen.add(root);

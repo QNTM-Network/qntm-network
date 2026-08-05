@@ -157,7 +157,6 @@
   }
   input:focus { border-color: var(--glow); box-shadow: 0 0 24px rgba(124,199,255,.15); }
   .row { display: flex; gap: var(--s2); align-items: center; }
-  .stack > * + * { margin-top: var(--s3); }
   .muted { color: var(--dim); font-size: var(--t3); }
   /* THE ERROR ROW RESERVES THE ROW IT ACTUALLY HOLDS. It was `1.2em`, and the thing it has to
      hold is one line at the body's `line-height: 1.5` — so at `--t3` it reserved 14.08 × 1.2 =
@@ -211,19 +210,6 @@
   .empty-body { font-size: var(--t3); color: var(--dim); margin: 0; }
   .empty-next { font-size: var(--t3); color: var(--dim); margin: var(--s3) 0 0; }
 
-  /* THE ONE THING */
-  .one-label { letter-spacing: var(--track); text-transform: uppercase; font-size: var(--t1); color: var(--glow); }
-  .one-thing {
-    font-size: clamp(1.3rem, 4.5vw, 1.9rem); font-weight: 600; line-height: 1.25;
-    margin: var(--s1) 0 var(--s4); text-wrap: balance;
-  }
-  .one-empty { color: var(--dim); font-weight: 400; }
-  .rest { margin-top: var(--s5); }
-  .rest h3 { font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); margin: 0 0 var(--s2); }
-  .item { display: flex; align-items: flex-start; gap: var(--s2); padding: var(--s2) 0; border-top: 1px solid var(--line); }
-  .item:first-child { border-top: 0; }
-  .tick { flex: none; width: 20px; height: 20px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: transparent; padding: 0; }
-  .tick:hover { border-color: var(--glow); box-shadow: 0 0 14px rgba(124,199,255,.25); }
   a { color: var(--accent); }
 
   /* ══ THE MENU BAR ═════════════════════════════════════════════════════════════════════════
@@ -298,10 +284,13 @@
 
   /* ══ THE ACTION RAIL ══════════════════════════════════════════════════════════════════════
      THIS IS NOT A TAB BAR, BECAUSE THERE IS NOTHING TO TAB BETWEEN. The app has one section a
-     reader can be in (`#graph`); `#entry` is the gate, not a place, and `#app` is unreachable —
-     `loadState()` is defined and never called, verified again for this change. What it HAS is 76
-     views in ten nested folders, and 76 nested destinations is a tree, which is what `.drawer`
-     already is. A tab bar over one section would be chrome with nothing behind it.
+     reader can be in (`#graph`); `#entry` is the gate, not a place. A second place, `#app` (a
+     to-do capture screen — "The one thing", capture box, "Also held" list), used to sit beside
+     them, unreachable — `loadState()` was defined and never called, verified at the time this
+     comment last said so — and it was removed entirely (chore/retire-the-dead-landing-app; see
+     that PR for the reachability trace and mutation proof). What is left HAS 76 views in ten
+     nested folders, and 76 nested destinations is a tree, which is what `.drawer` already is. A
+     tab bar over one section would be chrome with nothing behind it.
 
      SO IT HOLDS ACTIONS, and that is also the shape the operator already reads: `~/qntm/
      .obsidian/app.json` declares `mobileToolbarCommands` — the bar along the bottom of his phone —
@@ -948,25 +937,6 @@
     </div>
     <article id="viewBody" class="viewbody"></article>
   </section>
-
-  <!-- APP (logged in) -->
-  <section id="app" class="hidden">
-    <h1 style="margin-bottom:1.2rem">What do you already know needs doing?</h1>
-    <div class="card">
-      <div class="one-label">The one thing</div>
-      <div id="oneThing" class="one-thing"></div>
-      <button id="doneBtn" class="hidden">Done — it's held no longer</button>
-    </div>
-    <div class="row stack" style="margin-top:1.2rem">
-      <input id="captureBox" placeholder="capture a thought — press enter" autocomplete="off" />
-    </div>
-    <div id="appErr" class="err"></div>
-    <div class="rest">
-      <h3 id="restHead" class="hidden">Also held</h3>
-      <div id="rest"></div>
-    </div>
-    <p style="margin-top:2rem"><button id="logoutBtn" class="ghost">Sign out</button></p>
-  </section>
 </div>
 
 <script type="module">
@@ -1228,12 +1198,15 @@ const $ = (id) => document.getElementById(id);
 const tokenKey = "qntm_token";
 let token = localStorage.getItem(tokenKey);
 
-function show(view) {
-  const loggedIn = view === "app";
-  $("entry").classList.toggle("hidden", view !== "entry");
-  $("app").classList.toggle("hidden", view !== "app");
-  showShell(loggedIn);
-  if (!loggedIn) $("graph").classList.add("hidden");
+// THE ONLY DESTINATION LEFT. `view` used to take "entry" or "app" — the second value existed
+// only to reveal the dead `#app` screen (removed, chore/retire-the-dead-landing-app), so a
+// parameter with one literal caller left was residue of the same kind as the screen itself.
+// `showEntry()` returns the reader to the sign-in gate; the graph screen is revealed directly
+// by `enterGraph()`/`loadGraph()`, which never routed through this function.
+function showEntry() {
+  $("entry").classList.remove("hidden");
+  showShell(false);
+  $("graph").classList.add("hidden");
 }
 
 // The menu bar is always drawn; what a SESSION adds is where-you-are, who-you-are, and the rail
@@ -1279,47 +1252,6 @@ async function api(path, { method = "POST", body, auth = false } = {}) {
     throw error;
   }
   return data;
-}
-
-// --- render the app ---
-function render(state) {
-  $("who").textContent = state.handle ? "@" + state.handle : "";
-  const one = state.oneThing;
-  if (one) {
-    $("oneThing").textContent = one.text;
-    $("oneThing").classList.remove("one-empty");
-    $("doneBtn").classList.remove("hidden");
-    $("doneBtn").dataset.id = one.id;
-  } else {
-    $("oneThing").textContent = "Nothing held. Capture the first thing.";
-    $("oneThing").classList.add("one-empty");
-    $("doneBtn").classList.add("hidden");
-  }
-  const rest = (state.captures || []).slice(1);
-  $("restHead").classList.toggle("hidden", rest.length === 0);
-  $("rest").innerHTML = "";
-  for (const c of rest) {
-    const row = document.createElement("div");
-    row.className = "item";
-    const tick = document.createElement("button");
-    tick.className = "tick"; tick.title = "done"; tick.dataset.id = c.id;
-    tick.addEventListener("click", () => done(c.id));
-    const span = document.createElement("div");
-    span.textContent = c.text;
-    row.append(tick, span);
-    $("rest").append(row);
-  }
-}
-
-async function loadState() {
-  const state = await api("/app/state", { method: "GET", auth: true });
-  render(state); show("app");
-}
-async function capture(text) {
-  render(await api("/app/capture", { body: { text }, auth: true }));
-}
-async function done(id) {
-  render(await api("/app/done", { body: { id }, auth: true }));
 }
 
 // --- graph viewer: the rendering of the graph, fetched behind the passkey ---
@@ -2900,7 +2832,6 @@ function hideEmpty() {
 // The logged-in home: the graph, not Focus.
 async function enterGraph() {
   $("entry").classList.add("hidden");
-  $("app").classList.add("hidden");
   showShell(true);
   $("graph").classList.remove("hidden");
   // THE TWO READS LEAVE TOGETHER; THE DECLARATION IS STILL APPLIED BEFORE THE PAINT.
@@ -3240,15 +3171,13 @@ function logout() {
   closeDrawer();
   buildDrawer([]);
   $("graph").classList.add("hidden");
-  show("entry");
+  showEntry();
 }
 
 // --- wire up ---
 $("registerBtn").addEventListener("click", register);
 $("loginBtn").addEventListener("click", login);
 $("handle").addEventListener("keydown", (e) => { if (e.key === "Enter") register(); });
-$("doneBtn").addEventListener("click", () => done($("doneBtn").dataset.id));
-$("logoutBtn").addEventListener("click", logout);
 $("signOut").addEventListener("click", logout);
 
 // --- the shell ---
@@ -3438,12 +3367,6 @@ document.addEventListener("keydown", (e) => {
     }
   }
 });
-$("captureBox").addEventListener("keydown", async (e) => {
-  if (e.key !== "Enter") return;
-  const v = e.target.value.trim(); if (!v) return;
-  e.target.value = "";
-  try { await capture(v); } catch (err) { $("appErr").textContent = err.message; }
-});
 
 // --- boot: try the stored session, else show entry ---
 //
@@ -3459,14 +3382,14 @@ $("captureBox").addEventListener("keydown", async (e) => {
   // empty state — so "something else is showing" is exactly the condition `finally` here proves,
   // without naming it three times at three different `return`s.
   try {
-    if (!token) { show("entry"); return; }
+    if (!token) { showEntry(); return; }
     try {
       // BOUNDED-RETRIED — see `bootRead`'s own header for the lifecycle (design-the-two-rules.md
       // §2.2, §3 item 14). Every branch below is unchanged: `bootRead` re-throws exactly what
       // `enterGraph` would have thrown, once retrying could not turn it into a success.
       await bootRead();
     } catch (e) {
-      if (e?.status === 401) { localStorage.removeItem(tokenKey); token = null; show("entry"); return; }
+      if (e?.status === 401) { localStorage.removeItem(tokenKey); token = null; showEntry(); return; }
       // `enterGraph` has already revealed the shell and the graph section before the read that
       // failed, so the screen is standing — what it needs is something in it.
       showShell(true);
