@@ -221,6 +221,61 @@ export type { RowPlacement, SettleInstruction } from "./settle.js";
 export { PredictSurface } from "./predict.js";
 export type { PredictInstruction, RowPrediction, WithdrawnPrediction } from "./predict.js";
 
+// ── WHAT A RESOLVER IS, AND THE FOUR THIS APP HAS ──
+//
+// The page used to hold four hand-written functions per axis and name every one of them inside
+// `commitLine`. It now builds one `CommitContext`, walks `RESOLVERS`, and joins what comes back.
+// See resolve.ts's own header for the interface and for the one place the four did not fit.
+export {
+  COMPLETE,
+  NOT_EVALUATED,
+  armPredict,
+  armSettle,
+  coverageOf,
+  defineResolver,
+  diagnosticOf,
+  graphSnapshotOf,
+  runResolvers,
+} from "./resolve.js";
+export type {
+  Arming,
+  CommitContext,
+  CommitOutcome,
+  Coverage,
+  DeclarationSet,
+  Diagnostic,
+  GraphPayload,
+  PredictArm,
+  Reading,
+  Resolver,
+  ResolverRun,
+  ResolverSpec,
+  SettleArm,
+  ViewIdentity,
+} from "./resolve.js";
+
+export { RESOLVERS } from "./resolvers/registry.js";
+// THE SPECS THEMSELVES, BESIDE THE REGISTRY THAT ERASES THEM. `RESOLVERS` holds `Resolver`s, whose
+// reading type is deliberately erased (see `Resolver`'s own header) — a caller that wants to drive
+// ONE axis's `read`/`say`/`show` against a reading it is holding needs the spec, and the page's own
+// test seam is exactly that caller.
+export { membershipSpec } from "./resolvers/membership.js";
+export type { MembershipCommitReading, MembershipTransition } from "./resolvers/membership.js";
+export { orderingSpec } from "./resolvers/ordering.js";
+export type { OrderingCommitReading, OrderingMove } from "./resolvers/ordering.js";
+export { rulesSpec } from "./resolvers/rules.js";
+export type { RulesCommitReading, RulesOutcome } from "./resolvers/rules.js";
+export {
+  WAITING_FOR_TAG_BINDING,
+  edgeSourceOfFor,
+  parentCandidateFor,
+  promotionSpec,
+  prospectiveEdgeBinding,
+  structuralParentLineIndex,
+  structuralRelationshipChangeFor,
+} from "./resolvers/promotion.js";
+export type { PromotionCommitReading, PromotionOutcome, RelationshipChange } from "./resolvers/promotion.js";
+
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
 //
 // `app/present/embedded-declaration.ts` used to `import presentationJson from
