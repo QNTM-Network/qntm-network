@@ -13,8 +13,9 @@
  *    network or the clock. Same posture `section_membership.ts` proves for `membership.ts`, and
  *    for the same reason: addressing a row is not an edit and not a rendition.
  *
- * 2. `sectionAt` closes THE TRAP rather than merely avoiding it. `daily-work` publishes a
- *    qualification for 1 of its 5 declared sections. Ordinal 1 ("urgent") is UNPUBLISHED — absent
+ * 2. `sectionAt` closes THE TRAP rather than merely avoiding it. `daily-work` publishes
+ *    qualifications for a PROPER SUBSET of its 5 declared sections (today: "in-progress" and
+ *    "waiting"). Ordinal 1 ("urgent") is UNPUBLISHED — absent
  *    from `QualificationLanguage.sections['daily-work']` entirely — and `sectionAt` still names it
  *    correctly, because it indexes `sectionOrder` (the full declared order), never `sections` (the
  *    published subset). An implementation keyed on the subset would return the WRONG id, or throw,
@@ -147,11 +148,32 @@ function driveAddressingAndItsJoinToMembership(): void {
     throw new Error(`the shipped declaration reported problems: ${JSON.stringify(problems)}`);
   }
 
-  // CLAIM 2: ordinal 1 ("urgent") is UNPUBLISHED, and sectionAt still names it correctly.
-  const published = Object.keys(qualification.sections["daily-work"] ?? {});
-  if (!(published.length === 1 && published[0] === "in-progress")) {
+  // CLAIM 2's precondition: THE TRAP needs ordinal 0's section PUBLISHED (the control) and
+  // ordinal 1's section ADDRESSABLE-BUT-UNPUBLISHED (the trap itself, exactly the
+  // `no-section-declaration` test membership.ts:252 runs — `language.sections[viewId]?.[sectionId]
+  // === undefined`). Check that PROPERTY against the live declaration, not a snapshot of the whole
+  // published set: the operator's config GROWS the published set over time (`a482fd9`/#101 added
+  // "waiting" to daily-work without touching this trap at all), and a hardcoded published-set
+  // literal goes stale on every such growth even when the trap itself is untouched. A property
+  // keyed on the two ordinals this test actually probes cannot go stale the same way — it only
+  // breaks when one of THOSE TWO ordinals' publication status flips, which is exactly the moment
+  // this scenario needs to be re-pointed (see the throw below).
+  const order = qualification.sectionOrder["daily-work"] ?? [];
+  const published = qualification.sections["daily-work"] ?? {};
+  const [controlId, trapId] = order;
+  if (controlId === undefined || !(controlId in published)) {
     throw new Error(
-      `the trap's own precondition changed underfoot: daily-work publishes ${JSON.stringify(published)}`,
+      `the trap's CONTROL precondition changed underfoot: daily-work's ordinal 0 (${JSON.stringify(controlId)}) ` +
+        `is not published — published=${JSON.stringify(Object.keys(published))} order=${JSON.stringify(order)}`,
+    );
+  }
+  if (trapId === undefined || trapId in published) {
+    throw new Error(
+      `THE TRAP's own precondition changed underfoot: daily-work's ordinal 1 (${JSON.stringify(trapId)}) is ` +
+        `${trapId === undefined ? "missing from sectionOrder" : "now published"} — this scenario needs an ` +
+        "addressable-but-UNPUBLISHED section at this ordinal to exercise the trap. Move the ordinal this " +
+        `test probes if the config's shape changed. published=${JSON.stringify(Object.keys(published))} ` +
+        `order=${JSON.stringify(order)}`,
     );
   }
   const ordinal0 = sectionAt(DAILY_WORK, 0, "daily-work", qualification.sectionOrder);
