@@ -87,7 +87,10 @@ describe("the vendor bundle actually carries both libraries", () => {
     const page = readFileSync(resolve(REPO, "app", "index.html"), "utf8");
     assert.match(
       page,
-      /import \{ MarkdownIt, startRegistration, startAuthentication \} from "\/dist\/vendor\.js";/,
+      // `?v=<hash>` is scripts/build.mjs's cache-buster (see its own header) — the query is
+      // build-generated and changes with the bundle's bytes, so it is optional here rather than
+      // pinned to a value this test would go stale against on every rebuild.
+      /import \{ MarkdownIt, startRegistration, startAuthentication \} from "\/dist\/vendor\.js(\?v=[0-9a-f]+)?";/,
       "the page no longer imports the vendor bundle the way this test expects",
     );
   });

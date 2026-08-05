@@ -79,8 +79,13 @@ export function extractPageScript(workDir, mutate = (source) => source) {
   //    — tests/no-cdn.test.mjs — and deliberately does not run through this fixture, for the same
   //    reason present-golden.test.mjs imports dist/present.js directly rather than through here:
   //    the artifact the browser loads has to be the thing under test, not a stand-in for it.
+  // BOTH PATTERNS TOLERATE A TRAILING `?v=<hash>` — scripts/build.mjs's cache-buster (see its own
+  // header), which changes with the bundle's bytes. Pinning these to the query-less form would
+  // make this fixture go stale on every rebuild that changes either bundle; the swap still reads
+  // and loads the SAME on-disk file either way, so the query is irrelevant to what this fixture
+  // proves and is dropped rather than carried into the substitution.
   swap(
-    /^import \{ MarkdownIt, startRegistration, startAuthentication \} from "\/dist\/vendor\.js";$/m,
+    /^import \{ MarkdownIt, startRegistration, startAuthentication \} from "\/dist\/vendor\.js(?:\?v=[0-9a-f]+)?";$/m,
     `import MarkdownIt from ${JSON.stringify(import.meta.resolve("markdown-it"))};\n` +
       "const startRegistration = (...a) => (globalThis.__webauthn?.startRegistration ?? (() => {}))(...a);\n" +
       "const startAuthentication = (...a) => (globalThis.__webauthn?.startAuthentication ?? (() => {}))(...a);",
@@ -92,7 +97,7 @@ export function extractPageScript(workDir, mutate = (source) => source) {
   //    loads. The leading `/` is asserted, not tolerated — a page that went back to a relative
   //    "./dist/present.js" would 404 at /app/ in a browser and this swap fails instead.
   swap(
-    /"\/dist\/present\.js"/,
+    /"\/dist\/present\.js(?:\?v=[0-9a-f]+)?"/,
     JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href),
     "/dist/present.js",
   );
