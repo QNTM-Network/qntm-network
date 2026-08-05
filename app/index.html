@@ -1024,6 +1024,7 @@ import {
   PredictSurface,
   RowStore,
   existingLineCommit,
+  rebaseLineEdit,
   // ── THE RESOLVERS ──
   // `RESOLVERS` is the ordered registry (app/present/resolvers/registry.ts) and it is the ONLY
   // place any of the four is named. This page walks it; it does not know what is in it. Every
@@ -1051,7 +1052,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=e5c43d2ce8";
+} from "/dist/present.js?v=9a3d65822c";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2769,24 +2770,68 @@ async function commitLine(view, commit) {
     if (e?.status === 409) {
       // ── AN OPERATION COMPLETES (design-the-two-rules.md §2.2, §3 item 11) ─────────────────────
       //
-      // WHO STARTED THIS: the operator, committing this line. BOUND: ZERO automatic retries — see
-      // `WriteRegister.concludeGiveUp`'s own header for why a blind repost here would risk
-      // clobbering whatever changed server-side, and why a SAFE retry needs a rebase this change
-      // does not build. TERMINAL ACT, EVERY TIME: `concludeGiveUp` — NOTHING WAS WRITTEN, SO THE
-      // TOKEN IS CLOSED, formally now rather than silently (`giveUp` used to do this and say
-      // nothing about it; see `toggleTask`'s own 409 branch for the one caller that still uses
-      // `giveUp` — a tick has no characters at stake, so a bare release is already the complete
-      // answer there).
+      // WHO STARTED THIS: the operator, committing this line. `healFromRefusal` ONLY ADOPTS THE
+      // SERVER'S FILE WHEN `commit.text` IS EMPTY — nothing his own typing produced is on screen to
+      // lose in that case, so the token is closed and the view heals, unconditionally.
+      if (commit.text.trim() === "") {
+        if (token !== null) {
+          writes.concludeGiveUp(token);
+        }
+        healFromRefusal(view.path, e.current);
+        return;
+      }
+      // ── A SAFE RETRY: THE REBASE (rebase.ts) ──────────────────────────────────────────────────
+      //
+      // Blindly reposting `commit.markdown` — computed against the OLD base — over `e.current`
+      // would silently discard whatever changed server-side, which is the exact clobber the
+      // base/token mechanism exists to refuse. `rebaseLineEdit` asks the narrower, safe question:
+      // is the operator's ONE edited line still cleanly applicable to `e.current`, found
+      // unambiguously by the same anchor walk `RowStore`/`healFromRefusal` already trust, with the
+      // line itself unchanged server-side. Scoped to `"set-line"` — a brand-new line
+      // (`"insert-line"`) has no identity of its own yet to anchor by (`instance.ts`'s own honest
+      // floor) and rebasing one is a different, harder construct this change does not build.
+      const rebase =
+        commit.kind === "set-line" && typeof e.current === "string"
+          ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, e.current)
+          : null;
+      if (rebase?.outcome === "rebased") {
+        // THE FIRST WRITE'S TOKEN ENDS HERE EITHER WAY — this refused POST is done; the retry
+        // below is a NEW write with its own token, correlated to its own answer.
+        if (token !== null) {
+          writes.concludeGiveUp(token);
+        }
+        // BOUND: ONE rebase attempt, never more. A second refusal below — of either kind — falls
+        // through to the same terminal act a rebase that never ran would have reached.
+        const retryToken = mintWriteToken();
+        try {
+          const data = await writeFile(view, rebase.markdown, e.current, retryToken);
+          // THE SAME ONE STATEMENT EVERY SUCCESSFUL WRITE MAKES (see the non-refused branch
+          // below). A landed rebase is INVISIBLE by construction from here: it goes through
+          // `arrive` exactly as an ordinary commit does, so nothing on screen marks that a retry
+          // ever happened — the only thing that can ever appear is the SETTLE a later projection
+          // brings, same as any other write.
+          arrive(view.path, data, { markdown: rebase.markdown, token: retryToken, source: e.current });
+        } catch (retryError) {
+          if (retryError?.status === 409 && retryToken !== null) {
+            writes.concludeGiveUp(retryToken);
+          }
+          if (retryError?.status !== 409) {
+            // Same terminal act the plain write-failure branch below takes: the screen stops
+            // claiming something the vault does not have.
+            paintView(currentViewId, "arrived");
+          }
+          // A 409 here leaves the screen exactly as it is, for the identical reason the no-rebase
+          // branch does: the row already holds his characters and nothing here may destroy them.
+        }
+        return;
+      }
+      // NO REBASE WAS POSSIBLE — refused, not guessed (`rebase?.reason`, unread here: THE
+      // PERCEPTION RULE governs, and nothing on screen may say why). BOUND: ZERO further retries.
       if (token !== null) {
         writes.concludeGiveUp(token);
       }
-      // `healFromRefusal` ONLY ADOPTS THE SERVER'S FILE WHEN `commit.text` IS EMPTY — nothing his
-      // own typing produced is on screen to lose in that case.
-      if (commit.text.trim() === "") {
-        healFromRefusal(view.path, e.current);
-      }
-      // OTHERWISE: "return-to-row", THE ONLY ACT LEFT WHEN HEALING WOULD LOSE HIS CHARACTERS. Not
-      // a new write, not a repaint — the row already holds what he typed (`paint.ts`'s optimistic
+      // "return-to-row", THE ONLY ACT LEFT WHEN NEITHER HEALING NOR A REBASE COULD RUN. Not a new
+      // write, not a repaint — the row already holds what he typed (`paint.ts`'s optimistic
       // settle called `rows.edited` with this exact string before this write was ever posted;
       // NOT repainting here, unchanged from before this change, is what keeps it there). THE
       // PERCEPTION RULE governs what happens on screen: nothing does, on purpose — no badge, no
@@ -2795,7 +2840,8 @@ async function commitLine(view, commit) {
       // his next edit loses it, same as any unsent edit — the accepted, stated limit
       // (`state-edits-are-ephemeral`, docs/architecture/state.yaml:197). See
       // `tests/app-operation-completes.test.mjs` §2 for the driven proof that the characters and
-      // the row's editability both survive this branch.
+      // the row's editability both survive this branch, and `tests/app-refusal-rebases.test.mjs`
+      // for the rebase's own drive.
       return;
     }
     // The painter has already repainted this view from the edited source, so the page is showing

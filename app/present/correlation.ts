@@ -106,16 +106,24 @@
  *
  *   `commitLine`'s 409 branch (`app/index.html`), A REFUSAL WITH REAL TYPED TEXT AT STAKE, WHERE
  *     `healFromRefusal` CANNOT SAFELY ADOPT THE SERVER'S FILE. STARTED BY: the operator committing
- *     a line. BOUND: ZERO AUTOMATIC RETRIES, DELIBERATELY — a 409 means the base was stale, and
- *     blindly reposting `commit.markdown` (computed against the OLD base) over
- *     `e.current` (the NEW one) would silently discard whatever changed server-side, which is the
- *     exact clobber this whole token/base mechanism exists to refuse. A SAFE retry needs a rebase —
- *     reconciling the operator's one edit against `e.current` — which is real recovery machinery
- *     this change does not build; `docs/implementation-artifacts/design-the-two-rules.md`'s own
- *     backlog names it as follow-up. TERMINAL ACT: `"return-to-row"` — and the row already holds
- *     the operator's characters by construction (`paint.ts`'s optimistic repaint calls
- *     `rows.edited` before this write is even posted), so the act this class performs is naming
- *     that fact and releasing the token, not moving anything.
+ *     a line. A 409 means the base was stale, and blindly reposting `commit.markdown` (computed
+ *     against the OLD base) over `e.current` (the NEW one) would silently discard whatever changed
+ *     server-side, which is the exact clobber this whole token/base mechanism exists to refuse —
+ *     that refusal STAYS, unconditionally: no caller here ever reposts `commit.markdown` itself.
+ *     WHAT NOW HAPPENS FIRST: `rebase.ts`'s `rebaseLineEdit` asks the narrower, safe question —
+ *     is the operator's ONE edited line still cleanly applicable to `e.current`, found
+ *     unambiguously by the same anchor walk `RowStore` and `healFromRefusal` already trust, with
+ *     the line itself unchanged server-side. BOUND: ONE rebase attempt, never more — its own
+ *     repost carries a fresh token and is subject to the identical rules as any other write,
+ *     including this one, and a second refusal (of either kind) reaches the same terminal act a
+ *     rebase that never ran would have. TERMINAL ACT WHEN NO REBASE RUNS OR NONE IS POSSIBLE:
+ *     `"return-to-row"` — and the row already holds the operator's characters by construction
+ *     (`paint.ts`'s optimistic repaint calls `rows.edited` before this write is even posted), so
+ *     the act this class performs is naming that fact and releasing the token, not moving
+ *     anything. See `rebase.ts`'s own header for why the string a rebase needs (the OLD base,
+ *     still in scope, never replaced by a repaint) is available here though a rebase was
+ *     considered and refused once already for a different question — the cursor's own anchor
+ *     (`backlog.yaml`'s `the-cursor-anchors-to-a-node-not-a-line-number`).
  */
 
 import { stampSpans } from "./rendition.js";

@@ -3758,7 +3758,27 @@ backlog:
     bounded landing this row's sibling document specifies, not a new mechanism.
   driving_capability: refused-write-hands-content-back
   kind: capability
-  state: unscoped
+  record: >-
+    2026-08-05 — PARTIALLY SHIPPED, on `feat/a-refusal-rebases`. Verified first that a rebase's
+    three inputs (the base the write was computed against, the operator's edited line, `e.current`
+    from the 409 body) are genuinely available, un-replaced, at the catch block — `commit.source`
+    and `commit.text` are local variables of the same async function the 409 lands in, and nothing
+    repaints between the POST and the catch running, so the prior refusal of a rebase
+    (`the-cursor-anchors-to-a-node-not-a-line-number`'s own record, about the CURSOR's anchor
+    across an arriving projection, a different question) does not transfer: that row's blocking
+    fact was `paintView` reading markdown out of `graphData`, which a fresh snapshot replaces
+    wholesale — nothing here reads out of `graphData` at all.
+    WHAT SHIPPED: `app/present/rebase.ts`, `rebaseLineEdit` — reuses `instance.ts`'s
+    `resolveInstanceAnchor` (no second walk) to find the operator's line in `e.current`, refuses
+    unless the found line's PRE-EDIT text is byte-identical to what it was in the base (a one-line
+    diff3: base === theirs means only the operator's side changed), then reapplies his edit via
+    `source.ts#applyEdit` and reposts once, through the ordinary write path, with a fresh token.
+    Scoped to `commit.kind === "set-line"` only — a brand-new line (`insert-line`) has no anchor of
+    its own yet and rebasing one needs the RELATIVE construct (`relative.ts`), a different, harder
+    case named but not built here (see `a-line-being-made-survives-a-projection-too`).
+    STILL UNSCOPED, NOT THIS ROW'S: `write-register-gains-a-terminal-state`'s own item (pickup
+    exhaustion, item 4) is untouched by this change.
+  state: passing
 
 - id: boot-and-refresh-reads-retry-before-giving-up
   title: >-

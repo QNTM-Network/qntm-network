@@ -722,8 +722,11 @@ describe("6. NOTHING LOCAL IS WRITTEN beyond the seed characters and the stubbed
     assert.equal((APP.match(/\bgraphData\s*=(?!=)/g) ?? []).length, 4);
   });
 
-  test("`writeFile(` is called in exactly three places — this file adds no new write path", () => {
-    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 3);
+  test("`writeFile(` is called in exactly four places — this file adds no new write path", () => {
+    // Declaration + toggleTask + commitLine's own attempt + commitLine's bounded rebase retry
+    // (`app/present/rebase.ts`, `feat/a-refusal-rebases`) — one more OCCURRENCE, the same two
+    // CALLERS. The retry reuses `writeFile` rather than opening a second write path.
+    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 4);
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {

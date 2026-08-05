@@ -632,8 +632,10 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     }
   });
 
-  test("`writeFile` STILL has exactly two callers — toggleTask and commitLine", () => {
-    assert.equal((APP_SOURCE.match(/\bwriteFile\(/g) ?? []).length, 3, "a new write path appeared");
+  test("`writeFile` STILL has exactly two CALLERS — toggleTask and commitLine, now four occurrences", () => {
+    // Declaration (1) + toggleTask (1) + commitLine's own attempt (1) + commitLine's bounded
+    // rebase retry (1) — `app/present/rebase.ts`, `feat/a-refusal-rebases`. Same two callers.
+    assert.equal((APP_SOURCE.match(/\bwriteFile\(/g) ?? []).length, 4, "a new write path appeared");
   });
 
   test("`applyEdit` is STILL reached from exactly five sites outside its own module", () => {
