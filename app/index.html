@@ -1070,6 +1070,7 @@ import {
   todayFor,
   SettleSurface,
   PredictSurface,
+  RowStore,
   existingLineCommit,
   // ── THE RESOLVERS ──
   // `RESOLVERS` is the ordered registry (app/present/resolvers/registry.ts) and it is the ONLY
@@ -1082,7 +1083,7 @@ import {
   armSettle,
   armPredict,
   graphSnapshotOf,
-} from "/dist/present.js?v=1e8c28b2e9";
+} from "/dist/present.js?v=2e2a5c7907";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1465,6 +1466,31 @@ const pickups = new PickupSchedule();
 // still running — and they are separate because their READERS are separate: the base is compared,
 // the source is painted, and merging them would put the painter's string inside the detector.
 const accepted = new AcceptedSource();
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE ROWS OF THE VIEW ON SCREEN, HELD OUTSIDE THE DOM (app/present/rows.ts)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ONE SURFACE FOR THE PAGE, same reason as the eight above — it has to survive the repaint it
+// describes. What is new is WHICH WAY the dependency runs: `served`, `accepted`, `settle` and
+// `predict` are each consulted by a repaint that has already decided what to draw. THIS ONE
+// DECIDES. `repaintCurrentView` and the vim key handler both ask it for the string to walk, and
+// what it answers is by construction the string the painter last walked — because `paint.ts`'s own
+// `repaint` closure tells it before drawing.
+//
+// THE DEFECT IT ENDS, IN THE OPERATOR'S WORDS: "we can't select it while it's resolving". He types
+// a capture, presses Enter, and the painter repaints optimistically — so the row is on screen and
+// the cursor is on it. One `k` later `repaintCurrentView` re-derived its source as
+// `accepted.sourceFor(path) ?? v.markdown`, and until the server answered BOTH of those were the
+// file WITHOUT his line. The row vanished. There was no state: the only copy of the string he could
+// see was an argument to a `paint()` call that had already returned.
+//
+// IT IS NOT A SECOND COPY OF THE PROJECTION, AND THE ONE DIRECTION IS UNTOUCHED. `graphData` is
+// still assigned in exactly the four places it was, nothing here is ever offered to
+// `ProjectionQueue`, and every string this holds arrived either straight out of an envelope or out
+// of `applyEdit` in the painter. What it adds is the answer to a question the page could not
+// previously ask: WHICH STRING IS ON THE SCREEN.
+const rows = new RowStore();
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE VIEW DRAWER — the views as the folders they live in
@@ -2459,6 +2485,17 @@ function paintView(id, why) {
     // statement the base is replaced, because holding one past the projection that answers it is
     // exactly the lie `served`'s own "one base, for the file on screen" rule refuses.
     accepted.drop(entering.path);
+    // AND THE BROWSER'S OWN OPTIMISTIC STRING WITH IT, FOR THE STRONGER FORM OF THE SAME REASON.
+    // `accepted` is what the SERVER said it holds; `rows`'s local claim is what this browser
+    // computed and nobody has confirmed at all. If the weaker of the two survived a re-read that
+    // discards the stronger, the one string that could outlive every projection would be the one
+    // with no evidence behind it. The row TABLE is kept — `repaintCurrentView` reconciles it against
+    // whatever arrived a moment from now, and dropping the handles here would mint a fresh set for
+    // content whose identity never changed.
+    //
+    // THE ONE PATH THAT MUST KEEP THE CLAIM DOES NOT COME THROUGH HERE. A 409 leaves his characters
+    // on screen on purpose and `commitLine` returns without repainting, so this never runs for it.
+    rows.forget();
     // ── THE LINE HE IS MAKING, PUT BACK WHERE IT WAS — OR DROPPED ──
     //
     // BEFORE THE CURSOR BLOCK, because the two decisions overlap in one place and this one has to
@@ -2692,20 +2729,39 @@ function repaintCurrentView() {
   // assigned, and nothing here reaches the queue: what changes is which string the rows close over,
   // which is precisely what decides whether a second edit inside one cycle is computed on top of the
   // first. See `accept` above for why the ack is the server's word rather than this app's guess.
-  const source = accepted.sourceFor(v.path) ?? v.markdown;
-  // Clamp whatever `focus.lineIndex` currently IS — but only if it is a real number. `null` means
-  // "no real line should read as focused right now" (set deliberately by `o`/`O`, or by never
-  // having painted a view with vim wired at all) and is left alone rather than guessed back to 0.
   //
-  // THE COLUMN GOES THROUGH TOO, AND IT HAS TO BE SAID OUT LOUD. `focus.focus` resets the column to
-  // zero unless one is passed (focus.ts), so this line — which runs on EVERY repaint, and a repaint
-  // is what every motion causes — would otherwise send the cursor back to the head of the line the
-  // instant `w` moved it off. That is the same trap `focus.reanchor` carries a warning about, one
-  // layer up in the page, and it is the same answer: pass the column back in and let `focus` clamp
-  // it into whatever characters the line now has.
+  // AND THAT EXPRESSION IS NOW THE ROW STORE'S ARGUMENT RATHER THAN THE PAINTER'S SOURCE. Both
+  // strings above are what the SERVER says; neither is what the SCREEN says while a write is in the
+  // air, because the painter has already repainted optimistically into a string it computed itself
+  // (`paint.ts`'s `settle` -> `repaint(markdown)`). `rows.showing` is handed the server's newest and
+  // answers with the one on screen: the browser's own edit survives until the server says something
+  // newer, and then it does not. See app/present/rows.ts for the rule and for the defect it ends.
+  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);
+  // ── WHERE THE CURSOR GOES: BY IDENTITY WHEN THE WORLD MOVED, BY POSITION WHEN IT DID NOT ──────
+  //
+  // The clamp below is what this function always did, and it is right for the repaint a MOTION
+  // causes: the source is the same string the index was just taken from, so the index is the newer
+  // fact. It is wrong for the repaint a RESOLVE causes — the source is a different string and the
+  // index describes a file that is not on screen any more. `rows.carry` is the one place that
+  // distinction is made, and it makes it exactly (a motion cannot change the source; a resolve
+  // always does), answering `null` whenever it has nothing better to say than the caller knows.
+  //
+  // `focus.lineIndex === null` STILL MEANS "NO REAL LINE SHOULD READ AS FOCUSED" — set deliberately
+  // by `o`/`O` — and is left alone rather than guessed back to 0. `carry` is told about it so the
+  // seat is dropped with it; a seat that outlived the blur would put the selection back on a real
+  // line the instant the draft row settled, which is the "two editable rows at once" defect this
+  // function's own header records measuring.
+  //
+  // THE COLUMN GOES THROUGH EITHER WAY, AND IT HAS TO BE SAID OUT LOUD. `focus.focus` resets the
+  // column to zero unless one is passed (focus.ts), so this — which runs on EVERY repaint, and a
+  // repaint is what every motion causes — would otherwise send the cursor back to the head of the
+  // line the instant `w` moved it off. That is the same trap `focus.reanchor` carries a warning
+  // about, one layer up in the page, and it is the same answer: pass the column back in and let
+  // `focus` clamp it into whatever characters the line now has.
+  const carried = rows.carry(focus.lineIndex);
   if (focus.lineIndex !== null) {
     focus.focus(
-      clampLine(focus.lineIndex, Math.max(0, source.split("\n").length - 1)),
+      carried ?? clampLine(focus.lineIndex, Math.max(0, source.split("\n").length - 1)),
       source,
       focus.column,
       v.id,
@@ -2719,6 +2775,10 @@ function repaintCurrentView() {
     draft: draftLine,
     settle,
     predict,
+    // WHERE THE PAINTER SAYS WHAT IT DREW. Write-only from in there — `RowSink` (rows.ts) carries
+    // `edited` and nothing else — and told only by the painter's own `repaint` closure, which is
+    // the one place that file puts a string on screen that this page has not already seen.
+    rows,
     onCheckboxToggle: (toggle) => toggleTask(v, toggle),
     // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
     // created arrive here identically — `commit.markdown` is the whole view source either way, and
@@ -3656,6 +3716,10 @@ function logout() {
   // with no record and `collect` returns before it reads anything.
   pickups.clear();
   accepted.clear();
+  // AND THE ROWS THEMSELVES. `rows` holds one of the operator's files verbatim (app/present/
+  // rows.ts) — the same fact `accepted` holds one statement above, plus a table of handles keyed to
+  // it — so it is released for the identical reason and in the identical place.
+  rows.clear();
   // A message earned by the LAST person to use this browser is not a greeting for the next one,
   // and neither is an open <input>: the same leak the comment above already refuses.
   mode.enterNormal();
@@ -3713,7 +3777,24 @@ document.addEventListener("keydown", (e) => {
   if (mode.mode === "NORMAL" && !drawerIsOpen && !typingIn(e.target) && currentViewId !== null) {
     const v = graphData?.snapshot?.views.find((x) => x.id === currentViewId);
     if (v === undefined) return;
-    const lastIndex = Math.max(0, v.markdown.split("\n").length - 1);
+    // ── THE STRING THIS HANDLER READS IS THE ONE ON THE SCREEN, WHICH IS NOT WHAT IT USED TO BE ──
+    //
+    // Every arithmetic below used to be over `v.markdown` — the last PROJECTION, straight off
+    // `graphData`. That is the sharpest form of the defect `rows.ts` exists to end, because this
+    // handler does two things with it that the repaint does not:
+    //
+    //   IT COMPUTES EDITS. `x` and `>`/`<` pass `v.markdown` into `applyEdit` and POST the result.
+    //     While a write was in the air, the file on screen and `v.markdown` were different strings,
+    //     so the posted file was the operator's own line REMOVED and a different line changed. It
+    //     did not even read the ACCEPTED string the repaint reads.
+    //   IT TAKES THE CURSOR'S IDENTITY ANCHOR. `focus.focus(…, v.markdown, …)` anchors against a
+    //     string with no such line in it, which is `instance.ts` being handed the wrong projection.
+    //
+    // `rows.showing` is handed the same server-side newest the repaint hands it, and answers the
+    // same string — one expression, one answer, and the two can no longer disagree about what the
+    // operator is looking at.
+    const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);
+    const lastIndex = Math.max(0, source.split("\n").length - 1);
     const current = focus.lineIndex ?? 0;
     // `focus.column` IS THE FOURTH ARGUMENT FOR THE SAME REASON `current` IS THE SECOND: the cursor
     // has two axes now and `mode.handleKey` decides `i`/`a` relative to both. It reads the column
@@ -3729,15 +3810,15 @@ document.addEventListener("keydown", (e) => {
     // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
     const effect = outcome.effect;
     if (effect.kind === "move") {
-      focus.focus(effect.lineIndex, v.markdown, 0, v.id);
+      focus.focus(effect.lineIndex, source, 0, v.id);
       repaintCurrentView();
     } else if (effect.kind === "boundary") {
       // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)
       // is the one place "which line is that" is answered, from the SAME source string, never a
       // second opinion parsed here.
       focus.focus(
-        boundaryLine(v.markdown.split("\n"), current, effect.direction, effect.count),
-        v.markdown,
+        boundaryLine(source.split("\n"), current, effect.direction, effect.count),
+        source,
         0,
         v.id,
       );
@@ -3749,7 +3830,7 @@ document.addEventListener("keydown", (e) => {
       // own content down) — `applyEdit`'s `insert-line` convention, unchanged from Enter's.
       const targetIndex = effect.direction === "below" ? current + 1 : current;
       const opened = openLine(
-        v.markdown,
+        source,
         targetIndex,
         draftLine,
         declineNewLine,
@@ -3776,10 +3857,10 @@ document.addEventListener("keydown", (e) => {
       // SAME write path a mouse click on the box already uses (`commitLine`, below). If the
       // selected line has no checkbox, `classifyLine` says so and nothing happens — no repaint, no
       // POST, exactly the brief's own rule for this key.
-      const line = v.markdown.split("\n")[current] ?? "";
+      const line = source.split("\n")[current] ?? "";
       const shape = classifyLine(line);
       if (shape.kind === "checkbox") {
-        const markdown = applyEdit(v.markdown, {
+        const markdown = applyEdit(source, {
           kind: "set-checkbox",
           lineIndex: current,
           checked: !shape.done,
@@ -3789,7 +3870,7 @@ document.addEventListener("keydown", (e) => {
           // header for why: this line and the indent handler below are the two call sites that
           // shipped f448da2's regression by hand-rolling a `LineCommit` with `kind`/`source` left
           // out, in the one file (`app/index.html`) TypeScript never checks.
-          commitLine(v, existingLineCommit(v.markdown, current, markdown));
+          commitLine(v, existingLineCommit(source, current, markdown));
         }
       }
     } else if (effect.kind === "indent") {
@@ -3801,13 +3882,13 @@ document.addEventListener("keydown", (e) => {
       // outdenting a line already at zero), and `applyEdit`'s own "unchanged text is a refusal"
       // rule (source.ts) is what turns that into "post nothing" — no second no-op check is needed
       // here, same posture as `x` above.
-      const line = v.markdown.split("\n")[current] ?? "";
+      const line = source.split("\n")[current] ?? "";
       const text = indentedLine(line, effect.direction, effect.count, indentUnit);
-      const markdown = applyEdit(v.markdown, { kind: "set-line", lineIndex: current, text });
+      const markdown = applyEdit(source, { kind: "set-line", lineIndex: current, text });
       if (markdown !== null) {
         // `existingLineCommit` — see the comment on the `x` handler above for why this no longer
         // builds the object by hand.
-        commitLine(v, existingLineCommit(v.markdown, current, markdown));
+        commitLine(v, existingLineCommit(source, current, markdown));
       }
     } else if (effect.kind === "word") {
       // `w`/`b`/`e` — `wordCaret` (app/present/word.ts) decides the column, from the SAME source
@@ -3820,7 +3901,7 @@ document.addEventListener("keydown", (e) => {
       // that by using it: "right now word jump also does insert. so i can't jump through it just
       // does first jump then wwww typed". A motion that changes the mode is a motion that cannot
       // repeat. `focus.lineIndex` is already `current`, so only the column moves.
-      const line = v.markdown.split("\n")[current] ?? "";
+      const line = source.split("\n")[current] ?? "";
       const at = wordCaret(line, effect.motion, effect.count, focus.column);
       if (at !== null) {
         focus.moveColumn(at, line);
@@ -3831,7 +3912,7 @@ document.addEventListener("keydown", (e) => {
       // clamps `line.length` down to the last character that exists, so `$` is stated as "past the
       // end" and lands on the end. See motions.ts for why these are the SOURCE line's ends and not
       // the title's.
-      const line = v.markdown.split("\n")[current] ?? "";
+      const line = source.split("\n")[current] ?? "";
       focus.moveColumn(effect.to === "start" ? 0 : line.length, line);
       repaintCurrentView();
     } else {

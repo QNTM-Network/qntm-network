@@ -4258,6 +4258,9 @@ function paint(body, source, context, deps) {
     }
   };
   const repaint = (nextSource) => {
+    if (deps.view !== void 0) {
+      deps.rows?.edited(deps.view, nextSource);
+    }
     paint(body, nextSource, context, deps);
   };
   const focusable = (element, lineIndex) => {
@@ -4473,6 +4476,9 @@ function paint(body, source, context, deps) {
     });
     body.append(below);
   }
+  if (deps.view !== void 0) {
+    deps.rows?.seat(deps.view, source, focus?.lineIndex ?? null);
+  }
 }
 
 // app/present/settle.ts
@@ -4562,6 +4568,340 @@ var PredictSurface = class {
       return null;
     }
     return { predictions: [], withdrawn, animate: true };
+  }
+};
+
+// app/present/rows.ts
+function localOf(identity) {
+  return identity.local;
+}
+function engineOf(identity) {
+  return identity.kind === "reconciled" ? identity.engine : null;
+}
+function trustOf(via) {
+  return ANCHOR_TRUST.indexOf(via);
+}
+var RowStore = class {
+  #view = null;
+  /** THE STRING THE PAINTER WALKED. The only fact this class exists to make addressable. */
+  #source = null;
+  /**
+   * THE NEWEST STRING THE SERVER HAS SAID, as last handed to `showing`. Held so that "has the world
+   * moved past the browser's own edit" is a comparison rather than a guess — the identical key
+   * `SettleSurface`/`PredictSurface` use, and for the identical reason: a claim about one version of
+   * a file stops being a claim the moment that version is not what the server has.
+   */
+  #served = null;
+  /**
+   * THE BROWSER'S OWN EDIT, if it has one that the server has not answered yet. `null` whenever the
+   * screen is showing the server's own string.
+   */
+  #local = null;
+  #rows = [];
+  #selected = null;
+  /** The source `#selected` was chosen against — see `carry` for the one thing it decides. */
+  #seatedIn = null;
+  /** The line index `#selected` was seated at — see `carry` for the one thing it decides. */
+  #seatedAt = null;
+  #minted = 0;
+  /** The view these rows belong to, or `null` when nothing is held. */
+  get view() {
+    return this.#view;
+  }
+  /** THE STRING ON SCREEN, or `null` before anything has painted. */
+  get source() {
+    return this.#source;
+  }
+  /** Every printed row of that string, in line order. Blank lines get no row — they print none. */
+  get rows() {
+    return this.#rows;
+  }
+  /** The selected row, or `null` when nothing is selected or the selected row did not survive. */
+  get selected() {
+    const local = this.#selected;
+    if (local === null) {
+      return null;
+    }
+    return this.#rows.find((row) => row.id.local === local) ?? null;
+  }
+  /** Where the selected row sits now, or `null` when there is no selection to place. */
+  get selectedLineIndex() {
+    return this.selected?.lineIndex ?? null;
+  }
+  /** The row printed at `lineIndex` of the held source, or `null` (out of range, or a blank line). */
+  rowAt(lineIndex) {
+    return this.#rows.find((row) => row.lineIndex === lineIndex) ?? null;
+  }
+  /** The row carrying `local`, or `null` when it did not survive the last resolve. */
+  rowOf(local) {
+    return this.#rows.find((row) => row.id.local === local) ?? null;
+  }
+  /**
+   * THE BROWSER EDITED THE FILE AND IS ABOUT TO PAINT THE RESULT — the optimistic half.
+   *
+   * Called from `paint.ts`'s own `repaint` closure, which is the one place a settlement's new
+   * string reaches the screen. It is a RECORD, not a decision: the painter has already computed
+   * `source` (from `applyEdit`, against the string it was handed) and this is told what it will
+   * draw.
+   *
+   * A STRING THE SERVER HAS ALREADY SAID IS NOT A LOCAL CLAIM. Repainting the same file — a click,
+   * an abandoned row, a mode change — leaves `#local` null, so nothing has to remember to clear it.
+   */
+  edited(view, source) {
+    if (view !== this.#view) {
+      this.#reset(view);
+    }
+    this.#local = source === this.#served ? null : source;
+    this.#install(view, source);
+  }
+  /**
+   * WHAT TO PAINT FOR `view`, GIVEN THE NEWEST STRING THE SERVER HAS SAID — the read every repaint
+   * makes, and the write that keeps the table honest.
+   *
+   * THE RULE, IN ONE SENTENCE: the browser's own edit survives until the server says something
+   * newer, and then it does not.
+   *
+   *   the server's string is the one this store was already measuring against — nothing new has
+   *     landed, so the browser's own edit is still on top of the world and is what to paint.
+   *   the server's string has MOVED — a projection installed, an ack taken, a refusal adopted. The
+   *     engine is entitled to rewrite what it ingests, so the arriving string wins unconditionally
+   *     and the local claim is dropped. This is `AcceptedSource.drop`'s own posture, one layer up.
+   *
+   * A DIFFERENT VIEW DISCARDS EVERYTHING. `paintView` already drops the draft and forces NORMAL for
+   * exactly this reason, and a row table that crossed a view change would be the one construct in
+   * this app that outlived the boundary those two respect.
+   */
+  showing(view, served) {
+    if (view !== this.#view) {
+      this.#reset(view);
+    }
+    if (served !== this.#served) {
+      this.#served = served;
+      this.#local = null;
+    }
+    const source = this.#local ?? served;
+    this.#install(view, source);
+    return source;
+  }
+  /**
+   * THE FRAME THAT DREW `source` SHOWED THE CURSOR ON THIS LINE — the selection, recorded as the
+   * ROW it landed on rather than as the number it landed at.
+   *
+   * ── WHY THE PAINTER RECORDS IT AND NOT THE GESTURE ──
+   *
+   * Six things move the cursor (a click, five vim effects, a draft returning it, a projection
+   * re-anchoring it, a refusal adopting a file) and every one of them is followed immediately by a
+   * paint — because moving the cursor is only visible if something redraws. Recording the seat at
+   * each of the six would be six places to keep in step with one fact; recording it in the ONE
+   * function they all end in is one place, and it cannot go stale, because a seat that was never
+   * drawn was never the selection.
+   *
+   * IT IS REFUSED WHEN IT DOES NOT DESCRIBE WHAT THIS STORE IS HOLDING. A frame that drew another
+   * view, or a string this store has already moved past, is describing a screen that is gone; its
+   * seat would be a fact about the wrong file. Refusing is what lets the painter call this
+   * unconditionally without knowing what the store is holding.
+   *
+   * `null` CLEARS THE SEAT. `o`/`O` blur `focus` on purpose while a draft row is open, and a seat
+   * that survived that would put the selection back on a real line the instant the row settled —
+   * the "two editable rows at once" defect `repaintCurrentView`'s own header records measuring.
+   */
+  seat(view, source, lineIndex) {
+    if (view !== this.#view || source !== this.#source) {
+      return;
+    }
+    this.#selected = lineIndex === null ? null : this.rowAt(lineIndex)?.id.local ?? null;
+    this.#seatedIn = source;
+    this.#seatedAt = lineIndex;
+  }
+  /**
+   * WHERE THE SELECTED ROW IS NOW — `null` when this store has nothing better to say than the
+   * caller already knows.
+   *
+   * ── THE DISCRIMINATOR IS "DID THE SOURCE MOVE SINCE THE SEAT WAS TAKEN" ──
+   *
+   * There are two reasons a repaint asks where the cursor goes, and they want opposite answers:
+   *
+   *   A MOTION MOVED IT. `j`, `k`, `gg`, a click. The string is the one the seat was taken against,
+   *     so the caller's own index is the newer fact and this store must not overrule it. `null`.
+   *   THE WORLD MOVED THE ROW. A projection, an ack, an optimistic edit, an adopted refusal. The
+   *     string is a DIFFERENT one, so the caller's index describes a file that is not on screen any
+   *     more, and the seated ROW is the newer fact — this answers where it went.
+   *
+   * A motion cannot change the source and a resolve always does, so the test is not a proxy for the
+   * distinction: it is the distinction.
+   *
+   * ── IT ANSWERS ONLY WHERE THE CALLER HAS NOT, AND THAT IS WHY THERE ARE NOT TWO ANSWERS ──
+   *
+   * `lineIndex` is where the caller's cursor is NOW. If it has moved off the seat since the seat was
+   * taken, something has ALREADY re-anchored it — `paintView` calls `focus.reanchor` before it
+   * repaints, and so does `healFromRefusal` — and that answer is the newer one. This declines.
+   *
+   * So the two surfaces compose rather than compete: on a projection arrival `focus` answers and
+   * this is silent; on the paths where nothing re-anchors at all — an ack repainting from the string
+   * the browser posted, a settlement repainting into its own optimistic edit — `focus` had only a
+   * NUMERIC clamp, and this answers by identity instead. That clamp is not a hypothetical hazard:
+   * `healFromRefusal`'s own header records it overwriting one of the operator's tasks in place on
+   * 2026-08-03, because "a raw clamp reinterprets that index against whatever real content now sits
+   * at the same position."
+   *
+   * WHEN IT DOES ANSWER, IT CANNOT CONTRADICT `resolveInstanceAnchor`. The anchor this store holds
+   * for the seated row is built exactly as `instanceAnchorFor` builds `focus`'s — same instance,
+   * same node, same relative bracket — so the two walks agree by construction. Where this one is
+   * `null` because a STRONGER claim took the line (see `#carryInto`), the caller falls back to its
+   * own clamp. This can move the cursor by identity; it can never move it somewhere no surface named.
+   */
+  carry(lineIndex) {
+    if (this.#selected === null || this.#seatedIn === this.#source || lineIndex !== this.#seatedAt) {
+      return null;
+    }
+    return this.selected?.lineIndex ?? null;
+  }
+  /**
+   * THE BROWSER'S OWN EDIT IS SUPERSEDED — drop the claim, keep the table.
+   *
+   * Called from `paintView`, one statement after `accepted.drop`, and for the identical reason that
+   * one gives: a view is being chosen or re-read from the server, and what the server sends is the
+   * newer truth than anything this browser computed. A local claim is strictly WEAKER than an
+   * accepted source — the server has said nothing about it at all — so it cannot be the one thing
+   * that outlives a re-read that discards even the accepted one.
+   *
+   * IT IS NOT REACHED BY THE ONE PATH THAT MUST KEEP THE CLAIM. A 409 leaves the operator's
+   * characters on screen deliberately ("your characters are still on this line") and `commitLine`
+   * returns WITHOUT repainting, so `paintView` never runs and this is never called. The claim
+   * survives exactly as long as the screen showing it does.
+   *
+   * THE TABLE IS KEPT because the rows are still the rows: `showing` is about to reconcile them
+   * against whatever arrived, and throwing the handles away first would mint a fresh set for
+   * content that has not changed identity at all.
+   */
+  forget() {
+    this.#local = null;
+  }
+  /** Everything dropped — the graph was dropped, or the session ended. */
+  clear() {
+    this.#reset(null);
+    this.#served = null;
+  }
+  #reset(view) {
+    this.#view = view;
+    this.#source = null;
+    this.#served = null;
+    this.#local = null;
+    this.#rows = [];
+    this.#selected = null;
+    this.#seatedIn = null;
+    this.#seatedAt = null;
+  }
+  /** A handle no row in this store has ever had. The counter never rewinds. */
+  #mint() {
+    this.#minted += 1;
+    return `row:${String(this.#minted)}`;
+  }
+  /**
+   * Reconcile the table against `source` and hold it. Idempotent by construction: an unchanged
+   * string is the fast path, and re-running it on a changed one carries the same rows to the same
+   * places because `resolveInstanceAnchor` is pure.
+   */
+  #install(view, source) {
+    if (this.#view === view && this.#source === source) {
+      return;
+    }
+    const instances = instancesOf(source, view);
+    const lines = source.split("\n");
+    const held = this.#source === null ? [] : this.#rows;
+    const carried = this.#carryInto(held, source, view);
+    const rows = [];
+    instances.forEach((info, at) => {
+      if (info === null) {
+        return;
+      }
+      const previous = carried.get(at) ?? null;
+      rows.push({
+        id: this.#identityFor(previous, info),
+        lineIndex: at,
+        text: lines[at] ?? "",
+        instance: info.instance,
+        anchor: {
+          instance: info.instance,
+          node: info.node,
+          takenAt: at,
+          relative: relativeAnchorFor(instances, lines, at)
+        }
+      });
+    });
+    this.#view = view;
+    this.#source = source;
+    this.#rows = rows;
+  }
+  /**
+   * WHICH HELD ROW, IF ANY, CONTINUES AT EACH LINE OF `source`.
+   *
+   * ── ASSIGNED IN TRUST ORDER, AND A LINE IS CLAIMED ONCE ──
+   *
+   * Every held row is resolved independently — `resolveInstanceAnchor` is pure and cannot see the
+   * others — so two rows may name one line. The stronger claim wins, by `ANCHOR_TRUST` and nothing
+   * else, and the loser dies rather than being moved somewhere plausible. That is the same refusal
+   * `resolveInstanceAnchor` itself makes on `ambiguous`: a rung that finds too many stops rather
+   * than picking.
+   *
+   * TIES ARE BROKEN BY THE ORDER THE ROWS ARE HELD IN, which is line order in the previous source.
+   * `Array.prototype.sort` is stable in every engine this ships to (ES2019 requires it), so this is
+   * a stated property rather than a hope.
+   */
+  #carryInto(held, source, view) {
+    const claims = [];
+    for (const row of held) {
+      const reading = resolveInstanceAnchor(row.anchor, source, view);
+      if (reading.outcome === "found") {
+        claims.push({ row, at: reading.lineIndex, rank: trustOf(reading.via) });
+      }
+    }
+    claims.sort((a, b) => a.rank - b.rank);
+    const taken = /* @__PURE__ */ new Map();
+    const spent = /* @__PURE__ */ new Set();
+    for (const claim of claims) {
+      if (taken.has(claim.at) || spent.has(claim.row.id.local)) {
+        continue;
+      }
+      taken.set(claim.at, claim.row);
+      spent.add(claim.row.id.local);
+    }
+    return taken;
+  }
+  /**
+   * THE IDENTITY THE ROW AT THIS LINE GETS — and this is the one function where a provisional
+   * handle becomes a reconciled one.
+   *
+   * NO PREVIOUS ROW: a fresh handle. Already stamped when this browser first saw it, so it is
+   * `reconciled` from birth — it was never provisional to anybody, and saying otherwise would make
+   * the two arms mean "when did we notice" rather than "does the engine know about it".
+   *
+   * A PREVIOUS ROW, AND THE LINE IS NOW STAMPED: the SAME local handle, plus the engine's id. The
+   * hop the acceptance test is about.
+   *
+   * A PREVIOUS ROW ALREADY BOUND TO A DIFFERENT ENGINE ID: refused. The carry landed on a line this
+   * row is provably not, so the row is dropped and the line gets a fresh handle. A handle that
+   * quietly starts addressing different content is worse than a handle that dies.
+   *
+   * A PREVIOUS ROW AND NO STAMP: the identity stands. A reconciled row keeps its engine id — the
+   * engine named it once and this browser has no evidence it un-named it, only that this printing
+   * carries no stamp.
+   */
+  #identityFor(previous, info) {
+    const node = info.node;
+    if (previous === null) {
+      const local = this.#mint();
+      return node === null ? { kind: "provisional", local } : { kind: "reconciled", local, engine: node };
+    }
+    const bound = engineOf(previous.id);
+    if (bound !== null && node !== null && bound !== node) {
+      const local = this.#mint();
+      return { kind: "reconciled", local, engine: node };
+    }
+    if (node === null) {
+      return previous.id;
+    }
+    return { kind: "reconciled", local: previous.id.local, engine: node };
   }
 };
 
@@ -5124,6 +5464,7 @@ export {
   RESOLVABLE_FIELDS,
   RESOLVERS,
   RULES_KEY2 as RULES_KEY,
+  RowStore,
   SPECIFICITY,
   STRUCTURAL_KEY,
   SettleSurface,
@@ -5150,6 +5491,7 @@ export {
   defineResolver,
   diagnosticOf,
   edgeSourceOfFor,
+  engineOf,
   evaluateWhen,
   existingLineCommit,
   extendsLine,
@@ -5160,6 +5502,7 @@ export {
   instancesOf,
   isSilent,
   lineBody,
+  localOf,
   markerSpans,
   markerValue,
   matchesFindClause,
