@@ -1,6 +1,11 @@
 /**
  * The presentation levels, and THE precedence order — owned here and nowhere else.
  *
+ * ── HOMED IN express/ — THE EXPRESS VERB ──
+ *
+ * The precedence order EXPRESS's cascade (`cascade.ts`) walks to turn assembled contributions into
+ * one rendition decision per line. Only used by `cascade.ts` and, for typing, `context.ts`.
+ *
  * A level is more specific than another when its fact becomes KNOWN LATER (design-presentation-
  * cascade.md section 2.1). The instance's default is known when it is configured; the cursor's
  * position is known at the instant it lands. Most specific wins, exactly as on ingest.

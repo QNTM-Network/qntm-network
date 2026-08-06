@@ -44,10 +44,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { orderingFor } from "../../app/present/ordering.js";
+import { orderingFor } from "../../app/present/arrange/ordering.js";
 import { applyEdit } from "../../app/present/source.js";
 import { PresentationContext } from "../../app/present/context.js";
-import { PresentationCascade } from "../../app/present/cascade.js";
+import { PresentationCascade } from "../../app/present/express/cascade.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DECLARATION_PATH = resolve(HERE, "../../presentation.json");
@@ -108,7 +108,7 @@ function spyOnCascade(): { state: { count: number }; restore: () => void } {
 /** Count every call into the source-edit path. Ordering must never reach it. */
 function spyOnApplyEdit(): { state: { count: number } } {
   const state = { count: 0 };
-  const source = readFileSync(resolve(HERE, "../../app/present/ordering.ts"), "utf8");
+  const source = readFileSync(resolve(HERE, "../../app/present/arrange/ordering.ts"), "utf8");
   for (const line of source.split(/\r?\n/)) {
     if (!/^\s*import\b/.test(line)) continue;
     if (/["']\.\/(source|context|cascade)\.js["']/.test(line)) {

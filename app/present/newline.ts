@@ -1,6 +1,15 @@
 /**
  * seedFor — what a NEW line is, before anybody has typed into it. PURE: no DOM, no fetch.
  *
+ * ── NOT HOMED IN select/ OR express/ — IT ANSWERS BOTH QUESTIONS AT ONCE, FOR ONE CASE ONLY ──
+ *
+ * A new line needs SELECT's answer (which section/node-type does a bare line register as, via
+ * `sectionForInsertAt`/`address.ts`) AND an EXPRESS-shaped answer (what chrome/tokens does it
+ * inherit, via `chromeOf`/`classifyLine`, `express/rendition.ts`) before it has a single character
+ * typed into it — a question neither verb answers alone. Scoped narrowly enough (one case: an
+ * as-yet-nonexistent line) that homing it in either directory would misname what the other half is
+ * doing, so it stays at the top level rather than picking a side.
+ *
  * ── THE PROBLEM THIS MODULE EXISTS FOR ──
  *
  * A new line has no content, so nothing about it can be READ from the line. Everything about it has
@@ -142,9 +151,9 @@
  */
 
 import { sectionForInsertAt } from "./address.js";
-import { chromeOf, classifyLine } from "./rendition.js";
+import { chromeOf, classifyLine } from "./express/rendition.js";
 import { placeFor } from "./draft.js";
-import type { PresentationLevel } from "./levels.js";
+import type { PresentationLevel } from "./express/levels.js";
 import type { DraftSurface } from "./draft.js";
 
 /**

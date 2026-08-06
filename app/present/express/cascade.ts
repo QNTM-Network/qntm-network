@@ -1,6 +1,14 @@
 /**
  * PresentationCascade — the ONE reader. Pure: no DOM, no fetch, no globals.
  *
+ * ── HOMED IN express/ — THE EXPRESS VERB ──
+ *
+ * The LINES half of docs/implementation-artifacts/design-the-three-layers.md's three-verb split:
+ * this class is the actual cascade walk that turns an assembled `PresentationContext` into one
+ * `Resolved` decision per token family — the mechanism EXPRESS's own definition names ("turn one
+ * node into a line of text"). `levels.ts` (the precedence order) and `rendition.ts` (the value
+ * vocabulary) sit beside it in this directory for the same reason.
+ *
  * This is the answer to the test design-presentation-cascade.md section 1 sets: a reader of this
  * repo, asked "why did this line render this way?", must be able to answer by naming one level,
  * one declaration and one reader, without reading a painter function and without running the app.
@@ -20,7 +28,7 @@ import { SPECIFICITY, isSilent } from "./levels.js";
 import type { PresentationLevel } from "./levels.js";
 import { DEFAULT } from "./rendition.js";
 import type { Rendition, ResolutionKey } from "./rendition.js";
-import type { PresentationContext } from "./context.js";
+import type { PresentationContext } from "../context.js";
 
 /** A decision and its provenance: what won, and which level won it. */
 export interface Resolved {

@@ -42,8 +42,8 @@
  */
 
 import { sectionAt, sectionOrderFor } from "../address.js";
-import { membershipFor } from "../membership.js";
-import type { Abstention, MembershipAnswer } from "../membership.js";
+import { membershipFor } from "../select/membership.js";
+import type { Abstention, MembershipAnswer } from "../select/membership.js";
 import type { CommitContext, Reading, ResolverSpec } from "../resolve.js";
 import { COMPLETE, NOT_EVALUATED } from "../resolve.js";
 

@@ -3,6 +3,17 @@
  * preview registration, ordering and the day boundary, decidable from config alone, with no
  * graph read and no clock. PURE: no DOM, no fetch, no clock.
  *
+ * ── NOT HOMED IN select/ OR arrange/ — ONE DECLARATION KEY, READ BY ONE FUNCTION, FOR BOTH ──
+ *
+ * `RegistrationTable` (SELECT's registration defaults) and `SectionOrdering`/`OrderingKey`
+ * (ARRANGE's ordering config) are published under the SAME `resolution` key of `presentation.json`
+ * and read by the SAME `readConfigResolutionDeclaration` below, because the config itself bundles
+ * them, not because this module chose to. Splitting the reader in two would mean parsing one JSON
+ * key twice or inventing a boundary the declaration's own shape does not have. Left whole, shared
+ * by `select/qualification`'s neighbour `select/membership.ts` on one side and `arrange/ordering.ts`
+ * on the other — and by `today.ts`'s day-boundary reader, a third, non-verb axis, for the same
+ * reason.
+ *
  * `docs/implementation-artifacts/design-the-resolution-architecture.md` step 5. Two of the eight
  * config-only kinds that document names — DEFAULTS and REGISTRATION's per-view minting default —
  * are ALREADY published, by `scripts/generate-qualification-declaration.mjs`, as

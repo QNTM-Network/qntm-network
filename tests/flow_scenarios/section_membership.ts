@@ -48,11 +48,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readQualificationDeclaration } from "../../app/present/qualification.js";
-import { membershipFor } from "../../app/present/membership.js";
+import { readQualificationDeclaration } from "../../app/present/select/qualification.js";
+import { membershipFor } from "../../app/present/select/membership.js";
 import { applyEdit } from "../../app/present/source.js";
 import { PresentationContext } from "../../app/present/context.js";
-import { PresentationCascade } from "../../app/present/cascade.js";
+import { PresentationCascade } from "../../app/present/express/cascade.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DECLARATION_PATH = resolve(HERE, "../../presentation.json");
@@ -110,7 +110,7 @@ function spyOnApplyEdit(): { state: { count: number } } {
   // `applyEdit` is a module binding and cannot be reassigned from here, so the check is that it
   // was imported and stayed unused: any call would have to come from `membership.ts` itself, and
   // `membership.ts` does not import `source.ts` at all. Asserted by reading its imports below.
-  const source = readFileSync(resolve(HERE, "../../app/present/membership.ts"), "utf8");
+  const source = readFileSync(resolve(HERE, "../../app/present/select/membership.ts"), "utf8");
   for (const line of source.split(/\r?\n/)) {
     if (!/^\s*import\b/.test(line)) continue;
     if (/["']\.\/source\.js["']/.test(line) || /["']\.\/context\.js["']/.test(line)) {

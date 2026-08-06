@@ -154,7 +154,7 @@ describe("4. raising the constant alone would be a lie the type system cannot ca
     // Structural, not behavioural: `readEdgeStep`'s own recognised-key list, pinned so a future
     // widening of the WIRE SHAPE to carry a chained step is a deliberate edit here, never a
     // silent one.
-    const source = readFileSync(resolve(HERE, "..", "app", "present", "qualification.ts"), "utf8");
+    const source = readFileSync(resolve(HERE, "..", "app", "present", "select", "qualification.ts"), "utf8");
     const start = source.indexOf("export interface EdgeStep");
     const end = source.indexOf("}", start);
     const body = source.slice(start, end);

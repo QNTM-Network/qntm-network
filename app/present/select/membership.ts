@@ -1,6 +1,12 @@
 /**
  * membership — after this edit, does this line still belong in the section it is in?
  *
+ * ── HOMED IN select/ — THE SELECT VERB ──
+ *
+ * The SET half of docs/implementation-artifacts/design-the-three-layers.md's three-verb split:
+ * "which nodes belong in this section." `qualification.ts` beside this module reads the declared
+ * rule; this module re-evaluates one already-typed line against it after an edit.
+ *
  * PURE: no DOM, no fetch, no clock, no storage. It reads a line's characters, a section's declared
  * qualification, and answers, or refuses. It NEVER moves anything.
  *
@@ -65,7 +71,7 @@
  * instruction.
  */
 
-import { carriesContent, qntmIdSpans, tagSpans } from "./rendition.js";
+import { carriesContent, qntmIdSpans, tagSpans } from "../express/rendition.js";
 import { qualifierNeedsGraph } from "./qualification.js";
 import type {
   FieldPredicate,

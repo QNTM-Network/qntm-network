@@ -56,7 +56,7 @@ import { boundaryLine } from "../../app/present/boundary.js";
 import { indentedLine, INDENT_UNIT } from "../../app/present/indent.js";
 import { wordCaret } from "../../app/present/word.js";
 import { PresentationContext } from "../../app/present/context.js";
-import { PresentationCascade } from "../../app/present/cascade.js";
+import { PresentationCascade } from "../../app/present/express/cascade.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MOTIONS_SOURCE_PATH = resolve(HERE, "../../app/present/motions.ts");

@@ -14,8 +14,8 @@
  * location is the governance.
  */
 
-export { SPECIFICITY, isSilent } from "./levels.js";
-export type { PresentationLevel } from "./levels.js";
+export { SPECIFICITY, isSilent } from "./express/levels.js";
+export type { PresentationLevel } from "./express/levels.js";
 
 export {
   DEFAULT,
@@ -30,7 +30,7 @@ export {
   tagSpans,
   titleSpans,
   wikiLinkSpans,
-} from "./rendition.js";
+} from "./express/rendition.js";
 export type {
   CleanTitleAbstention,
   CleanTitleReading,
@@ -42,12 +42,12 @@ export type {
   StampSpan,
   TagSpan,
   WordSpan,
-} from "./rendition.js";
+} from "./express/rendition.js";
 
-export { DEFAULT_INDENT_UNIT, LANDING_VIEW_KEY, readDeclaration } from "./declaration.js";
-export type { DeclarationReading } from "./declaration.js";
+export { DEFAULT_INDENT_UNIT, LANDING_VIEW_KEY, readDeclaration } from "./express/declaration.js";
+export type { DeclarationReading } from "./express/declaration.js";
 
-export { readStructuralDeclaration, STRUCTURAL_KEY } from "./structural.js";
+export { readStructuralDeclaration, STRUCTURAL_KEY } from "./arrange/structural.js";
 export type {
   EdgeDirection,
   EdgeSource,
@@ -55,7 +55,7 @@ export type {
   SectionStructuralLanguage,
   StructuralLanguage,
   StructuralReading,
-} from "./structural.js";
+} from "./arrange/structural.js";
 
 export { sectionAt, sectionForInsertAt, sectionOrderFor, sectionOrdinalAt } from "./address.js";
 
@@ -64,7 +64,7 @@ export {
   DEFAULT_TRAVERSAL_DEPTH,
   readQualificationDeclaration,
   qualifierNeedsGraph,
-} from "./qualification.js";
+} from "./select/qualification.js";
 export type {
   EdgeStep,
   FieldPredicate,
@@ -74,7 +74,7 @@ export type {
   QualificationLanguage,
   QualificationReading,
   SectionQualification,
-} from "./qualification.js";
+} from "./select/qualification.js";
 
 export { RESOLUTION_TABLE_KEY, readConfigResolutionDeclaration } from "./resolutiontable.js";
 export type {
@@ -97,7 +97,7 @@ export {
   defaultOrderingPlacementFor,
   resolveOrderingFor,
   resolveOrderingPlacementFor,
-} from "./ordering.js";
+} from "./arrange/ordering.js";
 export type {
   OrderingAbstention,
   OrderingAnswer,
@@ -105,9 +105,9 @@ export type {
   OrderingReading,
   PlacementReading,
   QualifyingClassifier,
-} from "./ordering.js";
+} from "./arrange/ordering.js";
 
-export { publishedQualifierFor, qualifyingClassifierFor } from "./orderingqualify.js";
+export { publishedQualifierFor, qualifyingClassifierFor } from "./arrange/orderingqualify.js";
 
 export { resolveLogicalDate, resolveWeekEnd, todayFor } from "./today.js";
 export type { TodayAbstention, TodayAnswer, TodayReading } from "./today.js";
@@ -118,13 +118,13 @@ export {
   matchesQualifier,
   membershipFor,
   resolveLineFields,
-} from "./membership.js";
+} from "./select/membership.js";
 export type {
   Abstention,
   MembershipAnswer,
   MembershipReading,
   ResolvedFields,
-} from "./membership.js";
+} from "./select/membership.js";
 
 export {
   RULES_KEY,
@@ -223,8 +223,8 @@ export type { GlobalRegistration, NewLine } from "./newline.js";
 export { rebaseLineEdit } from "./rebase.js";
 export type { RebaseOutcome } from "./rebase.js";
 
-export { PresentationCascade } from "./cascade.js";
-export type { Resolved } from "./cascade.js";
+export { PresentationCascade } from "./express/cascade.js";
+export type { Resolved } from "./express/cascade.js";
 
 export { applyEdit } from "./source.js";
 export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";

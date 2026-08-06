@@ -1,4 +1,4 @@
-// app/present/levels.ts
+// app/present/express/levels.ts
 var SPECIFICITY = [
   "FOCUS",
   "MODE",
@@ -12,7 +12,7 @@ function isSilent(contribution) {
   return contribution === void 0 || Object.keys(contribution).length === 0;
 }
 
-// app/present/rendition.ts
+// app/present/express/rendition.ts
 var RESOLUTION_KEYS = [
   "checkbox",
   "heading",
@@ -229,7 +229,7 @@ function cleanTitleFor(line) {
   return { kind: "title", text: normalised };
 }
 
-// app/present/structural.ts
+// app/present/arrange/structural.ts
 var STRUCTURAL_KEY = "structural";
 var EDGE_SOURCES = ["self", "position"];
 var EDGE_DIRECTIONS = ["incoming", "outgoing"];
@@ -409,7 +409,7 @@ function readStructuralDeclaration(document2) {
   return { structural: { indent, edgeCardinality, sections, dropped }, problems };
 }
 
-// app/present/qualification.ts
+// app/present/select/qualification.ts
 function qualifierNeedsGraph(qualifier) {
   return (qualifier.edgeSteps?.length ?? 0) > 0;
 }
@@ -1281,7 +1281,7 @@ function indentedLine(line, direction, count, unit = INDENT_UNIT) {
   return " ".repeat(units * unit) + rest;
 }
 
-// app/present/declaration.ts
+// app/present/express/declaration.ts
 var NOTE = "note";
 var RULES_KEY = "rules";
 var LANDING_VIEW_KEY = "landingView";
@@ -1398,7 +1398,7 @@ function sectionOrderFor(view, declared) {
   return { ...declared, [view.id]: view.sections };
 }
 
-// app/present/ordering.ts
+// app/present/arrange/ordering.ts
 var abstains = (because) => ({ kind: "abstains", because });
 function sectionBounds(lines, lineIndex) {
   let start = 0;
@@ -1776,7 +1776,7 @@ function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
   );
 }
 
-// app/present/membership.ts
+// app/present/select/membership.ts
 var RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"];
 var abstains2 = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
@@ -2370,7 +2370,7 @@ function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf
   return { fields: working, applied, partial, undecidable };
 }
 
-// app/present/orderingqualify.ts
+// app/present/arrange/orderingqualify.ts
 var bareId = (id) => String(id).replace(/^qntm:/i, "");
 function publishedQualifierFor(viewId, sectionId, qualification) {
   const section = qualification.sections[viewId]?.[sectionId];
@@ -4153,7 +4153,7 @@ function rebaseLineEdit(view, base, lineIndex, edited, current) {
   return { outcome: "rebased", markdown };
 }
 
-// app/present/cascade.ts
+// app/present/express/cascade.ts
 var PresentationCascade = class {
   #context;
   constructor(context) {

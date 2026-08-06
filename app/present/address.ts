@@ -3,6 +3,16 @@
  * SECTION ID. PURE: no DOM, no fetch, no clock, no config file read here — the id list arrives as
  * a parameter, already validated by `qualification.ts`.
  *
+ * ── NOT HOMED IN select/, arrange/ OR express/ — SHARED ACROSS ALL OF THEM, ON PURPOSE ──
+ *
+ * "Which (view, section) is this row" sounds like SELECT, but this module is consumed by every
+ * axis equally: `newline.ts` (SELECT's registration), and all four `resolvers/*.ts` — SELECT,
+ * ARRANGE, RULES and promotion alike — call `sectionAt`/`sectionOrderFor` as their first step.
+ * Homing it inside one verb's directory would make the other three reach across a boundary for a
+ * fact that belongs to none of them more than the others. Left at the top level as the shared
+ * addressing primitive docs/implementation-artifacts/design-the-resolution-architecture.md §3.1
+ * (quoted below) names it as — the join every layer needs before it can ask its own question.
+ *
  * `sectionOrderFor`, below `sectionAt`, is step 11 (design-the-resolution-architecture.md) narrowed
  * to what a server that never runs the renderer can actually publish — see its own header for why
  * that is the declared section ORDER and not a per-line section, and what would need to change,
@@ -49,7 +59,7 @@
  * "above the first heading" floor.
  */
 
-import { classifyLine } from "./rendition.js";
+import { classifyLine } from "./express/rendition.js";
 
 /**
  * The 0-based ordinal of the section that contains `lineIndex` — counting every heading at or

@@ -99,7 +99,7 @@
  *      CDN markdown-it it supplied before; this change neither improves nor worsens that count.
  */
 
-import { PresentationCascade } from "./cascade.js";
+import { PresentationCascade } from "./express/cascade.js";
 import type { PresentationContext } from "./context.js";
 import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
@@ -107,8 +107,8 @@ import { instancesOf } from "./instance.js";
 import type { ModeSurface } from "./motions.js";
 import { openLine } from "./newline.js";
 import type { GlobalRegistration } from "./newline.js";
-import { classifyLine, stampSpans, tagSpans } from "./rendition.js";
-import type { Rendition } from "./rendition.js";
+import { classifyLine, stampSpans, tagSpans } from "./express/rendition.js";
+import type { Rendition } from "./express/rendition.js";
 import type { RowSink } from "./rows.js";
 import type { SettleSurface } from "./settle.js";
 import type { PredictSurface } from "./predict.js";

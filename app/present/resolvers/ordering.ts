@@ -60,9 +60,9 @@
  */
 
 import { sectionAt, sectionOrderFor } from "../address.js";
-import { resolveOrderingFor, resolveOrderingPlacementFor } from "../ordering.js";
-import type { OrderingAbstention, OrderingAnswer, QualifyingClassifier } from "../ordering.js";
-import { qualifyingClassifierFor } from "../orderingqualify.js";
+import { resolveOrderingFor, resolveOrderingPlacementFor } from "../arrange/ordering.js";
+import type { OrderingAbstention, OrderingAnswer, QualifyingClassifier } from "../arrange/ordering.js";
+import { qualifyingClassifierFor } from "../arrange/orderingqualify.js";
 import { edgeSourceOfFor } from "./promotion.js";
 import type { Arming, CommitContext, Coverage, Reading, ResolverSpec } from "../resolve.js";
 import { NOT_EVALUATED } from "../resolve.js";

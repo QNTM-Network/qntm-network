@@ -1,6 +1,13 @@
 /**
  * declaration — reading the GLOBAL level's served declaration. PURE: no DOM, no fetch.
  *
+ * ── HOMED IN express/ — THE EXPRESS VERB ──
+ *
+ * The GLOBAL-level default rendition is EXPRESS's own config: docs/implementation-artifacts/
+ * design-the-three-layers.md's "glyphs, tags, stamps, cell order," read off the served document
+ * rather than computed per line. Sits beside `rendition.ts` (the vocabulary this reads into) and
+ * `cascade.ts` (the reader that consumes it via `context.ts`).
+ *
  * The GLOBAL level is the instance's default rendition per token family, and
  * design-presentation-cascade.md section 2.2 gives it a declaration home ("one app-config
  * declaration, served with the app") and a reader (`app/present/cascade`, through the context).
@@ -73,10 +80,10 @@
 
 import { RESOLUTION_KEYS } from "./rendition.js";
 import type { Contribution, Rendition } from "./rendition.js";
-import { STRUCTURAL_KEY } from "./structural.js";
-import { QUALIFICATION_KEY } from "./qualification.js";
-import { RESOLUTION_TABLE_KEY } from "./resolutiontable.js";
-import { INDENT_UNIT } from "./indent.js";
+import { STRUCTURAL_KEY } from "../arrange/structural.js";
+import { QUALIFICATION_KEY } from "../select/qualification.js";
+import { RESOLUTION_TABLE_KEY } from "../resolutiontable.js";
+import { INDENT_UNIT } from "../indent.js";
 
 /** The one key of the served document that is prose for a human rather than a declaration. */
 const NOTE = "note";

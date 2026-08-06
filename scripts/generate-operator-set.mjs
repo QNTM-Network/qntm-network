@@ -1,5 +1,5 @@
 /**
- * generate-operator-set — writes `app/present/membership.ts`'s own literal copy of the
+ * generate-operator-set — writes `app/present/select/membership.ts`'s own literal copy of the
  * resolvable-field set, COMPILED from the real monorepo config, never by hand.
  *
  * ── THE DEFECT THIS EXISTS TO REMOVE ──
@@ -9,7 +9,7 @@
  * synchronised lists, none importing from another:
  *
  *   scripts/generate-qualification-declaration.mjs:96   export const RESOLVABLE_FIELDS = ...
- *   app/present/membership.ts:69                        export const RESOLVABLE_FIELDS = ...
+ *   app/present/select/membership.ts:69                  export const RESOLVABLE_FIELDS = ...
  *   scripts/qualification-agreement.py:62                TRIPLE_FIELDS = (...)
  *
  * The Python copy's own comment named the other two and said it was "kept in step with" them — the
@@ -99,7 +99,7 @@
  *
  * ── USAGE ──
  *
- *   node scripts/generate-operator-set.mjs           write app/present/membership.ts
+ *   node scripts/generate-operator-set.mjs           write app/present/select/membership.ts
  *   node scripts/generate-operator-set.mjs --check    diff only, exit 1 if stale
  *   node scripts/generate-operator-set.mjs --config-dir X [--check [--require-config]]
  */
@@ -122,8 +122,8 @@ export class NotCheckedError extends Error {}
  */
 const TARGETS = Object.freeze([
   {
-    label: "app/present/membership.ts",
-    path: join(REPO_ROOT, "app", "present", "membership.ts"),
+    label: "app/present/select/membership.ts",
+    path: join(REPO_ROOT, "app", "present", "select", "membership.ts"),
     pattern: /export const RESOLVABLE_FIELDS = \[[^\]]*\] as const;/,
     render: (fields) =>
       `export const RESOLVABLE_FIELDS = [${fields.map((f) => JSON.stringify(f)).join(", ")}] as const;`,

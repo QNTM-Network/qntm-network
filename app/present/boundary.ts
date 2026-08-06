@@ -41,7 +41,7 @@
  * last line, the same way vim's own motion does not stop half-counted.
  */
 
-import { classifyLine } from "./rendition.js";
+import { classifyLine } from "./express/rendition.js";
 
 /** Which direction `{`/`}` search in. */
 export type BoundaryDirection = "prev" | "next";

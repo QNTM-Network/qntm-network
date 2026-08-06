@@ -33,15 +33,15 @@
  */
 
 import { sectionAt, sectionOrderFor } from "../address.js";
-import { resolveLineFields } from "../membership.js";
-import type { ResolvedFields } from "../membership.js";
-import type { QualificationLanguage, SectionQualification } from "../qualification.js";
+import { resolveLineFields } from "../select/membership.js";
+import type { ResolvedFields } from "../select/membership.js";
+import type { QualificationLanguage, SectionQualification } from "../select/qualification.js";
 import { applyRules, renderRuleEffects } from "../rules.js";
 import type { RuleEffect } from "../rules.js";
 import { applyGraphAwareRules } from "../graphmatch.js";
 import type { GraphSnapshot } from "../graphmatch.js";
-import { stampSpans, tagSpans } from "../rendition.js";
-import type { StructuralLanguage } from "../structural.js";
+import { stampSpans, tagSpans } from "../express/rendition.js";
+import type { StructuralLanguage } from "../arrange/structural.js";
 import type { Arming, CommitContext, Reading, ResolverSpec } from "../resolve.js";
 import { NOT_EVALUATED, coverageOf } from "../resolve.js";
 

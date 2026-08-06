@@ -30,7 +30,7 @@
  * over — which is precisely what DOM inversion would look like on its first day.
  */
 
-import { carriesContent } from "./rendition.js";
+import { carriesContent } from "./express/rendition.js";
 
 /**
  * Set the checkbox glyph on one line.
