@@ -538,6 +538,14 @@ export function installBrowser() {
       }
       return event;
     },
+    // A REAL BUTTON'S OWN `.click()`, so production code can activate a row by calling the same
+    // method a browser gives it — `app/shell/drawer.ts`'s Enter handler does exactly this rather
+    // than carrying a second copy of what a row's own click listener already does. `dispatch`
+    // above is the lower-level primitive every suite drives directly; this is the one production
+    // code is allowed to call on itself; it fires the same listeners the same way.
+    click() {
+      return this.dispatch("click", makeEvent());
+    },
   });
 
   // The document itself takes listeners now: the shell binds ONE global `keydown` (Escape from

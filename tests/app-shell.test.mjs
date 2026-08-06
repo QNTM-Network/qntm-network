@@ -347,6 +347,144 @@ describe("3. the drawer opens, closes, and hands the cursor back", () => {
     page.closeDrawer();
   });
 
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+  // j/k — THE SAME VIM GESTURE THE REST OF THE APP ALREADY COMMITS TO
+  //
+  // Before this, only Tab moved focus through the tree (the wrap-around test above) and an arrow
+  // key did nothing at all — there was no existing arrow/j-k navigation to alias. `drawerShowing
+  // ("qntm-queue")` (this describe block's own `before`) leaves `admin` and `work` shut and `dev`
+  // open, which is what lets the skip test below be a real proof rather than an assumption: `admin`
+  // holds three rows (`dojo` > `habit` > `Habit Dojo`) that a naive index-walk would still consider
+  // "the next stop", and only the folder's own SHUT state — read fresh off the DOM, not off a flag
+  // cached at build time — tells `j` to keep going past them.
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+
+  test("j moves focus forward, k moves it back — the same stops Tab already visits", () => {
+    el("viewsBtn").dispatch("click");
+    const stops = page.drawerStops;
+    for (const stop of stops) stop.focused = false;
+
+    const down = stops[0].dispatch("keydown", makeEvent({ key: "j" }));
+    assert.ok(down.defaultPrevented);
+    const landed = stops.find((s) => s.focused);
+    assert.ok(landed && landed !== stops[0], "j did not move the cursor at all");
+
+    for (const stop of stops) stop.focused = false;
+    const up = landed.dispatch("keydown", makeEvent({ key: "k" }));
+    assert.ok(up.defaultPrevented);
+    assert.ok(stops[0].focused, "k from one step in did not come back to the close button");
+    page.closeDrawer();
+  });
+
+  test("ArrowDown/ArrowUp are not replaced — j/k are a second name for the same movement", () => {
+    el("viewsBtn").dispatch("click");
+    const stops = page.drawerStops;
+
+    for (const stop of stops) stop.focused = false;
+    stops[0].dispatch("keydown", makeEvent({ key: "ArrowDown" }));
+    const viaArrow = stops.find((s) => s.focused);
+
+    for (const stop of stops) stop.focused = false;
+    stops[0].dispatch("keydown", makeEvent({ key: "j" }));
+    const viaJ = stops.find((s) => s.focused);
+
+    assert.equal(viaJ, viaArrow, "j landed somewhere ArrowDown does not");
+    page.closeDrawer();
+  });
+
+  test("j skips a shut folder's rows entirely rather than stepping into them", () => {
+    el("viewsBtn").dispatch("click");
+    const stops = page.drawerStops;
+    const adminHead = buttonsOfClass("foldbtn").find((b) => nameOf(b) === "admin");
+    const devHead = buttonsOfClass("foldbtn").find((b) => nameOf(b) === "dev");
+    assert.ok(adminHead && devHead, "the fixture's folders moved without this test noticing");
+    // admin is shut (this describe block's current view is under dev, not admin) and holds
+    // dojo > habit > Habit Dojo — three more stops a plain index-walk would still visit.
+    const adminBox = rows().find((node) => (node.children ?? []).includes(adminHead));
+    assert.ok(adminBox.classList.contains("shut"), "admin was not shut — this test proves nothing");
+
+    for (const stop of stops) stop.focused = false;
+    adminHead.dispatch("keydown", makeEvent({ key: "j" }));
+    assert.ok(devHead.focused, "j from admin's own header landed inside admin instead of past it");
+
+    for (const stop of stops) stop.focused = false;
+    devHead.dispatch("keydown", makeEvent({ key: "k" }));
+    assert.ok(adminHead.focused, "k skipped back over admin's hidden rows onto the wrong stop");
+    page.closeDrawer();
+  });
+
+  test("j wraps from the last stop to the first, the same way Tab already does", () => {
+    el("viewsBtn").dispatch("click");
+    const stops = page.drawerStops;
+    for (const stop of stops) stop.focused = false;
+    stops[stops.length - 1].dispatch("keydown", makeEvent({ key: "j" }));
+    assert.ok(stops[0].focused, "j off the end did not wrap to the close button");
+    page.closeDrawer();
+  });
+
+  test("Enter chooses the focused view — the same click listener, not a second switch", () => {
+    el("viewsBtn").dispatch("click");
+    const target = buttonsOfClass("viewbtn").find((b) => nameOf(b) === "Inbox");
+    target.dispatch("keydown", makeEvent({ key: "Enter" }));
+    assert.equal(el("barView").textContent, "Inbox", "Enter did not choose the row it was fired on");
+    assert.ok(el("viewBody").children.length > 0, "the view was not painted");
+    assert.ok(!page.__drawerIsOpen(), "Enter chose the view but left the drawer open over it");
+    drawerShowing("qntm-queue");
+  });
+
+  test("Enter on a folder's header opens and shuts it, exactly like a click", () => {
+    el("viewsBtn").dispatch("click");
+    const head = buttonsOfClass("foldbtn").find((b) => nameOf(b) === "work");
+    const box = rows().find((node) => (node.children ?? []).includes(head));
+    assert.ok(box.classList.contains("shut"));
+    head.dispatch("keydown", makeEvent({ key: "Enter" }));
+    assert.ok(!box.classList.contains("shut"), "Enter did not open the folder its header belongs to");
+    assert.ok(page.__drawerIsOpen(), "opening a folder must not be mistaken for choosing a view");
+    head.dispatch("keydown", makeEvent({ key: "Enter" }));
+    assert.ok(box.classList.contains("shut"), "a second Enter did not shut it again");
+    page.closeDrawer();
+  });
+
+  test("`j` typed while the drawer is open never reaches the page's own vim motion", () => {
+    // THE GUARD IS THE SAME ONE `\\` AND Escape ALREADY EARN (this describe block's own tests
+    // above) — the page's global keydown handler refuses its NORMAL-mode branch outright while
+    // `drawerIsOpen`, so this proves the EFFECT of that guard against the concrete thing job 2
+    // adds: a vim motion actually moving the reading cursor. `doc.dispatch` here is standing in
+    // for the bubbled keydown a focused drawer button would produce in a real browser — the same
+    // simulation the existing `\\`-while-typing test above uses for the same reason.
+    //
+    // `this-week` (not `qntm-queue`) because it is the one fixture view with a second line to
+    // move a selection ONTO — a single-line view could not tell "refused" apart from "nowhere to
+    // go". `gg` first, the same way `tests/app-vim-wiring.test.mjs`'s own `paintFresh` reaches a
+    // known line rather than assuming `paintView` alone left the cursor at 0.
+    page.paintView("this-week");
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    const before = page.__focusIndex();
+    el("viewsBtn").dispatch("click");
+    assert.ok(page.__drawerIsOpen());
+
+    doc.dispatch("keydown", makeEvent({ key: "j" }));
+    assert.equal(page.__focusIndex(), before, "j leaked through the open drawer into the vim motion");
+
+    page.closeDrawer();
+    drawerShowing("qntm-queue");
+  });
+
+  test("j is not swallowed once the drawer is closed — it reaches the vim motion again", () => {
+    page.paintView("this-week");
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    const before = page.__focusIndex();
+    el("viewsBtn").dispatch("click");
+    page.closeDrawer();
+    assert.ok(!page.__drawerIsOpen());
+
+    doc.dispatch("keydown", makeEvent({ key: "j" }));
+    assert.notEqual(page.__focusIndex(), before, "j did nothing after the drawer that just closed");
+    drawerShowing("qntm-queue");
+  });
+
   test("the close button is the first stop, and every row after it is one", () => {
     assert.equal(page.drawerStops[0], el("drawerClose"));
     assert.equal(page.drawerStops.length, 1 + buttonsOfClass("foldbtn").length + VIEWS.length);
@@ -785,11 +923,13 @@ describe("8. a re-read keeps your place", () => {
   });
 
   test("it falls back rather than insisting — a view can leave between two reads", () => {
-    // Renamed on the laptop, so the id is simply not there any more. `this-week` is the default.
-    assert.equal(page.landOn(VIEWS, "a-view-that-was-renamed-away").id, "this-week");
-    assert.equal(page.landOn(VIEWS, null).id, "this-week");
-    // And with no `this-week` either, the first view rather than a crash.
-    const without = VIEWS.filter((v) => v.id !== "this-week");
+    // Renamed on the laptop, so the id is simply not there any more. `inbox` is the default —
+    // the operator's own ask ("opening on inbox not this week"), so a fresh boot and a
+    // fallen-through refresh both land there instead of on `this-week`.
+    assert.equal(page.landOn(VIEWS, "a-view-that-was-renamed-away").id, "inbox");
+    assert.equal(page.landOn(VIEWS, null).id, "inbox");
+    // And with no `inbox` either, the first view rather than a crash.
+    const without = VIEWS.filter((v) => v.id !== "inbox");
     assert.equal(page.landOn(without, null).id, without[0].id);
   });
 
