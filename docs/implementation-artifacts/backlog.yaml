@@ -3882,7 +3882,17 @@ backlog:
     would be sound today and unverifiable in general." NEEDS PR #132 merged first (out of this
     branch's control). See docs/implementation-artifacts/design-the-three-layers.md §8.
   kind: capability
-  state: unscoped
+  record: >-
+    2026-08-06 — CLOSED. PR #132 merged, then PR #135 built exactly this widening:
+    `deriveStructuralFieldsByQualification` admits a pattern referencing a STRUCTURAL-only field
+    where EVERY (view, section) site referencing it fixes that field via `defaults:` — the
+    intersection across sites, never the union, so a future section that omits the default can
+    only narrow admission, never silently widen it. Verified this pass, not assumed: regenerated
+    the qualification declaration against the real config
+    (`node scripts/generate-qualification-declaration.mjs`) and grepped its drop ledger for
+    `unresolvable field(s)... project` — zero remain. See
+    docs/implementation-artifacts/design-the-three-layers.md §8a, §3.5.
+  state: passing
 
 - id: structure-is-read-not-reverse-engineered
   title: >-
@@ -3908,5 +3918,140 @@ backlog:
     (`tests/flow_scenarios/*.ts`), add the corresponding `flows.yaml` entries in the same shape
     as `paint-resolves-through-the-cascade`. Filed now so the gap has a queue address rather than
     being rediscovered later. See docs/implementation-artifacts/design-the-three-layers.md §11.
+  kind: null
+  state: unscoped
+
+- id: close-the-composition-asymmetry-in-the-browsers-declaration
+  title: >-
+    [three-layers] [6] Monorepo PR #72 made the ENGINE read a per-operator `composition:` override
+    from `global_defaults.yaml` (falling back to its own literal when absent) — "the first genuine
+    instance of engine-reads-config in this system." The BROWSER's own declaration generator
+    (`scripts/compile-resolution.mjs:1053`, `composition: ENGINE_LITERAL_COMPOSITION`, verified
+    this pass — `ENGINE_LITERAL_COMPOSITION` is a frozen JS literal, never read from config) was
+    not updated alongside it. Today this is inert (no operator has declared an override), but the
+    moment one does, the engine would honour it and the browser would keep publishing the old
+    literal, silently disagreeing — the same class of drift `resolution-agreement.py`/
+    `composition-agreement.py` exist to catch, currently blind to this one case because nothing
+    exercises it yet. Mirror #72's own threading route on the generator side before an override is
+    ever declared, not after. Independent of rows 1–5.
+  driving_capability: resolution-runs-identically-in-engine-and-surface-from-one-compiled-declaration
+  kind: capability
+  state: unscoped
+
+- id: the-engine-reads-default-ordering-from-config
+  title: >-
+    [three-layers] [7] `apps/qntm-md/src/qntm_md/render/section_builder.py`'s `_DEFAULT_ORDERING`/
+    `_PRIORITY_RANK` (lines 26-31) are still Python module-level constants — verified this pass,
+    `grep -n "_DEFAULT_ORDERING|_PRIORITY_RANK"` shows no config read. PR #129 made the BROWSER's
+    declaration generator read an optional `global_defaults.yaml` key with a fallback to a literal
+    that mirrors the engine's hardcoded tuple, but the engine itself still never reads that key —
+    the two sides agree only because one hardcodes what the other could, in principle, override
+    with no way for the engine to find out. Monorepo PR #72 already built and named the exact
+    threading route for the analogous `composition:` case (`global_defaults.yaml` -> `loader.py`
+    -> `LoadedBundle` -> `orchestrator.py`'s `_iterate_phases` -> both render call sites ->
+    `section_builder.py`) — this row is that same route, applied to ordering instead of
+    composition, not a new design. Monorepo-only; independent of rows 1–6.
+  kind: capability
+  state: unscoped
+
+- id: per-cell-affixes-a-declared-bullet-a-declared-separator
+  title: >-
+    [three-layers] [8] `renderer.py:1003` hardcodes the bullet (`"- "`), the separator (a single
+    space) and the absence of any per-cell affix — composition (#71/#136) declares cell ORDER, not
+    cell FORM, so italics (a marker on both sides of one cell's text) cannot be expressed. Declare
+    the bullet, the separator, and a per-cell prefix/suffix table the way composition declared
+    order, each new emission paired with a declared inverse (`decompose_*`, mirroring
+    `stat_line`'s own `compose_stat_line_head`/`decompose_stat_line_head` pair) so a file printed
+    with an affix stays readable back, never a one-way write. See
+    docs/implementation-artifacts/design-the-three-layers.md §4.1. Needs #71/#136's declared-
+    composition precedent (landed) but not any of rows 1–7.
+  kind: capability
+  state: unscoped
+
+- id: does-placement-beat-derivation
+  title: >-
+    [three-layers] [9] `apps/qntm-md/src/qntm_md/resolution/levels.py`'s cascade makes LINE
+    "always win" over STRUCTURAL_NODE (placement) — correct and verified working-as-designed for
+    MINTING a new line (PR #135's own acceptance test), but the same module's docstring says this
+    is UNSOUND when the subject is an existing NODE rather than a LINE, and names a precedent:
+    the 2026-07-27 `routine->task->routine` production race, closed only for `BASE_NODE_TYPE` by
+    scoping it GLOBAL-only (`registration.py:85-112`). `DEFAULT_FIELDS`/`DEFAULT_TAGS` — the keys
+    ordinary fields like `stage`/`project` ride on — remain `(GLOBAL, VIEW, STRUCTURAL_NODE)`,
+    unchanged, so the same race is structurally still possible for ordinary fields. Not yet
+    triggerable: the browser has no row-relocation-between-sections capability today
+    (`design-the-resolution-architecture.md` §3.2: "L3 ADDRESSING may NOT... move a row"). RESOLVE
+    THIS BEFORE that capability ships, not after — either scope `DEFAULT_FIELDS`/`DEFAULT_TAGS`
+    the way `BASE_NODE_TYPE` was scoped, or design an explicit "the move IS authored input, elevate
+    it to LINE" mechanism (stripping/updating stale tokens on move). Which of the two is the right
+    fix is left OPEN by this document, deliberately — see §14. See
+    docs/implementation-artifacts/design-the-three-layers.md §3.6. Blocks the row-move capability
+    itself, not blocked by rows 1–8.
+  kind: capability
+  state: unscoped
+
+- id: the-browser-deletes-its-structural-inference
+  title: >-
+    [three-layers] [10] Once `structure-is-read-not-reverse-engineered` (row 4) ships and the
+    browser reads `is_qualifying`/`children` off the wire, its own indentation/glyph-based
+    structural guessing (`instance.ts`, `boundary.ts`, `arrange/ordering.ts`'s `parentLineOf`
+    stack walk) becomes provably redundant for anything the wire now carries. This row is the
+    SEAM, not the wire: name which functions retire, prove the retirement with the same
+    mutation-testing posture this repo already uses elsewhere (comment out the wire read, watch
+    the old inference silently take over unnoticed — that silent takeover is itself the risk this
+    row exists to close). NEEDS row 4 (structure-is-read-not-reverse-engineered) shipped first.
+  driving_capability: structural-language-is-published-not-guessed
+  kind: capability
+  state: unscoped
+
+- id: divergence-measured-on-rendered-output-not-only-on-decisions
+  title: >-
+    [three-layers] [11] `scripts/measure-the-divergence.mjs`'s own `rendered-output` axis is
+    NOT MEASURABLE today — its three built axes (membership/ordering/rules, 2,963 cells, 0
+    mismatches) prove the RESOLVERS agree, never that the composed STRING on screen agrees. The
+    same investigation found a real, checkable-without-an-engine disagreement: `newline.ts`'s
+    `seedFor` places a fresh capture's default tag BEFORE the title; `rules.ts`'s
+    `renderRuleEffects` appends AFTER — opposite conventions, both previewing "what the engine
+    will print." Build the fourth axis: an engine-side fixture (the same posture
+    `qualification-agreement.py`/`resolution-agreement.py` already take) that authors a line the
+    way `seedFor` seeds one, runs it through one real cycle against a read-only `state.db` copy,
+    and records the actually-composed text — closing which convention is correct, not guessing.
+    See docs/implementation-artifacts/design-the-three-layers.md §9.1. Independent of rows 1–10;
+    can start now.
+  kind: capability
+  state: unscoped
+
+- id: the-dist-rebuild-moves-to-a-bot-step-on-merge
+  title: >-
+    [three-layers] [12] Deploy-path housekeeping, the operator's own call, named here so it has a
+    queue address: today `dist/` is rebuilt and committed by hand alongside application changes
+    (visible in this pass's own PR history as merge-conflict noise on `dist/present.js.map`,
+    PR #137's own account). Move the rebuild to a bot step that runs on merge, so `dist/` is never
+    a hand-edited artifact a human PR carries. Ops, not architecture; independent of every other
+    row here.
+  kind: null
+  state: unscoped
+
+- id: the-166-pre-existing-engine-test-failures-are-unexamined
+  title: >-
+    [three-layers] [13] Monorepo PR #70's own measured baseline: `apps/qntm-md` has **166 failed,
+    3904 passed** at `0cbab1d`, unchanged in identity (same 166 test names, diffed) after that PR's
+    own changes — "confirmed by diffing failing test NAMES, not just count." Nobody has looked at
+    what those 166 are or whether any are load-bearing for this document's claims. Filed so the
+    gap has a queue address; NOT triaged by this document — no diagnosis was performed, only the
+    existence and the count were confirmed.
+  kind: null
+  state: unscoped
+
+- id: flows-yaml-entries-for-this-passs-new-capability-rows-once-real-calls-exist
+  title: >-
+    [three-layers] [14] The same test row 5 already applies to the scoped-node wire and the
+    working-set query applies to every capability row this pass adds
+    (close-the-composition-asymmetry-in-the-browsers-declaration,
+    the-engine-reads-default-ordering-from-config,
+    per-cell-affixes-a-declared-bullet-a-declared-separator, does-placement-beat-derivation,
+    divergence-measured-on-rendered-output-not-only-on-decisions): none has a module and an
+    observed call for flow-trace to check yet, so none gets a `flows.yaml` entry yet. Filed as one
+    row rather than five duplicates of the same reasoning — add each capability's own entry only
+    once its own `tests/flow_scenarios/*.ts` scenario observes a real call.
   kind: null
   state: unscoped
