@@ -46,13 +46,50 @@
  * `moved`. `OrderingAnswer.siblingCount` reports how many WERE ranked and nothing reports how many
  * were not, so this resolver cannot name what went unconsulted without a change to `ordering.ts`.
  * Claiming `complete` would be a lie about a measurement never taken; `unknown` is the true state.
+ *
+ * ── 2026-08-06: THE DEFAULT/TITLE PATH'S OWN QUALIFYING CLASSIFIER ──
+ *
+ * `resolveOrderingFor`/`resolveOrderingPlacementFor` each take an OPTIONAL last parameter, a plain
+ * `(lineIndex) => boolean | undefined` that lets the default/title path narrow its `nested-section`
+ * refusal (`ordering.ts`'s own header, and `orderingqualify.ts`'s). This is the ONE place that
+ * parameter is built and supplied — `ordering.ts` stays graph-free; this resolver already holds
+ * `ctx.graph` (`promotion.ts` reads it too, for the identical reason) and `ctx.declared.structural`
+ * (for the same `edgeSourceOfFor` `promotion.ts` builds). `classifierFor`, below, returns
+ * `undefined` — no classifier — the instant the graph has not loaded, which reproduces the
+ * PRE-2026-08-06 behaviour exactly for every commit made before the graph is available.
  */
 
 import { sectionAt, sectionOrderFor } from "../address.js";
 import { resolveOrderingFor, resolveOrderingPlacementFor } from "../ordering.js";
-import type { OrderingAbstention, OrderingAnswer } from "../ordering.js";
+import type { OrderingAbstention, OrderingAnswer, QualifyingClassifier } from "../ordering.js";
+import { qualifyingClassifierFor } from "../orderingqualify.js";
+import { edgeSourceOfFor } from "./promotion.js";
 import type { Arming, CommitContext, Coverage, Reading, ResolverSpec } from "../resolve.js";
 import { NOT_EVALUATED } from "../resolve.js";
+
+/**
+ * The default/title path's own qualifying-vs-context signal, built from whatever this commit's
+ * `ctx` already holds — `undefined` (no narrowing; `ordering.ts`'s original behaviour) when the
+ * graph has not loaded yet, or when `qualification` said nothing usable for this exact section
+ * (`qualifyingClassifierFor`'s own gate — see that function's header for the current count of
+ * sections this reaches). `source` is whichever text `resolveOrderingFor`/
+ * `resolveOrderingPlacementFor` are about to be called against — `read` and `arm` address a
+ * DIFFERENT string for an insert (see `arm`'s own comment below), so this is built fresh at each
+ * call site rather than once, the same "recompute rather than trust a shared cache" posture
+ * `orderingPlacementFor` itself takes for `moved`.
+ */
+function classifierFor(
+  ctx: CommitContext,
+  viewId: string,
+  sectionId: string,
+  source: string,
+): QualifyingClassifier | undefined {
+  const { qualification, structural } = ctx.declared;
+  if (qualification === undefined || ctx.graph === null) {
+    return undefined;
+  }
+  return qualifyingClassifierFor(source.split("\n"), viewId, sectionId, qualification, ctx.graph, edgeSourceOfFor(structural));
+}
 
 /**
  * WHY THIS RESOLVER CANNOT SAY WHAT IT DID NOT CONSULT — one constant, so the reason is stated
@@ -102,6 +139,7 @@ export const orderingSpec: ResolverSpec<OrderingCommitReading> = {
       resolution.orderingFields,
       resolution.defaultOrdering,
       resolution.priorityRank,
+      classifierFor(ctx, view.id, sectionId, commit.source),
     );
     if (reading.kind === "abstains") {
       return { kind: "abstains", because: reading.because };
@@ -166,6 +204,7 @@ export const orderingSpec: ResolverSpec<OrderingCommitReading> = {
       resolution.orderingFields,
       resolution.defaultOrdering,
       resolution.priorityRank,
+      classifierFor(ctx, view.id, sectionId, addressSource),
     );
     if (reading.kind !== "answer") {
       return [];

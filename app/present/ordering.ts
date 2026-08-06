@@ -87,10 +87,12 @@
  *   no marker for (unpublished today, but the reader stays honest if the config ever adds one).
  *
  *   NESTED-SECTION. **2026-08-06: no longer produced by the DECLARED path** (`evaluateSection`) —
- *   see measurement 2's own update, above, and `parentLineOf`'s header. It remains possible from
- *   the DEFAULT/title path (`evaluateDefaultSection`, below `orderingPlacementFor`'s own code) for
- *   the reason that function's own header gives: `title` has no marker to exclude a context row by,
- *   so parent-aware grouping alone cannot be proven safe there and the blanket refusal stays.
+ *   see measurement 2's own update, above, and `parentLineOf`'s header. On the DEFAULT/title path
+ *   (`evaluateDefaultSection`, below `orderingPlacementFor`'s own code) it is unconditional UNLESS
+ *   the caller supplies `classifyQualifying` (`orderingqualify.ts`) — `title` has no marker to
+ *   exclude a context row by, so parent-aware grouping alone is not provable safe there
+ *   (`tests/present-ordering.test.mjs` §11d's own counter-example) without a real qualifying/context
+ *   signal from the graph. See `evaluateDefaultSection`'s own header for the mechanism.
  *
  *   NO-VALUE. The edited line's BEFORE or AFTER text does not carry an extractable value for every
  *   key the section orders by. Symmetric with `membership.ts`'s "either side abstaining is
@@ -128,6 +130,13 @@
  * `evaluateDefaultSection`'s header (below) for the concrete, cited reason the title-based DEFAULT
  * path keeps refusing. `nested-section` remains a real, reachable abstention — reachable from the
  * default path only, now — not a retired one.
+ *
+ * **2026-08-06, `orderingqualify.ts`.** `evaluateDefaultSection` gained an OPTIONAL parameter,
+ * `classifyQualifying`, letting a caller with the live graph (`resolvers/ordering.ts`) hand in the
+ * one fact `title` cannot carry — is a sibling a genuine qualifying member, read off the engine's
+ * own last cycle, never approximated from characters. See that function's own header for the
+ * mechanism and `orderingqualify.ts`'s header for why no text-only version can exist. Without the
+ * parameter this file's behaviour is unchanged, byte for byte.
  */
 
 import { classifyLine, cleanTitleFor } from "./rendition.js";
@@ -157,6 +166,10 @@ import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "./resolu
  *   rather than silently answers by the wrong rule — `resolveOrderingFor`/
  *   `resolveOrderingPlacementFor` (this file's own dispatcher) never makes that call by
  *   construction, so a caller reaching this abstention went around the dispatcher.
+ *
+ *   NOT-QUALIFYING. Reachable only with `classifyQualifying` supplied AND confidently saying the
+ *   EDITED line itself is CONTEXT, not qualifying — `_order_children` (`section_builder.py:319-345`)
+ *   never gives a context row a title-ordered rank, so there is nothing to place it against.
  */
 export type OrderingAbstention =
   | "no-section-declaration"
@@ -166,7 +179,8 @@ export type OrderingAbstention =
   | "no-value"
   | "container-ordering-directive"
   | "style-ambiguous-title"
-  | "has-declared-ordering";
+  | "has-declared-ordering"
+  | "not-qualifying";
 
 /** The answer, when there is one. `moved` is the whole of it; the rest is provenance. */
 export interface OrderingAnswer {
@@ -652,33 +666,31 @@ export function orderingPlacementFor(
 // this app cannot tell "absent on this row" from "present but unreadable", so it refuses the whole
 // comparison rather than guess every row is tier 1.
 //
-// `nested-section` (reused, and DELIBERATELY NOT NARROWED — 2026-08-06) — this is the one place the
-// declared path's `parentLineOf` fix (see that function's own header) is NOT applied, and the reason
-// is load-bearing enough to state as a counter-example rather than a caveat:
+// `nested-section` (reused; **narrowed 2026-08-06, CONDITIONALLY** — `orderingqualify.ts`) — this
+// used to be the one place the declared path's `parentLineOf` fix was never applied, because field
+// presence was the only qualifying/context signal this file had, and `title` gives none: a bare
+// context row and a bare qualifying row both read `{tier: 1, tier: 1}` on `due_date`/`priority`,
+// indistinguishable, so grouping by parent alone would compare them by TITLE — a comparison
+// `_order_children` (`section_builder.py:345`) never runs, since context sorts before qualifying
+// UNCONDITIONALLY. `tests/present-ordering.test.mjs` §11d proves this and still passes unmodified:
+// called with no `classifyQualifying`, this function is byte-identical to before.
 //
-//   `parentLineOf` makes the declared path safe because a CONTEXT/ancestor row that lacks this
-//   section's own marker is ALREADY excluded from the ranked set by `tupleFor` — parent-grouping
-//   only stops a context-free comparison across the WRONG parent. `title` has no such exclusion.
-//   `defaultFieldKeyFor` gives ANY row with no `due_date`/`priority` a `{tier: 1}` key REGARDLESS OF
-//   WHETHER IT IS QUALIFYING — engine membership (`qualifying_ids`, invisible to this app) is what
-//   actually decides context-vs-qualifying, not field presence, and for a title-tiebroken section
-//   (his inbox: "no `due_date`, no `priority` on any item") a genuine context/ancestor row and a
-//   genuine qualifying row are BOTH `{tier: 1, tier: 1}` — indistinguishable here. Grouped by parent,
-//   the two would then be compared by TITLE, exactly the comparison `_order_children`
-//   (`section_builder.py:345`, `_canonical_context_order(context_nodes) + ordered_qualifying`) never
-//   runs: context sorts before qualifying UNCONDITIONALLY, never by title, never by value. Applying
-//   `parentLineOf` here would seat a context row into a rank comparison the engine does not perform,
-//   which is a CONFIDENTLY WRONG answer, not a merely-unproven one — worse than the abstention it
-//   would replace. `tests/present-ordering.test.mjs` §11 proves this disagreement directly (an
-//   invented context-shaped sibling, parent-aware grouping applied by hand, checked against what
-//   `_order_children` would actually do) rather than asserting the refusal on the strength of this
-//   paragraph alone. So: STILL ABSTAINS, for every one of the (up to) 171 undeclared sections that
-//   nest — narrowing this one is UNCONFIRMED, not merely undone; a future fix needs a real
-//   qualifying/context signal (graph membership, or a config-declared node-type split) this app does
-//   not have today, not a cleverer text heuristic.
+// What changed is the "only signal" premise, not the argument. `qualifying_ids` IS a graph fact
+// (`section_builder.py:237`), and `orderingqualify.ts`'s `qualifyingClassifierFor` reads it for an
+// existing, stamped sibling the same way `resolvers/promotion.ts`'s `parentCandidateFor` already
+// reads a structural parent — off the live `GraphSnapshot`, by its `[[qntm:N]]` stamp, never
+// re-derived from characters. Supplied as `classifyQualifying`, `evaluateDefaultSection` applies
+// `parentLineOf` for grouping and then keeps only siblings the classifier confidently calls
+// qualifying, dropping context AND unknown alike — the same "cannot read, so cannot include" rule
+// `tupleFor` already applies to an unreadable marker. Reaches only sections whose qualification was
+// PUBLISHED — 41 of 159 real qualifications, 47 of 186 sections, measured 2026-08-01
+// (`qualification.ts`'s own header; cross-checked against `backlog.yaml`'s
+// `the-cascade-terminates-for-a-new-line` row, which independently confirms 118 of 159 are not).
+// For every other section, no classifier is built, the parameter is `undefined`, and
+// `nested-section` still fires — STILL ABSTAINS, honestly, not approximated past.
 //
-// `container-ordering-directive`, `style-ambiguous-title`, `has-declared-ordering`: new, see
-// `OrderingAbstention`'s own header above for each.
+// `container-ordering-directive`, `style-ambiguous-title`, `has-declared-ordering`: unchanged, see
+// `OrderingAbstention`'s own header above for each. `not-qualifying`: new, same header.
 
 /** One field's comparison key for the DEFAULT ordering's tiered rule — `tier: 0` (present) always
  * sorts before `tier: 1` (absent), REGARDLESS of `direction`; `value` is compared only within one
@@ -831,6 +843,15 @@ type DefaultSectionEvaluation =
 // its heading as literally this substring — see `OrderingAbstention`'s own header.
 const CONTAINER_ORDER_DIRECTIVE = "#order:";
 
+/**
+ * `undefined` — no signal at all, `ordering.ts`'s original, unconditional behaviour. `true` — this
+ * line is a genuine QUALIFYING member of the section (`section_builder.py`'s own `qualifying_ids`).
+ * `false` — confidently CONTEXT (a row `_order_children` places by `_canonical_context_order`,
+ * never by this section's own ordering key). See `orderingqualify.ts`'s `qualifyingClassifierFor`
+ * for the one real implementation of this shape and why no version of it can be built from text.
+ */
+export type QualifyingClassifier = (lineIndex: number) => boolean | undefined;
+
 function evaluateDefaultSection(
   viewId: string,
   sectionId: string,
@@ -841,6 +862,7 @@ function evaluateDefaultSection(
   defaultOrdering: readonly OrderingKey[],
   orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
   priorityRank: Readonly<Record<string, number>>,
+  classifyQualifying?: QualifyingClassifier,
 ): DefaultSectionEvaluation {
   // Defence in depth — see `OrderingAbstention`'s own header for `has-declared-ordering`.
   if (ordering[viewId]?.[sectionId] !== undefined) {
@@ -862,24 +884,59 @@ function evaluateDefaultSection(
   if (headingIndex !== null && (lines[headingIndex] ?? "").includes(CONTAINER_ORDER_DIRECTIVE)) {
     return { kind: "abstains", because: "container-ordering-directive" };
   }
-  // The SAME nested-section refusal the declared path uses — see this module's header for the
-  // measurement it rests on, and this file's own report for what stays unconfirmed here.
-  if (anyLineIndented(lines, start, end)) {
-    return { kind: "abstains", because: "nested-section" };
-  }
 
   const beforeText = lines[lineIndex] ?? "";
   const beforeTuple = defaultTupleFor(beforeText, defaultOrdering, orderingFields, priorityRank);
   const afterTuple = defaultTupleFor(afterText, defaultOrdering, orderingFields, priorityRank);
 
   const siblingsRaw: { lineIndex: number; tuple: readonly DefaultFieldKey[] | "style-ambiguous" }[] = [];
-  for (let at = start; at < end; at += 1) {
-    if (at === lineIndex) continue;
-    siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+
+  if (classifyQualifying === undefined) {
+    // THE ORIGINAL, UNCONDITIONAL PATH — byte-identical to before 2026-08-06. No classifier means
+    // no way to tell context from qualifying, so the blanket nesting refusal stays, exactly as
+    // `OrderingAbstention`'s header and this file's own counter-example (`tests/present-
+    // ordering.test.mjs` §11d) require.
+    if (anyLineIndented(lines, start, end)) {
+      return { kind: "abstains", because: "nested-section" };
+    }
+    for (let at = start; at < end; at += 1) {
+      if (at === lineIndex) continue;
+      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
+  } else {
+    // THE NARROWED PATH — a real qualifying/context signal is available (`orderingqualify.ts`).
+    // The edited line ITSELF must not be a confidently-CONTEXT row: `_order_children` never gives a
+    // context row a title-ordered rank at all, so there is nothing to place it against. `undefined`
+    // (unknown — the ordinary shape of a freshly typed, not-yet-stamped capture, see
+    // `orderingqualify.ts`'s own header) is NOT treated as context here; only a confident `false` is.
+    if (classifyQualifying(lineIndex) === false) {
+      return { kind: "abstains", because: "not-qualifying" };
+    }
+    // `parentLineOf` — SHARED with the declared path, not reimplemented — restricts comparison to
+    // true tree siblings, exactly as `evaluateSection` already does above. See that function's own
+    // header for the citation this rests on.
+    const parentOf = parentLineOf(lines, start, end);
+    const group = parentOf.get(lineIndex) ?? null;
+    for (let at = start; at < end; at += 1) {
+      if (at === lineIndex) continue;
+      if (!parentOf.has(at)) continue; // blank line — not a member of any group
+      if (parentOf.get(at) !== group) continue; // a different parent — not a true sibling
+      // STRICT `=== true`: a sibling this classifier calls CONTEXT (`false`) is excluded because
+      // the engine never ranks it here; a sibling it cannot decide (`undefined` — no stamp, or
+      // stamped but not in a possibly-stale graph) is ALSO excluded, the same "cannot read, so
+      // cannot include" rule `tupleFor`'s marker check already applies on the declared path. Both
+      // are silent drops, not refusals of the whole section — see `orderingqualify.ts`'s header.
+      if (classifyQualifying(at) !== true) continue;
+      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
   }
-  // A SINGLE ambiguous title anywhere in the section refuses the WHOLE comparison, not just that
+
+  // A SINGLE ambiguous title anywhere in the RANKED set refuses the WHOLE comparison, not just that
   // one row — excluding the row silently would risk placing the edited line beside a neighbour
   // whose true rank this app could not actually establish. See `OrderingAbstention`'s own header.
+  // (A context row's own ambiguous title, when a classifier is in play, was already dropped above —
+  // it is never in `siblingsRaw` to begin with, and correctly does not block this comparison: the
+  // engine never reads that row's title either.)
   if (
     beforeTuple === "style-ambiguous" ||
     afterTuple === "style-ambiguous" ||
@@ -911,6 +968,7 @@ export function defaultOrderingFor(
   defaultOrdering: readonly OrderingKey[],
   orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
   priorityRank: Readonly<Record<string, number>>,
+  classifyQualifying?: QualifyingClassifier,
 ): OrderingReading {
   const evaluation = evaluateDefaultSection(
     viewId,
@@ -922,6 +980,7 @@ export function defaultOrderingFor(
     defaultOrdering,
     orderingFields,
     priorityRank,
+    classifyQualifying,
   );
   if (evaluation.kind === "abstains") return abstains(evaluation.because);
 
@@ -966,6 +1025,7 @@ export function defaultOrderingPlacementFor(
   defaultOrdering: readonly OrderingKey[],
   orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
   priorityRank: Readonly<Record<string, number>>,
+  classifyQualifying?: QualifyingClassifier,
 ): PlacementReading {
   const evaluation = evaluateDefaultSection(
     viewId,
@@ -977,6 +1037,7 @@ export function defaultOrderingPlacementFor(
     defaultOrdering,
     orderingFields,
     priorityRank,
+    classifyQualifying,
   );
   if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
 
@@ -1018,7 +1079,16 @@ export function defaultOrderingPlacementFor(
 // `defaultOrderingFor`/`defaultOrderingPlacementFor` above.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-/** Resolve WHETHER an edit moves its line, for ANY section — declared or the engine default. */
+/**
+ * Resolve WHETHER an edit moves its line, for ANY section — declared or the engine default.
+ *
+ * `classifyQualifying` is OPTIONAL and reaches only the default path — `orderingFor` never takes
+ * one, because the declared path already has its own qualifying/context signal (the ordering
+ * marker itself, `parentLineOf`'s own header). A caller with a live graph
+ * (`app/present/orderingqualify.ts`'s `qualifyingClassifierFor`) may narrow the default path's
+ * `nested-section` refusal; a caller with none gets the ORIGINAL, unconditional behaviour, because
+ * every parameter after `priorityRank` is new and optional.
+ */
 export function resolveOrderingFor(
   viewId: string,
   sectionId: string,
@@ -1029,6 +1099,7 @@ export function resolveOrderingFor(
   orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
   defaultOrdering: readonly OrderingKey[],
   priorityRank: Readonly<Record<string, number>>,
+  classifyQualifying?: QualifyingClassifier,
 ): OrderingReading {
   if (ordering[viewId]?.[sectionId] !== undefined) {
     return orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
@@ -1043,11 +1114,13 @@ export function resolveOrderingFor(
     defaultOrdering,
     orderingFields,
     priorityRank,
+    classifyQualifying,
   );
 }
 
 /** Resolve WHERE an edit's line belongs, for ANY section — declared or the engine default. The
- * placement-half twin of `resolveOrderingFor`, sharing the exact same routing rule. */
+ * placement-half twin of `resolveOrderingFor`, sharing the exact same routing rule and the exact
+ * same optional `classifyQualifying` (see that function's own header). */
 export function resolveOrderingPlacementFor(
   viewId: string,
   sectionId: string,
@@ -1058,6 +1131,7 @@ export function resolveOrderingPlacementFor(
   orderingFields: Readonly<Record<string, OrderingFieldMarker>>,
   defaultOrdering: readonly OrderingKey[],
   priorityRank: Readonly<Record<string, number>>,
+  classifyQualifying?: QualifyingClassifier,
 ): PlacementReading {
   if (ordering[viewId]?.[sectionId] !== undefined) {
     return orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
@@ -1072,5 +1146,6 @@ export function resolveOrderingPlacementFor(
     defaultOrdering,
     orderingFields,
     priorityRank,
+    classifyQualifying,
   );
 }

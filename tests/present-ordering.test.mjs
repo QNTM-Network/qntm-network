@@ -87,6 +87,7 @@ import {
   markerValue,
   classifyLine,
   cleanTitleFor,
+  qualifyingClassifierFor,
 } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1415,5 +1416,201 @@ describe("11d. THE DEFAULT/TITLE PATH'S OWN COUNTER-EXAMPLE — why parent-aware
     // row, UNCONDITIONALLY — never by title, never by value. A parent-aware title comparator would
     // rank 'Apple task' (qualifying) FIRST and 'Zebra context row' (context) SECOND — the exact
     // OPPOSITE of what the engine actually does. That contradiction is why this path keeps refusing.
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 12. THE DEFAULT/TITLE PATH'S OWN QUALIFYING CLASSIFIER (orderingqualify.ts) — §11d's own
+//     counter-example, RE-RUN with the one input its own header names as the fix: a real
+//     qualifying/context signal off the graph, never a text heuristic. Deterministic, non-vault,
+//     matching §11's own style — a hand-built `QualificationLanguage`/`GraphSnapshot` pair, not a
+//     dependency on what the operator's real config happens to publish today.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("12. THE DEFAULT/TITLE PATH'S OWN QUALIFYING CLASSIFIER — narrowing nested-section with a real graph signal", () => {
+  // ONE published section ("s" of view "v"), qualifying on node_type "task" — the shape
+  // `qualification.sections[view][section].qualification` names, and `qualification.predicates`
+  // carries, for a real section like the operator's own "Inbox" (`membershipFor`'s own worked
+  // example: "Inbox" qualifies on node_type being `inbox`, not done — this fixture uses `task`
+  // rather than restate that example, but the SHAPE — a bare `find.nodeType` clause, no field
+  // predicates — is the same one 41 of the operator's 47 published sections actually carry).
+  const qualification = {
+    defaultNodeType: undefined,
+    structuralNodeTypes: [],
+    tokens: {},
+    predicates: { "quali-task": { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
+    sections: { v: { s: { qualification: "quali-task", nodeType: "task", defaults: undefined, name: undefined } } },
+    sectionOrder: {},
+    refused: {},
+    dropped: {},
+  };
+  // Never invoked — `quali-task` carries no `edgeSteps`, so `matchesQualifierGraphAware`'s own
+  // `steps.length === 0` short-circuit returns before this would ever be called.
+  const edgeSourceOf = () => undefined;
+
+  test("12a. THE §11d SHAPE, RE-RUN WITH A REAL GRAPH SIGNAL — the context row is excluded, the abstention is gone", () => {
+    const source = [
+      "## Inbox",
+      "- [ ] Zebra context row [[qntm:100]]",
+      "    - [ ] some deeply qualifying descendant, unrelated to the row below [[qntm:101]]",
+      "- [ ] Apple task [[qntm:102]]",
+    ].join("\n");
+    const graph = {
+      nodes: [
+        { id: "100", type: "outcome", fields: {} }, // CONTEXT — not a task, fails the qualifier
+        { id: "101", type: "task", fields: {} },
+        { id: "102", type: "task", fields: {} }, // the edited line
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.ok(classify, "a published qualification must produce a classifier");
+    assert.equal(classify(1), false, "POSITIVE CONTROL: the graph really does read 'Zebra' as context, not merely pass by construction");
+    assert.equal(classify(3), true, "POSITIVE CONTROL: 'Apple task' really does read as qualifying");
+
+    const reading = defaultOrderingFor(
+      "v", "s", source, 3, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify,
+    );
+    assert.equal(reading.kind, "answer", "with a real classifier this no longer abstains nested-section");
+    assert.equal(reading.answer.siblingCount, 0, "'Zebra context row' is excluded — CONTEXT, never ranked by title, exactly as _order_children never ranks it");
+
+    // WITHOUT the classifier, the SAME source still abstains — the narrowing is additive, not a
+    // change to the no-classifier default (§11d's own claim, re-proven here rather than assumed).
+    const withoutClassifier = defaultOrderingFor("v", "s", source, 3, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK);
+    assert.equal(withoutClassifier.kind, "abstains");
+    assert.equal(withoutClassifier.because, "nested-section");
+  });
+
+  test("12b. THE EDITED LINE ITSELF, CONFIDENTLY CONTEXT — abstains not-qualifying, never title-ranked", () => {
+    const source = [
+      "## Inbox",
+      "- [ ] Zebra context row [[qntm:100]]",
+      "    - [ ] some deeply qualifying descendant [[qntm:101]]",
+    ].join("\n");
+    const graph = {
+      nodes: [
+        { id: "100", type: "outcome", fields: {} },
+        { id: "101", type: "task", fields: {} },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    const reading = defaultOrderingFor(
+      "v", "s", source, 1, "- [ ] Zebra context row edited [[qntm:100]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify,
+    );
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "not-qualifying", "_order_children never gives a context row a title rank — there is nothing to place it against");
+  });
+
+  test("12c. A FRESH, NOT-YET-STAMPED CAPTURE IS 'unknown', NOT 'context' — the operator's own Inbox-first shape still answers", () => {
+    // THE CASE THIS WHOLE FEATURE EXISTS FOR: the row being typed has no `[[qntm:N]]` yet.
+    const source = ["## Inbox", "- [ ] existing task [[qntm:1]]", "- [ ] "].join("\n");
+    const graph = { nodes: [{ id: "1", type: "task", fields: {} }], edges: [] };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(classify(2), undefined, "no stamp on the line being typed — unknown, not context");
+    const reading = defaultOrderingFor("v", "s", source, 2, "- [ ] brand new capture", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(reading.kind, "answer", "a fresh, unstamped capture must still be answerable — 'unknown' is not treated as 'context'");
+  });
+
+  test("12d. AN UNPUBLISHED SECTION QUALIFICATION — no classifier at all; ordering.ts abstains exactly as it did before this file existed", () => {
+    const unpublished = { ...qualification, sections: {} };
+    const classify = qualifyingClassifierFor(["## H"], "v", "s", unpublished, { nodes: [], edges: [] }, edgeSourceOf);
+    assert.equal(classify, undefined, "118 of 159 real section qualifications are exactly this shape — see this module's own header");
+  });
+
+  test("12e. A STAMPED SIBLING NOT IN THE GRAPH (a stale snapshot) — dropped from ranking, never guessed either way", () => {
+    const source = ["## Inbox", "- [ ] stale sibling, not in this graph [[qntm:999]]", "- [ ] Apple task [[qntm:102]]"].join("\n");
+    const graph = { nodes: [{ id: "102", type: "task", fields: {} }], edges: [] };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(classify(1), undefined, "stamped but absent from the graph — unknown, not context");
+    const reading = defaultOrderingFor("v", "s", source, 2, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.siblingCount, 0, "the stale sibling is silently dropped — the same 'cannot read, so cannot include' rule an unreadable marker already gets");
+  });
+
+  test("12f. PARENT-AWARE GROUPING STILL APPLIES — a qualifying row under a DIFFERENT parent is never compared, mirroring §11c", () => {
+    const source = [
+      "## H",
+      "- [ ] Parent 1 [[qntm:1]]",
+      "    - [ ] p1-child [[qntm:2]]",
+      "- [ ] Parent 2 [[qntm:3]]",
+      "    - [ ] p2-child [[qntm:4]]",
+    ].join("\n");
+    const graph = {
+      nodes: [
+        { id: "1", type: "task", fields: {} },
+        { id: "2", type: "task", fields: {} },
+        { id: "3", type: "task", fields: {} },
+        { id: "4", type: "task", fields: {} },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    const reading = defaultOrderingFor("v", "s", source, 2, "    - [ ] p1-child edited [[qntm:2]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.siblingCount, 0, "p1-child's true sibling group is empty — p2-child is a DIFFERENT parent's child, both qualifying or not");
+  });
+
+  test("12g. NON-REGRESSION: the available-overdue shape, reproduced through the classifier, still ranks the qualifying root ALONE", () => {
+    // The exact shape ordering.ts's own header (measurement 2) found against `~/qntm/this_week.md`,
+    // rebuilt for the DEFAULT/title path this time — two context outcome roots, each with a
+    // deeper-nested qualifying descendant, and one flat qualifying root at the SAME tree level.
+    const source = [
+      "## H",
+      "- [ ] Context Outcome A [[qntm:10]]",
+      "    - [ ] descendant of A [[qntm:11]]",
+      "- [ ] Context Outcome B [[qntm:12]]",
+      "    - [ ] descendant of B [[qntm:13]]",
+      "- [ ] Check personal outcomes [[qntm:14]]",
+    ].join("\n");
+    const graph = {
+      nodes: [
+        { id: "10", type: "outcome", fields: {} },
+        { id: "11", type: "task", fields: {} },
+        { id: "12", type: "outcome", fields: {} },
+        { id: "13", type: "task", fields: {} },
+        { id: "14", type: "task", fields: {} },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    const reading = defaultOrderingFor(
+      "v", "s", source, 5, "- [ ] Check personal outcomes edited [[qntm:14]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(
+      reading.answer.siblingCount,
+      0,
+      "the two context outcome roots are excluded — never compared by title, exactly as the engine never compares them",
+    );
+  });
+
+  test("12h. THE DISPATCHER THREADS THE CLASSIFIER THROUGH — resolveOrderingFor/resolveOrderingPlacementFor", () => {
+    const source = [
+      "## Inbox",
+      "- [ ] Zebra context row [[qntm:100]]",
+      "    - [ ] some deeply qualifying descendant [[qntm:101]]",
+      "- [ ] Apple task [[qntm:102]]",
+    ].join("\n");
+    const graph = {
+      nodes: [
+        { id: "100", type: "outcome", fields: {} },
+        { id: "101", type: "task", fields: {} },
+        { id: "102", type: "task", fields: {} },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    const after = "- [ ] Apple task edited [[qntm:102]]";
+
+    const direct = defaultOrderingFor("v", "s", source, 3, after, {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    const dispatched = resolveOrderingFor("v", "s", source, 3, after, {}, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK, classify);
+    assert.deepEqual(dispatched, direct);
+    assert.equal(direct.kind, "answer");
+
+    const placeDirect = defaultOrderingPlacementFor("v", "s", source, 3, after, {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    const placeDispatched = resolveOrderingPlacementFor("v", "s", source, 3, after, {}, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK, classify);
+    assert.deepEqual(placeDispatched, placeDirect);
+    assert.equal(placeDirect.kind, "answer");
   });
 });

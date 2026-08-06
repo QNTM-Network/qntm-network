@@ -104,7 +104,10 @@ export type {
   OrderingPlacement,
   OrderingReading,
   PlacementReading,
+  QualifyingClassifier,
 } from "./ordering.js";
+
+export { publishedQualifierFor, qualifyingClassifierFor } from "./orderingqualify.js";
 
 export { resolveLogicalDate, resolveWeekEnd, todayFor } from "./today.js";
 export type { TodayAbstention, TodayAnswer, TodayReading } from "./today.js";
