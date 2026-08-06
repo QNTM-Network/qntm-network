@@ -339,6 +339,23 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     assert.deepEqual(problems, []);
   });
 
+  test("compositionSource: 'config' and 'engine-fallback' both read cleanly; anything else is reported", () => {
+    assert.equal(read({ compositionSource: "config" }).resolution.compositionSource, "config");
+    assert.equal(
+      read({ compositionSource: "engine-fallback" }).resolution.compositionSource,
+      "engine-fallback",
+    );
+    const { resolution, problems } = read({ compositionSource: "made-up" });
+    assert.equal(resolution.compositionSource, undefined);
+    assert.ok(problems.some((p) => p.includes("compositionSource")), problems.join("\n"));
+  });
+
+  test("compositionSource: absent is silence, not a problem — an older declaration has no opinion", () => {
+    const { resolution, problems } = read({});
+    assert.equal(resolution.compositionSource, undefined);
+    assert.deepEqual(problems, []);
+  });
+
   test("priorityRank: a non-integer or non-positive rank is reported and the whole map drops", () => {
     const { resolution, problems } = read({ priorityRank: { urgent: 4, low: 0 } });
     assert.deepEqual(resolution.priorityRank, {});

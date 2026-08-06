@@ -867,9 +867,11 @@ var TOP_KEYS2 = [
   "defaultOrderingSource",
   "priorityRank",
   "composition",
+  "compositionSource",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
+var COMPOSITION_SOURCES = ["config", "engine-fallback"];
 var SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"];
 var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
 var ORDERING_KEY_KEYS = ["field", "direction"];
@@ -1339,6 +1341,15 @@ function readComposition(value, problems) {
     separator
   };
 }
+function readCompositionSource(value, problems) {
+  if (!COMPOSITION_SOURCES.includes(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.compositionSource' is ${JSON.stringify(value)}, not one of ${COMPOSITION_SOURCES.join(", ")} \u2014 which answer composition is stays unknown`
+    );
+    return void 0;
+  }
+  return value;
+}
 function readConfigResolutionDeclaration(document2) {
   if (!isPlainObject3(document2)) {
     return { resolution: void 0, problems: [] };
@@ -1383,6 +1394,7 @@ function readConfigResolutionDeclaration(document2) {
       defaultOrderingSource: "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : void 0,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : void 0,
+      compositionSource: "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}
     },
     problems

@@ -294,12 +294,22 @@ export interface ConfigResolutionTable {
   readonly priorityRank: Readonly<Record<string, number>>;
   /**
    * THE SECOND DIRECTION OF THE LINE GRAMMAR — where a cell goes, once a line's shape is known. See
-   * the `Composition` type's own header. Unlike `defaultOrdering`, there is no config-vs-engine-
-   * fallback split to publish: no config surface for this exists at all, so it is always the
-   * engine's own literal — `undefined` only when the served document predates this key or the key
-   * is malformed, never as a per-operator answer.
+   * the `Composition` type's own header. 2026-08-06 (closing the asymmetry monorepo PR #72 named):
+   * read by `scripts/compile-resolution.mjs` from `global_defaults.yaml`'s own `composition:` key
+   * when an operator's config declares one, the same GLOBAL layer and the same visible-fallback
+   * discipline `defaultOrdering` already has — see `compositionSource` for which answer this is.
+   * `undefined` only when the served document predates this key or the key is malformed, never as
+   * a per-operator answer that silently withheld itself.
    */
   readonly composition: Composition | undefined;
+  /**
+   * WHICH ANSWER `composition` IS — `"config"` when `global_defaults.yaml` declared `composition:`
+   * itself, `"engine-fallback"` when it did not and `ENGINE_LITERAL_COMPOSITION` answered instead.
+   * `undefined` when the served document predates this key or the key is malformed. The same
+   * "never silent about a fallback" posture `defaultOrderingSource` already established, applied
+   * here — see `compile-resolution.mjs`'s own header, "COMPOSITION", for the full argument.
+   */
+  readonly compositionSource: "config" | "engine-fallback" | undefined;
   /**
    * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. The two comments
    * above ("a field absent here has no known marker", "a type absent here is one whose chrome this
@@ -340,9 +350,15 @@ const TOP_KEYS = [
   "defaultOrderingSource",
   "priorityRank",
   "composition",
+  "compositionSource",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
+// Same two values as `DEFAULT_ORDERING_SOURCES` — kept as its own named constant, not a shared
+// import, because the two fields it validates (`defaultOrderingSource`, `compositionSource`)
+// answer unrelated questions that happen to share a domain; a future third source value for one
+// must not silently become valid for the other.
+const COMPOSITION_SOURCES = ["config", "engine-fallback"] as const;
 const SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
@@ -926,6 +942,22 @@ function readComposition(value: unknown, problems: string[]): Composition | unde
 }
 
 /**
+ * `resolution.compositionSource` — `"config"` or `"engine-fallback"`, or `undefined` if the
+ * document declares neither (an older declaration, published before this key existed) or something
+ * else entirely (reported, never guessed). Mirrors `readDefaultOrderingSource` exactly.
+ */
+function readCompositionSource(value: unknown, problems: string[]): "config" | "engine-fallback" | undefined {
+  if (!(COMPOSITION_SOURCES as readonly string[]).includes(value as string)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.compositionSource' is ${JSON.stringify(value)}, not one of ` +
+        `${COMPOSITION_SOURCES.join(", ")} — which answer composition is stays unknown`,
+    );
+    return undefined;
+  }
+  return value as "config" | "engine-fallback";
+}
+
+/**
  * Read the `resolution` key of a served presentation declaration.
  *
  * Same posture every reader in this directory takes, FOR EVERY FIELD BUT ONE: no key at all is
@@ -1023,6 +1055,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
         "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : undefined,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : undefined,
+      compositionSource:
+        "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
     problems,

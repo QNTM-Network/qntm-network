@@ -1,0 +1,90 @@
+{
+  "note": [
+    "HAND-VERIFIED, ONCE, AGAINST A SCRATCH-PATCHED COPY OF THE REAL ENGINE — see",
+    "tests/resolution-declared-composition.test.mjs section 4 for the full account.",
+    "",
+    "This is the 'another user, a genuinely different composition' proof: `declaration` below is NOT",
+    "ENGINE_LITERAL_COMPOSITION (title comes BEFORE checkbox in the checkbox head; the tail is",
+    "reordered to tags, stamp, markers, chrome, date instead of stamp, date, tags, markers, chrome).",
+    "Each fixture's `engineLine` is the byte-for-byte output of the REAL, unmodified",
+    "apps/qntm-md/src/qntm_md/render/renderer.py AT monorepo commit bc3aa01 ('The engine reads",
+    "composition from config, not just its own copy', #72), told to use this exact declaration via",
+    "its own new render(composition_heads=, composition_tail=) parameters.",
+    "",
+    "WHY THIS IS A FIXTURE RATHER THAN A LIVE composition-agreement.py RUN: the local trunk checkout",
+    "this repo's generators read (/Users/lukeannison/projects/qntm-network/qntm) is pinned three",
+    "commits BEHIND origin/main and does not yet contain bc3aa01 (or its prerequisite, #71,",
+    "38330a6) — composition-reads-config does not exist in that checkout's renderer.py. Editing that",
+    "checkout to pull or check out a newer commit is out of bounds ('NEVER edit the trunk clones'),",
+    "and no cycle or state.db may be used either. So the comparison was made ONCE, offline, by",
+    "loading bc3aa01's renderer.py content (read via `git show bc3aa01:apps/qntm-md/src/qntm_md/",
+    "render/renderer.py` — a read, not a checkout mutation) as a substitute module object, reusing",
+    "every other already-installed qntm_md/qntm_graph module unchanged, and calling the SAME",
+    "render() entry point composition-agreement.py itself uses. Each `engineLine` here is that run's",
+    "real, printed output, transcribed verbatim — never hand-composed.",
+    "",
+    "WHAT THIS FIXTURE PROVES ON EVERY TEST RUN: that app/present/express/composition.ts's",
+    "composeLine, given ONLY these cell values and this declared order, reproduces those exact",
+    "bytes. WHAT IT DOES NOT RE-PROVE ON EVERY RUN: that the engine itself still behaves this way —",
+    "that claim stands only as long as bc3aa01's own logic is unchanged, the same limit",
+    "composition-agreement.test.mjs's own header states for its committed fixture. The day the local",
+    "trunk checkout is updated past bc3aa01, `scripts/composition-agreement.py`-style live",
+    "verification becomes possible again and this fixture should be re-derived from it rather than",
+    "trusted indefinitely."
+  ],
+  "declaration": {
+    "heads": {
+      "checkbox": ["title", "checkbox"],
+      "plain_line": ["title"]
+    },
+    "tail": ["tags", "stamp", "markers", "chrome", "date"],
+    "separator": " "
+  },
+  "fixtures": [
+    {
+      "id": "checkbox_reordered_head_and_tail",
+      "shape": "checkbox",
+      "depth": 0,
+      "cells": {
+        "checkbox": "[ ]",
+        "title": "Ship the thing",
+        "stamp": "[[qntm:x1]]",
+        "date": "",
+        "tags": ["#task", "#work"],
+        "markers": ["⏫"],
+        "chrome": ["#requires [[Get approval]]"]
+      },
+      "engineLine": "- Ship the thing [ ] #task #work [[qntm:x1]] ⏫ #requires [[Get approval]]"
+    },
+    {
+      "id": "plain_line_read_only_no_stamp",
+      "shape": "plain_line",
+      "depth": 0,
+      "cells": {
+        "checkbox": "[ ]",
+        "title": "A note",
+        "stamp": "",
+        "date": "",
+        "tags": ["#note"],
+        "markers": [],
+        "chrome": []
+      },
+      "engineLine": "- A note #note"
+    },
+    {
+      "id": "nested_depth_with_marker",
+      "shape": "checkbox",
+      "depth": 1,
+      "cells": {
+        "checkbox": "[ ]",
+        "title": "Nested",
+        "stamp": "[[qntm:x3]]",
+        "date": "",
+        "tags": ["#task"],
+        "markers": ["🔽"],
+        "chrome": []
+      },
+      "engineLine": "    - Nested [ ] #task [[qntm:x3]] 🔽"
+    }
+  ]
+}
