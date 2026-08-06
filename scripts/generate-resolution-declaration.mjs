@@ -98,11 +98,14 @@
  * `fileURLToPath(import.meta.url)`) would crash a Worker at module load the moment anything
  * imported `compile` from here. See `compile-resolution.mjs`'s own header for the full account;
  * `worker/src/config.js`'s Gate-1 route for this generator imports `compile` from THAT file, never
- * this one. `generateResolution(configDir, ledger)` below is the thin shell: it reads exactly the
- * nine things this script has always read — `schema.yaml`, `line_grammars.yaml`, `day_boundary.
+ * this one. `generateResolution(configDir, ledger)` below is the thin shell: it reads the nine
+ * things this script has always read — `schema.yaml`, `line_grammars.yaml`, `day_boundary.
  * yaml`, every `views/*.yaml` (including `default_registration.yaml`), every `vocabulary/*.yaml`,
- * every `patterns/*.yaml` and every `rules/*.yaml`, each sorted — into a files map and hands it to
- * the imported `compile`. Nothing about WHAT is read or the ORDER it is read in changed; only WHERE
+ * every `patterns/*.yaml` and every `rules/*.yaml`, each sorted — PLUS (2026-08-06, "the default
+ * ordering is declared") a tenth, optional file: `global_defaults.yaml`, whose own `default_
+ * ordering:`/`priority_rank:` keys `compile` now reads instead of a hardcoded literal — see
+ * `compile-resolution.mjs`'s own header, "THE DEFAULT ORDERING". Nothing about WHAT was already
+ * read or the ORDER it is read in changed; only WHERE
  * the reading happens, and which file the parsing logic lives in, moved.
  *
  * ── USAGE ──
@@ -123,6 +126,7 @@ import {
   SCHEMA_KEY,
   LINE_GRAMMARS_KEY,
   DAY_BOUNDARY_KEY,
+  GLOBAL_DEFAULTS_KEY,
   VIEWS_PREFIX,
   VOCABULARY_PREFIX,
   PATTERNS_PREFIX,
@@ -164,6 +168,13 @@ export function readConfigTree(configDir) {
 
   const dayBoundaryPath = join(configDir, "day_boundary.yaml");
   if (existsSync(dayBoundaryPath)) files[DAY_BOUNDARY_KEY] = readFileSync(dayBoundaryPath, "utf8");
+
+  // GLOBAL_DEFAULTS_KEY — read the SAME file `global_defaults.yaml`'s `defaults:`/
+  // `node_defaults_cascade:` keys already live in (this repo did not read it before this key
+  // existed; see compile-resolution.mjs's own header, "THE DEFAULT ORDERING"). Optional: a config
+  // that declares no `default_ordering:` — every config today — falls back inside `compile`.
+  const globalDefaultsPath = join(configDir, "global_defaults.yaml");
+  if (existsSync(globalDefaultsPath)) files[GLOBAL_DEFAULTS_KEY] = readFileSync(globalDefaultsPath, "utf8");
 
   const viewsDir = join(configDir, "views");
   if (existsSync(viewsDir)) {

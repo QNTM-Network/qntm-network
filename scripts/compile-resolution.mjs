@@ -72,6 +72,7 @@ const isNonEmptyString = (v) => typeof v === "string" && v !== "";
 export const SCHEMA_KEY = "schema.yaml";
 export const LINE_GRAMMARS_KEY = "line_grammars.yaml";
 export const DAY_BOUNDARY_KEY = "day_boundary.yaml";
+export const GLOBAL_DEFAULTS_KEY = "global_defaults.yaml";
 export const VIEWS_PREFIX = "views/";
 export const DEFAULT_REGISTRATION_KEY = `${VIEWS_PREFIX}default_registration.yaml`;
 export const VOCABULARY_PREFIX = "vocabulary/";
@@ -93,49 +94,48 @@ const ORDERING_MODES = new Set(["pattern_default", "insertion_order"]);
 // read a value from — see the domain header for the two kinds left out on purpose.
 const EXTRACTION_KINDS = { trailing_date: "date", trailing_int: "int", trailing_float: "float" };
 
-// ── THE ENGINE'S DEFAULT ORDERING — an ENGINE FACT, not a config fact ─────────────────────────
+// ── THE DEFAULT ORDERING — a DECLARED value now, resolved like everything else ────────────────
 //
-// `apps/qntm-md/src/qntm_md/render/section_builder.py:26-29` (`_DEFAULT_ORDERING`) is the sort
-// spec `_section_order_key` (section_builder.py:392-397) applies whenever `_resolve_ordering`
-// (`ViewRegistration.ordering_binding`: the container node's OWN `ordering` field — settable at
-// runtime by a `#order:field:direction` heading directive — falling back to the view-section
-// `ordering:`) has NOTHING to say — i.e. every section that declares neither a per-view
-// `ordering:` nor an `ordering_mode:`. That is 171 of 186 sections in the operator's own config
-// (186 total, 15 declare `ordering:`/`ordering_mode:` per `readOrdering` above) and, because
-// `_DEFAULT_ORDERING` is a module-level constant with no config input at all, it is EXACTLY AS
-// TRUE for a config this app has never seen — the same tuple, unconditionally, for every qntm-md
-// instance. So it is published here unconditionally too, never read out of YAML.
+// UNTIL THIS CHANGE, this file published `apps/qntm-md/src/qntm_md/render/section_builder.py:
+// 26-37`'s `_DEFAULT_ORDERING`/`_PRIORITY_RANK` — a hardcoded (due_date, priority, title) tuple —
+// as an "ENGINE FACT... true for every qntm-md instance", unconditionally, for every operator this
+// app will ever serve. That was the defect: qntm.network lets an operator declare their OWN node
+// types and fields, and "everything else... and ordering" (the operator's own words). A user with
+// no `due_date` and no `priority` in their vocabulary got a GLOBAL default naming fields that do
+// not exist for them — the one rung of the resolution cascade (GLOBAL -> VIEW -> STRUCTURAL_NODE
+// -> LINE) that answered for every user identically, whether or not it made sense for them.
 //
-// REFUTES "IT IS JUST ALPHABETICAL": the operator's own description ("if you add something
-// anywhere then cycle it will come back all alphabetical") is exactly what this tuple produces
-// WHEN NEITHER due_date NOR priority IS SET ON ANY COMPARED ROW (his inbox's own case, measured
-// against the live server) — but the true default is a THREE-KEY composite, due_date first,
-// priority second, title only as the final tiebreak. A row that gains a due_date or a priority
-// stops sorting alphabetically at all, and a browser that hardcoded "alphabetical" would then
-// place it wrongly and be corrected by the next cycle — the exact "second jump" the operator's
-// own brief warns against.
+// `readGlobalDefaultOrdering` below reads `global_defaults.yaml`'s own `default_ordering:` /
+// `priority_rank:` keys (GLOBAL_DEFAULTS_KEY) — the same file, and the same GLOBAL layer, that
+// already carries `defaults:` (config-root field defaults) and `node_defaults_cascade:`. A
+// per-operator config can now say what its own floor sorts by; this file no longer decides that
+// for anyone.
 //
-// Pinned against a LIVE IMPORT of the engine's own tuple (never transcribed twice) by
-// `tests/resolution-default-ordering-agreement.test.mjs`, via `scripts/resolution-agreement.py`
-// importing `qntm_md.render.section_builder._DEFAULT_ORDERING` directly.
-export const ENGINE_DEFAULT_ORDERING = Object.freeze([
+// ── THE FALLBACK, AND WHY IT IS VISIBLE RATHER THAN SILENT ──
+//
+// `apps/qntm-md/config/` is read-only from this repo, and the ENGINE (`section_builder.py`) still
+// hardcodes `_DEFAULT_ORDERING`/`_PRIORITY_RANK` — see this file's own report for why that half of
+// the fix is out of scope here. So the operator's real config declares nothing yet, and a compile
+// against it must not go dark: `readGlobalDefaultOrdering` falls back to
+// `ENGINE_LITERAL_DEFAULT_ORDERING`/`ENGINE_LITERAL_PRIORITY_RANK` below — the exact tuple the
+// engine hardcodes, reproducing today's behaviour byte for byte — but records WHICH path answered
+// as `resolution.defaultOrderingSource` (`"config"` or `"engine-fallback"`), published alongside
+// `defaultOrdering`/`priorityRank`. Three options were open here: fail the compile loudly when
+// nothing is declared (breaks every deploy until the operator's own config change lands, for a
+// floor 171 of 186 of his own sections rely on); publish nothing (the same defect this change
+// exists to fix, now silent about EVERY vault rather than one); or fall back with the fallback
+// recorded. The third is what ships — a fallback nobody can see is how the literal survived this
+// long, so the one thing this compiler refuses to do is answer without saying which answer it gave.
+export const ENGINE_LITERAL_DEFAULT_ORDERING = Object.freeze([
   Object.freeze({ field: "due_date", direction: "asc" }),
   Object.freeze({ field: "priority", direction: "desc" }),
   Object.freeze({ field: "title", direction: "asc" }),
 ]);
 
-// Mirrors section_builder.py:31-37 (`_PRIORITY_RANK`) — the same engine-fact posture and the same
-// pinning as `ENGINE_DEFAULT_ORDERING` above. FOUR NUMBERS FOR FIVE NAMES, not simplified to five:
-// `normal` and `medium` really do share rank 2 in the engine's own dict, read verbatim.
-export const ENGINE_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
-
-// The non-'title' field names `ENGINE_DEFAULT_ORDERING` itself names. 'title' is excluded: it is
-// never marker-based (see `readOrderingFieldMarkers`'s own header — a title is the printed line's
-// own chrome-free text, not a glyph to search for), so asking `readOrderingFieldMarkers` to find a
-// marker for it would always and vacuously drop.
-const ENGINE_DEFAULT_ORDERING_MARKER_FIELDS = new Set(
-  ENGINE_DEFAULT_ORDERING.map((entry) => entry.field).filter((field) => field !== "title"),
-);
+// Mirrors section_builder.py:31-37 (`_PRIORITY_RANK`) verbatim — the same fallback posture as
+// `ENGINE_LITERAL_DEFAULT_ORDERING` above. FOUR NUMBERS FOR FIVE NAMES, not simplified to five:
+// `normal` and `medium` really do share rank 2 in the engine's own dict.
+export const ENGINE_LITERAL_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
 
 const CAPTURE_FIELDS_NOTE =
   "a new line carries its resolved node type, the schema's declared field defaults and its " +
@@ -501,6 +501,64 @@ export function compile(files, ledger = new Ledger()) {
     return { timezone, dayStartHour, weekStartsOn };
   }
 
+  // ── 4b. global_defaults.yaml -> default_ordering / priority_rank, or the engine's fallback ─────
+  //
+  // See this file's own domain header ("THE DEFAULT ORDERING") for the full account. NO FIELD NAME
+  // drives any decision in this function — `default_ordering:`'s entries are read the identical way
+  // a section's own `ordering:` is (`readOrderingFields` above), whatever fields the operator's
+  // config happens to name. A missing `global_defaults.yaml`, or one present but silent on
+  // `default_ordering:`, is "not declared" — the fallback branch — not an error: the GLOBAL layer is
+  // opt-in everywhere else in this file (`defaults: {}` is the documented default in
+  // `global_defaults.yaml` itself), and this key is no exception.
+  function readGlobalDefaultOrdering() {
+    const declared = has(GLOBAL_DEFAULTS_KEY) ? readYaml(GLOBAL_DEFAULTS_KEY) : undefined;
+    const hasOwn = declared && typeof declared === "object" && !Array.isArray(declared)
+      && Object.prototype.hasOwnProperty.call(declared, "default_ordering");
+    if (!hasOwn) {
+      return {
+        ordering: ENGINE_LITERAL_DEFAULT_ORDERING,
+        priorityRank: ENGINE_LITERAL_PRIORITY_RANK,
+        source: "engine-fallback",
+      };
+    }
+    const rawOrdering = declared.default_ordering;
+    if (!Array.isArray(rawOrdering) || rawOrdering.length === 0) {
+      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'default_ordering:' is not a non-empty list`);
+    }
+    const ordering = rawOrdering.map((entry, i) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: default_ordering[${i}] is not a mapping`);
+      }
+      const { field, direction } = entry;
+      if (!isNonEmptyString(field)) {
+        throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: default_ordering[${i}].field is not a string`);
+      }
+      if (!DIRECTIONS.has(direction)) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: default_ordering[${i}].direction is '${direction}', not one of ` +
+            `${[...DIRECTIONS].join("/")}`,
+        );
+      }
+      return { field, direction };
+    });
+
+    let priorityRank = {};
+    if (Object.prototype.hasOwnProperty.call(declared, "priority_rank")) {
+      const rawRank = declared.priority_rank;
+      if (!rawRank || typeof rawRank !== "object" || Array.isArray(rawRank)) {
+        throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'priority_rank:' is not a mapping`);
+      }
+      priorityRank = {};
+      for (const [name, rank] of Object.entries(rawRank)) {
+        if (!Number.isInteger(rank) || rank < 1) {
+          throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: priority_rank.${name} is not a positive integer`);
+        }
+        priorityRank[name] = rank;
+      }
+    }
+    return { ordering, priorityRank, source: "config" };
+  }
+
   // ── 5. schema.yaml -> node type -> chrome shape, for every default_node_type candidate ─────────
 
   function readChromeShapes(candidates, ledger) {
@@ -547,8 +605,8 @@ export function compile(files, ledger = new Ledger()) {
   //
   // TWO MARKER SHAPES, NOT ONE. `due_date`/`available_date`/`queue_position` are TRAILING-TOKEN
   // markers (`extraction_hint:`, this generator's original shape: a glyph followed by a value that
-  // varies line to line). `priority` — needed once `ENGINE_DEFAULT_ORDERING_MARKER_FIELDS` widens
-  // the candidate set below — is a FIXED-`value:` (value-match) marker instead: `markers.yaml`'s
+  // varies line to line). `priority` — needed once the default ordering's own fields widen the
+  // candidate set below — is a FIXED-`value:` (value-match) marker instead: `markers.yaml`'s
   // `🔽`/`⏫` rows each spell ONE literal value, and unlike a trailing marker, MORE THAN ONE token
   // legitimately owning the SAME field is the NORMAL shape for an enum (every value needs its own
   // glyph), not DROP PATH 12's collision. Published as `{ kind: "enum", values: { token: value } }`
@@ -917,13 +975,16 @@ export function compile(files, ledger = new Ledger()) {
   const registration = readRegistration(viewFiles);
   const candidates = collectDefaultNodeTypeCandidates(registration, viewFiles);
   const ordering = readOrdering(viewFiles, ledger);
+  const defaultOrderingResult = readGlobalDefaultOrdering();
   // WIDENED: the candidate set is no longer only the fields a DECLARED `ordering:` names — the
-  // engine's own default ordering (`ENGINE_DEFAULT_ORDERING`, applied to every section that
-  // declares neither `ordering:` nor `ordering_mode:`) names `due_date` and `priority` too, and a
-  // marker for either must be looked up for EVERY config, not only one that happens to already use
-  // them in a declared section. `title` is excluded — see `ENGINE_DEFAULT_ORDERING_MARKER_FIELDS`.
+  // (declared, or engine-fallback) default ordering's OWN fields are added too, generically, and a
+  // marker for each must be looked up for every config, not only one that happens to already use
+  // them in a declared section. NO FIELD IS EXCLUDED BY NAME — a field the default ordering names
+  // that turns out to have no marker at all (`title`, in the fallback tuple) is not filtered out in
+  // advance; `readOrderingFieldMarkers`'s own DROP PATH 13 records that absence, with its reason,
+  // rather than the candidate set silently never asking.
   const orderingFields = readOrderingFieldMarkers(
-    new Set([...orderingFieldNames(ordering), ...ENGINE_DEFAULT_ORDERING_MARKER_FIELDS]),
+    new Set([...orderingFieldNames(ordering), ...defaultOrderingResult.ordering.map((entry) => entry.field)]),
     ledger,
   );
   const chromeShapes = readChromeShapes(candidates, ledger);
@@ -937,12 +998,20 @@ export function compile(files, ledger = new Ledger()) {
     dayBoundary: readDayBoundary(),
     chromeShapes,
     sectionRegistration,
-    // ENGINE FACTS, published unconditionally — see this file's own header. `defaultOrdering` is
-    // what every section with NEITHER `ordering` NOR `orderingMode` above sorts by; `priorityRank`
-    // is the numeric rank `defaultOrdering`'s own `priority` key compares.
-    defaultOrdering: ENGINE_DEFAULT_ORDERING,
-    priorityRank: ENGINE_PRIORITY_RANK,
+    // THE FLOOR OF THE CASCADE, DECLARED — see this file's own header ("THE DEFAULT ORDERING").
+    // `defaultOrdering` is what every section with NEITHER `ordering` NOR `orderingMode` above sorts
+    // by; `defaultOrderingSource` says whether that answer came from `global_defaults.yaml`
+    // (`"config"`) or the engine's own hardcoded fallback (`"engine-fallback"`) — always published,
+    // so the fallback is a visible fact, never the silent one this file used to publish.
+    defaultOrdering: defaultOrderingResult.ordering,
+    defaultOrderingSource: defaultOrderingResult.source,
   };
+  // `priorityRank` follows the same "absent means nothing to say" convention every other optional
+  // key in this declaration already uses (see resolutiontable.ts's own header) — omitted, not
+  // published empty, when the declared default ordering names no field a rank table applies to.
+  if (Object.keys(defaultOrderingResult.priorityRank).length > 0) {
+    declaration.priorityRank = defaultOrderingResult.priorityRank;
+  }
   // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.
   const dropped = ledger.toJSON();
   return {

@@ -21,6 +21,21 @@
  * start reading `global_defaults.yaml` BY ACCIDENT, as a side effect of some other change. If a
  * generator ever needs to, this test is what turns that into a decision instead of a silent
  * drift, and updating it is a one-line edit alongside whatever change closes the skew on purpose.
+ *
+ * ── `generate-resolution-declaration.mjs` LEFT THIS LIST, 2026-08-06, ON PURPOSE ──
+ *
+ * "the default ordering is declared": the ONE rung of the resolution cascade that had NO config
+ * input at all (`resolution.defaultOrdering`/`priorityRank` — a hardcoded literal mirroring the
+ * engine's own `section_builder._DEFAULT_ORDERING`/`_PRIORITY_RANK`, published unconditionally for
+ * every operator regardless of their own vocabulary) now reads `global_defaults.yaml`'s own
+ * `default_ordering:`/`priority_rank:` keys — see `compile-resolution.mjs`'s own header, "THE
+ * DEFAULT ORDERING". This is exactly the "decision instead of a silent drift" this test's own
+ * header names, made on purpose, scoped narrowly: this generator reads ONLY those two keys.
+ * `global_defaults.yaml`'s OTHER two keys — `defaults:` (the config-root field-defaults cascade)
+ * and `node_defaults_cascade:` (subtree inheritance) — are NOT read by this generator and the skew
+ * for THEM is unchanged; nothing here widens to the whole file. `resolution.dropped`/`chromeShapes`
+ * etc. still know nothing about a declared global field default, only about a declared global
+ * default ORDERING.
  */
 
 import { test } from "node:test";
@@ -33,7 +48,6 @@ const REPO = resolve(fileURLToPath(import.meta.url), "..", "..");
 
 const GENERATORS = [
   "scripts/generate-qualification-declaration.mjs",
-  "scripts/generate-resolution-declaration.mjs",
   "scripts/generate-structural-declaration.mjs",
   "scripts/generate-rules-declaration.mjs",
 ];

@@ -135,16 +135,24 @@ describe("1. the shipped declaration reads cleanly", () => {
     });
   });
 
-  test("THE ENGINE DEFAULT — defaultOrdering/priorityRank are published, unconditionally, for every config", () => {
-    // `apps/qntm-md/src/qntm_md/render/section_builder.py:26-37` — `_DEFAULT_ORDERING`/
-    // `_PRIORITY_RANK`, verbatim. Pinned against a LIVE import of the engine's own tuple by
-    // `tests/resolution-default-ordering-agreement.test.mjs`; this test only proves it SHIPPED.
+  test("THE DEFAULT ORDERING — defaultOrdering/priorityRank are published, always, for every config", () => {
+    // 2026-08-06 ("the default ordering is declared"): defaultOrdering/priorityRank are now a
+    // DECLARED value (`global_defaults.yaml`'s own `default_ordering:`/`priority_rank:`), not a
+    // hardcoded literal — see `compile-resolution.mjs`'s own header, "THE DEFAULT ORDERING". The
+    // operator's own real config declares neither key yet, so this ships the engine's fallback
+    // tuple (`section_builder.py:26-37`'s `_DEFAULT_ORDERING`/`_PRIORITY_RANK`, verbatim) — pinned
+    // against a LIVE import of the engine's own tuple by
+    // `tests/resolution-default-ordering-agreement.test.mjs`; this test only proves it SHIPPED,
+    // and that the fallback is a NAMED, visible fact (`defaultOrderingSource`), not a silent one.
+    // `tests/resolution-declared-default-ordering.test.mjs` proves the CONFIG-DECLARED path, over
+    // fields that are not due_date/priority/title, against a fixture — the "another user" case.
     const { resolution } = readConfigResolutionDeclaration(SERVED);
     assert.deepEqual(resolution.defaultOrdering, [
       { field: "due_date", direction: "asc" },
       { field: "priority", direction: "desc" },
       { field: "title", direction: "asc" },
     ]);
+    assert.equal(resolution.defaultOrderingSource, "engine-fallback");
     assert.deepEqual(resolution.priorityRank, { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
   });
 
@@ -312,6 +320,23 @@ describe("2. a malformed declaration is reported, never guessed", () => {
     });
     assert.deepEqual(resolution.defaultOrdering, []);
     assert.ok(problems.some((p) => p.includes("defaultOrdering[1].direction")), problems.join("\n"));
+  });
+
+  test("defaultOrderingSource: 'config' and 'engine-fallback' both read cleanly; anything else is reported", () => {
+    assert.equal(read({ defaultOrderingSource: "config" }).resolution.defaultOrderingSource, "config");
+    assert.equal(
+      read({ defaultOrderingSource: "engine-fallback" }).resolution.defaultOrderingSource,
+      "engine-fallback",
+    );
+    const { resolution, problems } = read({ defaultOrderingSource: "made-up" });
+    assert.equal(resolution.defaultOrderingSource, undefined);
+    assert.ok(problems.some((p) => p.includes("defaultOrderingSource")), problems.join("\n"));
+  });
+
+  test("defaultOrderingSource: absent is silence, not a problem — an older declaration has no opinion", () => {
+    const { resolution, problems } = read({});
+    assert.equal(resolution.defaultOrderingSource, undefined);
+    assert.deepEqual(problems, []);
   });
 
   test("priorityRank: a non-integer or non-positive rank is reported and the whole map drops", () => {
@@ -509,6 +534,25 @@ describe("4. the falsifier: the app's answer follows the config, because it read
       writeFileSync(path, mutated);
     });
     assert.equal(resolution.orderingFields.queue_position, undefined, "a render_only marker still published");
+  });
+
+  test("MUTATE THE DEFAULT ORDERING: declare global_defaults.yaml's default_ordering, and defaultOrdering/defaultOrderingSource follow", { skip }, () => {
+    const before = generateResolution(DEFAULT_CONFIG_DIR);
+    assert.equal(before.defaultOrderingSource, "engine-fallback", "the operator's real config already declares one");
+    const resolution = withMutatedConfig((configDir) => {
+      const path = join(configDir, "global_defaults.yaml");
+      const original = readFileSync(path, "utf8");
+      assert.ok(original.includes("defaults: {}"), "the falsifier's own anchor is no longer in global_defaults.yaml");
+      const mutated =
+        original +
+        "\ndefault_ordering:\n  - { field: available_date, direction: desc }\npriority_rank:\n  urgent: 9\n";
+      writeFileSync(path, mutated);
+    });
+    assert.deepEqual(resolution.defaultOrdering, [{ field: "available_date", direction: "desc" }]);
+    assert.equal(resolution.defaultOrderingSource, "config");
+    assert.deepEqual(resolution.priorityRank, { urgent: 9 });
+    // due_date's marker is untouched — only the GLOBAL default's own field changed.
+    assert.deepEqual(resolution.orderingFields.available_date, { token: "🛫", kind: "date" });
   });
 
   test("MUTATE A CANDIDATE OUT OF EXISTENCE: remove person's render: block, and it still publishes checkbox", { skip }, () => {

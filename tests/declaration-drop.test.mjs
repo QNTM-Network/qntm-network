@@ -724,7 +724,21 @@ describe("4. NO WOLF — the ledger records what was dropped, and nothing else",
     const dropped = generateQualification(FIXTURE_CONFIG).dropped;
     assert.deepEqual(Object.keys(dropped).sort(), ["section 'main.nested'", "vocabulary token '📅'"]);
     assert.deepEqual(generateStructural(FIXTURE_CONFIG).dropped, {});
-    assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {});
+    // RESTATED, 2026-08-06 ("the default ordering is declared") — {} -> one real drop. The
+    // fixture declares no `global_defaults.yaml` at all, so `defaultOrdering` falls back to the
+    // engine's own literal tuple (due_date, priority, title — see compile-resolution.mjs's own
+    // header, "THE DEFAULT ORDERING"), and every one of ITS fields is now looked up for a marker,
+    // generically, the same as any section's own declared `ordering:` field — no field is
+    // exempted by name any more. `title` has none in this fixture (it never does: a title is the
+    // printed line's own chrome-free text, not a glyph — see `readOrderingFieldMarkers`'s own
+    // header), so DROP PATH 13 records it. This is NOT a new wolf: the fact was always true, and
+    // was previously silenced by a hardcoded `field !== "title"` filter this change removed
+    // precisely because it named a field by string in the compiler's own control flow.
+    assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {
+      "ordering field 'title'":
+        "named by a section's 'ordering:' and/or the engine's own default ordering, but " +
+        "vocabulary/markers.yaml declares no marker for it at all, so nothing can read its value off a line",
+    });
   });
 
   test("a token on a DIFFERENT axis — an edge tag — is not recorded, because nothing was dropped", () => {
