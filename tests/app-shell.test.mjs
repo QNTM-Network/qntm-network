@@ -918,19 +918,87 @@ describe("7. the rail is one element, and it holds actions", () => {
 
 describe("8. a re-read keeps your place", () => {
   test("it lands on the view you were in, when the snapshot still has it", () => {
-    assert.equal(page.landOn(VIEWS, "qntm-queue").id, "qntm-queue");
-    assert.equal(page.landOn(VIEWS, "habit-dojo").id, "habit-dojo");
+    // `keep` wins over the declared landing view regardless of what the third argument says —
+    // a re-read never throws the reader out of the view they were already reading.
+    assert.equal(page.landOn(VIEWS, "qntm-queue", "inbox").id, "qntm-queue");
+    assert.equal(page.landOn(VIEWS, "habit-dojo", "inbox").id, "habit-dojo");
   });
 
   test("it falls back rather than insisting — a view can leave between two reads", () => {
-    // Renamed on the laptop, so the id is simply not there any more. `inbox` is the default —
-    // the operator's own ask ("opening on inbox not this week"), so a fresh boot and a
-    // fallen-through refresh both land there instead of on `this-week`.
-    assert.equal(page.landOn(VIEWS, "a-view-that-was-renamed-away").id, "inbox");
-    assert.equal(page.landOn(VIEWS, null).id, "inbox");
-    // And with no `inbox` either, the first view rather than a crash.
-    const without = VIEWS.filter((v) => v.id !== "inbox");
-    assert.equal(page.landOn(without, null).id, without[0].id);
+    // Renamed on the laptop, so the id is simply not there any more. It falls back to the
+    // DECLARED landing view (the third argument — `declaration.landingView`, read off
+    // `presentation.json`), not a name this function knows.
+    assert.equal(page.landOn(VIEWS, "a-view-that-was-renamed-away", "inbox").id, "inbox");
+    assert.equal(page.landOn(VIEWS, null, "inbox").id, "inbox");
+  });
+
+  test("NO VIEW NAME LIVES IN landOn — a DIFFERENT declared landing view is honoured just as well", () => {
+    // The generality proof: nothing here is 'inbox'-shaped. A config that names 'habit-dojo', or
+    // any other real view id, is landed on exactly the same way — a different operator changes
+    // the config, never this function.
+    assert.equal(page.landOn(VIEWS, null, "habit-dojo").id, "habit-dojo");
+    assert.equal(page.landOn(VIEWS, null, "qntm-queue").id, "qntm-queue");
+  });
+
+  test("SILENCE IS THE WRONG ANSWER — no declared landing view falls back to the first view and SAYS SO", () => {
+    const warnings = [];
+    const savedWarn = console.warn;
+    console.warn = (message) => warnings.push(message);
+    try {
+      // Nothing declared at all (a fresh boot before the operator has ever set `landing_view`,
+      // or a document `presentation.json` never reached).
+      assert.equal(page.landOn(VIEWS, null, undefined).id, VIEWS[0].id);
+      assert.match(warnings[0], /no landing view is declared/);
+
+      // Declared, but the named view left the snapshot too — the SAME fallback, a DIFFERENT
+      // reason, and it still says which.
+      warnings.length = 0;
+      assert.equal(page.landOn(VIEWS, null, "a-view-that-was-renamed-away").id, VIEWS[0].id);
+      assert.match(warnings[0], /declared landing view 'a-view-that-was-renamed-away' is not in this snapshot/);
+    } finally {
+      console.warn = savedWarn;
+    }
+  });
+
+  test("it never crashes with an empty views list to warn into", () => {
+    // `landOn` is only ever called after `loadGraph`'s own empty-snapshot guard, but the
+    // function itself still must not throw building its own warning.
+    const warnings = [];
+    const savedWarn = console.warn;
+    console.warn = (message) => warnings.push(message);
+    try {
+      assert.equal(page.landOn([], null, "inbox"), undefined);
+    } finally {
+      console.warn = savedWarn;
+    }
+  });
+
+  test("THE PROOF THAT MATTERS: a config declaring a DIFFERENT landing view — the 'another user' case, driven end to end through loadGraph, not just landOn directly", async () => {
+    // `habit-dojo` is not `inbox` and it is not VIEWS[0] ('this-week') either — landing there
+    // can only happen because the DECLARATION said so, never because the code recognises the
+    // name. This is the fixture-config proof the change asked for: build a document declaring a
+    // different landing view, apply it the way `loadPresentation` does, and show the app lands
+    // there on the very next `loadGraph`.
+    page.__applyPresentation({ landingView: "habit-dojo" });
+    assert.equal(page.__declaration().landingView, "habit-dojo");
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true, handle: "luke", pending_edits: 0,
+        snapshot: { generated_at: "2026-08-06T09:00:00Z", views: VIEWS },
+      }),
+    });
+    page.__setGraphData(null);
+    page.__setCurrentViewId(null);
+    await page.loadGraph();
+
+    assert.equal(page.__currentViewId(), "habit-dojo", "the declared landing view was not honoured");
+
+    // Restore the module-scoped declaration other tests in this file assume (no landing view
+    // declared — see `before()`), so the drawer/landing tests above it in file order stay
+    // unaffected by running after this one.
+    page.__applyPresentation({});
   });
 
   test("THE RE-READ DOES NOT THROW THE READER BACK TO THE DEFAULT VIEW", async () => {

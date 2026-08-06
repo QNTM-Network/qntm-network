@@ -414,6 +414,7 @@ function qualifierNeedsGraph(qualifier) {
   return (qualifier.edgeSteps?.length ?? 0) > 0;
 }
 var QUALIFICATION_KEY = "qualification";
+var DEFAULT_TRAVERSAL_DEPTH = 1;
 var TOP_KEYS = [
   "defaultNodeType",
   "structuralNodeTypes",
@@ -422,7 +423,8 @@ var TOP_KEYS = [
   "sections",
   "sectionOrder",
   "refused",
-  "dropped"
+  "dropped",
+  "traversalDepth"
 ];
 var SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"];
 var EMPTY2 = {
@@ -433,7 +435,8 @@ var EMPTY2 = {
   sections: {},
   sectionOrder: {},
   refused: {},
-  dropped: {}
+  dropped: {},
+  traversalDepth: DEFAULT_TRAVERSAL_DEPTH
 };
 function isPlainObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -758,6 +761,16 @@ function readQualificationDeclaration(document2) {
     }
   }
   const predicates = "predicates" in raw ? readPredicates(raw.predicates, problems) : {};
+  let traversalDepth = DEFAULT_TRAVERSAL_DEPTH;
+  if ("traversalDepth" in raw) {
+    if (typeof raw.traversalDepth === "number" && Number.isInteger(raw.traversalDepth) && raw.traversalDepth >= 0) {
+      traversalDepth = raw.traversalDepth;
+    } else {
+      problems.push(
+        `'${QUALIFICATION_KEY}.traversalDepth' is ${JSON.stringify(raw.traversalDepth)}, not a non-negative integer \u2014 the built-in default (${DEFAULT_TRAVERSAL_DEPTH}) is used instead`
+      );
+    }
+  }
   return {
     qualification: {
       defaultNodeType,
@@ -771,7 +784,8 @@ function readQualificationDeclaration(document2) {
       sections: "sections" in raw ? readSections2(raw.sections, predicates, problems) : {},
       sectionOrder: "sectionOrder" in raw ? readSectionOrder(raw.sectionOrder, problems) : {},
       refused: "refused" in raw ? readReasons("refused", raw.refused, problems) : {},
-      dropped: "dropped" in raw ? readReasons("dropped", raw.dropped, problems) : {}
+      dropped: "dropped" in raw ? readReasons("dropped", raw.dropped, problems) : {},
+      traversalDepth
     },
     problems
   };
@@ -1255,6 +1269,7 @@ function indentedLine(line, direction, count, unit = INDENT_UNIT) {
 // app/present/declaration.ts
 var NOTE = "note";
 var RULES_KEY = "rules";
+var LANDING_VIEW_KEY = "landingView";
 var INDENT_UNIT_KEY = "indentUnit";
 var DEFAULT_INDENT_UNIT = INDENT_UNIT;
 var RENDITIONS = ["raw", "wired"];
@@ -1267,6 +1282,7 @@ function readDeclaration(document2) {
     return {
       contribution: {},
       indentUnit: DEFAULT_INDENT_UNIT,
+      landingView: void 0,
       problems: [
         `the declaration is ${Array.isArray(document2) ? "an array" : typeof document2}, not an object \u2014 every key stays silent and every line falls through to the default`
       ]
@@ -1275,6 +1291,7 @@ function readDeclaration(document2) {
   const entries = Object.entries(document2);
   const contribution = {};
   let indentUnit = DEFAULT_INDENT_UNIT;
+  let landingView;
   for (const [key, value] of entries) {
     if (key === NOTE) {
       if (typeof value !== "string") {
@@ -1304,6 +1321,16 @@ function readDeclaration(document2) {
       }
       continue;
     }
+    if (key === LANDING_VIEW_KEY) {
+      if (typeof value !== "string" || value === "") {
+        problems.push(
+          `'${LANDING_VIEW_KEY}' is ${JSON.stringify(value)}, which is not a non-empty view id \u2014 no landing view is adopted from this document`
+        );
+      } else {
+        landingView = value;
+      }
+      continue;
+    }
     if (!RESOLUTION_KEYS.includes(key)) {
       problems.push(
         `'${key}' is not a resolution key and was NOT applied \u2014 the keys are ${RESOLUTION_KEYS.join(", ")}`
@@ -1318,7 +1345,7 @@ function readDeclaration(document2) {
     }
     contribution[key] = value;
   }
-  return { contribution, indentUnit, problems };
+  return { contribution, indentUnit, landingView, problems };
 }
 
 // app/present/address.ts
@@ -2416,6 +2443,7 @@ function presentationFromDeclaration(document2) {
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
+    landingView: reading.landingView,
     structural: structuralReading.structural,
     qualification: qualificationReading.qualification,
     resolution: resolutionReading.resolution,
@@ -2432,6 +2460,7 @@ function presentationFromDeclaration(document2) {
 var NOT_YET_DECLARED = {
   context: new PresentationContext(),
   indentUnit: DEFAULT_INDENT_UNIT,
+  landingView: void 0,
   structural: void 0,
   qualification: void 0,
   resolution: void 0,
@@ -2441,6 +2470,7 @@ function declarationFrom(declared) {
   return {
     context: declared.context,
     indentUnit: declared.indentUnit,
+    landingView: declared.landingView,
     structural: declared.structural,
     qualification: declared.qualification,
     resolution: declared.resolution,
@@ -5820,9 +5850,11 @@ export {
   COMPLETE,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
+  DEFAULT_TRAVERSAL_DEPTH,
   DraftSurface,
   FocusSurface,
   INDENT_UNIT,
+  LANDING_VIEW_KEY,
   ModeSurface,
   NOT_EVALUATED,
   NOT_YET_DECLARED,

@@ -91,6 +91,10 @@ export interface DeclaredPresentation {
   /** The instance's indent unit, in spaces — see `declaration.ts`'s header for why this rides
    * beside the GLOBAL contribution rather than inside it (it is not a `Rendition`). */
   readonly indentUnit: number;
+  /** Which view id a fresh boot should land on — see `declaration.ts`'s `LANDING_VIEW_KEY` for
+   * where it comes from. `undefined` when the document declares none; `app/index.html`'s `landOn`
+   * is the one reader, and it says so loudly rather than guessing. */
+  readonly landingView: string | undefined;
   /** The INGEST axis — what a gesture like indent MEANS. See `structural.ts`'s header for why
    * this is a lookup table rather than a fifth cascade level. */
   readonly structural: StructuralLanguage;
@@ -162,6 +166,7 @@ export function presentationFromDeclaration(document: unknown): DeclaredPresenta
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
+    landingView: reading.landingView,
     structural: structuralReading.structural,
     qualification: qualificationReading.qualification,
     resolution: resolutionReading.resolution,
@@ -245,6 +250,7 @@ export function presentationFromDeclaration(document: unknown): DeclaredPresenta
 export interface Declaration {
   readonly context: PresentationContext;
   readonly indentUnit: number;
+  readonly landingView: string | undefined;
   readonly structural: StructuralLanguage | undefined;
   readonly qualification: QualificationLanguage | undefined;
   readonly resolution: ConfigResolutionTable | undefined;
@@ -261,6 +267,7 @@ export interface Declaration {
 export const NOT_YET_DECLARED: Declaration = {
   context: new PresentationContext(),
   indentUnit: DEFAULT_INDENT_UNIT,
+  landingView: undefined,
   structural: undefined,
   qualification: undefined,
   resolution: undefined,
@@ -277,6 +284,7 @@ export function declarationFrom(declared: DeclaredPresentation): Declaration {
   return {
     context: declared.context,
     indentUnit: declared.indentUnit,
+    landingView: declared.landingView,
     structural: declared.structural,
     qualification: declared.qualification,
     resolution: declared.resolution,

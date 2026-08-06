@@ -188,6 +188,19 @@ export interface QualificationLanguage {
    * `--check` (which compares the whole generated object) turns red when that set changes.
    */
   readonly dropped: Readonly<Record<string, string>>;
+  /**
+   * HOW MANY HOPS OFF THE CANDIDATE NODE THIS APP MAY ATTEMPT — `scripts/compile-qualification.mjs`'s
+   * `TRAVERSAL_DEPTH`, published unconditionally, the same "engine fact, not a config fact" posture
+   * `scripts/compile-resolution.mjs`'s `ENGINE_DEFAULT_ORDERING` already takes for a different one.
+   *
+   * NOT YET CONSUMED BY ANYTHING — stated rather than hidden, the same posture this codebase has
+   * already taken for a published-before-its-reader fact (`resolutiontable.ts`'s own header). What
+   * it makes possible: a caller can ask "is this declaration's own idea of how far it may look
+   * still 1?" instead of that ceiling being an unstated property of `normaliseStep`'s admitted
+   * shapes. Widening it to 2 or more, and teaching the grammar to actually reach that far, is a
+   * SEPARATE, larger change this field does not attempt — see `TRAVERSAL_DEPTH`'s own header.
+   */
+  readonly traversalDepth: number;
 }
 
 /** Mirrors `StructuralReading` and `DeclarationReading`: the value, plus what was wrong with it. */
@@ -199,6 +212,13 @@ export interface QualificationReading {
 /** The top-level key this module owns. `declaration.ts` knows its name only to skip it. */
 export const QUALIFICATION_KEY = "qualification";
 
+/** The built-in floor for `traversalDepth`, when the served key is absent or malformed — 1, not
+ * 0, because a one-hop `EdgeStep` (`qualifierNeedsGraph`, below) is already what this grammar
+ * admits regardless of whether the number arrived; falling back to 0 would make the REPORTED
+ * ceiling lie about what the reader already does. Mirrors `DEFAULT_INDENT_UNIT`'s own reasoning in
+ * `declaration.ts`: one built-in number, not a second copy of the compiler's own constant. */
+export const DEFAULT_TRAVERSAL_DEPTH = 1;
+
 const TOP_KEYS = [
   "defaultNodeType",
   "structuralNodeTypes",
@@ -208,6 +228,7 @@ const TOP_KEYS = [
   "sectionOrder",
   "refused",
   "dropped",
+  "traversalDepth",
 ] as const;
 const SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"] as const;
 
@@ -220,6 +241,7 @@ const EMPTY: QualificationLanguage = {
   sectionOrder: {},
   refused: {},
   dropped: {},
+  traversalDepth: DEFAULT_TRAVERSAL_DEPTH,
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -625,6 +647,17 @@ export function readQualificationDeclaration(document: unknown): QualificationRe
     }
   }
   const predicates = "predicates" in raw ? readPredicates(raw.predicates, problems) : {};
+  let traversalDepth = DEFAULT_TRAVERSAL_DEPTH;
+  if ("traversalDepth" in raw) {
+    if (typeof raw.traversalDepth === "number" && Number.isInteger(raw.traversalDepth) && raw.traversalDepth >= 0) {
+      traversalDepth = raw.traversalDepth;
+    } else {
+      problems.push(
+        `'${QUALIFICATION_KEY}.traversalDepth' is ${JSON.stringify(raw.traversalDepth)}, not a ` +
+          `non-negative integer — the built-in default (${DEFAULT_TRAVERSAL_DEPTH}) is used instead`,
+      );
+    }
+  }
   return {
     qualification: {
       defaultNodeType,
@@ -642,6 +675,7 @@ export function readQualificationDeclaration(document: unknown): QualificationRe
       sectionOrder: "sectionOrder" in raw ? readSectionOrder(raw.sectionOrder, problems) : {},
       refused: "refused" in raw ? readReasons("refused", raw.refused, problems) : {},
       dropped: "dropped" in raw ? readReasons("dropped", raw.dropped, problems) : {},
+      traversalDepth,
     },
     problems,
   };
