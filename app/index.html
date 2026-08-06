@@ -729,69 +729,70 @@
      and a struck-through dot would read as a rendering fault rather than as "this is done". */
   .viewbody .task.done span .stampmark { text-decoration: none; }
 
-  /* THE PREDICT AFFORDANCE — a CLAIM about what the engine's next answer will add to this row,
-     app/present/predict.ts, painted by app/present/paint.ts's `appendPrediction`. Two predictions
-     ship on it today (the `🆕` created-date stamp on the row just typed, a promotion rule's retype
-     on the row above it) and a third or fourth reads this same rule with no new CSS.
+  /* THE PREDICT AFFORDANCE — THE BROWSER'S ANSWER, painted by app/present/paint.ts's
+     `appendPrediction` from what app/present/predict.ts armed. Two predictions ship on it today (the
+     `🆕` created-date stamp on the row just typed, a promotion rule's retype on the row above it) and
+     a third or fourth reads this same rule with no new CSS.
 
-     WHY IT MUST NOT LOOK LIKE THE TAG CHIP OR THE STAMP MARK, EVEN THOUGH ALL THREE ARE PILLS. Those
-     two are the ENGINE'S OWN confirmed vocabulary — a chip is drawn because a `#tag` is really in the
-     source, a mark because `[[qntm:N]]` really is. This pill is drawn because the BROWSER GUESSED,
-     correctly or not, before anything answered — "the browser's first answer is a claim, not a
-     fact" is the operator's own principle for the settle affordance, and this is the same principle
-     applied to CONTENT rather than to POSITION. A pill styled identically to a chip would let a
-     prediction masquerade as the fact it is standing in for, which is the one failure this whole
-     feature exists to avoid. So it takes the identity's OWN accent (`--accent`, the pale blue this
-     page already uses for a heading) rather than the declared green those two reserve for confirmed
-     content, and a DASHED border rather than their solid one — dashes are the one border style this
-     page draws nowhere else, so "dashed" reads as "provisional" the first time it is ever seen and
-     stays that way because nothing else on the page borrows it.
+     THE PERCEPTION RULE: THE BROWSER IS AUTHORITATIVE UNTIL THE ENGINE DISAGREES, AND LATENCY IS
+     NEVER SURFACED. This rule used to draw a dashed, accent-coloured pill on the theory that a
+     prediction reading as "provisional" would stop it "masquerading as the fact it is standing in
+     for." That argument was made before the browser's own predictions were measured against the
+     engine — `docs/implementation-artifacts/design-the-two-rules.md` §5: 2,941 membership cells and
+     0 disagreements, ordering and rules likewise 0 on what could be checked. The browser is not
+     guessing here; it is computing the same answer the engine computes, ahead of the engine's own
+     14-second return. A dashed border was latency surfaced as a border style — the same anti-pattern
+     the status line was deleted for — so a prediction now renders EXACTLY as the row's own ordinary
+     characters: no pill, no background, no border, no accent colour of its own. If the engine's real
+     answer ever disagrees, `predict.ts`'s own withdrawal (below) is the one correction the perception
+     rule allows to be visible — that is where a disagreement is shown, never here, on the row while
+     it is still merely pending.
 
-     `inline-block` AND `line-height: 1` FOR THE SAME MEASURED REASON THE CHIP AND THE MARK ALREADY
-     STATE: an atomic inline whose box is its own content area cannot make a row taller than the row
-     invariant this whole reading column enforces (`.viewbody`'s own header comment). `white-space:
-     nowrap` for the same reason the chip sets it — `.viewbody` scrolls horizontally rather than
-     wrapping a row into two, and a multi-word promotion phrase must not become the first rendition
-     that does. */
+     `inline-block` AND `line-height: 1` REMAIN for the same measured reason the chip and the mark
+     state: an atomic inline whose box is its own content area cannot make a row taller than the row
+     invariant this whole reading column enforces (`.viewbody`'s own header comment) — dropping the
+     pill's chrome does not drop that constraint, because the row-height guarantee was never about
+     the border. `white-space: nowrap` for the same reason the chip sets it — `.viewbody` scrolls
+     horizontally rather than wrapping a row into two, and a multi-word promotion phrase must not
+     become the first rendition that does. */
   .viewbody .row-prediction {
     display: inline-block;
-    margin-left: .4em;
-    padding: .1em .5em;
-    border-radius: 999px;
-    background: rgba(207,232,255,.08);
-    border: 1px dashed rgba(207,232,255,.45);
-    color: var(--accent);
-    font-size: .78em;
+    margin-left: .3em;
+    color: inherit;
+    font: inherit;
     line-height: 1;
     white-space: nowrap;
     vertical-align: baseline;
-    opacity: .85;
     /* THE ONE-SHOT ARRIVAL, AS A `transition`, NOT AN `animation` — this page's stylesheet may
        declare `@media` and nothing else (tests/app-view-rows.test.mjs's own reader refuses every
        other at-rule, `qmark.css` is where a component's `@keyframes` belongs), so the rise-and-fade
-       a NEWLY APPEARING chip gets is driven the same way `settleRow`'s own FLIP motion is
+       a NEWLY APPEARING run of text gets is driven the same way `settleRow`'s own FLIP motion is
        (`paint.ts`): `appendPrediction` sets `opacity`/`transform` inline to a START state with
        `transition: none`, then — one frame later, the identical `requestAnimationFrame`-or-
        synchronous-fallback `settleRow` already uses — clears them, and THIS transition is what
-       animates the change back to the stylesheet's own resting values. Stated once, unconditionally,
-       because a repaint that is NOT an arrival never sets the inline start state at all, so this
-       property costs nothing on any other repaint. */
+       animates the change back to the stylesheet's own resting values. This is content arriving
+       smoothly, not a status being reported — the same distinction `settleRow`'s own motion draws
+       for position — and it costs nothing on any repaint that is not an arrival, because a repaint
+       that is not one never sets the inline start state at all. */
     transition: opacity var(--slide), transform var(--slide);
   }
   /* A completed line strikes its text through — the chip/mark's own rule, restated for the same
      reason: an atomic inline is already exempt, and a struck-through claim would read as a rendering
      fault rather than as "this task is done". */
   .viewbody .task.done span .row-prediction { text-decoration: none; }
-  /* THE WITHDRAWAL — `predict.ts`'s own one-shot reconciliation: this repaint discovered the claim's
-     text is nowhere in what the engine actually sent back. Struck through and dimmed rather than
-     simply removed, so "this did not happen" is a fact the operator is TOLD, not one he has to infer
-     from a chip quietly not reappearing — see this rule's own header, and predict.ts's, for why
-     silence is reserved for the OPPOSITE case (a confirmed claim, now indistinguishable from the
-     row's own ordinary characters). Shown for exactly one repaint, by construction — `predict.ts`'s
-     `take` clears the arm the instant it reports a withdrawal, so nothing here has to time out. */
+  /* THE WITHDRAWAL — the one correction the perception rule allows to be visible for CONTENT, the
+     same tier as `settleRow`'s own motion for POSITION: `predict.ts`'s one-shot reconciliation
+     discovered this repaint that the claim's text is nowhere in what the engine actually sent back.
+     Struck through and dimmed rather than simply removed, so "this did not happen" is a fact the
+     operator is TOLD, not one he has to infer from text quietly not reappearing — see this rule's own
+     header, and predict.ts's, for why silence is reserved for the OPPOSITE case (a confirmed claim,
+     now indistinguishable from the row's own ordinary characters, per `.row-prediction` above).
+     Shown for exactly one repaint, by construction — `predict.ts`'s `take` clears the arm the instant
+     it reports a withdrawal, so nothing here has to time out. NO BORDER, NO BACKGROUND, for the same
+     reason `.row-prediction` carries none: the strike-through and the dim colour are the correction,
+     and a pill around it would be exactly the "latency surfaced as a border style" this rule exists
+     to avoid saying twice. */
   .viewbody .row-prediction-withdrawn {
-    border-style: solid;
-    border-color: rgba(139,147,161,.4);
     color: var(--dim);
     text-decoration: line-through;
     opacity: .7;

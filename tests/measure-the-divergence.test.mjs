@@ -25,7 +25,13 @@ import { tmpdir } from "node:os";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { measureMembership, measureOrdering, measureRules, measurePromotion } from "../scripts/measure-the-divergence.mjs";
+import {
+  measureMembership,
+  measureOrdering,
+  measureRules,
+  measurePromotion,
+  measureRenderedOutput,
+} from "../scripts/measure-the-divergence.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -57,6 +63,19 @@ describe("1. the real numbers, pinned", () => {
     const r = measurePromotion();
     assert.equal(r.measured, false);
     assert.ok(r.reason.length > 0);
+  });
+
+  // FILED 2026-08-06, fix/the-prediction-is-the-answer: every axis above measures what a RESOLVER
+  // DECIDES, never what `paint.ts` PAINTS. The operator found a real rendered-output divergence
+  // live (a rule-added token's position, and its glyph) that none of the four axes above could
+  // have caught by construction — see measureRenderedOutput's own header for the read-only engine
+  // investigation this reason cites, and this branch's PR body for the fix that could and could
+  // not be made from it.
+  test("rendered-output: NOT MEASURED, and the reason names the specific engine mechanism read to reach that conclusion", () => {
+    const r = measureRenderedOutput();
+    assert.equal(r.measured, false);
+    assert.match(r.reason, /_field_expression_cells/, "the reason must cite the real engine function read, not a guess");
+    assert.match(r.reason, /seedFor/, "the reason must name the browser-side convention this gap actually found");
   });
 });
 
