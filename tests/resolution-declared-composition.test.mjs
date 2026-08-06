@@ -100,7 +100,12 @@ describe("2. ANOTHER USER'S CONFIG — a composition that is NOT the engine's li
         ].join("\n"),
       );
     });
-    assert.deepEqual(resolution.composition, { ...DECLARED, separator: " " });
+    assert.deepEqual(resolution.composition, {
+      ...DECLARED,
+      separator: " ",
+      bullet: ENGINE_LITERAL_COMPOSITION.bullet,
+      titleStyles: ENGINE_LITERAL_COMPOSITION.titleStyles,
+    });
     assert.equal(resolution.compositionSource, "config");
     // MUTATION PROOF: this really is DIFFERENT from the literal, not a reformatted copy of it —
     // a compiler that merely tolerated the key's presence but still published the literal would
@@ -108,23 +113,97 @@ describe("2. ANOTHER USER'S CONFIG — a composition that is NOT the engine's li
     assert.notDeepEqual(resolution.composition, ENGINE_LITERAL_COMPOSITION);
   });
 
-  test("separator is never a declared key — always published as a literal single space", () => {
-    const resolution = withScratchFixture((configDir) => {
-      writeFileSync(
-        join(configDir, "global_defaults.yaml"),
-        [
-          "defaults: {}",
-          "composition:",
-          "  heads:",
-          "    checkbox: [checkbox, title]",
-          "    plain_line: [title]",
-          "  tail: [stamp, tags, markers, chrome, date]",
-          "  separator: '  '", // an operator trying to declare one is silently NOT read as one
-          "",
-        ].join("\n"),
-      );
+  test("separator is never a declared key — an operator trying to declare one is REFUSED, not silently ignored", () => {
+    // Before `form:` existed, an unrecognised sibling of `heads:`/`tail:` loaded clean and changed
+    // nothing — precisely the defect this module's own header warns about elsewhere. Composition's
+    // top-level keys are now a closed, validated set (`heads`, `tail`, `form`), so a `separator:`
+    // typo is now a loud `GenerationError` instead of a silent no-op.
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            [
+              "defaults: {}",
+              "composition:",
+              "  heads:",
+              "    checkbox: [checkbox, title]",
+              "    plain_line: [title]",
+              "  tail: [stamp, tags, markers, chrome, date]",
+              "  separator: '  '",
+              "",
+            ].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  describe("2b. FORM — the declared bullet + title-style wrap, composition's OWN optional sub-block", () => {
+    test("a declared bullet + title_styles is read verbatim, compositionSource stays 'config'", () => {
+      const resolution = withScratchFixture((configDir) => {
+        writeFileSync(
+          join(configDir, "global_defaults.yaml"),
+          [
+            "defaults: {}",
+            "composition:",
+            "  heads:",
+            "    checkbox: [checkbox, title]",
+            "    plain_line: [title]",
+            "  tail: [stamp, date, tags, markers, chrome]",
+            "  form:",
+            "    bullet: '*'",
+            "    title_styles: [italic]",
+            "",
+          ].join("\n"),
+        );
+      });
+      assert.equal(resolution.composition.bullet, "*");
+      assert.deepEqual(resolution.composition.titleStyles, ["italic"]);
+      assert.equal(resolution.compositionSource, "config");
+      // MUTATION PROOF: genuinely different from the engine literal's form, not a reformatted copy.
+      assert.notEqual(resolution.composition.bullet, ENGINE_LITERAL_COMPOSITION.bullet);
+      assert.notDeepEqual(resolution.composition.titleStyles, ENGINE_LITERAL_COMPOSITION.titleStyles);
     });
-    assert.equal(resolution.composition.separator, " ");
+
+    test("heads/tail declared with NO form: block reads the engine's own bullet/titleStyles literal", () => {
+      const resolution = withScratchFixture((configDir) => {
+        writeFileSync(
+          join(configDir, "global_defaults.yaml"),
+          [
+            "defaults: {}",
+            "composition:",
+            "  heads:",
+            "    checkbox: [checkbox, title]",
+            "    plain_line: [title]",
+            "  tail: [stamp, date, tags, markers, chrome]",
+            "",
+          ].join("\n"),
+        );
+      });
+      assert.equal(resolution.composition.bullet, ENGINE_LITERAL_COMPOSITION.bullet);
+      assert.deepEqual(resolution.composition.titleStyles, ENGINE_LITERAL_COMPOSITION.titleStyles);
+    });
+
+    test("multiple declared title_styles nest, order-independent — the array is a MEMBERSHIP set", () => {
+      const resolution = withScratchFixture((configDir) => {
+        writeFileSync(
+          join(configDir, "global_defaults.yaml"),
+          [
+            "defaults: {}",
+            "composition:",
+            "  heads:",
+            "    checkbox: [checkbox, title]",
+            "    plain_line: [title]",
+            "  tail: [stamp, date, tags, markers, chrome]",
+            "  form:",
+            "    title_styles: [strikethrough, bold]",
+            "",
+          ].join("\n"),
+        );
+      });
+      assert.deepEqual(resolution.composition.titleStyles, ["strikethrough", "bold"]);
+    });
   });
 
   test("a composition may declare a THIRD head shape beyond checkbox/plain_line — not rejected", () => {
@@ -300,6 +379,145 @@ describe("3. MALFORMED CONFIG REFUSES LOUDLY, matching bundle/loader.py's own va
     });
     assert.deepEqual(resolution.composition, ENGINE_LITERAL_COMPOSITION);
     assert.equal(resolution.compositionSource, "engine-fallback");
+  });
+
+  // FORM — the same "refuse loudly" posture as heads/tail above, for composition's own optional
+  // `form:` sub-block. Each case names, in its own title, the check `bundle/loader.py`'s
+  // `_validate_composition_form` performs at the identical point.
+  const COMPOSITION_HEADS_TAIL = [
+    "  heads:",
+    "    checkbox: [checkbox, title]",
+    "    plain_line: [title]",
+    "  tail: [stamp, date, tags, markers, chrome]",
+  ];
+
+  test("composition.form: not a mapping throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            ["defaults: {}", "composition:", ...COMPOSITION_HEADS_TAIL, "  form: not-a-map", ""].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition.form: has an unknown key throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            [
+              "defaults: {}",
+              "composition:",
+              ...COMPOSITION_HEADS_TAIL,
+              "  form:",
+              "    separator: ', '", // never a form key — see section 2's own test
+              "",
+            ].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition.form.bullet: not one of -/*/+ throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            ["defaults: {}", "composition:", ...COMPOSITION_HEADS_TAIL, "  form:", "    bullet: '>'", ""].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition.form.bullet: more than one character throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            ["defaults: {}", "composition:", ...COMPOSITION_HEADS_TAIL, "  form:", "    bullet: '--'", ""].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition.form.title_styles: empty list throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            ["defaults: {}", "composition:", ...COMPOSITION_HEADS_TAIL, "  form:", "    title_styles: []", ""].join(
+              "\n",
+            ),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition.form.title_styles: an unknown style name throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            [
+              "defaults: {}",
+              "composition:",
+              ...COMPOSITION_HEADS_TAIL,
+              "  form:",
+              "    title_styles: [underline]", // not in the closed 3-member vocabulary
+              "",
+            ].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition.form.title_styles: a repeated style throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            [
+              "defaults: {}",
+              "composition:",
+              ...COMPOSITION_HEADS_TAIL,
+              "  form:",
+              "    title_styles: [italic, italic]",
+              "",
+            ].join("\n"),
+          );
+        }),
+      GenerationError,
+    );
+  });
+
+  test("composition: an unknown top-level key (e.g. a 'forms' typo) throws GenerationError", () => {
+    assert.throws(
+      () =>
+        withScratchFixture((configDir) => {
+          writeFileSync(
+            join(configDir, "global_defaults.yaml"),
+            ["defaults: {}", "composition:", ...COMPOSITION_HEADS_TAIL, "  forms:", "    bullet: '*'", ""].join(
+              "\n",
+            ),
+          );
+        }),
+      GenerationError,
+    );
   });
 });
 

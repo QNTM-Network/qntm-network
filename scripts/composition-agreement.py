@@ -158,6 +158,41 @@ except ImportError:
     }
     _COMPOSITION_SOURCE = "literal-fallback"
 
+# FORM — composition's own optional bullet + title-style wrap (renderer.py's "COMPOSITION FORM"
+# header). Same live-import-when-the-engine-has-it, literal-fallback-otherwise posture as heads/
+# tail above, kept as its OWN try/except so a checkout that has the base composition-reads-config
+# PR but not yet this one still runs (degrading only the two NEW fields to their literal answer).
+try:
+    from qntm_md.render.renderer import (  # type: ignore[attr-defined]
+        _COMPOSITION_BULLET as _ENGINE_COMPOSITION_BULLET,
+        _COMPOSITION_TITLE_STYLES as _ENGINE_COMPOSITION_TITLE_STYLES,
+    )
+
+    _COMPOSITION["bullet"] = _ENGINE_COMPOSITION_BULLET
+    _COMPOSITION["titleStyles"] = list(_ENGINE_COMPOSITION_TITLE_STYLES)
+    _COMPOSITION_FORM_SOURCE = "engine-live-import"
+except ImportError:
+    _COMPOSITION["bullet"] = "-"
+    _COMPOSITION["titleStyles"] = []
+    _COMPOSITION_FORM_SOURCE = "literal-fallback"
+
+
+def _apply_title_styles(text: str, title_styles: list[str]) -> str:
+    """The declared, UNCONDITIONAL title wrap — byte-identical emission order to
+    `renderer.py`'s `_apply_title_style` (fixed: italic innermost, then bold, then strikethrough
+    outermost, decided by MEMBERSHIP not list position) and to
+    `app/present/express/composition.ts`'s `applyTitleStyles`, transcribed here so this script can
+    prove the declared styles against the real renderer BEFORE that TypeScript file is trusted to.
+    """
+    styled = text
+    if "italic" in title_styles:
+        styled = f"*{styled}*"
+    if "bold" in title_styles:
+        styled = f"**{styled}**"
+    if "strikethrough" in title_styles:
+        styled = f"~~{styled}~~"
+    return styled
+
 
 def _compose(cell_classes: list[str], cells: dict[str, Any]) -> list[str]:
     """Recompose a HEAD or TAIL from `_COMPOSITION`'s declared class order — the exact operation
@@ -299,6 +334,36 @@ def _cells_for(
     }
 
 
+def _compose_line(
+    shape: str, cells: dict[str, Any], composition: dict[str, Any], depth: int
+) -> str:
+    """The FULL line recomposition — the exact operation `app/present/express/composition.ts`'s
+    `composeLine` performs (bullet + indent, then every declared cell in order, the title cell
+    wrapped by `composition["titleStyles"]`, joined by `composition["separator"]`), transcribed
+    here so this script can prove a DECLARED FORM (not just a declared order) against the real
+    renderer BEFORE that TypeScript file is trusted to. Supersedes the old head/tail-only
+    `_compose` splice for any fixture that declares a non-default bullet or title_styles; existing
+    callers whose `composition["bullet"] == "-"` and `composition["titleStyles"] == []` compose
+    byte-identically to before this function existed.
+    """
+    order = [*composition["heads"][shape], *composition["tail"]]
+    parts: list[str] = []
+    for cell_class in order:
+        if cell_class == "title":
+            title = cells.get("title") or ""
+            if title:
+                parts.append(_apply_title_styles(title, composition.get("titleStyles", [])))
+            continue
+        value = cells.get(cell_class)
+        if value is None or value == "":
+            continue
+        if isinstance(value, list):
+            parts.extend(v for v in value if v)
+        else:
+            parts.append(value)
+    return f"{'    ' * depth}{composition['bullet']} {composition['separator'].join(parts)}"
+
+
 def _fixture(
     fixture_id: str,
     *,
@@ -308,6 +373,8 @@ def _fixture(
     depth: int = 0,
     parent_title: str | None = None,
     edge_target_title: str | None = None,
+    composition_bullet: str | None = None,
+    composition_title_styles: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     graph = _graph()
     node = graph.create_node(node_type, fields)
@@ -341,25 +408,35 @@ def _fixture(
             section_id="sec",
             roots=(SectionTreeNode(node=node, is_qualifying=True, children=()),),
         )
+    render_kwargs: dict[str, Any] = {}
+    if composition_bullet is not None:
+        render_kwargs["composition_bullet"] = composition_bullet
+    if composition_title_styles is not None:
+        render_kwargs["composition_title_styles"] = composition_title_styles
     result = render(
         _sheet(write_policy=write_policy),
         {"sec": tree},
         _FakeDispatcher(),
         graph=graph,
         token_resolver=token_resolver,
+        **render_kwargs,
     )
     lines = result.markdown.splitlines()
     # The node's OWN rendered line — last line when nested (parent then child), else the second
     # line (the manifest heading is line 1 in every fixture here).
     expected_line = lines[-1]
 
-    # ── REFUSING — recompose from the declared order alone and demand byte-identity BEFORE this
-    # fixture is allowed into the committed file. See module docstring, "THE ACCEPTANCE TEST". ──
-    head = _compose(_COMPOSITION["heads"][shape], cells)
-    tail = _compose(_COMPOSITION["tail"], cells)
-    recomposed = (
-        "    " * depth + "- " + _COMPOSITION["separator"].join(c for c in (*head, *tail) if c)
-    )
+    # ── REFUSING — recompose from the declared order/form alone and demand byte-identity BEFORE
+    # this fixture is allowed into the committed file. See module docstring, "THE ACCEPTANCE
+    # TEST". A fixture that declares no bullet/title_styles override recomposes through
+    # `_COMPOSITION`'s own defaults ("-", []), the SAME literal every pre-existing fixture proved
+    # against — this generalisation changes no existing fixture's behaviour. ──
+    effective_composition = dict(_COMPOSITION)
+    if composition_bullet is not None:
+        effective_composition["bullet"] = composition_bullet
+    if composition_title_styles is not None:
+        effective_composition["titleStyles"] = list(composition_title_styles)
+    recomposed = _compose_line(shape, cells, effective_composition, depth)
     if recomposed != expected_line:
         print(
             f"REFUSING fixture {fixture_id!r}: declared-order recomposition\n"
@@ -375,6 +452,7 @@ def _fixture(
         "depth": depth,
         "cells": cells,
         "expectedLine": expected_line,
+        "composition": effective_composition,
     }
 
 
@@ -435,6 +513,51 @@ def build_fixtures() -> list[dict[str, Any]]:
             parent_title="Parent",
             edge_target_title="Some target",
         ),
+        # ── FORM — composition's OWN optional bullet + title-style wrap. Every fixture above
+        # declares NEITHER (composition_bullet=None, composition_title_styles=None), proving
+        # ABSENCE is byte-identical to the pre-existing literal — see this script's own REFUSING
+        # check, which recomposes those through `_COMPOSITION`'s own "-" / [] unchanged. The three
+        # below are the CAPABILITY proof: a genuinely different bullet and/or title wrap, still
+        # byte-identical between the real renderer and the declared-order recomposition. No fixture
+        # node below sets `status` or uses `node_type="explainer"`, so `render_title_style`'s own
+        # per-node rows (the pre-existing "done"/"in_progress"/"waiting"/explainer wrap) all miss —
+        # `title_styles` below is the ONLY wrap in play, isolating the NEW capability cleanly.
+        #
+        # F7 — THE OPERATOR'S OWN EXAMPLE: "*Buy gift*" — a declared `form.title_styles: [italic]`
+        # wraps the title in single asterisks, and NOTHING else about the line changes.
+        _fixture(
+            "declared_italic_title",
+            node_type="task",
+            fields={"title": "Buy gift", "qntm_id": "f7"},
+            composition_title_styles=("italic",),
+        ),
+        # F8 — a declared `form.bullet: "*"` — GFM's OTHER bullet character. `io.parser.
+        # parse_checkbox` (monorepo, read-only) already accepts `-`/`*`/`+` interchangeably
+        # (`_CHECKBOX_RE`/`_BULLET_ONLY_RE`), so this round-trips with zero ingest-side change —
+        # see renderer.py's "COMPOSITION FORM" header for the full argument.
+        _fixture(
+            "declared_star_bullet",
+            node_type="task",
+            fields={"title": "Water the plants", "domain": "work", "qntm_id": "f8"},
+            composition_bullet="*",
+        ),
+        # F9 — bullet AND title_styles declared TOGETHER, combined with bold+strikethrough (two
+        # styles nesting in ONE wrap: `~~**…**~~`), nested one level — the strongest single proof
+        # that FORM composes correctly alongside indentation, order, tags and markers all at once.
+        _fixture(
+            "declared_bullet_and_multi_style",
+            node_type="task",
+            fields={
+                "title": "Archive the ticket",
+                "domain": "work",
+                "priority": "high",
+                "qntm_id": "f9",
+            },
+            depth=1,
+            parent_title="Parent",
+            composition_bullet="+",
+            composition_title_styles=("bold", "strikethrough"),
+        ),
     ]
     return fixtures
 
@@ -463,20 +586,40 @@ def main() -> int:
     if not any(f["shape"] == "plain_line" for f in fixtures):
         print("REFUSING: no fixture exercises the plain_line HEAD", file=sys.stderr)
         return 2
+    # FORM positive controls — a fixture set that never declared a non-default bullet or
+    # title_styles would REFUSE nothing about FORM specifically and prove nothing about it.
+    if not any(f["composition"]["bullet"] != "-" for f in fixtures):
+        print("REFUSING: no fixture declares a non-default bullet", file=sys.stderr)
+        return 2
+    if not any(f["composition"]["titleStyles"] for f in fixtures):
+        print("REFUSING: no fixture declares a title_styles wrap", file=sys.stderr)
+        return 2
+    if not any(len(f["composition"]["titleStyles"]) > 1 for f in fixtures):
+        print("REFUSING: no fixture declares MORE THAN ONE title style (nesting untested)", file=sys.stderr)
+        return 2
+    if not any(f["composition"]["bullet"] == "-" and not f["composition"]["titleStyles"] for f in fixtures):
+        print("REFUSING: no fixture proves ABSENCE — default bullet, no title wrap", file=sys.stderr)
+        return 2
 
     out = {
         "note": (
             "GENERATED by scripts/composition-agreement.py, run against a LIVE import of "
             "qntm_md.render.renderer (apps/qntm-md/.venv/bin/python scripts/composition-agreement.py). "
             "Every fixture here already passed a byte-identity check between the declared "
-            "composition order and the real renderer's own output — see that script's REFUSING "
-            "block. Never hand-edit: regenerate."
+            "composition order/form and the real renderer's own output — see that script's "
+            "REFUSING block. Each fixture carries its OWN 'composition' (bullet + titleStyles); "
+            "most fixtures declare neither override and so carry _COMPOSITION's own defaults "
+            "('-', []) — the absence proof. Never hand-edit: regenerate."
         ),
         # WHICH ANSWER `composition` IS — "engine-live-import" once the companion engine PR
         # (renderer.py reading `_COMPOSITION_HEADS`/`_COMPOSITION_TAIL` as data) has merged into
         # the monorepo checkout this ran against, "literal-fallback" otherwise. See this script's
         # own header, "THE DECLARED ORDER" — never silent about which one answered.
         "compositionSource": _COMPOSITION_SOURCE,
+        # WHICH ANSWER the FORM half (bullet/titleStyles) of `composition` is — same two-state
+        # posture, its own flag because a checkout can have the base composition-reads-config PR
+        # without yet having this one's engine-side form additions.
+        "compositionFormSource": _COMPOSITION_FORM_SOURCE,
         "composition": _COMPOSITION,
         "fixtures": fixtures,
     }

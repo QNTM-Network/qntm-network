@@ -882,8 +882,10 @@ var TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"];
 var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
 var DIRECTIONS2 = ["asc", "desc"];
 var CHROME_SHAPES = ["checkbox", "plain_line"];
-var COMPOSITION_KEYS = ["heads", "tail", "separator"];
+var COMPOSITION_KEYS = ["heads", "tail", "separator", "bullet", "titleStyles"];
 var COMPOSITION_CELL_CLASSES = ["checkbox", "title", "stamp", "date", "tags", "markers", "chrome"];
+var COMPOSITION_BULLET_CHARS = ["-", "*", "+"];
+var COMPOSITION_TITLE_STYLES = ["italic", "bold", "strikethrough"];
 var isScalarOrNull = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
 function readSectionRegistrationEntry(path, value, problems) {
   if (!isPlainObject3(value)) {
@@ -1309,7 +1311,7 @@ function readComposition(value, problems) {
       problems.push(`'${path}.${key}' is not a recognised key \u2014 the keys are ${COMPOSITION_KEYS.join(", ")}`);
     }
   }
-  const { heads, tail, separator } = value;
+  const { heads, tail, separator, bullet, titleStyles } = value;
   if (!isPlainObject3(heads)) {
     problems.push(`'${path}.heads' is ${shapeOf2(heads)}, not an object`);
     return void 0;
@@ -1335,10 +1337,30 @@ function readComposition(value, problems) {
     problems.push(`'${path}.separator' is ${JSON.stringify(separator)}, not a non-empty string`);
     return void 0;
   }
+  if (!COMPOSITION_BULLET_CHARS.includes(bullet)) {
+    problems.push(
+      `'${path}.bullet' is ${JSON.stringify(bullet)}, not one of ${COMPOSITION_BULLET_CHARS.join(", ")}`
+    );
+    return void 0;
+  }
+  if (!Array.isArray(titleStyles) || !titleStyles.every((s) => typeof s === "string")) {
+    problems.push(`'${path}.titleStyles' is ${shapeOf2(titleStyles)}, not an array of strings`);
+    return void 0;
+  }
+  for (const [i, style] of titleStyles.entries()) {
+    if (!COMPOSITION_TITLE_STYLES.includes(style)) {
+      problems.push(
+        `'${path}.titleStyles[${i}]' is ${JSON.stringify(style)}, not one of ${COMPOSITION_TITLE_STYLES.join(", ")}`
+      );
+      return void 0;
+    }
+  }
   return {
     heads: readHeads,
     tail: readTail,
-    separator
+    separator,
+    bullet,
+    titleStyles
   };
 }
 function readCompositionSource(value, problems) {
@@ -1547,19 +1569,26 @@ function readCell(cellClass, cells) {
 function indentFor(depth) {
   return "    ".repeat(Math.max(0, Math.trunc(depth)));
 }
+function applyTitleStyles(text, titleStyles) {
+  let styled = text;
+  if (titleStyles.includes("italic")) styled = `*${styled}*`;
+  if (titleStyles.includes("bold")) styled = `**${styled}**`;
+  if (titleStyles.includes("strikethrough")) styled = `~~${styled}~~`;
+  return styled;
+}
 function composeLine(shape, cells, composition, depth = 0) {
   const order = [...composition.heads[shape], ...composition.tail];
   const parts = [];
   for (const cellClass of order) {
     if (cellClass === "title") {
       if (cells.title !== "") {
-        parts.push(cells.title);
+        parts.push(applyTitleStyles(cells.title, composition.titleStyles));
       }
       continue;
     }
     parts.push(...readCell(cellClass, cells));
   }
-  return `${indentFor(depth)}- ${parts.join(composition.separator)}`;
+  return `${indentFor(depth)}${composition.bullet} ${parts.join(composition.separator)}`;
 }
 var TITLE_SLOT = String.fromCharCode(0);
 function composeSeed(shape, known, composition, depth = 0) {
@@ -1567,13 +1596,13 @@ function composeSeed(shape, known, composition, depth = 0) {
   const parts = [];
   for (const cellClass of order) {
     if (cellClass === "title") {
-      parts.push(TITLE_SLOT);
+      parts.push(applyTitleStyles(TITLE_SLOT, composition.titleStyles));
       continue;
     }
     parts.push(...readCell(cellClass, known));
   }
   const joined = parts.join(composition.separator);
-  const prefix = `${indentFor(depth)}- `;
+  const prefix = `${indentFor(depth)}${composition.bullet} `;
   const slotIndex = joined.indexOf(TITLE_SLOT);
   if (slotIndex === -1) {
     return { text: `${prefix}${joined}`, cursorOffset: (prefix + joined).length };
