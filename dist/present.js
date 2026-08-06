@@ -805,9 +805,11 @@ var TOP_KEYS2 = [
   "chromeShapes",
   "sectionRegistration",
   "defaultOrdering",
+  "defaultOrderingSource",
   "priorityRank",
   "dropped"
 ];
+var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
 var SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"];
 var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
 var ORDERING_KEY_KEYS = ["field", "direction"];
@@ -1190,6 +1192,15 @@ function readDefaultOrdering(value, problems) {
   }
   return keys;
 }
+function readDefaultOrderingSource(value, problems) {
+  if (!DEFAULT_ORDERING_SOURCES.includes(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.defaultOrderingSource' is ${JSON.stringify(value)}, not one of ${DEFAULT_ORDERING_SOURCES.join(", ")} \u2014 which answer defaultOrdering/priorityRank are stays unknown`
+    );
+    return void 0;
+  }
+  return value;
+}
 function readPriorityRank(value, problems) {
   const path = `${RESOLUTION_TABLE_KEY}.priorityRank`;
   if (!isPlainObject3(value) || Object.keys(value).length === 0) {
@@ -1247,6 +1258,7 @@ function readConfigResolutionDeclaration(document2) {
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
       sectionRegistration: "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
       defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],
+      defaultOrderingSource: "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : void 0,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}
     },

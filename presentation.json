@@ -6745,6 +6745,7 @@
         "direction": "asc"
       }
     ],
+    "defaultOrderingSource": "engine-fallback",
     "priorityRank": {
       "urgent": 4,
       "high": 3,
@@ -6753,6 +6754,7 @@
       "low": 1
     },
     "dropped": {
+      "ordering field 'title'": "named by a section's 'ordering:' and/or the engine's own default ordering, but vocabulary/markers.yaml declares no marker for it at all, so nothing can read its value off a line",
       "rule 'auto-habit-without-routine-children-reverts-to-task'": "its pattern 'auto-habits-without-routine-children' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'auto-outcome-without-open-children-reverts-to-task'": "its pattern 'auto-outcomes-without-open-children' traverses the graph (3 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'outcome-with-routine-child-becomes-habit'": "its pattern 'outcomes-with-routine-child' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",

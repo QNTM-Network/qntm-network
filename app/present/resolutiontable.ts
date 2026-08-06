@@ -224,19 +224,35 @@ export interface ConfigResolutionTable {
    */
   readonly sectionRegistration: Readonly<Record<string, Readonly<Record<string, SectionRegistration>>>>;
   /**
-   * THE ENGINE'S OWN DEFAULT ORDERING — `apps/qntm-md/src/qntm_md/render/section_builder.py`'s
-   * `_DEFAULT_ORDERING`, the sort spec applied to EVERY section that declares neither `ordering`
-   * nor `orderingMode` above (171 of 186 sections, measured against the operator's real config).
-   * Published UNCONDITIONALLY — it is a fact about the engine, true for every qntm-md instance,
-   * never read out of this config's own YAML — so it is never absent and never per-view. See
-   * `app/present/ordering.ts`'s `resolveOrderingPlacementFor` for where this is actually consumed.
+   * THE FLOOR OF THE CASCADE — the sort spec applied to EVERY section that declares neither
+   * `ordering` nor `orderingMode` above (171 of 186 sections, measured against the operator's real
+   * config). 2026-08-06 ("the default ordering is declared"): this is now a DECLARED value, read by
+   * `scripts/compile-resolution.mjs` from `global_defaults.yaml`'s own `default_ordering:` when an
+   * operator's config names one, so it can differ per instance the way every other node type, field
+   * and ordering already can — no operator is handed a global naming fields their own vocabulary
+   * does not have. When no config declares one, it falls back to the engine's own hardcoded tuple
+   * (`apps/qntm-md/src/qntm_md/render/section_builder.py`'s `_DEFAULT_ORDERING`) so behaviour does
+   * not change underfoot — see `defaultOrderingSource` for which answer this is. Always published
+   * (never absent, never per-view) either way. See `app/present/ordering.ts`'s
+   * `resolveOrderingPlacementFor` for where this is actually consumed.
    */
   readonly defaultOrdering: readonly OrderingKey[];
   /**
-   * THE ENGINE'S OWN PRIORITY RANK — `section_builder.py`'s `_PRIORITY_RANK`, the numeric rank
-   * `defaultOrdering`'s own `priority` key compares by. Also unconditional, also never per-view.
-   * Four numbers for five names (`normal`/`medium` share rank 2) — read verbatim from the engine,
-   * not simplified.
+   * WHICH ANSWER `defaultOrdering`/`priorityRank` ARE — `"config"` when `global_defaults.yaml`
+   * declared `default_ordering:` itself, `"engine-fallback"` when it did not and the engine's own
+   * hardcoded tuple answered instead. Published so the fallback is a VISIBLE fact rather than the
+   * silent one this table used to publish unconditionally with no way to tell the two apart —
+   * see `compile-resolution.mjs`'s own header, "THE DEFAULT ORDERING", for the full argument.
+   */
+  readonly defaultOrderingSource: "config" | "engine-fallback" | undefined;
+  /**
+   * THE PRIORITY RANK `defaultOrdering`'s own enum-shaped key (`priority`, in the engine's own
+   * fallback tuple) compares by — the numeric rank an `"enum"`-kind `orderingFields` marker's
+   * spelled value looks up. Declared alongside `default_ordering:` (`priority_rank:`) or, absent
+   * that, the engine's own hardcoded `_PRIORITY_RANK` (four numbers for five names —
+   * `normal`/`medium` share rank 2). Omitted entirely (not published empty) when the effective
+   * default ordering names no field a rank table applies to — the same "absent means nothing to
+   * say" convention every other optional key on this table already uses.
    */
   readonly priorityRank: Readonly<Record<string, number>>;
   /**
@@ -276,9 +292,11 @@ const TOP_KEYS = [
   "chromeShapes",
   "sectionRegistration",
   "defaultOrdering",
+  "defaultOrderingSource",
   "priorityRank",
   "dropped",
 ] as const;
+const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
 const SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
@@ -747,6 +765,25 @@ function readDefaultOrdering(value: unknown, problems: string[]): readonly Order
   return keys;
 }
 
+/**
+ * `resolution.defaultOrderingSource` — `"config"` or `"engine-fallback"`, or `undefined` if the
+ * document declares neither (an older declaration, published before this key existed) or something
+ * else entirely (reported, never guessed).
+ */
+function readDefaultOrderingSource(
+  value: unknown,
+  problems: string[],
+): "config" | "engine-fallback" | undefined {
+  if (!(DEFAULT_ORDERING_SOURCES as readonly string[]).includes(value as string)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.defaultOrderingSource' is ${JSON.stringify(value)}, not one of ` +
+        `${DEFAULT_ORDERING_SOURCES.join(", ")} — which answer defaultOrdering/priorityRank are stays unknown`,
+    );
+    return undefined;
+  }
+  return value as "config" | "engine-fallback";
+}
+
 /** `resolution.priorityRank` — field VALUE (`"urgent"`) -> its numeric rank. Every value here is
  * a positive integer; the ENGINE decides the numbers, this reader only checks the shape. */
 function readPriorityRank(value: unknown, problems: string[]): Record<string, number> {
@@ -860,6 +897,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       sectionRegistration:
         "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
       defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],
+      defaultOrderingSource:
+        "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : undefined,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
