@@ -1616,7 +1616,7 @@ function defaultRankOf(target, siblings, defaultOrdering) {
   return rank;
 }
 var CONTAINER_ORDER_DIRECTIVE = "#order:";
-function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank) {
+function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
   if (ordering[viewId]?.[sectionId] !== void 0) {
     return { kind: "abstains", because: "has-declared-ordering" };
   }
@@ -1632,16 +1632,31 @@ function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText,
   if (headingIndex !== null && (lines[headingIndex] ?? "").includes(CONTAINER_ORDER_DIRECTIVE)) {
     return { kind: "abstains", because: "container-ordering-directive" };
   }
-  if (anyLineIndented(lines, start, end)) {
-    return { kind: "abstains", because: "nested-section" };
-  }
   const beforeText = lines[lineIndex] ?? "";
   const beforeTuple = defaultTupleFor(beforeText, defaultOrdering, orderingFields, priorityRank);
   const afterTuple = defaultTupleFor(afterText, defaultOrdering, orderingFields, priorityRank);
   const siblingsRaw = [];
-  for (let at = start; at < end; at += 1) {
-    if (at === lineIndex) continue;
-    siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+  if (classifyQualifying === void 0) {
+    if (anyLineIndented(lines, start, end)) {
+      return { kind: "abstains", because: "nested-section" };
+    }
+    for (let at = start; at < end; at += 1) {
+      if (at === lineIndex) continue;
+      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
+  } else {
+    if (classifyQualifying(lineIndex) === false) {
+      return { kind: "abstains", because: "not-qualifying" };
+    }
+    const parentOf2 = parentLineOf(lines, start, end);
+    const group = parentOf2.get(lineIndex) ?? null;
+    for (let at = start; at < end; at += 1) {
+      if (at === lineIndex) continue;
+      if (!parentOf2.has(at)) continue;
+      if (parentOf2.get(at) !== group) continue;
+      if (classifyQualifying(at) !== true) continue;
+      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
   }
   if (beforeTuple === "style-ambiguous" || afterTuple === "style-ambiguous" || siblingsRaw.some((sibling) => sibling.tuple === "style-ambiguous")) {
     return { kind: "abstains", because: "style-ambiguous-title" };
@@ -1653,7 +1668,7 @@ function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText,
     siblings: siblingsRaw
   };
 }
-function defaultOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank) {
+function defaultOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
   const evaluation = evaluateDefaultSection(
     viewId,
     sectionId,
@@ -1663,7 +1678,8 @@ function defaultOrderingFor(viewId, sectionId, source, lineIndex, afterText, ord
     ordering,
     defaultOrdering,
     orderingFields,
-    priorityRank
+    priorityRank,
+    classifyQualifying
   );
   if (evaluation.kind === "abstains") return abstains(evaluation.because);
   const tuples = evaluation.siblings.map((sibling) => sibling.tuple);
@@ -1679,7 +1695,7 @@ function defaultOrderingFor(viewId, sectionId, source, lineIndex, afterText, ord
     }
   };
 }
-function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank) {
+function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
   const evaluation = evaluateDefaultSection(
     viewId,
     sectionId,
@@ -1689,7 +1705,8 @@ function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
     ordering,
     defaultOrdering,
     orderingFields,
-    priorityRank
+    priorityRank,
+    classifyQualifying
   );
   if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
   const { beforeTuple, afterTuple, siblings } = evaluation;
@@ -1712,7 +1729,7 @@ function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
   const beforeLineIndex = next === void 0 ? null : next.lineIndex;
   return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
 }
-function resolveOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank) {
+function resolveOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank, classifyQualifying) {
   if (ordering[viewId]?.[sectionId] !== void 0) {
     return orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
   }
@@ -1725,10 +1742,11 @@ function resolveOrderingFor(viewId, sectionId, source, lineIndex, afterText, ord
     ordering,
     defaultOrdering,
     orderingFields,
-    priorityRank
+    priorityRank,
+    classifyQualifying
   );
 }
-function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank) {
+function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank, classifyQualifying) {
   if (ordering[viewId]?.[sectionId] !== void 0) {
     return orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
   }
@@ -1741,82 +1759,14 @@ function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
     ordering,
     defaultOrdering,
     orderingFields,
-    priorityRank
+    priorityRank,
+    classifyQualifying
   );
-}
-
-// app/present/today.ts
-var abstains2 = (because) => ({ kind: "abstains", because });
-var WEEKDAY_NAMES = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday"
-];
-var pad2 = (n) => String(n).padStart(2, "0");
-var isoDate = (utcMs) => {
-  const d = new Date(utcMs);
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
-};
-function localPartsInZone(nowUtcMs, timezone) {
-  let formatter;
-  try {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      hourCycle: "h23"
-    });
-  } catch {
-    return void 0;
-  }
-  const parts = formatter.formatToParts(new Date(nowUtcMs));
-  const get = (type) => parts.find((p) => p.type === type)?.value;
-  const year = Number(get("year"));
-  const month = Number(get("month"));
-  const day = Number(get("day"));
-  const rawHour = Number(get("hour"));
-  const hour = rawHour === 24 ? 0 : rawHour;
-  if (![year, month, day, hour].every(Number.isFinite)) return void 0;
-  return { year, month, day, hour };
-}
-function resolveLogicalDate(nowUtcMs, boundary) {
-  const parts = localPartsInZone(nowUtcMs, boundary.timezone);
-  if (parts === void 0) return void 0;
-  const asUtcMidnight = Date.UTC(parts.year, parts.month - 1, parts.day);
-  const rolled = parts.hour >= boundary.dayStartHour ? asUtcMidnight : asUtcMidnight - 864e5;
-  return isoDate(rolled);
-}
-function resolveWeekEnd(logicalDate, weekStartsOn) {
-  const startIndex = WEEKDAY_NAMES.indexOf(
-    weekStartsOn.trim().toLowerCase()
-  );
-  if (startIndex === -1) return void 0;
-  const [y, m, d] = logicalDate.split("-").map(Number);
-  if (y === void 0 || m === void 0 || d === void 0) return void 0;
-  const asUtcMidnight = Date.UTC(y, m - 1, d);
-  const jsWeekday = new Date(asUtcMidnight).getUTCDay();
-  const pyWeekday = (jsWeekday + 6) % 7;
-  const daysSinceWeekStart = ((pyWeekday - startIndex) % 7 + 7) % 7;
-  const weekEndMs = asUtcMidnight + (6 - daysSinceWeekStart) * 864e5;
-  return isoDate(weekEndMs);
-}
-function todayFor(nowUtcMs, boundary) {
-  const logicalDate = resolveLogicalDate(nowUtcMs, boundary);
-  if (logicalDate === void 0) return abstains2("unresolvable-timezone");
-  const weekEnd = resolveWeekEnd(logicalDate, boundary.weekStartsOn);
-  if (weekEnd === void 0) return abstains2("unknown-week-start");
-  return { kind: "answer", answer: { logicalDate, weekEnd } };
 }
 
 // app/present/membership.ts
 var RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"];
-var abstains3 = (because) => ({ kind: "abstains", because });
+var abstains2 = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
@@ -1870,12 +1820,12 @@ function resolveLineFields(line, section, language) {
 }
 function membershipFor(viewId, sectionId, line, language) {
   const section = language.sections[viewId]?.[sectionId];
-  if (section === void 0) return abstains3("no-section-declaration");
+  if (section === void 0) return abstains2("no-section-declaration");
   const qualifier = language.predicates[section.qualification];
-  if (qualifier === void 0) return abstains3("no-section-declaration");
-  if (qualifierNeedsGraph(qualifier)) return abstains3("needs-graph-traversal");
+  if (qualifier === void 0) return abstains2("no-section-declaration");
+  if (qualifierNeedsGraph(qualifier)) return abstains2("needs-graph-traversal");
   const fields = resolveLineFields(line, section, language);
-  if (typeof fields === "string") return abstains3(fields);
+  if (typeof fields === "string") return abstains2(fields);
   return {
     kind: "answer",
     answer: {
@@ -2406,6 +2356,98 @@ function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf
     applied.push(...effects);
   }
   return { fields: working, applied, partial, undecidable };
+}
+
+// app/present/orderingqualify.ts
+var bareId = (id) => String(id).replace(/^qntm:/i, "");
+function publishedQualifierFor(viewId, sectionId, qualification) {
+  const section = qualification.sections[viewId]?.[sectionId];
+  if (section === void 0) return void 0;
+  return qualification.predicates[section.qualification];
+}
+function qualifyingClassifierFor(lines, viewId, sectionId, qualification, graph, edgeSourceOf) {
+  const qualifier = publishedQualifierFor(viewId, sectionId, qualification);
+  if (qualifier === void 0) return void 0;
+  const byId = new Map(graph.nodes.map((node) => [bareId(node.id), node]));
+  return (lineIndex) => {
+    const line = lines[lineIndex] ?? "";
+    const stamped = stampSpans(line);
+    const first = stamped[0];
+    if (first === void 0) return void 0;
+    const node = byId.get(bareId(first.id));
+    if (node === void 0) return void 0;
+    const fields = { node_type: node.type, ...node.fields };
+    return matchesQualifierGraphAware(fields, node.id, qualifier, graph, edgeSourceOf, void 0);
+  };
+}
+
+// app/present/today.ts
+var abstains3 = (because) => ({ kind: "abstains", because });
+var WEEKDAY_NAMES = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday"
+];
+var pad2 = (n) => String(n).padStart(2, "0");
+var isoDate = (utcMs) => {
+  const d = new Date(utcMs);
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+};
+function localPartsInZone(nowUtcMs, timezone) {
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23"
+    });
+  } catch {
+    return void 0;
+  }
+  const parts = formatter.formatToParts(new Date(nowUtcMs));
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const year = Number(get("year"));
+  const month = Number(get("month"));
+  const day = Number(get("day"));
+  const rawHour = Number(get("hour"));
+  const hour = rawHour === 24 ? 0 : rawHour;
+  if (![year, month, day, hour].every(Number.isFinite)) return void 0;
+  return { year, month, day, hour };
+}
+function resolveLogicalDate(nowUtcMs, boundary) {
+  const parts = localPartsInZone(nowUtcMs, boundary.timezone);
+  if (parts === void 0) return void 0;
+  const asUtcMidnight = Date.UTC(parts.year, parts.month - 1, parts.day);
+  const rolled = parts.hour >= boundary.dayStartHour ? asUtcMidnight : asUtcMidnight - 864e5;
+  return isoDate(rolled);
+}
+function resolveWeekEnd(logicalDate, weekStartsOn) {
+  const startIndex = WEEKDAY_NAMES.indexOf(
+    weekStartsOn.trim().toLowerCase()
+  );
+  if (startIndex === -1) return void 0;
+  const [y, m, d] = logicalDate.split("-").map(Number);
+  if (y === void 0 || m === void 0 || d === void 0) return void 0;
+  const asUtcMidnight = Date.UTC(y, m - 1, d);
+  const jsWeekday = new Date(asUtcMidnight).getUTCDay();
+  const pyWeekday = (jsWeekday + 6) % 7;
+  const daysSinceWeekStart = ((pyWeekday - startIndex) % 7 + 7) % 7;
+  const weekEndMs = asUtcMidnight + (6 - daysSinceWeekStart) * 864e5;
+  return isoDate(weekEndMs);
+}
+function todayFor(nowUtcMs, boundary) {
+  const logicalDate = resolveLogicalDate(nowUtcMs, boundary);
+  if (logicalDate === void 0) return abstains3("unresolvable-timezone");
+  const weekEnd = resolveWeekEnd(logicalDate, boundary.weekStartsOn);
+  if (weekEnd === void 0) return abstains3("unknown-week-start");
+  return { kind: "answer", answer: { logicalDate, weekEnd } };
 }
 
 // app/present/context.ts
@@ -5269,209 +5311,6 @@ var membershipSpec = {
   }
 };
 
-// app/present/resolvers/ordering.ts
-var SIBLINGS_DROPPED_UNREPORTED = {
-  kind: "unknown",
-  because: "ordering-drops-unreadable-siblings-without-reporting-them"
-};
-var orderingSpec = {
-  id: "ordering",
-  badge: "orderingBadge",
-  read(ctx) {
-    const { view, commit } = ctx;
-    const { qualification, resolution } = ctx.declared;
-    if (resolution === void 0 || qualification === void 0 || commit.kind !== "set-line") {
-      return NOT_EVALUATED;
-    }
-    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-    const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
-    if (sectionId === null) {
-      return NOT_EVALUATED;
-    }
-    const reading = resolveOrderingFor(
-      view.id,
-      sectionId,
-      commit.source,
-      commit.lineIndex,
-      commit.text,
-      resolution.ordering,
-      resolution.orderingFields,
-      resolution.defaultOrdering,
-      resolution.priorityRank
-    );
-    if (reading.kind === "abstains") {
-      return { kind: "abstains", because: reading.because };
-    }
-    return {
-      kind: "answer",
-      coverage: SIBLINGS_DROPPED_UNREPORTED,
-      answer: reading.answer,
-      sectionName: resolution.ordering[view.id]?.[sectionId]?.name ?? sectionId
-    };
-  },
-  say(reading) {
-    if (reading.kind !== "answer" || !reading.answer.moved) {
-      return "";
-    }
-    return `this line will move within ${reading.sectionName}`;
-  },
-  show(reading) {
-    if (reading.kind === "not-evaluated") {
-      return "";
-    }
-    if (reading.kind === "abstains") {
-      return `ordering: abstained \u2014 ${reading.because}`;
-    }
-    return "ordering: decided";
-  },
-  /**
-   * THE PLACEMENT — computed from `ctx`, NOT from `reading`, and that asymmetry is real rather than
-   * an oversight. `read` answers "did the rank change" (`resolveOrderingFor`); this answers "which
-   * row does it now sit before" (`resolveOrderingPlacementFor`) — a different published function
-   * against a different address source for an insert. The two questions do not reduce to one, so
-   * `arm` takes the context and asks its own. It is still PURE, and it still runs exactly once per
-   * commit, which is what the shared-reading rule is actually protecting.
-   */
-  arm(ctx) {
-    const { view, commit } = ctx;
-    const { qualification, resolution } = ctx.declared;
-    if (resolution === void 0 || qualification === void 0 || commit.markdown === null) {
-      return [];
-    }
-    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-    const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
-    const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
-    if (sectionId === null) {
-      return [];
-    }
-    const reading = resolveOrderingPlacementFor(
-      view.id,
-      sectionId,
-      addressSource,
-      commit.lineIndex,
-      commit.text,
-      resolution.ordering,
-      resolution.orderingFields,
-      resolution.defaultOrdering,
-      resolution.priorityRank
-    );
-    if (reading.kind !== "answer") {
-      return [];
-    }
-    const needsPlacement = commit.kind === "insert-line" ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex : reading.placement.moved;
-    if (!needsPlacement) {
-      return [];
-    }
-    return [
-      {
-        surface: "settle",
-        placement: { lineIndex: commit.lineIndex, beforeLineIndex: reading.placement.beforeLineIndex }
-      }
-    ];
-  }
-};
-
-// app/present/resolvers/rules.ts
-var rulesSpec = {
-  id: "rules",
-  badge: "rulesBadge",
-  read(ctx) {
-    const { view, commit } = ctx;
-    const { qualification, resolution, rules: rulesTable } = ctx.declared;
-    if (rulesTable === void 0 || qualification === void 0 || resolution === void 0) {
-      return NOT_EVALUATED;
-    }
-    if (commit.kind !== "insert-line" || commit.markdown === null) {
-      return NOT_EVALUATED;
-    }
-    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
-    const sectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
-    if (sectionId === null) {
-      return NOT_EVALUATED;
-    }
-    const section = qualification.sections[view.id]?.[sectionId];
-    if (section === void 0) {
-      return NOT_EVALUATED;
-    }
-    const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
-    const fields = resolveLineFields(line, section, qualification);
-    if (typeof fields === "string") {
-      return { kind: "abstains", because: fields };
-    }
-    const today = todayFor(ctx.now(), resolution.dayBoundary);
-    const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : void 0);
-    if (pass.applied.length === 0) {
-      if (pass.undecidable.length > 0) {
-        return { kind: "abstains", because: "rule-pattern-needs-graph-traversal" };
-      }
-      return { kind: "answer", coverage: COMPLETE, applied: [], text: null, partial: false };
-    }
-    const rendered = renderRuleEffects(
-      line,
-      pass.applied,
-      qualification.tokens.node_type ?? {},
-      qualification.tokens,
-      rulesTable.fieldMarkers
-    );
-    if (rendered.kind === "abstains") {
-      return { kind: "abstains", because: `rendering-${rendered.because}` };
-    }
-    return {
-      kind: "answer",
-      // THE SEVEN THIS PASS COULD NOT CONSULT, CARRIED RATHER THAN DROPPED — see this module's
-      // header for the measurement, and `Coverage`'s own header for why it rides on the answer.
-      coverage: coverageOf(pass.undecidable),
-      applied: pass.applied,
-      text: rendered.kind === "rendered" ? rendered.text : null,
-      partial: pass.partial.length > 0
-    };
-  },
-  say(reading) {
-    if (reading.kind !== "answer" || reading.applied.length === 0 || reading.text === null) {
-      return "";
-    }
-    const words = reading.applied.map((effect) => {
-      if (effect.verb === "retype") return `becomes ${effect.to}`;
-      if (effect.verb === "set") return `sets ${effect.field}`;
-      return `clears ${effect.field}`;
-    });
-    return `this line ${words.join(", ")}`;
-  },
-  show(reading) {
-    if (reading.kind === "not-evaluated") {
-      return "";
-    }
-    if (reading.kind === "abstains") {
-      return `rules: abstained \u2014 ${reading.because}`;
-    }
-    return reading.partial ? "rules: decided (partial \u2014 action(s) not modelled)" : "rules: decided";
-  },
-  /**
-   * THE CHILD'S OWN PREDICTION — the row `commit` just became, decorated with what this pass says
-   * it will carry once the cycle answers.
-   *
-   * SCOPED TO EXACTLY THE CASES `read` ALREADY CALLS "answer", NEVER TO AN ABSTENTION.
-   * `reading.text === null` is the third silent case: a pass ran and genuinely decided nothing (an
-   * `unset` on a field that was never set), a real answer with no characters to show.
-   *
-   * THE TEXT IS THE DELTA, NOT THE WHOLE LINE. `reading.text` is `renderRuleEffects`'s own
-   * `line + appended`, so the characters the operator already typed are sliced back off — the row
-   * already shows them, and repeating them would be the chip doubling the line rather than adding.
-   */
-  arm(ctx, reading) {
-    const { commit } = ctx;
-    if (commit.kind !== "insert-line" || commit.markdown === null) {
-      return [];
-    }
-    if (reading.kind !== "answer" || reading.text === null) {
-      return [];
-    }
-    const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
-    const delta = reading.text.slice(line.length).trim();
-    return delta === "" ? [] : [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }];
-  }
-};
-
 // app/present/resolvers/promotion.ts
 var WAITING_FOR_TAG_BINDING = {
   tag: "#waiting-for",
@@ -5510,7 +5349,7 @@ function structuralParentLineIndex(lines, lineIndex) {
   }
   return null;
 }
-var bareId = (id) => String(id).replace(/^qntm:/i, "");
+var bareId2 = (id) => String(id).replace(/^qntm:/i, "");
 function parentCandidateFor(parentLine, parentSection, snapshot, qualification) {
   const stamped = stampSpans(parentLine);
   const first = stamped[0];
@@ -5518,8 +5357,8 @@ function parentCandidateFor(parentLine, parentSection, snapshot, qualification) 
     if (snapshot === null) {
       return { abstain: "graph-not-loaded" };
     }
-    const wanted = bareId(first.id);
-    const node = snapshot.nodes.find((n) => bareId(n.id) === wanted);
+    const wanted = bareId2(first.id);
+    const node = snapshot.nodes.find((n) => bareId2(n.id) === wanted);
     if (node === void 0) {
       return { abstain: "parent-not-in-graph" };
     }
@@ -5669,6 +5508,218 @@ var promotionSpec = {
     }
     const text = rendered.text.slice(parentLine.length).trim();
     return text === "" ? [] : [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text } }];
+  }
+};
+
+// app/present/resolvers/ordering.ts
+function classifierFor(ctx, viewId, sectionId, source) {
+  const { qualification, structural } = ctx.declared;
+  if (qualification === void 0 || ctx.graph === null) {
+    return void 0;
+  }
+  return qualifyingClassifierFor(source.split("\n"), viewId, sectionId, qualification, ctx.graph, edgeSourceOfFor(structural));
+}
+var SIBLINGS_DROPPED_UNREPORTED = {
+  kind: "unknown",
+  because: "ordering-drops-unreadable-siblings-without-reporting-them"
+};
+var orderingSpec = {
+  id: "ordering",
+  badge: "orderingBadge",
+  read(ctx) {
+    const { view, commit } = ctx;
+    const { qualification, resolution } = ctx.declared;
+    if (resolution === void 0 || qualification === void 0 || commit.kind !== "set-line") {
+      return NOT_EVALUATED;
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const sectionId = sectionAt(commit.source, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return NOT_EVALUATED;
+    }
+    const reading = resolveOrderingFor(
+      view.id,
+      sectionId,
+      commit.source,
+      commit.lineIndex,
+      commit.text,
+      resolution.ordering,
+      resolution.orderingFields,
+      resolution.defaultOrdering,
+      resolution.priorityRank,
+      classifierFor(ctx, view.id, sectionId, commit.source)
+    );
+    if (reading.kind === "abstains") {
+      return { kind: "abstains", because: reading.because };
+    }
+    return {
+      kind: "answer",
+      coverage: SIBLINGS_DROPPED_UNREPORTED,
+      answer: reading.answer,
+      sectionName: resolution.ordering[view.id]?.[sectionId]?.name ?? sectionId
+    };
+  },
+  say(reading) {
+    if (reading.kind !== "answer" || !reading.answer.moved) {
+      return "";
+    }
+    return `this line will move within ${reading.sectionName}`;
+  },
+  show(reading) {
+    if (reading.kind === "not-evaluated") {
+      return "";
+    }
+    if (reading.kind === "abstains") {
+      return `ordering: abstained \u2014 ${reading.because}`;
+    }
+    return "ordering: decided";
+  },
+  /**
+   * THE PLACEMENT — computed from `ctx`, NOT from `reading`, and that asymmetry is real rather than
+   * an oversight. `read` answers "did the rank change" (`resolveOrderingFor`); this answers "which
+   * row does it now sit before" (`resolveOrderingPlacementFor`) — a different published function
+   * against a different address source for an insert. The two questions do not reduce to one, so
+   * `arm` takes the context and asks its own. It is still PURE, and it still runs exactly once per
+   * commit, which is what the shared-reading rule is actually protecting.
+   */
+  arm(ctx) {
+    const { view, commit } = ctx;
+    const { qualification, resolution } = ctx.declared;
+    if (resolution === void 0 || qualification === void 0 || commit.markdown === null) {
+      return [];
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
+    const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return [];
+    }
+    const reading = resolveOrderingPlacementFor(
+      view.id,
+      sectionId,
+      addressSource,
+      commit.lineIndex,
+      commit.text,
+      resolution.ordering,
+      resolution.orderingFields,
+      resolution.defaultOrdering,
+      resolution.priorityRank,
+      classifierFor(ctx, view.id, sectionId, addressSource)
+    );
+    if (reading.kind !== "answer") {
+      return [];
+    }
+    const needsPlacement = commit.kind === "insert-line" ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex : reading.placement.moved;
+    if (!needsPlacement) {
+      return [];
+    }
+    return [
+      {
+        surface: "settle",
+        placement: { lineIndex: commit.lineIndex, beforeLineIndex: reading.placement.beforeLineIndex }
+      }
+    ];
+  }
+};
+
+// app/present/resolvers/rules.ts
+var rulesSpec = {
+  id: "rules",
+  badge: "rulesBadge",
+  read(ctx) {
+    const { view, commit } = ctx;
+    const { qualification, resolution, rules: rulesTable } = ctx.declared;
+    if (rulesTable === void 0 || qualification === void 0 || resolution === void 0) {
+      return NOT_EVALUATED;
+    }
+    if (commit.kind !== "insert-line" || commit.markdown === null) {
+      return NOT_EVALUATED;
+    }
+    const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
+    const sectionId = sectionAt(commit.markdown, commit.lineIndex, view.id, sectionOrder);
+    if (sectionId === null) {
+      return NOT_EVALUATED;
+    }
+    const section = qualification.sections[view.id]?.[sectionId];
+    if (section === void 0) {
+      return NOT_EVALUATED;
+    }
+    const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
+    const fields = resolveLineFields(line, section, qualification);
+    if (typeof fields === "string") {
+      return { kind: "abstains", because: fields };
+    }
+    const today = todayFor(ctx.now(), resolution.dayBoundary);
+    const pass = applyRules(fields, rulesTable, today.kind === "answer" ? today.answer : void 0);
+    if (pass.applied.length === 0) {
+      if (pass.undecidable.length > 0) {
+        return { kind: "abstains", because: "rule-pattern-needs-graph-traversal" };
+      }
+      return { kind: "answer", coverage: COMPLETE, applied: [], text: null, partial: false };
+    }
+    const rendered = renderRuleEffects(
+      line,
+      pass.applied,
+      qualification.tokens.node_type ?? {},
+      qualification.tokens,
+      rulesTable.fieldMarkers
+    );
+    if (rendered.kind === "abstains") {
+      return { kind: "abstains", because: `rendering-${rendered.because}` };
+    }
+    return {
+      kind: "answer",
+      // THE SEVEN THIS PASS COULD NOT CONSULT, CARRIED RATHER THAN DROPPED — see this module's
+      // header for the measurement, and `Coverage`'s own header for why it rides on the answer.
+      coverage: coverageOf(pass.undecidable),
+      applied: pass.applied,
+      text: rendered.kind === "rendered" ? rendered.text : null,
+      partial: pass.partial.length > 0
+    };
+  },
+  say(reading) {
+    if (reading.kind !== "answer" || reading.applied.length === 0 || reading.text === null) {
+      return "";
+    }
+    const words = reading.applied.map((effect) => {
+      if (effect.verb === "retype") return `becomes ${effect.to}`;
+      if (effect.verb === "set") return `sets ${effect.field}`;
+      return `clears ${effect.field}`;
+    });
+    return `this line ${words.join(", ")}`;
+  },
+  show(reading) {
+    if (reading.kind === "not-evaluated") {
+      return "";
+    }
+    if (reading.kind === "abstains") {
+      return `rules: abstained \u2014 ${reading.because}`;
+    }
+    return reading.partial ? "rules: decided (partial \u2014 action(s) not modelled)" : "rules: decided";
+  },
+  /**
+   * THE CHILD'S OWN PREDICTION — the row `commit` just became, decorated with what this pass says
+   * it will carry once the cycle answers.
+   *
+   * SCOPED TO EXACTLY THE CASES `read` ALREADY CALLS "answer", NEVER TO AN ABSTENTION.
+   * `reading.text === null` is the third silent case: a pass ran and genuinely decided nothing (an
+   * `unset` on a field that was never set), a real answer with no characters to show.
+   *
+   * THE TEXT IS THE DELTA, NOT THE WHOLE LINE. `reading.text` is `renderRuleEffects`'s own
+   * `line + appended`, so the characters the operator already typed are sliced back off — the row
+   * already shows them, and repeating them would be the chip doubling the line rather than adding.
+   */
+  arm(ctx, reading) {
+    const { commit } = ctx;
+    if (commit.kind !== "insert-line" || commit.markdown === null) {
+      return [];
+    }
+    if (reading.kind !== "answer" || reading.text === null) {
+      return [];
+    }
+    const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
+    const delta = reading.text.slice(line.length).trim();
+    return delta === "" ? [] : [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }];
   }
 };
 
@@ -5957,8 +6008,10 @@ export {
   presentationFromDeclaration,
   promotionSpec,
   prospectiveEdgeBinding,
+  publishedQualifierFor,
   qntmIdSpans,
   qualifierNeedsGraph,
+  qualifyingClassifierFor,
   readConfigResolutionDeclaration,
   readDeclaration,
   readQualificationDeclaration,
