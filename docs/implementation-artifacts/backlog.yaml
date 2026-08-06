@@ -3846,3 +3846,67 @@ backlog:
   driving_capability: reading-column-width-is-a-measured-choice
   kind: capability
   state: unscoped
+
+- id: the-scoped-node-wire
+  title: >-
+    [three-layers] [1 of 5] The server serves a DECLARED SUBSET of the graph (nodes, fields,
+    edges) to the browser, not only markdown plus an unread whole-graph blob. Today `graphData`
+    carries the full 1,501-node/460-edge envelope and every one of its six reads in `app/` reaches
+    `?.snapshot?.views`, zero reach `.graph` (`research-the-resolution-universe.md` §6.3). This is
+    the FIRST row of the three-layer target — the-declared-working-set-bound and
+    structure-is-read-not-reverse-engineered both need a wire to bound/read before they mean
+    anything. See docs/implementation-artifacts/design-the-three-layers.md §8, §12.
+  driving_capability: the-working-set-is-a-declared-bounded-query-not-a-view
+  kind: capability
+  state: unscoped
+
+- id: the-declared-working-set-bound
+  title: >-
+    [three-layers] [2 of 5] The query shape itself: everything selected by any registered view,
+    plus one hop, plus anything touched recently — deliberately NOT `status = open`, which would
+    silently break a rule like "completing the last child completes the parent" (needs the
+    completed siblings in scope to know it was the last). Default generous. NEEDS
+    the-scoped-node-wire — a bound is meaningless without a wire to apply it to. See
+    docs/implementation-artifacts/design-the-three-layers.md §6.4, §12.
+  driving_capability: the-working-set-is-a-declared-bounded-query-not-a-view
+  kind: capability
+  state: unscoped
+
+- id: per-section-field-admission-not-per-field-name
+  title: >-
+    [three-layers] [3 of 5] The `project` case: widen `deriveResolvableFields` (or its successor
+    once PR #132 lands) from a global field-NAME check to a per-(pattern, referencing-section)
+    check, so `project` and future fields like it can be admitted where every referencing
+    section's own `defaults:` covers them, without becoming unsound the day a new pattern
+    references the field from a section that does not. PR #132's own body: "admitting it now
+    would be sound today and unverifiable in general." NEEDS PR #132 merged first (out of this
+    branch's control). See docs/implementation-artifacts/design-the-three-layers.md §8.
+  kind: capability
+  state: unscoped
+
+- id: structure-is-read-not-reverse-engineered
+  title: >-
+    [three-layers] [4 of 5] Publish `SectionTree`/`SectionTreeNode`'s `is_qualifying`/`children`
+    facts (`apps/qntm-md/src/qntm_md/render/section_builder.py:41-52` — already computed by the
+    engine every render, already discarded before the renderer emits markdown) through the same
+    generated-declaration path the other config-only kinds already use, so the surface READS
+    structure instead of re-deriving an approximation of it from glyphs and indentation. NEEDS
+    the-scoped-node-wire for the per-node fact (`is_qualifying` is per-node); independent of the
+    working-set-bound and field-admission rows. See
+    docs/implementation-artifacts/design-the-three-layers.md §8.
+  driving_capability: structural-language-is-published-not-guessed
+  kind: capability
+  state: unscoped
+
+- id: declare-the-scoped-node-wire-and-working-set-in-flows-yaml
+  title: >-
+    [three-layers] [5 of 5] `flows.yaml` cannot declare the scoped-node wire or the working-set
+    query today — there is no module and no observed call for flow-trace to check a declaration
+    against, and declaring one anyway would manufacture permanent drift (the exact failure this
+    file's own header names as the reason it was emptied and re-populated once already,
+    2026-07-23). Once the-scoped-node-wire ships a real module and a real observed call
+    (`tests/flow_scenarios/*.ts`), add the corresponding `flows.yaml` entries in the same shape
+    as `paint-resolves-through-the-cascade`. Filed now so the gap has a queue address rather than
+    being rediscovered later. See docs/implementation-artifacts/design-the-three-layers.md §11.
+  kind: null
+  state: unscoped

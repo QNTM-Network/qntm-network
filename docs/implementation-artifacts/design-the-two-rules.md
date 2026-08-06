@@ -1,5 +1,14 @@
 # Design: the two rules — what "unfinished" is, now that the status line cannot say so
 
+**SUPERSEDED IN PART, 2026-08-06.** `design-the-three-layers.md` pins the target architecture (the
+graph as a store, resolution run identically in engine and surface from one compiled declaration,
+presentation surface-only) and corrects this document's §4 Perception Rule: the visible SETTLE it
+treats as a designed surface is, against that target, **scaffolding for a working set the surface
+does not yet hold** (`design-the-three-layers.md` §6.4, §8) — not a finished design choice. **What
+still stands, unamended:** §2's two rules (THE CASCADE TERMINATES, AN OPERATION COMPLETES), and §5's
+divergence measurement (0 mismatches over 2,963 cells), both cited directly by the superseding
+document without correction.
+
 **Status: design plus one built, checked-in measurement harness. No `app/` source changes on this
 branch — `app/index.html`, `app/present/`, `app/shell/` are all untouched. This document, one
 script (`scripts/measure-the-divergence.mjs`), one test (`tests/measure-the-divergence.test.mjs`)

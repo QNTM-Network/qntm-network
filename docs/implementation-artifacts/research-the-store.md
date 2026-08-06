@@ -1,5 +1,14 @@
 # Research: the store — can eleven surfaces become one, without a second path to the screen?
 
+**SUPERSEDED IN PART, 2026-08-06.** `design-the-three-layers.md` pins the target architecture (the
+graph, resolution, presentation split) and names what this document did not have a candidate for:
+a scoped-node wire and a declared working-set query do not exist yet (`design-the-three-layers.md`
+§8 rows 1–2), so this document's scope was necessarily "the browser's own internal state shape,"
+never "state for a bounded node set the browser does not yet hold." **What still stands, unamended:**
+§5's eight invariants and §7's recommendation (consolidate six declaration `let`s into one
+`Declaration` value) are orthogonal to the three-layer split and are cited directly by the
+superseding document without correction.
+
 **Status:** research. **No application source changed on this branch.** This document is the whole
 of it.
 
