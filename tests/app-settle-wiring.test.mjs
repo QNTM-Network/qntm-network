@@ -126,7 +126,22 @@ async function freshGesturePage(label, declaration, view) {
   page.__setGraphData({ snapshot: { generated_at: "2026-08-06T00:00:00Z", views: [view] } });
   page.paintView(view.id);
   const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
-  return { page, elements, press, posted: () => posted, view };
+  return { page, elements, press, posted: () => posted, view, document: doc };
+}
+
+/** Press Enter the way a real browser does: fire the SAME event at the focused `<input>` first
+ * (running its own keydown listener), then let it "bubble" to `document` (running the global
+ * handler) — the two-stage dispatch this fixture's mock DOM does not do automatically (an
+ * element's own `dispatch` never reaches `document`'s listeners — see `installBrowser` in
+ * `tests/fixtures/app-html-page.mjs`). §7 and §8 below both need this: a real Enter keydown reaches
+ * BOTH the input's own listener and app/index.html's global keydown handler (which unconditionally
+ * calls `drainPainted()` before its own NORMAL-mode gate — "the third drain point"), and a test that
+ * only dispatched to the input would silently fail to exercise that second listener at all. */
+function pressEnterOn(input, doc) {
+  const event = makeEvent({ key: "Enter", target: input });
+  input.dispatch("keydown", event);
+  doc.dispatch("keydown", event);
+  return event;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -370,8 +385,8 @@ describe("2. THE FIX — the row the operator just captured stays sorted through
   test("real commitLine arms the placement for a freshly captured, UNSTAMPED row sorting first", async () => {
     const { page, view } = await freshDefaultPage("settle-fix-stamp-arm", DEFAULT_DECLARATION, BEFORE);
     await page.commitLine(view, COMMIT);
-    const instruction = page.__settle().take(AFTER, "demo");
-    assert.notEqual(instruction, null, "the real resolver walk must have armed a placement for the new row");
+    const [instruction] = page.__settle().take(AFTER, "demo");
+    assert.notEqual(instruction, undefined, "the real resolver walk must have armed a placement for the new row");
     assert.deepEqual(instruction.placement, { lineIndex: 2, beforeLineIndex: 1 }, "\"Aaa\" belongs immediately before \"Family domain\"");
   });
 
@@ -392,8 +407,8 @@ describe("2. THE FIX — the row the operator just captured stays sorted through
     const STAMPED = ["## Queue", "- [ ] Family domain [[qntm:1]]", "- [ ] Aaa sorts first [[qntm:9]]", "- [ ] Micu lunch [[qntm:2]]"].join("\n");
     paintProjection(page, view, STAMPED);
 
-    const instruction = page.__settle().take(STAMPED, "demo");
-    assert.notEqual(instruction, null, "the placement must survive the stamp landing on its own row");
+    const [instruction] = page.__settle().take(STAMPED, "demo");
+    assert.notEqual(instruction, undefined, "the placement must survive the stamp landing on its own row");
 
     texts = rowTexts(elements.get("viewBody"));
     aaaAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
@@ -417,7 +432,7 @@ describe("3. THE NEGATIVE — a placement that is no longer true never fires, th
     const { page, elements, view } = await freshQueuePage("settle-negative-deleted", BEFORE);
 
     await page.commitLine(view, { lineIndex: 3, text: "- [ ] c [[qntm:3]] 🔢 0", markdown: AFTER, source: BEFORE, kind: "set-line" });
-    assert.notEqual(page.__settle().take(AFTER, view.id), null, "precondition: a placement really was armed for \"c\"");
+    assert.equal(page.__settle().take(AFTER, view.id).length, 1, "precondition: a placement really was armed for \"c\"");
 
     // THE ENGINE'S OWN ANSWER DROPS "c" ENTIRELY — a real, if unusual, outcome (a rule retyped it
     // out of this section, a refusal adopted a file that no longer has it, and so on). Whatever the
@@ -425,7 +440,7 @@ describe("3. THE NEGATIVE — a placement that is no longer true never fires, th
     const WITHOUT_C = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
     paintProjection(page, view, WITHOUT_C);
 
-    assert.equal(page.__settle().take(WITHOUT_C, view.id), null, "a row that cannot be found must not be guessed at");
+    assert.deepEqual(page.__settle().take(WITHOUT_C, view.id), [], "a row that cannot be found must not be guessed at");
     const texts = rowTexts(elements.get("viewBody")); // includes the heading itself
     assert.equal(texts.length, 3, `expected the heading plus the 2 surviving rows, got: ${JSON.stringify(texts)}`);
     assert.ok(!texts.some((t) => t.includes("qntm:3")), "\"c\" must not be painted at all — it left the source");
@@ -441,7 +456,7 @@ describe("3. THE NEGATIVE — a placement that is no longer true never fires, th
 
     await page.commitLine(view, { lineIndex: 3, text: "- [ ] c [[qntm:3]] 🔢 0", markdown: AFTER_FIRST, source: BEFORE, kind: "set-line" });
     const firstArm = page.__settle().take(AFTER_FIRST, view.id);
-    assert.notEqual(firstArm, null, "precondition: the first edit really armed a placement moving \"c\" before \"a\"");
+    assert.equal(firstArm.length, 1, "precondition: the first edit really armed a placement moving \"c\" before \"a\"");
 
     // SECOND EDIT, SAME ROW: the operator deletes the marker while fixing a typo — a real, plausible
     // edit ("- [ ] c [[qntm:3]] 🔢 0" -> "- [ ] c [[qntm:3]]"). `ordering.ts`'s own header: a row
@@ -458,9 +473,9 @@ describe("3. THE NEGATIVE — a placement that is no longer true never fires, th
 
     await page.commitLine(view, { lineIndex: 3, text: "- [ ] c [[qntm:3]]", markdown: AFTER_SECOND, source: AFTER_FIRST, kind: "set-line" });
 
-    assert.equal(
+    assert.deepEqual(
       page.__settle().take(AFTER_SECOND, view.id),
-      null,
+      [],
       "the stale first placement must be discarded, not left standing by an abstention's empty re-arm",
     );
 
@@ -511,7 +526,7 @@ describe("4. A KNOWN REMAINING GAP — a capture that ALREADY carries a trailing
 
     // THE GAP, PROVEN: the placement does NOT survive, and the row falls back to plain (unsorted)
     // file order — the exact regression this whole change exists to end, for this one shape only.
-    assert.equal(page.__settle().take(STAMPED, view.id), null, "KNOWN GAP: a marker-bearing capture's placement is still discarded on stamp arrival");
+    assert.deepEqual(page.__settle().take(STAMPED, view.id), [], "KNOWN GAP: a marker-bearing capture's placement is still discarded on stamp arrival");
     texts = rowTexts(elements.get("viewBody"));
     const newAt = texts.findIndex((t) => t.includes("NEW ROW"));
     const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
@@ -643,9 +658,9 @@ describe("6. THE NEGATIVE — a section that declares no sort at all (insertion 
     // NO PLACEMENT WAS EVER ARMED — the resolver abstained (`insertion-order`), so `armSettle` never
     // called `.arm()` at all, and `take()`, asked against the EXACT string that was armed against
     // (were anything armed), has nothing to say.
-    assert.equal(
+    assert.deepEqual(
       page.__settle().take(p.body.markdown, "demo"),
-      null,
+      [],
       "an abstaining section must never leave a live placement armed",
     );
 
@@ -660,5 +675,258 @@ describe("6. THE NEGATIVE — a section that declares no sort at all (insertion 
 
     const moved = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
     assert.equal(moved, undefined, "no element may carry the FLIP class — nothing was ever armed to move");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7. THE ENTER GESTURE — o, type, ENTER (not blur) — the operator's own live gesture, reproduced
+//    or refuted, driven through the real page
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("7. THE ENTER GESTURE — o, type, ENTER — the coordinator's hypothesis, checked rather than assumed", () => {
+  // WHY THIS SECTION EXISTS. §5 above proves placement-at-commit end to end for `o`, type, BLUR.
+  // Every other section in this file also commits through BLUR. The operator's own live report was
+  // `o`, type, ENTER — a gesture this file, until now, never drove. `draftInput`'s own wiring
+  // (app/present/paint.ts) attaches BOTH `input.addEventListener("blur", settle)` and a `keydown`
+  // listener that calls the SAME `settle()` closure for `Enter` — so the two gestures reach
+  // identical application code, UNLESS something differs at the DOM-EVENT level that this file's
+  // `input.dispatch("blur")` shortcut never exercises: a real `Enter` keydown is dispatched at the
+  // FOCUSED `<input>` first (running `draftInput`'s own listener) and then BUBBLES to `document`,
+  // where app/index.html's global keydown handler (index.html:3210) unconditionally calls
+  // `drainPainted()` BEFORE its own NORMAL-mode gate — "the THIRD DRAIN POINT ... called ... on
+  // ORDINARY keystrokes with nothing queued" (index.html:1958-1961). `tests/fixtures/
+  // app-html-page.mjs`'s mock DOM does NOT bubble an element-dispatched event to `document` at all
+  // (`dispatch` on an element only walks THAT element's own `listeners` map, and `document.dispatch`
+  // is a wholly separate call) — so a faithful reproduction of a real keypress has to dispatch the
+  // SAME event to BOTH the input and `document`, by hand, exactly what a browser does for free. A
+  // test that only called `input.dispatch("keydown", ...)` would silently fail to exercise the one
+  // mechanism (the third drain point) the operator's own symptom could plausibly depend on.
+  // (`pressEnterOn` itself is defined at module scope, just below `freshGesturePage` — §8 needs it
+  // too, for the identical reason.)
+
+  test("DEFAULT ordering (undeclared section, title tiebreak): o, type, ENTER — correct BEFORE any projection, exactly mirroring §5's BLUR case", async () => {
+    const SRC = ["## Queue", "- [ ] Family domain [[qntm:1]]", "- [ ] Micu lunch [[qntm:2]]"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { page, elements, press, view, document: doc } = await freshGesturePage("enter-gesture-default", DEFAULT_DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); // line 1: "Family domain"
+    press("o");
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    // THE BARE CAPTURE, TYPED EXACTLY AS §5's BLUR CASE TYPES IT — the only variable this section
+    // changes is the key that commits it.
+    input.value = "- [ ] Aaa sorts first";
+    const event = pressEnterOn(input, doc);
+
+    // THE KEYDOWN ITSELF MUST NOT HAVE INSERTED A NEWLINE OR REACHED THE BROWSER'S OWN DEFAULT —
+    // `draftInput`'s own listener calls `event.preventDefault()` before `settle()`; if this is
+    // false, `commitLine` never ran at all and everything below would be checking a stale screen.
+    assert.ok(event.defaultPrevented, "Enter must be prevented by draftInput's own keydown listener — commitLine may not have run");
+
+    // ── BEFORE ANY PROJECTION IS DELIVERED: is the row already in its correct sorted position? ──
+    // This is the EXACT assertion §5's BLUR test makes, unchanged, against the ENTER gesture.
+    const texts = rowTexts(elements.get("viewBody"));
+    const newAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
+    const familyAt = texts.findIndex((t) => t.includes("Family domain"));
+    assert.ok(newAt !== -1 && familyAt !== -1, `expected both rows painted, got: ${JSON.stringify(texts)}`);
+    assert.ok(newAt < familyAt, "THE OPERATOR'S OWN SYMPTOM: the row must sort BEFORE \"Family domain\" in the SAME turn as the Enter keystroke — no projection has been delivered yet");
+    const moved = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
+    assert.ok(moved, "the FLIP motion must have run in this same synchronous pass — no element carries settle-move");
+  });
+
+  test("DECLARED ordering (queue_position): o, type, ENTER — correct BEFORE any projection, exactly mirroring §5's BLUR case", async () => {
+    const SRC = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { elements, press, document: doc } = await freshGesturePage("enter-gesture-declared", QUEUE_DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); // line 1: "a"
+    press("j"); // line 2: "b"
+    press("o");
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    input.value = "- [ ] c sorts first 🔢 0";
+    pressEnterOn(input, doc);
+
+    const texts = rowTexts(elements.get("viewBody"));
+    const cAt = texts.findIndex((t) => t.includes("c sorts first"));
+    const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
+    assert.ok(cAt !== -1 && aAt !== -1, `expected both rows painted, got: ${JSON.stringify(texts)}`);
+    assert.ok(cAt < aAt, "queue_position 0 must sort before queue_position 1, in the same turn as the Enter keystroke");
+    const moved = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
+    assert.ok(moved, "the FLIP motion must have run in this same synchronous pass");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. TWO CAPTURES IN A ROW — the operator's real workflow, and the actual mechanism behind the
+//    reported symptom, found while §7 above was refuting the Enter-vs-blur hypothesis
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("8. TWO CAPTURES IN A ROW — a second, unrelated commit must not undo the first row's placement", () => {
+  // ── WHY THIS SECTION EXISTS, AND WHAT §7 ACTUALLY FOUND ──
+  //
+  // §7 refutes the Enter-vs-blur hypothesis directly: a single `o`/type/Enter capture lands
+  // correctly, synchronously, exactly like the blur-driven §5. That is NOT the end of the
+  // investigation — driving the operator's REAL workflow (rapid, repeated `o`/type/Enter capture,
+  // one inbox item after another — "his own two-captures-in-a-row gesture", `app/index.html`'s own
+  // words at `commitLine`'s `arrive` comment) found a real, reproducible defect independent of the
+  // Enter/blur question and independent of the GitHub Pages deploy gap: the FIRST row's placement
+  // reverted to raw file order the INSTANT a second, wholly unrelated row was captured. Verified
+  // live: `o`/type "Aaa sorts first"/Enter lands "Aaa" correctly before "Family domain" (matching
+  // §7) — then, immediately, `o`/type "Zzz sorts last"/Enter — and "Aaa" falls back to AFTER "Family
+  // domain" the moment the second capture's own optimistic repaint runs. Root cause: `SettleSurface`
+  // (app/present/settle.ts, before this change) held exactly ONE pending placement — `arm()`'s own
+  // comment called that "the same reason there is one cursor," which is right for a SECOND commit to
+  // the SAME row and silently wrong for a commit to a DIFFERENT one. `armSettle`'s second call
+  // (resolve.ts) simply overwrote the first row's still-correct claim, and the next full repaint
+  // rebuilt every row from the literal (unsorted) source string with nothing left to reposition the
+  // first one. This matches the operator's report almost exactly — visible immediately, wrong, and
+  // self-correcting only once a real server answer eventually replaces the DOM outright — for a
+  // workflow (capturing several inbox items back to back) that is at least as ordinary as a single
+  // isolated capture.
+  //
+  // THE FIX: `SettleSurface` now holds one entry PER ROW, keyed by that row's own identity, so an
+  // arm for one row never discards another's. See settle.ts's own header for the full account, the
+  // discard conditions, and the derived (never chosen) bound on how many can be pending at once.
+  test("DEFAULT ordering (undeclared section): o/type/Enter, then IMMEDIATELY o/type/Enter again for an unrelated row — BOTH stay correctly placed, before any projection", async () => {
+    const SRC = ["## Queue", "- [ ] Family domain [[qntm:1]]", "- [ ] Micu lunch [[qntm:2]]"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { elements, press, document: doc } = await freshGesturePage("two-captures-default", DEFAULT_DECLARATION, V);
+
+    // CAPTURE 1: sorts FIRST, immediately before "Family domain".
+    press("g"); press("g");
+    press("j"); // line 1: "Family domain"
+    press("o");
+    let input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    input.value = "- [ ] Aaa sorts first";
+    pressEnterOn(input, doc);
+
+    let texts = rowTexts(elements.get("viewBody"));
+    let newAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
+    let familyAt = texts.findIndex((t) => t.includes("Family domain"));
+    assert.ok(newAt !== -1 && newAt < familyAt, `precondition: capture 1 alone must sort correctly, exactly as §7 already proved, got: ${JSON.stringify(texts)}`);
+
+    // CAPTURE 2, IMMEDIATELY: a wholly UNRELATED row, sorting LAST — nowhere near capture 1's own
+    // slot. The cursor is left wherever capture 1's own commit put it (NORMAL, on the row it just
+    // placed), so `o` opens the next draft below it — the same "one more item" gesture the operator
+    // actually uses.
+    press("o");
+    input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    assert.ok(input, "the second o did not open a draft");
+    input.value = "- [ ] Zzz sorts last";
+    pressEnterOn(input, doc);
+
+    // ── THE REGRESSION THIS SECTION EXISTS TO CATCH: does CAPTURE 1 survive CAPTURE 2? ──
+    texts = rowTexts(elements.get("viewBody"));
+    newAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
+    familyAt = texts.findIndex((t) => t.includes("Family domain"));
+    const micuAt = texts.findIndex((t) => t.includes("Micu lunch"));
+    const zzzAt = texts.findIndex((t) => t.includes("Zzz sorts last"));
+    assert.ok(
+      newAt !== -1 && familyAt !== -1 && micuAt !== -1 && zzzAt !== -1,
+      `expected all four rows painted, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(
+      newAt < familyAt,
+      `THE OPERATOR'S OWN SYMPTOM, TWO CAPTURES DEEP: "Aaa sorts first" must STILL sort before "Family domain" after an unrelated second capture — got order: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(familyAt < micuAt, "\"Family domain\" and \"Micu lunch\" keep their own relative order");
+    assert.ok(micuAt < zzzAt, "\"Zzz sorts last\" — capture 2's own placement — must also be correct, last");
+
+    // BOTH ROWS MUST HAVE CARRIED THE FLIP CLASS AT SOME POINT DURING THIS SEQUENCE — captured
+    // AFTER capture 2, since capture 1's own class is cleared once its transition completes, but
+    // the count on THIS repaint shows capture 2's own admitted motion at minimum.
+    const movedAfterSecond = walk(elements.get("viewBody")).filter((el) => String(el.className ?? "").includes("settle-move"));
+    assert.ok(movedAfterSecond.length >= 1, "at least the second capture's own motion must be visible on this repaint");
+  });
+
+  test("DECLARED ordering (queue_position): the same two-captures shape, both rows correctly placed", async () => {
+    const SRC = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 5"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { elements, press, document: doc } = await freshGesturePage("two-captures-declared", QUEUE_DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); // line 1: "a"
+    press("o");
+    let input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    // Sorts between "a" (1) and "b" (5).
+    input.value = "- [ ] middle 🔢 3";
+    pressEnterOn(input, doc);
+
+    let texts = rowTexts(elements.get("viewBody"));
+    assert.ok(
+      texts.findIndex((t) => t.includes("middle")) !== -1 &&
+        texts.findIndex((t) => t.includes("middle")) > texts.findIndex((t) => t.includes("[[qntm:1]]")) &&
+        texts.findIndex((t) => t.includes("middle")) < texts.findIndex((t) => t.includes("[[qntm:2]]")),
+      `precondition: capture 1 alone must sort between "a" and "b", got: ${JSON.stringify(texts)}`,
+    );
+
+    // CAPTURE 2: sorts FIRST, before "a" — unrelated to capture 1's own slot.
+    press("o");
+    input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    input.value = "- [ ] first 🔢 0";
+    pressEnterOn(input, doc);
+
+    texts = rowTexts(elements.get("viewBody"));
+    const firstAt = texts.findIndex((t) => t.includes("- [ ] first"));
+    const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
+    const middleAt = texts.findIndex((t) => t.includes("middle"));
+    const bAt = texts.findIndex((t) => t.includes("[[qntm:2]]"));
+    assert.ok(
+      [firstAt, aAt, middleAt, bAt].every((i) => i !== -1),
+      `expected all four rows painted, got: ${JSON.stringify(texts)}`,
+    );
+    assert.ok(firstAt < aAt, "capture 2's own placement (queue_position 0) must sort before \"a\"");
+    assert.ok(
+      aAt < middleAt && middleAt < bAt,
+      `capture 1's own placement must SURVIVE capture 2 — "middle" must still sort between "a" and "b", got: ${JSON.stringify(texts)}`,
+    );
+  });
+
+  // ── THE OPEN LINE IS SACRED — NEGATIVE PROOF ──
+  //
+  // `settle`'s own repositioning must never reach a row that is still an open `<input>`: paint.ts's
+  // `rowsByLineIndex` is built ONLY from `source.split("\n")` — the committed file — and a draft
+  // still being typed is appended SEPARATELY (`paintDraft`), never entered into that map at all. So
+  // there is no `lineIndex` a settle instruction could name that resolves to the draft — proven here
+  // by driving row 1's own placement AND leaving a SECOND draft open, mid-type, uncommitted, and
+  // checking that draft's own characters and caret are exactly what was typed, untouched by
+  // whatever `settle` does elsewhere on the same repaint.
+  test("the operator's SECOND, still-open draft keeps its own characters and caret while the FIRST row settles around it", async () => {
+    const SRC = ["## Queue", "- [ ] Family domain [[qntm:1]]", "- [ ] Micu lunch [[qntm:2]]"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { elements, press, document: doc } = await freshGesturePage("two-captures-caret-safe", DEFAULT_DECLARATION, V);
+
+    // CAPTURE 1: commits and settles, exactly as above.
+    press("g"); press("g");
+    press("j");
+    press("o");
+    let input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    input.value = "- [ ] Aaa sorts first";
+    pressEnterOn(input, doc);
+
+    // A SECOND DRAFT IS OPENED, AND LEFT OPEN — not committed. This is the row `settle` must never
+    // touch: it has no source line of its own yet at all.
+    press("o");
+    input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    assert.ok(input, "the second o did not open a draft");
+    input.value = "- [ ] half-typed row, not yet committ";
+    input.dispatch("input", makeEvent({}));
+    input.setSelectionRange(input.value.length, input.value.length);
+
+    // ── THE OPEN DRAFT'S OWN CHARACTERS AND CARET, CHECKED WHILE ROW 1's OWN PLACEMENT IS LIVE ──
+    assert.equal(input.value, "- [ ] half-typed row, not yet committ", "the open draft's characters must be exactly what was typed — nothing lost, nothing added");
+    assert.equal(input.selectionStart, input.value.length, "the caret must stay at the end of what was typed");
+
+    // AND ROW 1's OWN PLACEMENT IS STILL LIVE, CONFIRMED THE SAME WAY §7/§8 ALREADY DO — the two
+    // facts hold at once: the settled row stays settled, the open row stays exactly as typed.
+    const texts = rowTexts(elements.get("viewBody"));
+    const newAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
+    const familyAt = texts.findIndex((t) => t.includes("Family domain"));
+    assert.ok(newAt !== -1 && familyAt !== -1 && newAt < familyAt, `row 1 must still be correctly placed while the draft is open, got: ${JSON.stringify(texts)}`);
+
+    // THE DRAFT IS STILL THE FOCUSED ELEMENT — nothing about settling row 1 moved the cursor away
+    // from the line the operator is actively typing.
+    assert.equal(input.focused, true, "the open draft must still hold the caret");
   });
 });

@@ -357,8 +357,8 @@ describe("5. armOrderingSettle arms the settle surface, and agrees with ordering
 
   test("moving c from rank 3 to rank 1 arms the surface with the SAME beforeLineIndex orderingPlacementFor gives directly", () => {
     page.__armOrderingSettle(DEMO_VIEW, COMMIT);
-    const instruction = page.__settle().take(COMMIT.markdown, DEMO_VIEW.id);
-    assert.notEqual(instruction, null, "the settle surface was never armed");
+    const [instruction] = page.__settle().take(COMMIT.markdown, DEMO_VIEW.id);
+    assert.notEqual(instruction, undefined, "the settle surface was never armed");
 
     // THE AGREEMENT PROOF, NOT MERELY A NON-NULL ANSWER — the same section, source and line
     // handed to `orderingPlacementFor` DIRECTLY, off the same declaration `armOrderingSettle`
@@ -390,7 +390,7 @@ describe("5. armOrderingSettle arms the settle surface, and agrees with ordering
       kind: "set-line",
     };
     page.__armOrderingSettle(DEMO_VIEW, noMove);
-    assert.equal(page.__settle().take(noMove.markdown, DEMO_VIEW.id), null);
+    assert.deepEqual(page.__settle().take(noMove.markdown, DEMO_VIEW.id), []);
   });
 
   // A NEWLY INSERTED LINE NOW ARMS TOO — 2026-08-04, the fix for the settle-never-fires-for-a-
@@ -412,8 +412,8 @@ describe("5. armOrderingSettle arms the settle surface, and agrees with ordering
       kind: "insert-line",
     };
     page.__armOrderingSettle(DEMO_VIEW, insertCommit);
-    const instruction = page.__settle().take(insertCommit.markdown, DEMO_VIEW.id);
-    assert.notEqual(instruction, null, "the settle surface was never armed for a newly inserted line");
+    const [instruction] = page.__settle().take(insertCommit.markdown, DEMO_VIEW.id);
+    assert.notEqual(instruction, undefined, "the settle surface was never armed for a newly inserted line");
     // `a` (🔢 1) is the row `d` (🔢 0) now ranks immediately ahead of.
     assert.deepEqual(instruction.placement, { lineIndex: 4, beforeLineIndex: 1 });
 
@@ -445,7 +445,7 @@ describe("5. armOrderingSettle arms the settle surface, and agrees with ordering
       kind: "insert-line",
     };
     page.__armOrderingSettle(DEMO_VIEW, insertCommit);
-    assert.equal(page.__settle().take(insertCommit.markdown, DEMO_VIEW.id), null);
+    assert.deepEqual(page.__settle().take(insertCommit.markdown, DEMO_VIEW.id), []);
   });
 
   test("a section outside the published table never arms the surface", () => {
@@ -458,7 +458,7 @@ describe("5. armOrderingSettle arms the settle surface, and agrees with ordering
       kind: "set-line",
     };
     page.__armOrderingSettle(DEMO_VIEW, elsewhere);
-    assert.equal(page.__settle().take(elsewhere.markdown, DEMO_VIEW.id), null);
+    assert.deepEqual(page.__settle().take(elsewhere.markdown, DEMO_VIEW.id), []);
   });
 });
 
@@ -684,8 +684,8 @@ describe("8. THE DEFAULT ORDERING — an undeclared section now speaks, through 
       kind: "set-line",
     };
     page.__armOrderingSettle(DEMO3_VIEW, commit);
-    const instruction = page.__settle().take(commit.markdown, DEMO3_VIEW.id);
-    assert.notEqual(instruction, null, "the settle surface was never armed for an undeclared section");
+    const [instruction] = page.__settle().take(commit.markdown, DEMO3_VIEW.id);
+    assert.notEqual(instruction, undefined, "the settle surface was never armed for an undeclared section");
 
     const direct = resolveOrderingPlacementFor(
       DEMO3_VIEW.id,
@@ -809,16 +809,16 @@ describe("9. THE HEADLINE DEFECT — a newly INSERTED line is placed, in a secti
   test('"I Just Added This One" sorts between "Family domain" and "Micu lunch" — the settle arms, placing it before "Micu lunch"', () => {
     const commit = insertLast("I Just Added This One");
     page.__armOrderingSettle(INBOX_VIEW, commit);
-    const instruction = page.__settle().take(commit.markdown, INBOX_VIEW.id);
-    assert.notEqual(instruction, null, "the settle surface was never armed for a newly inserted line");
+    const [instruction] = page.__settle().take(commit.markdown, INBOX_VIEW.id);
+    assert.notEqual(instruction, undefined, "the settle surface was never armed for a newly inserted line");
     assert.deepEqual(instruction.placement, { lineIndex: 5, beforeLineIndex: 2 });
   });
 
   test('"Aaa goes first" sorts before "Family domain" — the settle arms, placing it first', () => {
     const commit = insertLast("Aaa goes first");
     page.__armOrderingSettle(INBOX_VIEW, commit);
-    const instruction = page.__settle().take(commit.markdown, INBOX_VIEW.id);
-    assert.notEqual(instruction, null, "the settle surface was never armed for a newly inserted line");
+    const [instruction] = page.__settle().take(commit.markdown, INBOX_VIEW.id);
+    assert.notEqual(instruction, undefined, "the settle surface was never armed for a newly inserted line");
     assert.deepEqual(instruction.placement, { lineIndex: 5, beforeLineIndex: 1 });
   });
 
@@ -826,17 +826,20 @@ describe("9. THE HEADLINE DEFECT — a newly INSERTED line is placed, in a secti
   // surface. `moved` was `false` here even before this fix, by coincidence (the trivial
   // before-equals-after tuple) rather than by a real "is it already correct" check; this proves the
   // NEW check (`currentBeforeLineIndex !== beforeLineIndex`) still answers "no" for the right reason.
+  // ALSO PROVES the earlier tests' own now-stale entries (for OTHER rows, still pending because
+  // nothing here calls `take()` between tests) do not leak into THIS one: none of them can resolve
+  // against a source that never carried them, so `take()` prunes them and returns nothing for them.
   test('"zzz stays last" already sorts after every existing row — the settle correctly does NOT arm', () => {
     const commit = insertLast("zzz stays last");
     page.__armOrderingSettle(INBOX_VIEW, commit);
-    assert.equal(page.__settle().take(commit.markdown, INBOX_VIEW.id), null);
+    assert.deepEqual(page.__settle().take(commit.markdown, INBOX_VIEW.id), []);
   });
 
   test("agrees with resolveOrderingPlacementFor called directly against commit.markdown", () => {
     const commit = insertLast("I Just Added This One");
     page.__armOrderingSettle(INBOX_VIEW, commit);
-    const instruction = page.__settle().take(commit.markdown, INBOX_VIEW.id);
-    assert.notEqual(instruction, null, "the settle surface was never armed");
+    const [instruction] = page.__settle().take(commit.markdown, INBOX_VIEW.id);
+    assert.notEqual(instruction, undefined, "the settle surface was never armed");
     const direct = resolveOrderingPlacementFor(
       INBOX_VIEW.id,
       "inbox",

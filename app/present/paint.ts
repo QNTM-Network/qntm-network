@@ -1648,17 +1648,26 @@ export function paint(
     return;
   }
 
-  // ── THE SETTLE AFFORDANCE — placing a row where the browser predicts the engine will ──────────
+  // ── THE SETTLE AFFORDANCE — placing every row the browser has a live prediction for ────────────
   //
   // Asked ONCE, for THIS `source`/`deps.view` pair, after every row this paint would draw anyway
-  // already exists in `rowsByLineIndex` — `settle.ts`'s own header is where WHY this is source-
-  // keyed and one-shot is argued; `ordering.ts`'s `orderingPlacementFor` is where the placement
-  // came from and the proof it agrees with the engine; `settleRow` above is HOW the motion looks.
+  // already exists in `rowsByLineIndex` — `settle.ts`'s own header is where WHY this is identity-
+  // keyed, MANY-AT-ONCE and one-shot-per-row is argued; `ordering.ts`'s `orderingPlacementFor` is
+  // where each placement came from and the proof it agrees with the engine; `settleRow` above is
+  // HOW one row's motion looks.
+  //
+  // MANY ROWS, NOT ONE — `take()` returns one `SettleInstruction` per row that still has a live,
+  // re-resolvable claim (`settle.ts`'s own "MANY PENDING PLACEMENTS" header — two unrelated
+  // captures in quick succession each keep their own placement now, rather than the second
+  // discarding the first). Applied in whatever order `take()` hands them back: each `settleRow`
+  // call only ever touches ITS OWN `movingEl`/`beforeEl` pair, looked up by the LINE INDEX this
+  // repaint's own `rowsByLineIndex` recorded, so one row's reorder cannot invalidate another's —
+  // `insertBefore` moves a node relative to another node's CURRENT position, never by a stale index.
   //
   // NOT REACHED WHEN `deps.settle` IS ABSENT — every test written before `settle.ts` existed, and
   // the golden master's own byte-identical comparison, paint exactly what they always painted.
   //
-  // A ROW STILL BEING TYPED IS NEVER THE ROW THIS MOVES. `SettleSurface.arm` is only ever called
+  // A ROW STILL BEING TYPED IS NEVER A ROW THIS MOVES. `SettleSurface.arm` is only ever called
   // from `commitLine` (app/index.html), after `paint.ts`'s own `rawInput.settle` has already run
   // `leaveInsert()` — the `<input>` for the line just committed is gone from the DOM by the time
   // THIS forEach pass even starts building rows again, replaced by whatever the cascade resolves
@@ -1666,8 +1675,7 @@ export function paint(
   // this function an element still carrying a live text box.
   const settle = deps.settle;
   if (settle !== undefined) {
-    const instruction = settle.take(source, deps.view ?? "");
-    if (instruction !== null) {
+    for (const instruction of settle.take(source, deps.view ?? "")) {
       const movingEl = rowsByLineIndex.get(instruction.placement.lineIndex);
       const beforeLineIndex = instruction.placement.beforeLineIndex;
       const beforeEl = beforeLineIndex === null ? null : (rowsByLineIndex.get(beforeLineIndex) ?? null);

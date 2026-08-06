@@ -5,6 +5,68 @@
  * the-road-ahead.md` step 3, and the operator's own words for what it must feel like: "not clunky
  * but intentional · moving deliberately in the background."
  *
+ * ── 2026-08-06, SECOND CHANGE: MANY PENDING PLACEMENTS, NOT ONE — READ THIS BEFORE THE REST ──
+ *
+ * "The row landed at the bottom and stayed there. About ten seconds later — when the engine's
+ * projection arrived — it moved up." Reproduced directly (`tests/app-settle-wiring.test.mjs` §8):
+ * `o`/type/Enter a row that sorts first — it DOES land correctly, immediately, exactly as designed.
+ * Then, immediately, a SECOND unrelated `o`/type/Enter — a title sorting last, nowhere near the
+ * first row's slot. The first row REVERTS to raw file order the instant the second commits. Nothing
+ * about the first row's own text, position or identity changed; what discarded it was this class's
+ * OWN previous shape: one arm slot, and `arm()`'s own comment called that "the same reason there is
+ * one cursor" — a call that made sense for a second commit to the SAME row (a newer prediction about
+ * the SAME thing) and was silently wrong for a commit to a DIFFERENT one. This is "his own
+ * two-captures-in-a-row gesture" (`app/index.html`, the comment at `commitLine`'s own `arrive` call)
+ * — ordinary, rapid, multi-item capture, not an edge case.
+ *
+ * THE FIX: `#pending` is a map, keyed by the row's OWN identity string (`InstanceAnchor.instance`
+ * at arm time), not one slot. `arm()` for row A no longer touches whatever is pending for row B —
+ * it can only ever replace ITS OWN row's own prior entry (see below for why that can never produce
+ * two entries for one physical row). `take()` walks every entry and returns one `SettleInstruction`
+ * per row that can still be found, each independently re-resolved through `resolveInstanceAnchor` —
+ * exactly the per-row proof the single-slot version already did, just no longer thrown away the
+ * moment a DIFFERENT row also has something pending.
+ *
+ * NOT SPECIFIC TO ANY GESTURE, VIEW OR SECTION. Every commit — `o`/Enter, `o`/blur, editing an
+ * existing line, a checkbox tick's own settle-adjacent paths — arms through the identical
+ * `armSettle`/`SettleSurface.arm` call in `commitLine` (app/index.html), for whichever section and
+ * view the commit's own view names. The fix is one property of the map ("a row's placement survives
+ * until ITS OWN identity says otherwise"), asked the same way for all of them.
+ *
+ * ── THE BOUND, DERIVED, NOT CHOSEN ──
+ *
+ * There is no "keep the last N" and no arbitrary capacity. `arm()` for a given row's identity always
+ * REPLACES that row's own prior entry (never adds a second one for the same row — see `arm()`'s own
+ * comment), so `#pending`'s size can never exceed the number of DISTINCT rows the view holds, each
+ * counted at most once. A view with `n` printed lines can have at most `n` pending placements, and in
+ * practice only the small number of rows committed since their own placement was last confirmed or
+ * contradicted — which `take()` prunes on every call (a resolved-but-vanished row is deleted, not
+ * kept). The bound is "at most one entry per row that exists," which is the view's own size, not a
+ * number this class picked.
+ *
+ * ── EVERY CONDITION THAT DISCARDS A PENDING PLACEMENT, NAMED ──
+ *
+ *   A VIEW CHANGE. `arm()` for a different view than the one currently held clears every pending
+ *     entry for the OLD view before arming the new one — a placement about one view is not evidence
+ *     about another, and holding it would let it resurface, stale, were the operator ever to return.
+ *     `take()` for a view that does not match answers `[]` without discarding anything, the same
+ *     "withhold, do not erase" posture the single-slot version already had for this case — the
+ *     entries are for the CURRENT view only, by construction, so nothing to erase is ever held for a
+ *     view not currently armed.
+ *   THE ROW LEAVING THE VIEW. Exactly as before, per entry: `resolveInstanceAnchor` answers anything
+ *     other than `found` for the moving row or its `before` row, and `take()` deletes THAT entry —
+ *     never the others.
+ *   A SECOND COMMIT TO THE SAME ROW. `supersede`, unchanged in contract, now searches every pending
+ *     entry for the one whose anchor resolves to the edited `lineIndex` and removes only that one.
+ *   A FRESH ARM FOR THE SAME ROW. `arm()` keys by the row's OWN identity at arm time; a second arm
+ *     for a row already holding a pending entry replaces it (a newer prediction about the SAME row),
+ *     exactly the single-slot behaviour, now scoped to the one row it is about.
+ *
+ * FIRING THE WRONG MOTION IS WORSE THAN FIRING NONE — unchanged from the single-slot version, and
+ * still the reason every exit above is a refusal: `take()` only ever returns a `lineIndex`/
+ * `beforeLineIndex` it just re-derived from `resolveInstanceAnchor`'s own current answer, per entry,
+ * never a coordinate carried over unchecked.
+ *
  * ── WHAT THIS CLASS DOES, AND WHAT IT DELIBERATELY LEAVES TO ITS TWO NEIGHBOURS ──
  *
  * Three questions, three owners, exactly the split `focus.ts`/`motions.ts`/`paint.ts` already draw
@@ -66,28 +128,10 @@
  * this change does not touch — `extendsLine` is shared with `held.ts`, `rows.ts` and `focus.ts`, and
  * widening what it confirms is a decision about ALL of their correctness, not only this one's.
  *
- * ── EXACTLY WHEN AN ARM IS DISCARDED, NAMED RATHER THAN LEFT IMPLICIT ──
- *
- *   A VIEW CHANGE. `take` compares `view` first, unconditionally — the same guard the string-keyed
- *   version had, kept byte-for-byte, because a placement about one view is not evidence about
- *   another one.
- *
- *   THE ROW LEAVING THE VIEW. `resolveInstanceAnchor` answers `ambiguous` or `absent` for the
- *   moving row, or for the row it was armed to sit before, in the arriving `source` — `take` then
- *   clears its own state and answers `null`. Refused, never guessed: a row that cannot be found is
- *   not "probably still there," and a target row that vanished means "before WHAT" has no answer.
- *
- *   A SECOND COMMIT TO THE SAME ROW. `armSettle` (resolve.ts) only re-arms when a fresh placement
- *   was computed — a placement left un-rearmed keeps describing a still-correct claim, which is
- *   right for every OTHER row in the file. It is wrong for THIS row: if the operator edits the very
- *   line a placement is pending for, and the new edit needs no placement of its own (already sorted
- *   correctly for the new value), the OLD placement would otherwise survive, unrearmed, and could
- *   still resolve — its anchor is keyed on the row's IDENTITY, which a same-row re-edit does not
- *   disturb — and fire a motion for a value the row no longer has. `supersede`, called from
- *   `commitLine` (app/index.html) before `armSettle` on every commit, closes exactly this gap: it
- *   asks whether the line about to be committed IS the row currently armed and, if so, clears the
- *   arm before the resolver walk even runs. A fresh placement computed a moment later (via
- *   `armSettle`) simply re-arms on top, which is the ordinary "one pending settle" case below.
+ * (Every discard condition — a view change, a row leaving the view, a second commit to the same
+ * row, a fresh arm for the same row — is named once, above, in "EVERY CONDITION THAT DISCARDS A
+ * PENDING PLACEMENT." `supersede`'s own doc comment below states the same fact from `commitLine`'s
+ * calling side.)
  *
  * ── WHY A STALE PLACEMENT CAN NEVER ANIMATE A ROW SOMEWHERE NO LONGER CORRECT ──
  *
@@ -137,8 +181,9 @@ export interface RowPlacement {
   readonly beforeLineIndex: number | null;
 }
 
-/** What one `take()` call hands back — the placement, and whether THIS repaint is the one that
- * gets to show the motion. */
+/** What one `take()` call hands back for ONE row — the placement, and whether THIS repaint is the
+ * one that gets to show the motion. `take()` itself returns zero, one or many of these — see the
+ * class header for why the count is never capped. */
 export interface SettleInstruction {
   readonly placement: RowPlacement;
   /** `true` for exactly one `take()` per armed instruction — the repaint that should play the
@@ -147,96 +192,125 @@ export interface SettleInstruction {
   readonly animate: boolean;
 }
 
+/** One row's own standing claim — everything `resolveInstanceAnchor` needs to re-derive, every
+ * call, whether this row is still findable and where. Never read by anything outside this class. */
+interface PendingEntry {
+  readonly moving: InstanceAnchor;
+  /** Whether a "before" row was armed at all — `RowPlacement.beforeLineIndex === null` ("last")
+   * carries no row to re-anchor, so this is tracked separately from `before` being `null`. */
+  readonly hasBefore: boolean;
+  readonly before: InstanceAnchor | null;
+  animated: boolean;
+}
+
 export class SettleSurface {
   #view = "";
-  /** The moving row's identity, at arm time — `null` means nothing is armed. */
-  #moving: InstanceAnchor | null = null;
-  /** Whether a "before" row was armed at all — `RowPlacement.beforeLineIndex === null` ("last")
-   * carries no row to re-anchor, so this is tracked separately from `#before` being `null`. */
-  #hasBefore = false;
-  /** The "before" row's identity, at arm time — meaningless unless `#hasBefore`. */
-  #before: InstanceAnchor | null = null;
-  #animated = false;
+  /** One entry per row with an unconfirmed placement, keyed by that row's OWN identity string
+   * (`InstanceAnchor.instance`, taken at arm time) — never a second entry for the same physical row;
+   * see `arm()`. The class header states the bound this gives the map's size. */
+  #pending = new Map<string, PendingEntry>();
 
   /**
    * Arm a placement, computed elsewhere, against the identity of the row it is about — not the
-   * exact string it was computed from. `source`/`view` are still required: they are what
-   * `instanceAnchorFor` needs to TAKE the anchor in the first place, exactly once, here. Overwrites
-   * whatever was armed before — there is one cursor and, for the same reason, one pending settle: a
-   * second commit before the first one's motion has even shown describes a NEWER prediction, and
-   * the newer one is the only one worth keeping.
+   * exact string it was computed from, and not against whatever else is currently pending for OTHER
+   * rows. `source`/`view` are still required: they are what `instanceAnchorFor` needs to TAKE the
+   * anchor in the first place, exactly once, here.
+   *
+   * REPLACES ONLY THIS ROW'S OWN PRIOR ENTRY, keyed by `moving.instance` — a second arm for a row
+   * already holding a pending claim describes a NEWER prediction about the SAME row (the one case
+   * "there is one cursor" ever meant), and overwrites it; every OTHER row's own pending entry is
+   * untouched. This is the whole of the fix: the single-slot version overwrote regardless of WHICH
+   * row the new arm was about, discarding a still-correct claim about a row nothing here has
+   * touched — see the class header for the reproduction.
+   *
+   * A DIFFERENT VIEW THAN THE ONE CURRENTLY HELD clears every pending entry before arming this one
+   * — see the class header's "A VIEW CHANGE" condition.
    *
    * IF EITHER ROW HAS NO IDENTITY TO TAKE — `placement.lineIndex` or a non-null
-   * `placement.beforeLineIndex` names a blank line or a line out of range — NOTHING IS ARMED, and
-   * whatever was armed before is cleared with it. `orderingPlacementFor` never returns such an
-   * index (a blank line has no marker value to rank), so this is a defensive floor, not a live
-   * path; it exists so an unrealistic caller fails by arming nothing rather than by arming a
-   * placement this class could never re-find.
+   * `placement.beforeLineIndex` names a blank line or a line out of range — NOTHING IS ARMED FOR
+   * THIS PLACEMENT, and every OTHER row's own pending entry is left exactly as it was.
+   * `orderingPlacementFor` never returns such an index (a blank line has no marker value to rank),
+   * so this is a defensive floor, not a live path; it exists so an unrealistic caller fails by
+   * arming nothing rather than by arming a placement this class could never re-find.
    */
   arm(source: string, view: string, placement: RowPlacement): void {
     const moving = instanceAnchorFor(source, placement.lineIndex, view);
     if (moving === null) {
-      this.#clear();
       return;
     }
     let before: InstanceAnchor | null = null;
     if (placement.beforeLineIndex !== null) {
       before = instanceAnchorFor(source, placement.beforeLineIndex, view);
       if (before === null) {
-        this.#clear();
         return;
       }
     }
-    this.#view = view;
-    this.#moving = moving;
-    this.#hasBefore = placement.beforeLineIndex !== null;
-    this.#before = before;
-    this.#animated = false;
+    if (view !== this.#view) {
+      this.#pending.clear();
+      this.#view = view;
+    }
+    this.#pending.set(moving.instance, {
+      moving,
+      hasBefore: placement.beforeLineIndex !== null,
+      before,
+      animated: false,
+    });
   }
 
   /**
-   * What THIS repaint of `source`/`view` should do, or `null` when nothing is armed, the view does
-   * not match, or the armed row(s) can no longer be found in `source` — see this class's own header
-   * for the three discard conditions and why none of them can be skipped.
+   * What THIS repaint of `source`/`view` should do — one `SettleInstruction` per row that still has
+   * a live, re-resolvable claim, in no particular order (`paint.ts` applies each independently by
+   * the LINE INDEX it carries, not by array position). `[]` for "nothing to do" — no rows armed, a
+   * view that does not match, or every armed row's own claim now fails to resolve — never `null`;
+   * an empty list and "nothing happened" are the same fact stated as a length.
+   *
+   * A ROW THAT CANNOT BE RE-FOUND IS DELETED FROM `#pending` HERE, not merely skipped — see the
+   * class header's "THE ROW LEAVING THE VIEW" condition. Every OTHER row's entry, found or not,
+   * is judged independently and never affects this one.
    *
    * THE LINE INDICES RETURNED ARE THIS REPAINT'S OWN, NEVER THE ONES ARMED AGAINST — recomputed
    * fresh, every call, from `resolveInstanceAnchor`'s current answer. A caller can act on them
    * without knowing anything moved.
    */
-  take(source: string, view: string): SettleInstruction | null {
-    if (this.#moving === null || this.#view !== view) {
-      return null;
+  take(source: string, view: string): readonly SettleInstruction[] {
+    if (view !== this.#view || this.#pending.size === 0) {
+      return [];
     }
-    const movingReading = resolveInstanceAnchor(this.#moving, source, view);
-    if (movingReading.outcome !== "found") {
-      this.#clear();
-      return null;
-    }
-    let beforeLineIndex: number | null = null;
-    if (this.#hasBefore) {
-      if (this.#before === null) {
-        // Unreachable by construction — `arm` never sets `#hasBefore` without a valid `#before`.
-        // Guarded rather than asserted so a future refactor fails by refusing, not by throwing.
-        this.#clear();
-        return null;
+    const instructions: SettleInstruction[] = [];
+    for (const [key, entry] of this.#pending) {
+      const movingReading = resolveInstanceAnchor(entry.moving, source, view);
+      if (movingReading.outcome !== "found") {
+        this.#pending.delete(key);
+        continue;
       }
-      const beforeReading = resolveInstanceAnchor(this.#before, source, view);
-      if (beforeReading.outcome !== "found") {
-        this.#clear();
-        return null;
+      let beforeLineIndex: number | null = null;
+      if (entry.hasBefore) {
+        if (entry.before === null) {
+          // Unreachable by construction — `arm` never sets `hasBefore` without a valid `before`.
+          // Guarded rather than asserted so a future refactor fails by refusing, not by throwing.
+          this.#pending.delete(key);
+          continue;
+        }
+        const beforeReading = resolveInstanceAnchor(entry.before, source, view);
+        if (beforeReading.outcome !== "found") {
+          this.#pending.delete(key);
+          continue;
+        }
+        beforeLineIndex = beforeReading.lineIndex;
       }
-      beforeLineIndex = beforeReading.lineIndex;
+      const animate = !entry.animated;
+      entry.animated = true;
+      instructions.push({
+        placement: { lineIndex: movingReading.lineIndex, beforeLineIndex },
+        animate,
+      });
     }
-    const animate = !this.#animated;
-    this.#animated = true;
-    return {
-      placement: { lineIndex: movingReading.lineIndex, beforeLineIndex },
-      animate,
-    };
+    return instructions;
   }
 
   /**
-   * A LINE IS ABOUT TO BE COMMITTED — discard the armed placement if it describes THIS row.
+   * A LINE IS ABOUT TO BE COMMITTED — discard the ONE pending entry that describes THIS row, if
+   * there is one; every other row's own pending entry is untouched.
    *
    * Called from `commitLine` (app/index.html), before the resolver walk that might re-arm, on
    * EVERY commit — the same "always called" posture `armPredict` already has, for the identical
@@ -251,11 +325,11 @@ export class SettleSurface {
    *
    * `source`/`lineIndex` ARE THE COMMIT'S OWN "BEFORE" — `commit.source`/`commit.lineIndex`, the
    * file and the position as they stood the instant before this edit landed, which is the same
-   * source the currently-armed anchor would resolve against if nothing else had happened since it
-   * was armed. If it resolves there, to that exact line, this commit is re-touching the row the arm
-   * is about; the arm is cleared. If it resolves anywhere else, or not at all, this commit is about
-   * a DIFFERENT row and the standing arm is left exactly as it was — still a live claim about a row
-   * nothing here has touched.
+   * source each currently-armed anchor would resolve against if nothing else had happened since it
+   * was armed. Every entry is checked; the first (and, by construction, only) one that resolves to
+   * that exact line is the row this commit is re-touching, and it alone is removed. An edit that
+   * resolves nowhere, or to a different line, is about a DIFFERENT row, and every standing entry is
+   * left exactly as it was.
    *
    * CALL THIS ONLY FOR A `"set-line"` COMMIT. `LineCommit.source`'s own header states why: for
    * `"insert-line"`, `source.split("\n")[lineIndex]` is a DIFFERENT, unrelated line about to be
@@ -267,20 +341,15 @@ export class SettleSurface {
    * exist when the arm was taken — so `"insert-line"` never needs this call at all.
    */
   supersede(source: string, view: string, lineIndex: number): void {
-    if (this.#moving === null || this.#view !== view) {
+    if (view !== this.#view) {
       return;
     }
-    const reading = resolveInstanceAnchor(this.#moving, source, view);
-    if (reading.outcome === "found" && reading.lineIndex === lineIndex) {
-      this.#clear();
+    for (const [key, entry] of this.#pending) {
+      const reading = resolveInstanceAnchor(entry.moving, source, view);
+      if (reading.outcome === "found" && reading.lineIndex === lineIndex) {
+        this.#pending.delete(key);
+        return;
+      }
     }
-  }
-
-  #clear(): void {
-    this.#view = "";
-    this.#moving = null;
-    this.#hasBefore = false;
-    this.#before = null;
-    this.#animated = false;
   }
 }
