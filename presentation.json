@@ -6779,12 +6779,12 @@
       "vocabulary token '#every-{weekdays}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#scope-{area}'": "sets 'scope' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '☑️'": "sets 'done_task_count', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
-      "vocabulary token '✅'": "sets 'completed_at', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
-      "vocabulary token '🆕'": "sets 'created_at', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '✅'": "sets 'completed_at' through a value that varies per line (its 'extraction_hint:' marker) — resolvable, but not with a FIXED spelling this token table can hold; see the extraction-hint rung (deriveExtractionHintFields) for how its value is read",
+      "vocabulary token '🆕'": "sets 'created_at' through a value that varies per line (its 'extraction_hint:' marker) — resolvable, but not with a FIXED spelling this token table can hold; see the extraction-hint rung (deriveExtractionHintFields) for how its value is read",
       "vocabulary token '🎯'": "sets 'par', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
-      "vocabulary token '📅'": "sets 'due_date', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
-      "vocabulary token '🔢'": "sets 'queue_position', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
-      "vocabulary token '🛫'": "sets 'available_date', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)"
+      "vocabulary token '📅'": "sets 'due_date' through a value that varies per line (its 'extraction_hint:' marker) — resolvable, but not with a FIXED spelling this token table can hold; see the extraction-hint rung (deriveExtractionHintFields) for how its value is read",
+      "vocabulary token '🔢'": "sets 'queue_position' through a value that varies per line (its 'extraction_hint:' marker) — resolvable, but not with a FIXED spelling this token table can hold; see the extraction-hint rung (deriveExtractionHintFields) for how its value is read",
+      "vocabulary token '🛫'": "sets 'available_date' through a value that varies per line (its 'extraction_hint:' marker) — resolvable, but not with a FIXED spelling this token table can hold; see the extraction-hint rung (deriveExtractionHintFields) for how its value is read"
     }
   },
   "resolution": {
@@ -9341,6 +9341,7 @@
       ],
       "separator": " "
     },
+    "compositionSource": "engine-fallback",
     "priorityRank": {
       "urgent": 4,
       "high": 3,

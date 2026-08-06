@@ -1021,10 +1021,18 @@ export function compile(files, ledger = new Ledger()) {
             continue;
           }
           if (!TOKEN_FIELDS.includes(entry.field)) {
+            // STALE WORDING FIXED (PR #137 split "not in this fixed-token table" from "not
+            // resolvable at all" — due_date and its extraction-hint siblings are resolvable now,
+            // through their own rung (`extractionHintFields`), even though no FIXED spelling
+            // exists for this table to hold; see this generator's own header, rung (a)).
             ledger.drop(
               what,
-              `sets '${entry.field}', which is not one of the fields this config's vocabulary and ` +
-                `schema make resolvable for a line being typed (${resolvableFields.join(", ")})`,
+              Object.prototype.hasOwnProperty.call(extractionHintFields, entry.field)
+                ? `sets '${entry.field}' through a value that varies per line (its 'extraction_hint:' ` +
+                    "marker) — resolvable, but not with a FIXED spelling this token table can hold; " +
+                    "see the extraction-hint rung (deriveExtractionHintFields) for how its value is read"
+                : `sets '${entry.field}', which is not one of the fields this config's vocabulary and ` +
+                    `schema make resolvable for a line being typed (${resolvableFields.join(", ")})`,
             );
             continue;
           }

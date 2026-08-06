@@ -147,9 +147,25 @@ export const ENGINE_LITERAL_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, 
 // WHERE each CELL goes — the checkbox glyph, the title, the `[[qntm:N]]` stamp, the tags, the
 // markers, the outgoing-edge chrome.
 //
-// Unlike `defaultOrdering`, there is NO config surface for this at all — `apps/qntm-md/config/`
-// carries no key that could express it, so this is always the engine's own literal, never a
-// per-operator override; there is no `"config"` vs `"engine-fallback"` split to publish.
+// UNTIL THIS CHANGE, this file published `renderer.py`'s own `_COMPOSITION_HEADS`/
+// `_COMPOSITION_TAIL` as an unconditional literal, with the comment right here saying "there is NO
+// config surface for this at all". That was true of the ENGINE the day it was written, and stopped
+// being true the moment monorepo PR #72 (`bc3aa01`, "The engine reads composition from config, not
+// just its own copy") gave `global_defaults.yaml` its own `composition:` key, validated at load
+// time by `bundle/loader.py`'s `_validate_global_composition` and threaded into every render call
+// site — that PR's own body named the asymmetry it was opening: the ENGINE would honour a declared
+// composition and the BROWSER would keep publishing the old literal regardless, silently disagreeing
+// the moment anyone declared one that actually differs. `readGlobalComposition` below closes it,
+// mirroring `readGlobalDefaultOrdering`'s own visible-fallback discipline exactly: absence falls
+// back to `ENGINE_LITERAL_COMPOSITION`, recorded as `compositionSource: "engine-fallback"`; a
+// declared `composition:` is read, validated against the SAME shape `_validate_global_composition`
+// enforces (a non-empty `heads:` mapping naming both `checkbox` and `plain_line`, each a non-empty
+// list drawn only from `checkbox`/`title`; a non-empty `tail:` list drawn only from `stamp`/`date`/
+// `tags`/`markers`/`chrome`), and published verbatim as `compositionSource: "config"`. A PRESENT
+// but malformed declaration is a hard `GenerationError`, never a silent fallback — the engine's own
+// posture, reproduced rather than relaxed. `separator` is not a declared key on either side: the
+// engine always joins with `" "` (renderer.py:1003's `" ".join`, unchanged by PR #72), so this
+// generator always publishes `separator: " "` regardless of source.
 //
 // Read LIVE off `apps/qntm-md/src/qntm_md/render/renderer.py`:
 //   `_field_expression_cells` (renderer.py:1138-1194) — the ONE tail every shape emits:
@@ -171,6 +187,10 @@ export const ENGINE_LITERAL_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, 
 // `tests/fixtures/composition-agreement.json`'s own cell values through
 // `app/present/express/composition.ts`'s `composeLine`, using ONLY this declared order, and
 // asserts the result against that fixture's `expectedLine` — the engine's own committed output.
+// That fixture is generated against the ENGINE-FALLBACK literal (no monorepo config declares
+// `composition:` yet), so it does not exercise `readGlobalComposition`'s "config" branch —
+// `tests/resolution-declared-composition.test.mjs` is where that branch is proven, the same split
+// `tests/resolution-declared-default-ordering.test.mjs` already draws for `defaultOrdering`.
 export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
   heads: Object.freeze({
     checkbox: Object.freeze(["checkbox", "title"]),
@@ -179,6 +199,15 @@ export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
   tail: Object.freeze(["stamp", "date", "tags", "markers", "chrome"]),
   separator: " ",
 });
+
+// The cell-class vocabulary a declared `composition:` may use — mirrors `bundle/loader.py`'s own
+// `_COMPOSITION_REQUIRED_HEAD_SHAPES` / `_COMPOSITION_HEAD_CELL_CLASSES` /
+// `_COMPOSITION_TAIL_CELL_CLASSES` (monorepo, read-only) field for field. Kept as data here, the
+// same posture `EXTRACTION_HINT_KINDS`-style tables in this file already take, so a shape check is
+// "is this string in the set", never a decision this compiler makes about what a cell class MEANS.
+const COMPOSITION_REQUIRED_HEAD_SHAPES = ["checkbox", "plain_line"];
+const COMPOSITION_HEAD_CELL_CLASSES = new Set(["checkbox", "title"]);
+const COMPOSITION_TAIL_CELL_CLASSES = new Set(["stamp", "date", "tags", "markers", "chrome"]);
 
 const CAPTURE_FIELDS_NOTE =
   "a new line carries its resolved node type, the schema's declared field defaults and its " +
@@ -600,6 +629,78 @@ export function compile(files, ledger = new Ledger()) {
       }
     }
     return { ordering, priorityRank, source: "config" };
+  }
+
+  // ── 4c. global_defaults.yaml -> composition.heads / composition.tail, or the engine's fallback ─
+  //
+  // Mirrors `readGlobalDefaultOrdering` immediately above — same file, same GLOBAL layer, same
+  // visible-fallback discipline (absence is opt-out; a present-but-malformed declaration is a hard
+  // `GenerationError`, never a silent guess). See this file's own domain header ("COMPOSITION") for
+  // why this key exists at all and the monorepo PR that opened the asymmetry it closes. Unlike
+  // `readGlobalDefaultOrdering`, the shape here is fixed rather than open — a cell class is drawn
+  // from the SAME closed seven-member alphabet `ENGINE_LITERAL_COMPOSITION` already uses
+  // (`COMPOSITION_HEAD_CELL_CLASSES`/`COMPOSITION_TAIL_CELL_CLASSES`, above), because composition
+  // orders CLASSES OF CELL the engine itself defines, never an operator's own field or token name —
+  // the same "no field name drives this" property `readGlobalDefaultOrdering` states for a
+  // different reason (there, any field name is admitted; here, no field name is ever read at all).
+  function readGlobalComposition() {
+    const declared = has(GLOBAL_DEFAULTS_KEY) ? readYaml(GLOBAL_DEFAULTS_KEY) : undefined;
+    const hasOwn = declared && typeof declared === "object" && !Array.isArray(declared)
+      && Object.prototype.hasOwnProperty.call(declared, "composition");
+    if (!hasOwn) {
+      return { composition: ENGINE_LITERAL_COMPOSITION, source: "engine-fallback" };
+    }
+    const raw = declared.composition;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition:' is not a mapping`);
+    }
+    const rawHeads = raw.heads;
+    if (!rawHeads || typeof rawHeads !== "object" || Array.isArray(rawHeads) || Object.keys(rawHeads).length === 0) {
+      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition.heads:' is not a non-empty mapping`);
+    }
+    const missingShapes = COMPOSITION_REQUIRED_HEAD_SHAPES.filter(
+      (shape) => !Object.prototype.hasOwnProperty.call(rawHeads, shape),
+    );
+    if (missingShapes.length > 0) {
+      throw new GenerationError(
+        `${GLOBAL_DEFAULTS_KEY}: 'composition.heads:' is missing required shape(s) ` +
+          `${JSON.stringify(missingShapes)}`,
+      );
+    }
+    const heads = {};
+    for (const [shape, cells] of Object.entries(rawHeads)) {
+      if (!Array.isArray(cells) || cells.length === 0 || !cells.every((c) => typeof c === "string")) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: 'composition.heads.${shape}:' is not a non-empty list of strings`,
+        );
+      }
+      const unknown = cells.filter((c) => !COMPOSITION_HEAD_CELL_CLASSES.has(c));
+      if (unknown.length > 0) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: 'composition.heads.${shape}:' names unknown cell class(es) ` +
+            `${JSON.stringify(unknown)} (known: ${[...COMPOSITION_HEAD_CELL_CLASSES].sort().join(", ")})`,
+        );
+      }
+      heads[shape] = [...cells];
+    }
+    const rawTail = raw.tail;
+    if (!Array.isArray(rawTail) || rawTail.length === 0 || !rawTail.every((c) => typeof c === "string")) {
+      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition.tail:' is not a non-empty list of strings`);
+    }
+    const unknownTail = rawTail.filter((c) => !COMPOSITION_TAIL_CELL_CLASSES.has(c));
+    if (unknownTail.length > 0) {
+      throw new GenerationError(
+        `${GLOBAL_DEFAULTS_KEY}: 'composition.tail:' names unknown cell class(es) ` +
+          `${JSON.stringify(unknownTail)} (known: ${[...COMPOSITION_TAIL_CELL_CLASSES].sort().join(", ")})`,
+      );
+    }
+    // `separator` is not a declared key on either side of this pair — see the domain header's own
+    // paragraph on why: the engine always joins with `" "` (renderer.py:1003), unchanged by the
+    // monorepo PR that made heads/tail declarable, so this generator always publishes it too.
+    return {
+      composition: { heads, tail: [...rawTail], separator: " " },
+      source: "config",
+    };
   }
 
   // ── 5. schema.yaml -> node type -> chrome shape, for every default_node_type candidate ─────────
@@ -1032,6 +1133,7 @@ export function compile(files, ledger = new Ledger()) {
   );
   const chromeShapes = readChromeShapes(candidates, ledger);
   const sectionRegistration = readSectionRegistration(viewFiles, registration, ledger);
+  const compositionResult = readGlobalComposition();
 
   const declaration = {
     registration,
@@ -1048,9 +1150,12 @@ export function compile(files, ledger = new Ledger()) {
     // so the fallback is a visible fact, never the silent one this file used to publish.
     defaultOrdering: defaultOrderingResult.ordering,
     defaultOrderingSource: defaultOrderingResult.source,
-    // THE SECOND DIRECTION OF THE LINE GRAMMAR — see "COMPOSITION" above. Always the engine's own
-    // literal (no config surface exists for it), published unconditionally like `lineGrammars`.
-    composition: ENGINE_LITERAL_COMPOSITION,
+    // THE SECOND DIRECTION OF THE LINE GRAMMAR — see "COMPOSITION" above. Read from
+    // `global_defaults.yaml`'s own `composition:` key when the operator's config declares one,
+    // exactly as `defaultOrdering` is; `compositionSource` says which answer this is
+    // (`"config"` or `"engine-fallback"`), the same visible-fallback discipline.
+    composition: compositionResult.composition,
+    compositionSource: compositionResult.source,
   };
   // `priorityRank` follows the same "absent means nothing to say" convention every other optional
   // key in this declaration already uses (see resolutiontable.ts's own header) — omitted, not
