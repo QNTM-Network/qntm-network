@@ -94,7 +94,11 @@ describe("3. THE SCENARIO — the published number agrees with what the grammar 
       root: { find: { node_type: "task" } },
       steps: [{ children: { edge_type: "PART_OF", node_type: "routine" }, exists: true }],
     };
-    const { edgeSteps } = normalisePattern(oneHop);
+    // `[]` for resolvableFields: neither pattern here names a root/self field predicate — only
+    // `node_type` (handled outside the resolvableFields check) and edge-step fields (deliberately
+    // EXEMPT from it, see `normalisePattern`'s own comment) — so the derived set never matters to
+    // what these two tests assert.
+    const { edgeSteps } = normalisePattern(oneHop, []);
     assert.equal(edgeSteps?.length, 1, "a one-hop pattern did not resolve to one edge step");
   });
 
@@ -103,7 +107,7 @@ describe("3. THE SCENARIO — the published number agrees with what the grammar 
       root: { find: {} },
       steps: [{ ancestors: { edge_type: "PART_OF" }, exists: true }],
     };
-    assert.throws(() => normalisePattern(beyondOneHop), /traverses \(ancestors/);
+    assert.throws(() => normalisePattern(beyondOneHop, []), /traverses \(ancestors/);
   });
 
   test("MUTATION PROOF: the fixture's OWN beyond-depth pattern (traversing-tasks, ancestors:) becomes a real one-hop pattern (parents:), and the section it feeds flips from refused to published — the exact recovery the depth number describes", () => {

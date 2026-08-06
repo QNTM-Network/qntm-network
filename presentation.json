@@ -4114,6 +4114,7 @@
       "trace-orchestration-queue-items": "unresolvable field(s): project",
       "unlocks-dojo-heads": "unresolvable field(s): project"
     },
+    "traversalDepth": 1,
     "dropped": {
       "section 'all-personal.tasks'": "qualification refused: all-personal-nodes",
       "section 'all-work.tasks'": "qualification refused: all-work-nodes",
