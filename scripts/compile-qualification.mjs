@@ -133,8 +133,16 @@ export const DEFAULT_REGISTRATION_KEY = `${VIEWS_PREFIX}default_registration.yam
  *
  * `stage` and `project` are held up by `docs/…` as the sharpest refutation of "just widen the
  * list": both are referenced by real patterns, NEITHER has a vocabulary token or a registration
- * default, and this rule correctly leaves both unresolvable — measured, not assumed (see this
- * file's own PR description for the exact count).
+ * default, and THIS FUNCTION correctly leaves both out of its own answer — that has not changed.
+ * What changed (2026-08-06, second pass) is that a field's value can ALSO arrive STRUCTURALLY — the
+ * line's SECTION fixes it, never a glyph in the line — and a pattern referencing such a field is no
+ * longer refused SOLELY because it is absent from this function's LEXICAL answer.
+ * `deriveStructuralFieldsByQualification`, below `normalisePattern`, is the second rung; `compile()`
+ * unions its answer, per pattern, with THIS function's answer before calling `normalisePattern`.
+ * `deriveResolvableFields` itself stays exactly what its name says — the fields the LINE alone
+ * resolves, everywhere, with no position to consult — which is still correct and still needed
+ * unchanged for the token-table build immediately below (§4) and for `app/present/membership.ts`'s
+ * own line-token decode loop, neither of which has a "referencing section" to widen against.
  *
  * ── WHY THIS LIVES IN ONE FUNCTION, NOT AS A MODULE-LEVEL CONSTANT ──
  *
@@ -256,6 +264,94 @@ export function deriveResolvableFields(files) {
     }
   }
   return [...fields].sort();
+}
+
+/**
+ * ── RESOLVABILITY IS A CASCADE WALK, NOT A LINE-ONLY TOKEN LOOKUP. ──
+ *
+ * 2026-08-06, second pass. `deriveResolvableFields` (above) answers ONE rung of the cascade the
+ * operator's own config already runs on for every other purpose: `global -> view -> section ->
+ * node type -> line`, most-specific-first (`apps/qntm-md/src/qntm_md/resolution/levels.py:86-92`,
+ * `SPECIFICITY = (LINE, SUBTREE, STRUCTURAL_NODE, VIEW, GLOBAL)`, verified against the engine this
+ * PR). It asks "does a token in the LINE spell this field" and stops — so a field whose value
+ * arrives STRUCTURALLY (the line's own POSITION decides it, not a glyph in it) is invisible to it
+ * and every pattern that references that field is refused, even where the position makes the value
+ * as certain as a token would.
+ *
+ * `project` is the measured case: no vocabulary token spells it anywhere in the operator's real
+ * config, but every section that registers a `qntm-packages-*`-shaped qualification fixes it with
+ * a section-level `defaults: {project: qntm-md}` (`views/qntm-packages.yaml`, four sections, this
+ * exact key). A line typed under that section has a KNOWN `project` the instant it is typed — the
+ * app already computes it (`app/present/membership.ts`'s `resolveLineFields`, unconditionally
+ * copies every key of `section.defaults` into the resolved field set, lines 230-231, unchanged by
+ * this PR) — but the COMPILER, asking only "does a token spell it", refused every pattern that
+ * referenced it. This function is the second rung that closes that gap: THE SECTION.
+ *
+ * ── WHY ONLY THE SECTION RUNG, NOT VIEW OR GLOBAL TOO ──
+ *
+ * The engine's own cascade has GLOBAL and VIEW rungs for arbitrary fields too — `auto_tag:`,
+ * validated at `bundle/validators/views.py`'s `_validate_registration_auto_tag`, feeds
+ * `RegistrationKey.DEFAULT_FIELDS` at the VIEW and GLOBAL resolution levels
+ * (`resolution/registration.py:84`). It is REAL engine machinery. It is also, measured directly
+ * against the operator's real config (`rg -n "auto_tag:" apps/qntm-md/config`), used NOWHERE —
+ * every field default in the real bundle is section-scoped (`defaults:`). Admitting a field on the
+ * strength of a VIEW/GLOBAL `auto_tag:` would be sound in principle, but `resolveLineFields`
+ * (`app/present/membership.ts`) does not read `auto_tag:` at any level today — only
+ * `section.defaults`. Wiring admission to a rung the runtime resolver cannot yet read would publish
+ * a predicate the browser would then evaluate against a field that silently reads `null`
+ * (`matchesFindClause`'s own `fields[field] ?? null`) — exactly the confident-and-wrong answer this
+ * whole mechanism exists to refuse. So this function walks SECTION only, the one rung that is
+ * fully wired end to end (parsed, published, read at runtime) today. VIEW/GLOBAL `auto_tag:`
+ * admission is a real next rung, left unbuilt and named, not built halfway — see this PR's own
+ * description.
+ *
+ * ── THE SOUNDNESS ARGUMENT: INTERSECTION ACROSS EVERY REFERENCING SITE, NOT UNION ──
+ *
+ * A qualification is not owned by one section. `views/routines.yaml` and `views/routines-qntm.yaml`
+ * both register a section against `qntm-routines`, for instance — measured, 16 of 192 qualifications
+ * in the real config are referenced by more than one (view, section) site. If field F is fixed by
+ * SOME but not ALL of a pattern's referencing sites, admitting F would be sound at the sites that
+ * fix it and WRONG at the one that does not — the browser would resolve `F: null` there and a
+ * predicate `F: eq X` would confidently answer false when it should abstain. So a field is
+ * structurally admitted for a qualification only when EVERY site referencing it fixes that field —
+ * the INTERSECTION of each site's own fixed-field set, never the union. This degrades gracefully:
+ * a NEW section added tomorrow that references an existing qualification but omits a field the
+ * OTHER sites fix silently NARROWS what that qualification can express, never widens it past what
+ * every site can actually answer. Measured against the real config: every one of the 66 patterns
+ * this rung newly admits is referenced by exactly ONE site, so the intersection is a no-op for all
+ * of them today — the multi-site case is a soundness FLOOR this function enforces for the config
+ * that has not been written yet, not a case the current config exercises.
+ *
+ * @param {Record<string, {qualification: string, defaults?: Record<string, unknown>}>[]} viewSectionMaps
+ *   `Object.values(views)` — one array per view, each holding that view's `{sectionId: entry}` map,
+ *   the SAME `entry` objects `compile()` already built (and will publish) at step 3, so this reads
+ *   no new parse and cannot disagree with what the browser is actually handed.
+ * @returns {Map<string, Set<string>>} qualification name -> the field names EVERY referencing site
+ *   fixes via its own `defaults:` — empty when no site fixes anything in common (or the pattern
+ *   simply has no section-level defaults at all).
+ */
+export function deriveStructuralFieldsByQualification(viewSectionMaps) {
+  const siteFieldSetsByQualification = new Map();
+  for (const sections of viewSectionMaps) {
+    for (const section of Object.values(sections)) {
+      const siteFields = new Set(Object.keys(section.defaults ?? {}));
+      const existing = siteFieldSetsByQualification.get(section.qualification);
+      if (existing) existing.push(siteFields);
+      else siteFieldSetsByQualification.set(section.qualification, [siteFields]);
+    }
+  }
+  const result = new Map();
+  for (const [qualification, siteFieldSets] of siteFieldSetsByQualification) {
+    const [first, ...rest] = siteFieldSets;
+    const intersection = new Set(first);
+    for (const siteFields of rest) {
+      for (const field of intersection) {
+        if (!siteFields.has(field)) intersection.delete(field);
+      }
+    }
+    result.set(qualification, intersection);
+  }
+  return result;
 }
 
 // ── the pattern normaliser — pure over a parsed config object, no files map involved ───────────
@@ -830,6 +926,12 @@ export function compile(files, ledger = new Ledger()) {
     for (const section of Object.values(sections)) referenced.add(section.qualification);
   }
 
+  // THE CASCADE WALK'S SECOND RUNG — see `deriveStructuralFieldsByQualification`'s own header for
+  // the mechanism and the soundness argument (intersection across every referencing site). Reads
+  // the SAME `entry.defaults` objects step 3 already built and will publish below — no second parse
+  // to disagree with the runtime resolver over.
+  const structuralFieldsByQualification = deriveStructuralFieldsByQualification(Object.values(views));
+
   const predicates = {};
   const refused = {};
   for (const name of [...referenced].sort()) {
@@ -839,10 +941,17 @@ export function compile(files, ledger = new Ledger()) {
         `section qualification '${name}' names a pattern that no file in patterns/ defines`,
       );
     }
+    // LEXICAL (line-rung, works anywhere) UNION STRUCTURAL (section-rung, only where every
+    // referencing site fixes it) — never the other way round. `resolvableFields` never shrinks by
+    // being unioned; a field this pattern's own predicate does not reference is never even asked
+    // about, so a wider admissible set here costs nothing to a pattern that does not use it.
+    const admissibleFields = [
+      ...new Set([...resolvableFields, ...(structuralFieldsByQualification.get(name) ?? [])]),
+    ].sort();
     try {
       predicates[name] = normalisePattern(
         applyStructuralExclusionDefaults(raw.config, structuralTypes),
-        resolvableFields,
+        admissibleFields,
       );
     } catch (error) {
       if (!(error instanceof Refusal)) throw error;

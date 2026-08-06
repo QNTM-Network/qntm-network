@@ -797,7 +797,7 @@ const monorepo = existsSync(DEFAULT_CONFIG_DIR);
 const skip = monorepo ? false : `monorepo not checked out at ${DEFAULT_CONFIG_DIR}`;
 
 describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his own config", () => {
-  test("BASELINE: his real config today drops 11 tokens and 82 sections, all recorded", { skip }, () => {
+  test("BASELINE: his real config today drops 11 tokens and 16 sections, all recorded", { skip }, () => {
     // RESTATED 2026-08-03 against monorepo `d4c9d98`: 77/137/214 -> 82/148/230.
     //
     // RESTATED AGAIN 2026-08-04 against monorepo `0fe6c1d`: 82/148/230 -> 82/107/189. Not his
@@ -820,6 +820,18 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
     // `class_state`/`package_state`/`instantiate`/`tier`/`genre`/`god_box`/`priority`/`cadence`/
     // `change_type`/`blocked_state`/`lead_state`/`asserted_state` becoming resolvable buys.
     //
+    // RESTATED AGAIN, SAME DAY: 11/82/93 -> 11/16/27. Resolvability became a CASCADE WALK
+    // (`deriveStructuralFieldsByQualification`, `compile-qualification.mjs`), not a line-rung-only
+    // token lookup: a pattern referencing `project` or `stage` — no vocabulary token, but fixed by
+    // EVERY section that registers it via a section-level `defaults:` — is admitted too. 66 of the
+    // 82 previously-dropped sections were dropped for exactly that reason (`unresolvable field(s):
+    // project` or `...stage`); the other 16 are dropped for a genuinely different reason (the
+    // section's qualification needs the clock or an orderable comparison — `due_date < today` and
+    // its kin — which this rung does not and should not touch; see this PR's own residue
+    // classification). The token count (11) is untouched: no vocabulary token's own admission
+    // changed, only which SECTIONS' patterns can now use a token-admitted OR structurally-admitted
+    // field together.
+    //
     // THESE THREE NUMBERS ARE A RECORD OF HIS CONFIG AND THIS GENERATOR'S GRAMMAR, NOT A FIXED
     // PROPERTY OF THIS REPO. They move whenever he adds a view OR this generator's grammar widens,
     // and they are expected to. Re-measure and restate them with the monorepo commit named — do not
@@ -828,10 +840,10 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
     const tokens = Object.keys(dropped).filter((k) => k.startsWith("vocabulary token"));
     const sections = Object.keys(dropped).filter((k) => k.startsWith("section "));
     assert.equal(tokens.length, 11, "the token drop count moved — regenerate and say so");
-    assert.equal(sections.length, 82, "the refused-section count moved — regenerate and say so");
+    assert.equal(sections.length, 16, "the refused-section count moved — regenerate and say so");
     // design-the-rule-mirror.md §9.2 measured 137 of 186 by running a script. It is now a fact
     // the declaration states about itself.
-    assert.equal(Object.keys(dropped).length, 93);
+    assert.equal(Object.keys(dropped).length, 27);
     for (const reason of Object.values(dropped)) assert.ok(reason.length > 0);
   });
 

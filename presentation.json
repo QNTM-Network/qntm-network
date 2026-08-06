@@ -821,6 +821,84 @@
         },
         "exclude": []
       },
+      "dev-tickets-diagnose-ready": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "stage": {
+              "eq": "diagnose_ready"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "dev-tickets-in-progress": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "stage": {
+              "eq": "in_progress"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "dev-tickets-passing": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "stage": {
+              "eq": "passing"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "dev-tickets-retired": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "stage": {
+              "eq": "retired"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "dev-tickets-scoped": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "stage": {
+              "eq": "scoped"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "dev-tickets-unscoped": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "stage": {
+              "eq": "unscoped"
+            }
+          }
+        },
+        "exclude": []
+      },
       "domain-empty": {
         "find": {
           "nodeType": null,
@@ -1075,6 +1153,401 @@
         },
         "exclude": []
       },
+      "flowtrace-capabilities-diagnose-ready": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "cap_state": {
+              "eq": "diagnose_ready"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-capabilities-in-progress": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "cap_state": {
+              "eq": "in_progress"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-capabilities-passing": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "cap_state": {
+              "eq": "passing"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-capabilities-retired": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "cap_state": {
+              "eq": "retired"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-capabilities-scoped": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "cap_state": {
+              "eq": "scoped"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-capabilities-unscoped": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "cap_state": {
+              "eq": "unscoped"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-classes-concept": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "class_state": {
+              "eq": "concept"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-classes-exists": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "class_state": {
+              "eq": "exists"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-classes-extracted": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "class_state": {
+              "eq": "extracted"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-classes-subsumed": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "class_state": {
+              "eq": "subsumed"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-packages-concept": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "package_state": {
+              "eq": "concept"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-packages-exists": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "package_state": {
+              "eq": "exists"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-packages-extracted": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "package_state": {
+              "eq": "extracted"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-packages-subsumed": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "package_state": {
+              "eq": "subsumed"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-principles-held": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "principle_state": {
+              "eq": "held"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-principles-held-weak": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "principle_state": {
+              "eq": "held_weak"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-principles-un-anchored": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "principle_state": {
+              "eq": "un_anchored"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-principles-unverifiable": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "principle_state": {
+              "eq": "unverifiable"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-principles-violated": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "principle_state": {
+              "eq": "violated"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-queue-items": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "flowtrace-sinks-all": {
+        "find": {
+          "nodeType": [
+            "sink"
+          ],
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "free-trial-dojo-heads": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "free-trial-dojo"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
       "god-box-discussed": {
         "find": {
           "nodeType": [
@@ -1108,6 +1581,71 @@
           }
         },
         "exclude": []
+      },
+      "habit-dojo-heads": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "habit-dojo"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
       },
       "habits-with-routines": {
         "find": {
@@ -1273,6 +1811,406 @@
           }
         },
         "exclude": []
+      },
+      "operator-flowtrace-outcomes-open": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "flow-trace"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-flowtrace-tasks-open": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "flow-trace"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-flowtrace-waited-on": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "flow-trace"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "operator-qntm-network-outcomes-open": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "qntm-network"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-qntm-network-tasks-open": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "qntm-network"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-qntm-network-waited-on": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "qntm-network"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "operator-qntm-outcomes-open": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "qntm-md"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-qntm-tasks-open": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "qntm-md"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-qntm-waited-on": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "operator-trace-orchestration-outcomes-open": {
+        "find": {
+          "nodeType": [
+            "outcome"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "trace-orchestration"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-trace-orchestration-tasks-open": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "project": {
+              "eq": "trace-orchestration"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "operator-trace-orchestration-waited-on": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "trace-orchestration"
+            },
+            "status": {
+              "eq": "waiting"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": true,
+            "edgeType": [
+              "WAITING_FOR"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
       },
       "orphan-outcomes": {
         "find": {
@@ -1803,6 +2741,166 @@
         },
         "exclude": []
       },
+      "qntm-capabilities-diagnose-ready": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "cap_state": {
+              "eq": "diagnose_ready"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-capabilities-in-progress": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "cap_state": {
+              "eq": "in_progress"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-capabilities-passing": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "cap_state": {
+              "eq": "passing"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-capabilities-retired": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "cap_state": {
+              "eq": "retired"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-capabilities-scoped": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "cap_state": {
+              "eq": "scoped"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-capabilities-unscoped": {
+        "find": {
+          "nodeType": [
+            "capability"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "cap_state": {
+              "eq": "unscoped"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-classes-concept": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "class_state": {
+              "eq": "concept"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-classes-exists": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "class_state": {
+              "eq": "exists"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-classes-extracted": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "class_state": {
+              "eq": "extracted"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-classes-subsumed": {
+        "find": {
+          "nodeType": [
+            "class"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "class_state": {
+              "eq": "subsumed"
+            }
+          }
+        },
+        "exclude": []
+      },
       "qntm-habits": {
         "find": {
           "nodeType": [
@@ -1831,6 +2929,163 @@
             "fields": {}
           }
         ]
+      },
+      "qntm-packages-concept": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "package_state": {
+              "eq": "concept"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-packages-exists": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "package_state": {
+              "eq": "exists"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-packages-extracted": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "package_state": {
+              "eq": "extracted"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-packages-subsumed": {
+        "find": {
+          "nodeType": [
+            "package"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "package_state": {
+              "eq": "subsumed"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-principles-held": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "principle_state": {
+              "eq": "held"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-principles-held-weak": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "principle_state": {
+              "eq": "held_weak"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-principles-un-anchored": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "principle_state": {
+              "eq": "un_anchored"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-principles-unverifiable": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "principle_state": {
+              "eq": "unverifiable"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-principles-violated": {
+        "find": {
+          "nodeType": [
+            "principle"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            },
+            "principle_state": {
+              "eq": "violated"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "qntm-queue-items": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            }
+          }
+        },
+        "exclude": []
       },
       "qntm-routines": {
         "find": {
@@ -1863,6 +3118,84 @@
           }
         },
         "exclude": []
+      },
+      "qntm-sinks-all": {
+        "find": {
+          "nodeType": [
+            "sink"
+          ],
+          "fields": {
+            "project": {
+              "eq": "qntm-md"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "routine-cascade-dojo-heads": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "routine-cascade-dojo"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
       },
       "routine-drift": {
         "find": {
@@ -2196,6 +3529,84 @@
           }
         ]
       },
+      "termination-dojo-heads": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "termination-dojo"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": null,
+            "fields": {}
+          }
+        ]
+      },
+      "trace-orchestration-queue-items": {
+        "find": {
+          "nodeType": [
+            "ticket"
+          ],
+          "fields": {
+            "project": {
+              "eq": "trace-orchestration"
+            }
+          }
+        },
+        "exclude": []
+      },
       "tv-done": {
         "find": {
           "nodeType": [
@@ -2244,6 +3655,71 @@
             "nodeType": [
               "routine"
             ],
+            "fields": {}
+          }
+        ]
+      },
+      "unlocks-dojo-heads": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "project": {
+              "eq": "dojo"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ],
+        "edgeSteps": [
+          {
+            "direction": "parents",
+            "mustExist": false,
+            "edgeType": [
+              "PART_OF"
+            ],
+            "nodeType": null,
             "fields": {}
           }
         ]
@@ -2636,6 +4112,62 @@
           }
         }
       },
+      "backlog": {
+        "unscoped": {
+          "qualification": "dev-tickets-unscoped",
+          "nodeType": "task",
+          "name": "Unscoped",
+          "defaults": {
+            "domain": "dev",
+            "stage": "unscoped"
+          }
+        },
+        "diagnose-ready": {
+          "qualification": "dev-tickets-diagnose-ready",
+          "nodeType": "task",
+          "name": "Diagnose-ready",
+          "defaults": {
+            "domain": "dev",
+            "stage": "diagnose_ready"
+          }
+        },
+        "scoped": {
+          "qualification": "dev-tickets-scoped",
+          "nodeType": "task",
+          "name": "Scoped",
+          "defaults": {
+            "domain": "dev",
+            "stage": "scoped"
+          }
+        },
+        "in-progress": {
+          "qualification": "dev-tickets-in-progress",
+          "nodeType": "task",
+          "name": "In-progress",
+          "defaults": {
+            "domain": "dev",
+            "stage": "in_progress"
+          }
+        },
+        "passing": {
+          "qualification": "dev-tickets-passing",
+          "nodeType": "task",
+          "name": "Passing",
+          "defaults": {
+            "domain": "dev",
+            "stage": "passing"
+          }
+        },
+        "retired": {
+          "qualification": "dev-tickets-retired",
+          "nodeType": "task",
+          "name": "Retired",
+          "defaults": {
+            "domain": "dev",
+            "stage": "retired"
+          }
+        }
+      },
       "blogs": {
         "to-check": {
           "qualification": "blogs-open",
@@ -2824,6 +4356,238 @@
           }
         }
       },
+      "flowtrace-capabilities": {
+        "unscoped": {
+          "qualification": "flowtrace-capabilities-unscoped",
+          "nodeType": "task",
+          "name": "Unscoped",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "unscoped"
+          }
+        },
+        "diagnose-ready": {
+          "qualification": "flowtrace-capabilities-diagnose-ready",
+          "nodeType": "task",
+          "name": "Diagnose-ready",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "diagnose_ready"
+          }
+        },
+        "scoped": {
+          "qualification": "flowtrace-capabilities-scoped",
+          "nodeType": "task",
+          "name": "Scoped",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "scoped"
+          }
+        },
+        "in-progress": {
+          "qualification": "flowtrace-capabilities-in-progress",
+          "nodeType": "task",
+          "name": "In-progress",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "in_progress"
+          }
+        },
+        "passing": {
+          "qualification": "flowtrace-capabilities-passing",
+          "nodeType": "task",
+          "name": "Passing",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "passing"
+          }
+        },
+        "retired": {
+          "qualification": "flowtrace-capabilities-retired",
+          "nodeType": "task",
+          "name": "Retired",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "cap_state": "retired"
+          }
+        }
+      },
+      "flowtrace-classes": {
+        "exists": {
+          "qualification": "flowtrace-classes-exists",
+          "nodeType": "task",
+          "name": "Exists",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "exists"
+          }
+        },
+        "concept": {
+          "qualification": "flowtrace-classes-concept",
+          "nodeType": "task",
+          "name": "Concept (not yet a real class)",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "concept"
+          }
+        },
+        "extracted": {
+          "qualification": "flowtrace-classes-extracted",
+          "nodeType": "task",
+          "name": "Extracted",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "extracted"
+          }
+        },
+        "subsumed": {
+          "qualification": "flowtrace-classes-subsumed",
+          "nodeType": "task",
+          "name": "Subsumed",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "class_state": "subsumed"
+          }
+        }
+      },
+      "flowtrace-packages": {
+        "exists": {
+          "qualification": "flowtrace-packages-exists",
+          "nodeType": "task",
+          "name": "Exists",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "exists"
+          }
+        },
+        "concept": {
+          "qualification": "flowtrace-packages-concept",
+          "nodeType": "task",
+          "name": "Concept (not yet a real package)",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "concept"
+          }
+        },
+        "extracted": {
+          "qualification": "flowtrace-packages-extracted",
+          "nodeType": "task",
+          "name": "Extracted",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "extracted"
+          }
+        },
+        "subsumed": {
+          "qualification": "flowtrace-packages-subsumed",
+          "nodeType": "task",
+          "name": "Subsumed",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "package_state": "subsumed"
+          }
+        }
+      },
+      "flowtrace-principles": {
+        "held": {
+          "qualification": "flowtrace-principles-held",
+          "nodeType": "task",
+          "name": "Held",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "held"
+          }
+        },
+        "held-weak": {
+          "qualification": "flowtrace-principles-held-weak",
+          "nodeType": "task",
+          "name": "Held-weak",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "held_weak"
+          }
+        },
+        "violated": {
+          "qualification": "flowtrace-principles-violated",
+          "nodeType": "task",
+          "name": "Violated",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "violated"
+          }
+        },
+        "unverifiable": {
+          "qualification": "flowtrace-principles-unverifiable",
+          "nodeType": "task",
+          "name": "Unverifiable",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "unverifiable"
+          }
+        },
+        "un-anchored": {
+          "qualification": "flowtrace-principles-un-anchored",
+          "nodeType": "task",
+          "name": "Un-anchored",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "principle_state": "un_anchored"
+          }
+        }
+      },
+      "flowtrace-queue": {
+        "queue": {
+          "qualification": "flowtrace-queue-items",
+          "nodeType": "task",
+          "name": "Queue",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace",
+            "stage": "unscoped"
+          }
+        }
+      },
+      "flowtrace-sinks": {
+        "sinks": {
+          "qualification": "flowtrace-sinks-all",
+          "nodeType": "task",
+          "name": "Sinks",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          }
+        }
+      },
+      "free-trial-dojo": {
+        "fragments": {
+          "qualification": "free-trial-dojo-heads",
+          "nodeType": "task",
+          "name": "Free-Trial Dojo — tag a line with the free-trial tag then cycle; three parallel chores appear. All [ ] at once — no gating, tick them in any order",
+          "defaults": {
+            "domain": "dojo",
+            "project": "free-trial-dojo"
+          }
+        }
+      },
       "god-box": {
         "not-discussed": {
           "qualification": "god-box-not-discussed",
@@ -2851,6 +4615,17 @@
           "name": "Groups",
           "defaults": {
             "domain": "social"
+          }
+        }
+      },
+      "habit-dojo": {
+        "classification": {
+          "qualification": "habit-dojo-heads",
+          "nodeType": "task",
+          "name": "Habit Dojo - a routine under it makes it a #habit; plain tasks under it make it an #outcome; hold both and habit wins. Take the cadence off and watch it revert.",
+          "defaults": {
+            "domain": "dojo",
+            "project": "habit-dojo"
           }
         }
       },
@@ -3173,6 +4948,122 @@
           }
         }
       },
+      "operator-flowtrace": {
+        "tasks": {
+          "qualification": "operator-flowtrace-tasks-open",
+          "nodeType": "task",
+          "name": "Tasks",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          }
+        },
+        "outcomes": {
+          "qualification": "operator-flowtrace-outcomes-open",
+          "nodeType": "task",
+          "name": "Outcomes",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          }
+        },
+        "waiting-for": {
+          "qualification": "operator-flowtrace-waited-on",
+          "nodeType": "task",
+          "name": "Waiting For",
+          "defaults": {
+            "domain": "dev",
+            "project": "flow-trace"
+          }
+        }
+      },
+      "operator-qntm-network": {
+        "tasks": {
+          "qualification": "operator-qntm-network-tasks-open",
+          "nodeType": "task",
+          "name": "Tasks",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-network"
+          }
+        },
+        "outcomes": {
+          "qualification": "operator-qntm-network-outcomes-open",
+          "nodeType": "task",
+          "name": "Outcomes",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-network"
+          }
+        },
+        "waiting-for": {
+          "qualification": "operator-qntm-network-waited-on",
+          "nodeType": "task",
+          "name": "Waiting For",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-network"
+          }
+        }
+      },
+      "operator-qntm": {
+        "tasks": {
+          "qualification": "operator-qntm-tasks-open",
+          "nodeType": "task",
+          "name": "Tasks",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          }
+        },
+        "outcomes": {
+          "qualification": "operator-qntm-outcomes-open",
+          "nodeType": "task",
+          "name": "Outcomes",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          }
+        },
+        "waiting-for": {
+          "qualification": "operator-qntm-waited-on",
+          "nodeType": "task",
+          "name": "Waiting For",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          }
+        }
+      },
+      "operator-trace-orchestration": {
+        "tasks": {
+          "qualification": "operator-trace-orchestration-tasks-open",
+          "nodeType": "task",
+          "name": "Tasks",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration"
+          }
+        },
+        "outcomes": {
+          "qualification": "operator-trace-orchestration-outcomes-open",
+          "nodeType": "task",
+          "name": "Outcomes",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration"
+          }
+        },
+        "waiting-for": {
+          "qualification": "operator-trace-orchestration-waited-on",
+          "nodeType": "task",
+          "name": "Waiting For",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration"
+          }
+        }
+      },
       "outcomes-all": {
         "work-outcomes": {
           "qualification": "outcomes-work",
@@ -3352,6 +5243,238 @@
           "name": "People",
           "defaults": {
             "domain": "social"
+          }
+        }
+      },
+      "qntm-capabilities": {
+        "unscoped": {
+          "qualification": "qntm-capabilities-unscoped",
+          "nodeType": "task",
+          "name": "Unscoped",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "unscoped"
+          }
+        },
+        "diagnose-ready": {
+          "qualification": "qntm-capabilities-diagnose-ready",
+          "nodeType": "task",
+          "name": "Diagnose-ready",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "diagnose_ready"
+          }
+        },
+        "scoped": {
+          "qualification": "qntm-capabilities-scoped",
+          "nodeType": "task",
+          "name": "Scoped",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "scoped"
+          }
+        },
+        "in-progress": {
+          "qualification": "qntm-capabilities-in-progress",
+          "nodeType": "task",
+          "name": "In-progress",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "in_progress"
+          }
+        },
+        "passing": {
+          "qualification": "qntm-capabilities-passing",
+          "nodeType": "task",
+          "name": "Passing",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "passing"
+          }
+        },
+        "retired": {
+          "qualification": "qntm-capabilities-retired",
+          "nodeType": "task",
+          "name": "Retired",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "cap_state": "retired"
+          }
+        }
+      },
+      "qntm-classes": {
+        "exists": {
+          "qualification": "qntm-classes-exists",
+          "nodeType": "task",
+          "name": "Exists",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "exists"
+          }
+        },
+        "concept": {
+          "qualification": "qntm-classes-concept",
+          "nodeType": "task",
+          "name": "Concept (not yet a real class)",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "concept"
+          }
+        },
+        "extracted": {
+          "qualification": "qntm-classes-extracted",
+          "nodeType": "task",
+          "name": "Extracted",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "extracted"
+          }
+        },
+        "subsumed": {
+          "qualification": "qntm-classes-subsumed",
+          "nodeType": "task",
+          "name": "Subsumed",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "class_state": "subsumed"
+          }
+        }
+      },
+      "qntm-packages": {
+        "exists": {
+          "qualification": "qntm-packages-exists",
+          "nodeType": "task",
+          "name": "Exists",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "exists"
+          }
+        },
+        "concept": {
+          "qualification": "qntm-packages-concept",
+          "nodeType": "task",
+          "name": "Concept (not yet a real package)",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "concept"
+          }
+        },
+        "extracted": {
+          "qualification": "qntm-packages-extracted",
+          "nodeType": "task",
+          "name": "Extracted",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "extracted"
+          }
+        },
+        "subsumed": {
+          "qualification": "qntm-packages-subsumed",
+          "nodeType": "task",
+          "name": "Subsumed",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "package_state": "subsumed"
+          }
+        }
+      },
+      "qntm-principles": {
+        "held": {
+          "qualification": "qntm-principles-held",
+          "nodeType": "task",
+          "name": "Held",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "held"
+          }
+        },
+        "held-weak": {
+          "qualification": "qntm-principles-held-weak",
+          "nodeType": "task",
+          "name": "Held-weak",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "held_weak"
+          }
+        },
+        "violated": {
+          "qualification": "qntm-principles-violated",
+          "nodeType": "task",
+          "name": "Violated",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "violated"
+          }
+        },
+        "unverifiable": {
+          "qualification": "qntm-principles-unverifiable",
+          "nodeType": "task",
+          "name": "Unverifiable",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "unverifiable"
+          }
+        },
+        "un-anchored": {
+          "qualification": "qntm-principles-un-anchored",
+          "nodeType": "task",
+          "name": "Un-anchored",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "principle_state": "un_anchored"
+          }
+        }
+      },
+      "qntm-queue": {
+        "queue": {
+          "qualification": "qntm-queue-items",
+          "nodeType": "task",
+          "name": "Queue",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md",
+            "stage": "unscoped"
+          }
+        }
+      },
+      "qntm-sinks": {
+        "sinks": {
+          "qualification": "qntm-sinks-all",
+          "nodeType": "task",
+          "name": "Sinks",
+          "defaults": {
+            "domain": "dev",
+            "project": "qntm-md"
+          }
+        }
+      },
+      "routine-cascade-dojo": {
+        "governed": {
+          "qualification": "routine-cascade-dojo-heads",
+          "nodeType": "routine",
+          "name": "Routine-Cascade Dojo - tick a step, it stays done; tick the PARENT and every step beneath it clears together. [ ] = do now, [>] = scheduled, [x] = done",
+          "defaults": {
+            "domain": "dojo",
+            "project": "routine-cascade-dojo"
           }
         }
       },
@@ -3541,12 +5664,35 @@
           }
         }
       },
+      "termination-dojo": {
+        "fragments": {
+          "qualification": "termination-dojo-heads",
+          "nodeType": "task",
+          "name": "Termination Dojo — tag a line with the termination tag then cycle; three parallel chores appear. All [ ] at once — no gating, tick them in any order",
+          "defaults": {
+            "domain": "dojo",
+            "project": "termination-dojo"
+          }
+        }
+      },
       "test-scratchpad": {
         "scratchpad-targets": {
           "qualification": "scratchpad-targets",
           "nodeType": "task",
           "defaults": {
             "domain": "personal"
+          }
+        }
+      },
+      "trace-orchestration-queue": {
+        "queue": {
+          "qualification": "trace-orchestration-queue-items",
+          "nodeType": "task",
+          "name": "Queue",
+          "defaults": {
+            "domain": "dev",
+            "project": "trace-orchestration",
+            "stage": "unscoped"
           }
         }
       },
@@ -3565,6 +5711,17 @@
           "name": "Watched",
           "defaults": {
             "domain": "arts"
+          }
+        }
+      },
+      "unlocks-dojo": {
+        "chain": {
+          "qualification": "unlocks-dojo-heads",
+          "nodeType": "task",
+          "name": "Unlocks Dojo — tick a cluster's children to [x] then cycle; the next cluster unlocks. [ ] = do now, [~] = held, [x] = done",
+          "defaults": {
+            "domain": "dojo",
+            "project": "dojo"
           }
         }
       },
@@ -4041,151 +6198,21 @@
       "available-tomorrow": "available_date: cycle variable $cycle_today + 1 d",
       "available-yesterday": "available_date: cycle variable $cycle_today - 1 d",
       "captured-today": "created_at: cycle variable $cycle_today",
-      "dev-tickets-diagnose-ready": "unresolvable field(s): stage",
-      "dev-tickets-in-progress": "unresolvable field(s): stage",
-      "dev-tickets-passing": "unresolvable field(s): stage",
-      "dev-tickets-retired": "unresolvable field(s): stage",
-      "dev-tickets-scoped": "unresolvable field(s): stage",
-      "dev-tickets-unscoped": "unresolvable field(s): stage",
       "due-soon-tasks": "due_date: cycle variable $cycle_today",
       "due-this-week": "due_date: operator gte+lte",
       "due-today": "due_date: cycle variable $cycle_today",
       "due-tomorrow": "due_date: cycle variable $cycle_today + 1 d",
       "due-yesterday": "due_date: cycle variable $cycle_today - 1 d",
-      "flowtrace-capabilities-diagnose-ready": "unresolvable field(s): project",
-      "flowtrace-capabilities-in-progress": "unresolvable field(s): project",
-      "flowtrace-capabilities-passing": "unresolvable field(s): project",
-      "flowtrace-capabilities-retired": "unresolvable field(s): project",
-      "flowtrace-capabilities-scoped": "unresolvable field(s): project",
-      "flowtrace-capabilities-unscoped": "unresolvable field(s): project",
-      "flowtrace-classes-concept": "unresolvable field(s): project",
-      "flowtrace-classes-exists": "unresolvable field(s): project",
-      "flowtrace-classes-extracted": "unresolvable field(s): project",
-      "flowtrace-classes-subsumed": "unresolvable field(s): project",
-      "flowtrace-packages-concept": "unresolvable field(s): project",
-      "flowtrace-packages-exists": "unresolvable field(s): project",
-      "flowtrace-packages-extracted": "unresolvable field(s): project",
-      "flowtrace-packages-subsumed": "unresolvable field(s): project",
-      "flowtrace-principles-held": "unresolvable field(s): project",
-      "flowtrace-principles-held-weak": "unresolvable field(s): project",
-      "flowtrace-principles-un-anchored": "unresolvable field(s): project",
-      "flowtrace-principles-unverifiable": "unresolvable field(s): project",
-      "flowtrace-principles-violated": "unresolvable field(s): project",
-      "flowtrace-queue-items": "unresolvable field(s): project",
-      "flowtrace-sinks-all": "unresolvable field(s): project",
-      "free-trial-dojo-heads": "unresolvable field(s): project",
-      "habit-dojo-heads": "unresolvable field(s): project",
-      "operator-flowtrace-outcomes-open": "unresolvable field(s): project",
-      "operator-flowtrace-tasks-open": "unresolvable field(s): project",
-      "operator-flowtrace-waited-on": "unresolvable field(s): project",
-      "operator-qntm-network-outcomes-open": "unresolvable field(s): project",
-      "operator-qntm-network-tasks-open": "unresolvable field(s): project",
-      "operator-qntm-network-waited-on": "unresolvable field(s): project",
-      "operator-qntm-outcomes-open": "unresolvable field(s): project",
-      "operator-qntm-tasks-open": "unresolvable field(s): project",
-      "operator-qntm-waited-on": "unresolvable field(s): project",
-      "operator-trace-orchestration-outcomes-open": "unresolvable field(s): project",
-      "operator-trace-orchestration-tasks-open": "unresolvable field(s): project",
-      "operator-trace-orchestration-waited-on": "unresolvable field(s): project",
-      "overdue": "due_date: operator lt",
-      "qntm-capabilities-diagnose-ready": "unresolvable field(s): project",
-      "qntm-capabilities-in-progress": "unresolvable field(s): project",
-      "qntm-capabilities-passing": "unresolvable field(s): project",
-      "qntm-capabilities-retired": "unresolvable field(s): project",
-      "qntm-capabilities-scoped": "unresolvable field(s): project",
-      "qntm-capabilities-unscoped": "unresolvable field(s): project",
-      "qntm-classes-concept": "unresolvable field(s): project",
-      "qntm-classes-exists": "unresolvable field(s): project",
-      "qntm-classes-extracted": "unresolvable field(s): project",
-      "qntm-classes-subsumed": "unresolvable field(s): project",
-      "qntm-packages-concept": "unresolvable field(s): project",
-      "qntm-packages-exists": "unresolvable field(s): project",
-      "qntm-packages-extracted": "unresolvable field(s): project",
-      "qntm-packages-subsumed": "unresolvable field(s): project",
-      "qntm-principles-held": "unresolvable field(s): project",
-      "qntm-principles-held-weak": "unresolvable field(s): project",
-      "qntm-principles-un-anchored": "unresolvable field(s): project",
-      "qntm-principles-unverifiable": "unresolvable field(s): project",
-      "qntm-principles-violated": "unresolvable field(s): project",
-      "qntm-queue-items": "unresolvable field(s): project",
-      "qntm-sinks-all": "unresolvable field(s): project",
-      "routine-cascade-dojo-heads": "unresolvable field(s): project",
-      "termination-dojo-heads": "unresolvable field(s): project",
-      "trace-orchestration-queue-items": "unresolvable field(s): project",
-      "unlocks-dojo-heads": "unresolvable field(s): project"
+      "overdue": "due_date: operator lt"
     },
     "traversalDepth": 1,
     "dropped": {
       "section 'all-personal.tasks'": "qualification refused: all-personal-nodes",
       "section 'all-work.tasks'": "qualification refused: all-work-nodes",
-      "section 'backlog.diagnose-ready'": "qualification refused: dev-tickets-diagnose-ready",
-      "section 'backlog.in-progress'": "qualification refused: dev-tickets-in-progress",
-      "section 'backlog.passing'": "qualification refused: dev-tickets-passing",
-      "section 'backlog.retired'": "qualification refused: dev-tickets-retired",
-      "section 'backlog.scoped'": "qualification refused: dev-tickets-scoped",
-      "section 'backlog.unscoped'": "qualification refused: dev-tickets-unscoped",
       "section 'daily-personal.capture'": "qualification refused: captured-today",
       "section 'daily-personal.due-soon'": "qualification refused: due-soon-tasks",
       "section 'daily-work.capture'": "qualification refused: captured-today",
       "section 'daily-work.due-today'": "qualification refused: due-soon-tasks",
-      "section 'flowtrace-capabilities.diagnose-ready'": "qualification refused: flowtrace-capabilities-diagnose-ready",
-      "section 'flowtrace-capabilities.in-progress'": "qualification refused: flowtrace-capabilities-in-progress",
-      "section 'flowtrace-capabilities.passing'": "qualification refused: flowtrace-capabilities-passing",
-      "section 'flowtrace-capabilities.retired'": "qualification refused: flowtrace-capabilities-retired",
-      "section 'flowtrace-capabilities.scoped'": "qualification refused: flowtrace-capabilities-scoped",
-      "section 'flowtrace-capabilities.unscoped'": "qualification refused: flowtrace-capabilities-unscoped",
-      "section 'flowtrace-classes.concept'": "qualification refused: flowtrace-classes-concept",
-      "section 'flowtrace-classes.exists'": "qualification refused: flowtrace-classes-exists",
-      "section 'flowtrace-classes.extracted'": "qualification refused: flowtrace-classes-extracted",
-      "section 'flowtrace-classes.subsumed'": "qualification refused: flowtrace-classes-subsumed",
-      "section 'flowtrace-packages.concept'": "qualification refused: flowtrace-packages-concept",
-      "section 'flowtrace-packages.exists'": "qualification refused: flowtrace-packages-exists",
-      "section 'flowtrace-packages.extracted'": "qualification refused: flowtrace-packages-extracted",
-      "section 'flowtrace-packages.subsumed'": "qualification refused: flowtrace-packages-subsumed",
-      "section 'flowtrace-principles.held'": "qualification refused: flowtrace-principles-held",
-      "section 'flowtrace-principles.held-weak'": "qualification refused: flowtrace-principles-held-weak",
-      "section 'flowtrace-principles.un-anchored'": "qualification refused: flowtrace-principles-un-anchored",
-      "section 'flowtrace-principles.unverifiable'": "qualification refused: flowtrace-principles-unverifiable",
-      "section 'flowtrace-principles.violated'": "qualification refused: flowtrace-principles-violated",
-      "section 'flowtrace-queue.queue'": "qualification refused: flowtrace-queue-items",
-      "section 'flowtrace-sinks.sinks'": "qualification refused: flowtrace-sinks-all",
-      "section 'free-trial-dojo.fragments'": "qualification refused: free-trial-dojo-heads",
-      "section 'habit-dojo.classification'": "qualification refused: habit-dojo-heads",
-      "section 'operator-flowtrace.outcomes'": "qualification refused: operator-flowtrace-outcomes-open",
-      "section 'operator-flowtrace.tasks'": "qualification refused: operator-flowtrace-tasks-open",
-      "section 'operator-flowtrace.waiting-for'": "qualification refused: operator-flowtrace-waited-on",
-      "section 'operator-qntm-network.outcomes'": "qualification refused: operator-qntm-network-outcomes-open",
-      "section 'operator-qntm-network.tasks'": "qualification refused: operator-qntm-network-tasks-open",
-      "section 'operator-qntm-network.waiting-for'": "qualification refused: operator-qntm-network-waited-on",
-      "section 'operator-qntm.outcomes'": "qualification refused: operator-qntm-outcomes-open",
-      "section 'operator-qntm.tasks'": "qualification refused: operator-qntm-tasks-open",
-      "section 'operator-qntm.waiting-for'": "qualification refused: operator-qntm-waited-on",
-      "section 'operator-trace-orchestration.outcomes'": "qualification refused: operator-trace-orchestration-outcomes-open",
-      "section 'operator-trace-orchestration.tasks'": "qualification refused: operator-trace-orchestration-tasks-open",
-      "section 'operator-trace-orchestration.waiting-for'": "qualification refused: operator-trace-orchestration-waited-on",
-      "section 'qntm-capabilities.diagnose-ready'": "qualification refused: qntm-capabilities-diagnose-ready",
-      "section 'qntm-capabilities.in-progress'": "qualification refused: qntm-capabilities-in-progress",
-      "section 'qntm-capabilities.passing'": "qualification refused: qntm-capabilities-passing",
-      "section 'qntm-capabilities.retired'": "qualification refused: qntm-capabilities-retired",
-      "section 'qntm-capabilities.scoped'": "qualification refused: qntm-capabilities-scoped",
-      "section 'qntm-capabilities.unscoped'": "qualification refused: qntm-capabilities-unscoped",
-      "section 'qntm-classes.concept'": "qualification refused: qntm-classes-concept",
-      "section 'qntm-classes.exists'": "qualification refused: qntm-classes-exists",
-      "section 'qntm-classes.extracted'": "qualification refused: qntm-classes-extracted",
-      "section 'qntm-classes.subsumed'": "qualification refused: qntm-classes-subsumed",
-      "section 'qntm-packages.concept'": "qualification refused: qntm-packages-concept",
-      "section 'qntm-packages.exists'": "qualification refused: qntm-packages-exists",
-      "section 'qntm-packages.extracted'": "qualification refused: qntm-packages-extracted",
-      "section 'qntm-packages.subsumed'": "qualification refused: qntm-packages-subsumed",
-      "section 'qntm-principles.held'": "qualification refused: qntm-principles-held",
-      "section 'qntm-principles.held-weak'": "qualification refused: qntm-principles-held-weak",
-      "section 'qntm-principles.un-anchored'": "qualification refused: qntm-principles-un-anchored",
-      "section 'qntm-principles.unverifiable'": "qualification refused: qntm-principles-unverifiable",
-      "section 'qntm-principles.violated'": "qualification refused: qntm-principles-violated",
-      "section 'qntm-queue.queue'": "qualification refused: qntm-queue-items",
-      "section 'qntm-sinks.sinks'": "qualification refused: qntm-sinks-all",
-      "section 'routine-cascade-dojo.governed'": "qualification refused: routine-cascade-dojo-heads",
-      "section 'termination-dojo.fragments'": "qualification refused: termination-dojo-heads",
       "section 'this-week.available-overdue'": "qualification refused: available-overdue",
       "section 'this-week.available-this-week'": "qualification refused: available-this-week",
       "section 'this-week.available-today'": "qualification refused: available-today",
@@ -4196,8 +6223,6 @@
       "section 'this-week.due-tomorrow'": "qualification refused: due-tomorrow",
       "section 'this-week.due-yesterday'": "qualification refused: due-yesterday",
       "section 'this-week.overdue'": "qualification refused: overdue",
-      "section 'trace-orchestration-queue.queue'": "qualification refused: trace-orchestration-queue-items",
-      "section 'unlocks-dojo.chain'": "qualification refused: unlocks-dojo-heads",
       "vocabulary token '#every-{dom}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#every-{n}{unit}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#every-{weekdays}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
