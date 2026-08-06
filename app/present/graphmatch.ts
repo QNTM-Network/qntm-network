@@ -75,9 +75,9 @@
  * pointed at a graph-aware qualifier matcher instead of a fields-only one.
  */
 
-import type { FieldValue, FindClause, Qualifier } from "./qualification.js";
-import { matchesFindClause } from "./membership.js";
-import type { ResolvedFields } from "./membership.js";
+import type { FieldValue, FindClause, Qualifier } from "./select/qualification.js";
+import { matchesFindClause } from "./select/membership.js";
+import type { ResolvedFields } from "./select/membership.js";
 import { applyRuleActions, evaluateWhen } from "./rules.js";
 import type { RuleEffect, RulesLanguage } from "./rules.js";
 

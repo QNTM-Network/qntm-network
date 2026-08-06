@@ -126,7 +126,7 @@
  *     (`backlog.yaml`'s `the-cursor-anchors-to-a-node-not-a-line-number`).
  */
 
-import { stampSpans } from "./rendition.js";
+import { stampSpans } from "./express/rendition.js";
 
 /**
  * The envelope key the echo is read from. Exported so a test can name it rather than repeat it.

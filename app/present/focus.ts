@@ -95,8 +95,8 @@ import { PresentationContext } from "./context.js";
 import { instanceAnchorFor, resolveInstanceAnchor } from "./instance.js";
 import type { InstanceAnchor, InstanceReading } from "./instance.js";
 import { clampColumn } from "./motions.js";
-import { RESOLUTION_KEYS } from "./rendition.js";
-import type { Contribution, Rendition } from "./rendition.js";
+import { RESOLUTION_KEYS } from "./express/rendition.js";
+import type { Contribution, Rendition } from "./express/rendition.js";
 
 /**
  * The characters of the line at `lineIndex`, or `null` when there is no source to read them from.

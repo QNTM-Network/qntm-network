@@ -52,11 +52,11 @@
  * decision this module does not make — see `app/index.html`'s own header for that boundary.
  */
 
-import type { EdgeStep, FieldValue, Qualifier } from "./qualification.js";
-import { qualifierNeedsGraph } from "./qualification.js";
-import { matchesQualifier } from "./membership.js";
-import type { ResolvedFields } from "./membership.js";
-import { tagSpans } from "./rendition.js";
+import type { EdgeStep, FieldValue, Qualifier } from "./select/qualification.js";
+import { qualifierNeedsGraph } from "./select/qualification.js";
+import { matchesQualifier } from "./select/membership.js";
+import type { ResolvedFields } from "./select/membership.js";
+import { tagSpans } from "./express/rendition.js";
 
 /** Mirrors `compile-rules.mjs`'s `normaliseWhen` output exactly — the closed predicate grammar a
  * published rule's `when:` was reduced to. */

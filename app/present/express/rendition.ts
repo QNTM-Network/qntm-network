@@ -1,6 +1,21 @@
 /**
  * What a resolution IS — values only. No DOM, no fetch, no behaviour beyond reading a line.
  *
+ * ── HOMED IN express/ — THE EXPRESS VERB, PLUS THE SHARED LINE GRAMMAR EVERY VERB BORROWS ──
+ *
+ * docs/implementation-artifacts/design-the-three-layers.md's EXPRESS is "turn one node into a
+ * line of text; glyphs, tags, stamps, cell order. Produces LINES" — this file's `Resolution`/
+ * `Rendition` types are exactly that vocabulary, and `cascade.ts`/`declaration.ts`/`levels.ts`
+ * beside it are the reader, the declaration and the precedence order that resolve it. It is homed
+ * here despite ALSO being the widest-imported module in this bundle (SELECT's `membership.ts`,
+ * ARRANGE's `ordering.ts`/`orderingqualify.ts`, every vim motion module, and half the write-path
+ * plumbing all reach `classifyLine`/`tagSpans`/`stampSpans`/`titleSpans` from here) — a straddle
+ * decided rather than split: parsing "what shape is this line" is a single, well-tested 800-line
+ * grammar with one behavioural contract, and cutting it into an EXPRESS half and a shared-parsing
+ * half would be a real code change, not a rename, for a module this document's brief does not ask
+ * to be rewritten. See docs/implementation-artifacts/design-the-three-layers.md itself for why
+ * EXPRESS is allowed to be the layer other layers borrow vocabulary from.
+ *
  * A `Resolution` is a small closed record, one key per token family the app can show more than
  * one way, each key holding a `Rendition`. `raw` means the characters, verbatim. `wired` means
  * the app's rendition of them. Every mixture is legal: a Resolution with every key `raw` is a

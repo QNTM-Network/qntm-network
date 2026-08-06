@@ -1,6 +1,20 @@
 /**
  * PresentationContext — the assembled facts, one contribution per level.
  *
+ * ── NOT HOMED IN select/, arrange/ OR express/ — THE ONE PARSE SITE FOR ALL OF THEM ──
+ *
+ * `presentationFromDeclaration`, below, reads the served document once and returns ALL FIVE axes
+ * this bundle knows — the EXPRESS contribution (`readDeclaration`), ARRANGE's ingest language
+ * (`readStructuralDeclaration`), SELECT's qualification (`readQualificationDeclaration`), the
+ * shared config-only table (`readConfigResolutionDeclaration`), and RULES (`readRulesDeclaration`)
+ * — deliberately, in one function, off one document. Its own header (below) states why: one call
+ * site per document is what lets a reader ask "is this declaration wired?" without re-fetching or
+ * re-parsing, and it is what flow-trace observes as `context -> declaration`, `context ->
+ * structural`, `context -> qualification`, `context -> resolutiontable` (docs/architecture/
+ * flows.yaml). Splitting this module along verb lines would mean parsing the same JSON document
+ * multiple times or re-plumbing that single-parse guarantee for no behavioural gain — so it stays
+ * here, a fifth thing beside the three verbs rather than inside any one of them.
+ *
  * PURE. It holds what each level says and nothing else: no DOM, no fetch, no session, no clock.
  * Keeping it pure is what lets a test say "resolve as if the cursor were on this line" without a
  * browser, which is the whole reason the cursor rule (migration stage 3) can be specified before
@@ -22,17 +36,17 @@
  * and stay silent on the rest without spelling silence a second way.
  */
 
-import type { PresentationLevel } from "./levels.js";
-import { readDeclaration, DEFAULT_INDENT_UNIT } from "./declaration.js";
-import { readStructuralDeclaration } from "./structural.js";
-import type { StructuralLanguage } from "./structural.js";
-import { readQualificationDeclaration } from "./qualification.js";
-import type { QualificationLanguage } from "./qualification.js";
+import type { PresentationLevel } from "./express/levels.js";
+import { readDeclaration, DEFAULT_INDENT_UNIT } from "./express/declaration.js";
+import { readStructuralDeclaration } from "./arrange/structural.js";
+import type { StructuralLanguage } from "./arrange/structural.js";
+import { readQualificationDeclaration } from "./select/qualification.js";
+import type { QualificationLanguage } from "./select/qualification.js";
 import { readConfigResolutionDeclaration } from "./resolutiontable.js";
 import type { ConfigResolutionTable } from "./resolutiontable.js";
 import { readRulesDeclaration } from "./rules.js";
 import type { RulesLanguage } from "./rules.js";
-import type { Contribution } from "./rendition.js";
+import type { Contribution } from "./express/rendition.js";
 
 export class PresentationContext {
   readonly #contributions: ReadonlyMap<PresentationLevel, Contribution>;

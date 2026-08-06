@@ -2,6 +2,20 @@
  * structural — reading the INGEST half of the presentation cascade: what a gesture MEANS, not how
  * a token is SHOWN. PURE: no DOM, no fetch, no clock.
  *
+ * ── HOMED IN arrange/, ON PURPOSE, AGAINST ITS OWN "SITS BESIDE declaration.ts" FRAMING ──
+ *
+ * This file's own architecture (below) frames itself as `declaration.ts`'s INGEST-direction
+ * mirror — a general pattern, not a verb assignment. What it actually PUBLISHES is edge
+ * cardinality and direction per indent binding: the declared rule for what an indent gesture does
+ * to the PARENT/CHILD relationship between two lines. That is docs/implementation-artifacts/
+ * design-the-three-layers.md's ARRANGE question ("order and nest them; parent/child") stated as a
+ * config reader rather than as a per-edit answer, so it is homed here rather than beside
+ * `declaration.ts` in `express/`. Its current live consumer is `resolvers/promotion.ts` (the
+ * RULES axis's graph-aware resolver, which turns an indent into a prospective edge) — a further
+ * straddle, named rather than hidden: ARRANGE's own declaration is read by the RULES wire, not by
+ * `ordering.ts` directly, because nothing has wired a VIEW/STRUCTURAL_NODE cascade level against
+ * it yet (this file's own "WHY THIS IS NOT A CASCADE LEVEL" section, below, unchanged).
+ *
  * `docs/implementation-artifacts/design-the-structural-language.md` is the brief. Its §7 draws the
  * line this module exists to encode in code rather than only in prose: rendition and structural
  * meaning are the same KIND of fact (both cascading resolutions, declared in config, read by a

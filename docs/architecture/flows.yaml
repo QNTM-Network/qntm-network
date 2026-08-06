@@ -96,7 +96,7 @@ expected_flows:
   # at the call site stops producing it.
   - id: paint-resolves-through-the-cascade
     from: app/present/paint
-    to:   app/present/cascade
+    to:   app/present/express/cascade
     callee: PresentationCascade.resolve
     event: app.resolves-a-rendition
     class: presentation-resolution
@@ -110,7 +110,7 @@ expected_flows:
   # edge worth watching. app.html fetches; app/present/context reads.
   - id: context-reads-the-global-declaration
     from: app/present/context
-    to:   app/present/declaration
+    to:   app/present/express/declaration
     callee: readDeclaration
     event: app.reads-the-global-declaration
     class: presentation-resolution
@@ -124,7 +124,7 @@ expected_flows:
   # `context-reads-the-global-declaration` does for the rendition axis above it.
   - id: context-reads-the-structural-declaration
     from: app/present/context
-    to:   app/present/structural
+    to:   app/present/arrange/structural
     callee: readStructuralDeclaration
     event: app.reads-the-structural-declaration
     class: presentation-resolution
@@ -140,7 +140,7 @@ expected_flows:
   # this edge specifically.
   - id: context-reads-the-qualification-declaration
     from: app/present/context
-    to:   app/present/qualification
+    to:   app/present/select/qualification
     callee: readQualificationDeclaration
     event: app.reads-the-qualification-declaration
     class: presentation-resolution
@@ -174,7 +174,7 @@ expected_flows:
   # session, a store or a global — which is what lets a test resolve "as if the cursor were here"
   # without a browser, and what stage 3 depends on.
   - id: cascade-reads-the-levels-it-was-given
-    from: app/present/cascade
+    from: app/present/express/cascade
     to:   app/present/context
     callee: PresentationContext.at
     event: app.reads-a-level-contribution
@@ -185,8 +185,8 @@ expected_flows:
   # spelling at a call site is how a cascade acquires a hole nobody can see, so the edge is
   # declared rather than left as an implementation detail.
   - id: cascade-asks-the-levels-what-silence-is
-    from: app/present/cascade
-    to:   app/present/levels
+    from: app/present/express/cascade
+    to:   app/present/express/levels
     callee: isSilent
     event: app.tests-level-silence
     class: presentation-resolution
@@ -196,7 +196,7 @@ expected_flows:
   # regexes at three call sites.
   - id: paint-classifies-the-line
     from: app/present/paint
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.classifies-a-source-line
     class: presentation-resolution
@@ -215,7 +215,7 @@ expected_flows:
   # evidence that a declaration reached the painter and was obeyed.
   - id: paint-finds-the-tags-in-the-line
     from: app/present/paint
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: tagSpans
     event: app.finds-the-tags-in-a-line
     class: presentation-resolution
@@ -234,7 +234,7 @@ expected_flows:
   # a declaration of `stamp: wired` reached the painter and was obeyed rather than merely loaded.
   - id: paint-finds-the-identity-stamp-in-the-line
     from: app/present/paint
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: stampSpans
     event: app.finds-the-identity-stamp-in-a-line
     class: presentation-resolution
@@ -356,7 +356,7 @@ expected_flows:
   # stops a node titled nothing from being minted, which was measured against a real cycle.
   - id: source-asks-the-grammar-whether-a-line-carries-content
     from: app/present/source
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: carriesContent
     event: app.judges-a-line-empty
     class: source-write-back
@@ -368,7 +368,7 @@ expected_flows:
   # answer instead of re-deriving it.
   - id: newline-reads-the-printed-shape
     from: app/present/newline
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: chromeOf
     event: app.reads-the-printed-shape
     class: presentation-resolution
@@ -380,7 +380,7 @@ expected_flows:
   # view's. Same grammar as the painter's, asked for a different purpose.
   - id: newline-finds-the-section-boundary
     from: app/present/newline
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.finds-a-section-boundary
     class: presentation-resolution
@@ -459,7 +459,7 @@ expected_flows:
 
   - id: boundary-classifies-the-line
     from: app/present/boundary
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.finds-a-structural-boundary
     class: presentation-resolution
@@ -467,7 +467,7 @@ expected_flows:
 
   - id: indent-classifies-the-line
     from: app/present/indent
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.decides-whether-a-line-may-be-indented
     class: presentation-resolution
@@ -475,7 +475,7 @@ expected_flows:
 
   - id: word-finds-the-title-words
     from: app/present/word
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: titleSpans
     event: app.finds-the-title-words-for-a-word-jump
     class: presentation-resolution
@@ -497,24 +497,24 @@ expected_flows:
   # record above.
 
   - id: membership-reads-the-lines-identity-stamp
-    from: app/present/membership
-    to:   app/present/rendition
+    from: app/present/select/membership
+    to:   app/present/express/rendition
     callee: qntmIdSpans
     event: app.checks-whether-the-line-is-already-a-node
     class: section-membership
     gates_capabilities: [section-membership-is-read-not-guessed]
 
   - id: membership-reads-the-lines-tags
-    from: app/present/membership
-    to:   app/present/rendition
+    from: app/present/select/membership
+    to:   app/present/express/rendition
     callee: tagSpans
     event: app.resolves-the-lines-fields-from-its-tokens
     class: section-membership
     gates_capabilities: [section-membership-is-read-not-guessed]
 
   - id: membership-checks-the-line-carries-content
-    from: app/present/membership
-    to:   app/present/rendition
+    from: app/present/select/membership
+    to:   app/present/express/rendition
     callee: carriesContent
     event: app.refuses-a-line-that-would-mint-an-untitled-node
     class: section-membership
@@ -532,7 +532,7 @@ expected_flows:
   # evaluation are two different layers with two different reaches.
   - id: address-classifies-the-line
     from: app/present/address
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.counts-a-lines-section-ordinal
     class: section-addressing
@@ -561,8 +561,8 @@ expected_flows:
   # shapes, no runtime call), so no edge is declared for it — the same posture this file already
   # takes for a type-only import elsewhere.
   - id: ordering-classifies-the-line
-    from: app/present/ordering
-    to:   app/present/rendition
+    from: app/present/arrange/ordering
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.finds-a-sections-line-range
     class: presentation-resolution
@@ -650,7 +650,7 @@ expected_flows:
   # promoted from INFO to declared on 2026-07-31.
   - id: instance-classifies-the-line
     from: app/present/instance
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: classifyLine
     event: app.counts-the-section-a-printed-row-sits-in
     class: section-addressing
@@ -658,7 +658,7 @@ expected_flows:
 
   - id: instance-reads-the-stamp
     from: app/present/instance
-    to:   app/present/rendition
+    to:   app/present/express/rendition
     callee: qntmIdSpans
     event: app.reads-a-printed-rows-node-id
     class: section-addressing
@@ -740,7 +740,7 @@ forbidden_flows:
   # change could quietly break.
 
   - id: cascade-never-touches-the-dom
-    from: app/present/cascade
+    from: app/present/express/cascade
     to:   app/present/paint
     reason: >
       The cascade is a pure decision. If it ever calls into the painter it can see the page it is

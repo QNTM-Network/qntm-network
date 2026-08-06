@@ -53,8 +53,8 @@
  * `count === 1` here, not a separate branch.
  */
 
-import { titleSpans } from "./rendition.js";
-import type { WordSpan } from "./rendition.js";
+import { titleSpans } from "./express/rendition.js";
+import type { WordSpan } from "./express/rendition.js";
 
 /** `w`: start of the count-th word. `e`: end of the count-th word. `b`: start, counted from the end. */
 export type WordMotion = "w" | "b" | "e";

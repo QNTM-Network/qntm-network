@@ -97,7 +97,7 @@
  * spaces — this app never writes a tab, mirroring the engine, which never emits one either.
  */
 
-import { classifyLine } from "./rendition.js";
+import { classifyLine } from "./express/rendition.js";
 
 /**
  * Four spaces — the BUILT-IN FALLBACK, used only when `presentation.json` declares no

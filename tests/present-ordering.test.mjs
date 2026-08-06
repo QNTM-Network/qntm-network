@@ -604,7 +604,7 @@ describe("5. orderingFor reaches the clock zero times", () => {
 
 describe("6. NOTHING LOCAL REACHES A WRITE — ordering.ts's own imports", () => {
   test("ordering.ts imports nothing from source.ts, context.ts or cascade.ts", () => {
-    const src = readFileSync(resolve(HERE, "..", "app", "present", "ordering.ts"), "utf8");
+    const src = readFileSync(resolve(HERE, "..", "app", "present", "arrange", "ordering.ts"), "utf8");
     for (const line of src.split(/\r?\n/)) {
       if (!/^\s*import\b/.test(line)) continue;
       assert.doesNotMatch(
@@ -1219,7 +1219,7 @@ describe("10e. THE DISPATCHER — resolveOrderingFor/resolveOrderingPlacementFor
 
 describe("10f. NOTHING LOCAL REACHES A WRITE — the default-ordering path's own imports, mirroring §6", () => {
   test("ordering.ts still imports nothing from source.ts", () => {
-    const ORDERING_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "ordering.ts"), "utf8");
+    const ORDERING_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "arrange", "ordering.ts"), "utf8");
     for (const line of ORDERING_SOURCE.split(/\r?\n/)) {
       if (!/^\s*import\b/.test(line)) continue;
       assert.doesNotMatch(line, /["']\.\/source\.js["']/, `ordering.ts imports the edit path: ${line.trim()}`);

@@ -3,6 +3,14 @@
  * PURE: no DOM, no fetch, no clock, no graph. design-the-resolution-architecture.md step 7, L5
  * EVALUATION.
  *
+ * ── HOMED IN arrange/ — THE ARRANGE VERB ──
+ *
+ * The TREE half of docs/implementation-artifacts/design-the-three-layers.md's three-verb split:
+ * "order and nest them; parent/child, context versus qualifying." `parentLineOf`, below, is this
+ * browser's own hand-rolled reconstruction of the parent boundaries the engine's
+ * `section_builder.py` computes once and discards before markdown ships — see
+ * `arrange/incoming-section-tree.ts` for the seam where that fact would arrive already built.
+ *
  * ── THE TWO MEASUREMENTS THAT DECIDED WHAT THIS MODULE IS, MADE BEFORE WRITING IT ──
  *
  * 1. DOES AN ORDERING KEY DEPEND ON THE CLOCK? Measured directly off the operator's real config
@@ -139,9 +147,9 @@
  * parameter this file's behaviour is unchanged, byte for byte.
  */
 
-import { classifyLine, cleanTitleFor } from "./rendition.js";
-import type { CleanTitleReading } from "./rendition.js";
-import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "./resolutiontable.js";
+import { classifyLine, cleanTitleFor } from "../express/rendition.js";
+import type { CleanTitleReading } from "../express/rendition.js";
+import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "../resolutiontable.js";
 
 /**
  * Why nothing is said. The first five name a refusal in this module's own header, for the DECLARED

@@ -56,10 +56,10 @@
  */
 
 import type { LineCommit } from "./paint.js";
-import type { QualificationLanguage } from "./qualification.js";
+import type { QualificationLanguage } from "./select/qualification.js";
 import type { ConfigResolutionTable } from "./resolutiontable.js";
 import type { RulesLanguage } from "./rules.js";
-import type { StructuralLanguage } from "./structural.js";
+import type { StructuralLanguage } from "./arrange/structural.js";
 import type { GraphSnapshot } from "./graphmatch.js";
 import type { RowPlacement } from "./settle.js";
 import type { RowPrediction } from "./predict.js";

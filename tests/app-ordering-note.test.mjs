@@ -262,7 +262,7 @@ describe("2. BOTH NOTES ANSWER INDEPENDENTLY, FOR THE SAME COMMIT — through th
 describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor's own imports", () => {
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
   const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
-  const ORDERING_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "ordering.ts"), "utf8");
+  const ORDERING_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "arrange", "ordering.ts"), "utf8");
 
   // FOUR RATHER THAN FIVE SINCE 2026-08-01 — the behavioural queue's one `installProjection`
   // replaced the two write paths' identical assign-paint-say. tests/app-membership-note.test.mjs §4

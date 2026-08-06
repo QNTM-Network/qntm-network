@@ -669,7 +669,7 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     // above is untouched. A SECOND import, or a different one, still turns this red.
     assert.deepEqual(
       CORRELATION_CODE.match(/^import\b.*$/gm),
-      ['import { stampSpans } from "./rendition.js";'],
+      ['import { stampSpans } from "./express/rendition.js";'],
       "correlation.ts gained an import that is not the stamp grammar",
     );
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);

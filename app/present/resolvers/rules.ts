@@ -41,7 +41,7 @@
  */
 
 import { sectionAt, sectionOrderFor } from "../address.js";
-import { resolveLineFields } from "../membership.js";
+import { resolveLineFields } from "../select/membership.js";
 import { applyRules, renderRuleEffects } from "../rules.js";
 import type { RuleEffect } from "../rules.js";
 import { todayFor } from "../today.js";

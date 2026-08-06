@@ -2,6 +2,20 @@
  * orderingqualify — for an EXISTING, already-rendered sibling line, is it a genuine QUALIFYING
  * member of its section, or a CONTEXT/ancestor row pulled in only to complete the tree?
  *
+ * ── HOMED IN arrange/, THOUGH THE QUESTION IT ANSWERS IS SELECT-SHAPED ──
+ *
+ * "Is this row a genuine set member" is, by docs/implementation-artifacts/design-the-three-
+ * layers.md's own split, a SELECT question — it is the same shape `qualification.ts`/
+ * `membership.ts` answer. This module is homed in `arrange/` anyway, deliberately, because its
+ * ONLY consumer is `ordering.ts` (through `resolvers/ordering.ts`): it exists to give ARRANGE the
+ * qualifying-vs-context signal `ordering.ts`'s own header says the browser lacked, not to answer
+ * SELECT's question for its own sake. It also reaches into `graphmatch.ts` (the RULES axis's
+ * one-hop traversal) to get that signal — so this one module touches SELECT's question, RULES'
+ * mechanism, and ARRANGE's consumer, in eleven lines of actual logic. Splitting it along verb
+ * lines would mean two files calling each other for one signal with one caller; left together, on
+ * the strength of "home it where it is consumed." See `arrange/incoming-section-tree.ts` — this
+ * whole module is a stand-in for `SectionTreeNode.is_qualifying`, once that field arrives.
+ *
  * `ordering.ts`'s header names this gap and refuses to guess past it: the DEFAULT/title path keeps
  * refusing `nested-section` because "engine membership (`qualifying_ids`, invisible to this app) is
  * what actually decides context-vs-qualifying" and needs "a real qualifying/context signal (graph
@@ -55,10 +69,10 @@
  * cannot be resolved (`matchesQualifierGraphAware`'s own `undefined`).
  */
 
-import { stampSpans } from "./rendition.js";
-import type { QualificationLanguage, Qualifier } from "./qualification.js";
-import { matchesQualifierGraphAware } from "./graphmatch.js";
-import type { EdgeSourceOf, GraphSnapshot } from "./graphmatch.js";
+import { stampSpans } from "../express/rendition.js";
+import type { QualificationLanguage, Qualifier } from "../select/qualification.js";
+import { matchesQualifierGraphAware } from "../graphmatch.js";
+import type { EdgeSourceOf, GraphSnapshot } from "../graphmatch.js";
 
 /** `[[qntm:N]]` -> `N`, and `qntm:N` -> `N` — the same normalisation `promotion.ts`'s own `bareId`
  * applies, so a real match is never missed over a prefix this app is not certain either side uses. */

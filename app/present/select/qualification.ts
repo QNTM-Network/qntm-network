@@ -2,6 +2,13 @@
  * qualification — reading the MEMBERSHIP half of the declaration: which section a line belongs in,
  * not how a token is shown and not what a gesture means. PURE: no DOM, no fetch, no clock.
  *
+ * ── HOMED IN select/ — THE SELECT VERB ──
+ *
+ * design-the-three-layers.md's naming pass (docs/implementation-artifacts/design-the-three-
+ * layers.md): SELECT is "which nodes belong in this section — the qualification/pattern
+ * evaluation. Produces a SET." This module and `membership.ts` beside it are that verb's
+ * declaration-reading half; `resolvers/membership.ts` is its wire half.
+ *
  * A view's section names a `qualification` — a pattern the engine resolves each cycle to decide
  * which nodes render under that heading. Type a line under "Domain Empty" in `inbox.md` and a
  * determinate question follows immediately: after that edit, does this line still belong where it
