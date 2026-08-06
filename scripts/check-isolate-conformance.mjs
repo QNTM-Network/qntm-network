@@ -87,7 +87,6 @@ import {
   compile as compileRules,
   RULES_PREFIX as RULES_CATEGORY_PREFIX,
   PATTERNS_PREFIX as RULES_PATTERNS_PREFIX,
-  MARKERS_KEY as RULES_MARKERS_KEY,
 } from "./compile-rules.mjs";
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
@@ -203,20 +202,24 @@ const GENERATORS = [
     routePath: "/config/compile/rules",
     compile: compileRules,
     // Read a config directory into exactly the files map `compile()` recognises — every
-    // `rules/*.yaml`, every `patterns/*.yaml` and `vocabulary/markers.yaml`, sorted, the same way
-    // `generate-rules-declaration.mjs`'s own fs shell reads it. PASS 2 (resolve `for_each.pattern`)
-    // and PASS 3 (spell a `setsField` target) — `compile-rules.mjs`'s own header — are what make
-    // `patterns/`/`vocabulary/` non-optional now; their absence is still not an error on its own
-    // (a category with zero rules, or zero rules whose pattern resolves, is legitimate), same as
-    // `rules/` absence always was.
+    // `rules/*.yaml`, every `patterns/*.yaml` and every `vocabulary/*.yaml`, sorted, the same way
+    // `generate-rules-declaration.mjs`'s own fs shell reads it. PASS 2 (resolve `for_each.pattern`,
+    // and — 2026-08-06 — `deriveResolvableFields`) and PASS 3 (spell a `setsField` target) —
+    // `compile-rules.mjs`'s own header — are what make `patterns/`/`vocabulary/` non-optional now;
+    // their absence is still not an error on its own (a category with zero rules, or zero rules
+    // whose pattern resolves, is legitimate), same as `rules/` absence always was. Narrowing this
+    // to `vocabulary/markers.yaml` alone (as it did before 2026-08-06) starves
+    // `deriveResolvableFields` of `status_tags.yaml`/`type_tags.yaml`/`domain_tags.yaml` and every
+    // real rule's pattern refuses as unresolvable — see `generate-rules-declaration.mjs`'s header
+    // for the full account of that regression and its fix.
     readConfigTree(configDir) {
       const files = {};
       const rulesDir = join(configDir, "rules");
       if (existsSync(rulesDir)) readYamlDir(rulesDir, RULES_CATEGORY_PREFIX, files);
       const patternsDir = join(configDir, "patterns");
       if (existsSync(patternsDir)) readYamlDir(patternsDir, RULES_PATTERNS_PREFIX, files);
-      const markersPath = join(configDir, "vocabulary", "markers.yaml");
-      if (existsSync(markersPath)) files[RULES_MARKERS_KEY] = readFileSync(markersPath, "utf8");
+      const vocabularyDir = join(configDir, "vocabulary");
+      if (existsSync(vocabularyDir)) readYamlDir(vocabularyDir, VOCABULARY_PREFIX, files);
       return files;
     },
     // UNLIKE THE OTHER THREE. `compile-rules.mjs` never refuses the whole category over a rule

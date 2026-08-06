@@ -33,7 +33,8 @@ import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT, notCheckedReport } from "./monorepo-config.mjs";
 import { Ledger, reportDropped } from "./ledger.mjs";
-import { compile, GenerationError, RULES_PREFIX, PATTERNS_PREFIX, MARKERS_KEY } from "./compile-rules.mjs";
+import { compile, GenerationError, RULES_PREFIX, PATTERNS_PREFIX } from "./compile-rules.mjs";
+import { VOCABULARY_PREFIX } from "./compile-qualification.mjs";
 
 // Re-exported, not restated: tests import it from here, same as every sibling generator.
 export { DEFAULT_CONFIG_DIR };
@@ -57,10 +58,21 @@ export { compile };
  *
  * `rules/` absence is NOT an error: a category with zero rules is a legitimate (if unusual) state,
  * the same posture `generate-resolution-declaration.mjs`'s own `rules/` reader already takes. The
- * same now applies to `patterns/` and `vocabulary/markers.yaml`: `compile`'s own PASS 2/PASS 3
+ * same now applies to `patterns/` and `vocabulary/`: `compile`'s own PASS 2/PASS 3
  * (`compile-rules.mjs`'s header) read them to resolve a rule's `for_each.pattern` and to spell a
  * `setsField` target's marker — their absence just means every rule needing either drops, which
  * `compile` already reports through `dropped`, not a reason for this shell to refuse to run.
+ *
+ * 2026-08-06: widened from `vocabulary/markers.yaml` ALONE to the WHOLE `vocabulary/` directory.
+ * `compile`'s PASS 2 now calls `deriveResolvableFields(files)` (`compile-qualification.mjs`) to
+ * know which of a `for_each.pattern`'s referenced fields a fresh capture can actually resolve —
+ * the identical rule `compile-qualification.mjs`'s own shell already reads the whole directory
+ * for. Reading only `markers.yaml` starved that derivation of every OTHER vocabulary file
+ * (`checkbox.yaml`, `type_tags.yaml`, `domain_tags.yaml`, …), so it could see nothing beyond
+ * `title` — refusing `status`, `domain` and every other field a real rule's pattern needs, even
+ * though `compile-qualification.mjs` resolves the identical pattern for the SAME config correctly.
+ * `MARKERS_KEY` is still exported and still consumed by name (PASS 3, the marker gap) — it is now
+ * just one of the many keys this wider read populates, not a special case of its own.
  *
  * @param {string} configDir
  * @returns {Record<string, string>}
@@ -79,9 +91,11 @@ export function readConfigTree(configDir) {
       files[`${PATTERNS_PREFIX}${f}`] = readFileSync(join(patternsDir, f), "utf8");
     }
   }
-  const markersPath = join(configDir, "vocabulary", "markers.yaml");
-  if (existsSync(markersPath)) {
-    files[MARKERS_KEY] = readFileSync(markersPath, "utf8");
+  const vocabularyDir = join(configDir, "vocabulary");
+  if (existsSync(vocabularyDir)) {
+    for (const f of readdirSync(vocabularyDir).filter((f) => f.endsWith(".yaml")).sort()) {
+      files[`${VOCABULARY_PREFIX}${f}`] = readFileSync(join(vocabularyDir, f), "utf8");
+    }
   }
   return files;
 }

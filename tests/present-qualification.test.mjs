@@ -114,25 +114,31 @@ describe("1a. sectionOrder — the FULL declared order, published beside the pub
     assert.deepEqual(qualification.sectionOrder["inbox"], ["inbox-tagged", "domain-empty"]);
   });
 
-  test("daily-work: 5 declared, only 2 published — sectionOrder still carries all 5", () => {
+  test("daily-work: 5 declared, only 3 published — sectionOrder still carries all 5", () => {
     // RESTATED 2026-08-04, the one-hop `children:`/`parents:` widening
     // (`compile-qualification.mjs`'s `normaliseEdgeStep`): `waiting` joined `in-progress` in
     // `sections` because its own qualification is a one-hop edge-existence test, which this
     // generator now normalises instead of refusing outright. `sectionOrder` itself is untouched —
     // it was always the full declared order, and still is.
+    //
+    // RESTATED AGAIN 2026-08-06: `urgent` joined too — `deriveResolvableFields` (`compile-
+    // qualification.mjs`'s header) admits `priority` (a fixed-value vocabulary token, `markers
+    // .yaml`'s 🔽/⏫/📌), which `urgent`'s own qualification predicate ranges over.
     const { qualification } = readQualificationDeclaration(SERVED);
     assert.deepEqual(
       qualification.sectionOrder["daily-work"],
       ["in-progress", "urgent", "due-today", "waiting", "capture"],
     );
-    assert.deepEqual(Object.keys(qualification.sections["daily-work"]), ["in-progress", "waiting"]);
+    assert.deepEqual(Object.keys(qualification.sections["daily-work"]), ["in-progress", "urgent", "waiting"]);
   });
 
-  test("daily-personal: 8 declared, only 5 published — sectionOrder still carries all 8", () => {
+  test("daily-personal: 8 declared, only 6 published — sectionOrder still carries all 8", () => {
     // RESTATED 2026-08-04 — see the `daily-work` test above for why the published count moved.
+    // RESTATED AGAIN 2026-08-06 — 5 -> 6, the same `priority` widening `daily-work`'s own restated
+    // comment names.
     const { qualification } = readQualificationDeclaration(SERVED);
     assert.equal(qualification.sectionOrder["daily-personal"].length, 8);
-    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 5);
+    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 6);
   });
 
   test("every published section's id also appears in its view's full order", () => {
@@ -174,13 +180,18 @@ describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into 
     // regenerated from monorepo `d4c9d98`. RESTATED AGAIN 2026-08-04: predicates 64 -> 88, sections
     // 32 -> 51 — `compile-qualification.mjs`'s one-hop `children:`/`parents:` widening
     // (`normaliseEdgeStep`) resolved 19 patterns that were previously refused for "traverses an
-    // edge", each covering one or more sections across several views. The counts are a census of
-    // HIS config, not a property of this wiring. What this test actually falsifies — that
+    // edge", each covering one or more sections across several views.
+    //
+    // RESTATED AGAIN 2026-08-06: predicates 88 -> 112, views-with-a-published-section 51 -> 57.
+    // `RESOLVABLE_FIELDS` stopped being the frozen `["node_type", "domain", "status"]` and became
+    // `deriveResolvableFields`'s own measurement of the real config (18 fields) — see `compile-
+    // qualification.mjs`'s header. The counts are a census of HIS config and this generator's
+    // grammar, not a property of this wiring. What this test actually falsifies — that
     // `presentationFromDeclaration` carries the qualification axis at all — is unchanged, and
     // `problems` is still empty.
     const declared = presentationFromDeclaration(SERVED);
-    assert.equal(Object.keys(declared.qualification.predicates).length, 88);
-    assert.equal(Object.keys(declared.qualification.sections).length, 51);
+    assert.equal(Object.keys(declared.qualification.predicates).length, 112);
+    assert.equal(Object.keys(declared.qualification.sections).length, 57);
     assert.deepEqual(declared.problems, [], "wiring qualification in introduced a reported problem");
   });
 

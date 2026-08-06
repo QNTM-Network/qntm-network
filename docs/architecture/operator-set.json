@@ -64,15 +64,26 @@
     "below AND every one of the surfaces listed, in the same pull request, or",
     "tests/operator-set-agreement.test.mjs goes red naming exactly which surface fell out of step.",
     "",
-    "RESOLVABLE_FIELDS STOPPED BEING THREE HAND-TYPED COPIES. scripts/generate-qualification-",
-    "declaration.mjs:96 is now the one hand-authored copy; scripts/generate-operator-set.mjs writes",
-    "app/present/membership.ts's and scripts/qualification-agreement.py's copies FROM it. This file",
-    "was deliberately NOT made the generation source (see CORRECTIONS above) — it exists to OBSERVE",
-    "the surfaces, by test, and handing it a second job as the thing that DEFINES the value would",
-    "blur that. The three surfaces above still each declare their own symbol; only the literal value",
-    "of two of them is now mechanical rather than retyped by hand. This index, and the resolvableFields",
-    "'values' list below, remain independently hand-authored — a fourth, deliberately separate",
-    "declaration of intent that the generated pair is checked against, not derived from."
+    "RESOLVABLE_FIELDS STOPPED BEING THREE HAND-TYPED COPIES, THEN STOPPED BEING A HAND-TYPED LIST",
+    "AT ALL. scripts/generate-qualification-declaration.mjs:96 used to be the one hand-authored",
+    "copy; scripts/generate-operator-set.mjs wrote app/present/membership.ts's and scripts/",
+    "qualification-agreement.py's copies FROM it. 2026-08-06 (the operator's own diagnosis: 'we have",
+    "nodes and fields etc all declared in yaml... that should be compiled and be the source of",
+    "truth') retired that constant: scripts/compile-qualification.mjs's deriveResolvableFields(files)",
+    "now DERIVES the set from a config's own vocabulary+schema, and generate-operator-set.mjs writes",
+    "app/present/membership.ts's copy from compiling the REAL monorepo config. This file was",
+    "deliberately NOT made the generation source (see CORRECTIONS above) — it exists to OBSERVE the",
+    "surfaces, by test, and handing it a second job as the thing that DEFINES the value would blur",
+    "that. This index, and the resolvableFields 'values' list below, remain independently",
+    "hand-authored — a snapshot of what the real config compiles to today, checked against the",
+    "generated copy, not derived from it.",
+    "",
+    "scripts/qualification-agreement.py's TRIPLE_FIELDS is NO LONGER one of the generated copies —",
+    "see scripts/generate-operator-set.mjs's own header, 'WHY qualification-agreement.py IS NO",
+    "LONGER A TARGET'. Its whole method (an exhaustive cross product of every axis's value domain)",
+    "was tractable at three low-cardinality fields and is not tractable at eighteen; it is now a",
+    "DELIBERATELY hand-frozen subset of resolvableFields, asserted (at run time, in that file) to",
+    "remain a subset, rather than a copy kept in lockstep with it."
   ],
 
   "memberOperators": {
@@ -95,25 +106,25 @@
   },
 
   "resolvableFields": {
-    "description": "The complete set of node fields a section's own predicate may range over, for a line the operator is typing (not yet an existing node). Anything outside this list is a field the browser cannot resolve locally and the surface must refuse or withhold it.",
-    "values": ["node_type", "domain", "status"],
+    "description": "The complete set of node fields a section's own predicate may range over, for a line the operator is typing (not yet an existing node). Anything outside this list is a field the browser cannot resolve locally and the surface must refuse or withhold it. SNAPSHOT, 2026-08-06: what scripts/compile-qualification.mjs's deriveResolvableFields(files) computes against the real monorepo config today (35 node types, 55 distinct schema fields) — a MEASUREMENT, not a design decision independent of the config. 'project' (60 refusals before this change) and 'stage' (6) are the two most-referenced fields that remain OUTSIDE this list: both are set only by a per-section 'defaults:' block (never a vocabulary token, never the global registration default), which the current compiler cannot yet admit safely on every use — see compile-qualification.mjs's own header, section (b)/(c), and this PR's description for the full account.",
+    "values": ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"],
     "surfaces": [
       {
         "name": "RESOLVABLE fields (compiler)",
-        "file": "scripts/generate-qualification-declaration.mjs",
-        "symbol": "RESOLVABLE_FIELDS (:96)",
+        "file": "scripts/compile-qualification.mjs",
+        "symbol": "deriveResolvableFields (function, not a literal — see its own header)",
         "side": "compiler"
       },
       {
         "name": "RESOLVABLE fields (browser) — NOT in the six-surface report; found verifying it",
         "file": "app/present/membership.ts",
-        "symbol": "RESOLVABLE_FIELDS (:69)",
+        "symbol": "RESOLVABLE_FIELDS (generated from deriveResolvableFields against the real config)",
         "side": "browser"
       },
       {
-        "name": "RESOLVABLE fields (python agreement generator) — also NOT in the report",
+        "name": "RESOLVABLE fields (python agreement generator) — also NOT in the report; DELIBERATELY a subset, not a copy, since 2026-08-06 — see scripts/generate-operator-set.mjs's header",
         "file": "scripts/qualification-agreement.py",
-        "symbol": "TRIPLE_FIELDS (:62)",
+        "symbol": "TRIPLE_FIELDS (:87) — hand-frozen at (\"node_type\", \"domain\", \"status\")",
         "side": "compiler (test-fixture generator, run against the engine directly)"
       }
     ]

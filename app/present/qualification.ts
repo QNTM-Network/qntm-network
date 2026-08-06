@@ -156,6 +156,17 @@ export interface QualificationLanguage {
   readonly defaultNodeType: string | undefined;
   /** Schema-declared identity-unique types, for callers that want to name why chrome is excluded. */
   readonly structuralNodeTypes: readonly string[];
+  /**
+   * WHAT THIS CONFIG'S OWN VOCABULARY+SCHEMA MADE RESOLVABLE FOR A LINE BEING TYPED —
+   * `deriveResolvableFields(files)`'s own answer (`scripts/compile-qualification.mjs`), published
+   * so a reader never has to re-derive it from the raw config to know what governed `tokens` and
+   * `predicates` below. NOT read to decide anything here — `membership.ts`'s own `RESOLVABLE_
+   * FIELDS` constant (generated from the same function, against the same real config, by
+   * `scripts/generate-operator-set.mjs`) is what the app actually gates a line's own tokens by;
+   * this is provenance, kept for legibility and for `tests/operator-set-agreement.test.mjs`'s own
+   * cross-surface check, the same reason `dropped` is published though nothing reads it to decide.
+   */
+  readonly resolvableFields: readonly string[];
   /** field name -> token -> value, for every token in the vocabulary that sets that field. */
   readonly tokens: Readonly<Record<string, Readonly<Record<string, FieldValue>>>>;
   readonly predicates: Readonly<Record<string, Qualifier>>;
@@ -222,6 +233,7 @@ export const DEFAULT_TRAVERSAL_DEPTH = 1;
 const TOP_KEYS = [
   "defaultNodeType",
   "structuralNodeTypes",
+  "resolvableFields",
   "tokens",
   "predicates",
   "sections",
@@ -235,6 +247,7 @@ const SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"] as const;
 const EMPTY: QualificationLanguage = {
   defaultNodeType: undefined,
   structuralNodeTypes: [],
+  resolvableFields: [],
   tokens: {},
   predicates: {},
   sections: {},
@@ -668,6 +681,10 @@ export function readQualificationDeclaration(document: unknown): QualificationRe
               raw.structuralNodeTypes,
               problems,
             )
+          : [],
+      resolvableFields:
+        "resolvableFields" in raw
+          ? readStringList(`${QUALIFICATION_KEY}.resolvableFields`, raw.resolvableFields, problems)
           : [],
       tokens: "tokens" in raw ? readTokens(raw.tokens, problems) : {},
       predicates,

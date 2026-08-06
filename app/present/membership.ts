@@ -44,7 +44,7 @@
  *   from a stamped line clears `domain` is the engine's ingest semantics to decide, and guessing
  *   it would produce exactly the confident-and-wrong answer this module exists to avoid.
  *
- *   THE LINE IS NOT A CHECKBOX WITH A DECLARED BOX. `status` is one of the three fields the
+ *   THE LINE IS NOT A CHECKBOX WITH A DECLARED BOX. `status` is one of the resolvable fields the
  *   predicates range over, and the checkbox is the only thing on a line that sets it. A prose line
  *   has no status to resolve — and per `source.ts`, a bare `- ` line under a checkbox-shaped
  *   default is refused at the applier's form gate and simply vanishes, so it has no membership to
@@ -76,16 +76,25 @@ import type {
 } from "./qualification.js";
 
 /**
- * The three fields a line being typed decides, and the only three any published predicate uses.
+ * The fields a line being typed decides, and the only ones any published predicate uses.
  *
- * GENERATED from `RESOLVABLE_FIELDS` in `scripts/generate-qualification-declaration.mjs`, by
- * `scripts/generate-operator-set.mjs` — run `node scripts/generate-operator-set.mjs` after changing
- * that list, and commit the result. Do not hand-edit the array below; `tests/operator-set-
- * agreement.test.mjs` fails loudly if this file and the compiler's list ever disagree.
+ * 2026-08-06: this is no longer a hand-picked three — it is `deriveResolvableFields`'s own answer
+ * (`scripts/compile-qualification.mjs`), MEASURED against the real config: a field qualifies when
+ * some `vocabulary/*.yaml` entry spells it with a fixed value, when it is `node_type` (the
+ * registration cascade, or a type token), or when it is `title` (a line's own chrome-free text —
+ * never a glyph). `project` and `stage` are the two most-referenced fields that still do NOT
+ * qualify: both are set only by a per-SECTION `defaults:` block, never by a token in the line
+ * itself or a value this array's rule can see is safe on every use — see that function's own
+ * header for the full account.
+ *
+ * GENERATED from the real monorepo config's `deriveResolvableFields`, by
+ * `scripts/generate-operator-set.mjs` — run `node scripts/generate-operator-set.mjs` after the
+ * config changes, and commit the result. Do not hand-edit the array below; `tests/operator-set-
+ * agreement.test.mjs` fails loudly if this file and the compiler's own compile ever disagree.
  */
-export const RESOLVABLE_FIELDS = ["node_type", "domain", "status"] as const;
+export const RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"] as const;
 
-/** A line's resolved fields — what the engine would mint from it, for these three fields only. */
+/** A line's resolved fields — what the engine would mint from it, for these resolvable fields only. */
 export type ResolvedFields = Readonly<Record<string, FieldValue>>;
 
 /** Why nothing is said. Each value names a refusal in this module's header. */
@@ -194,7 +203,7 @@ export function matchesQualifier(fields: ResolvedFields, qualifier: Qualifier): 
 }
 
 /**
- * What the engine would mint from `line`, typed under `section`, for the three resolvable fields.
+ * What the engine would mint from `line`, typed under `section`, for the resolvable fields.
  *
  * The registration cascade, least specific first: the node type comes from the section's published
  * `nodeType` (already resolved through GLOBAL then VIEW by the generator), the section's own

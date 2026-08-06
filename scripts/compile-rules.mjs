@@ -142,7 +142,7 @@
 import { Ledger } from "./ledger.mjs";
 import { versionKey } from "./declaration-version.mjs";
 import { parseYamlSubset } from "./yaml-subset.mjs";
-import { normalisePattern, PATTERNS_PREFIX } from "./compile-qualification.mjs";
+import { normalisePattern, deriveResolvableFields, PATTERNS_PREFIX } from "./compile-qualification.mjs";
 
 export class GenerationError extends Error {}
 class Refusal extends Error {}
@@ -518,6 +518,11 @@ export function compile(files, ledger = new Ledger()) {
   const get = (key) => (isMap ? files.get(key) : files[key]);
   const allKeys = () => (isMap ? [...files.keys()] : Object.keys(files));
 
+  // Same files map `compile-qualification.mjs`'s own `compile()` derives this from (§0 there) —
+  // 2026-08-06, this reader's `normalisePattern` call now needs the same field set THAT compiler
+  // threads through, rather than a frozen `RESOLVABLE_FIELDS` import. See that function's header.
+  const resolvableFields = deriveResolvableFields(files);
+
   const ruleKeys = allKeys()
     .filter((k) => k.startsWith(RULES_PREFIX) && k.endsWith(".yaml"))
     .sort();
@@ -603,7 +608,8 @@ export function compile(files, ledger = new Ledger()) {
   // "generate once" applied to a SECOND consumer of one already-published grammar, not a new one —
   // the same move `compile-resolution.mjs`'s own `readRetypeRules` already made for its narrower
   // purpose (predicting a SEED's type tag). A pattern this closed grammar cannot model AT ALL — a
-  // MULTI-HOP traversal (`ancestors:`/`descendants:`), a field outside `RESOLVABLE_FIELDS` — is not
+  // MULTI-HOP traversal (`ancestors:`/`descendants:`), a field outside what THIS config's own
+  // vocabulary+schema make resolvable (`deriveResolvableFields`, above) — is not
   // guessed at: every rule that names it is DROPPED, because a rule this app cannot tell the
   // candidate for is a rule this app cannot apply, however cleanly its own `when`/action read. A
   // pattern that resolves but carries `edgeSteps` (a ONE-HOP `children:`/`parents:` existence test,
@@ -640,7 +646,7 @@ export function compile(files, ledger = new Ledger()) {
       continue;
     }
     try {
-      patterns[name] = normalisePattern(raw);
+      patterns[name] = normalisePattern(raw, resolvableFields);
     } catch (error) {
       patternRefused.set(name, error.message);
     }

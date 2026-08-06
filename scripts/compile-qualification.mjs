@@ -17,8 +17,11 @@
  * ── WHAT MOVED HERE, VERBATIM OR NEAR IT ──
  *
  * Every piece of `generate-qualification-declaration.mjs` that never touched a filesystem path
- * moved unchanged: `RESOLVABLE_FIELDS`, the pattern normaliser (`normalisePattern` and its
- * helpers), the structural-exclusion desugarer (`applyStructuralExclusionDefaults`). The four
+ * moved unchanged: `RESOLVABLE_FIELDS` (as it then was — 2026-08-06 replaced the frozen constant
+ * with `deriveResolvableFields(files)`, a pure function of this same files map; see that function's
+ * own header), the pattern normaliser (`normalisePattern` and its helpers, `normalisePattern` now
+ * taking the derived field set as an explicit second argument rather than closing over a module
+ * constant), the structural-exclusion desugarer (`applyStructuralExclusionDefaults`). The four
  * `read*(configDir, ledger)` functions that DID read the filesystem directly
  * (`readStructuralNodeTypes`, `readPatterns`, `readViews`, `readTokens`) are inlined into one
  * `compile(files, ledger)`, rewritten to read an in-memory files map instead — the same has/get/
@@ -41,12 +44,18 @@
  *
  * ── WHAT DID NOT MOVE, AND WHY IT MATTERS MOST ──
  *
- * `normalisePattern` is unchanged in EVERY way that matters to `unresolvable field(s): project` —
- * `tests/app-generality-acceptance.test.mjs:519`'s own pinned refusal. It still takes one parsed
- * pattern config and returns `{find, exclude}` or throws `Refusal`; it never reads a file, a
- * files-map key, or a ledger. `tests/operator-set-agreement.test.mjs` calls it directly, with a
- * hand-built config object, exactly as it did before this file existed — this move changes where
- * the function LIVES, never what it DOES or SAYS.
+ * `normalisePattern` is unchanged in every way that matters to `unresolvable field(s): project` —
+ * `tests/app-generality-acceptance.test.mjs`'s own pinned refusal, still true (`project` has no
+ * vocabulary token and no registration default, so `deriveResolvableFields` never admits it — see
+ * that function's own header). It still takes one parsed pattern config, returns `{find, exclude}`
+ * or throws `Refusal`, and never reads a file, a files-map key, or a ledger. The ONE thing that DID
+ * change (2026-08-06): it now takes the resolvable-field set as an explicit second argument instead
+ * of reading a module-level `RESOLVABLE_FIELDS` constant — a REQUIRED parameter, not a default,
+ * because a caller that forgot to derive it would otherwise silently answer against a stale idea of
+ * what the config resolves. `tests/operator-set-agreement.test.mjs` still calls it directly, with a
+ * hand-built config object, now alongside a hand-built field list for the same reason a hand-built
+ * config needs a hand-built everything-else — this move changes where the function LIVES and what
+ * it NEEDS TO BE TOLD, never what it DOES or SAYS about a given `(config, resolvableFields)` pair.
  */
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
@@ -70,22 +79,76 @@ export const VOCABULARY_PREFIX = "vocabulary/";
 export const DEFAULT_REGISTRATION_KEY = `${VIEWS_PREFIX}default_registration.yaml`;
 
 /**
- * The only node fields `app/present/membership.ts` can resolve for a line the operator is typing:
- * the node type (registration default, or a type token on the line), the domain (a domain token),
- * and the status (the checkbox). Every one of the three is decided by something visible IN THE
- * LINE or by a registration default this file also publishes. A predicate that ranges outside this
- * set is published but is not answerable, and the app refuses it at read time rather than here —
- * the declaration stays a faithful record of the config either way.
+ * ── RESOLVABLE_FIELDS IS NO LONGER A LIST. IT IS A MEASUREMENT. ──
  *
- * THE ONE VALUE THREE OTHER FILES ARE GENERATED FROM. `scripts/generate-operator-set.mjs` writes
- * `app/present/membership.ts`'s and `scripts/qualification-agreement.py`'s own copies of this list
- * FROM this one — this move keeps this constant's name, its value, and the module path callers
- * already import it from (`generate-qualification-declaration.mjs` re-exports it, unchanged, below
- * its own header) so that generation and `tests/operator-set-agreement.test.mjs`'s direct import
- * both keep working with no edit of their own.
+ * 2026-08-06. The operator's own diagnosis: "config categories it can't resolve... we have nodes
+ * and fields etc all declared in yaml. means we're not using that as the source of truth." Until
+ * this change, `RESOLVABLE_FIELDS` was `Object.freeze(["node_type", "domain", "status"])` — three
+ * names, hand-picked, that could only ever describe the config THIS repo shipped with. The
+ * rationale for the three was always sound (it survives below, generalised rather than replaced):
+ * a field is resolvable for a line being typed only when something VISIBLE IN THE LINE, or a
+ * REGISTRATION DEFAULT this file also publishes, decides it. What was wrong is that the RULE was
+ * applied by a person, once, and then frozen — instead of applied by this generator, every time it
+ * runs, to whatever the config in front of it actually declares.
+ *
+ * ── THE RULE, STATED SO IT CAN BE CHECKED AGAINST THE THREE ORIGINAL FIELDS ──
+ *
+ * A field is resolvable if and only if ONE of:
+ *
+ *   (a) VOCABULARY SPELLS IT. Some `vocabulary/*.yaml` entry declares `field: F, value: <scalar>`
+ *       (not `render_only: true` — a render-only marker is the engine's OUTPUT, never read back;
+ *       see `deriveResolvableFields` below) — a FIXED glyph that means one discrete value. This is
+ *       exactly what `status` (`checkbox.yaml`) and `domain` (`domain_tags.yaml`) already were:
+ *       "visible in the line" cashes out, mechanically, as "a token spells it." Measured against
+ *       the operator's real vocabulary (2026-08-06): fourteen OTHER fields pass this same test —
+ *       `cadence`, `tier`, `cap_state`, `change_type`, `genre`, `god_box`, `class_state`,
+ *       `package_state`, `principle_state`, `instantiate`, `priority`, `blocked_state`,
+ *       `lead_state`, `asserted_state` — every one a plain tag family shaped exactly like
+ *       `domain_tags.yaml`. EXCLUDED BY THE SAME RULE, NOT BY EXCEPTION: `due_date`,
+ *       `available_date`, `completed_at`, `created_at`, `queue_position` carry only
+ *       `extraction_hint:` markers (a glyph followed by a value that VARIES line to line — never a
+ *       fixed spelling `tokens[field][token]` can hold); `done_task_count` and `par` carry only
+ *       `render_only: true` markers (the engine never reads them back — exactly the operator's own
+ *       "`done_task_count` is derived by the engine and cannot be read off a line" case, now a
+ *       consequence of the rule rather than a hand-added carve-out); `cadence`'s own
+ *       `parametric_field:` rows (`#every-3d`, verbatim capture) are excluded the same way DROP
+ *       PATH 13 already excluded them — `cadence` is still resolvable because `cadence_tags.yaml`/
+ *       `calendar_tags.yaml` ALSO spell it with fixed values (`#daily`, `#every-monday`, ...), so
+ *       the parametric rows simply add nothing this rule needed from them.
+ *
+ *   (b) IT IS THE NODE TYPE. `entry.node_type` (a DIFFERENT key than `entry.field` — `type_tags
+ *       .yaml`'s own shape) spells `node_type` the same way, plus the registration cascade's own
+ *       `default_node_type` — the "registration default this file also publishes" half of the
+ *       original rule, unchanged.
+ *
+ *   (c) IT IS `title`. Never spelled by a glyph — a title is the line's own printed text with the
+ *       chrome cut away, the same fact `app/present/rendition.ts`'s `cleanTitleFor` and `app/
+ *       present/ordering.ts`'s default-ordering comparator already rely on (that module's own
+ *       header: "title is excluded [from marker lookup]: it is never marker-based... a title is
+ *       the printed line's own chrome-free text, not a glyph to search for"). This is NOT a vocab
+ *       fact and does not vary with the schema — it is a property of every qntm-md line, the same
+ *       tier as "a checkbox glyph decides `status`" — so it is included unconditionally, the one
+ *       field this function does not derive from `vocabulary/`. `app/present/membership.ts` reads
+ *       it via the SAME `cleanTitleFor` reader, not a second transcription — see that file.
+ *
+ * `stage` and `project` are held up by `docs/…` as the sharpest refutation of "just widen the
+ * list": both are referenced by real patterns, NEITHER has a vocabulary token or a registration
+ * default, and this rule correctly leaves both unresolvable — measured, not assumed (see this
+ * file's own PR description for the exact count).
+ *
+ * ── WHY THIS LIVES IN ONE FUNCTION, NOT AS A MODULE-LEVEL CONSTANT ──
+ *
+ * The three-field freeze was a lie the moment a second qntm-md instance pointed this generator at
+ * a DIFFERENT schema: the list could not follow. `deriveResolvableFields(files)` takes the exact
+ * same files map `compile()` does and returns what a field-resolvability, cast over THAT config,
+ * has to be. `compile()` calls it once, at the top, and threads the result through — to
+ * `normalisePattern` (now a required second argument, not a closed-over module constant) and to
+ * the token-table build below. `scripts/generate-operator-set.mjs` calls it too, against the real
+ * monorepo config, to keep writing `app/present/membership.ts`'s and `scripts/qualification-
+ * agreement.py`'s own literal copies — GENERATED, never hand-typed, exactly as before. The single
+ * source moved from "a frozen array" to "a pure function of the config," which is the only kind of
+ * single source that is still true on someone else's config.
  */
-export const RESOLVABLE_FIELDS = Object.freeze(["node_type", "domain", "status"]);
-
 // ── THE DECLARED TRAVERSAL DEPTH — how many hops off the candidate node THIS GRAMMAR can express,
 //    published so the browser reads what it is allowed to attempt instead of this file silently
 //    deciding for it (backlog: `declare-the-default-view`'s sibling row for rule abstention) ──
@@ -128,6 +191,72 @@ export const RESOLVABLE_FIELDS = Object.freeze(["node_type", "domain", "status"]
 export const TRAVERSAL_DEPTH = 1;
 
 const isScalar = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
+
+/** A vocabulary entry that spells `field` with one FIXED, engine-readable scalar — see (a) above. */
+function isFixedValueToken(entry) {
+  return (
+    entry !== null &&
+    typeof entry === "object" &&
+    typeof entry.field === "string" &&
+    entry.render_only !== true &&
+    isScalar(entry.value) &&
+    entry.value !== null
+  );
+}
+
+/**
+ * Derive the resolvable-field set from `files` — the same in-memory config tree `compile` reads —
+ * rather than a hand-maintained list. PURE, and tolerant of a vocabulary file that will not parse
+ * or will not read as a mapping of families: this function only needs to know what IS spelled, and
+ * a file `compile()` itself cannot read spells nothing either way, so `compile()`'s own ledger
+ * records the read failure once, at its own drop path, rather than this function repeating it.
+ *
+ * @param {Record<string, string> | Map<string, string>} files
+ * @returns {string[]} sorted, so a caller never has to sort it again
+ */
+export function deriveResolvableFields(files) {
+  const isMap = files instanceof Map;
+  const has = (key) => (isMap ? files.has(key) : Object.prototype.hasOwnProperty.call(files, key));
+  const get = (key) => (isMap ? files.get(key) : files[key]);
+  const allKeys = () => (isMap ? [...files.keys()] : Object.keys(files));
+
+  // (c) — unconditional; see this section's own header for why title is not derived from vocabulary.
+  const fields = new Set(["title"]);
+
+  const vocabularyKeys = allKeys()
+    .filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml"))
+    .sort();
+  for (const key of vocabularyKeys) {
+    // NOT A DROP: `allKeys()` already enumerated this key, so `has(key)` is always true for an
+    // object files map; the `isMap` branch is the only one that could ever miss, and only if a
+    // caller mutated the map mid-iteration — defensive, not a real config-reading gap.
+    if (!has(key)) continue;
+    let document;
+    try {
+      document = parseYamlSubset(get(key), key);
+    } catch {
+      // NOT A DROP HERE: `compile()`'s own vocabulary read (below) hits the identical parse
+      // failure and records it once, keyed the same way it always was. This function's only job
+      // is "what does the config that DOES parse spell", so it treats an unparsable file as
+      // spelling nothing and moves on, rather than reporting the same fact twice under two rules.
+      continue;
+    }
+    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+    for (const family of Object.values(document)) {
+      if (!Array.isArray(family)) continue;
+      for (const entry of family) {
+        if (!entry || typeof entry !== "object") continue;
+        if (typeof entry.node_type === "string") {
+          // NOT A DROP: loop control — this entry set (b), so it is classified, not discarded.
+          fields.add("node_type"); // (b)
+          continue;
+        }
+        if (isFixedValueToken(entry)) fields.add(entry.field); // (a)
+      }
+    }
+  }
+  return [...fields].sort();
+}
 
 // ── the pattern normaliser — pure over a parsed config object, no files map involved ───────────
 
@@ -267,8 +396,20 @@ function normaliseStep(step, index) {
  * files-map key, no ledger. `tests/operator-set-agreement.test.mjs` drives this directly, and
  * `tests/app-generality-acceptance.test.mjs`'s pinned refusal (`unresolvable field(s): project`)
  * is this function's own last check, unchanged by this file's existence.
+ *
+ * @param {object} config the pattern's own parsed `{root, steps, parameters}` config
+ * @param {readonly string[]} resolvableFields the field set `deriveResolvableFields` computed for
+ *   THIS config — REQUIRED, not defaulted, because a caller that forgot to derive it would
+ *   otherwise silently fall back to some stale idea of what is resolvable. Every caller in this
+ *   repo (`compile` below, `compile-rules.mjs`) derives it from the same files map it already has.
  */
-export function normalisePattern(config) {
+export function normalisePattern(config, resolvableFields) {
+  if (!Array.isArray(resolvableFields)) {
+    throw new TypeError(
+      "normalisePattern(config, resolvableFields): resolvableFields must be an array — call " +
+        "deriveResolvableFields(files) and pass its result, never a hand-written list.",
+    );
+  }
   const parameters = config?.parameters;
   if (parameters && typeof parameters === "object" && Object.keys(parameters).length > 0) {
     refuse(`parameters: ${Object.keys(parameters).join("+")}`);
@@ -309,14 +450,14 @@ export function normalisePattern(config) {
   // EDGE-STEP FIELDS ARE DELIBERATELY OUTSIDE THIS CHECK. A `children:`/`parents:` field predicate
   // (`status`, `reset_cascade_pending`, `cluster_locked`, ...) ranges over a NEIGHBOUR NODE's
   // fields, read from the graph payload the same way any node's fields are — never from the LINE
-  // being typed, which is what `RESOLVABLE_FIELDS` exists to bound. Applying that bound here would
+  // being typed, which is what `resolvableFields` exists to bound. Applying that bound here would
   // refuse every one-hop pattern this widening exists to admit, for a restriction that was never
   // about the graph in the first place.
   const referencedFields = new Set();
   for (const clause of [find, ...exclude]) {
     for (const field of Object.keys(clause.fields)) referencedFields.add(field);
   }
-  const unresolvable = [...referencedFields].filter((f) => !RESOLVABLE_FIELDS.includes(f)).sort();
+  const unresolvable = [...referencedFields].filter((f) => !resolvableFields.includes(f)).sort();
   if (unresolvable.length > 0) {
     refuse(`unresolvable field(s): ${unresolvable.join("+")}`);
   }
@@ -393,6 +534,12 @@ export function compile(files, ledger = new Ledger()) {
   const get = (key) => (isMap ? files.get(key) : files[key]);
   const allKeys = () => (isMap ? [...files.keys()] : Object.keys(files));
   const readYaml = (key) => parseYamlSubset(get(key), key);
+
+  // ── 0. what CAN this config resolve, at all — see `deriveResolvableFields`'s own header ────────
+  // Computed ONCE, from this same files map, and threaded through: to `normalisePattern` (§5) and
+  // to the token-table build (§4). `title` is carried in this set but has no token table of its
+  // own — see `TOKEN_FIELDS` at §4 — so it is split out there, not here.
+  const resolvableFields = deriveResolvableFields(files);
 
   // ── 1. schema.yaml -> the identity-unique (structural) node types ────────────────────────────
 
@@ -559,9 +706,14 @@ export function compile(files, ledger = new Ledger()) {
   // ── 4. vocabulary/*.yaml -> the tokens that set a RESOLVABLE field ──────────────────────────
   // Collected across ALL vocabulary files rather than from three known filenames, so a new family
   // that starts setting one of these fields is picked up with no edit here.
+  //
+  // `title` IS resolvable (see `deriveResolvableFields`) but has NO token table: it is never
+  // spelled by a glyph, so there is no `tokens.title` for a vocabulary entry to populate and no
+  // "empty map" to refuse below. `TOKEN_FIELDS` is `resolvableFields` minus exactly that one field.
 
+  const TOKEN_FIELDS = resolvableFields.filter((f) => f !== "title");
   const tokens = {};
-  for (const field of RESOLVABLE_FIELDS) tokens[field] = {};
+  for (const field of TOKEN_FIELDS) tokens[field] = {};
 
   const vocabularyKeys = allKeys()
     .filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml"))
@@ -601,14 +753,26 @@ export function compile(files, ledger = new Ledger()) {
           tokens.node_type[entry.token] = entry.node_type;
           continue;
         }
-        // DROP PATH 10 — the largest of the sixteen: a token setting a field outside the three the
-        // app can resolve for a line being typed.
+        // DROP PATH 10 — the largest of the sixteen: a token setting a field outside what this
+        // config's own vocabulary+schema make resolvable for a line being typed.
         if (typeof entry.field === "string") {
-          if (!RESOLVABLE_FIELDS.includes(entry.field)) {
+          // `title` is resolvable (§0) but is NEVER spelled by a glyph — a title is the line's own
+          // printed text, not a value a token could fix (see `deriveResolvableFields`'s case (c)).
+          // A vocabulary entry that tried would have no `tokens.title` to land in; named here
+          // rather than left to crash on the missing table.
+          if (entry.field === "title") {
             ledger.drop(
               what,
-              `sets '${entry.field}', which is not one of the fields the app can resolve for a ` +
-                `line being typed (${RESOLVABLE_FIELDS.join(", ")})`,
+              "sets 'title' — a line's title is its own chrome-free printed text, never a glyph's " +
+                "fixed value, so this generator does not read it from a vocabulary token",
+            );
+            continue;
+          }
+          if (!TOKEN_FIELDS.includes(entry.field)) {
+            ledger.drop(
+              what,
+              `sets '${entry.field}', which is not one of the fields this config's vocabulary and ` +
+                `schema make resolvable for a line being typed (${resolvableFields.join(", ")})`,
             );
             continue;
           }
@@ -650,7 +814,7 @@ export function compile(files, ledger = new Ledger()) {
       }
     }
   }
-  for (const field of RESOLVABLE_FIELDS) {
+  for (const field of TOKEN_FIELDS) {
     if (Object.keys(tokens[field]).length === 0) {
       throw new GenerationError(
         `no vocabulary token sets '${field}' — the app resolves a line's ${field} from these ` +
@@ -678,6 +842,7 @@ export function compile(files, ledger = new Ledger()) {
     try {
       predicates[name] = normalisePattern(
         applyStructuralExclusionDefaults(raw.config, structuralTypes),
+        resolvableFields,
       );
     } catch (error) {
       if (!(error instanceof Refusal)) throw error;
@@ -708,6 +873,11 @@ export function compile(files, ledger = new Ledger()) {
   const declaration = {
     defaultNodeType: globalNodeType,
     structuralNodeTypes: structuralTypes,
+    // WHAT THIS CONFIG MADE RESOLVABLE — `deriveResolvableFields(files)`'s own answer, published so
+    // a reader (`generate-operator-set.mjs`, a test, a future Worker route) never has to re-derive
+    // it from the files map itself to know what governed `tokens`/`predicates` below. Sorted by
+    // `deriveResolvableFields`, so this is stable across a compile that changes nothing.
+    resolvableFields,
     tokens,
     predicates,
     sections,

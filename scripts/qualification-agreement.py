@@ -79,11 +79,20 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_DIR = monorepo_config.config_dir(REPO_ROOT)
 DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "qualification-agreement.json"
 
-# The three fields every published predicate ranges over. GENERATED from `RESOLVABLE_FIELDS` in
-# `scripts/generate-qualification-declaration.mjs`, by `scripts/generate-operator-set.mjs` — run
-# `node scripts/generate-operator-set.mjs` after changing that list, and commit the result. Do not
-# hand-edit the tuple below; the assertion in main() still fails loudly if a published predicate
-# ever reaches outside these fields.
+# RESTATED 2026-08-06: NO LONGER GENERATED — HAND-FROZEN, DELIBERATELY. `compile-qualification.mjs`'s
+# `deriveResolvableFields` retired the frozen `RESOLVABLE_FIELDS` list this tuple used to mirror; it
+# now derives a field set FROM the config (18 fields against the real monorepo, 2026-08-06 — see
+# that function's own header). This script's method — key the fixture on the field tuple, then cross
+# every axis's OWN value domain into an exhaustive probe space (PHASE 2, below) — was tractable at
+# three low-cardinality axes (~2,184 probes) and is NOT tractable at eighteen (a full cross product
+# is billions of probes, not a bigger fixture). Widening this tuple to match `resolvableFields`
+# without also redesigning the probe strategy would silently zip only the first three field NAMES
+# against the SAME three-element VALUES (`dict(zip(TRIPLE_FIELDS, triple))`, below) — a fixture that
+# CLAIMS ground truth over 18 fields while only ever having varied three. So this tuple stays exactly
+# the historical three, and `main()` treats a published predicate that ranges outside it as OUT OF
+# THIS SCRIPT'S SCOPE — named and excluded from the fixture, the same way a graph-dependent predicate
+# already is (`graphDependentPatterns`) — rather than aborting the whole run the day `presentation.
+# json` is regenerated with the wider set. Widening the probe strategy itself is a separate PR.
 TRIPLE_FIELDS = ("node_type", "domain", "status")
 
 
@@ -108,12 +117,30 @@ def main() -> int:
         for name, predicate in declaration["predicates"].items()
         if predicate.get("edgeSteps")
     )
-    published = sorted(name for name in all_published if name not in graph_dependent)
+    # OUTSIDE THIS FIXTURE'S KEY, NOT ATTEMPTED HERE — see "RESTATED 2026-08-06" at TRIPLE_FIELDS's
+    # own declaration, above. A predicate the compiler resolves (`deriveResolvableFields` admits
+    # more fields than this fixture's three-axis probe space can afford to cross) is real and
+    # decidable; it is simply not one THIS script's method can verify without a probe-space redesign
+    # this fixture does not attempt. Named and excluded, like `graph_dependent`, rather than aborting
+    # the whole run — the day `presentation.json` is regenerated with fields beyond the historical
+    # three, this script keeps producing a smaller, correct fixture instead of exit(2)-ing outright.
+    field_out_of_scope = sorted(
+        name
+        for name, predicate in declaration["predicates"].items()
+        if name not in graph_dependent
+        and any(
+            set(clause["fields"]) - set(TRIPLE_FIELDS)
+            for clause in [predicate["find"], *predicate["exclude"]]
+        )
+    )
+    published = sorted(
+        name for name in all_published if name not in graph_dependent and name not in field_out_of_scope
+    )
 
-    # Every SELF-ONLY published predicate must range only over the three fields, or the fixture's
-    # key is not a complete input and the whole comparison is invalid. `edgeSteps` clauses are
-    # deliberately not scanned here — they range over a NEIGHBOUR's fields, which is exactly why
-    # their patterns were excluded from `published` just above rather than checked by this loop.
+    # Every SELF-ONLY published predicate now in `published` ranges only over the three fields, by
+    # construction of `field_out_of_scope` above — so the fixture's key IS a complete input for all
+    # of it. `edgeSteps` clauses are deliberately not scanned here — they range over a NEIGHBOUR's
+    # fields, which is exactly why their patterns were excluded from `published` above instead.
     for name in published:
         predicate = declaration["predicates"][name]
         for clause in [predicate["find"], *predicate["exclude"]]:
@@ -121,7 +148,8 @@ def main() -> int:
             if outside:
                 print(
                     f"REFUSING: published predicate {name!r} ranges over {sorted(outside)}, "
-                    f"outside {list(TRIPLE_FIELDS)} — the fixture key would not be a complete input",
+                    f"outside {list(TRIPLE_FIELDS)} — should be impossible, `field_out_of_scope` "
+                    "above claims to have excluded every such predicate from `published` already",
                     file=sys.stderr,
                 )
                 return 2
@@ -255,9 +283,16 @@ def main() -> int:
         "patterns": published,
         # NAMED, NOT SILENT — every published predicate this script did NOT attempt to verify,
         # because it is graph-dependent (see this file's own header). `all_published` minus this
-        # equals `patterns` above; `tests/qualification-agreement.test.mjs` asserts both halves
-        # against the live declaration, not just the one this script could check.
+        # minus `fieldOutOfScopePatterns` (below) equals `patterns` above;
+        # `tests/qualification-agreement.test.mjs` asserts against the live declaration, not just
+        # the subset this script could check.
         "graphDependentPatterns": graph_dependent,
+        # NAMED, NOT SILENT — every published predicate this script did NOT attempt to verify
+        # because it ranges over a field outside TRIPLE_FIELDS (see that constant's own "RESTATED
+        # 2026-08-06"). Empty today: `presentation.json` has not been regenerated against the wider
+        # `deriveResolvableFields` set this repo's compiler now supports, so nothing published yet
+        # reaches outside the historical three. Present, and expected to gain entries, the day it is.
+        "fieldOutOfScopePatterns": field_out_of_scope,
         "matchSets": match_sets,
         "nodes": sum(row["nodes"] for row in rows),
         "triples": len(rows),
@@ -276,7 +311,9 @@ def main() -> int:
         f"  {len(probe_cells)} probe triples over the reachable space\n"
         f"  {len(published)} published qualifications answered by the engine\n"
         f"  {len(graph_dependent)} published qualifications are graph-dependent and were not "
-        "attempted: " + ", ".join(graph_dependent)
+        "attempted: " + ", ".join(graph_dependent) + "\n"
+        f"  {len(field_out_of_scope)} published qualifications range outside TRIPLE_FIELDS and were "
+        "not attempted: " + ", ".join(field_out_of_scope)
     )
     return 0
 

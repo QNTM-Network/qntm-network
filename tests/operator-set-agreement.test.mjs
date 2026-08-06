@@ -84,7 +84,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readQualificationDeclaration, RESOLVABLE_FIELDS as BROWSER_RESOLVABLE_FIELDS } from "../dist/present.js";
-import { normalisePattern, RESOLVABLE_FIELDS as COMPILER_RESOLVABLE_FIELDS } from "../scripts/generate-qualification-declaration.mjs";
+import { normalisePattern, deriveResolvableFields } from "../scripts/generate-qualification-declaration.mjs";
 import { checkOperatorSet } from "../scripts/generate-operator-set.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -98,14 +98,26 @@ const FIELDS = INDEX.resolvableFields.values;
 // Decoys: real engine operators (`patterns/engine.py::_NODE_PREDICATE_OPERATORS`, cited by
 // qualification.ts:60-68) and plausible field names that are NOT in the local grammar. If the
 // index is ever widened, add the new value to operator-set.json's `values` array, not here.
+//
+// `title`, `priority` and `cap_state` moved OUT of this list 2026-08-06: RESOLVABLE_FIELDS is no
+// longer a frozen three — it is `deriveResolvableFields`'s own measurement of the real config, and
+// all three are now genuinely resolvable (a vocabulary token spells `cap_state`/`priority`, and
+// `title` is the line's own printed text). `project` and `stage` replace them as decoys — both are
+// referenced by real patterns, both are set only by a per-SECTION `defaults:` block rather than a
+// vocabulary token or the GLOBAL registration default, and `deriveResolvableFields`'s own header
+// (`scripts/compile-qualification.mjs`) explains why that is not (yet) enough to admit them.
 const NON_OPERATORS = ["gte", "lte", "gt", "lt", "ne", "in", "contains"];
-const NON_FIELDS = ["title", "priority", "project", "cap_state", "assignee"];
+const NON_FIELDS = ["project", "stage", "assignee", "due_date", "queue_position"];
 
 /**
  * `scripts/qualification-agreement.py`'s TRIPLE_FIELDS is read as source text, not executed — see
  * this file's header for why. The pattern matches the exact literal this repo has today
  * (`TRIPLE_FIELDS = ("node_type", "domain", "status")`); a change of FORM (not just values) fails
  * this test loudly rather than silently passing on stale text.
+ *
+ * 2026-08-06: NO LONGER a copy of `resolvableFields` — it is a DELIBERATELY hand-frozen subset
+ * (`scripts/generate-operator-set.mjs`'s own header, "WHY qualification-agreement.py IS NO LONGER
+ * A TARGET"). Section 1 below checks it is a SUBSET of `FIELDS`, not that it equals it.
  */
 function readPythonTripleFields() {
   const source = readFileSync(resolve(HERE, "..", "scripts", "qualification-agreement.py"), "utf8");
@@ -141,13 +153,22 @@ function browserAcceptsOperator(op) {
   return accepted;
 }
 
+// The one field this probe's hand-built pattern ever names — `normalisePattern` now takes the
+// resolvable-field set as an explicit second argument (2026-08-06, `compile-qualification.mjs`'s
+// own header) rather than closing over a module constant, so this probe supplies exactly the field
+// its own pattern uses, the same way any real caller derives its set from the config it has.
+const PROBE_RESOLVABLE_FIELDS = ["status"];
+
 /** Feeds one operator to the compiler's pattern normaliser and reports accept/refuse. */
 function compilerAcceptsOperator(op) {
   try {
     // `node_type` is a reserved key in normaliseFind's own grammar (a type restriction, never run
     // through normalisePredicate) — `status` is an ordinary field and reaches the real operator
-    // switch (generate-qualification-declaration.mjs:234-236, normalisePredicate at :205-226).
-    normalisePattern({ root: { find: { status: { [op]: predicateValueFor(op) } } } });
+    // switch (compile-qualification.mjs's normalisePredicate/normalisePattern).
+    normalisePattern(
+      { root: { find: { status: { [op]: predicateValueFor(op) } } } },
+      PROBE_RESOLVABLE_FIELDS,
+    );
     return true;
   } catch {
     return false;
@@ -183,28 +204,133 @@ describe("0. the index is not vacuous", () => {
   });
 });
 
-describe("0.5. the two GENERATED copies are not stale", () => {
-  test("membership.ts and qualification-agreement.py match generate-qualification-declaration.mjs's RESOLVABLE_FIELDS", () => {
-    const { stale, lines } = checkOperatorSet();
+describe("0.5. membership.ts is not stale relative to a live compile of the real config", () => {
+  // `checkOperatorSet` NEVER throws for a missing monorepo — it returns `{stale: [], checked:
+  // false, lines}` (`scripts/generate-operator-set.mjs`'s own header) — so this degrades to
+  // "nothing to check" on a CI runner with no monorepo clone, and genuinely compares on a laptop
+  // or worktree that has one (this repo's own `DEFAULT_CONFIG_DIR`, when found).
+  test("membership.ts matches deriveResolvableFields, compiled from the real monorepo config", () => {
+    const { stale, checked, lines } = checkOperatorSet();
+    if (!checked) {
+      // Nothing to check IS a legitimate outcome, not a pass by omission — say so, same as every
+      // other "reproduces the monorepo" test in this repo.
+      return;
+    }
     assert.deepEqual(stale, [], `run 'node scripts/generate-operator-set.mjs' and commit:\n${lines.join("\n")}`);
   });
 });
 
-describe("1. RESOLVABLE_FIELDS — three literal declarations, checked for exact agreement", () => {
+describe("1. RESOLVABLE_FIELDS — checked for agreement across every surface that declares it", () => {
   test("the index's own list matches this repo's shipped value", () => {
-    assert.deepEqual(FIELDS, ["node_type", "domain", "status"]);
+    assert.deepEqual(
+      [...FIELDS].sort(),
+      [
+        "asserted_state",
+        "blocked_state",
+        "cadence",
+        "cap_state",
+        "change_type",
+        "class_state",
+        "domain",
+        "genre",
+        "god_box",
+        "instantiate",
+        "lead_state",
+        "node_type",
+        "package_state",
+        "principle_state",
+        "priority",
+        "status",
+        "tier",
+        "title",
+      ].sort(),
+    );
   });
 
-  test("compiler (generate-qualification-declaration.mjs) matches the index", () => {
-    assert.deepEqual([...COMPILER_RESOLVABLE_FIELDS].sort(), [...FIELDS].sort());
+  // `generate-qualification-declaration.mjs`/`compile-qualification.mjs` no longer export a
+  // static `RESOLVABLE_FIELDS` constant to compare against — `deriveResolvableFields(files)` is a
+  // FUNCTION of a config, not a fact about this repo (see that function's own header). What CAN be
+  // checked hermetically, with no monorepo, is that it derives the SAME index-carried set from a
+  // hand-built files map shaped like the real config's relevant vocabulary — i.e. that the rule,
+  // not just its output on one config, is the one this index describes. `tests/derive-resolvable-
+  // fields.test.mjs` is the deep, fixture-driven version of this claim (including the "different
+  // schema" proof); this is the narrow one, local to this file's own cross-surface purpose.
+  test("compiler (deriveResolvableFields) derives the index's own list from a matching fixture", () => {
+    const files = {
+      "vocabulary/checkbox.yaml": "checkbox:\n  - { token: '[ ]', field: status, value: open }\n",
+      "vocabulary/type_tags.yaml": "type_tags:\n  - { token: '#task', node_type: task }\n",
+      "vocabulary/tags.yaml": [
+        "domain_tags:",
+        "  - { token: '#work', field: domain, value: work }",
+        "cadence_tags:",
+        "  - { token: '#daily', field: cadence, value: daily }",
+        "tier_tags:",
+        "  - { token: '#t1', field: tier, value: 1 }",
+        "cap_state_tags:",
+        "  - { token: '#capped', field: cap_state, value: capped }",
+        "change_type_tags:",
+        "  - { token: '#minor', field: change_type, value: minor }",
+        "genre_tags:",
+        "  - { token: '#fiction', field: genre, value: fiction }",
+        "god_box_tags:",
+        "  - { token: '#god', field: god_box, value: true }",
+        "class_state_tags:",
+        "  - { token: '#cls', field: class_state, value: exists }",
+        "package_state_tags:",
+        "  - { token: '#pkg', field: package_state, value: exists }",
+        "principle_state_tags:",
+        "  - { token: '#prn', field: principle_state, value: held }",
+        "instantiate_tags:",
+        "  - { token: '#onboard', field: instantiate, value: onboard }",
+        "priority_tags:",
+        "  - { token: '#p1', field: priority, value: 1 }",
+        "blocked_state_tags:",
+        "  - { token: '#blocked', field: blocked_state, value: blocked }",
+        "lead_state_tags:",
+        "  - { token: '#lead', field: lead_state, value: lead }",
+        "asserted_state_tags:",
+        "  - { token: '#asserted', field: asserted_state, value: asserted }",
+        "",
+      ].join("\n"),
+    };
+    assert.deepEqual(deriveResolvableFields(files), [...FIELDS].sort());
   });
 
   test("browser (membership.ts) matches the index", () => {
     assert.deepEqual([...BROWSER_RESOLVABLE_FIELDS].sort(), [...FIELDS].sort());
   });
 
-  test("python agreement generator (qualification-agreement.py) matches the index", () => {
-    assert.deepEqual(readPythonTripleFields().sort(), [...FIELDS].sort());
+  test("python agreement generator (qualification-agreement.py) is a SUBSET of the index, not a copy", () => {
+    // 2026-08-06: qualification-agreement.py's TRIPLE_FIELDS is deliberately hand-frozen at the
+    // historical three — see this file's own header and `scripts/generate-operator-set.mjs`'s.
+    const triple = readPythonTripleFields();
+    for (const field of triple) {
+      assert.ok(FIELDS.includes(field), `TRIPLE_FIELDS carries '${field}', which is not even in the index`);
+    }
+    assert.deepEqual(triple.sort(), ["domain", "node_type", "status"]);
+  });
+});
+
+describe("1.5. deriveResolvableFields needs the config it is a function of — not a narrower slice", () => {
+  // 2026-08-06's own regression, caught while wiring this branch up: `compile-rules.mjs` and
+  // `check-isolate-conformance.mjs`'s `rules` entry both used to build a files map holding only
+  // `vocabulary/markers.yaml` (deliberately narrow — "THE MARKER GAP", `compile-rules.mjs`'s own
+  // header) and then called `deriveResolvableFields` on THAT map. `markers.yaml` alone spells no
+  // fixed-value field at all (every entry is `extraction_hint`/`render_only`), so the derived set
+  // collapsed to `["title"]` — refusing `status`, `domain`, everything a real rule's pattern
+  // needs. Fixed by widening both readers to the whole `vocabulary/` directory
+  // (`generate-rules-declaration.mjs`'s header has the full account). This test pins the
+  // regression itself, not just its fix, so a future narrowing is caught here first.
+  test("a files map holding ONLY markers.yaml-shaped entries derives no field beyond title", () => {
+    const markersOnly = {
+      "vocabulary/markers.yaml": [
+        "trailing_markers:",
+        "  - { token: '📅', field: due_date, extraction_hint: trailing_date }",
+        "  - { token: '☑️', field: done_task_count, extraction_hint: trailing_int, render_only: true }",
+        "",
+      ].join("\n"),
+    };
+    assert.deepEqual(deriveResolvableFields(markersOnly), ["title"]);
   });
 });
 

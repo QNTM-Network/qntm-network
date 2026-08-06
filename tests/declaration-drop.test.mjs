@@ -196,14 +196,32 @@ describe("1a. qualification — every path that discards a declaration records i
     assertDropped(dropped, "vocabulary/domain_tags.yaml#domain_tags[0]", /declares no 'token:' string/);
   });
 
-  test("DROP 10 — THE ONE §9.3 NAMES: a token setting a fourth field", () => {
-    // The operator's own worked example, verbatim from the design document: "If the operator
-    // declares `#p1 -> priority: high` tomorrow, it vanishes from the published grammar and
-    // nothing anywhere says so."
+  test("DROP 10 — THE ONE §9.3 NAMES: a token setting a field this config's vocabulary+schema do not make resolvable", () => {
+    // The operator's own worked example, verbatim from the design document AT THE TIME: "If the
+    // operator declares `#p1 -> priority: high` tomorrow, it vanishes from the published grammar
+    // and nothing anywhere says so." 2026-08-06 RETIRES `priority` from this example, on purpose —
+    // it is the worked example's OWN vindication, not a hole in the fix: `RESOLVABLE_FIELDS`
+    // stopped being the hand-picked `["node_type", "domain", "status"]` this test pinned and
+    // became `deriveResolvableFields`'s own measurement of the config (`compile-qualification.mjs`'s
+    // header). The fixture's OWN `vocabulary/markers.yaml` already carries a fixed-value `priority`
+    // enum (🔽/⏫), so under the derived rule `priority` is NOW resolvable — the exact defect the
+    // operator's diagnosis named, and this test cannot use it to demonstrate a drop any more than
+    // the operator's own real config can. THE FIX ALSO RETIRES `field: X, value: <scalar>` as a
+    // shape that can EVER demonstrate DROP 10 — rule (a) admits exactly that shape, by
+    // construction (see `isFixedValueToken`), so no fixed-value token can ever be dropped for
+    // ranging outside the resolvable set again. What is STILL dropped this way is a token that
+    // sets a field through `extraction_hint:` alone (a value that VARIES per line, never a fixed
+    // spelling `tokens[field][token]` can hold) — `due_date` (📅, this same fixture) already is
+    // one; this mutation adds a SECOND, brand-new field via the identical shape, so the path is
+    // exercised by a real mutation rather than only by the fixture's own pre-existing content.
     const dropped = droppedFrom(generateQualification, (c) =>
-      put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
+      put(
+        c,
+        "vocabulary/gentest_scheduled_tags.yaml",
+        'gentest_scheduled_tags:\n  - token: "🗓️"\n    field: gentest_scheduled_at\n    extraction_hint: trailing_date\n',
+      ),
     );
-    assertDropped(dropped, "vocabulary token '#p1'", /sets 'priority'.*node_type, domain, status/s);
+    assertDropped(dropped, "vocabulary token '🗓️'", /sets 'gentest_scheduled_at'/);
   });
 
   test("DROP 11: a resolvable field set by a render-only token", () => {
@@ -485,7 +503,14 @@ describe("2. THE MUTATION PROOF — re-introduce a silent drop and a test goes r
         assert.notEqual(end, -1, "the end of the recorded branch was not found");
         return (
           source.slice(0, start) +
-          '        if (typeof entry.field !== "string" || !RESOLVABLE_FIELDS.includes(entry.field)) continue;\n' +
+          // `resolvableFields` — the LOCAL variable `compile()` computes at its own step 0
+          // (`deriveResolvableFields(files)`) — not a module constant: 2026-08-06 retired
+          // `RESOLVABLE_FIELDS` as a name this file could even reference here any more, which is
+          // itself part of what this mutant proves (see this test's own header): the OLD shape
+          // closed over a frozen list; the CURRENT shape closes over a value computed from the
+          // same config this loop is already reading, and the silent-continue defect is
+          // reproduced against THAT shape, not a stale one.
+          '        if (typeof entry.field !== "string" || !resolvableFields.includes(entry.field)) continue;\n' +
           "        if (entry.render_only === true) continue;\n" +
           "        if (!isScalar(entry.value) || entry.value === null) continue;\n" +
           "        tokens[entry.field][entry.token] = entry.value;\n" +
@@ -496,17 +521,28 @@ describe("2. THE MUTATION PROOF — re-introduce a silent drop and a test goes r
       (mutant) =>
         withMutatedConfig(
           FIXTURE_CONFIG,
-          (c) => put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
+          // NOT `priority` (as this test used before 2026-08-06): the fixture's own `markers.yaml`
+          // already spells `priority` with a fixed value (🔽/⏫), so `deriveResolvableFields`
+          // admits it at `compile()`'s step 0 — BEFORE this mutated loop ever runs — regardless of
+          // this mutation. An `extraction_hint`-only field (no `value:` anywhere for it, the same
+          // shape DROP 10 above uses) is the one shape no admission rule can ever pull in, mutated
+          // or not, so it is what proves THIS loop's own record-keeping is what makes DROP 10 pass.
+          (c) =>
+            put(
+              c,
+              "vocabulary/gentest_scheduled_tags.yaml",
+              'gentest_scheduled_tags:\n  - token: "🗓️"\n    field: gentest_scheduled_at\n    extraction_hint: trailing_date\n',
+            ),
           (configDir) => generateWithMutantCompile(mutant, configDir).dropped,
         ),
     );
 
-    // THE RED. Under the mutant, `#p1` is dropped and NOTHING says so — which is exactly the
+    // THE RED. Under the mutant, `🗓️` is dropped and NOTHING says so — which is exactly the
     // shipped defect. The assertion DROP 10 makes therefore fails here, and this test asserts
     // that it fails: a guard that cannot go red is decoration.
     assert.throws(
-      () => assertDropped(droppedByMutant, "vocabulary token '#p1'", /sets 'priority'/),
-      /nothing was recorded for 'vocabulary token '#p1''/,
+      () => assertDropped(droppedByMutant, "vocabulary token '🗓️'", /sets 'gentest_scheduled_at'/),
+      /nothing was recorded for 'vocabulary token '🗓️''/,
       "the mutant still recorded the drop — the guard is not what makes DROP 10 pass",
     );
   });
@@ -568,13 +604,24 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
       const served = servedFrom(FIXTURE_CONFIG, scratch);
       const result = withMutatedConfig(
         FIXTURE_CONFIG,
-        (c) => put(c, "vocabulary/priority_tags.yaml", 'priority_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n'),
+        // NOT `priority` (as this test used before 2026-08-06): the fixture's `markers.yaml`
+        // already spells it with a fixed value, so `deriveResolvableFields` admits it and a NEW
+        // `#p1` token would be PUBLISHED, not dropped — proving staleness a different way (a new
+        // token value) rather than the one this test names. `gentest_scheduled_at`
+        // (`extraction_hint`-only, the same shape DROP 10 above uses) stays unresolvable under
+        // every admission rule, so it still demonstrates "a token the app cannot express".
+        (c) =>
+          put(
+            c,
+            "vocabulary/gentest_scheduled_tags.yaml",
+            'gentest_scheduled_tags:\n  - token: "🗓️"\n    field: gentest_scheduled_at\n    extraction_hint: trailing_date\n',
+          ),
         (configDir) => runCheck(configDir, served),
       );
       assert.equal(result.code, 1, `the gate did not fail on a stale declaration:\n${result.output}`);
       assert.match(result.output, /qualification: STALE/);
       // And it names WHICH declaration vanished, not merely that bytes differ.
-      assert.match(result.output, /NEWLY DROPPED\s+vocabulary token '#p1'/);
+      assert.match(result.output, /NEWLY DROPPED\s+vocabulary token '🗓️'/);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
@@ -658,23 +705,24 @@ describe("3. THE CI GATE — it does not merely run, it FAILS on a stale declara
 // ── 4. no wolf ────────────────────────────────────────────────────────────────────────────────
 
 describe("4. NO WOLF — the ledger records what was dropped, and nothing else", () => {
-  test("the unmutated fixture drops exactly four things, all real", () => {
+  test("the unmutated fixture drops exactly two things, all real", () => {
     // RESTATED — two -> four, when the fixture's markers.yaml gained priority's own two
     // value-match rows (🔽/⏫, needed so `readOrderingFieldMarkers` has something real to find once
     // it always looks for a `priority` marker — see this file's own resolution-side tests below).
-    // `compile-qualification.mjs` reads markers.yaml too and drops any token whose `field` is
-    // outside `RESOLVABLE_FIELDS` — `priority` is not one of them, so BOTH new tokens drop here.
-    // The operator's own real config already carries this exact drop pair for the exact same
-    // reason (verified: `priority` is not in `RESOLVABLE_FIELDS` there either) — this is the
-    // fixture catching up to what generateQualification already does against real config, not a
-    // new wolf.
+    // At the time, `compile-qualification.mjs` dropped any token whose `field` was outside the
+    // frozen `RESOLVABLE_FIELDS` triple — `priority` was not one of them, so both new tokens
+    // dropped here.
+    //
+    // RESTATED AGAIN 2026-08-06 — four -> two. `RESOLVABLE_FIELDS` is no longer frozen: it is
+    // `deriveResolvableFields`'s own measurement of the config, and 🔽/⏫ are exactly a fixed-value
+    // vocabulary token spelling `priority` — rule (a), admitted (`compile-qualification.mjs`'s own
+    // header). They are PUBLISHED now, not dropped; the operator's real config shows the identical
+    // move (verified: `priority` moved from dropped to published there too, PR description). Only
+    // `📅` (an `extraction_hint`-only marker, never a fixed value) and the malformed nested section
+    // still drop — the same two DROP PATHS DROP 10's own reworked test now demonstrates with a
+    // synthetic field, reproduced here for real from the fixture's own pre-existing content.
     const dropped = generateQualification(FIXTURE_CONFIG).dropped;
-    assert.deepEqual(Object.keys(dropped).sort(), [
-      "section 'main.nested'",
-      "vocabulary token '⏫'",
-      "vocabulary token '📅'",
-      "vocabulary token '🔽'",
-    ]);
+    assert.deepEqual(Object.keys(dropped).sort(), ["section 'main.nested'", "vocabulary token '📅'"]);
     assert.deepEqual(generateStructural(FIXTURE_CONFIG).dropped, {});
     assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {});
   });
@@ -701,16 +749,27 @@ describe("4. NO WOLF — the ledger records what was dropped, and nothing else",
 
   test("a generate NEVER fails on a drop — a generator that cries wolf gets --force'd", () => {
     // The design decision, asserted rather than left in a comment: `generateQualification` returns
-    // normally with 230 drops against the operator's config and 4 against the fixture (RESTATED
-    // alongside the "four things" test above, same cause). Only DISAGREEING with the committed
-    // record is an error, and that is `--check`'s job (section 3).
+    // normally with drops present, both against the operator's config and against the fixture.
+    // Only DISAGREEING with the committed record is an error, and that is `--check`'s job
+    // (section 3).
+    //
+    // NOT a `field: alpha, value: 1` fixed-value token (as this test used before 2026-08-06): rule
+    // (a) admits exactly that shape (`isFixedValueToken`), so `alpha`/`beta` would each become
+    // resolvable and PUBLISH rather than drop — proving nothing about a generator that "cries
+    // wolf". `extraction_hint`-only entries (the same shape DROP 10 uses) still drop under every
+    // admission rule, so they are what this test needs.
     assert.doesNotThrow(() =>
       withMutatedConfig(
         FIXTURE_CONFIG,
-        (c) => put(c, "vocabulary/many.yaml", 'many:\n  - token: "#a"\n    field: alpha\n    value: 1\n  - token: "#b"\n    field: beta\n    value: 2\n'),
+        (c) =>
+          put(
+            c,
+            "vocabulary/many.yaml",
+            'many:\n  - token: "#a"\n    field: alpha\n    extraction_hint: trailing_int\n  - token: "#b"\n    field: beta\n    extraction_hint: trailing_int\n',
+          ),
         (configDir) => {
           const result = generateQualification(configDir);
-          assert.equal(Object.keys(result.dropped).length, 6);
+          assert.equal(Object.keys(result.dropped).length, 4);
           return result;
         },
       ),
@@ -724,7 +783,7 @@ const monorepo = existsSync(DEFAULT_CONFIG_DIR);
 const skip = monorepo ? false : `monorepo not checked out at ${DEFAULT_CONFIG_DIR}`;
 
 describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his own config", () => {
-  test("BASELINE: his real config today drops 82 tokens and 107 sections, all recorded", { skip }, () => {
+  test("BASELINE: his real config today drops 11 tokens and 82 sections, all recorded", { skip }, () => {
     // RESTATED 2026-08-03 against monorepo `d4c9d98`: 77/137/214 -> 82/148/230.
     //
     // RESTATED AGAIN 2026-08-04 against monorepo `0fe6c1d`: 82/148/230 -> 82/107/189. Not his
@@ -734,6 +793,19 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
     // that reason. The token count is untouched (82): vocabulary drops are a different axis this
     // widening never reads.
     //
+    // RESTATED AGAIN 2026-08-06: 82/107/189 -> 11/82/93. This time the token count DOES move, and
+    // by the most — `RESOLVABLE_FIELDS` stopped being the hand-picked `["node_type", "domain",
+    // "status"]` this test pinned and became `deriveResolvableFields`'s own measurement of his
+    // config (`compile-qualification.mjs`'s header): 18 fields are resolvable now, not 3, so most
+    // of the 82 tokens DROP PATH 10 used to catch ("sets a field outside node_type/domain/status")
+    // are published instead. The 71 that stopped being dropped are exactly the operator's own
+    // diagnosis made concrete: "it's definitely fields it can't resolve... that should be compiled
+    // and be the source of truth." The 11 still dropped are `extraction_hint`-only, `render_only`,
+    // or `parametric_field:`-shaped — see DROP 10/11/13's own tests for what each still excludes,
+    // and why. Sections: 107 -> 82, the same 25-section improvement `cap_state`/`principle_state`/
+    // `class_state`/`package_state`/`instantiate`/`tier`/`genre`/`god_box`/`priority`/`cadence`/
+    // `change_type`/`blocked_state`/`lead_state`/`asserted_state` becoming resolvable buys.
+    //
     // THESE THREE NUMBERS ARE A RECORD OF HIS CONFIG AND THIS GENERATOR'S GRAMMAR, NOT A FIXED
     // PROPERTY OF THIS REPO. They move whenever he adds a view OR this generator's grammar widens,
     // and they are expected to. Re-measure and restate them with the monorepo commit named — do not
@@ -741,37 +813,40 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
     const dropped = generateQualification(DEFAULT_CONFIG_DIR).dropped;
     const tokens = Object.keys(dropped).filter((k) => k.startsWith("vocabulary token"));
     const sections = Object.keys(dropped).filter((k) => k.startsWith("section "));
-    assert.equal(tokens.length, 82, "the token drop count moved — regenerate and say so");
-    assert.equal(sections.length, 107, "the refused-section count moved — regenerate and say so");
+    assert.equal(tokens.length, 11, "the token drop count moved — regenerate and say so");
+    assert.equal(sections.length, 82, "the refused-section count moved — regenerate and say so");
     // design-the-rule-mirror.md §9.2 measured 137 of 186 by running a script. It is now a fact
     // the declaration states about itself.
-    assert.equal(Object.keys(dropped).length, 189);
+    assert.equal(Object.keys(dropped).length, 93);
     for (const reason of Object.values(dropped)) assert.ok(reason.length > 0);
   });
 
   test("HALF A — a declaration the grammar CANNOT express: a human is told", { skip }, () => {
+    // NOT `#p1 -> priority` (as this test used before 2026-08-06): the real config's own
+    // `vocabulary/markers.yaml` spells `priority` with fixed enum values, so `deriveResolvable
+    // Fields` admits it and this token would be PUBLISHED, not dropped. `gentest_scheduled_at`
+    // (`extraction_hint`-only) stays unresolvable under every admission rule this compiler has.
     const dropped = withMutatedConfig(
       DEFAULT_CONFIG_DIR,
       (configDir) =>
         writeFileSync(
-          join(configDir, "vocabulary", "urgency_tags.yaml"),
-          'urgency_tags:\n  - token: "#p1"\n    field: priority\n    value: high\n',
+          join(configDir, "vocabulary", "gentest_scheduled_tags.yaml"),
+          'gentest_scheduled_tags:\n  - token: "🗓️"\n    field: gentest_scheduled_at\n    extraction_hint: trailing_date\n',
         ),
       (configDir) => generateQualification(configDir).dropped,
     );
     // 1. RECORDED, keyed by the token he typed, with a reason he can act on.
-    assertDropped(dropped, "vocabulary token '#p1'", /sets 'priority'/);
-    assertDropped(dropped, "vocabulary token '#p1'", /node_type, domain, status/);
+    assertDropped(dropped, "vocabulary token '🗓️'", /sets 'gentest_scheduled_at'/);
     // 2. PRINTED. The same map is what `reportDropped` turns into stderr lines on every generate.
     const ledger = new Ledger();
-    ledger.drop("vocabulary token '#p1'", dropped["vocabulary token '#p1'"]);
+    ledger.drop("vocabulary token '🗓️'", dropped["vocabulary token '🗓️'"]);
     const report = ledger.report("qualification").join("\n");
     assert.match(report, /READ AND NOT PUBLISHED/);
-    assert.match(report, /vocabulary token '#p1'/);
+    assert.match(report, /vocabulary token '🗓️'/);
     // 3. GATED. The committed presentation.json does not carry it, so `--check` is now red.
     const served = JSON.parse(readFileSync(join(REPO, "presentation.json"), "utf8"));
     assert.ok(
-      !("vocabulary token '#p1'" in served.qualification.dropped),
+      !("vocabulary token '🗓️'" in served.qualification.dropped),
       "the committed declaration already carries this token — the gate arm of this test is void",
     );
   });
@@ -836,7 +911,12 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
       (configDir) =>
         writeFileSync(
           join(configDir, "vocabulary", "extra_domain_tags.yaml"),
-          'extra_domain_tags:\n  - token: "#invented"\n    field: invented_field\n    value: invented\n',
+          // NOT `field: invented_field, value: invented` (as this test used before 2026-08-06):
+          // rule (a) admits EXACTLY that shape (a fixed-value token) — `invented_field` would
+          // become resolvable and PUBLISH, collapsing this into ROW 1. `extraction_hint`-only
+          // (a value that VARIES per line, never a fixed spelling) is what still refuses under
+          // every rule this compiler has.
+          'extra_domain_tags:\n  - token: "#invented"\n    field: invented_field\n    extraction_hint: trailing_int\n',
         ),
       (configDir) => generateQualification(configDir),
     );
