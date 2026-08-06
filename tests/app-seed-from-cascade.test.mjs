@@ -417,8 +417,17 @@ describe("4. THE REFUSALS — each one still fires, none removed to make a case 
   });
 
   test("A VIEW WITH NO PUBLISHED SEED TABLE still refuses outright", () => {
+    // `sections: {}` ALONGSIDE `sectionRegistration: undefined` — 2026-08-06 (job 1, "the last
+    // fourteen") closed `all-personal.tasks`'s own qualification, so `declared.sections`
+    // answers on its own now (`newline.ts`'s `chromeFor`, rung 4, tries it BEFORE
+    // `sectionRegistration`). Stripping `sections` too is what isolates "no seed table AT ALL" —
+    // see `tests/present-seed.test.mjs`'s identical fixture for the fuller account.
     assert.equal(
-      seedFor("## All Personal\n", 1, { ...declaredFor("all-personal"), sectionRegistration: undefined }),
+      seedFor(
+        "## All Personal\n",
+        1,
+        { ...declaredFor("all-personal"), sections: {}, sectionRegistration: undefined },
+      ),
       null,
       "the GLOBAL rung answered without a table to answer from",
     );

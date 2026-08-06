@@ -797,7 +797,7 @@ const monorepo = existsSync(DEFAULT_CONFIG_DIR);
 const skip = monorepo ? false : `monorepo not checked out at ${DEFAULT_CONFIG_DIR}`;
 
 describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his own config", () => {
-  test("BASELINE: his real config today drops 11 tokens and 16 sections, all recorded", { skip }, () => {
+  test("BASELINE: his real config today drops 11 tokens and 0 sections, all recorded", { skip }, () => {
     // RESTATED 2026-08-03 against monorepo `d4c9d98`: 77/137/214 -> 82/148/230.
     //
     // RESTATED AGAIN 2026-08-04 against monorepo `0fe6c1d`: 82/148/230 -> 82/107/189. Not his
@@ -832,6 +832,18 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
     // changed, only which SECTIONS' patterns can now use a token-admitted OR structurally-admitted
     // field together.
     //
+    // RESTATED A THIRD TIME 2026-08-06 (job 1, "the last fourteen"): 11/16/27 -> 11/0/11. The 16
+    // still-dropped sections named just above — `due_date < $cycle_today` and its kin — are the
+    // exact 14 refusals (16 sections, some sharing one qualification) job 1 closes: the operator
+    // grammar admits `gt`/`gte`/`lt`/`lte` as a CLASS, `resolution.dayBoundary` (already published)
+    // resolves the cycle variable at EVALUATION time (never baked in at generation time, so it
+    // never goes stale), and a NEW fourth field-resolvability rung (`deriveExtractionHintFields`)
+    // reads `due_date`/`available_date`/`created_at`'s own varying trailing value. ZERO sections
+    // are dropped for a qualification-refusal reason today, across the whole real config — the
+    // token count (11) is untouched, because the fourth rung is published SEPARATELY from
+    // `resolvableFields` (see `deriveExtractionHintFields`'s own header for why it cannot join the
+    // FIXED token table those 11 tokens are still correctly absent from).
+    //
     // THESE THREE NUMBERS ARE A RECORD OF HIS CONFIG AND THIS GENERATOR'S GRAMMAR, NOT A FIXED
     // PROPERTY OF THIS REPO. They move whenever he adds a view OR this generator's grammar widens,
     // and they are expected to. Re-measure and restate them with the monorepo commit named — do not
@@ -840,10 +852,10 @@ describe("5. THE ACCEPTANCE TEST — the operator's own three outcomes, on his o
     const tokens = Object.keys(dropped).filter((k) => k.startsWith("vocabulary token"));
     const sections = Object.keys(dropped).filter((k) => k.startsWith("section "));
     assert.equal(tokens.length, 11, "the token drop count moved — regenerate and say so");
-    assert.equal(sections.length, 16, "the refused-section count moved — regenerate and say so");
+    assert.equal(sections.length, 0, "the refused-section count moved — regenerate and say so");
     // design-the-rule-mirror.md §9.2 measured 137 of 186 by running a script. It is now a fact
     // the declaration states about itself.
-    assert.equal(Object.keys(dropped).length, 27);
+    assert.equal(Object.keys(dropped).length, 11);
     for (const reason of Object.values(dropped)) assert.ok(reason.length > 0);
   });
 

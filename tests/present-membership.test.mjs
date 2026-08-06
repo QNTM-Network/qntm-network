@@ -136,12 +136,36 @@ describe("2. what it refuses, and why each refusal is not timidity", () => {
     // by EVERY section that registers `habit-dojo-heads` via a section-level `defaults:`, so it is
     // published now too (`because("habit-dojo", "classification", ...)` would answer
     // `needs-graph-traversal`, not this abstention — `habit-dojo-heads` also carries an edge step).
-    // `daily-personal.yaml`'s `due-soon` section names `due-soon-tasks`, which ranges over
-    // `due_date < $cycle_today` — the CLOCK, not the value, is what this widening never touches
-    // (question 2, not question 1 — see this PR's own residue classification) — and stands in for
-    // this test's claim now.
-    assert.equal(because("daily-personal", "due-soon", "- [ ] Anything"), "no-section-declaration");
+    // `daily-personal.yaml`'s `due-soon` section named `due-soon-tasks`, which ranged over
+    // `due_date < $cycle_today` — the CLOCK, not the value — and stood in for this test's claim
+    // for one PR.
+    //
+    // RESTATED A THIRD TIME 2026-08-06 (job 1, "the last fourteen"): `due-soon-tasks` is published
+    // now too — `because("daily-personal", "due-soon", ...)` answers `needs-clock` instead (a
+    // published, decidable predicate this ONE call cannot apply without `today` — see the next
+    // describe block), not this abstention. Measured across the WHOLE real config: 0 referenced
+    // qualifications are refused today, so no REAL section stands in for "never published"
+    // any more. A hand-built declaration is the honest replacement — a predicate the reader itself
+    // never received is exactly what `no-section-declaration` means, real config or not.
+    const unpublished = readQualificationDeclaration({
+      qualification: {
+        predicates: {},
+        sections: {}, // no predicate named 'ghost-qualification' was ever published
+      },
+    }).qualification;
+    const reading = membershipFor("nowhere", "ghost-section", "- [ ] Anything", unpublished);
+    assert.equal(reading.kind, "abstains");
+    assert.equal(reading.because, "no-section-declaration");
     assert.equal(because("inbox", "no-such-section", "- [ ] Anything"), "no-section-declaration");
+  });
+
+  test("a section whose qualification compares a field against the clock gets no answer without 'today'", () => {
+    // job 1's own new abstention. `daily-personal.yaml`'s `due-soon` section names
+    // `due-soon-tasks`, which ranges over `due_date < $cycle_today` — published now (see the
+    // previous test's own restatement), but UNDECIDABLE by this ONE call because it supplies no
+    // `today`. `tests/present-membership.test.mjs`'s own `LANGUAGE`/`because` helper never threads
+    // one through — see `app/present/resolvers/membership.ts` for the real caller that does.
+    assert.equal(because("daily-personal", "due-soon", "- [ ] Anything"), "needs-clock");
   });
 
   test("a section whose qualification traverses ONE HOP publishes, but membership still abstains — visibly, differently", () => {
@@ -206,6 +230,46 @@ describe("2. what it refuses, and why each refusal is not timidity", () => {
   test("a tag that sets an UNRELATED field is likewise not a refusal", () => {
     // `#genre-scifi` sets `genre`, which no published predicate ranges over.
     assert.equal(answerFor("inbox", "domain-empty", "- [ ] Read Dune #genre-scifi").belongs, true);
+  });
+});
+
+describe("2a. job 1, END TO END — a real typed line, a real extraction glyph, and 'today'", () => {
+  // `this-week.yaml`'s `overdue` section names `overdue` (`due_date: {lt: $cycle_today}`) — one of
+  // the fourteen. FAR IN THE FUTURE, so a due_date this test writes by hand is unambiguously
+  // before it regardless of when this suite runs — the point is the MECHANISM (glyph extraction +
+  // comparison), not a live clock, so `today` is a fixed, hand-chosen value, never `Date.now()`.
+  const FAR_FUTURE_TODAY = { logicalDate: "2999-01-01", weekEnd: "2999-01-04" };
+
+  test("a line with an overdue due_date belongs — resolveLineFields' own glyph extraction, then the comparison", () => {
+    const reading = membershipFor(
+      "this-week",
+      "overdue",
+      "- [ ] Ring the dentist 📅 2026-01-01",
+      LANGUAGE,
+      FAR_FUTURE_TODAY,
+    );
+    assert.equal(reading.kind, "answer", `abstained: ${reading.kind === "abstains" ? reading.because : ""}`);
+    assert.equal(reading.answer.fields.due_date, "2026-01-01", "the glyph's trailing value was not extracted");
+    assert.equal(reading.answer.belongs, true);
+  });
+
+  test("a line with a not-yet-due due_date does not belong — the same mechanism, the other side", () => {
+    const reading = membershipFor(
+      "this-week",
+      "overdue",
+      "- [ ] Ring the dentist 📅 2999-06-01",
+      LANGUAGE,
+      FAR_FUTURE_TODAY,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.belongs, false);
+  });
+
+  test("a line with NO due_date glyph at all does not belong — null-tolerant lt, same as the engine", () => {
+    const reading = membershipFor("this-week", "overdue", "- [ ] Ring the dentist", LANGUAGE, FAR_FUTURE_TODAY);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.fields.due_date, undefined);
+    assert.equal(reading.answer.belongs, false);
   });
 });
 

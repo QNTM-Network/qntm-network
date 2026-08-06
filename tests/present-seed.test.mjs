@@ -605,7 +605,18 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
   });
 
   test("A VIEW WITH NO PUBLISHED SEED TABLE behaves exactly as it did", () => {
-    const seed = seedFor("## All Personal\n", 1, { ...declaredFor("all-personal"), sectionRegistration: undefined });
+    // `sections: {}` ALONGSIDE `sectionRegistration: undefined`, not `sectionRegistration:
+    // undefined` alone — 2026-08-06 (job 1, "the last fourteen") closed `all-personal.tasks`'s own
+    // qualification (`all-personal-nodes`, a `$cycle_today` comparison), so `declared.sections
+    // ["all-personal"]["tasks"].nodeType` now answers on its own, via `chromeFor`'s rung 4 FIRST
+    // source (`qualification.sections`, tried before `sectionRegistration` — see that rung's own
+    // header, "THE TYPE IS NOW ASKED FOR TWICE"). Stripping `sections` too is what isolates "no
+    // seed table AT ALL", which is this test's actual claim.
+    const seed = seedFor(
+      "## All Personal\n",
+      1,
+      { ...declaredFor("all-personal"), sections: {}, sectionRegistration: undefined },
+    );
     assert.deepEqual(seed, null, "the GLOBAL rung answered without a table to answer from");
   });
 

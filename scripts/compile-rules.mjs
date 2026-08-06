@@ -142,7 +142,12 @@
 import { Ledger } from "./ledger.mjs";
 import { versionKey } from "./declaration-version.mjs";
 import { parseYamlSubset } from "./yaml-subset.mjs";
-import { normalisePattern, deriveResolvableFields, PATTERNS_PREFIX } from "./compile-qualification.mjs";
+import {
+  normalisePattern,
+  deriveResolvableFields,
+  deriveExtractionHintFields,
+  PATTERNS_PREFIX,
+} from "./compile-qualification.mjs";
 
 export class GenerationError extends Error {}
 class Refusal extends Error {}
@@ -521,7 +526,15 @@ export function compile(files, ledger = new Ledger()) {
   // Same files map `compile-qualification.mjs`'s own `compile()` derives this from (§0 there) —
   // 2026-08-06, this reader's `normalisePattern` call now needs the same field set THAT compiler
   // threads through, rather than a frozen `RESOLVABLE_FIELDS` import. See that function's header.
-  const resolvableFields = deriveResolvableFields(files);
+  // UNIONED WITH THE FOURTH RUNG (`deriveExtractionHintFields`) for the identical reason
+  // `compile-qualification.mjs`'s own `compile()` unions it into `admissibleFields` — a rule's
+  // `for_each` pattern shares ONE grammar with a section's `qualification:` (`normalisePattern`
+  // is imported, not reimplemented), so a pattern like `overall-aoi-completed`
+  // (`completed_at: {gte: "$cycle_today - 30 d", lte: "$cycle_today"}`) resolves here exactly the
+  // same way it now resolves there.
+  const resolvableFields = [
+    ...new Set([...deriveResolvableFields(files), ...Object.keys(deriveExtractionHintFields(files))]),
+  ].sort();
 
   const ruleKeys = allKeys()
     .filter((k) => k.startsWith(RULES_PREFIX) && k.endsWith(".yaml"))

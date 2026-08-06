@@ -53,7 +53,7 @@
  */
 
 import type { EdgeStep, FieldValue, Qualifier } from "./select/qualification.js";
-import { qualifierNeedsGraph } from "./select/qualification.js";
+import { qualifierNeedsClock, qualifierNeedsGraph } from "./select/qualification.js";
 import { matchesQualifier } from "./select/membership.js";
 import type { ResolvedFields } from "./select/membership.js";
 import { tagSpans } from "./express/rendition.js";
@@ -631,7 +631,17 @@ export function applyRules(
       undecidable.push(ruleId);
       continue;
     }
-    if (!matchesQualifier(working, qualifier)) continue;
+    // SAME TREATMENT, THE OTHER THING A ONE-PASS FIELDS-ONLY MATCHER CANNOT RESOLVE ALONE: a
+    // `for_each` pattern that compares a field against `$cycle_today`/`$cycle_week_end`
+    // (`qualifierNeedsClock` — `compile-rules.mjs` shares `normalisePattern` with
+    // `compile-qualification.mjs`, so a rule's pattern can be clock-bound exactly as a section's
+    // qualification can) needs `today`, which this pass already threads through for `setsFieldTo`
+    // substitution below — reused here rather than a second parameter for the same fact.
+    if (qualifierNeedsClock(qualifier) && today === undefined) {
+      undecidable.push(ruleId);
+      continue;
+    }
+    if (!matchesQualifier(working, qualifier, today)) continue;
     if (!evaluateWhen(rule.when, working)) continue;
 
     if (rule.partial === true) partial.push(ruleId);

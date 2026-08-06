@@ -410,8 +410,28 @@ function readStructuralDeclaration(document2) {
 }
 
 // app/present/select/qualification.ts
+var COMPARISON_OPERATORS = ["gt", "gte", "lt", "lte"];
+var CYCLE_EXPRESSION_RE = /^\$(cycle_today|cycle_week_end)(?:\s*[+-]\s*\d+\s*d)?$/;
+function isCycleExpression(value) {
+  return typeof value === "string" && CYCLE_EXPRESSION_RE.test(value);
+}
 function qualifierNeedsGraph(qualifier) {
   return (qualifier.edgeSteps?.length ?? 0) > 0;
+}
+function predicateNeedsClock(predicate) {
+  if (predicate.not !== void 0) return predicateNeedsClock(predicate.not);
+  if (predicate.eq !== void 0) return isCycleExpression(predicate.eq);
+  return COMPARISON_OPERATORS.some((op) => {
+    const operand = predicate[op];
+    return operand !== void 0 && isCycleExpression(operand);
+  });
+}
+function findClauseNeedsClock(clause) {
+  return Object.values(clause.fields).some(predicateNeedsClock);
+}
+function qualifierNeedsClock(qualifier) {
+  if (findClauseNeedsClock(qualifier.find)) return true;
+  return qualifier.exclude.some(findClauseNeedsClock);
 }
 var QUALIFICATION_KEY = "qualification";
 var DEFAULT_TRAVERSAL_DEPTH = 1;
@@ -419,6 +439,7 @@ var TOP_KEYS = [
   "defaultNodeType",
   "structuralNodeTypes",
   "resolvableFields",
+  "extractionFields",
   "tokens",
   "predicates",
   "sections",
@@ -428,10 +449,12 @@ var TOP_KEYS = [
   "traversalDepth"
 ];
 var SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"];
+var EXTRACTION_FIELD_KINDS = ["date", "int", "float"];
 var EMPTY2 = {
   defaultNodeType: void 0,
   structuralNodeTypes: [],
   resolvableFields: [],
+  extractionFields: {},
   tokens: {},
   predicates: {},
   sections: {},
@@ -453,24 +476,32 @@ function readPredicate(path, value, problems) {
     return void 0;
   }
   const keys = Object.keys(value);
-  if (keys.length !== 1) {
-    problems.push(
-      `'${path}' carries ${keys.length} operators (${keys.join(", ")}) \u2014 exactly one of eq, not`
-    );
-    return void 0;
-  }
-  if (keys[0] === "eq") {
+  if (keys.length === 1 && keys[0] === "eq") {
     if (!isFieldValue(value.eq)) {
       problems.push(`'${path}.eq' is ${shapeOf(value.eq)}, not a scalar or null`);
       return void 0;
     }
     return { eq: value.eq };
   }
-  if (keys[0] === "not") {
+  if (keys.length === 1 && keys[0] === "not") {
     const inner = readPredicate(`${path}.not`, value.not, problems);
     return inner === void 0 ? void 0 : { not: inner };
   }
-  problems.push(`'${path}' uses operator '${keys[0]}' \u2014 the operators are eq, not`);
+  if (keys.length > 0 && keys.every((k) => COMPARISON_OPERATORS.includes(k))) {
+    const compare = {};
+    for (const operator of keys) {
+      const operand = value[operator];
+      if (!isFieldValue(operand)) {
+        problems.push(`'${path}.${operator}' is ${shapeOf(operand)}, not a scalar or null`);
+        return void 0;
+      }
+      compare[operator] = operand;
+    }
+    return compare;
+  }
+  problems.push(
+    `'${path}' carries ${keys.length} operator(s) (${keys.join(", ")}) \u2014 exactly one of eq, not, or one or more of gt/gte/lt/lte`
+  );
   return void 0;
 }
 function readFindClause(path, value, problems) {
@@ -669,6 +700,33 @@ function readSections2(value, predicates, problems) {
   }
   return out;
 }
+function readExtractionFields(value, problems) {
+  if (!isPlainObject2(value)) {
+    problems.push(
+      `'${QUALIFICATION_KEY}.extractionFields' is ${shapeOf(value)}, not an object \u2014 no field spelled by a varying trailing value can be resolved`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [field, raw] of Object.entries(value)) {
+    const path = `${QUALIFICATION_KEY}.extractionFields.${field}`;
+    if (!isPlainObject2(raw)) {
+      problems.push(`'${path}' is ${shapeOf(raw)}, not an object`);
+      continue;
+    }
+    const { token, kind } = raw;
+    if (typeof token !== "string" || token === "") {
+      problems.push(`'${path}.token' is ${JSON.stringify(token)}, not a non-empty string`);
+      continue;
+    }
+    if (typeof kind !== "string" || !EXTRACTION_FIELD_KINDS.includes(kind)) {
+      problems.push(`'${path}.kind' is ${JSON.stringify(kind)}, not one of ${EXTRACTION_FIELD_KINDS.join(", ")}`);
+      continue;
+    }
+    out[field] = { token, kind };
+  }
+  return out;
+}
 function readTokens(value, problems) {
   if (!isPlainObject2(value)) {
     problems.push(
@@ -782,6 +840,7 @@ function readQualificationDeclaration(document2) {
         problems
       ) : [],
       resolvableFields: "resolvableFields" in raw ? readStringList(`${QUALIFICATION_KEY}.resolvableFields`, raw.resolvableFields, problems) : [],
+      extractionFields: "extractionFields" in raw ? readExtractionFields(raw.extractionFields, problems) : {},
       tokens: "tokens" in raw ? readTokens(raw.tokens, problems) : {},
       predicates,
       sections: "sections" in raw ? readSections2(raw.sections, predicates, problems) : {},
@@ -1896,28 +1955,96 @@ function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 var CHECKBOX = /^\s*- (\[[^\]]\]) (.*)$/;
-function evaluatePredicate(actual, predicate) {
-  if ("not" in predicate) return !evaluatePredicate(actual, predicate.not);
-  return actual === predicate.eq;
+var CYCLE_EXPRESSION_PARTS = /^\$(cycle_today|cycle_week_end)(?:\s*([+-])\s*(\d+)\s*d)?$/;
+var MS_PER_DAY = 864e5;
+function resolveCycleExpression(raw, today) {
+  const match = CYCLE_EXPRESSION_PARTS.exec(raw);
+  if (match === null) {
+    throw new Error(`resolveCycleExpression: '${raw}' is not a recognised cycle expression`);
+  }
+  const [, variable, operator, daysText] = match;
+  const base = variable === "cycle_today" ? today.logicalDate : today.weekEnd;
+  if (operator === void 0 || daysText === void 0) return base;
+  const [y, m, d] = base.split("-").map(Number);
+  const baseMs = Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1);
+  const offsetMs = Number(daysText) * MS_PER_DAY;
+  const shifted = new Date(operator === "+" ? baseMs + offsetMs : baseMs - offsetMs);
+  const pad22 = (n) => String(n).padStart(2, "0");
+  return `${shifted.getUTCFullYear()}-${pad22(shifted.getUTCMonth() + 1)}-${pad22(shifted.getUTCDate())}`;
 }
-function matchesFindClause(fields, clause) {
+function resolveOperand(value, today) {
+  if (!isCycleExpression(value)) return value;
+  if (today === void 0) {
+    throw new Error(
+      "evaluatePredicate: this predicate compares a field against a cycle expression ($cycle_today/$cycle_week_end) \u2014 it needs 'today' (app/present/today.ts's TodayAnswer), which this call did not supply. The caller must check qualifierNeedsClock() and abstain, or supply today, never call this function on a clock-bound qualifier without it."
+    );
+  }
+  return resolveCycleExpression(value, today);
+}
+function applyComparison(operator, cmp) {
+  if (operator === "gt") return cmp > 0;
+  if (operator === "gte") return cmp >= 0;
+  if (operator === "lt") return cmp < 0;
+  if (operator === "lte") return cmp <= 0;
+  return false;
+}
+function compareOrdered(actual, operator, expected) {
+  if (typeof actual === "string" && typeof expected === "string") {
+    return applyComparison(operator, actual < expected ? -1 : actual > expected ? 1 : 0);
+  }
+  if (typeof actual === "number" && typeof expected === "number") {
+    return applyComparison(operator, actual < expected ? -1 : actual > expected ? 1 : 0);
+  }
+  return false;
+}
+function evaluatePredicate(actual, predicate, today) {
+  if ("not" in predicate) return !evaluatePredicate(actual, predicate.not, today);
+  if ("eq" in predicate) return actual === resolveOperand(predicate.eq, today);
+  for (const operator of COMPARISON_OPERATORS) {
+    const rawExpected = predicate[operator];
+    if (rawExpected === void 0) continue;
+    const expected = resolveOperand(rawExpected, today);
+    if (!compareOrdered(actual, operator, expected)) return false;
+  }
+  return true;
+}
+function matchesFindClause(fields, clause, today) {
   if (clause.nodeType !== null) {
     const nodeType = fields["node_type"];
     if (typeof nodeType !== "string" || !clause.nodeType.includes(nodeType)) return false;
   }
   for (const [field, predicate] of Object.entries(clause.fields)) {
-    if (!evaluatePredicate(fields[field] ?? null, predicate)) return false;
+    if (!evaluatePredicate(fields[field] ?? null, predicate, today)) return false;
   }
   return true;
 }
-function matchesQualifier(fields, qualifier) {
+function matchesQualifier(fields, qualifier, today) {
   if (qualifierNeedsGraph(qualifier)) {
     throw new Error(
       "matchesQualifier: this qualifier carries edgeSteps (a one-hop children:/parents: traversal) \u2014 it ranges over a NEIGHBOUR node's fields, which this function does not have. The caller must check qualifierNeedsGraph() and abstain, never call this function to decide."
     );
   }
-  if (!matchesFindClause(fields, qualifier.find)) return false;
-  return !qualifier.exclude.some((clause) => matchesFindClause(fields, clause));
+  if (qualifierNeedsClock(qualifier) && today === void 0) {
+    throw new Error(
+      "matchesQualifier: this qualifier compares a field against a cycle expression ($cycle_today/$cycle_week_end) and no 'today' was supplied. The caller must check qualifierNeedsClock() and abstain, or supply today, never call this function blind."
+    );
+  }
+  if (!matchesFindClause(fields, qualifier.find, today)) return false;
+  return !qualifier.exclude.some((clause) => matchesFindClause(fields, clause, today));
+}
+var EXTRACTION_SHAPE = {
+  date: /^\d{4}-\d{2}-\d{2}$/,
+  int: /^-?\d+$/,
+  float: /^-?\d+(?:\.\d+)?$/
+};
+function extractionValue(line, marker) {
+  const at = line.indexOf(marker.token);
+  if (at === -1) return void 0;
+  const after = line.slice(at + marker.token.length);
+  const match = /^\s+(\S+)/.exec(after);
+  if (match === null) return void 0;
+  const token = match[1] ?? "";
+  return EXTRACTION_SHAPE[marker.kind].test(token) ? token : void 0;
 }
 function resolveLineFields(line, section, language) {
   if (qntmIdSpans(line).length > 0) return "already-a-node";
@@ -1941,20 +2068,26 @@ function resolveLineFields(line, section, language) {
       fields[field] = value;
     }
   }
+  for (const [field, marker] of Object.entries(language.extractionFields)) {
+    const raw = extractionValue(tail, marker);
+    if (raw === void 0) continue;
+    fields[field] = marker.kind === "date" ? raw : Number(raw);
+  }
   return fields;
 }
-function membershipFor(viewId, sectionId, line, language) {
+function membershipFor(viewId, sectionId, line, language, today) {
   const section = language.sections[viewId]?.[sectionId];
   if (section === void 0) return abstains2("no-section-declaration");
   const qualifier = language.predicates[section.qualification];
   if (qualifier === void 0) return abstains2("no-section-declaration");
   if (qualifierNeedsGraph(qualifier)) return abstains2("needs-graph-traversal");
+  if (qualifierNeedsClock(qualifier) && today === void 0) return abstains2("needs-clock");
   const fields = resolveLineFields(line, section, language);
   if (typeof fields === "string") return abstains2(fields);
   return {
     kind: "answer",
     answer: {
-      belongs: matchesQualifier(fields, qualifier),
+      belongs: matchesQualifier(fields, qualifier, today),
       view: viewId,
       section: sectionId,
       qualification: section.qualification,
@@ -2323,7 +2456,11 @@ function applyRules(fields, language, today) {
       undecidable.push(ruleId);
       continue;
     }
-    if (!matchesQualifier(working, qualifier)) continue;
+    if (qualifierNeedsClock(qualifier) && today === void 0) {
+      undecidable.push(ruleId);
+      continue;
+    }
+    if (!matchesQualifier(working, qualifier, today)) continue;
     if (!evaluateWhen(rule.when, working)) continue;
     if (rule.partial === true) partial.push(ruleId);
     const { working: nextWorking, effects } = applyRuleActions(ruleId, rule.actions, working, today);
@@ -2445,9 +2582,10 @@ function edgeStepIsSatisfied(candidateId, step, edgeSourceOf, graph, prospective
   const anyMatches = candidates.some((fields) => matchesFindClause(fields, clause));
   return step.mustExist ? anyMatches : !anyMatches;
 }
-function matchesQualifierGraphAware(candidateFields, candidateId, qualifier, graph, edgeSourceOf, prospective) {
-  if (!matchesFindClause(candidateFields, qualifier.find)) return false;
-  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause))) return false;
+function matchesQualifierGraphAware(candidateFields, candidateId, qualifier, graph, edgeSourceOf, prospective, today) {
+  if (qualifierNeedsClock(qualifier) && today === void 0) return void 0;
+  if (!matchesFindClause(candidateFields, qualifier.find, today)) return false;
+  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause, today))) return false;
   const steps = qualifier.edgeSteps ?? [];
   if (steps.length === 0) return true;
   const id = candidateId ?? "";
@@ -2468,7 +2606,15 @@ function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf
     if (rule === void 0) continue;
     const qualifier = language.patterns[rule.pattern];
     if (qualifier === void 0) continue;
-    const matched = matchesQualifierGraphAware(working, candidateId, qualifier, graph, edgeSourceOf, prospective);
+    const matched = matchesQualifierGraphAware(
+      working,
+      candidateId,
+      qualifier,
+      graph,
+      edgeSourceOf,
+      prospective,
+      today
+    );
     if (matched === void 0) {
       undecidable.push(ruleId);
       continue;
@@ -5437,12 +5583,18 @@ var membershipSpec = {
     if (sectionId === null) {
       return NOT_EVALUATED;
     }
+    const resolution = ctx.declared.resolution;
+    let today;
+    if (resolution !== void 0) {
+      const reading = todayFor(ctx.now(), resolution.dayBoundary);
+      today = reading.kind === "answer" ? reading.answer : void 0;
+    }
     const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
-    const before = membershipFor(view.id, sectionId, beforeLine, qualification);
+    const before = membershipFor(view.id, sectionId, beforeLine, qualification, today);
     if (before.kind !== "answer") {
       return { kind: "abstains", because: before.because };
     }
-    const after = membershipFor(view.id, sectionId, commit.text, qualification);
+    const after = membershipFor(view.id, sectionId, commit.text, qualification, today);
     if (after.kind !== "answer") {
       return { kind: "abstains", because: after.because };
     }

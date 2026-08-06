@@ -87,19 +87,19 @@
   ],
 
   "memberOperators": {
-    "description": "The complete set of operator keys a MEMBERSHIP predicate may use, both as the browser reads a served declaration and as the compiler normalises a pattern into one. Anything outside this list must be refused, loudly, by every surface below.",
-    "values": ["eq", "not"],
+    "description": "The complete set of operator keys a MEMBERSHIP predicate may use, both as the browser reads a served declaration and as the compiler normalises a pattern into one. Anything outside this list must be refused, loudly, by every surface below. WIDENED 2026-08-06 (job 1, 'the last fourteen'): gt/gte/lt/lte joined eq/not — the engine's own orderable-comparison operators (`patterns/engine.py::_NODE_PREDICATE_OPERATORS`), admitted as a CLASS over the candidate's own fields (never inside a one-hop edge step's neighbour restriction — see compile-qualification.mjs's own `allowComparison` parameter). One or more may CONJOIN in the same predicate (`{gte, lte}` is a range), the engine's own multi-key shape, unwrapped — never mixed with eq/not in the same predicate.",
+    "values": ["eq", "not", "gt", "gte", "lt", "lte"],
     "surfaces": [
       {
         "name": "MEMBERSHIP predicate grammar (browser)",
-        "file": "app/present/qualification.ts",
-        "symbol": "FieldPredicate (type, :69), readPredicate (:198-222)",
+        "file": "app/present/select/qualification.ts",
+        "symbol": "FieldPredicate (type, :128), readPredicate (:386-)",
         "side": "browser"
       },
       {
         "name": "MEMBERSHIP predicate grammar (compiler)",
-        "file": "scripts/generate-qualification-declaration.mjs",
-        "symbol": "normalisePredicate (:205-226), reached via normalisePattern",
+        "file": "scripts/compile-qualification.mjs",
+        "symbol": "normalisePredicate (:471-), reached via normalisePattern",
         "side": "compiler"
       }
     ]

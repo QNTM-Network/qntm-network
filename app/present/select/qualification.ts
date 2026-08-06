@@ -65,15 +65,71 @@
 /** A scalar a node field can hold, as it arrives in the declaration. */
 export type FieldValue = string | number | boolean | null;
 
+/** The kinds `deriveExtractionHintFields` (`scripts/compile-qualification.mjs`) ever emits — the
+ * same three `resolution.orderingFields`' own `OrderingFieldMarker` trailing-token kinds name,
+ * kept as an independent type here rather than an import so SELECT stays declared and read
+ * separately from ARRANGE, exactly the split this module's own header draws. */
+export type ExtractionFieldKind = "date" | "int" | "float";
+
+/** One extraction-hint field's marker: the glyph that precedes its value on a line, and the shape
+ * that value must have. `scripts/compile-qualification.mjs`'s `deriveExtractionHintFields`, read
+ * unchanged off the wire. */
+export interface ExtractionFieldMarker {
+  readonly token: string;
+  readonly kind: ExtractionFieldKind;
+}
+
 /**
- * One field's predicate. Closed to two forms because those are the only two the generator emits:
- * `eq` is the engine's default for a bare YAML value, and `not` is its one logical operator
- * (`patterns/engine.py::_NODE_PREDICATE_OPERATORS`). The orderable comparisons exist in the engine
- * and are deliberately NOT here — every pattern using one compares a date against a cycle variable,
- * which is not local, so admitting the operator would only widen this type without widening what
- * can be answered.
+ * The engine's own orderable-comparison vocabulary (`core/graph/src/qntm_graph/patterns/
+ * engine.py::_NODE_PREDICATE_OPERATORS`, minus `eq`/`not`, which this grammar already names by
+ * their own keys — see `FieldPredicate`).
  */
-export type FieldPredicate = { readonly eq: FieldValue } | { readonly not: FieldPredicate };
+export type ComparisonOperator = "gt" | "gte" | "lt" | "lte";
+
+export const COMPARISON_OPERATORS: readonly ComparisonOperator[] = ["gt", "gte", "lt", "lte"];
+
+/**
+ * `$cycle_today` / `$cycle_week_end`, optionally offset by a whole number of days — the engine's
+ * own closed cycle-variable grammar (`core/graph/src/qntm_graph/patterns/engine.py`'s
+ * `_CYCLE_EXPR_RE`), narrowed to the two names the engine's `cycle_context` ever binds to an ISO
+ * DATE (`apps/qntm-md/src/qntm_md/coordination/orchestrator.py:4717-4722`) — `cycle_started_at`
+ * and `day_window_since` are datetimes, never compared here, and no other `$cycle_*` name is ever
+ * bound. This is the SAME "closed grammar names no other cycle variable" posture `rules.ts`'s own
+ * `resolveRuleValue` already takes for `setsFieldTo` — a class of two, not a field enumerated.
+ * `scripts/compile-qualification.mjs`'s `CYCLE_EXPRESSION_RE` is this identical pattern, kept
+ * independent rather than shared so this module's own Worker-import story never grows a dependency
+ * on the generator (this file already draws that line for every other constant it needs).
+ */
+const CYCLE_EXPRESSION_RE = /^\$(cycle_today|cycle_week_end)(?:\s*[+-]\s*\d+\s*d)?$/;
+
+/** Is `value` one of the two recognised cycle expressions — `$cycle_today`/`$cycle_week_end`,
+ * optionally offset by whole days (`$cycle_today - 30 d`)? A structural shape test, never a clock
+ * read: it says what KIND of value this is, not what date it names today. */
+export function isCycleExpression(value: FieldValue): value is string {
+  return typeof value === "string" && CYCLE_EXPRESSION_RE.test(value);
+}
+
+/**
+ * One field's predicate. `eq`/`not` are the engine's default for a bare YAML value and its one
+ * logical operator (`patterns/engine.py::_NODE_PREDICATE_OPERATORS`) — unchanged since this type
+ * was `{eq}|{not}` only, and still mutually exclusive with everything else: a predicate is either
+ * `{eq}`, `{not}`, or ONE OR MORE of `gt`/`gte`/`lt`/`lte` TOGETHER, CONJOINED (a `{gte, lte}` pair
+ * is a range) — the engine's own wire shape, unwrapped (`_normalise_node_predicate`,
+ * `engine.py`:678-712: "a mapping predicate may carry MULTIPLE operators — they conjoin"). Each
+ * comparison operand is either a literal scalar or a cycle expression (`isCycleExpression`).
+ * `scripts/compile-qualification.mjs`'s own `normalisePredicate` is what decides a config
+ * predicate normalises into this shape rather than being refused (never mixing `eq`/`not` with a
+ * comparison in the same predicate — no pattern in the operator's real config does, and this
+ * reader does not either); this type only has to be able to HOLD what that reader already decided
+ * is local. `membership.ts`'s `evaluatePredicate` is what resolves a comparison's cycle expression
+ * against `today` — this module stays a reader, never an interpreter, exactly as its own header
+ * states for every other key.
+ */
+export type FieldPredicate = Readonly<
+  | { eq: FieldValue; not?: never; gt?: never; gte?: never; lt?: never; lte?: never }
+  | { not: FieldPredicate; eq?: never; gt?: never; gte?: never; lt?: never; lte?: never }
+  | ({ eq?: never; not?: never } & Partial<Record<ComparisonOperator, FieldValue>>)
+>;
 
 /**
  * One `find` clause: an optional node-type restriction plus field predicates, conjoined.
@@ -141,6 +197,41 @@ export function qualifierNeedsGraph(qualifier: Qualifier): boolean {
   return (qualifier.edgeSteps?.length ?? 0) > 0;
 }
 
+/** Does `predicate` reference a cycle expression anywhere in it — recursing through `not`, and
+ * through every operand of a `compare`? Mirrors `qualifierNeedsGraph`'s own "structural check, not
+ * a read" framing: it asks what KIND of predicate this is, never what today's date is. */
+function predicateNeedsClock(predicate: FieldPredicate): boolean {
+  if (predicate.not !== undefined) return predicateNeedsClock(predicate.not);
+  if (predicate.eq !== undefined) return isCycleExpression(predicate.eq);
+  return COMPARISON_OPERATORS.some((op) => {
+    const operand = predicate[op];
+    return operand !== undefined && isCycleExpression(operand);
+  });
+}
+
+function findClauseNeedsClock(clause: FindClause): boolean {
+  return Object.values(clause.fields).some(predicateNeedsClock);
+}
+
+/**
+ * Does deciding `qualifier` need the day boundary — `app/present/today.ts`'s `TodayAnswer` — to
+ * resolve a `$cycle_today`/`$cycle_week_end` reference, rather than only the candidate's own
+ * fields? `matchesQualifier`/`matchesFindClause` (`membership.ts`) throw rather than guess when
+ * this is `true` and no `today` was supplied; every real caller checks this FIRST and abstains, or
+ * supplies `today`, instead of calling them blind — the same discipline `qualifierNeedsGraph`
+ * already established for a one-hop edge step, applied to the OTHER thing this app cannot resolve
+ * from the line's own characters alone.
+ *
+ * EDGE-STEP FIELDS ARE NEVER CHECKED HERE, on purpose: `scripts/compile-qualification.mjs`'s
+ * `normalisePredicate` never admits a comparison or a cycle expression inside an `EdgeStep`'s own
+ * `fields` (see that function's own `allowComparison` parameter), so a published `Qualifier`
+ * structurally cannot need the clock THROUGH its edge steps — only through `find`/`exclude`.
+ */
+export function qualifierNeedsClock(qualifier: Qualifier): boolean {
+  if (findClauseNeedsClock(qualifier.find)) return true;
+  return qualifier.exclude.some(findClauseNeedsClock);
+}
+
 /** What a section declares: its qualification, and the registration defaults a line under it gets. */
 export interface SectionQualification {
   readonly qualification: string;
@@ -174,6 +265,16 @@ export interface QualificationLanguage {
    * cross-surface check, the same reason `dropped` is published though nothing reads it to decide.
    */
   readonly resolvableFields: readonly string[];
+  /**
+   * THE FOURTH RUNG'S OWN MARKER TABLE — `deriveExtractionHintFields(files)`'s own answer
+   * (`scripts/compile-qualification.mjs`), field name -> the glyph that precedes its value and
+   * what shape that value must have. Kept SEPARATE from `resolvableFields`, not folded into it —
+   * see that field's own comment and `deriveExtractionHintFields`'s header for why a field spelled
+   * by a varying trailing value (`due_date`'s 📅) cannot join a FIXED `tokens[field][token]` table.
+   * `membership.ts`'s `resolveLineFields` is what reads this to extract such a field off a line
+   * being typed, mirroring `app/present/arrange/ordering.ts`'s proven `markerValue`.
+   */
+  readonly extractionFields: Readonly<Record<string, ExtractionFieldMarker>>;
   /** field name -> token -> value, for every token in the vocabulary that sets that field. */
   readonly tokens: Readonly<Record<string, Readonly<Record<string, FieldValue>>>>;
   readonly predicates: Readonly<Record<string, Qualifier>>;
@@ -241,6 +342,7 @@ const TOP_KEYS = [
   "defaultNodeType",
   "structuralNodeTypes",
   "resolvableFields",
+  "extractionFields",
   "tokens",
   "predicates",
   "sections",
@@ -250,11 +352,13 @@ const TOP_KEYS = [
   "traversalDepth",
 ] as const;
 const SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"] as const;
+const EXTRACTION_FIELD_KINDS = ["date", "int", "float"] as const;
 
 const EMPTY: QualificationLanguage = {
   defaultNodeType: undefined,
   structuralNodeTypes: [],
   resolvableFields: [],
+  extractionFields: {},
   tokens: {},
   predicates: {},
   sections: {},
@@ -285,24 +389,36 @@ function readPredicate(path: string, value: unknown, problems: string[]): FieldP
     return undefined;
   }
   const keys = Object.keys(value);
-  if (keys.length !== 1) {
-    problems.push(
-      `'${path}' carries ${keys.length} operators (${keys.join(", ")}) — exactly one of eq, not`,
-    );
-    return undefined;
-  }
-  if (keys[0] === "eq") {
+  if (keys.length === 1 && keys[0] === "eq") {
     if (!isFieldValue(value.eq)) {
       problems.push(`'${path}.eq' is ${shapeOf(value.eq)}, not a scalar or null`);
       return undefined;
     }
     return { eq: value.eq };
   }
-  if (keys[0] === "not") {
+  if (keys.length === 1 && keys[0] === "not") {
     const inner = readPredicate(`${path}.not`, value.not, problems);
     return inner === undefined ? undefined : { not: inner };
   }
-  problems.push(`'${path}' uses operator '${keys[0]}' — the operators are eq, not`);
+  // ONE OR MORE comparison operators, CONJOINED — the engine's own multi-key range shape
+  // (`{gte: X, lte: Y}`), unwrapped: never mixed with `eq`/`not` in the same object, exactly the
+  // grammar `compile-qualification.mjs`'s own `normalisePredicate` emits.
+  if (keys.length > 0 && keys.every((k) => (COMPARISON_OPERATORS as readonly string[]).includes(k))) {
+    const compare: Partial<Record<ComparisonOperator, FieldValue>> = {};
+    for (const operator of keys as ComparisonOperator[]) {
+      const operand = value[operator];
+      if (!isFieldValue(operand)) {
+        problems.push(`'${path}.${operator}' is ${shapeOf(operand)}, not a scalar or null`);
+        return undefined;
+      }
+      compare[operator] = operand;
+    }
+    return compare as FieldPredicate;
+  }
+  problems.push(
+    `'${path}' carries ${keys.length} operator(s) (${keys.join(", ")}) — exactly one of eq, not, ` +
+      "or one or more of gt/gte/lt/lte",
+  );
   return undefined;
 }
 
@@ -539,6 +655,38 @@ function readSections(
   return out;
 }
 
+function readExtractionFields(
+  value: unknown,
+  problems: string[],
+): Record<string, ExtractionFieldMarker> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${QUALIFICATION_KEY}.extractionFields' is ${shapeOf(value)}, not an object — no field ` +
+        "spelled by a varying trailing value can be resolved",
+    );
+    return {};
+  }
+  const out: Record<string, ExtractionFieldMarker> = {};
+  for (const [field, raw] of Object.entries(value)) {
+    const path = `${QUALIFICATION_KEY}.extractionFields.${field}`;
+    if (!isPlainObject(raw)) {
+      problems.push(`'${path}' is ${shapeOf(raw)}, not an object`);
+      continue;
+    }
+    const { token, kind } = raw;
+    if (typeof token !== "string" || token === "") {
+      problems.push(`'${path}.token' is ${JSON.stringify(token)}, not a non-empty string`);
+      continue;
+    }
+    if (typeof kind !== "string" || !(EXTRACTION_FIELD_KINDS as readonly string[]).includes(kind)) {
+      problems.push(`'${path}.kind' is ${JSON.stringify(kind)}, not one of ${EXTRACTION_FIELD_KINDS.join(", ")}`);
+      continue;
+    }
+    out[field] = { token, kind: kind as ExtractionFieldKind };
+  }
+  return out;
+}
+
 function readTokens(value: unknown, problems: string[]): Record<string, Record<string, FieldValue>> {
   if (!isPlainObject(value)) {
     problems.push(
@@ -693,6 +841,8 @@ export function readQualificationDeclaration(document: unknown): QualificationRe
         "resolvableFields" in raw
           ? readStringList(`${QUALIFICATION_KEY}.resolvableFields`, raw.resolvableFields, problems)
           : [],
+      extractionFields:
+        "extractionFields" in raw ? readExtractionFields(raw.extractionFields, problems) : {},
       tokens: "tokens" in raw ? readTokens(raw.tokens, problems) : {},
       predicates,
       sections: "sections" in raw ? readSections(raw.sections, predicates, problems) : {},

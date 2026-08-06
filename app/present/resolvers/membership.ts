@@ -44,6 +44,8 @@
 import { sectionAt, sectionOrderFor } from "../address.js";
 import { membershipFor } from "../select/membership.js";
 import type { Abstention, MembershipAnswer } from "../select/membership.js";
+import { todayFor } from "../today.js";
+import type { TodayAnswer } from "../today.js";
 import type { CommitContext, Reading, ResolverSpec } from "../resolve.js";
 import { COMPLETE, NOT_EVALUATED } from "../resolve.js";
 
@@ -74,12 +76,25 @@ export const membershipSpec: ResolverSpec<MembershipCommitReading> = {
     if (sectionId === null) {
       return NOT_EVALUATED;
     }
+    // `$cycle_today`/`$cycle_week_end` — the day boundary, resolved the way the engine resolves
+    // it, exactly `resolvers/rules.ts`'s own `todayFor(ctx.now(), resolution.dayBoundary)` call
+    // (see that file's own header for the defect this pattern closed and why no guard belongs
+    // here instead). UNDEFINED, not a thrown gate, when `resolution` has not loaded — the
+    // OVERWHELMING majority of sections need no clock at all (`qualifierNeedsClock` is `false` for
+    // them), and `membershipFor` abstains `needs-clock` only for the few that do, rather than this
+    // whole resolver going dark for every section because ONE config key is missing.
+    const resolution = ctx.declared.resolution;
+    let today: TodayAnswer | undefined;
+    if (resolution !== undefined) {
+      const reading = todayFor(ctx.now(), resolution.dayBoundary);
+      today = reading.kind === "answer" ? reading.answer : undefined;
+    }
     const beforeLine = commit.source.split("\n")[commit.lineIndex] ?? "";
-    const before = membershipFor(view.id, sectionId, beforeLine, qualification);
+    const before = membershipFor(view.id, sectionId, beforeLine, qualification, today);
     if (before.kind !== "answer") {
       return { kind: "abstains", because: before.because };
     }
-    const after = membershipFor(view.id, sectionId, commit.text, qualification);
+    const after = membershipFor(view.id, sectionId, commit.text, qualification, today);
     if (after.kind !== "answer") {
       return { kind: "abstains", because: after.because };
     }

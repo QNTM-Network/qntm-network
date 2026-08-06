@@ -90,16 +90,28 @@ describe("1. the shipped declaration reads cleanly", () => {
   });
 
   test("what was refused is recorded with a reason, not dropped in silence", () => {
-    const { qualification } = readQualificationDeclaration(SERVED);
-    const refused = Object.entries(qualification.refused);
-    assert.ok(refused.length > 0, "nothing was refused, which cannot be true of this config");
-    for (const [name, reason] of refused) {
+    // 2026-08-06 (job 1, "the last fourteen"): the operator's real config now REFUSES ZERO
+    // referenced qualifications — the widened operator/cycle-variable/extraction-hint grammar
+    // closed every one of the 14 that used to land here. That is this config's own true count
+    // today, not a broken assumption: `project`/`stage` (unresolvable-field) and a two-hop
+    // traversal both still refuse in this grammar, they simply are not REFERENCED by any section
+    // today — `tests/app-generality-acceptance.test.mjs` pins the `project` refusal directly
+    // against `normalisePattern`, unaffected by which patterns a section happens to reference.
+    // The invariant THIS test exists to pin — a refusal always carries a reason, and refused and
+    // published are disjoint — is checked against whatever the shipped declaration's `refused`
+    // holds today (0 or more), plus a hand-built refusal the reader must still shape correctly.
+    const { qualification: served } = readQualificationDeclaration(SERVED);
+    for (const [name, reason] of Object.entries(served.refused)) {
       assert.ok(reason.length > 0, `'${name}' was refused with an empty reason`);
       assert.ok(
-        !(name in qualification.predicates),
+        !(name in served.predicates),
         `'${name}' is both refused and published — the two halves disagree`,
       );
     }
+    const { qualification: handBuilt } = readQualificationDeclaration({
+      qualification: { refused: { "unresolvable-example": "unresolvable field(s): project" } },
+    });
+    assert.deepEqual(handBuilt.refused, { "unresolvable-example": "unresolvable field(s): project" });
   });
 });
 
@@ -114,7 +126,7 @@ describe("1a. sectionOrder — the FULL declared order, published beside the pub
     assert.deepEqual(qualification.sectionOrder["inbox"], ["inbox-tagged", "domain-empty"]);
   });
 
-  test("daily-work: 5 declared, only 3 published — sectionOrder still carries all 5", () => {
+  test("daily-work: 5 declared, all 5 now published — sectionOrder and sections agree", () => {
     // RESTATED 2026-08-04, the one-hop `children:`/`parents:` widening
     // (`compile-qualification.mjs`'s `normaliseEdgeStep`): `waiting` joined `in-progress` in
     // `sections` because its own qualification is a one-hop edge-existence test, which this
@@ -124,21 +136,32 @@ describe("1a. sectionOrder — the FULL declared order, published beside the pub
     // RESTATED AGAIN 2026-08-06: `urgent` joined too — `deriveResolvableFields` (`compile-
     // qualification.mjs`'s header) admits `priority` (a fixed-value vocabulary token, `markers
     // .yaml`'s 🔽/⏫/📌), which `urgent`'s own qualification predicate ranges over.
+    //
+    // RESTATED A THIRD TIME 2026-08-06 (job 1, "the last fourteen"): `due-today` joined too —
+    // `due-soon-tasks` (this section's own qualification) compares `due_date` against
+    // `$cycle_today`, closed by the widened operator/cycle-variable/extraction-hint grammar. All 5
+    // of the view's declared sections are now published; `sectionOrder` and `sections` agree.
     const { qualification } = readQualificationDeclaration(SERVED);
     assert.deepEqual(
       qualification.sectionOrder["daily-work"],
       ["in-progress", "urgent", "due-today", "waiting", "capture"],
     );
-    assert.deepEqual(Object.keys(qualification.sections["daily-work"]), ["in-progress", "urgent", "waiting"]);
+    assert.deepEqual(
+      Object.keys(qualification.sections["daily-work"]),
+      ["in-progress", "urgent", "due-today", "waiting", "capture"],
+    );
   });
 
-  test("daily-personal: 8 declared, only 6 published — sectionOrder still carries all 8", () => {
+  test("daily-personal: 8 declared, all 8 now published — sectionOrder and sections agree", () => {
     // RESTATED 2026-08-04 — see the `daily-work` test above for why the published count moved.
     // RESTATED AGAIN 2026-08-06 — 5 -> 6, the same `priority` widening `daily-work`'s own restated
     // comment names.
+    // RESTATED A THIRD TIME 2026-08-06 (job 1, "the last fourteen"): 6 -> 8 — `due-soon` and
+    // `capture` (`due-soon-tasks`/`captured-today`, both cycle-variable-bound) are the two that
+    // closed here; see the `daily-work` test above for the same widening.
     const { qualification } = readQualificationDeclaration(SERVED);
     assert.equal(qualification.sectionOrder["daily-personal"].length, 8);
-    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 6);
+    assert.equal(Object.keys(qualification.sections["daily-personal"]).length, 8);
   });
 
   test("every published section's id also appears in its view's full order", () => {
@@ -192,13 +215,23 @@ describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into 
     // referencing a field fixed by every section that registers it (`project`, `stage` — no
     // vocabulary token, but a section-level `defaults:` in every real config site) is admitted too.
     // `deriveStructuralFieldsByQualification` (`compile-qualification.mjs`) is the second rung; see
-    // that function's own header for the mechanism and the soundness argument. The counts are a
-    // census of HIS config and this generator's grammar, not a property of this wiring. What this
-    // test actually falsifies — that `presentationFromDeclaration` carries the qualification axis at
-    // all — is unchanged, and `problems` is still empty.
+    // that function's own header for the mechanism and the soundness argument.
+    //
+    // RESTATED A FOURTH TIME 2026-08-06 (job 1, "the last fourteen"): predicates 178 -> 192,
+    // views-with-a-published-section 80 -> 83. The 14 remaining refusals — `available_date`/
+    // `due_date`/`created_at` compared against `$cycle_today`/`$cycle_week_end` (`gt`/`lt`/
+    // `gte`+`lte`, or a bare cycle-variable `eq`) — all closed: the operator grammar admits
+    // `gt`/`gte`/`lt`/`lte` as a CLASS over the candidate's own fields, the day boundary already
+    // published (`resolution.dayBoundary`) resolves the cycle variable at evaluation time (never
+    // baked in at generation time, so it never goes stale), and a NEW fourth field-resolvability
+    // rung (`deriveExtractionHintFields`) reads a glyph's varying trailing value the same way
+    // `arrange/ordering.ts` already does for ordering. The counts are a census of HIS config and
+    // this generator's grammar, not a property of this wiring. What this test actually falsifies —
+    // that `presentationFromDeclaration` carries the qualification axis at all — is unchanged, and
+    // `problems` is still empty.
     const declared = presentationFromDeclaration(SERVED);
-    assert.equal(Object.keys(declared.qualification.predicates).length, 178);
-    assert.equal(Object.keys(declared.qualification.sections).length, 80);
+    assert.equal(Object.keys(declared.qualification.predicates).length, 192);
+    assert.equal(Object.keys(declared.qualification.sections).length, 83);
     assert.deepEqual(declared.problems, [], "wiring qualification in introduced a reported problem");
   });
 
@@ -225,10 +258,15 @@ describe("2. a malformed declaration is reported, never guessed", () => {
   });
 
   test("an unknown predicate operator is reported and the pattern is dropped", () => {
+    // `gt` moved OUT of this example 2026-08-06 (job 1, "the last fourteen") — it is now a
+    // recognised comparison operator (`docs/architecture/operator-set.json`'s own widening), so
+    // `{domain: {gt: "x"}}` is no longer a shape this reader refuses. `ne` is not, and matches no
+    // grammar this reader or the engine's ever admitted — see `tests/operator-set-agreement
+    // .test.mjs`'s own `NON_OPERATORS` for the same fabricated-decoy reasoning.
     const { qualification, problems } = read({
-      predicates: { p: { find: { nodeType: null, fields: { domain: { gt: "x" } } } } },
+      predicates: { p: { find: { nodeType: null, fields: { domain: { ne: "x" } } } } },
     });
-    assert.ok(problems.some((p) => p.includes("gt")), problems.join("\n"));
+    assert.ok(problems.some((p) => p.includes("ne")), problems.join("\n"));
     assert.deepEqual(qualification.predicates, {}, "a pattern with a bad operator was published");
   });
 

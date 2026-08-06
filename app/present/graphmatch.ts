@@ -76,8 +76,10 @@
  */
 
 import type { FieldValue, FindClause, Qualifier } from "./select/qualification.js";
+import { qualifierNeedsClock } from "./select/qualification.js";
 import { matchesFindClause } from "./select/membership.js";
 import type { ResolvedFields } from "./select/membership.js";
+import type { TodayAnswer } from "./today.js";
 import { applyRuleActions, evaluateWhen } from "./rules.js";
 import type { RuleEffect, RulesLanguage } from "./rules.js";
 
@@ -249,9 +251,18 @@ export function matchesQualifierGraphAware(
   graph: GraphSnapshot,
   edgeSourceOf: EdgeSourceOf,
   prospective: ProspectiveChild | undefined,
+  today?: TodayAnswer,
 ): boolean | undefined {
-  if (!matchesFindClause(candidateFields, qualifier.find)) return false;
-  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause))) return false;
+  // THE SAME "UNDEFINED, NEVER A GUESSED FALSE" CONTRACT THIS FUNCTION'S OWN HEADER STATES FOR AN
+  // EDGE STEP, applied to the OTHER thing a candidate's own `find`/`exclude` might need and this
+  // call might not have: `qualifierNeedsClock` can only ever be `true` here through `qualifier
+  // .find`/`.exclude` (never through an edge step's own neighbour fields — `compile-qualification
+  // .mjs`'s `normalisePredicate` never admits a comparison there; see that function's own
+  // `allowComparison` parameter), so checking it before either `matchesFindClause` call below
+  // is checking exactly what those two calls are about to need.
+  if (qualifierNeedsClock(qualifier) && today === undefined) return undefined;
+  if (!matchesFindClause(candidateFields, qualifier.find, today)) return false;
+  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause, today))) return false;
   const steps = qualifier.edgeSteps ?? [];
   if (steps.length === 0) return true;
   // `candidateId` folded to a sentinel no real wire id can equal — `neighboursOf`'s own filter
@@ -303,7 +314,15 @@ export function applyGraphAwareRules(
     const qualifier = language.patterns[rule.pattern];
     if (qualifier === undefined) continue; // same defence
 
-    const matched = matchesQualifierGraphAware(working, candidateId, qualifier, graph, edgeSourceOf, prospective);
+    const matched = matchesQualifierGraphAware(
+      working,
+      candidateId,
+      qualifier,
+      graph,
+      edgeSourceOf,
+      prospective,
+      today,
+    );
     if (matched === undefined) {
       undecidable.push(ruleId);
       continue;

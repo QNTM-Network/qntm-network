@@ -95,9 +95,17 @@ const INDEX = JSON.parse(
 const OPERATORS = INDEX.memberOperators.values;
 const FIELDS = INDEX.resolvableFields.values;
 
-// Decoys: real engine operators (`patterns/engine.py::_NODE_PREDICATE_OPERATORS`, cited by
-// qualification.ts:60-68) and plausible field names that are NOT in the local grammar. If the
-// index is ever widened, add the new value to operator-set.json's `values` array, not here.
+// Decoys: fabricated operator keys no grammar (this one or the engine's) admits, and plausible
+// field names that are NOT in the local grammar. If the index is ever widened, add the new value
+// to operator-set.json's `values` array, not here.
+//
+// `gt`, `gte`, `lt`, `lte` moved OUT of this list 2026-08-06 (job 1, "the last fourteen"): they
+// are now genuinely admitted, as a class, over the candidate's own fields — see
+// `operator-set.json`'s own `memberOperators.description` for the widening. The engine's own
+// `_NODE_PREDICATE_OPERATORS` (`patterns/engine.py`, cited by `qualification.ts`'s own
+// `FieldPredicate` header) is now `{eq, not, gt, gte, lt, lte}` in full, so there is no remaining
+// REAL engine operator left to use as a decoy — `ne`/`in`/`contains` are fabricated, matching no
+// grammar at all, which is exactly what a decoy needs to be.
 //
 // `title`, `priority` and `cap_state` moved OUT of this list 2026-08-06: RESOLVABLE_FIELDS is no
 // longer a frozen three — it is `deriveResolvableFields`'s own measurement of the real config, and
@@ -106,7 +114,12 @@ const FIELDS = INDEX.resolvableFields.values;
 // referenced by real patterns, both are set only by a per-SECTION `defaults:` block rather than a
 // vocabulary token or the GLOBAL registration default, and `deriveResolvableFields`'s own header
 // (`scripts/compile-qualification.mjs`) explains why that is not (yet) enough to admit them.
-const NON_OPERATORS = ["gte", "lte", "gt", "lt", "ne", "in", "contains"];
+// `due_date`/`queue_position` stay decoys here too, on purpose — job 1 gave them a SEPARATE
+// resolution path (`extractionFields`, a varying trailing value, never a fixed
+// `RESOLVABLE_FIELDS`/`tokens[field][token]` spelling), so `membership.ts`'s OWN
+// `RESOLVABLE_FIELDS.includes(field)` gate this probe exercises is correctly still `false` for
+// both — see `resolveLineFields`'s own header for the two rungs.
+const NON_OPERATORS = ["ne", "in", "contains"];
 const NON_FIELDS = ["project", "stage", "assignee", "due_date", "queue_position"];
 
 /**
