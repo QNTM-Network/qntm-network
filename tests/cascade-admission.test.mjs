@@ -381,7 +381,11 @@ describe("6. THE MUTATION PROOF — a compiler that never unions the structural 
       const source = readFileSync(join(REPO, "scripts", "compile-qualification.mjs"), "utf8");
       const anchor =
         'const admissibleFields = [\n' +
-        '      ...new Set([...resolvableFields, ...(structuralFieldsByQualification.get(name) ?? [])]),\n' +
+        '      ...new Set([\n' +
+        '        ...resolvableFields,\n' +
+        '        ...Object.keys(extractionHintFields),\n' +
+        '        ...(structuralFieldsByQualification.get(name) ?? []),\n' +
+        '      ]),\n' +
         '    ].sort();';
       assert.ok(source.includes(anchor), "the mutation's own anchor was not found — did the assemble step move?");
       const mutated = source.replace(anchor, "const admissibleFields = resolvableFields;");

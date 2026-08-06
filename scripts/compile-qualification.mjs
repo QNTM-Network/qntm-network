@@ -266,6 +266,95 @@ export function deriveResolvableFields(files) {
   return [...fields].sort();
 }
 
+/** `markers.yaml`'s own `extraction_hint:` vocabulary, restricted to the three shapes an
+ * orderable comparison can be resolved against — the same three `resolution.orderingFields`
+ * (`compile-resolution.mjs`) already reads a marker for, kept as an independent constant here
+ * rather than an import so this file's own Worker-safety story (see this file's own header)
+ * never depends on that module's. */
+const EXTRACTION_HINT_KINDS = { trailing_date: "date", trailing_int: "int", trailing_float: "float" };
+
+/**
+ * Derive the EXTRACTION-HINT field marker table — THE FOURTH RUNG of field-resolvability,
+ * alongside `deriveResolvableFields`'s (a)-(c). A field admitted here is spelled by a GLYPH
+ * followed by a VALUE THAT VARIES line to line (`due_date`'s 📅, `available_date`'s 🛫, …) rather
+ * than a fixed spelling — `markers.yaml`'s `extraction_hint:` rows, deliberately excluded from
+ * `deriveResolvableFields` itself (see that function's own header, "EXCLUDED BY THE SAME RULE, NOT
+ * BY EXCEPTION"): a `tokens[field][token]` lookup cannot hold a value that is different on every
+ * line, so these fields need a DIFFERENT reader (`app/present/select/membership.ts`'s
+ * `extractionValue`, mirroring `app/present/arrange/ordering.ts`'s proven `markerValue`) rather
+ * than a wider token table.
+ *
+ * EXCLUDED, BY THE SAME RULE `deriveResolvableFields`'s DROP PATH 11 ALREADY STATES FOR THE FIXED
+ * TABLE: a `render_only: true` marker (`done_task_count`, `par`) is the engine's own OUTPUT, never
+ * read back from a line the operator is typing — admitting it here would publish a field this
+ * grammar could then compare against, and answer confidently and wrongly, because the glyph on the
+ * line is a display artefact the NEXT cycle overwrites, not a value the operator set.
+ *
+ * PURE and tolerant of an unparsable vocabulary file, mirroring `deriveResolvableFields` exactly —
+ * see that function's own header for why an unreadable file spells nothing either way.
+ *
+ * @param {Record<string, string> | Map<string, string>} files
+ * @returns {Record<string, {token: string, kind: "date" | "int" | "float"}>}
+ */
+export function deriveExtractionHintFields(files) {
+  const isMap = files instanceof Map;
+  const has = (key) => (isMap ? files.has(key) : Object.prototype.hasOwnProperty.call(files, key));
+  const get = (key) => (isMap ? files.get(key) : files[key]);
+  const allKeys = () => (isMap ? [...files.keys()] : Object.keys(files));
+
+  const fields = {};
+  const vocabularyKeys = allKeys()
+    .filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml"))
+    .sort();
+  for (const key of vocabularyKeys) {
+    // NOT A DROP: `allKeys()` already enumerated this key — see `deriveResolvableFields`'s own
+    // identical guard, immediately above, for why the `isMap` branch is the only one that could
+    // ever miss, and only defensively.
+    if (!has(key)) continue;
+    let document;
+    try {
+      document = parseYamlSubset(get(key), key);
+    } catch {
+      // NOT A DROP HERE: `compile()`'s own vocabulary read (below, §4) hits the identical parse
+      // failure and records it once — see `deriveResolvableFields`'s own identical `catch`, above,
+      // for the full reasoning (this function only asks "what does the config that DOES parse
+      // spell", so a file that will not parse spells nothing, exactly like there).
+      continue;
+    }
+    // NOT A DROP: mirrors `deriveResolvableFields`'s own three identical shape guards immediately
+    // below (a non-mapping document, a family that is not a list, an entry that is not an object)
+    // — the SAME "not a compile()-recognised shape, so it names nothing" reasoning, not a THIRD
+    // explanation for what is structurally the same guard three times over.
+    if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+    for (const family of Object.values(document)) {
+      if (!Array.isArray(family)) continue;
+      for (const entry of family) {
+        if (!entry || typeof entry !== "object") continue;
+        // NOT A DROP: an extraction-hint entry setting no field, or `render_only: true`
+        // (`done_task_count`, `par`) — this function's own header states why `render_only` is
+        // EXCLUDED rather than admitted; a token with no `field:` at all declares nothing this
+        // rung could ever range over either way.
+        if (typeof entry.field !== "string" || entry.render_only === true) continue;
+        const kind = EXTRACTION_HINT_KINDS[entry.extraction_hint];
+        // NOT A DROP: an `extraction_hint:` value outside the three orderable shapes this rung
+        // admits (`EXTRACTION_HINT_KINDS`, above) — nothing today's real config declares, but a
+        // fourth hint value would need this rung's own widening before it could mean anything
+        // here, not a silent guess at what it should compare as.
+        if (kind === undefined) continue;
+        // NOT A DROP: no glyph to key the marker table by — the same "nothing to publish" fact
+        // `readOrderingFieldMarker`'s own `token` guard (`resolutiontable.ts`) states for the
+        // sibling table this rung's own header cites.
+        if (typeof entry.token !== "string" || entry.token === "") continue;
+        // First writer wins — measured against the real config, every field's extraction_hint
+        // entries name exactly one glyph each, so this never actually arbitrates a collision; it
+        // exists so a future config that DID declare two never gets a silently-overwritten answer.
+        if (!(entry.field in fields)) fields[entry.field] = { token: entry.token, kind };
+      }
+    }
+  }
+  return fields;
+}
+
 /**
  * ── RESOLVABILITY IS A CASCADE WALK, NOT A LINE-ONLY TOKEN LOOKUP. ──
  *
@@ -356,30 +445,91 @@ export function deriveStructuralFieldsByQualification(viewSectionMaps) {
 
 // ── the pattern normaliser — pure over a parsed config object, no files map involved ───────────
 
-function normalisePredicate(value, field) {
+/** The engine's own orderable-comparison vocabulary (`core/graph/src/qntm_graph/patterns/
+ * engine.py::_NODE_PREDICATE_OPERATORS`, minus `eq`/`not` which this grammar already names by
+ * their own keys) — admitted here as a CLASS, never a per-field special case. */
+const COMPARISON_OPERATORS = ["gt", "gte", "lt", "lte"];
+
+/**
+ * `$cycle_today` / `$cycle_week_end`, optionally offset by a whole number of days — the ENGINE's
+ * own closed cycle-variable grammar (`core/graph/src/qntm_graph/patterns/engine.py`'s
+ * `_CYCLE_EXPR_RE = re.compile(r"^\$(cycle_[a-zA-Z0-9_]*)(?:\s*([+-])\s*(\d+)\s*d)?$")`), narrowed
+ * to the two names the engine's own `cycle_context` ever actually binds to an ISO DATE
+ * (`apps/qntm-md/src/qntm_md/coordination/orchestrator.py:4717-4722` — `cycle_today`/
+ * `cycle_week_end`; `cycle_started_at` and `day_window_since` are datetimes, never compared here,
+ * and no other `$cycle_*` name is ever bound). This is the same "closed grammar names no other
+ * cycle variable" posture `app/present/rules.ts`'s own `resolveRuleValue` already takes for
+ * `setsFieldTo` — a class of two, not a field enumerated. `app/present/select/qualification.ts`'s
+ * `CYCLE_EXPRESSION_RE` is this SAME pattern, kept as an independent literal (not an import) for
+ * the same Worker-isolation reason `EXTRACTION_HINT_KINDS`, above, gives.
+ */
+const CYCLE_EXPRESSION_RE = /^\$(cycle_today|cycle_week_end)(?:\s*[+-]\s*\d+\s*d)?$/;
+
+/**
+ * A comparison operand: a plain scalar, or a recognised cycle expression. A `$`-prefixed value
+ * that is NOT a recognised cycle expression is refused by name — an unknown variable, or a
+ * malformed offset, is not a value this reader can resolve, so it is treated exactly as the
+ * original unconditional `$`-refusal already treated every `$`-prefixed scalar.
+ */
+function normaliseComparisonOperand(value, field) {
+  if (typeof value === "string" && value.startsWith("$")) {
+    if (!CYCLE_EXPRESSION_RE.test(value)) refuse(`${field}: cycle variable ${value}`);
+    return value;
+  }
+  if (!isScalar(value) || value === null) refuse(`${field}: comparison value is not a scalar`);
+  return value;
+}
+
+/**
+ * `allowComparison` distinguishes the CANDIDATE's own fields (root `find`, a self-step's
+ * `find_nodes` — both test the line being typed, exactly `resolveLineFields`'s domain) from an
+ * EDGE STEP's neighbour restriction (a `children:`/`parents:` hop's own `fields` — a DIFFERENT
+ * node's fields, read from the graph payload, never from the line). Comparisons and cycle
+ * expressions are admitted only for the former: widening the latter would need `today` threaded
+ * through `graphmatch.ts`'s whole graph-aware matcher, a larger and separately-verified surface
+ * this leg does not touch — see `normaliseEdgeStep`'s own call site, below, which always passes
+ * `false`. This is a SCOPE boundary, not a field boundary: it holds for every field alike.
+ */
+function normalisePredicate(value, field, allowComparison) {
   if (isScalar(value)) {
     if (typeof value === "string" && value.startsWith("$")) {
+      if (allowComparison && CYCLE_EXPRESSION_RE.test(value)) return { eq: value };
       refuse(`${field}: cycle variable ${value}`);
     }
     return { eq: value };
   }
   if (value && typeof value === "object" && !Array.isArray(value)) {
-    // A mapping predicate names its operator explicitly. The engine allows several, conjoined
-    // (`{gte: $today, lte: $week_end}` is a range), but every multi-operator predicate in the
-    // config is a date window against a cycle variable, so only the single-operator forms are
-    // local. `eq` is spelled out here as well as inferred from a bare value, because
-    // `status: {not: {eq: done}}` nests one inside the other and refusing the inner `eq` would
-    // withhold a pattern that is entirely decidable.
+    // A mapping predicate names its operator explicitly. `eq`/`not` are spelled out here as well
+    // as inferred from a bare value, because `status: {not: {eq: done}}` nests one inside the
+    // other and refusing the inner `eq` would withhold a pattern that is entirely decidable.
     const keys = Object.keys(value);
+    if (keys.length === 1 && keys[0] === "not") {
+      return { not: normalisePredicate(value.not, field, allowComparison) };
+    }
+    if (keys.length === 1 && keys[0] === "eq") {
+      return normalisePredicate(value.eq, field, allowComparison);
+    }
+    // The engine allows several comparison operators, CONJOINED (`{gte: $today, lte: $week_end}`
+    // is a range) — `_normalise_node_predicate`, engine.py:678-712. Admitted only when EVERY key
+    // is one of the four comparison operators (never mixed with `eq`/`not` in the same mapping —
+    // no pattern in the operator's real config does that, and refusing the mix rather than
+    // guessing an evaluation order for it is the same "wrong answer worse than refusal" posture
+    // this whole reader keeps elsewhere).
+    if (allowComparison && keys.length > 0 && keys.every((k) => COMPARISON_OPERATORS.includes(k))) {
+      // FLAT, not wrapped — the engine's own multi-key shape, unwrapped, so the wire predicate a
+      // config's `{gte: X, lte: Y}` normalises TO is the SAME shape it started as. `app/present/
+      // select/qualification.ts`'s `FieldPredicate` reads this identically.
+      const compare = {};
+      for (const k of keys) compare[k] = normaliseComparisonOperand(value[k], field);
+      return compare;
+    }
     if (keys.length !== 1) refuse(`${field}: operator ${keys.join("+")}`);
-    if (keys[0] === "not") return { not: normalisePredicate(value.not, field) };
-    if (keys[0] === "eq") return normalisePredicate(value.eq, field);
     refuse(`${field}: operator ${keys[0]}`);
   }
   refuse(`${field}: unreadable predicate`);
 }
 
-function normaliseFind(find, where) {
+function normaliseFind(find, where, allowComparison) {
   if (!find || typeof find !== "object" || Array.isArray(find)) {
     refuse(`${where}: not a mapping`);
   }
@@ -395,7 +545,7 @@ function normaliseFind(find, where) {
       // NOT A DROP: loop control — node_type was just read into `nodeType`.
       continue;
     }
-    fields[key] = normalisePredicate(value, key);
+    fields[key] = normalisePredicate(value, key, allowComparison);
   }
   return { nodeType, fields };
 }
@@ -416,7 +566,7 @@ function normaliseSelfStep(step, index) {
   if (!("find_nodes" in sub)) {
     refuse(`step ${index}: traverses (${Object.keys(sub)[0]})`);
   }
-  return { kind: "self", ...normaliseFind(sub.find_nodes, `step ${index}.not[0].find_nodes`) };
+  return { kind: "self", ...normaliseFind(sub.find_nodes, `step ${index}.not[0].find_nodes`, true) };
 }
 
 /**
@@ -453,7 +603,7 @@ function normaliseEdgeStep(direction, mustExist, spec, index) {
     refuse(`step ${index}.${direction}.edge_type: not a string or non-empty list of strings`);
   }
   const edgeType = [...edgeTypeList].sort();
-  const { nodeType, fields } = normaliseFind(rest, `step ${index}.${direction}`);
+  const { nodeType, fields } = normaliseFind(rest, `step ${index}.${direction}`, false);
   return { kind: "edge", direction, mustExist, edgeType, nodeType, fields };
 }
 
@@ -517,7 +667,7 @@ export function normalisePattern(config, resolvableFields) {
   if (extraRootKeys.length > 0) {
     refuse(`root also carries ${extraRootKeys.join("+")}`);
   }
-  const find = normaliseFind(root.find, "root.find");
+  const find = normaliseFind(root.find, "root.find", true);
   const steps = Array.isArray(config.steps) ? config.steps : config.steps == null ? [] : refuse("'steps' is not a list");
   const normalisedSteps = steps.map((step, i) => normaliseStep(step, i));
   const exclude = normalisedSteps
@@ -636,6 +786,12 @@ export function compile(files, ledger = new Ledger()) {
   // to the token-table build (§4). `title` is carried in this set but has no token table of its
   // own — see `TOKEN_FIELDS` at §4 — so it is split out there, not here.
   const resolvableFields = deriveResolvableFields(files);
+  // THE FOURTH RUNG, KEPT SEPARATE FROM `resolvableFields` ITSELF — see `deriveExtractionHintFields`'s
+  // own header for why a field spelled by a varying trailing value cannot join the FIXED-token set
+  // `resolvableFields` publishes unchanged (§4's `TOKEN_FIELDS` would try, and fail, to build a
+  // `tokens[field]` table for it). Unioned into `normalisePattern`'s own admissible-field argument
+  // below (§5), never into `resolvableFields`'s own published value.
+  const extractionHintFields = deriveExtractionHintFields(files);
 
   // ── 1. schema.yaml -> the identity-unique (structural) node types ────────────────────────────
 
@@ -941,12 +1097,17 @@ export function compile(files, ledger = new Ledger()) {
         `section qualification '${name}' names a pattern that no file in patterns/ defines`,
       );
     }
-    // LEXICAL (line-rung, works anywhere) UNION STRUCTURAL (section-rung, only where every
-    // referencing site fixes it) — never the other way round. `resolvableFields` never shrinks by
-    // being unioned; a field this pattern's own predicate does not reference is never even asked
-    // about, so a wider admissible set here costs nothing to a pattern that does not use it.
+    // LEXICAL (line-rung, works anywhere) UNION EXTRACTION-HINT (line-rung, a varying trailing
+    // value rather than a fixed spelling) UNION STRUCTURAL (section-rung, only where every
+    // referencing site fixes it) — never the other way round. Neither union ever shrinks
+    // `resolvableFields`; a field this pattern's own predicate does not reference is never even
+    // asked about, so a wider admissible set here costs nothing to a pattern that does not use it.
     const admissibleFields = [
-      ...new Set([...resolvableFields, ...(structuralFieldsByQualification.get(name) ?? [])]),
+      ...new Set([
+        ...resolvableFields,
+        ...Object.keys(extractionHintFields),
+        ...(structuralFieldsByQualification.get(name) ?? []),
+      ]),
     ].sort();
     try {
       predicates[name] = normalisePattern(
@@ -987,6 +1148,12 @@ export function compile(files, ledger = new Ledger()) {
     // it from the files map itself to know what governed `tokens`/`predicates` below. Sorted by
     // `deriveResolvableFields`, so this is stable across a compile that changes nothing.
     resolvableFields,
+    // THE FOURTH RUNG'S OWN MARKER TABLE — field -> {token, kind}, `deriveExtractionHintFields
+    // (files)`'s own answer. Published beside `resolvableFields` rather than folded into it (see
+    // that field's own comment) so a reader can extract `due_date`/`available_date`/… off a line
+    // being typed the same way `app/present/arrange/ordering.ts`'s `markerValue` already does for
+    // ordering — `app/present/select/membership.ts`'s `extractionValue` is that reader.
+    extractionFields: extractionHintFields,
     tokens,
     predicates,
     sections,

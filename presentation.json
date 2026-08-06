@@ -98,6 +98,28 @@
       "tier",
       "title"
     ],
+    "extractionFields": {
+      "due_date": {
+        "token": "📅",
+        "kind": "date"
+      },
+      "available_date": {
+        "token": "🛫",
+        "kind": "date"
+      },
+      "completed_at": {
+        "token": "✅",
+        "kind": "date"
+      },
+      "created_at": {
+        "token": "🆕",
+        "kind": "date"
+      },
+      "queue_position": {
+        "token": "🔢",
+        "kind": "int"
+      }
+    },
     "tokens": {
       "asserted_state": {
         "🏳️": "asserted",
@@ -624,6 +646,27 @@
         },
         "exclude": []
       },
+      "all-personal-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "personal"
+            },
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "not": {
+                "gt": "$cycle_today"
+              }
+            }
+          }
+        },
+        "exclude": []
+      },
       "all-program-nodes": {
         "find": {
           "nodeType": [
@@ -676,6 +719,27 @@
         },
         "exclude": []
       },
+      "all-work-nodes": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "domain": {
+              "eq": "work"
+            },
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "not": {
+                "gt": "$cycle_today"
+              }
+            }
+          }
+        },
+        "exclude": []
+      },
       "attributes-developing": {
         "find": {
           "nodeType": [
@@ -699,6 +763,102 @@
           "fields": {
             "status": {
               "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "available-overdue": {
+        "find": {
+          "nodeType": [
+            "outcome",
+            "project",
+            "task",
+            "ticket"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "lt": "$cycle_today"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "available-this-week": {
+        "find": {
+          "nodeType": [
+            "outcome",
+            "project",
+            "task",
+            "ticket"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "gte": "$cycle_today",
+              "lte": "$cycle_week_end"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "available-today": {
+        "find": {
+          "nodeType": [
+            "outcome",
+            "project",
+            "task",
+            "ticket"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "eq": "$cycle_today"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "available-tomorrow": {
+        "find": {
+          "nodeType": [
+            "outcome",
+            "project",
+            "task",
+            "ticket"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "eq": "$cycle_today + 1 d"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "available-yesterday": {
+        "find": {
+          "nodeType": [
+            "outcome",
+            "project",
+            "task",
+            "ticket"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "available_date": {
+              "eq": "$cycle_today - 1 d"
             }
           }
         },
@@ -764,6 +924,22 @@
           "fields": {
             "status": {
               "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "captured-today": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "created_at": {
+              "eq": "$cycle_today"
             }
           }
         },
@@ -973,6 +1149,251 @@
           }
         },
         "exclude": []
+      },
+      "due-soon-tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "due_date": {
+              "eq": "$cycle_today"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "due-this-week": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "due_date": {
+              "gte": "$cycle_today",
+              "lte": "$cycle_week_end"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "due-today": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "due_date": {
+              "eq": "$cycle_today"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "due-tomorrow": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "due_date": {
+              "eq": "$cycle_today + 1 d"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
+      },
+      "due-yesterday": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "due_date": {
+              "eq": "$cycle_today - 1 d"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "everything-personal-nodes": {
         "find": {
@@ -2486,6 +2907,63 @@
           }
         },
         "exclude": []
+      },
+      "overdue": {
+        "find": {
+          "nodeType": null,
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "due_date": {
+              "lt": "$cycle_today"
+            }
+          }
+        },
+        "exclude": [
+          {
+            "nodeType": [
+              "capability"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "class"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "explainer"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "header"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "package"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "principle"
+            ],
+            "fields": {}
+          },
+          {
+            "nodeType": [
+              "sink"
+            ],
+            "fields": {}
+          }
+        ]
       },
       "personal-habits": {
         "find": {
@@ -4052,6 +4530,16 @@
           }
         }
       },
+      "all-personal": {
+        "tasks": {
+          "qualification": "all-personal-nodes",
+          "nodeType": "task",
+          "name": "All Personal",
+          "defaults": {
+            "domain": "personal"
+          }
+        }
+      },
       "all-program": {
         "tasks": {
           "qualification": "all-program-nodes",
@@ -4089,6 +4577,16 @@
           "name": "All Spirit",
           "defaults": {
             "domain": "spirit"
+          }
+        }
+      },
+      "all-work": {
+        "tasks": {
+          "qualification": "all-work-nodes",
+          "nodeType": "task",
+          "name": "All Work",
+          "defaults": {
+            "domain": "work"
           }
         }
       },
@@ -4213,6 +4711,14 @@
             "domain": "personal"
           }
         },
+        "due-soon": {
+          "qualification": "due-soon-tasks",
+          "nodeType": "task",
+          "name": "Due Soon",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
         "waiting": {
           "qualification": "waiting-tasks",
           "nodeType": "task",
@@ -4225,6 +4731,14 @@
           "qualification": "routine-drift",
           "nodeType": "task",
           "name": "Routine Drift",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
+        "capture": {
+          "qualification": "captured-today",
+          "nodeType": "task",
+          "name": "Personal Capture",
           "defaults": {
             "domain": "personal"
           }
@@ -4271,10 +4785,26 @@
             "domain": "work"
           }
         },
+        "due-today": {
+          "qualification": "due-soon-tasks",
+          "nodeType": "task",
+          "name": "Due Today",
+          "defaults": {
+            "domain": "work"
+          }
+        },
         "waiting": {
           "qualification": "waiting-tasks",
           "nodeType": "task",
           "name": "Work Waiting",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "capture": {
+          "qualification": "captured-today",
+          "nodeType": "task",
+          "name": "Work Capture",
           "defaults": {
             "domain": "work"
           }
@@ -5684,6 +6214,58 @@
           }
         }
       },
+      "this-week": {
+        "due-yesterday": {
+          "qualification": "due-yesterday",
+          "nodeType": "task",
+          "name": "Yesterday — Due"
+        },
+        "available-yesterday": {
+          "qualification": "available-yesterday",
+          "nodeType": "task",
+          "name": "Yesterday — Available"
+        },
+        "due-today": {
+          "qualification": "due-today",
+          "nodeType": "task",
+          "name": "Today — Due"
+        },
+        "available-today": {
+          "qualification": "available-today",
+          "nodeType": "task",
+          "name": "Today — Available"
+        },
+        "due-tomorrow": {
+          "qualification": "due-tomorrow",
+          "nodeType": "task",
+          "name": "Tomorrow — Due"
+        },
+        "available-tomorrow": {
+          "qualification": "available-tomorrow",
+          "nodeType": "task",
+          "name": "Tomorrow — Available"
+        },
+        "overdue": {
+          "qualification": "overdue",
+          "nodeType": "task",
+          "name": "Overdue"
+        },
+        "due-this-week": {
+          "qualification": "due-this-week",
+          "nodeType": "task",
+          "name": "Due This Week"
+        },
+        "available-overdue": {
+          "qualification": "available-overdue",
+          "nodeType": "task",
+          "name": "Overdue to Start"
+        },
+        "available-this-week": {
+          "qualification": "available-this-week",
+          "nodeType": "task",
+          "name": "Scheduled This Week"
+        }
+      },
       "trace-orchestration-queue": {
         "queue": {
           "qualification": "trace-orchestration-queue-items",
@@ -6189,40 +6771,9 @@
         "checked"
       ]
     },
-    "refused": {
-      "all-personal-nodes": "available_date: operator gt",
-      "all-work-nodes": "available_date: operator gt",
-      "available-overdue": "available_date: operator lt",
-      "available-this-week": "available_date: operator gte+lte",
-      "available-today": "available_date: cycle variable $cycle_today",
-      "available-tomorrow": "available_date: cycle variable $cycle_today + 1 d",
-      "available-yesterday": "available_date: cycle variable $cycle_today - 1 d",
-      "captured-today": "created_at: cycle variable $cycle_today",
-      "due-soon-tasks": "due_date: cycle variable $cycle_today",
-      "due-this-week": "due_date: operator gte+lte",
-      "due-today": "due_date: cycle variable $cycle_today",
-      "due-tomorrow": "due_date: cycle variable $cycle_today + 1 d",
-      "due-yesterday": "due_date: cycle variable $cycle_today - 1 d",
-      "overdue": "due_date: operator lt"
-    },
+    "refused": {},
     "traversalDepth": 1,
     "dropped": {
-      "section 'all-personal.tasks'": "qualification refused: all-personal-nodes",
-      "section 'all-work.tasks'": "qualification refused: all-work-nodes",
-      "section 'daily-personal.capture'": "qualification refused: captured-today",
-      "section 'daily-personal.due-soon'": "qualification refused: due-soon-tasks",
-      "section 'daily-work.capture'": "qualification refused: captured-today",
-      "section 'daily-work.due-today'": "qualification refused: due-soon-tasks",
-      "section 'this-week.available-overdue'": "qualification refused: available-overdue",
-      "section 'this-week.available-this-week'": "qualification refused: available-this-week",
-      "section 'this-week.available-today'": "qualification refused: available-today",
-      "section 'this-week.available-tomorrow'": "qualification refused: available-tomorrow",
-      "section 'this-week.available-yesterday'": "qualification refused: available-yesterday",
-      "section 'this-week.due-this-week'": "qualification refused: due-this-week",
-      "section 'this-week.due-today'": "qualification refused: due-today",
-      "section 'this-week.due-tomorrow'": "qualification refused: due-tomorrow",
-      "section 'this-week.due-yesterday'": "qualification refused: due-yesterday",
-      "section 'this-week.overdue'": "qualification refused: overdue",
       "vocabulary token '#every-{dom}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#every-{n}{unit}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#every-{weekdays}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",

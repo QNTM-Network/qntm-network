@@ -80,6 +80,14 @@
       }
     },
     {
+      "view": "all-personal",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
       "view": "all-program",
       "section": "tasks",
       "nodeType": "task",
@@ -109,6 +117,14 @@
       "nodeType": "task",
       "defaults": {
         "domain": "spirit"
+      }
+    },
+    {
+      "view": "all-work",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
       }
     },
     {
@@ -225,6 +241,14 @@
     },
     {
       "view": "daily-personal",
+      "section": "due-soon",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "daily-personal",
       "section": "waiting",
       "nodeType": "task",
       "defaults": {
@@ -234,6 +258,14 @@
     {
       "view": "daily-personal",
       "section": "routine-drift",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "daily-personal",
+      "section": "capture",
       "nodeType": "task",
       "defaults": {
         "domain": "personal"
@@ -281,7 +313,23 @@
     },
     {
       "view": "daily-work",
+      "section": "due-today",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "daily-work",
       "section": "waiting",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "daily-work",
+      "section": "capture",
       "nodeType": "task",
       "defaults": {
         "domain": "work"
@@ -1618,6 +1666,66 @@
       "defaults": {
         "domain": "personal"
       }
+    },
+    {
+      "view": "this-week",
+      "section": "due-yesterday",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "available-yesterday",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "due-today",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "available-today",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "due-tomorrow",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "available-tomorrow",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "overdue",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "due-this-week",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "available-overdue",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "this-week",
+      "section": "available-this-week",
+      "nodeType": "task",
+      "defaults": null
     },
     {
       "view": "trace-orchestration-queue",

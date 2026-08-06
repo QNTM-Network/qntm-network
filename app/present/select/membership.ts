@@ -44,6 +44,12 @@
  *   the other names one it CAN read but cannot yet APPLY without a graph-aware matcher (a later
  *   leg's work).
  *
+ *   NEEDS CLOCK. The section's qualification compares a field against `$cycle_today`/
+ *   `$cycle_week_end` (`qualifierNeedsClock`, `qualification.ts`) and no `today` (`app/present/
+ *   today.ts`'s `TodayAnswer`) was supplied — the day boundary has not loaded, or the caller has
+ *   none to give. The SAME two-fact split `needs-graph-traversal` draws applies here: the
+ *   predicate is published and readable, but this ONE call cannot apply it without the clock.
+ *
  *   THE LINE ALREADY CARRIES A `[[qntm:N]]` STAMP. This module answers for a line being TYPED. An
  *   existing node's fields live in the graph, and this module does not read the graph — but the
  *   deeper reason is that token REMOVAL is not token addition inverted. Whether deleting `#work`
@@ -72,14 +78,21 @@
  */
 
 import { carriesContent, qntmIdSpans, tagSpans } from "../express/rendition.js";
-import { qualifierNeedsGraph } from "./qualification.js";
+import {
+  COMPARISON_OPERATORS,
+  isCycleExpression,
+  qualifierNeedsClock,
+  qualifierNeedsGraph,
+} from "./qualification.js";
 import type {
+  ExtractionFieldMarker,
   FieldPredicate,
   FieldValue,
   FindClause,
   QualificationLanguage,
   Qualifier,
 } from "./qualification.js";
+import type { TodayAnswer } from "../today.js";
 
 /**
  * The fields a line being typed decides, and the only ones any published predicate uses.
@@ -107,6 +120,7 @@ export type ResolvedFields = Readonly<Record<string, FieldValue>>;
 export type Abstention =
   | "no-section-declaration"
   | "needs-graph-traversal"
+  | "needs-clock"
   | "already-a-node"
   | "not-a-declared-checkbox"
   | "no-content"
@@ -160,9 +174,100 @@ function titleCaseFromId(id: string): string {
  */
 const CHECKBOX = /^\s*- (\[[^\]]\]) (.*)$/;
 
-function evaluatePredicate(actual: FieldValue, predicate: FieldPredicate): boolean {
-  if ("not" in predicate) return !evaluatePredicate(actual, predicate.not);
-  return actual === predicate.eq;
+/** `$cycle_today`/`$cycle_week_end`, optionally offset by whole days — the SAME shape
+ * `qualification.ts`'s `CYCLE_EXPRESSION_RE` accepts, captured here to pull the variable name and
+ * the optional `± N` apart. */
+const CYCLE_EXPRESSION_PARTS = /^\$(cycle_today|cycle_week_end)(?:\s*([+-])\s*(\d+)\s*d)?$/;
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Resolve `raw` (already proven a cycle expression by `isCycleExpression`) to its concrete ISO
+ * date, given `today`. Mirrors the engine's own two-pass cycle-expression resolver field for
+ * field — `core/graph/src/qntm_graph/patterns/engine.py::_bind_cycle_expression`: the base
+ * variable resolves from the cycle context (`today.logicalDate`/`today.weekEnd` here), then an
+ * optional whole-day offset shifts it — `date.fromisoformat(...) ± timedelta(days=N)` there,
+ * `Date.UTC` arithmetic here, the same "one absolute instant, one declared zone, no local
+ * calendar quirks" posture `today.ts`'s own header states for `resolveLogicalDate`.
+ */
+function resolveCycleExpression(raw: string, today: TodayAnswer): string {
+  const match = CYCLE_EXPRESSION_PARTS.exec(raw);
+  if (match === null) {
+    // Unreachable through a published declaration — `compile-qualification.mjs`'s own
+    // `CYCLE_EXPRESSION_RE` only ever emits a value this regex also matches. Named rather than
+    // silently defaulting, for the same reason `resolveLineFields`'s own unreachable branches are.
+    throw new Error(`resolveCycleExpression: '${raw}' is not a recognised cycle expression`);
+  }
+  const [, variable, operator, daysText] = match;
+  const base = variable === "cycle_today" ? today.logicalDate : today.weekEnd;
+  if (operator === undefined || daysText === undefined) return base;
+  const [y, m, d] = base.split("-").map(Number);
+  const baseMs = Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1);
+  const offsetMs = Number(daysText) * MS_PER_DAY;
+  const shifted = new Date(operator === "+" ? baseMs + offsetMs : baseMs - offsetMs);
+  const pad2 = (n: number): string => String(n).padStart(2, "0");
+  return `${shifted.getUTCFullYear()}-${pad2(shifted.getUTCMonth() + 1)}-${pad2(shifted.getUTCDate())}`;
+}
+
+/** `value` as written on the wire, unless it is a cycle expression — then the concrete date
+ * `today` resolves it to. THROWS when it needs `today` and none was given; see `matchesQualifier`'s
+ * own header for why a throw, not a guess, is this module's answer to a caller that skipped the
+ * `qualifierNeedsClock` check. */
+function resolveOperand(value: FieldValue, today: TodayAnswer | undefined): FieldValue {
+  if (!isCycleExpression(value)) return value;
+  if (today === undefined) {
+    throw new Error(
+      "evaluatePredicate: this predicate compares a field against a cycle expression " +
+        "($cycle_today/$cycle_week_end) — it needs 'today' (app/present/today.ts's TodayAnswer), " +
+        "which this call did not supply. The caller must check qualifierNeedsClock() and abstain, " +
+        "or supply today, never call this function on a clock-bound qualifier without it.",
+    );
+  }
+  return resolveCycleExpression(value, today);
+}
+
+/** `actual`, ORDER-COMPARED against `expected` — both must be the same orderable JS primitive
+ * (string, for the ISO date shape every currently-published `compare` predicate ranges over; the
+ * engine's own `int`/`float` field types would arrive as `number`, handled identically). A type
+ * mismatch, or a `null`/`undefined` actual, never satisfies a comparison — mirrors the engine's
+ * own null-tolerant filter (`engine.py::_apply_single_node_field_predicate`: a missing or `None`
+ * field returns `False` before the comparison ever runs), which is what lets `{not: {gt: ...}}`
+ * (`available_date: {not: {gt: $cycle_today}}`) keep an undated node IN the result. */
+function applyComparison(operator: string, cmp: number): boolean {
+  if (operator === "gt") return cmp > 0;
+  if (operator === "gte") return cmp >= 0;
+  if (operator === "lt") return cmp < 0;
+  if (operator === "lte") return cmp <= 0;
+  return false; // unreachable — ComparisonOperator is closed to these four; see qualification.ts
+}
+
+function compareOrdered(actual: FieldValue, operator: string, expected: FieldValue): boolean {
+  if (typeof actual === "string" && typeof expected === "string") {
+    return applyComparison(operator, actual < expected ? -1 : actual > expected ? 1 : 0);
+  }
+  if (typeof actual === "number" && typeof expected === "number") {
+    return applyComparison(operator, actual < expected ? -1 : actual > expected ? 1 : 0);
+  }
+  return false;
+}
+
+function evaluatePredicate(
+  actual: FieldValue,
+  predicate: FieldPredicate,
+  today: TodayAnswer | undefined,
+): boolean {
+  if ("not" in predicate) return !evaluatePredicate(actual, predicate.not as FieldPredicate, today);
+  if ("eq" in predicate) return actual === resolveOperand(predicate.eq as FieldValue, today);
+  // One or more of gt/gte/lt/lte, CONJOINED — the engine's own multi-key range shape, unwrapped
+  // (`qualification.ts`'s own `FieldPredicate` header). `readPredicate` guarantees this branch
+  // never mixes in `eq`/`not`, and never carries zero comparison keys.
+  for (const operator of COMPARISON_OPERATORS) {
+    const rawExpected = predicate[operator];
+    if (rawExpected === undefined) continue;
+    const expected = resolveOperand(rawExpected, today);
+    if (!compareOrdered(actual, operator, expected)) return false;
+  }
+  return true;
 }
 
 /**
@@ -173,14 +278,23 @@ function evaluatePredicate(actual: FieldValue, predicate: FieldPredicate): boole
  * predicate, all conjoined. A field the resolver never set reads as `null`, which is the engine's
  * behaviour too — `node.fields.get(name)` returns `None` for an absent field, so `domain: null`
  * matches a node that never had one.
+ *
+ * `today` is OPTIONAL — every existing caller that never hands a clock-bound qualifier to this
+ * function keeps working unchanged; `evaluatePredicate` throws only if a predicate it actually
+ * evaluates needs the clock and `today` is `undefined`. See `qualifierNeedsClock` for the
+ * structural pre-check every real caller runs to avoid that throw.
  */
-export function matchesFindClause(fields: ResolvedFields, clause: FindClause): boolean {
+export function matchesFindClause(
+  fields: ResolvedFields,
+  clause: FindClause,
+  today?: TodayAnswer,
+): boolean {
   if (clause.nodeType !== null) {
     const nodeType = fields["node_type"];
     if (typeof nodeType !== "string" || !clause.nodeType.includes(nodeType)) return false;
   }
   for (const [field, predicate] of Object.entries(clause.fields)) {
-    if (!evaluatePredicate(fields[field] ?? null, predicate)) return false;
+    if (!evaluatePredicate(fields[field] ?? null, predicate, today)) return false;
   }
   return true;
 }
@@ -195,8 +309,16 @@ export function matchesFindClause(fields: ResolvedFields, clause: FindClause): b
  * (`membershipFor`, below, and `rules.ts`'s `applyRules`) check `qualifierNeedsGraph` FIRST and
  * abstain before ever reaching this function with a graph-dependent qualifier; this guard is the
  * defence for a caller that does not.
+ *
+ * THROWS THE SAME WAY when `qualifier` needs the clock (`qualifierNeedsClock`) and `today` is
+ * `undefined` — same posture, same reason, the other thing this app cannot resolve from a
+ * candidate's own fields alone.
  */
-export function matchesQualifier(fields: ResolvedFields, qualifier: Qualifier): boolean {
+export function matchesQualifier(
+  fields: ResolvedFields,
+  qualifier: Qualifier,
+  today?: TodayAnswer,
+): boolean {
   if (qualifierNeedsGraph(qualifier)) {
     throw new Error(
       "matchesQualifier: this qualifier carries edgeSteps (a one-hop children:/parents: " +
@@ -204,8 +326,40 @@ export function matchesQualifier(fields: ResolvedFields, qualifier: Qualifier): 
         "The caller must check qualifierNeedsGraph() and abstain, never call this function to decide.",
     );
   }
-  if (!matchesFindClause(fields, qualifier.find)) return false;
-  return !qualifier.exclude.some((clause) => matchesFindClause(fields, clause));
+  if (qualifierNeedsClock(qualifier) && today === undefined) {
+    throw new Error(
+      "matchesQualifier: this qualifier compares a field against a cycle expression " +
+        "($cycle_today/$cycle_week_end) and no 'today' was supplied. The caller must check " +
+        "qualifierNeedsClock() and abstain, or supply today, never call this function blind.",
+    );
+  }
+  if (!matchesFindClause(fields, qualifier.find, today)) return false;
+  return !qualifier.exclude.some((clause) => matchesFindClause(fields, clause, today));
+}
+
+const EXTRACTION_SHAPE: Readonly<Record<ExtractionFieldMarker["kind"], RegExp>> = {
+  date: /^\d{4}-\d{2}-\d{2}$/,
+  int: /^-?\d+$/,
+  float: /^-?\d+(?:\.\d+)?$/,
+};
+
+/**
+ * The value trailing `marker.token` on `line`, or `undefined` when the glyph is absent or what
+ * follows it does not have the shape `marker.kind` demands — the identical rule
+ * `app/present/arrange/ordering.ts`'s own `markerValue` reads by (that function's own header cites
+ * the full chain to `parse_marker.py:98-99`). Kept as a small LOCAL copy rather than a cross-verb
+ * import: SELECT and ARRANGE are declared and resolved separately by this module's own design (see
+ * this file's header), and the function is five lines — a shared low-level utility here would be a
+ * new coupling between two verbs for a five-line saving, not a generalisation worth making.
+ */
+function extractionValue(line: string, marker: ExtractionFieldMarker): string | undefined {
+  const at = line.indexOf(marker.token);
+  if (at === -1) return undefined;
+  const after = line.slice(at + marker.token.length);
+  const match = /^\s+(\S+)/.exec(after);
+  if (match === null) return undefined;
+  const token = match[1] ?? "";
+  return EXTRACTION_SHAPE[marker.kind].test(token) ? token : undefined;
 }
 
 /**
@@ -214,7 +368,11 @@ export function matchesQualifier(fields: ResolvedFields, qualifier: Qualifier): 
  * The registration cascade, least specific first: the node type comes from the section's published
  * `nodeType` (already resolved through GLOBAL then VIEW by the generator), the section's own
  * `defaults:` block supplies any fields it declares, and then the line's own tokens win over both —
- * the same "more specific beats less specific" ordering the presentation cascade resolves by.
+ * the same "more specific beats less specific" ordering the presentation cascade resolves by. The
+ * line's EXTRACTION-HINT fields (`due_date`'s 📅 and its siblings — `language.extractionFields`)
+ * are read the same rung as the fixed-vocabulary tokens, off the same `tail`, and OVERRIDE a
+ * section default exactly as a fixed token would, for the identical reason: what the operator just
+ * typed is more specific than what the section declares.
  *
  * Returns the reason instead when the line is one this module will not answer for.
  */
@@ -249,6 +407,19 @@ export function resolveLineFields(
       fields[field] = value;
     }
   }
+
+  // THE FOURTH RUNG: a glyph followed by a value that VARIES line to line, never a fixed spelling
+  // `RESOLVABLE_FIELDS`'s loop above can look up — `qualification.ts`'s own header on
+  // `ExtractionFieldMarker` for the shape, `compile-qualification.mjs`'s `deriveExtractionHintFields`
+  // for where the marker table comes from. No ambiguity check here: `extractionValue`'s own
+  // `indexOf` already takes the FIRST occurrence of the glyph, mirroring `arrange/ordering.ts`'s
+  // `markerValue` — the same "first match wins" rule this app already ships and tests elsewhere,
+  // not a second, stricter policy invented for this rung alone.
+  for (const [field, marker] of Object.entries(language.extractionFields)) {
+    const raw = extractionValue(tail, marker);
+    if (raw === undefined) continue;
+    fields[field] = marker.kind === "date" ? raw : Number(raw);
+  }
   return fields;
 }
 
@@ -262,6 +433,7 @@ export function membershipFor(
   sectionId: string,
   line: string,
   language: QualificationLanguage,
+  today?: TodayAnswer,
 ): MembershipReading {
   const section = language.sections[viewId]?.[sectionId];
   if (section === undefined) return abstains("no-section-declaration");
@@ -274,6 +446,11 @@ export function membershipFor(
   // the same tier as `no-section-declaration`, not a line-shape refusal. See `Abstention`'s own
   // header for why this is a different fact from that one.
   if (qualifierNeedsGraph(qualifier)) return abstains("needs-graph-traversal");
+  // SAME TIER, THE OTHER THING THIS APP CANNOT RESOLVE FROM THE SECTION ALONE — see `Abstention`'s
+  // own "NEEDS CLOCK" entry. `today` is the day boundary, resolved once by the caller (`app/present/
+  // resolvers/membership.ts`) exactly the way `resolvers/rules.ts` already resolves it for
+  // `applyRules` — never read here, never re-derived per line.
+  if (qualifierNeedsClock(qualifier) && today === undefined) return abstains("needs-clock");
 
   const fields = resolveLineFields(line, section, language);
   if (typeof fields === "string") return abstains(fields);
@@ -281,7 +458,7 @@ export function membershipFor(
   return {
     kind: "answer",
     answer: {
-      belongs: matchesQualifier(fields, qualifier),
+      belongs: matchesQualifier(fields, qualifier, today),
       view: viewId,
       section: sectionId,
       qualification: section.qualification,
