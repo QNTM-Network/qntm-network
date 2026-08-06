@@ -418,6 +418,7 @@ var DEFAULT_TRAVERSAL_DEPTH = 1;
 var TOP_KEYS = [
   "defaultNodeType",
   "structuralNodeTypes",
+  "resolvableFields",
   "tokens",
   "predicates",
   "sections",
@@ -430,6 +431,7 @@ var SECTION_KEYS = ["qualification", "nodeType", "defaults", "name"];
 var EMPTY2 = {
   defaultNodeType: void 0,
   structuralNodeTypes: [],
+  resolvableFields: [],
   tokens: {},
   predicates: {},
   sections: {},
@@ -779,6 +781,7 @@ function readQualificationDeclaration(document2) {
         raw.structuralNodeTypes,
         problems
       ) : [],
+      resolvableFields: "resolvableFields" in raw ? readStringList(`${QUALIFICATION_KEY}.resolvableFields`, raw.resolvableFields, problems) : [],
       tokens: "tokens" in raw ? readTokens(raw.tokens, problems) : {},
       predicates,
       sections: "sections" in raw ? readSections2(raw.sections, predicates, problems) : {},
@@ -1795,7 +1798,7 @@ function todayFor(nowUtcMs, boundary) {
 }
 
 // app/present/membership.ts
-var RESOLVABLE_FIELDS = ["node_type", "domain", "status"];
+var RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"];
 var abstains3 = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");

@@ -121,12 +121,20 @@ describe("2. sectionAt — the join, against the REAL declaration and REAL vault
       "## Work Capture",
     ].join("\n");
 
-    test("daily-work: published subset is 2 of 5 — asserted as the precondition for this test", () => {
+    test("daily-work: published subset is 3 of 5 — asserted as the precondition for this test", () => {
       // RESTATED 2026-08-04: `waiting` (ordinal 3) joined `in-progress` (ordinal 0) —
       // `compile-qualification.mjs`'s one-hop `children:`/`parents:` widening resolved its
       // qualification, which used to be refused for "traverses an edge".
+      //
+      // RESTATED AGAIN 2026-08-06: `urgent` (ordinal 1) joined too — `deriveResolvableFields`
+      // (`compile-qualification.mjs`'s header) admits `priority`, which `urgent`'s own
+      // qualification predicate ranges over.
       const published = Object.keys(SERVED.qualification.sections["daily-work"] ?? {});
-      assert.deepEqual(published, ["in-progress", "waiting"], "the trap's own precondition changed underfoot");
+      assert.deepEqual(
+        published,
+        ["in-progress", "urgent", "waiting"],
+        "the trap's own precondition changed underfoot",
+      );
       assert.equal(SECTION_ORDER["daily-work"].length, 5);
     });
 
@@ -143,23 +151,31 @@ describe("2. sectionAt — the join, against the REAL declaration and REAL vault
       assert.equal(sectionAt(DAILY_WORK, 5, "daily-work", SECTION_ORDER), "capture");
     });
 
-    test("THE FAILING VERSION OF THIS TEST — indexing the published subset gets it wrong from ordinal 1", () => {
+    test("THE FAILING VERSION OF THIS TEST — indexing the published subset gets it wrong from ordinal 2", () => {
       // Not what this module does; written out so the trap is legible as a concrete, checkable
       // claim rather than only prose. `Object.keys(sections[view])[ordinal]` on daily-work:
       //
       // RESTATED 2026-08-04: with a SECOND published section (`waiting`, real ordinal 3), the naive
       // version does not merely go blank at ordinal 1 — it returns a WRONG, non-empty answer.
-      // `Object.keys` preserves the view's own declared order among the PUBLISHED subset, so index 1
-      // of that subset is `waiting` — a confidently wrong answer for "what heading is ordinal 1",
-      // which is really `urgent`, an unpublished section. Sharper proof of the same trap: the naive
-      // version does not fail loud, it fails quiet and wrong.
+      //
+      // RESTATED AGAIN 2026-08-06: with a THIRD published section (`urgent`, real ordinal 1 — see
+      // the precondition test above), the naive version now agrees with the real answer at ordinal
+      // 1 TOO, by coincidence (`urgent` sits at both index 1 of the published subset AND real
+      // ordinal 1 — the unpublished `due-today` between `urgent` and `waiting` is what the naive
+      // version cannot see). The first ordinal it gets WRONG moves to 2: `Object.keys` preserves
+      // the view's own declared order among the PUBLISHED subset, so index 2 of that subset is
+      // `waiting` — a confidently wrong answer for "what heading is ordinal 2", which is really
+      // `due-today`, an unpublished section. Sharper proof of the same trap: the naive version does
+      // not fail loud, it fails quiet and wrong, and WHERE it first fails depends on which sections
+      // happen to be published — the exact reason `sectionAt` must never be built this way.
       const naive = Object.keys(SERVED.qualification.sections["daily-work"]);
       assert.equal(naive[0], "in-progress", "ordinal 0 happens to agree");
-      assert.equal(naive[1], "waiting", "ordinal 1 ('urgent') is where the naive version silently returns the WRONG section");
+      assert.equal(naive[1], "urgent", "ordinal 1 also happens to agree, by coincidence");
+      assert.equal(naive[2], "waiting", "ordinal 2 ('due-today') is where the naive version silently returns the WRONG section");
       assert.notEqual(
-        naive[1],
-        sectionAt(DAILY_WORK, 1, "daily-work", SECTION_ORDER),
-        "the naive index and the real answer for ordinal 1 must disagree — that IS the trap",
+        naive[2],
+        sectionAt(DAILY_WORK, 2, "daily-work", SECTION_ORDER),
+        "the naive index and the real answer for ordinal 2 must disagree — that IS the trap",
       );
     });
 
@@ -176,11 +192,14 @@ describe("2. sectionAt — the join, against the REAL declaration and REAL vault
       "## Done",
     ].join("\n");
 
-    test("daily-personal: published subset is 5 of 8 — asserted as the precondition for this test", () => {
+    test("daily-personal: published subset is 6 of 8 — asserted as the precondition for this test", () => {
       // RESTATED 2026-08-04: `waiting` and `orphans` joined the previously-published three — the
       // same one-hop widening noted on `daily-work` above.
+      //
+      // RESTATED AGAIN 2026-08-06: `high-priority` joined too — the same `priority` widening
+      // `daily-work`'s own restated comment names.
       const published = Object.keys(SERVED.qualification.sections["daily-personal"] ?? {}).sort();
-      assert.deepEqual(published, ["backlog", "done", "orphans", "routine-drift", "waiting"]);
+      assert.deepEqual(published, ["backlog", "done", "high-priority", "orphans", "routine-drift", "waiting"]);
       assert.equal(SECTION_ORDER["daily-personal"].length, 8);
     });
 

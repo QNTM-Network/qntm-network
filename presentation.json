@@ -78,7 +78,125 @@
       "principle",
       "sink"
     ],
+    "resolvableFields": [
+      "asserted_state",
+      "blocked_state",
+      "cadence",
+      "cap_state",
+      "change_type",
+      "class_state",
+      "domain",
+      "genre",
+      "god_box",
+      "instantiate",
+      "lead_state",
+      "node_type",
+      "package_state",
+      "principle_state",
+      "priority",
+      "status",
+      "tier",
+      "title"
+    ],
     "tokens": {
+      "asserted_state": {
+        "🏳️": "asserted",
+        "💤": "asserted_drift"
+      },
+      "blocked_state": {
+        "⛔": "blocked"
+      },
+      "cadence": {
+        "#daily": 1,
+        "#weekly": 7,
+        "#monthly": 30,
+        "#weekdays": "mon/tue/wed/thu/fri",
+        "#weekends": "sat/sun",
+        "#every-monday": "monday",
+        "#every-tuesday": "tuesday",
+        "#every-wednesday": "wednesday",
+        "#every-thursday": "thursday",
+        "#every-friday": "friday",
+        "#every-saturday": "saturday",
+        "#every-sunday": "sunday",
+        "#every-month-end": "month-end",
+        "#every-1st": "1st",
+        "#every-15th": "15th"
+      },
+      "cap_state": {
+        "#unscoped": "unscoped",
+        "#diagnose-ready": "diagnose_ready",
+        "#cap-scoped": "scoped",
+        "#in-progress": "in_progress",
+        "#passing": "passing",
+        "#retired": "retired"
+      },
+      "change_type": {
+        "#feat": "feat",
+        "#fix": "fix",
+        "#chore": "chore",
+        "#refactor": "refactor",
+        "#docs": "docs",
+        "#test": "test",
+        "#perf": "perf",
+        "#spike": "spike"
+      },
+      "class_state": {
+        "#class-exists": "exists",
+        "#class-concept": "concept",
+        "#class-extracted": "extracted",
+        "#class-subsumed": "subsumed"
+      },
+      "domain": {
+        "#health": "health",
+        "#work": "work",
+        "#personal": "personal",
+        "#dev": "dev",
+        "#qntm": "qntm",
+        "#home": "home",
+        "#arts": "arts",
+        "#social": "social",
+        "#program": "program",
+        "#character": "character",
+        "#admin": "admin",
+        "#spirit": "spirit",
+        "#life-admin": "life-admin",
+        "#family": "family"
+      },
+      "genre": {
+        "#scifi": "scifi",
+        "#horror": "horror",
+        "#comedy": "comedy",
+        "#drama": "drama",
+        "#thriller": "thriller",
+        "#documentary": "documentary",
+        "#animation": "animation",
+        "#romance": "romance",
+        "#action": "action",
+        "#fantasy": "fantasy",
+        "#nonfiction": "nonfiction",
+        "#biography": "biography",
+        "#crime": "crime",
+        "#history": "history"
+      },
+      "god_box": {
+        "#God": "surrendered"
+      },
+      "instantiate": {
+        "#onboarding": "onboard_client",
+        "#termination": "termination",
+        "#free-trial": "free_trial",
+        "#step-10": "upset",
+        "#upset": "upset",
+        "#evening-review": "evening_review",
+        "#novation": "novation",
+        "#new-agreement": "new_agreement",
+        "#account-opening": "account_opening",
+        "#vote-review": "vote_review"
+      },
+      "lead_state": {
+        "📌": "active"
+      },
       "node_type": {
         "#task": "task",
         "#step": "step",
@@ -113,21 +231,22 @@
         "#class": "class",
         "#sink": "sink"
       },
-      "domain": {
-        "#health": "health",
-        "#work": "work",
-        "#personal": "personal",
-        "#dev": "dev",
-        "#qntm": "qntm",
-        "#home": "home",
-        "#arts": "arts",
-        "#social": "social",
-        "#program": "program",
-        "#character": "character",
-        "#admin": "admin",
-        "#spirit": "spirit",
-        "#life-admin": "life-admin",
-        "#family": "family"
+      "package_state": {
+        "#package-exists": "exists",
+        "#package-concept": "concept",
+        "#package-extracted": "extracted",
+        "#package-subsumed": "subsumed"
+      },
+      "principle_state": {
+        "#held": "held",
+        "#held-weak": "held_weak",
+        "#violated": "violated",
+        "#unverifiable": "unverifiable",
+        "#un-anchored": "un_anchored"
+      },
+      "priority": {
+        "🔽": "low",
+        "⏫": "high"
       },
       "status": {
         "[ ]": "open",
@@ -136,9 +255,169 @@
         "[-]": "cancelled",
         "[~]": "waiting",
         "[>]": "scheduled"
+      },
+      "tier": {
+        "#foundational": "foundational",
+        "#functional": "functional"
       }
     },
     "predicates": {
+      "accuracy-carrier-overall-1d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "On-track accuracy (today)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-overall-3d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "On-track accuracy (3d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-overall-7d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "On-track accuracy (7d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-personal-1d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Personal on-track (today)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-personal-3d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Personal on-track (3d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-personal-7d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Personal on-track (7d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-program-1d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Program on-track (today)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-program-3d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Program on-track (3d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-program-7d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Program on-track (7d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-work-1d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Work on-track (today)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-work-3d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Work on-track (3d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "accuracy-carrier-work-7d": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Work on-track (7d)"
+            }
+          }
+        },
+        "exclude": []
+      },
       "admin-done": {
         "find": {
           "nodeType": [
@@ -223,6 +502,58 @@
             },
             "status": {
               "eq": "scheduled"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "age-intent-carrier-overall": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Age of intent (30d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "age-intent-carrier-personal": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Personal age of intent (30d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "age-intent-carrier-program": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Program age of intent (30d)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "age-intent-carrier-work": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Work age of intent (30d)"
             }
           }
         },
@@ -433,6 +764,58 @@
           "fields": {
             "status": {
               "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "coverage-carrier-overall": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Scheduled coverage (%)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "coverage-carrier-personal": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Personal scheduled coverage (%)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "coverage-carrier-program": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Program scheduled coverage (%)"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "coverage-carrier-work": {
+        "find": {
+          "nodeType": [
+            "header"
+          ],
+          "fields": {
+            "title": {
+              "eq": "Work scheduled coverage (%)"
             }
           }
         },
@@ -692,6 +1075,40 @@
         },
         "exclude": []
       },
+      "god-box-discussed": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "god_box": {
+              "eq": "surrendered"
+            },
+            "status": {
+              "eq": "done"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "god-box-not-discussed": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "god_box": {
+              "eq": "surrendered"
+            },
+            "status": {
+              "not": {
+                "eq": "done"
+              }
+            }
+          }
+        },
+        "exclude": []
+      },
       "habits-with-routines": {
         "find": {
           "nodeType": [
@@ -717,6 +1134,22 @@
             "fields": {}
           }
         ]
+      },
+      "high-priority-tasks": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "priority": {
+              "eq": "high"
+            }
+          }
+        },
+        "exclude": []
       },
       "in-progress-tasks": {
         "find": {
@@ -1439,6 +1872,22 @@
           "fields": {
             "status": {
               "eq": "open"
+            }
+          }
+        },
+        "exclude": []
+      },
+      "scratchpad-targets": {
+        "find": {
+          "nodeType": [
+            "task"
+          ],
+          "fields": {
+            "status": {
+              "eq": "open"
+            },
+            "title": {
+              "eq": "my test"
             }
           }
         },
@@ -2224,6 +2673,14 @@
         }
       },
       "daily-personal": {
+        "high-priority": {
+          "qualification": "high-priority-tasks",
+          "nodeType": "task",
+          "name": "High Priority",
+          "defaults": {
+            "domain": "personal"
+          }
+        },
         "waiting": {
           "qualification": "waiting-tasks",
           "nodeType": "task",
@@ -2270,6 +2727,14 @@
           "qualification": "in-progress-tasks",
           "nodeType": "task",
           "name": "In Progress",
+          "defaults": {
+            "domain": "work"
+          }
+        },
+        "urgent": {
+          "qualification": "high-priority-tasks",
+          "nodeType": "task",
+          "name": "Urgent",
           "defaults": {
             "domain": "work"
           }
@@ -2356,6 +2821,26 @@
           "name": "Watched",
           "defaults": {
             "domain": "arts"
+          }
+        }
+      },
+      "god-box": {
+        "not-discussed": {
+          "qualification": "god-box-not-discussed",
+          "nodeType": "task",
+          "name": "Not Discussed",
+          "defaults": {
+            "domain": "spirit",
+            "god_box": "surrendered"
+          }
+        },
+        "discussed": {
+          "qualification": "god-box-discussed",
+          "nodeType": "task",
+          "name": "Discussed",
+          "defaults": {
+            "domain": "spirit",
+            "god_box": "surrendered"
           }
         }
       },
@@ -2568,6 +3053,114 @@
           "qualification": "domain-empty",
           "nodeType": "task",
           "name": "Domain Empty"
+        }
+      },
+      "metrics-personal": {
+        "personal-accuracy-1d": {
+          "qualification": "accuracy-carrier-personal-1d",
+          "nodeType": "task",
+          "name": "Personal on-track (today)"
+        },
+        "personal-accuracy-3d": {
+          "qualification": "accuracy-carrier-personal-3d",
+          "nodeType": "task",
+          "name": "Personal on-track (3d)"
+        },
+        "personal-accuracy-7d": {
+          "qualification": "accuracy-carrier-personal-7d",
+          "nodeType": "task",
+          "name": "Personal on-track (7d)"
+        },
+        "personal-age-of-intent": {
+          "qualification": "age-intent-carrier-personal",
+          "nodeType": "task",
+          "name": "Personal age of intent (30d)"
+        },
+        "personal-coverage": {
+          "qualification": "coverage-carrier-personal",
+          "nodeType": "task",
+          "name": "Personal scheduled coverage (%)"
+        }
+      },
+      "metrics-program": {
+        "program-accuracy-1d": {
+          "qualification": "accuracy-carrier-program-1d",
+          "nodeType": "task",
+          "name": "Program on-track (today)"
+        },
+        "program-accuracy-3d": {
+          "qualification": "accuracy-carrier-program-3d",
+          "nodeType": "task",
+          "name": "Program on-track (3d)"
+        },
+        "program-accuracy-7d": {
+          "qualification": "accuracy-carrier-program-7d",
+          "nodeType": "task",
+          "name": "Program on-track (7d)"
+        },
+        "program-age-of-intent": {
+          "qualification": "age-intent-carrier-program",
+          "nodeType": "task",
+          "name": "Program age of intent (30d)"
+        },
+        "program-coverage": {
+          "qualification": "coverage-carrier-program",
+          "nodeType": "task",
+          "name": "Program scheduled coverage (%)"
+        }
+      },
+      "metrics-work": {
+        "work-accuracy-1d": {
+          "qualification": "accuracy-carrier-work-1d",
+          "nodeType": "task",
+          "name": "Work on-track (today)"
+        },
+        "work-accuracy-3d": {
+          "qualification": "accuracy-carrier-work-3d",
+          "nodeType": "task",
+          "name": "Work on-track (3d)"
+        },
+        "work-accuracy-7d": {
+          "qualification": "accuracy-carrier-work-7d",
+          "nodeType": "task",
+          "name": "Work on-track (7d)"
+        },
+        "work-age-of-intent": {
+          "qualification": "age-intent-carrier-work",
+          "nodeType": "task",
+          "name": "Work age of intent (30d)"
+        },
+        "work-coverage": {
+          "qualification": "coverage-carrier-work",
+          "nodeType": "task",
+          "name": "Work scheduled coverage (%)"
+        }
+      },
+      "metrics": {
+        "overall-accuracy-1d": {
+          "qualification": "accuracy-carrier-overall-1d",
+          "nodeType": "task",
+          "name": "On-track accuracy (today)"
+        },
+        "overall-accuracy-3d": {
+          "qualification": "accuracy-carrier-overall-3d",
+          "nodeType": "task",
+          "name": "On-track accuracy (3d)"
+        },
+        "overall-accuracy-7d": {
+          "qualification": "accuracy-carrier-overall-7d",
+          "nodeType": "task",
+          "name": "On-track accuracy (7d)"
+        },
+        "overall-age-of-intent": {
+          "qualification": "age-intent-carrier-overall",
+          "nodeType": "task",
+          "name": "Age of intent (30d)"
+        },
+        "overall-coverage": {
+          "qualification": "coverage-carrier-overall",
+          "nodeType": "task",
+          "name": "Scheduled coverage (%)"
         }
       },
       "notes-work": {
@@ -2945,6 +3538,15 @@
           "name": "Spirit Routines",
           "defaults": {
             "domain": "spirit"
+          }
+        }
+      },
+      "test-scratchpad": {
+        "scratchpad-targets": {
+          "qualification": "scratchpad-targets",
+          "nodeType": "task",
+          "defaults": {
+            "domain": "personal"
           }
         }
       },
@@ -3431,22 +4033,6 @@
       ]
     },
     "refused": {
-      "accuracy-carrier-overall-1d": "unresolvable field(s): title",
-      "accuracy-carrier-overall-3d": "unresolvable field(s): title",
-      "accuracy-carrier-overall-7d": "unresolvable field(s): title",
-      "accuracy-carrier-personal-1d": "unresolvable field(s): title",
-      "accuracy-carrier-personal-3d": "unresolvable field(s): title",
-      "accuracy-carrier-personal-7d": "unresolvable field(s): title",
-      "accuracy-carrier-program-1d": "unresolvable field(s): title",
-      "accuracy-carrier-program-3d": "unresolvable field(s): title",
-      "accuracy-carrier-program-7d": "unresolvable field(s): title",
-      "accuracy-carrier-work-1d": "unresolvable field(s): title",
-      "accuracy-carrier-work-3d": "unresolvable field(s): title",
-      "accuracy-carrier-work-7d": "unresolvable field(s): title",
-      "age-intent-carrier-overall": "unresolvable field(s): title",
-      "age-intent-carrier-personal": "unresolvable field(s): title",
-      "age-intent-carrier-program": "unresolvable field(s): title",
-      "age-intent-carrier-work": "unresolvable field(s): title",
       "all-personal-nodes": "available_date: operator gt",
       "all-work-nodes": "available_date: operator gt",
       "available-overdue": "available_date: operator lt",
@@ -3455,10 +4041,6 @@
       "available-tomorrow": "available_date: cycle variable $cycle_today + 1 d",
       "available-yesterday": "available_date: cycle variable $cycle_today - 1 d",
       "captured-today": "created_at: cycle variable $cycle_today",
-      "coverage-carrier-overall": "unresolvable field(s): title",
-      "coverage-carrier-personal": "unresolvable field(s): title",
-      "coverage-carrier-program": "unresolvable field(s): title",
-      "coverage-carrier-work": "unresolvable field(s): title",
       "dev-tickets-diagnose-ready": "unresolvable field(s): stage",
       "dev-tickets-in-progress": "unresolvable field(s): stage",
       "dev-tickets-passing": "unresolvable field(s): stage",
@@ -3470,32 +4052,29 @@
       "due-today": "due_date: cycle variable $cycle_today",
       "due-tomorrow": "due_date: cycle variable $cycle_today + 1 d",
       "due-yesterday": "due_date: cycle variable $cycle_today - 1 d",
-      "flowtrace-capabilities-diagnose-ready": "unresolvable field(s): cap_state+project",
-      "flowtrace-capabilities-in-progress": "unresolvable field(s): cap_state+project",
-      "flowtrace-capabilities-passing": "unresolvable field(s): cap_state+project",
-      "flowtrace-capabilities-retired": "unresolvable field(s): cap_state+project",
-      "flowtrace-capabilities-scoped": "unresolvable field(s): cap_state+project",
-      "flowtrace-capabilities-unscoped": "unresolvable field(s): cap_state+project",
-      "flowtrace-classes-concept": "unresolvable field(s): class_state+project",
-      "flowtrace-classes-exists": "unresolvable field(s): class_state+project",
-      "flowtrace-classes-extracted": "unresolvable field(s): class_state+project",
-      "flowtrace-classes-subsumed": "unresolvable field(s): class_state+project",
-      "flowtrace-packages-concept": "unresolvable field(s): package_state+project",
-      "flowtrace-packages-exists": "unresolvable field(s): package_state+project",
-      "flowtrace-packages-extracted": "unresolvable field(s): package_state+project",
-      "flowtrace-packages-subsumed": "unresolvable field(s): package_state+project",
-      "flowtrace-principles-held": "unresolvable field(s): principle_state+project",
-      "flowtrace-principles-held-weak": "unresolvable field(s): principle_state+project",
-      "flowtrace-principles-un-anchored": "unresolvable field(s): principle_state+project",
-      "flowtrace-principles-unverifiable": "unresolvable field(s): principle_state+project",
-      "flowtrace-principles-violated": "unresolvable field(s): principle_state+project",
+      "flowtrace-capabilities-diagnose-ready": "unresolvable field(s): project",
+      "flowtrace-capabilities-in-progress": "unresolvable field(s): project",
+      "flowtrace-capabilities-passing": "unresolvable field(s): project",
+      "flowtrace-capabilities-retired": "unresolvable field(s): project",
+      "flowtrace-capabilities-scoped": "unresolvable field(s): project",
+      "flowtrace-capabilities-unscoped": "unresolvable field(s): project",
+      "flowtrace-classes-concept": "unresolvable field(s): project",
+      "flowtrace-classes-exists": "unresolvable field(s): project",
+      "flowtrace-classes-extracted": "unresolvable field(s): project",
+      "flowtrace-classes-subsumed": "unresolvable field(s): project",
+      "flowtrace-packages-concept": "unresolvable field(s): project",
+      "flowtrace-packages-exists": "unresolvable field(s): project",
+      "flowtrace-packages-extracted": "unresolvable field(s): project",
+      "flowtrace-packages-subsumed": "unresolvable field(s): project",
+      "flowtrace-principles-held": "unresolvable field(s): project",
+      "flowtrace-principles-held-weak": "unresolvable field(s): project",
+      "flowtrace-principles-un-anchored": "unresolvable field(s): project",
+      "flowtrace-principles-unverifiable": "unresolvable field(s): project",
+      "flowtrace-principles-violated": "unresolvable field(s): project",
       "flowtrace-queue-items": "unresolvable field(s): project",
       "flowtrace-sinks-all": "unresolvable field(s): project",
       "free-trial-dojo-heads": "unresolvable field(s): project",
-      "god-box-discussed": "unresolvable field(s): god_box",
-      "god-box-not-discussed": "unresolvable field(s): god_box",
       "habit-dojo-heads": "unresolvable field(s): project",
-      "high-priority-tasks": "unresolvable field(s): priority",
       "operator-flowtrace-outcomes-open": "unresolvable field(s): project",
       "operator-flowtrace-tasks-open": "unresolvable field(s): project",
       "operator-flowtrace-waited-on": "unresolvable field(s): project",
@@ -3509,33 +4088,33 @@
       "operator-trace-orchestration-tasks-open": "unresolvable field(s): project",
       "operator-trace-orchestration-waited-on": "unresolvable field(s): project",
       "overdue": "due_date: operator lt",
-      "qntm-capabilities-diagnose-ready": "unresolvable field(s): cap_state+project",
-      "qntm-capabilities-in-progress": "unresolvable field(s): cap_state+project",
-      "qntm-capabilities-passing": "unresolvable field(s): cap_state+project",
-      "qntm-capabilities-retired": "unresolvable field(s): cap_state+project",
-      "qntm-capabilities-scoped": "unresolvable field(s): cap_state+project",
-      "qntm-capabilities-unscoped": "unresolvable field(s): cap_state+project",
-      "qntm-classes-concept": "unresolvable field(s): class_state+project",
-      "qntm-classes-exists": "unresolvable field(s): class_state+project",
-      "qntm-classes-extracted": "unresolvable field(s): class_state+project",
-      "qntm-classes-subsumed": "unresolvable field(s): class_state+project",
-      "qntm-packages-concept": "unresolvable field(s): package_state+project",
-      "qntm-packages-exists": "unresolvable field(s): package_state+project",
-      "qntm-packages-extracted": "unresolvable field(s): package_state+project",
-      "qntm-packages-subsumed": "unresolvable field(s): package_state+project",
-      "qntm-principles-held": "unresolvable field(s): principle_state+project",
-      "qntm-principles-held-weak": "unresolvable field(s): principle_state+project",
-      "qntm-principles-un-anchored": "unresolvable field(s): principle_state+project",
-      "qntm-principles-unverifiable": "unresolvable field(s): principle_state+project",
-      "qntm-principles-violated": "unresolvable field(s): principle_state+project",
+      "qntm-capabilities-diagnose-ready": "unresolvable field(s): project",
+      "qntm-capabilities-in-progress": "unresolvable field(s): project",
+      "qntm-capabilities-passing": "unresolvable field(s): project",
+      "qntm-capabilities-retired": "unresolvable field(s): project",
+      "qntm-capabilities-scoped": "unresolvable field(s): project",
+      "qntm-capabilities-unscoped": "unresolvable field(s): project",
+      "qntm-classes-concept": "unresolvable field(s): project",
+      "qntm-classes-exists": "unresolvable field(s): project",
+      "qntm-classes-extracted": "unresolvable field(s): project",
+      "qntm-classes-subsumed": "unresolvable field(s): project",
+      "qntm-packages-concept": "unresolvable field(s): project",
+      "qntm-packages-exists": "unresolvable field(s): project",
+      "qntm-packages-extracted": "unresolvable field(s): project",
+      "qntm-packages-subsumed": "unresolvable field(s): project",
+      "qntm-principles-held": "unresolvable field(s): project",
+      "qntm-principles-held-weak": "unresolvable field(s): project",
+      "qntm-principles-un-anchored": "unresolvable field(s): project",
+      "qntm-principles-unverifiable": "unresolvable field(s): project",
+      "qntm-principles-violated": "unresolvable field(s): project",
       "qntm-queue-items": "unresolvable field(s): project",
       "qntm-sinks-all": "unresolvable field(s): project",
       "routine-cascade-dojo-heads": "unresolvable field(s): project",
-      "scratchpad-targets": "unresolvable field(s): title",
       "termination-dojo-heads": "unresolvable field(s): project",
       "trace-orchestration-queue-items": "unresolvable field(s): project",
       "unlocks-dojo-heads": "unresolvable field(s): project"
     },
+    "traversalDepth": 1,
     "dropped": {
       "section 'all-personal.tasks'": "qualification refused: all-personal-nodes",
       "section 'all-work.tasks'": "qualification refused: all-work-nodes",
@@ -3547,10 +4126,8 @@
       "section 'backlog.unscoped'": "qualification refused: dev-tickets-unscoped",
       "section 'daily-personal.capture'": "qualification refused: captured-today",
       "section 'daily-personal.due-soon'": "qualification refused: due-soon-tasks",
-      "section 'daily-personal.high-priority'": "qualification refused: high-priority-tasks",
       "section 'daily-work.capture'": "qualification refused: captured-today",
       "section 'daily-work.due-today'": "qualification refused: due-soon-tasks",
-      "section 'daily-work.urgent'": "qualification refused: high-priority-tasks",
       "section 'flowtrace-capabilities.diagnose-ready'": "qualification refused: flowtrace-capabilities-diagnose-ready",
       "section 'flowtrace-capabilities.in-progress'": "qualification refused: flowtrace-capabilities-in-progress",
       "section 'flowtrace-capabilities.passing'": "qualification refused: flowtrace-capabilities-passing",
@@ -3573,29 +4150,7 @@
       "section 'flowtrace-queue.queue'": "qualification refused: flowtrace-queue-items",
       "section 'flowtrace-sinks.sinks'": "qualification refused: flowtrace-sinks-all",
       "section 'free-trial-dojo.fragments'": "qualification refused: free-trial-dojo-heads",
-      "section 'god-box.discussed'": "qualification refused: god-box-discussed",
-      "section 'god-box.not-discussed'": "qualification refused: god-box-not-discussed",
       "section 'habit-dojo.classification'": "qualification refused: habit-dojo-heads",
-      "section 'metrics-personal.personal-accuracy-1d'": "qualification refused: accuracy-carrier-personal-1d",
-      "section 'metrics-personal.personal-accuracy-3d'": "qualification refused: accuracy-carrier-personal-3d",
-      "section 'metrics-personal.personal-accuracy-7d'": "qualification refused: accuracy-carrier-personal-7d",
-      "section 'metrics-personal.personal-age-of-intent'": "qualification refused: age-intent-carrier-personal",
-      "section 'metrics-personal.personal-coverage'": "qualification refused: coverage-carrier-personal",
-      "section 'metrics-program.program-accuracy-1d'": "qualification refused: accuracy-carrier-program-1d",
-      "section 'metrics-program.program-accuracy-3d'": "qualification refused: accuracy-carrier-program-3d",
-      "section 'metrics-program.program-accuracy-7d'": "qualification refused: accuracy-carrier-program-7d",
-      "section 'metrics-program.program-age-of-intent'": "qualification refused: age-intent-carrier-program",
-      "section 'metrics-program.program-coverage'": "qualification refused: coverage-carrier-program",
-      "section 'metrics-work.work-accuracy-1d'": "qualification refused: accuracy-carrier-work-1d",
-      "section 'metrics-work.work-accuracy-3d'": "qualification refused: accuracy-carrier-work-3d",
-      "section 'metrics-work.work-accuracy-7d'": "qualification refused: accuracy-carrier-work-7d",
-      "section 'metrics-work.work-age-of-intent'": "qualification refused: age-intent-carrier-work",
-      "section 'metrics-work.work-coverage'": "qualification refused: coverage-carrier-work",
-      "section 'metrics.overall-accuracy-1d'": "qualification refused: accuracy-carrier-overall-1d",
-      "section 'metrics.overall-accuracy-3d'": "qualification refused: accuracy-carrier-overall-3d",
-      "section 'metrics.overall-accuracy-7d'": "qualification refused: accuracy-carrier-overall-7d",
-      "section 'metrics.overall-age-of-intent'": "qualification refused: age-intent-carrier-overall",
-      "section 'metrics.overall-coverage'": "qualification refused: coverage-carrier-overall",
       "section 'operator-flowtrace.outcomes'": "qualification refused: operator-flowtrace-outcomes-open",
       "section 'operator-flowtrace.tasks'": "qualification refused: operator-flowtrace-tasks-open",
       "section 'operator-flowtrace.waiting-for'": "qualification refused: operator-flowtrace-waited-on",
@@ -3631,7 +4186,6 @@
       "section 'qntm-sinks.sinks'": "qualification refused: qntm-sinks-all",
       "section 'routine-cascade-dojo.governed'": "qualification refused: routine-cascade-dojo-heads",
       "section 'termination-dojo.fragments'": "qualification refused: termination-dojo-heads",
-      "section 'test-scratchpad.scratchpad-targets'": "qualification refused: scratchpad-targets",
       "section 'this-week.available-overdue'": "qualification refused: available-overdue",
       "section 'this-week.available-this-week'": "qualification refused: available-this-week",
       "section 'this-week.available-today'": "qualification refused: available-today",
@@ -3644,88 +4198,17 @@
       "section 'this-week.overdue'": "qualification refused: overdue",
       "section 'trace-orchestration-queue.queue'": "qualification refused: trace-orchestration-queue-items",
       "section 'unlocks-dojo.chain'": "qualification refused: unlocks-dojo-heads",
-      "vocabulary token '#God'": "sets 'god_box', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#action'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#animation'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#biography'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#cap-scoped'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#chore'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#class-concept'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#class-exists'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#class-extracted'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#class-subsumed'": "sets 'class_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#comedy'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#crime'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#daily'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#diagnose-ready'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#docs'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#documentary'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#drama'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#evening-review'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-15th'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-1st'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-friday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-monday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-month-end'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-saturday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-sunday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-thursday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-tuesday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#every-wednesday'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#every-{dom}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#every-{n}{unit}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
       "vocabulary token '#every-{weekdays}'": "sets 'cadence' through 'parametric_field:', a shape this generator does not read at all",
-      "vocabulary token '#fantasy'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#feat'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#fix'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#foundational'": "sets 'tier', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#free-trial'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#functional'": "sets 'tier', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#held'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#held-weak'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#history'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#horror'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#in-progress'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#monthly'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#nonfiction'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#onboarding'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#package-concept'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#package-exists'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#package-extracted'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#package-subsumed'": "sets 'package_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#passing'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#perf'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#refactor'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#retired'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#romance'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#scifi'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
       "vocabulary token '#scope-{area}'": "sets 'scope' through 'parametric_field:', a shape this generator does not read at all",
-      "vocabulary token '#spike'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#step-10'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#termination'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#test'": "sets 'change_type', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#thriller'": "sets 'genre', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#un-anchored'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#unscoped'": "sets 'cap_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#unverifiable'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#upset'": "sets 'instantiate', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#violated'": "sets 'principle_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#weekdays'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#weekends'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '#weekly'": "sets 'cadence', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '⏫'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '☑️'": "sets 'done_task_count', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '⛔'": "sets 'blocked_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '✅'": "sets 'completed_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '🆕'": "sets 'created_at', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '🎯'": "sets 'par', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '🏳️'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '💤'": "sets 'asserted_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '📅'": "sets 'due_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '📌'": "sets 'lead_state', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '🔢'": "sets 'queue_position', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '🔽'": "sets 'priority', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)",
-      "vocabulary token '🛫'": "sets 'available_date', which is not one of the fields the app can resolve for a line being typed (node_type, domain, status)"
+      "vocabulary token '☑️'": "sets 'done_task_count', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '✅'": "sets 'completed_at', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '🆕'": "sets 'created_at', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '🎯'": "sets 'par', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '📅'": "sets 'due_date', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '🔢'": "sets 'queue_position', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)",
+      "vocabulary token '🛫'": "sets 'available_date', which is not one of the fields this config's vocabulary and schema make resolvable for a line being typed (asserted_state, blocked_state, cadence, cap_state, change_type, class_state, domain, genre, god_box, instantiate, lead_state, node_type, package_state, principle_state, priority, status, tier, title)"
     }
   },
   "resolution": {
@@ -6271,7 +6754,7 @@
     },
     "dropped": {
       "rule 'auto-habit-without-routine-children-reverts-to-task'": "its pattern 'auto-habits-without-routine-children' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
-      "rule 'auto-outcome-without-open-children-reverts-to-task'": "its pattern 'auto-outcomes-without-open-children' traverses the graph (2 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
+      "rule 'auto-outcome-without-open-children-reverts-to-task'": "its pattern 'auto-outcomes-without-open-children' traverses the graph (3 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'outcome-with-routine-child-becomes-habit'": "its pattern 'outcomes-with-routine-child' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'step-with-cadence-becomes-routine'": "its pattern 'steps-under-routines' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
       "rule 'step-without-routine-parent-becomes-task'": "its pattern 'steps-without-routine-parent' traverses the graph (1 step(s)), which this generator does not read, so whether it retypes a new line was not evaluated",
@@ -6529,11 +7012,6 @@
           {
             "verb": "retype",
             "to": "outcome"
-          },
-          {
-            "verb": "set",
-            "field": "auto_outcome",
-            "to": true
           }
         ],
         "partial": true
@@ -6549,11 +7027,6 @@
           {
             "verb": "retype",
             "to": "outcome"
-          },
-          {
-            "verb": "set",
-            "field": "auto_outcome",
-            "to": true
           }
         ],
         "partial": true
@@ -7194,26 +7667,27 @@
       }
     },
     "dropped": {
-      "rule 'accuracy-overall-1d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-overall-3d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-overall-7d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-personal-1d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-personal-3d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-personal-7d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-program-1d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-program-3d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-program-7d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-work-1d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-work-3d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'accuracy-work-7d'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'added_effort_sum_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'added_effort_sum_7d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'added_priority_weight_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'added_priority_weight_7d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'age-of-intent-overall'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'age-of-intent-personal'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'age-of-intent-program'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'age-of-intent-work'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'account_opening'": "an action verb this closed grammar does not model: \"create_subtree\"",
+      "rule 'accuracy-overall-1d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-overall-3d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-overall-7d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-personal-1d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-personal-3d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-personal-7d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-program-1d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-program-3d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-program-7d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-work-1d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-work-3d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'accuracy-work-7d'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'added_effort_sum_30d'": "an action verb this closed grammar does not model: \"sum\"",
+      "rule 'added_effort_sum_7d'": "an action verb this closed grammar does not model: \"sum\"",
+      "rule 'added_priority_weight_30d'": "an action verb this closed grammar does not model: \"weighted_sum\"",
+      "rule 'added_priority_weight_7d'": "an action verb this closed grammar does not model: \"weighted_sum\"",
+      "rule 'age-of-intent-overall'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'age-of-intent-personal'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'age-of-intent-program'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'age-of-intent-work'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
       "rule 'auto-habit-without-routine-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'auto-outcome-without-open-children-reverts-to-task'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'cancelled-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
@@ -7223,26 +7697,29 @@
       "rule 'clear-routine-reset-cascade-marker'": "its for_each pattern 'routines-with-reset-cascade-marker' could not be resolved: unresolvable field(s): reset_cascade_pending",
       "rule 'completed-target-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'completed-task-clears-waiting-link'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'completed_effort_sum_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'completed_effort_sum_7d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'completed_priority_weight_30d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'completed_priority_weight_7d'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'coverage-overall'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'coverage-personal'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'coverage-program'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'coverage-work'": "'for_each' is a list of 3 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'evening-review'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'free_trial'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'completed_effort_sum_30d'": "an action verb this closed grammar does not model: \"sum\"",
+      "rule 'completed_effort_sum_7d'": "an action verb this closed grammar does not model: \"sum\"",
+      "rule 'completed_priority_weight_30d'": "an action verb this closed grammar does not model: \"weighted_sum\"",
+      "rule 'completed_priority_weight_7d'": "an action verb this closed grammar does not model: \"weighted_sum\"",
+      "rule 'coverage-overall'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'coverage-personal'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'coverage-program'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'coverage-work'": "'for_each' joins 3 pattern bindings (a multi-source join), which this closed grammar does not model",
+      "rule 'evening-review'": "an action verb this closed grammar does not model: \"create_subtree\"",
+      "rule 'free_trial'": "an action verb this closed grammar does not model: \"create_subtree\"",
       "rule 'fulfill-mandate-when-all-sponsors-committed'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'migrate-cadence-days-to-cadence'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
+      "rule 'migrate-clear-retired-auto-outcome'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'migrate-clear-retired-auto-routine'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'migrate-clear-retired-cluster-satisfied'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'migrate-recurs-on-to-cadence'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
+      "rule 'new_agreement'": "an action verb this closed grammar does not model: \"create_subtree\"",
       "rule 'next-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'node-with-live-requires-gets-status-waiting'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'node-with-live-requires-gets-status-waiting'": "'when' uses operator 'in', which this closed grammar does not model (only null/eq/not)",
+      "rule 'novation'": "an action verb this closed grammar does not model: \"create_subtree\"",
       "rule 'obsolete-needs-attention-prune'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'onboard_client'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'onboarding_followups'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'onboard_client'": "an action verb this closed grammar does not model: \"compute_date\", \"create_subtree\"",
+      "rule 'onboarding_followups'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'parallel-edge-repair-creates-edge'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'part-of-child-of-ticket-becomes-spike'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'promote-scheduled-routine-to-open'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
@@ -7252,15 +7729,15 @@
       "rule 'routine-reset-cascades-to-descendants'": "its for_each pattern 'nodes-under-resetting-routine' could not be resolved: step 0: traverses (ancestors+exists)",
       "rule 'stamp-available-date-on-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
       "rule 'stamp-completed-at-on-done-routine'": "'when' uses operator 'and', which this closed grammar does not model (only null/eq/not)",
-      "rule 'stamp-dev-ticket-number'": "'for_each' is a list of 2 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'stamp-dev-ticket-number'": "'for_each' joins 2 pattern bindings (a multi-source join), which this closed grammar does not model",
       "rule 'stamp-expected-contribution'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'stamp-outcome-done-task-count'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'stamp-task-intent-planned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-intent-unplanned'": "an action verb this closed grammar does not model: \"subtract\"",
       "rule 'stamp-task-overdue-drag'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'target-of-open-waiter-gets-status-waiting'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'target-reopens-when-no-open-waiters-remain'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
-      "rule 'termination'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'target-of-open-waiter-gets-status-waiting'": "'when' uses operator 'in', which this closed grammar does not model (only null/eq/not)",
+      "rule 'target-reopens-when-no-open-waiters-remain'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
+      "rule 'termination'": "an action verb this closed grammar does not model: \"create_subtree\"",
       "rule 'unblock-node-when-all-requires-done'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'unlocks-descendant-becomes-held'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'unlocks-held-marker-becomes-cleared'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
@@ -7269,9 +7746,9 @@
       "rule 'unlocks-link-becomes-unlocked'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'unlocks-node-becomes-released'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
       "rule 'update-scorecard-done-count'": "1 is not a '$current.node.fields.<name>' reference — this closed grammar only models predicates over the candidate node's own fields",
-      "rule 'upset'": "'for_each' is a list of 1 pattern binding(s) (a multi-source join), which this closed grammar does not model",
+      "rule 'upset'": "an action verb this closed grammar does not model: \"create_subtree\"",
+      "rule 'vote_review'": "an action verb this closed grammar does not model: \"create_subtree\"",
       "rule-set field 'auto_habit'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
-      "rule-set field 'auto_outcome'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
       "rule-set field 'auto_ticket'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
       "rule-set field 'domain'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
       "rule-set field 'interval_days'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it"

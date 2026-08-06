@@ -55,12 +55,15 @@
  * predicate is emitted, so a section the browser cannot decide is a section the browser says
  * nothing about.
  *
- * ── `RESOLVABLE_FIELDS` — GENERATED INTO TWO OTHER FILES, NOT HAND-COPIED ──
+ * ── THE RESOLVABLE-FIELD SET — GENERATED INTO TWO OTHER FILES, NOT HAND-COPIED ──
  *
  * `scripts/generate-operator-set.mjs` writes `app/present/membership.ts`'s and `scripts/
- * qualification-agreement.py`'s own copies of the constant exported below FROM this module —
- * unaffected by this split, because the constant is still exported from THIS file (re-exported
- * from `compile-qualification.mjs`, where it now lives) under the same name.
+ * qualification-agreement.py`'s own literal copies of the field list FROM `deriveResolvableFields`
+ * (`compile-qualification.mjs`), called against the real monorepo config — not from a constant
+ * exported here. 2026-08-06: the list stopped being a constant at all (it is now a measurement of
+ * the config, not a fact about this codebase), so `generate-operator-set.mjs` compiles the real
+ * config to get the concrete value for THIS operator's instance, the same way `generateQualification`
+ * below does — one source, still, just a function of the config instead of a literal in it.
  *
  * ── WHAT IT IS NOT ──
  *
@@ -90,7 +93,7 @@ import { Ledger, reportDropped } from "./ledger.mjs";
 import {
   compile,
   GenerationError,
-  RESOLVABLE_FIELDS,
+  deriveResolvableFields,
   normalisePattern,
   SCHEMA_KEY,
   PATTERNS_PREFIX,
@@ -103,12 +106,17 @@ import {
 export { DEFAULT_CONFIG_DIR };
 
 // Re-exported so every existing importer keeps working unchanged: `tests/operator-set-
-// agreement.test.mjs` imports `normalisePattern` and `RESOLVABLE_FIELDS` directly from this file,
-// and `scripts/generate-operator-set.mjs` imports `RESOLVABLE_FIELDS` directly from this file. A
-// Worker route must import `compile` from `compile-qualification.mjs` itself, never from here —
-// see that file's header for why (importing from here drags in `node:fs` and `monorepo-
-// config.mjs`'s module-level `fileURLToPath`, which crashes a Worker at load).
-export { compile, RESOLVABLE_FIELDS, normalisePattern };
+// agreement.test.mjs` imports `normalisePattern` and `deriveResolvableFields` directly from this
+// file, and `scripts/generate-operator-set.mjs` calls `deriveResolvableFields` (against the files
+// map `readConfigTree` below builds) rather than importing a frozen list — 2026-08-06, the
+// `RESOLVABLE_FIELDS` constant this file used to re-export was retired in favour of that function;
+// see `compile-qualification.mjs`'s own header for why a frozen list could never be correct for a
+// config it had not been hand-updated for. A Worker route must import `compile` (and
+// `deriveResolvableFields`, if it needs the set on its own) from `compile-qualification.mjs`
+// itself, never from here — see that file's header for why (importing from here drags in
+// `node:fs` and `monorepo-config.mjs`'s module-level `fileURLToPath`, which crashes a Worker at
+// load).
+export { compile, deriveResolvableFields, normalisePattern };
 
 // ── the fs shell — reads the operator's laptop into a files map, then calls the pure compile ───
 

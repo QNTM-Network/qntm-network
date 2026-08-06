@@ -163,6 +163,14 @@
     },
     {
       "view": "daily-personal",
+      "section": "high-priority",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
+      }
+    },
+    {
+      "view": "daily-personal",
       "section": "waiting",
       "nodeType": "task",
       "defaults": {
@@ -204,6 +212,14 @@
     {
       "view": "daily-work",
       "section": "in-progress",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "work"
+      }
+    },
+    {
+      "view": "daily-work",
+      "section": "urgent",
       "nodeType": "task",
       "defaults": {
         "domain": "work"
@@ -281,6 +297,24 @@
       "nodeType": "film",
       "defaults": {
         "domain": "arts"
+      }
+    },
+    {
+      "view": "god-box",
+      "section": "not-discussed",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit",
+        "god_box": "surrendered"
+      }
+    },
+    {
+      "view": "god-box",
+      "section": "discussed",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "spirit",
+        "god_box": "surrendered"
       }
     },
     {
@@ -474,6 +508,126 @@
     {
       "view": "inbox",
       "section": "domain-empty",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-accuracy-1d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-accuracy-3d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-accuracy-7d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-age-of-intent",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-personal",
+      "section": "personal-coverage",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-accuracy-1d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-accuracy-3d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-accuracy-7d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-age-of-intent",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-program",
+      "section": "program-coverage",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-accuracy-1d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-accuracy-3d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-accuracy-7d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-age-of-intent",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics-work",
+      "section": "work-coverage",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics",
+      "section": "overall-accuracy-1d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics",
+      "section": "overall-accuracy-3d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics",
+      "section": "overall-accuracy-7d",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics",
+      "section": "overall-age-of-intent",
+      "nodeType": "task",
+      "defaults": null
+    },
+    {
+      "view": "metrics",
+      "section": "overall-coverage",
       "nodeType": "task",
       "defaults": null
     },
@@ -839,6 +993,14 @@
       "nodeType": "task",
       "defaults": {
         "domain": "spirit"
+      }
+    },
+    {
+      "view": "test-scratchpad",
+      "section": "scratchpad-targets",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "personal"
       }
     },
     {

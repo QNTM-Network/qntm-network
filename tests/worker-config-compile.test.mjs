@@ -111,13 +111,21 @@ function readResolutionFixtureFiles() {
 }
 
 /** Read the committed fixture's `rules/*.yaml` (`primary.yaml`, `secondary.yaml`), PLUS
- * `patterns/*.yaml` and `vocabulary/markers.yaml`, into exactly the file map rules' `compile()`
- * expects — the same reader `scripts/check-isolate-conformance.mjs`'s own `rules` generator entry
- * now uses for the identical fixture. `compile-rules.mjs`'s own two later passes need the wider
- * set: PASS 2 resolves `for_each.pattern` (`local-tasks`) against `patterns/`, and PASS 3 spells a
- * `setsField` target against `vocabulary/markers.yaml` — see that file's header, "THE PATTERN
- * GAP"/"THE MARKER GAP". Reading `patterns/`/`vocabulary/` here is no longer a cross-check this
- * generator performs by choice; it is data PASS 2/PASS 3 require to publish anything at all. */
+ * `patterns/*.yaml` and the WHOLE `vocabulary/` directory, into exactly the file map rules'
+ * `compile()` expects — the same reader `scripts/check-isolate-conformance.mjs`'s own `rules`
+ * generator entry now uses for the identical fixture. `compile-rules.mjs`'s own two later passes
+ * need the wider set: PASS 2 resolves `for_each.pattern` (`local-tasks`) against `patterns/`, and
+ * PASS 3 spells a `setsField` target against `vocabulary/markers.yaml` — see that file's header,
+ * "THE PATTERN GAP"/"THE MARKER GAP".
+ *
+ * 2026-08-06: widened from `vocabulary/markers.yaml` ALONE to the WHOLE `vocabulary/` directory —
+ * PASS 2 also calls `deriveResolvableFields(files)` now (`compile-qualification.mjs`), and that
+ * needs `status_tags.yaml`/`type_tags.yaml`/`domain_tags.yaml` to know `local-tasks`'s own
+ * `status`/`node_type` predicates are resolvable at all; `markers.yaml` alone spells nothing but
+ * `extraction_hint`/`render_only` entries, none of them fixed-value, so `local-tasks` would refuse
+ * with "unresolvable field(s): status" if this reader still narrowed to `markers.yaml` alone —
+ * exactly the regression `generate-rules-declaration.mjs`'s own `readConfigTree` was widened
+ * identically to fix; see that file's header. */
 function readRulesFixtureFiles() {
   const files = {};
   const rulesDir = join(FIXTURE_CONFIG, "rules");
@@ -128,8 +136,10 @@ function readRulesFixtureFiles() {
   for (const f of readdirSync(patternsDir).filter((f) => f.endsWith(".yaml")).sort()) {
     files[`patterns/${f}`] = readFileSync(join(patternsDir, f), "utf8");
   }
-  const markersPath = join(FIXTURE_CONFIG, "vocabulary", "markers.yaml");
-  files["vocabulary/markers.yaml"] = readFileSync(markersPath, "utf8");
+  const vocabularyDir = join(FIXTURE_CONFIG, "vocabulary");
+  for (const f of readdirSync(vocabularyDir).filter((f) => f.endsWith(".yaml")).sort()) {
+    files[`vocabulary/${f}`] = readFileSync(join(vocabularyDir, f), "utf8");
+  }
   return files;
 }
 
