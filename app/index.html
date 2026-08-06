@@ -76,7 +76,22 @@
     --rail-bottom: 0px;
     --rail-side: var(--rail-w);
     --drawer-w: min(21rem, 86vw);
-    --col-w: 35rem;         /* the reading column's width — 560px, unchanged */
+    /* THE READING COLUMN'S WIDTH. Was a flat 560px on every screen, which is what the operator's
+       own screenshot showed: a narrow strip of text with hundreds of empty pixels either side on
+       a wide monitor, most of the window doing nothing. `35rem` (560px) stays as the FLOOR — a
+       laptop-width screen is unchanged — and the column now grows with the room the rail has
+       actually left it: `100vw` minus the rail reservation (`--rail-side`, 0 on a phone) minus
+       the same horizontal padding `body` already pays on both edges (`2 * --s4`) minus one more
+       step of breathing margin on each side so the column never touches its own gutter (`2 *
+       --s6`). `46rem` (736px) is a ceiling so a very wide monitor still reads as one column
+       rather than one very long line — a STRUCTURAL cap, not a claim about the optimal character
+       count for a typeface, which is a different, deliberately deferred question (see
+       docs/implementation-artifacts/research-polish-direction.md §2/§3a and backlog
+       `size-the-column-to-a-declared-measure`). `#entry`/`#boot` are short-form screens, not the
+       reading column, and are held back to the old measure below (`--form-w`) rather than
+       stretching with it. */
+    --col-w: clamp(35rem, calc(100vw - var(--rail-side) - (2 * var(--s4)) - (2 * var(--s6))), 46rem);
+    --form-w: 35rem;        /* the entry/boot screens' width — 560px, unchanged, see --col-w above */
     --radius-sm: 6px; --radius: 10px; --radius-lg: 16px; --pill: 999px;
 
     /* ── THE EDGES OF THE SCREEN ───────────────────────────────────────────────────────────
@@ -136,6 +151,12 @@
       max(calc(var(--rail-side) + var(--s4)), var(--safe-l));
   }
   .wrap { width: 100%; max-width: var(--col-w); }
+  /* THE TWO SHORT-FORM SCREENS DO NOT STRETCH WITH THE READING COLUMN. `.wrap` now grows on a
+     wide screen so the graph section (the reading column, `#graph` > `.viewbody`) can use the
+     room — but a sign-in card and a "opening your graph…" line are not prose, and a 736px-wide
+     login form is not what "the page sits better" asked for. `margin: 0 auto` re-centres each
+     inside the wider `.wrap`, the same way `.wrap` itself centres inside `body`. */
+  #entry, #boot { max-width: var(--form-w); margin: 0 auto; }
   h1 { font-weight: 600; font-size: clamp(1.6rem, 5vw, 2.2rem); margin: var(--s2) 0 var(--s1); }
   .tag { color: var(--dim); margin: 0 0 var(--s6); }
   button {
@@ -306,9 +327,10 @@
 
      THE DESKTOP ANCHORING IS THE LEFT EDGE. A mouse has no reach problem, so the desktop rail is
      not for reach — it is for PERSISTENCE, which is the shape of the 200px left panel his own
-     Obsidian keeps permanently open (`workspace.json`). Measured at 1440 wide, the reading column
-     is 560px with ~440px of empty gutter each side: the rail is spent out of that gutter and the
-     column keeps every pixel it had. */
+     Obsidian keeps permanently open (`workspace.json`). At 1440 wide the reading column now grows
+     to fill the room the rail leaves it (see `--col-w` above) rather than sitting at a flat 560px
+     with the gutter left untouched either side — the rail is still spent out of that space, but
+     the column no longer stops taking the pixels once it reaches its old width. */
   .rail {
     position: fixed; z-index: 20;
     /* `stretch`, so a column of controls is one column and not three widths — the cross axis of
@@ -1023,7 +1045,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=becc5e2a0f";
+} from "/dist/present.js?v=82d0bda378";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2925,15 +2947,25 @@ async function bootRead(delays = BOOT_READ_DELAYS) {
  * Where a fresh read of the graph lands you: the view you were already in if the snapshot still
  * has it, else the default.
  *
- * THIS IS WHAT MAKES A REFRESH CONTROL POSSIBLE AT ALL. `loadGraph` has always landed on
- * `this-week`, which is the right answer at sign-in and the wrong one every other time — a button
- * wired straight to it would have thrown the reader out of the view they were reading in order to
- * tell them it was up to date. The fall-through is deliberate rather than an assertion: a view
- * really can leave between two reads, because the file behind it was renamed on the laptop.
+ * THIS IS WHAT MAKES A REFRESH CONTROL POSSIBLE AT ALL. `loadGraph` used to land on `this-week`
+ * unconditionally; now it lands on `inbox`, and either way this is the ONLY place that default is
+ * written — a button wired straight to the default id would have thrown the reader out of the
+ * view they were reading in order to tell them it was up to date. The fall-through is deliberate
+ * rather than an assertion: a view really can leave between two reads, because the file behind it
+ * was renamed on the laptop.
+ *
+ * THE DEFAULT IS A LITERAL STRING HERE, ON PURPOSE, AND IT SHOULD NOT STAY ONE. Nothing in the
+ * snapshot a view arrives in (`DrawerView`: `id`/`path`/`title`) declares "open on me" — there is
+ * no config-resolution rung this could be pulled from today, so hard-coding one named id in the
+ * one function that already owns the fallback is the honest version of "resolve, don't scatter":
+ * one place, not a view name copied into the boot path a second time. It should become a declared
+ * fact (a flag on a view's config, resolved the same way `declaration` resolves qualification/
+ * resolution/structural/rules) rather than a string this function has to know — see backlog row
+ * `declare-the-default-view`.
  */
 function landOn(views, keep) {
   return views.find((v) => v.id === keep)
-      ?? views.find((v) => v.id === "this-week")
+      ?? views.find((v) => v.id === "inbox")
       ?? views[0];
 }
 

@@ -5715,10 +5715,53 @@ function buildDrawer(deps, views, currentViewId) {
   drawerStops.forEach((stop, index) => stop.addEventListener("keydown", (e) => drawerKey(deps, e, index)));
   markWhereWeAre(deps, views, currentViewId);
 }
+var parentOf = (el) => el.parentElement ?? el._parent ?? null;
+function isReachable(stop) {
+  let node = stop;
+  for (; ; ) {
+    if (node === null) return true;
+    const parent = parentOf(node);
+    if (!parent) return true;
+    if (String(parent.className ?? "").split(/\s+/).includes("foldkids")) {
+      const foldBox = parentOf(parent);
+      if (String(foldBox?.className ?? "").split(/\s+/).includes("shut")) return false;
+      node = foldBox;
+      continue;
+    }
+    node = parent;
+  }
+}
+function moveTo(index, delta) {
+  if (drawerStops.length === 0) return;
+  let next = index;
+  for (let step = 0; step < drawerStops.length; step += 1) {
+    next = (next + delta + drawerStops.length) % drawerStops.length;
+    const candidate = drawerStops[next];
+    if (candidate && isReachable(candidate)) {
+      candidate.focus();
+      return;
+    }
+  }
+}
 function drawerKey(deps, e, index) {
   if (e.key === "Escape") {
     e.preventDefault();
     closeDrawer(deps);
+    return;
+  }
+  if (e.key === "ArrowDown" || e.key === "j") {
+    e.preventDefault();
+    moveTo(index, 1);
+    return;
+  }
+  if (e.key === "ArrowUp" || e.key === "k") {
+    e.preventDefault();
+    moveTo(index, -1);
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    drawerStops[index]?.click();
     return;
   }
   if (e.key !== "Tab" || drawerStops.length === 0) return;

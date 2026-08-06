@@ -305,8 +305,73 @@ export function buildDrawer(deps: DrawerDeps, views: readonly DrawerView[], curr
   markWhereWeAre(deps, views, currentViewId);
 }
 
+// EITHER ID, BECAUSE A REAL DOM ELEMENT AND THIS MODULE'S TEST STUB DISAGREE ON WHICH ONE IT
+// CARRIES. `.parentElement` is how a browser answers "what is above this node"; the fixture
+// (`tests/fixtures/app-html-page.mjs`) is not a browser and records the same fact as `._parent`
+// instead. Reading both and taking whichever exists is what lets this walk run unmodified in a
+// real page and in the harness that drives it — see this file's own header on why the stronger
+// proof is a fixture that drives real elements rather than one that describes them.
+const parentOf = (el: HTMLElement): HTMLElement | null =>
+  el.parentElement ?? (el as unknown as { _parent?: HTMLElement | null })._parent ?? null;
+
+/**
+ * Is `stop` a row `j`/`k` can actually land on right now?
+ *
+ * A SHUT FOLDER'S ROWS ARE SKIPPED, NOT STEPPED INTO. `.fold.shut > .foldkids { display: none }`
+ * (the sheet in `app/index.html`) means a real browser already refuses to focus anything in
+ * there — `.focus()` on a `display: none` element is a no-op, so landing `j` on one would look
+ * like the key did nothing rather than like it moved. Skipping keeps `j`/`k` doing what Tab
+ * already does for the same rows (Tab does not visit a hidden element either), so the two ways of
+ * moving through the tree agree rather than one of them occasionally getting stuck. The header
+ * row of a shut folder is NOT skipped — only what is inside it — because the header itself is
+ * never hidden; `j`/`k` land on every folder exactly the way Tab already does.
+ *
+ * Walks upward from `stop` rather than reading a cached "is this folder open" flag, because
+ * `buildDrawer` rebuilds `drawerStops` once and a folder can be toggled shut afterwards by a
+ * click this module's own listener handles — a flag captured at build time would go stale the
+ * first time the operator closed a folder without touching a key.
+ */
+function isReachable(stop: HTMLElement): boolean {
+  let node: HTMLElement | null = stop;
+  for (;;) {
+    if (node === null) return true;
+    const parent = parentOf(node);
+    if (!parent) return true;
+    if (String(parent.className ?? "").split(/\s+/).includes("foldkids")) {
+      const foldBox = parentOf(parent);
+      if (String(foldBox?.className ?? "").split(/\s+/).includes("shut")) return false;
+      node = foldBox;
+      continue;
+    }
+    node = parent;
+  }
+}
+
+/** The next (`delta` 1) or previous (`delta` -1) reachable stop from `index`, wrapping around. */
+function moveTo(index: number, delta: 1 | -1): void {
+  if (drawerStops.length === 0) return;
+  let next = index;
+  for (let step = 0; step < drawerStops.length; step += 1) {
+    next = (next + delta + drawerStops.length) % drawerStops.length;
+    const candidate = drawerStops[next];
+    if (candidate && isReachable(candidate)) { candidate.focus(); return; }
+  }
+}
+
 function drawerKey(deps: DrawerDeps, e: KeyboardEvent, index: number): void {
   if (e.key === "Escape") { e.preventDefault(); closeDrawer(deps); return; }
+  // `j`/`k` ALONGSIDE THE ARROWS, NOT INSTEAD OF THEM — the same vim gesture the rest of the app
+  // already commits to (`index.html`'s NORMAL-mode handler), added here as a second name for the
+  // one movement rather than a second mechanism. Neither existed on this row before now: only
+  // Tab moved focus through the tree, and an arrow key did nothing.
+  if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); moveTo(index, 1); return; }
+  if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); moveTo(index, -1); return; }
+  // ENTER CLICKS THE FOCUSED ROW RATHER THAN CARRYING ITS OWN COPY OF WHAT A ROW DOES. A folder's
+  // row toggles it shut/open; a view's row reports the choice and closes the drawer — both are
+  // already exactly what `paintFolder`'s own click listener on this element does, so asking the
+  // element to click itself is the one true way to activate a row rather than a second switch
+  // here that has to be kept in step with the first one forever.
+  if (e.key === "Enter") { e.preventDefault(); drawerStops[index]?.click(); return; }
   if (e.key !== "Tab" || drawerStops.length === 0) return;
   const last = drawerStops.length - 1;
   if (e.shiftKey && index === 0) { e.preventDefault(); drawerStops[last]?.focus(); }

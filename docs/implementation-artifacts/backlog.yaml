@@ -3817,3 +3817,32 @@ backlog:
     reach.
   kind: null
   state: unscoped
+
+- id: declare-the-default-view
+  title: >-
+    [app] The view a fresh boot lands on (`app/index.html`, `landOn`) changed from the literal
+    string `"this-week"` to the literal string `"inbox"` (the operator's ask — open on Inbox, not
+    This Week) but is still a literal string, hard-coded in the one function that owns the
+    fallback because nothing in the snapshot a view arrives in (`DrawerView`: `id`/`path`/`title`)
+    declares "open on me". This should become a declared fact instead — a flag on a view's own
+    config, resolved through the same cascade `declaration` already resolves qualification/
+    resolution/structural/rules for — so the boot path asks a resolved answer rather than knowing
+    a view's id by name. `landOn` stays the one place that reads it either way; only WHERE the
+    answer comes from should change.
+  driving_capability: default-view-is-declared
+  kind: capability
+  state: unscoped
+
+- id: size-the-column-to-a-declared-measure
+  title: >-
+    [app] `--col-w` (`app/index.html`) now grows the reading column with the viewport, structurally
+    — but the CAP (`46rem`) and the FLOOR (`35rem`) are still a plain layout guess, not the
+    character-count measure `docs/implementation-artifacts/research-polish-direction.md` §2/§3a
+    already worked out (`--measure`/`--measure-min`, a typeface-aware 65-75ch band) — deliberately
+    NOT applied here because the operator asked for structure first, typography/type-scale as its
+    own pass with options put to him ("first structure not using all this space, then we can look
+    at other style things"). This row is that pass: reconcile `--col-w`'s cap against the
+    research doc's reasoned measure once the typeface question is actually decided.
+  driving_capability: reading-column-width-is-a-measured-choice
+  kind: capability
+  state: unscoped
