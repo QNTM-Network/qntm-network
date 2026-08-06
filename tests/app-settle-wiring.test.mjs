@@ -30,7 +30,7 @@
  * `app/present/settle.ts`'s own header) rather than by the string, so the stamp arrival no longer
  * discards it.
  *
- * ── FOUR SECTIONS ──
+ * ── SIX SECTIONS ──
  *
  *   1. THE WIN, DRIVEN END TO END — `o`, type a row that must sort first, blur. The mechanism this
  *      whole capability rests on (resolver → arm → paint → FLIP) is proven live, through the real
@@ -59,6 +59,25 @@
  *      insertion in the middle of the line as the same row. This is the honest edge of what this
  *      change fixes; closing it is separately-scoped work in a shared module this change does not
  *      touch. See §4's own test for the proof and app/present/settle.ts's header for the pointer.
+ *   5. PLACEMENT APPLIES AT COMMIT, IN THE SAME TURN AS THE KEYSTROKE — added 2026-08-06, per
+ *      `design-the-two-rules.md`'s Perception Rule and the operator's own words: "it should happen
+ *      instantly... that it resolves in the same [turn] from front end live, not from sync from
+ *      backend." §1 above already drove this end to end, but BOTH of its captures type the
+ *      `[[qntm:N]]` stamp BY HAND — not how a real capture ever looks (`settle.ts`'s own header:
+ *      "a row this browser just captured has no stamp yet"). §2's own bare/unstamped case proves
+ *      `armSettle` arms correctly, but calls `commitLine` directly rather than through a real
+ *      keystroke, and stops at the arm — it never paints the DOM at all. §5 closes both gaps at
+ *      once: a BARE capture (no stamp, matching a real `o`/Enter gesture exactly), driven through
+ *      real DOM events, checked BEFORE any projection has been delivered — proving the row is
+ *      relocated and the FLIP motion ran in the SAME synchronous pass the keystroke causes — and
+ *      then, for the shape §2/§4 already proved survives a stamp, the engine's AGREEING projection
+ *      is delivered and shown to be an invisible no-op: no second motion, nothing re-painted that
+ *      was not already correct.
+ *   6. THE NEGATIVE, ONE MORE — AN ABSTAINING SECTION NEVER MOVES THE ROW AT ALL. A section that
+ *      declares no sort (`orderingMode: insertion_order`, `ordering.ts`'s own "abstains on EVERY
+ *      edit, forever") has nowhere for `armSettle` to arm a placement from — proven through the
+ *      same real gesture, checking that nothing is armed and the row lands exactly where it was
+ *      typed, never guessed into a rank the section never declared.
  */
 
 import { test, describe } from "node:test";
@@ -81,6 +100,33 @@ function rowTexts(body) {
       if (spans.length > 0) return spans.map((s) => s.innerHTML || s.textContent || "").join("");
       return el.innerHTML || el.textContent || "";
     });
+}
+
+/**
+ * A fresh page, wired for a REAL keydown-driven gesture — `o`, type, blur/Enter — with a mocked
+ * `fetch` that echoes back whatever markdown was posted, the same shape §1's own `freshPage`
+ * established. Shared by §5/§6 below, which both need the real DOM/keyboard path §1 already proved
+ * out, against declarations of their own.
+ */
+async function freshGesturePage(label, declaration, view) {
+  const { elements, document: doc } = installBrowser();
+  let posted = null;
+  globalThis.fetch = async (_url, init) => {
+    posted = { url: _url, body: JSON.parse(init.body) };
+    return {
+      ok: true,
+      json: async () => ({
+        ok: true, handle: "luke", pending_edits: 0,
+        snapshot: { generated_at: "2026-08-06T00:00:00Z", views: [{ ...view, markdown: posted.body.markdown }] },
+      }),
+    };
+  };
+  const page = await importPage(makeWorkDir(label));
+  page.__applyPresentation(declaration);
+  page.__setGraphData({ snapshot: { generated_at: "2026-08-06T00:00:00Z", views: [view] } });
+  page.paintView(view.id);
+  const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
+  return { page, elements, press, posted: () => posted, view };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -470,5 +516,149 @@ describe("4. A KNOWN REMAINING GAP — a capture that ALREADY carries a trailing
     const newAt = texts.findIndex((t) => t.includes("NEW ROW"));
     const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
     assert.ok(newAt > aAt, "KNOWN GAP: the row is shown back in its unsorted, as-typed position once stamped");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 5. PLACEMENT APPLIES AT COMMIT — the row is in its correct position BEFORE any projection is
+//    delivered, with the motion having run — and the engine's AGREEING answer moves nothing again
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("5. PLACEMENT APPLIES AT COMMIT — a bare, unstamped capture is relocated in the SAME synchronous paint as the real keystroke, before any projection, and an agreeing projection is a no-op", () => {
+  test("DEFAULT ordering (undeclared section, title tiebreak): correct BEFORE any projection, with motion — then the engine's stamped, agreeing answer moves nothing a second time", async () => {
+    const SRC = ["## Queue", "- [ ] Family domain [[qntm:1]]", "- [ ] Micu lunch [[qntm:2]]"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { page, elements, press, view } = await freshGesturePage("commit-applies-default", DEFAULT_DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); // line 1: "Family domain"
+    press("o");
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    // A BARE CAPTURE — a title, nothing else. No stamp, no marker: exactly what a real `o`/Enter
+    // capture looks like (`settle.ts`'s own header — the engine mints the stamp, never the operator).
+    input.value = "- [ ] Aaa sorts first";
+    input.dispatch("blur"); // real draftInput settle -> commitLine -> armSettle -> optimistic repaint, ALL synchronous, before this test has awaited anything at all
+
+    // ── BEFORE ANY PROJECTION IS DELIVERED: already in its correct sorted position, with motion ──
+    let texts = rowTexts(elements.get("viewBody"));
+    let newAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
+    let familyAt = texts.findIndex((t) => t.includes("Family domain"));
+    assert.ok(newAt !== -1 && familyAt !== -1, `expected both rows painted, got: ${JSON.stringify(texts)}`);
+    assert.ok(newAt < familyAt, "the row must sort BEFORE \"Family domain\" in the SAME turn as the keystroke — no projection has been delivered yet");
+    const movedBefore = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
+    assert.ok(movedBefore, "the FLIP motion must have run in this same synchronous pass — no element carries settle-move");
+
+    // ── THE ENGINE'S OWN AGREEING ANSWER, LATER — the same row, now stamped, nothing else different.
+    // This is exactly the shape §2 already proved the placement survives (a bare capture, stamp
+    // appended, never inserted mid-line), reused here so §5 can go one step further: not merely
+    // "does it still resolve" but "is the SCREEN a no-op".
+    const STAMPED = ["## Queue", "- [ ] Family domain [[qntm:1]]", "- [ ] Aaa sorts first [[qntm:9]]", "- [ ] Micu lunch [[qntm:2]]"].join("\n");
+    paintProjection(page, view, STAMPED);
+
+    // ── AFTER THE AGREEING PROJECTION: still correctly placed, and NOTHING moved a second time ──
+    texts = rowTexts(elements.get("viewBody"));
+    newAt = texts.findIndex((t) => t.includes("Aaa sorts first"));
+    familyAt = texts.findIndex((t) => t.includes("Family domain"));
+    const micuAt = texts.findIndex((t) => t.includes("Micu lunch"));
+    assert.ok(newAt !== -1 && familyAt !== -1 && micuAt !== -1, `expected all three rows painted, got: ${JSON.stringify(texts)}`);
+    assert.ok(newAt < familyAt && familyAt < micuAt, "the row stays correctly sorted once the engine's own answer lands");
+    const movedAfter = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
+    assert.equal(movedAfter, undefined, "the agreeing projection must be an invisible NO-OP — no second motion; the engine only CONFIRMS what the browser already showed");
+  });
+
+  test("DECLARED ordering (queue_position): correct BEFORE any projection is delivered, with the motion having run", async () => {
+    const SRC = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { elements, press } = await freshGesturePage("commit-applies-declared", QUEUE_DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); // line 1: "a"
+    press("j"); // line 2: "b"
+    press("o");
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    // A real marker, typed as the operator would, and still NO stamp — the engine mints that, not him.
+    input.value = "- [ ] c sorts first 🔢 0";
+    input.dispatch("blur");
+
+    const texts = rowTexts(elements.get("viewBody"));
+    const cAt = texts.findIndex((t) => t.includes("c sorts first"));
+    const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
+    assert.ok(cAt !== -1 && aAt !== -1, `expected both rows painted, got: ${JSON.stringify(texts)}`);
+    assert.ok(cAt < aAt, "queue_position 0 must sort before queue_position 1, in the same turn as the keystroke — no projection has been delivered yet");
+    const moved = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
+    assert.ok(moved, "the FLIP motion must have run in this same synchronous pass");
+    // NOT CARRIED FURTHER TO A STAMPED PROJECTION, ON PURPOSE. A capture that already carries its
+    // own ordering marker is §4's KNOWN, NAMED, OUT-OF-SCOPE GAP: the engine inserts `[[qntm:N]]`
+    // BEFORE the marker, not after it, so `extendsLine`'s append-only check does not survive it —
+    // asserting a no-op here would either duplicate §4's proof of the gap or silently paper over it.
+    // The default-ordering test above carries the FULL before/after arc for the shape that does
+    // survive a stamp; this test's job is only the "before" half, for the declared-ordering path.
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 6. THE NEGATIVE, ONE MORE — AN ABSTAINING SECTION NEVER MOVES THE ROW AT ALL
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("6. THE NEGATIVE — a section that declares no sort at all (insertion order) never arms a placement, and the row stays exactly where it was typed", () => {
+  // DECLARED, explicitly, with NO ordering fields at all — `ordering.ts`'s own header: "A section
+  // declaring `orderingMode: insertion_order` abstains on EVERY edit, forever." This is NOT the
+  // undeclared/default-fallback case (§1's second test, §5's first test) — those always have
+  // somewhere to fall back to (due_date/priority/title). This section genuinely has nowhere at all.
+  const INSERTION_ORDER_DECLARATION = {
+    qualification: {
+      defaultNodeType: "task", structuralNodeTypes: [],
+      tokens: { node_type: {}, domain: {}, status: { "[ ]": "open", "[x]": "done" } },
+      predicates: {}, sections: {}, sectionOrder: { demo: ["queue"] }, refused: {},
+    },
+    resolution: {
+      ordering: { demo: { queue: { ordering: [], orderingMode: "insertion_order", name: "Queue" } } },
+      orderingFields: {},
+      defaultOrdering: [
+        { field: "due_date", direction: "asc" },
+        { field: "priority", direction: "desc" },
+        { field: "title", direction: "asc" },
+      ],
+      priorityRank: {},
+      dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" },
+    },
+  };
+
+  test("a row typed where it would sort FIRST under title order stays exactly where it was opened — no placement is ever armed", async () => {
+    const SRC = ["## Queue", "- [ ] Zzz already last [[qntm:1]]"].join("\n");
+    const V = { id: "demo", path: "demo.md", title: "Demo", domain: "demo", markdown: SRC };
+    const { page, elements, press, posted } = await freshGesturePage("negative-insertion-order", INSERTION_ORDER_DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); // line 1: "Zzz already last"
+    press("o"); // opens a draft AFTER it, at line index 2 — where insertion order must leave it
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    // "Aaa" would sort FIRST under title order — the section's own declared `insertion_order` must
+    // refuse to apply that rule at all, leaving the row exactly where it was opened, AFTER "Zzz".
+    input.value = "- [ ] Aaa would sort first under title order";
+    input.dispatch("blur");
+
+    const p = posted();
+    assert.ok(p, "the write must have posted — commitLine ran");
+    // NO PLACEMENT WAS EVER ARMED — the resolver abstained (`insertion-order`), so `armSettle` never
+    // called `.arm()` at all, and `take()`, asked against the EXACT string that was armed against
+    // (were anything armed), has nothing to say.
+    assert.equal(
+      page.__settle().take(p.body.markdown, "demo"),
+      null,
+      "an abstaining section must never leave a live placement armed",
+    );
+
+    // THE ROW IS EXACTLY WHERE IT WAS TYPED — second, in FILE order, never dragged by a rule the
+    // section never declared. Landing it first would be the browser guessing a rule this section
+    // does not have, which is the exact hazard the abstention exists to refuse.
+    const texts = rowTexts(elements.get("viewBody"));
+    const newAt = texts.findIndex((t) => t.includes("Aaa would sort first"));
+    const zzzAt = texts.findIndex((t) => t.includes("Zzz already last"));
+    assert.ok(newAt !== -1 && zzzAt !== -1, `expected both rows painted, got: ${JSON.stringify(texts)}`);
+    assert.ok(zzzAt < newAt, "insertion order: the new row must land AFTER the row it was opened below, never sorted ahead of it");
+
+    const moved = walk(elements.get("viewBody")).find((el) => String(el.className ?? "").includes("settle-move"));
+    assert.equal(moved, undefined, "no element may carry the FLIP class — nothing was ever armed to move");
   });
 });
