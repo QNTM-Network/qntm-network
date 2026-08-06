@@ -930,3 +930,102 @@ describe("8. TWO CAPTURES IN A ROW — a second, unrelated commit must not undo 
     assert.equal(input.focused, true, "the open draft must still hold the caret");
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 9. A STALE QUEUED PROJECTION MUST NOT OUTLIVE THE COMMIT THAT MAKES IT STALE — the operator's
+//    real, five-times-reported symptom, found OUTSIDE the settle/paint span itself
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("9. A STALE QUEUED PROJECTION MUST NOT OUTLIVE THE COMMIT THAT MAKES IT STALE", () => {
+  // ── WHERE THIS ONE ACTUALLY LIVES, AND WHY §1–8 ABOVE COULD NEVER FIND IT ──
+  //
+  // Every section above proves `commitLine` -> `armSettle` -> `SettleSurface.arm` -> the optimistic
+  // repaint -> `SettleSurface.take` -> `settleRow`'s FLIP, in isolation, for ONE commit against a
+  // page holding nothing else. That mechanism is not what drops the row. What drops it sits one
+  // layer OUTSIDE that span, in `app/index.html`'s own `document`-level `keydown` handler: "THE
+  // THIRD DRAIN POINT" (`drainPainted()`) runs UNCONDITIONALLY, before any mode gate, on literally
+  // every keydown that bubbles to `document` — INCLUDING the very Enter that just committed a fresh
+  // capture through the `<input>`'s own listener, which fires FIRST (target phase) and closes the
+  // line (`aLineIsOpen()` flips `true` -> `false`) before this handler's own bubble-phase code runs.
+  //
+  // If a projection for this same file is already sitting in `queued` — a wholly ordinary state for
+  // the operator's own real workflow, capturing several inbox items back to back (`settle.ts`'s own
+  // header names this gesture), where an EARLIER item's ~10s pickup can land while a LATER item is
+  // still being typed, and gets QUEUED rather than installed because `aLineIsOpen()` was `true` at
+  // that instant — `drainPainted()` installs it right there, on the SAME keystroke, discarding the
+  // placement `armSettle` just armed for the row before the operator ever sees it painted. The row
+  // then reappears, unsorted, in plain file order, the moment its OWN write's answer next lands
+  // (there is nothing left in `SettleSurface` to place it once its identity anchor has failed to
+  // resolve against the stale source and been deleted) — and stays there until the real engine cycle
+  // eventually corrects it. That is exactly "it only reaches its correct position when the engine's
+  // projection arrives seconds later."
+  //
+  // THE FIX lives in `commitLine` itself (`app/index.html`): `queued.drop(view.path)`, alongside the
+  // existing `settle.supersede` call. Anything held in `queued` at the moment a NEW local commit is
+  // made necessarily predates that commit — the edit has not even reached `writeFile` yet, so no
+  // cycle anywhere could possibly have answered for it — so it can never be MORE current than the
+  // screen this commit is about to paint, and letting it survive to be installed later (by this same
+  // keydown's own bubble, or by any ordinary keystroke after) can only ever regress the screen.
+  // Dropping it costs nothing durable: the write this commit is about to make starts its own pickup,
+  // and whatever the dropped projection knew is superseded for good the moment that pickup answers.
+  //
+  // NOT REACHABLE THROUGH A HAND-BUILT DOM. `tests/fixtures/app-html-page.mjs`'s mock `document`
+  // never bubbles an element-dispatched event on its own — `pressEnterOn` (this file) already exists
+  // to compensate for exactly that gap — but this section additionally needs a projection to be
+  // sitting in `queued` at commit time, which no earlier section in this file, and no prior agent's
+  // proof, ever put there. `page.__queued()` (the exported getter onto the page's own module-scoped
+  // `ProjectionQueue`) is what lets this section manufacture that state directly, through the real
+  // `offer`/`drop` methods `app/present/queue.ts` exports — not a second, hand-rolled queue.
+
+  test("a projection queued for an UNRELATED earlier write, still pending the instant a fresh o/type/Enter capture commits, must not survive to overwrite that capture's own placement", async () => {
+    const SRC = [
+      "## Tagged",
+      "## Inbox",
+      "- [ ] And now testing a second one [[qntm:1]]",
+      "- [ ] Testing inbox [[qntm:2]]",
+      "- [ ] and third one [[qntm:3]]",
+    ].join("\n");
+    const V = { id: "inbox", path: "inbox.md", title: "Inbox", domain: "inbox", markdown: SRC };
+    const DECLARATION = {
+      ...DEFAULT_DECLARATION,
+      qualification: { ...DEFAULT_DECLARATION.qualification, sectionOrder: { inbox: ["inbox-tagged", "domain-empty"] } },
+    };
+    const { page, elements, press, view, document: doc } = await freshGesturePage("stale-queue-race", DECLARATION, V);
+
+    press("g"); press("g");
+    press("j"); press("j"); press("j"); // "and third one" — the last row in the section
+    press("o");
+    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    input.value = "- [ ] Bravo zzTEST should be second";
+
+    // AN EARLIER, WHOLLY UNRELATED WRITE'S OWN CYCLE ANSWERED WHILE THIS DRAFT WAS STILL OPEN — the
+    // real, ordinary consequence of capturing several items in quick succession. Its projection does
+    // not and cannot carry "Bravo" — the server has not seen it yet — so it was held rather than
+    // installed (`arrive`/`drainProjection`'s own `aLineIsOpen()` gate), exactly as it would for real.
+    page.__queued().offer(view.path, "2026-08-06T00:00:05Z", {
+      snapshot: { generated_at: "2026-08-06T00:00:05Z", views: [{ ...view, markdown: SRC }] },
+    });
+    assert.notEqual(page.__queued().pending(view.path), null, "precondition: a projection really is queued for this path before the commit");
+
+    pressEnterOn(input, doc);
+
+    // ── THE OPERATOR'S OWN SYMPTOM, ON THE SAME KEYSTROKE THE ROW WAS TYPED WITH ──
+    let texts = rowTexts(elements.get("viewBody"));
+    let bravoAt = texts.findIndex((t) => t.includes("Bravo"));
+    let testingAt = texts.findIndex((t) => t.includes("Testing inbox"));
+    assert.ok(bravoAt !== -1, `the row must not vanish — a stale queued projection must never overwrite a commit that has not yet reached the server, got: ${JSON.stringify(texts)}`);
+    assert.ok(bravoAt < testingAt, `the row must sort BEFORE "Testing inbox" on the SAME keystroke that captured it, got: ${JSON.stringify(texts)}`);
+
+    // ── AND IT MUST STAY CORRECT THROUGH THE NEXT ORDINARY KEYSTROKE, NOT ONLY THIS ONE ──
+    // A fix that only guarded the FIRST `drainPainted()` call (the one on this same Enter) but left
+    // the stale entry standing in `queued` would still lose the row the moment the operator's next,
+    // wholly ordinary keystroke ran the document handler's own drain — this is the falsifier for
+    // that narrower, insufficient fix.
+    press("j");
+    texts = rowTexts(elements.get("viewBody"));
+    bravoAt = texts.findIndex((t) => t.includes("Bravo"));
+    testingAt = texts.findIndex((t) => t.includes("Testing inbox"));
+    assert.ok(bravoAt !== -1, `the row must still be on screen after the NEXT ordinary keystroke, got: ${JSON.stringify(texts)}`);
+    assert.ok(bravoAt < testingAt, `the row must still sort correctly after the NEXT ordinary keystroke, got: ${JSON.stringify(texts)}`);
+  });
+});
