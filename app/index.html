@@ -1023,7 +1023,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=d761128061";
+} from "/dist/present.js?v=becc5e2a0f";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2655,6 +2655,16 @@ async function commitLine(view, commit) {
   // `commit.markdown` the instant this returns. Armed against that same string for the same reason:
   // anything else would describe a paint that has already happened by the time it could be read.
   //
+  // A SECOND COMMIT TO THE ROW `settle` IS CURRENTLY ARMED FOR, BEFORE THE WALK ABOVE CAN RE-ARM
+  // IT. `settle.ts`'s own header names this as one of three ways an arm is discarded: the row's
+  // identity survives a same-row edit (that is the whole point of keying by identity rather than by
+  // string), so an un-rearmed OLD placement would otherwise keep resolving against a value the row
+  // no longer carries. Scoped to `"set-line"` — an `"insert-line"`'s own `source`/`lineIndex` name
+  // an unrelated pushed-down line, never the new row's own before-state, and `supersede`'s own
+  // header states why calling it there would risk a false match instead.
+  if (commit.kind === "set-line") {
+    settle.supersede(commit.source, view.id, commit.lineIndex);
+  }
   // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST. See `armSettle`
   // and `armPredict` (resolve.ts) for why the two differ — an un-rearmed placement keeps describing
   // a still-correct claim, whereas a stale predict arm gets reconciled by a LATER, unrelated

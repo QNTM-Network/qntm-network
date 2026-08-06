@@ -17,7 +17,12 @@
  *
  *   1. THE REORDER ITSELF — `body.children` really changes order, `null` really means "last."
  *   2. SILENCE WHEN THERE IS NOTHING TO DO — no `deps.settle`, nothing armed, or an armed
- *      instruction for a DIFFERENT source: three ways to be a no-op, each proven separately.
+ *      instruction whose row can no longer be found in THIS paint's source: three ways to be a
+ *      no-op, each proven separately. (`SettleSurface` is keyed by the row's IDENTITY, not by the
+ *      exact source string — see settle.ts's own header, 2026-08-06 — so an armed instruction is
+ *      NOT a no-op merely because the source differs; it is a no-op only once the row itself is
+ *      genuinely gone. tests/present-settle.test.mjs §2 proves the surface tolerates the kind of
+ *      difference that does not touch the row; this file's own §2 below proves the one that does.)
  *   3. THE MOTION IS FLIP, MEASURED — real before/after geometry (this fixture's own minimal
  *      layout model, index × a constant row height — see dom-stub.mjs), a transform that is set
  *      mid-flight and cleared once the deferred frame runs, and never replayed on a repeat
@@ -103,7 +108,13 @@ describe("2. SILENCE WHEN THERE IS NOTHING TO DO", () => {
     assert.match(texts[2], /row c/);
   });
 
-  test("an instruction armed against a DIFFERENT source never applies to THIS paint", () => {
+  test("an instruction armed against a source that only differs ELSEWHERE (unrelated to the armed row) still applies — not stale", () => {
+    // THIS IS THE FIX, PROVEN AT THE PAINT LAYER: the extra trailing line touches nothing about
+    // "row c"'s own identity (same section, same characters), so the placement is NOT stale —
+    // `resolveInstanceAnchor` finds "row c" and "row a" exactly where they were. The OLD,
+    // source-string-keyed surface would have refused this (any byte difference discarded the arm),
+    // which was the defect: a character arriving elsewhere in the file, not the row's own position
+    // being contradicted.
     const settle = new SettleSurface();
     settle.arm("## Queue\nrow a\nrow b\nrow c\nTHIS IS A DIFFERENT FILE", "demo", {
       lineIndex: 3,
@@ -111,9 +122,24 @@ describe("2. SILENCE WHEN THERE IS NOTHING TO DO", () => {
     });
     const body = paintOnce(SOURCE, { settle });
     const texts = roseTexts(body);
+    assert.match(texts[0], /row c/, "the still-correct placement must still apply");
+    assert.match(texts[1], /row a/);
+    assert.match(texts[2], /row b/);
+  });
+
+  test("an instruction whose armed row is genuinely GONE from this paint's source never applies", () => {
+    // The row itself was deleted — not merely stamped, not merely sharing the file with an
+    // unrelated new line. `resolveInstanceAnchor` cannot find "row c" anywhere (no matching
+    // instance, no node to search with, no bracket or text extension either), so this is the real
+    // no-op case: the row's own identity, not merely the string, is gone.
+    const settle = new SettleSurface();
+    settle.arm(SOURCE, "demo", { lineIndex: 3, beforeLineIndex: 1 });
+    const withoutC = "## Queue\nrow a\nrow b";
+    const body = paintOnce(withoutC, { settle });
+    const texts = roseTexts(body);
+    assert.equal(texts.length, 2, `expected 2 prose rows, got ${texts.length}: ${JSON.stringify(texts)}`);
     assert.match(texts[0], /row a/, "the stale instruction must not have reordered anything");
     assert.match(texts[1], /row b/);
-    assert.match(texts[2], /row c/);
   });
 });
 

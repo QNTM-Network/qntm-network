@@ -24,7 +24,7 @@
  * `tests/app-membership-note.test.mjs` names for `membershipNoteFor`.
  */
 
-import { test, describe, before } from "node:test";
+import { test, describe, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -324,10 +324,26 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor'
 describe("5. armOrderingSettle arms the settle surface, and agrees with orderingPlacementFor called directly", () => {
   let page;
 
-  before(async () => {
+  // A FRESH `page` (and so a FRESH `SettleSurface`) PER TEST, IN A FRESH `importPage` WORK
+  // DIRECTORY — NOT `before` ONCE, AND NOT `WORK` (the file-level constant every OTHER describe in
+  // this suite also imports against). `importPage` writes the extracted module to a FIXED filename
+  // inside its work directory and imports it by URL, and Node's ESM loader caches a module by that
+  // URL — so every describe in this file that calls `importPage(WORK)` has ALWAYS shared one
+  // underlying module instance, `settle` included, whether or not any one describe's own `before`
+  // looked like it was creating something fresh. `SettleSurface` is now keyed by the ROW'S IDENTITY
+  // (settle.ts, 2026-08-06), not by the exact source string — which is the whole fix, and it has one
+  // consequence for a suite built this way: an armed placement for an already-stamped row now
+  // survives ANY later source in which that row can still be found, so a stale arm from an EARLIER
+  // describe block (§1/§2 above both drive real commits through the real `commitLine`) can leak all
+  // the way into this one. The OLD string key made that leak unobservable by accident — any
+  // different commit's different string discarded whatever came before it. `makeWorkDir` here, a
+  // NEW directory per test, gives `importPage` a URL Node has never cached, so this describe gets a
+  // genuinely fresh module — and so a genuinely fresh `settle` — the same guarantee the shared `WORK`
+  // constant only ever gave by coincidence.
+  beforeEach(async () => {
     installBrowser();
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
-    page = await importPage(WORK);
+    page = await importPage(makeWorkDir("app-ordering-note-settle-arm"));
     page.__applyPresentation(FAKE_DECLARATION);
   });
 
@@ -559,9 +575,17 @@ describe("7. NOTHING NEW REACHES A WRITE — armOrderingSettle and orderingDiagn
   });
 
   test("settle.ts imports nothing from source.ts — it holds an instruction, it never builds one", () => {
+    // NARROWED 2026-08-06, THE SAME WAY THE ORDERING.TS CHECK TWO SECTIONS UP ALREADY IS: this
+    // asserted "imports nothing at all" only because settle.ts happened to import nothing, before
+    // settle.ts was keyed by the row's IDENTITY rather than by the exact source string it was armed
+    // against. That fix needs `instanceAnchorFor`/`resolveInstanceAnchor` (instance.ts) — the SAME
+    // pure, DOM-free, fetch-free walk `rows.ts`/`focus.ts` already trust, never a second one (see
+    // settle.ts's own header) — so the true claim this test is named for, "it holds an instruction,
+    // it never builds one," is that it does not reach `source.ts` (`applyEdit`, the write path), not
+    // that it imports literally nothing.
     for (const line of SETTLE_SOURCE.split(/\r?\n/)) {
       if (!/^\s*import\b/.test(line)) continue;
-      assert.fail(`settle.ts is expected to import nothing at all, found: ${line.trim()}`);
+      assert.doesNotMatch(line, /["']\.\/source\.js["']/, `settle.ts imports the edit path: ${line.trim()}`);
     }
   });
 });

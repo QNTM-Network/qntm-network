@@ -4564,33 +4564,134 @@ function paint(body, source, context, deps) {
 
 // app/present/settle.ts
 var SettleSurface = class {
-  #source = null;
   #view = "";
-  #placement = null;
+  /** The moving row's identity, at arm time — `null` means nothing is armed. */
+  #moving = null;
+  /** Whether a "before" row was armed at all — `RowPlacement.beforeLineIndex === null` ("last")
+   * carries no row to re-anchor, so this is tracked separately from `#before` being `null`. */
+  #hasBefore = false;
+  /** The "before" row's identity, at arm time — meaningless unless `#hasBefore`. */
+  #before = null;
   #animated = false;
   /**
-   * Arm a placement, computed elsewhere, against the EXACT source it was computed from and the
-   * view it belongs to. Overwrites whatever was armed before — there is one cursor and, for the
-   * same reason, one pending settle: a second commit before the first one's motion has even shown
-   * describes a NEWER prediction, and the newer one is the only one worth keeping.
+   * Arm a placement, computed elsewhere, against the identity of the row it is about — not the
+   * exact string it was computed from. `source`/`view` are still required: they are what
+   * `instanceAnchorFor` needs to TAKE the anchor in the first place, exactly once, here. Overwrites
+   * whatever was armed before — there is one cursor and, for the same reason, one pending settle: a
+   * second commit before the first one's motion has even shown describes a NEWER prediction, and
+   * the newer one is the only one worth keeping.
+   *
+   * IF EITHER ROW HAS NO IDENTITY TO TAKE — `placement.lineIndex` or a non-null
+   * `placement.beforeLineIndex` names a blank line or a line out of range — NOTHING IS ARMED, and
+   * whatever was armed before is cleared with it. `orderingPlacementFor` never returns such an
+   * index (a blank line has no marker value to rank), so this is a defensive floor, not a live
+   * path; it exists so an unrealistic caller fails by arming nothing rather than by arming a
+   * placement this class could never re-find.
    */
   arm(source, view, placement) {
-    this.#source = source;
+    const moving = instanceAnchorFor(source, placement.lineIndex, view);
+    if (moving === null) {
+      this.#clear();
+      return;
+    }
+    let before = null;
+    if (placement.beforeLineIndex !== null) {
+      before = instanceAnchorFor(source, placement.beforeLineIndex, view);
+      if (before === null) {
+        this.#clear();
+        return;
+      }
+    }
     this.#view = view;
-    this.#placement = placement;
+    this.#moving = moving;
+    this.#hasBefore = placement.beforeLineIndex !== null;
+    this.#before = before;
     this.#animated = false;
   }
   /**
-   * What THIS repaint of `source`/`view` should do, or `null` when nothing is armed for this exact
-   * pair — see this class's own header for why a mismatch needs no separate clearing.
+   * What THIS repaint of `source`/`view` should do, or `null` when nothing is armed, the view does
+   * not match, or the armed row(s) can no longer be found in `source` — see this class's own header
+   * for the three discard conditions and why none of them can be skipped.
+   *
+   * THE LINE INDICES RETURNED ARE THIS REPAINT'S OWN, NEVER THE ONES ARMED AGAINST — recomputed
+   * fresh, every call, from `resolveInstanceAnchor`'s current answer. A caller can act on them
+   * without knowing anything moved.
    */
   take(source, view) {
-    if (this.#placement === null || this.#source !== source || this.#view !== view) {
+    if (this.#moving === null || this.#view !== view) {
       return null;
+    }
+    const movingReading = resolveInstanceAnchor(this.#moving, source, view);
+    if (movingReading.outcome !== "found") {
+      this.#clear();
+      return null;
+    }
+    let beforeLineIndex = null;
+    if (this.#hasBefore) {
+      if (this.#before === null) {
+        this.#clear();
+        return null;
+      }
+      const beforeReading = resolveInstanceAnchor(this.#before, source, view);
+      if (beforeReading.outcome !== "found") {
+        this.#clear();
+        return null;
+      }
+      beforeLineIndex = beforeReading.lineIndex;
     }
     const animate = !this.#animated;
     this.#animated = true;
-    return { placement: this.#placement, animate };
+    return {
+      placement: { lineIndex: movingReading.lineIndex, beforeLineIndex },
+      animate
+    };
+  }
+  /**
+   * A LINE IS ABOUT TO BE COMMITTED — discard the armed placement if it describes THIS row.
+   *
+   * Called from `commitLine` (app/index.html), before the resolver walk that might re-arm, on
+   * EVERY commit — the same "always called" posture `armPredict` already has, for the identical
+   * reason: an un-rearmed claim about a row that just changed again is a claim about a value the
+   * row no longer carries, and `armSettle` only re-arms when a FRESH placement was computed, which
+   * a same-row edit that now sorts correctly (no placement) will not produce. Left unchecked, the
+   * OLD placement's anchor is still the row's own identity — untouched by a same-row text edit that
+   * does not touch its stamp — so it would keep resolving and could fire a motion for a value that
+   * is no longer true. This is the one case a plain identity key reopens that the old string key
+   * closed by accident (ANY edit changed the string, so ANY edit discarded the arm); this closes it
+   * on purpose, narrowly, without giving up the tolerance the rest of this class exists to add.
+   *
+   * `source`/`lineIndex` ARE THE COMMIT'S OWN "BEFORE" — `commit.source`/`commit.lineIndex`, the
+   * file and the position as they stood the instant before this edit landed, which is the same
+   * source the currently-armed anchor would resolve against if nothing else had happened since it
+   * was armed. If it resolves there, to that exact line, this commit is re-touching the row the arm
+   * is about; the arm is cleared. If it resolves anywhere else, or not at all, this commit is about
+   * a DIFFERENT row and the standing arm is left exactly as it was — still a live claim about a row
+   * nothing here has touched.
+   *
+   * CALL THIS ONLY FOR A `"set-line"` COMMIT. `LineCommit.source`'s own header states why: for
+   * `"insert-line"`, `source.split("\n")[lineIndex]` is a DIFFERENT, unrelated line about to be
+   * pushed down to make room for the new row, not that row's own before-state — comparing an armed
+   * anchor's resolved position against that index would risk clearing a live arm on the coincidence
+   * of a new row being opened at the slot an already-armed row currently occupies, which is exactly
+   * the "a row still being typed is never the row this moves" hazard `paint.ts` already guards on
+   * the read side. A brand-new row cannot be "the same row" as anything already armed — it did not
+   * exist when the arm was taken — so `"insert-line"` never needs this call at all.
+   */
+  supersede(source, view, lineIndex) {
+    if (this.#moving === null || this.#view !== view) {
+      return;
+    }
+    const reading = resolveInstanceAnchor(this.#moving, source, view);
+    if (reading.outcome === "found" && reading.lineIndex === lineIndex) {
+      this.#clear();
+    }
+  }
+  #clear() {
+    this.#view = "";
+    this.#moving = null;
+    this.#hasBefore = false;
+    this.#before = null;
+    this.#animated = false;
   }
 };
 
