@@ -1414,6 +1414,20 @@ function anyLineIndented(lines, start, end) {
   }
   return false;
 }
+function parentLineOf(lines, start, end) {
+  const parentOf2 = /* @__PURE__ */ new Map();
+  const stack = [];
+  for (let at = start; at < end; at += 1) {
+    const match = /^(\s*)\S/.exec(lines[at] ?? "");
+    if (match === null) continue;
+    const indent = match[1]?.length ?? 0;
+    while (stack.length > 0 && (stack[stack.length - 1]?.indent ?? -1) >= indent) stack.pop();
+    const parent = stack[stack.length - 1];
+    parentOf2.set(at, parent === void 0 ? null : parent.lineIndex);
+    stack.push({ lineIndex: at, indent });
+  }
+  return parentOf2;
+}
 var DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 var INT_SHAPE = /^-?\d+$/;
 var FLOAT_SHAPE = /^-?\d+(?:\.\d+)?$/;
@@ -1478,14 +1492,17 @@ function evaluateSection(viewId, sectionId, source, lineIndex, afterText, orderi
   }
   const lines = source.split("\n");
   const { start, end } = sectionBounds(lines, lineIndex);
-  if (anyLineIndented(lines, start, end)) return { kind: "abstains", because: "nested-section" };
   const beforeText = lines[lineIndex] ?? "";
   const beforeTuple = tupleFor(beforeText, keys, orderingFields);
   const afterTuple = tupleFor(afterText, keys, orderingFields);
   if (beforeTuple === void 0 || afterTuple === void 0) return { kind: "abstains", because: "no-value" };
+  const parentOf2 = parentLineOf(lines, start, end);
+  const group = parentOf2.get(lineIndex) ?? null;
   const siblings = [];
   for (let at = start; at < end; at += 1) {
     if (at === lineIndex) continue;
+    if (!parentOf2.has(at)) continue;
+    if (parentOf2.get(at) !== group) continue;
     const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
     if (tuple !== void 0) siblings.push({ lineIndex: at, tuple });
   }

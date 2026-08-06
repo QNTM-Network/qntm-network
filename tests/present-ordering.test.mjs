@@ -15,12 +15,17 @@
  *      `_order_children` (`section_builder.py:337-341`) places every ANCESTOR/context row ahead of
  *      every ordering-sorted QUALIFYING row at each tree level, so a flat whole-section rank is
  *      the wrong model the moment a section prints any nested row — which all four `this-week`
- *      sections do (they pull in `#outcome` ancestors). `orderingFor`'s adapted falsifier is
- *      therefore: it refuses (`nested-section`) for exactly the shape that broke the literal one,
- *      proven against the SAME real content that broke it.
+ *      sections do (they pull in `#outcome` ancestors). **2026-08-06:** `orderingFor` no longer
+ *      refuses the whole section outright for this — `parentLineOf` (ordering.ts) narrows the
+ *      ranked set to true siblings instead, so §1b now proves the NARROWER claim: the flat,
+ *      whole-section rank is still wrong (unchanged), and `orderingFor` no longer needs to be flat
+ *      to avoid it. §11 carries the deterministic, non-vault proof that the narrowed ranking
+ *      agrees with the engine; §1/§1b keep proving the real-content shape still exists to narrow.
  *   2. A TEST AGAINST HIS REAL CONFIG: an edit that changes the ordered field in a flat one of the
  *      9 sections says so; an edit in one of the other 177 is silent.
- *   3. EVERY REFUSAL PATH PRODUCES SILENCE — all five `OrderingAbstention` values.
+ *   3. EVERY REFUSAL PATH PRODUCES SILENCE — the four `OrderingAbstention` values `orderingFor`
+ *      can still reach after 2026-08-06 (`nested-section` moved to §11/§10d — see that section's
+ *      own header for why it is no longer one of THIS function's four).
  *   4. THE CONFIG-CHANGE FALSIFIER (proof standard #5) lives in `tests/present-resolution.test.mjs`
  *      §4 (`generateResolution`'s own scratch-copy mutations) — restated here is only the SHAPE the
  *      published table takes when `direction` flips, proving `orderingFor` itself (not just the
@@ -35,6 +40,13 @@
  *      declared section; §8 proves the two functions abstain for the IDENTICAL reason, always;
  *      §9 proves the tie-break claim (a stable sort's guarantee, not an assumption) over invented
  *      config his real sections do not currently exercise.
+ *   11. PARENT-AWARE SIBLING GROUPING (2026-08-06) — the deterministic, non-vault proof that
+ *      `parentLineOf`'s narrowing agrees with `section_builder.py`'s own `_order_children`: the
+ *      flagship "indented child excluded, fresh capture placed correctly" scenario, a synthetic
+ *      reproduction of the `available-overdue` finding proving the fix does not reintroduce it, a
+ *      genuine two-parent section proving cross-parent lines never enter one another's ranked set,
+ *      and the DEFAULT/title path's own counter-example proving why THAT path was deliberately
+ *      left refusing.
  *
  * WHAT THIS FILE DOES NOT COVER: no DOM, no `app/index.html` wiring (that is
  * `tests/app-ordering-note.test.mjs`), no browser.
@@ -74,6 +86,7 @@ import {
   resolveOrderingPlacementFor,
   markerValue,
   classifyLine,
+  cleanTitleFor,
 } from "../dist/present.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -209,13 +222,51 @@ describe("1a. THE FALSIFIER, LITERALLY, ON THE THREE `queue` SECTIONS' DOCUMENT 
     assert.equal(reading.answer.afterRank, 1);
   });
 
-  test("orderingFor refuses on qntm-queue's real content — its own summary child trips nested-section", { skip: skipVault }, () => {
+  test("2026-08-06: orderingFor now ANSWERS on qntm-queue's real content — the summary child is EXCLUDED, not a reason to refuse", { skip: skipVault }, () => {
+    // Before `parentLineOf` (ordering.ts), this test asserted the opposite: any indentation
+    // anywhere in the section — including this one summary child — forced the WHOLE section to
+    // abstain `nested-section`. Parent-aware grouping narrows the ranked set to true siblings
+    // instead of refusing outright; the summary child (one level deeper, under a DIFFERENT parent
+    // than the top-level queue items) is simply not a candidate any more, exactly as
+    // `section_builder.py:306-348`'s own per-parent `_order_children` calls would treat it.
     const source = readFileSync(join(vaultDir, "dev/qntm/queue.md"), "utf8");
     const lines = source.split("\n");
     const firstIndex = lines.findIndex((l) => l.includes("🔢 1"));
     assert.ok(firstIndex !== -1, "no '🔢 1' row found — fixture assumption broken");
+    // Precondition: the row this test edits must itself be TOP-LEVEL (unindented) — the shape the
+    // independent expectation below assumes. If his real content ever nests the '🔢 1' row itself,
+    // this test's own assumption (not the engine's behaviour) would be what broke.
+    const isTopLevel = !/^\s+\S/.test(lines[firstIndex] ?? "");
+    if (!isTopLevel) {
+      console.log(
+        "PRECONDITION NOT MET, SO NOTHING WAS MEASURED — the '🔢 1' row in dev/qntm/queue.md is " +
+          "itself indented today; this test needs it top-level. His content's shape, not an engine change.",
+      );
+      return;
+    }
     const reading = orderingFor("qntm-queue", "queue", source, firstIndex, lines[firstIndex], ORDERING, ORDERING_FIELDS);
-    assert.deepEqual(reading, { kind: "abstains", because: "nested-section" });
+    assert.equal(reading.kind, "answer", "the summary child must no longer force the whole section to abstain");
+    assert.equal(reading.answer.moved, false, "reading the row back as itself must never report a move");
+
+    // THE INDEPENDENT EXPECTATION — built without calling anything ordering.ts exports (not the
+    // module checking its own homework, the same posture §7's real-content proof takes). Every
+    // TOP-LEVEL (zero-indent) 🔢-bearing line in the section is a true sibling of `firstIndex`; an
+    // indented summary child — however many 🔢 tokens it might coincidentally carry — is not: it
+    // sits one level deeper, under a different parent, and "top-level" is exactly "raw indent 0"
+    // regardless of how deep any OTHER subtree in the section happens to go.
+    const marker = ORDERING_FIELDS.queue_position;
+    const startAt = lines.findIndex((l) => classifyLine(l).kind === "heading");
+    let topLevelMarkerBearing = 0;
+    for (let at = startAt + 1; at < lines.length; at += 1) {
+      if (classifyLine(lines[at]).kind === "heading") break;
+      if (/^\s+\S/.test(lines[at] ?? "")) continue; // indented — a different parent, excluded
+      if (markerValue(lines[at], marker) !== undefined) topLevelMarkerBearing += 1;
+    }
+    assert.equal(
+      reading.answer.siblingCount,
+      topLevelMarkerBearing - 1,
+      "siblingCount should count only the OTHER top-level 🔢-bearing lines, never the summary child",
+    );
   });
 });
 
@@ -270,14 +321,35 @@ describe("1b. THE ADAPTED FALSIFIER — this_week.md's own nesting breaks the fl
     { section: "available-overdue", heading: "Overdue to Start" },
     { section: "available-this-week", heading: "Scheduled This Week" },
   ]) {
-    test(`orderingFor abstains 'nested-section' for this-week.${section}, against real content`, { skip: skipVault }, (t) => {
+    test(`2026-08-06: orderingFor no longer abstains 'nested-section' for this-week.${section}, against real content`, { skip: skipVault }, (t) => {
+      // Before `parentLineOf` (ordering.ts), this test asserted the OPPOSITE: this-week's nesting
+      // forced every one of these four sections to abstain outright, always. Parent-aware grouping
+      // means nesting alone is no longer a reason to refuse — the section may still abstain (a
+      // different reason — e.g. the edited row is itself a context/ancestor line with no marker of
+      // its own, `no-value`) or it may answer, but it must never again be `nested-section`.
       const source = readFileSync(join(vaultDir, "this_week.md"), "utf8");
       const lines = source.split("\n");
       const headingAt = lines.findIndex((l) => classifyLine(l).kind === "heading" && classifyLine(l).text === heading);
       assert.ok(headingAt !== -1, `no '## ${heading}' heading found`);
-      // The first content line under the heading — whatever it is, editing it must refuse, because
-      // the refusal is a property of the SECTION'S shape, not of which line inside it is touched.
+      // The first content line under the heading — whatever it is.
       const firstContentAt = headingAt + 1;
+      // A section with genuinely nothing printed under it (measured earlier in this arc: "Overdue"
+      // is currently empty) has no line to test.
+      if ((lines[firstContentAt] ?? "").trim() === "" || classifyLine(lines[firstContentAt] ?? "").kind === "heading") {
+        t.diagnostic(`'## ${heading}' is empty today — no line to test, nothing measured.`);
+        return;
+      }
+      // ── THE PRECONDITION, CARRIED FORWARD (added 2026-08-03) ─────────────────────────────────
+      // This claim needs the section to actually NEST today — a flat section never exercised
+      // `nested-section` even before this fix (§1a already proves that shape separately).
+      if (!hasNestedRow(source, heading)) {
+        t.diagnostic(
+          `PRECONDITION NOT MET, SO NOTHING WAS MEASURED — '## ${heading}' prints only flat rows in ` +
+            `${join(vaultDir, "this_week.md")} today, so there is no nesting to prove this claim against. ` +
+            `This is his week's shape today, not an engine change.`,
+        );
+        return;
+      }
       const reading = orderingFor(
         "this-week",
         section,
@@ -287,33 +359,45 @@ describe("1b. THE ADAPTED FALSIFIER — this_week.md's own nesting breaks the fl
         ORDERING,
         ORDERING_FIELDS,
       );
-      // A section with genuinely nothing printed under it (measured earlier in this arc: "Overdue"
-      // is currently empty) has no line to test — skip that one case rather than fail on an empty
-      // fixture, while every section that DOES have content must show the refusal.
-      if ((lines[firstContentAt] ?? "").trim() === "" || classifyLine(lines[firstContentAt]).kind === "heading") {
-        t.diagnostic(`'## ${heading}' is empty today — no line to test, nothing measured.`);
-        return;
-      }
-      // ── THE SECOND PRECONDITION, MADE EXPLICIT (added 2026-08-03) ────────────────────────────
-      // The paragraph above already conceded that this claim depends on live vault content; it
-      // only conceded the EMPTY case. The FLAT case is the same dependency and was not guarded.
-      // On 2026-08-03 '## Due This Week' held two flat `#task` rows and pulled in no `#outcome`
-      // ancestor, so `orderingFor` correctly ANSWERED (siblingCount 1) instead of abstaining, and
-      // the suite reported an engine defect that did not exist. `nested-section` is a refusal
-      // about a section that NESTS; a section with nothing nested in it has nothing to refuse.
-      //
-      // The claim is not weakened. `available-this-week` still nests today and still asserts, so
-      // the refusal remains proven against real content on every run — just not claimed of a
-      // section whose content cannot support it.
-      if (!hasNestedRow(source, heading)) {
+      assert.notEqual(
+        reading.because,
+        "nested-section",
+        "the declared path must never abstain 'nested-section' after parent-aware grouping (2026-08-06)",
+      );
+      if (reading.kind !== "answer") {
         t.diagnostic(
-          `PRECONDITION NOT MET, SO NOTHING WAS MEASURED — '## ${heading}' prints only flat rows in ` +
-            `${join(vaultDir, "this_week.md")} today, so there is no nesting for 'nested-section' to refuse. ` +
-            `This is his week's shape, not an engine change.`,
+          `abstained for '${reading.because}' instead of answering (a real, different reason — e.g. the ` +
+            `edited row is itself a context/ancestor line without this section's own marker) — not measured further.`,
         );
         return;
       }
-      assert.deepEqual(reading, { kind: "abstains", because: "nested-section" });
+      assert.equal(reading.answer.moved, false, "reading the row back as itself must never report a move");
+      // A POSITIVE PROOF, not merely an absence one — the INDEPENDENT EXPECTATION, built without
+      // calling anything ordering.ts exports: siblingCount must equal the count of OTHER TOP-LEVEL
+      // (raw indent 0) marker-bearing lines in the section, never a line nested under a DIFFERENT
+      // parent, however many rows of the section's own marker that deeper subtree happens to carry.
+      const declaredField = ORDERING["this-week"]?.[section]?.ordering?.[0]?.field;
+      assert.ok(declaredField, `no declared ordering field for this-week.${section} — the published table changed shape`);
+      const marker = ORDERING_FIELDS[declaredField];
+      const isTopLevel = !/^\s+\S/.test(lines[firstContentAt] ?? "");
+      if (!isTopLevel) {
+        t.diagnostic(
+          `the edited row is itself indented today — this test's independent-expectation shortcut needs it ` +
+            `top-level; nothing further measured.`,
+        );
+        return;
+      }
+      let topLevelMarkerBearing = 0;
+      for (let at = headingAt + 1; at < lines.length; at += 1) {
+        if (classifyLine(lines[at]).kind === "heading") break;
+        if (/^\s+\S/.test(lines[at] ?? "")) continue; // indented — a different parent, excluded
+        if (markerValue(lines[at], marker) !== undefined) topLevelMarkerBearing += 1;
+      }
+      assert.equal(
+        reading.answer.siblingCount,
+        topLevelMarkerBearing - 1,
+        "siblingCount should count only the OTHER top-level marker-bearing lines",
+      );
     });
   }
 });
@@ -384,16 +468,20 @@ describe("2. against the real published table", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 3. EVERY REFUSAL PATH PRODUCES SILENCE — all five `OrderingAbstention` values
+// 3. EVERY REFUSAL PATH PRODUCES SILENCE — the FOUR `OrderingAbstention` values `orderingFor`
+//    (the DECLARED path) can still reach after 2026-08-06's parent-aware grouping. `nested-section`
+//    is no longer one of them — see the test right after this `describe` block, which used to
+//    belong here (it asserted the refusal) and now proves the fix's own falsifier (the identical
+//    fixture answers instead). It is not deleted; §11 and §10d are where it is still reachable.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 describe("3. every abstention, named", () => {
-  test('1/5 — "no-section-declaration": a section outside the published 9', () => {
+  test('1/4 — "no-section-declaration": a section outside the published 9', () => {
     const reading = orderingFor("inbox", "not-a-section", "## H\n- [ ] x", 1, "- [ ] x", ORDERING, ORDERING_FIELDS);
     assert.deepEqual(reading, { kind: "abstains", because: "no-section-declaration" });
   });
 
-  test('2/5 — "insertion-order": daily-work.capture has a mode, not a field', () => {
+  test('2/4 — "insertion-order": daily-work.capture has a mode, not a field', () => {
     const reading = orderingFor(
       "daily-work",
       "capture",
@@ -406,20 +494,13 @@ describe("3. every abstention, named", () => {
     assert.deepEqual(reading, { kind: "abstains", because: "insertion-order" });
   });
 
-  test('3/5 — "field-not-published": a hand-built section ordering by an unmapped field', () => {
+  test('3/4 — "field-not-published": a hand-built section ordering by an unmapped field', () => {
     const fakeOrdering = { v: { s: { ordering: [{ field: "mystery", direction: "asc" }] } } };
     const reading = orderingFor("v", "s", "## H\n- [ ] x", 1, "- [ ] x", fakeOrdering, ORDERING_FIELDS);
     assert.deepEqual(reading, { kind: "abstains", because: "field-not-published" });
   });
 
-  test('4/5 — "nested-section": an indented sibling anywhere in the section refuses the whole edit', () => {
-    const fakeOrdering = { v: { s: { ordering: [{ field: "queue_position", direction: "asc" }] } } };
-    const source = ["## H", "- [ ] a [[qntm:1]] 🔢 1", "    - [ ] child, indented, no marker"].join("\n");
-    const reading = orderingFor("v", "s", source, 1, "- [ ] a [[qntm:1]] 🔢 2", fakeOrdering, ORDERING_FIELDS);
-    assert.deepEqual(reading, { kind: "abstains", because: "nested-section" });
-  });
-
-  test('5/5 — "no-value": the AFTER text carries no marker at all', () => {
+  test('4/4 — "no-value": the AFTER text carries no marker at all', () => {
     const source = "## Queue\n- [ ] a [[qntm:1]] #dev 🔢 1";
     const reading = orderingFor("flowtrace-queue", "queue", source, 1, "- [ ] a [[qntm:1]] #dev", ORDERING, ORDERING_FIELDS);
     assert.deepEqual(reading, { kind: "abstains", because: "no-value" });
@@ -444,6 +525,21 @@ describe("3. every abstention, named", () => {
     const reading = orderingFor("flowtrace-queue", "queue", source, 1, "- [ ] a [[qntm:1]] 🔢 3", ORDERING, ORDERING_FIELDS);
     assert.equal(reading.kind, "answer");
     assert.equal(reading.answer.siblingCount, 1, "the marker-less done item should not count as a sibling");
+  });
+});
+
+describe('3b. 2026-08-06 — THE FALSIFIER: the EXACT fixture that used to prove "nested-section" now proves the opposite', () => {
+  test("an indented child with no marker of its own no longer refuses the edit — it is excluded, not a reason to abstain", () => {
+    // The identical fixture §3's old case 4/5 used to assert `{ kind: "abstains", because:
+    // "nested-section" }` against — restated here as its own falsifier so the OLD claim stays
+    // legible even though it is no longer true, rather than silently vanishing from the suite. If
+    // this ever starts abstaining `nested-section` again, `parentLineOf` (ordering.ts) broke.
+    const fakeOrdering = { v: { s: { ordering: [{ field: "queue_position", direction: "asc" }] } } };
+    const source = ["## H", "- [ ] a [[qntm:1]] 🔢 1", "    - [ ] child, indented, no marker"].join("\n");
+    const reading = orderingFor("v", "s", source, 1, "- [ ] a [[qntm:1]] 🔢 2", fakeOrdering, ORDERING_FIELDS);
+    assert.equal(reading.kind, "answer", "the indented, marker-less child must no longer force a refusal");
+    assert.equal(reading.answer.moved, false, "'a' has no OTHER top-level sibling to rank against");
+    assert.equal(reading.answer.siblingCount, 0, "the indented child is excluded — a different parent, not merely unranked");
   });
 });
 
@@ -739,6 +835,11 @@ describe("7b. currentBeforeLineIndex — is a row's ACTUAL neighbour its CORRECT
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // 8. orderingPlacementFor abstains for the IDENTICAL reason orderingFor does, every time
+//    `nested-section` is NOT in this list (2026-08-06) — it is no longer one of the DECLARED
+//    path's own abstentions (§3's own header explains where it moved). The test right after this
+//    `describe` block proves the two functions still AGREE on the fixture that used to abstain —
+//    now by both ANSWERING identically, the same shape §7's "moved never disagrees" sweep already
+//    proves in general, restated here for the specific case this section used to cover.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 describe("8. orderingPlacementFor's abstentions match orderingFor's, reason for reason", () => {
@@ -760,18 +861,6 @@ describe("8. orderingPlacementFor's abstentions match orderingFor's, reason for 
         1,
         "- [ ] x",
         { v: { s: { ordering: [{ field: "mystery", direction: "asc" }] } } },
-        ORDERING_FIELDS,
-      ],
-    },
-    {
-      label: "nested-section",
-      args: [
-        "v",
-        "s",
-        ["## H", "- [ ] a [[qntm:1]] 🔢 1", "    - [ ] child, indented, no marker"].join("\n"),
-        1,
-        "- [ ] a [[qntm:1]] 🔢 2",
-        { v: { s: { ordering: [{ field: "queue_position", direction: "asc" }] } } },
         ORDERING_FIELDS,
       ],
     },
@@ -798,6 +887,19 @@ describe("8. orderingPlacementFor's abstentions match orderingFor's, reason for 
       assert.equal(placeReading.because, label);
     });
   }
+
+  test("2026-08-06: the fixture that USED TO be this section's 'nested-section' case now agrees by ANSWERING, not abstaining", () => {
+    const fakeOrdering = { v: { s: { ordering: [{ field: "queue_position", direction: "asc" }] } } };
+    const source = ["## H", "- [ ] a [[qntm:1]] 🔢 1", "    - [ ] child, indented, no marker"].join("\n");
+    const args = ["v", "s", source, 1, "- [ ] a [[qntm:1]] 🔢 2", fakeOrdering, ORDERING_FIELDS];
+    const noteReading = orderingFor(...args);
+    const placeReading = orderingPlacementFor(...args);
+    assert.equal(noteReading.kind, "answer");
+    assert.equal(placeReading.kind, "answer");
+    assert.equal(noteReading.answer.moved, placeReading.placement.moved);
+    assert.equal(noteReading.answer.moved, false);
+    assert.equal(placeReading.placement.beforeLineIndex, null, "no OTHER top-level sibling to sit before");
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -1135,5 +1237,183 @@ describe("10f. NOTHING LOCAL REACHES A WRITE — the default-ordering path's own
     } finally {
       Date.now = realNow;
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 11. PARENT-AWARE SIBLING GROUPING (2026-08-06) — deterministic, NON-VAULT proof that
+//     `parentLineOf` (ordering.ts) agrees with `section_builder.py`'s own `_order_children`
+//     (`:306-348`, called once per PARENT — the section's own root list at `build:291-299`, or one
+//     node's own `children` at `build:270-278`). §1/§1b/§3b already proved the declared path no
+//     longer abstains `nested-section` against real content; this section proves the ANSWER itself
+//     agrees with the engine's rule, over fixtures built by hand so the claim does not depend on
+//     what his week happens to contain today.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("11a. THE SINGLE MOST VALUABLE TEST — an indented child excluded, a fresh capture placed correctly", () => {
+  test("the child is neither ranked against top-level rows nor disturbed; the fresh capture settles into its correct top-level slot", () => {
+    // 'a' (📅 08-05) has an indented, marker-less child. 'b' (📅 08-10) is flat. 'fresh capture'
+    // (📅 08-01, the EARLIEST) is typed last — the `insert-line` shape §7b already established:
+    // `source` already holds it, `afterText` repeats the identical text, so `moved` is trivially
+    // false (nothing to compare against itself) and `currentBeforeLineIndex`/`beforeLineIndex` are
+    // what actually prove where it belongs.
+    const fakeOrdering = { v: { s: { ordering: [{ field: "due_date", direction: "asc" }] } } };
+    const fakeMarker = { due_date: { token: "📅", kind: "date" } };
+    const source = [
+      "## H",
+      "- [ ] a [[qntm:1]] 📅 2026-08-05",
+      "    - [ ] child of a, indented, no marker",
+      "- [ ] b [[qntm:2]] 📅 2026-08-10",
+      "- [ ] fresh capture [[qntm:3]] 📅 2026-08-01",
+    ].join("\n");
+    const lines = source.split("\n");
+    const freshIndex = 4;
+
+    const noteReading = orderingFor("v", "s", source, freshIndex, lines[freshIndex], fakeOrdering, fakeMarker);
+    assert.equal(noteReading.kind, "answer");
+    assert.equal(noteReading.answer.siblingCount, 2, "'a' and 'b' — the indented child is excluded, not merely unranked");
+    assert.equal(noteReading.answer.moved, false, "a same-text read can never report a move — see §7b's own falsifier");
+
+    const placeReading = orderingPlacementFor("v", "s", source, freshIndex, lines[freshIndex], fakeOrdering, fakeMarker);
+    assert.equal(placeReading.kind, "answer");
+    assert.equal(placeReading.placement.currentBeforeLineIndex, null, "'fresh capture' sits last in the file, right now");
+    assert.equal(
+      placeReading.placement.beforeLineIndex,
+      1,
+      "'fresh capture' (08-01) ranks EARLIEST of the three true siblings — it belongs immediately before 'a' (08-05)",
+    );
+    assert.notEqual(
+      placeReading.placement.currentBeforeLineIndex,
+      placeReading.placement.beforeLineIndex,
+      "this is exactly the shape currentBeforeLineIndex exists to catch: the row is not where it belongs",
+    );
+  });
+});
+
+describe("11b. SYNTHETIC REPRODUCTION of the available-overdue finding — proof the fix does NOT reintroduce it", () => {
+  test("two context roots with LATER-dated descendants, one qualifying root with the EARLIEST date: the flat model is still wrong; the fix does not repeat it", () => {
+    // The exact SHAPE measurement 2 (ordering.ts's own header) found against
+    // `~/qntm/this_week.md`'s `available-overdue`, rebuilt here so the claim does not depend on
+    // what his week contains today. 'Check personal outcomes' carries the EARLIEST date in the
+    // section (2026-07-27) but must rank ALONE at its own tree level — its only root-level peers
+    // are two context outcomes that carry no due_date of their own; their descendants (LATER
+    // dates) are a different parent's children entirely and must never enter this comparison.
+    const fakeOrdering = { v: { s: { ordering: [{ field: "due_date", direction: "asc" }] } } };
+    const fakeMarker = { due_date: { token: "📅", kind: "date" } };
+    const source = [
+      "## H",
+      "- [ ] Context Outcome A, no due_date of its own",
+      "    - [ ] descendant of A [[qntm:10]] 📅 2026-08-20",
+      "- [ ] Context Outcome B, no due_date of its own",
+      "    - [ ] descendant of B [[qntm:11]] 📅 2026-08-21",
+      "- [ ] Check personal outcomes [[qntm:1]] 📅 2026-07-27",
+    ].join("\n");
+    const lines = source.split("\n");
+    const editedIndex = 5;
+
+    // THE OLD, WRONG MODEL, REBUILT BY HAND — this comparison no longer exists anywhere in
+    // ordering.ts; it is reconstructed here ONLY to prove it would still get this wrong, so the
+    // claim that the fix avoids it is a claim about something real, not a strawman.
+    const editedValue = markerValue(lines[editedIndex], fakeMarker.due_date);
+    const flatSiblingValues = [2, 4].map((at) => markerValue(lines[at], fakeMarker.due_date));
+    const flatRank = 1 + flatSiblingValues.filter((v) => v < editedValue).length;
+    assert.equal(
+      flatRank,
+      1,
+      "POSITIVE CONTROL: the flat model ranks 'Check personal outcomes' FIRST — the wrong, over-eager answer measurement 2 found",
+    );
+
+    // THE FIX.
+    const reading = orderingFor("v", "s", source, editedIndex, lines[editedIndex], fakeOrdering, fakeMarker);
+    assert.equal(reading.kind, "answer");
+    assert.equal(
+      reading.answer.siblingCount,
+      0,
+      "the two descendants must never enter this comparison — they belong to a DIFFERENT parent",
+    );
+    assert.equal(reading.answer.moved, false, "reading the row back as itself must never report a move");
+  });
+});
+
+describe("11c. A GENUINE TWO-PARENT SECTION — siblings scoped to ONE parent's children, never mixed with another's", () => {
+  test("editing a child under Parent 1 ranks it only against Parent 1's OTHER children, never Parent 2's", () => {
+    const fakeOrdering = { v: { s: { ordering: [{ field: "due_date", direction: "asc" }] } } };
+    const fakeMarker = { due_date: { token: "📅", kind: "date" } };
+    const source = [
+      "## H",
+      "- [ ] Parent 1, no marker",
+      "    - [ ] p1-child-a [[qntm:1]] 📅 2026-08-05",
+      "    - [ ] p1-child-b [[qntm:2]] 📅 2026-08-01",
+      "- [ ] Parent 2, no marker",
+      "    - [ ] p2-child-a [[qntm:3]] 📅 2026-08-10",
+      "    - [ ] p2-child-b [[qntm:4]] 📅 2026-08-02",
+    ].join("\n");
+    // p1-child-b moves from EARLIEST (08-01) to LATEST (08-06) among Parent 1's own children —
+    // must cross p1-child-a (a real rank change) and must NEVER be compared to Parent 2's children,
+    // even though p2-child-a (08-10) and p2-child-b (08-02) would otherwise straddle its new value.
+    const reading = orderingFor(
+      "v",
+      "s",
+      source,
+      3,
+      "    - [ ] p1-child-b [[qntm:2]] 📅 2026-08-06",
+      fakeOrdering,
+      fakeMarker,
+    );
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.siblingCount, 1, "only p1-child-a is a true sibling — Parent 2's two children must be excluded");
+    assert.equal(reading.answer.moved, true, "p1-child-b crosses p1-child-a on the way from earliest to latest, within its own parent");
+    assert.equal(reading.answer.beforeRank, 1);
+    assert.equal(reading.answer.afterRank, 2);
+  });
+});
+
+describe("11d. THE DEFAULT/TITLE PATH'S OWN COUNTER-EXAMPLE — why parent-aware grouping was NOT extended there", () => {
+  test("a context-shaped sibling would be seated into a title comparison the engine never runs — defaultOrderingFor still abstains", () => {
+    // His inbox's own shape: no due_date, no priority anywhere. 'Zebra context row' stands in for
+    // an ancestor pulled in as CONTEXT (its own descendant, several levels down, is what actually
+    // qualifies); 'Apple task' is the row being edited. Both lack due_date/priority, so BOTH read
+    // {tier:1, tier:1} on the first two keys — indistinguishable by field presence, unlike the
+    // declared path's marker.
+    const source = [
+      "## Inbox",
+      "- [ ] Zebra context row",
+      "    - [ ] some deeply qualifying descendant, unrelated to the row below",
+      "- [ ] Apple task",
+    ].join("\n");
+    const reading = defaultOrderingFor(
+      "v",
+      "s",
+      source,
+      3,
+      "- [ ] Apple task edited",
+      {},
+      DEFAULT_ORDERING,
+      ORDERING_FIELDS,
+      PRIORITY_RANK,
+    );
+    assert.equal(reading.kind, "abstains");
+    assert.equal(
+      reading.because,
+      "nested-section",
+      "the default/title path must keep refusing here — no signal distinguishes context from qualifying",
+    );
+
+    // THE DISAGREEMENT, MADE CONCRETE — using the SAME title reader the default path itself uses
+    // (`cleanTitleFor`), never a function of ordering.ts's own parent-aware grouping (which is not
+    // applied on this path at all): if it WERE applied, both rows are root-level siblings, both
+    // tier-1 on due_date/priority, so TITLE alone would decide their order.
+    const zebraTitle = cleanTitleFor("- [ ] Zebra context row");
+    const appleTitle = cleanTitleFor("- [ ] Apple task edited");
+    assert.equal(zebraTitle.kind, "title");
+    assert.equal(appleTitle.kind, "title");
+    assert.ok(
+      appleTitle.text < zebraTitle.text,
+      "POSITIVE CONTROL: 'Apple' must sort BEFORE 'Zebra' by title, or this fixture proves nothing",
+    );
+    // `_order_children` (section_builder.py:345) places EVERY context row before EVERY qualifying
+    // row, UNCONDITIONALLY — never by title, never by value. A parent-aware title comparator would
+    // rank 'Apple task' (qualifying) FIRST and 'Zebra context row' (context) SECOND — the exact
+    // OPPOSITE of what the engine actually does. That contradiction is why this path keeps refusing.
   });
 });

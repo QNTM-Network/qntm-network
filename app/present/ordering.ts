@@ -51,12 +51,20 @@
  *    personal outcomes" is a QUALIFYING root sorted after two CONTEXT roots, never compared to them
  *    by date at all. A flat, whole-section rank (comparing every marker-bearing line regardless of
  *    tree position) would have called this a "moved" prediction the cycle would then contradict.
- *    **So this module refuses outright — abstention `nested-section` — the instant ANY line in the
- *    section's printed range carries indentation.** A section rendered with zero indentation
- *    (`renderer.py:950`'s `'    ' * depth` prefix is empty at every printed row) has no ancestor
- *    context and no tree levels to cross, which is exactly the shape the three flat `queue`
- *    sections have and the `this-week` sections do not — proven, not assumed, by
- *    `tests/present-ordering.test.mjs` §1 reading both shapes from the real vault.
+ *    **2026-08-06, NARROWED — this module used to refuse outright, abstention `nested-section`, the
+ *    instant ANY line in the section's printed range carried indentation. It no longer does, for
+ *    THIS (marker-based) path.** The finding above was never "any nesting is unsafe" — it was
+ *    "a flat, WHOLE-SECTION rank crosses parents `_order_children` never lets cross." `parentLineOf`
+ *    (below `anyLineIndented`) rebuilds the same PARENT boundaries `_order_children` itself ranks
+ *    within — one call per parent, `section_builder.py:258-289`/`:291-299` — straight off the
+ *    printed indentation, and `evaluateSection` now ranks a line only against siblings sharing its
+ *    OWN parent. "Check personal outcomes" is a concrete instance: with parent-aware grouping its
+ *    group is the section's ROOT level, and the only OTHER root-level lines are the two `#outcome`
+ *    ancestors — which carry no `available_date` of their own and are excluded by `tupleFor`'s
+ *    existing marker requirement (measurement 2's own opening paragraph, unchanged) — so it ranks
+ *    alone, `siblingCount: 0`, never compared to the deeper dated rows that broke the flat model.
+ *    See `parentLineOf`'s own header for the full citation and for why this narrowing is sound for
+ *    a MARKER-based field but is not extended to the title-based default path below.
  *
  *    `snapshot.graph` (1,501 nodes, 460 edges) already reaches the browser and is NOT read here —
  *    the marker-token reading gives an answer computed the same way for the sibling rows and for
@@ -78,9 +86,11 @@
  *   FIELD-NOT-PUBLISHED. The section's ordering key names a field `resolution.orderingFields` has
  *   no marker for (unpublished today, but the reader stays honest if the config ever adds one).
  *
- *   NESTED-SECTION. Any line in the section's printed range carries indentation — see measurement
- *   2 above. Applies to all four `this-week` sections today (they print `#outcome` ancestors); the
- *   three `queue` sections are flat and never trigger it.
+ *   NESTED-SECTION. **2026-08-06: no longer produced by the DECLARED path** (`evaluateSection`) —
+ *   see measurement 2's own update, above, and `parentLineOf`'s header. It remains possible from
+ *   the DEFAULT/title path (`evaluateDefaultSection`, below `orderingPlacementFor`'s own code) for
+ *   the reason that function's own header gives: `title` has no marker to exclude a context row by,
+ *   so parent-aware grouping alone cannot be proven safe there and the blanket refusal stays.
  *
  *   NO-VALUE. The edited line's BEFORE or AFTER text does not carry an extractable value for every
  *   key the section orders by. Symmetric with `membership.ts`'s "either side abstaining is
@@ -105,6 +115,19 @@
  * no new one: the same nine sections that can be ranked can be placed, the same 177 that cannot be
  * ranked cannot be placed either. See `orderingPlacementFor`'s own header for the proof that its
  * answer agrees with the engine's, not merely that it produces AN index.
+ *
+ * **2026-08-06, PARENT-AWARE SIBLING GROUPING.** The operator's own report: browser ordering had
+ * gone silent almost everywhere, because `nested-section` fired the instant ANY line in a section
+ * nested — which four of the `this-week` sections do on every real cycle (they print `#outcome`
+ * ancestors) and which `qntm-queue`'s own summary-child shape does too. `evaluateSection` (shared by
+ * `orderingFor`/`orderingPlacementFor`) no longer refuses on that trigger alone: `parentLineOf`
+ * (below `anyLineIndented`) restricts the ranked sibling set to lines sharing the edited line's own
+ * PARENT, mirroring `_order_children`'s one-call-per-parent shape (`section_builder.py:258-299`)
+ * instead of ranking the whole flattened section. This is NOT a blanket removal — see
+ * `parentLineOf`'s own header for exactly what makes it sound for THIS (marker-based) path, and
+ * `evaluateDefaultSection`'s header (below) for the concrete, cited reason the title-based DEFAULT
+ * path keeps refusing. `nested-section` remains a real, reachable abstention — reachable from the
+ * default path only, now — not a retired one.
  */
 
 import { classifyLine, cleanTitleFor } from "./rendition.js";
@@ -204,6 +227,61 @@ function anyLineIndented(lines: readonly string[], start: number, end: number): 
     if (INDENTED_CONTENT.test(lines[at] ?? "")) return true;
   }
   return false;
+}
+
+/**
+ * 2026-08-06, PARENT-AWARE SIBLING GROUPING — the declared path's own narrowing of
+ * `nested-section`, mirroring `section_builder.py`'s tree directly rather than refusing the
+ * instant a section nests at all. See this module's header, "measurement 2", for the finding that
+ * MOTIVATED this: `_order_children` (`section_builder.py:306-348`) is called ONCE PER PARENT — once
+ * for the section's own root list (`build:291-299`), once again for every node's own `children` as
+ * `build_node` recurses (`build:258-289`, the call at `:270-278`) — and each call ranks ONLY the
+ * nodes it was given, which share that one call's PARENT. A line several tree levels away, under a
+ * DIFFERENT parent, is never a candidate for that comparison at all — not merely a candidate that
+ * loses a tiebreak. `available-overdue`'s finding was never "context beats qualifying"; it was
+ * "Check personal outcomes" (a ROOT) got compared, by a flat whole-section rank, against dated rows
+ * living several levels beneath two OTHER roots — rows that are not its siblings under any
+ * definition the engine has. Restricting the ranked set to true siblings removes exactly that
+ * cross-parent comparison and nothing else.
+ *
+ * The walk below returns, for every non-blank line in `[start, end)`, the file index of its nearest
+ * enclosing line with STRICTLY LESS leading whitespace — `null` for a line at the section's own top
+ * level (the engine's `root_ids`, `build:244-250`). This is sound because `renderer.py:591-620`
+ * (`_render_tree_node`, `depth=depth+1` at its one recursive call, `:722`) guarantees every child
+ * prints at EXACTLY one level deeper than its own immediate parent, never more, never less — so two
+ * lines share a real tree parent if and only if they share the nearest shallower line above them.
+ * The comparison uses the RAW leading-whitespace character count, not a divided "depth" number —
+ * deliberately: `content_diff.py:721-722` (cited in `indent.ts`'s own header) reads a raw count for
+ * the identical reason, and a raw count needs no `indentUnit` read to stay correct, since two true
+ * siblings always carry the IDENTICAL exact prefix (`'    ' * depth`, repeated, never approximated).
+ *
+ * Blank lines are skipped entirely, matching `INDENTED_CONTENT`/`anyLineIndented` above — an empty
+ * line between two siblings carries no depth of its own and must not interrupt the walk.
+ *
+ * WHY THIS IS SAFE FOR THE MARKER-BASED FIELDS THIS FUNCTION SERVES (`due_date`/`available_date`/
+ * `queue_position`) AND NOT EXTENDED TO THE DEFAULT/TITLE PATH BELOW — see that path's own header
+ * for the argument in full. In short: a CONTEXT/ancestor row that lacks this section's own ordering
+ * marker is already excluded from `tupleFor`'s ranked set regardless of parent (the exclusion this
+ * module's header, measurement 2, already names as accepted and pre-existing) — this walk only
+ * stops a context-free, cross-parent QUALIFYING row from being compared to a QUALIFYING row it does
+ * not share a parent with. The default/title path has no such exclusion available: `title` is
+ * readable off every line, context or qualifying alike, so the same walk there would happily seat a
+ * context row into a title comparison the engine never runs — see `evaluateDefaultSection`'s own
+ * header for why that path keeps the blanket refusal.
+ */
+function parentLineOf(lines: readonly string[], start: number, end: number): ReadonlyMap<number, number | null> {
+  const parentOf = new Map<number, number | null>();
+  const stack: { lineIndex: number; indent: number }[] = [];
+  for (let at = start; at < end; at += 1) {
+    const match = /^(\s*)\S/.exec(lines[at] ?? "");
+    if (match === null) continue; // blank line — no depth, does not interrupt the walk
+    const indent = match[1]?.length ?? 0;
+    while (stack.length > 0 && (stack[stack.length - 1]?.indent ?? -1) >= indent) stack.pop();
+    const parent = stack[stack.length - 1];
+    parentOf.set(at, parent === undefined ? null : parent.lineIndex);
+    stack.push({ lineIndex: at, indent });
+  }
+  return parentOf;
 }
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
@@ -345,22 +423,25 @@ function evaluateSection(
 
   const lines = source.split("\n");
   const { start, end } = sectionBounds(lines, lineIndex);
-  // MUST run before any value is trusted — see this module's header, measurement 2: a section with
-  // ANY indented row nests ancestor/context lines the engine sorts by a DIFFERENT rule (context
-  // rows first, ordering applied only within same-parent siblings), which a flat rank across the
-  // whole section would get wrong. Checked over the section's FULL range, not just the two lines
-  // being compared, because an indented line elsewhere in the section is still evidence the section
-  // is a tree, not a list.
-  if (anyLineIndented(lines, start, end)) return { kind: "abstains", because: "nested-section" };
 
   const beforeText = lines[lineIndex] ?? "";
   const beforeTuple = tupleFor(beforeText, keys, orderingFields);
   const afterTuple = tupleFor(afterText, keys, orderingFields);
   if (beforeTuple === undefined || afterTuple === undefined) return { kind: "abstains", because: "no-value" };
 
+  // PARENT-AWARE — see `parentLineOf`'s own header for the full citation. `_order_children`
+  // (`section_builder.py:306-348`) ranks ONLY the siblings one call was given, which share one
+  // PARENT (the section's own root level, or one node's own `children`) — never the whole section
+  // flattened. A line under a DIFFERENT parent is walked past here exactly as it is in the engine:
+  // not compared, not even considered, regardless of whether it carries this section's marker.
+  const parentOf = parentLineOf(lines, start, end);
+  const group = parentOf.get(lineIndex) ?? null;
+
   const siblings: RankedSibling[] = [];
   for (let at = start; at < end; at += 1) {
     if (at === lineIndex) continue;
+    if (!parentOf.has(at)) continue; // blank line — not a member of any group
+    if (parentOf.get(at) !== group) continue; // a different parent — not a true sibling
     const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
     if (tuple !== undefined) siblings.push({ lineIndex: at, tuple });
   }
@@ -569,10 +650,33 @@ export function orderingPlacementFor(
 //
 // `field-not-published` (reused): `due_date` or `priority` has no marker in THIS config at all —
 // this app cannot tell "absent on this row" from "present but unreadable", so it refuses the whole
-// comparison rather than guess every row is tier 1. `nested-section` (reused): the SAME
-// indentation check the declared path uses — see measurement 2 in this module's own header for why
-// a flat render is the signal this codebase already trusts, and this file's own report for what
-// remains UNCONFIRMED about that signal for a section this feature has not exercised before.
+// comparison rather than guess every row is tier 1.
+//
+// `nested-section` (reused, and DELIBERATELY NOT NARROWED — 2026-08-06) — this is the one place the
+// declared path's `parentLineOf` fix (see that function's own header) is NOT applied, and the reason
+// is load-bearing enough to state as a counter-example rather than a caveat:
+//
+//   `parentLineOf` makes the declared path safe because a CONTEXT/ancestor row that lacks this
+//   section's own marker is ALREADY excluded from the ranked set by `tupleFor` — parent-grouping
+//   only stops a context-free comparison across the WRONG parent. `title` has no such exclusion.
+//   `defaultFieldKeyFor` gives ANY row with no `due_date`/`priority` a `{tier: 1}` key REGARDLESS OF
+//   WHETHER IT IS QUALIFYING — engine membership (`qualifying_ids`, invisible to this app) is what
+//   actually decides context-vs-qualifying, not field presence, and for a title-tiebroken section
+//   (his inbox: "no `due_date`, no `priority` on any item") a genuine context/ancestor row and a
+//   genuine qualifying row are BOTH `{tier: 1, tier: 1}` — indistinguishable here. Grouped by parent,
+//   the two would then be compared by TITLE, exactly the comparison `_order_children`
+//   (`section_builder.py:345`, `_canonical_context_order(context_nodes) + ordered_qualifying`) never
+//   runs: context sorts before qualifying UNCONDITIONALLY, never by title, never by value. Applying
+//   `parentLineOf` here would seat a context row into a rank comparison the engine does not perform,
+//   which is a CONFIDENTLY WRONG answer, not a merely-unproven one — worse than the abstention it
+//   would replace. `tests/present-ordering.test.mjs` §11 proves this disagreement directly (an
+//   invented context-shaped sibling, parent-aware grouping applied by hand, checked against what
+//   `_order_children` would actually do) rather than asserting the refusal on the strength of this
+//   paragraph alone. So: STILL ABSTAINS, for every one of the (up to) 171 undeclared sections that
+//   nest — narrowing this one is UNCONFIRMED, not merely undone; a future fix needs a real
+//   qualifying/context signal (graph membership, or a config-declared node-type split) this app does
+//   not have today, not a cleverer text heuristic.
+//
 // `container-ordering-directive`, `style-ambiguous-title`, `has-declared-ordering`: new, see
 // `OrderingAbstention`'s own header above for each.
 
