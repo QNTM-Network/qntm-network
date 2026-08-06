@@ -3844,3 +3844,90 @@ capabilities:
   tier: functional
   status: undeclared
 
+- id: resolution-runs-identically-in-engine-and-surface-from-one-compiled-declaration
+  intent: >-
+    RESOLUTION — what a fact MEANS given the config — runs in BOTH the Python engine and the
+    TypeScript surface, from the SAME compiled declaration, and this is the only reason the two
+    can agree. It is not a layer that lives in one place. The engine's own `ResolutionCascade`
+    (`apps/qntm-md/src/qntm_md/resolution/`) and the surface's `PresentationCascade`
+    (`app/present/cascade.ts`) share one precedence tuple (LINE/SUBTREE/STRUCTURAL_NODE/VIEW/
+    GLOBAL, most-specific-first) and the surface's copy is generated from, and checked against,
+    the operator's real config by `scripts/generate-{qualification,resolution,structural,
+    rules}-declaration.mjs` plus the `scripts/*-agreement.py` suite that calls the engine's own
+    resolver directly. WHAT EXISTS TODAY: the agreement is real and measured — 49 of 49
+    (view, section) pairs agree (resolution), 14 of 14 instants agree (day boundary), 0
+    mismatches over 2,963 checked cells in a separate build-time divergence harness
+    (`design-the-two-rules.md` §5.4). WHAT THIS CAPABILITY PINS BEYOND THAT: that this is the
+    permanent architecture, not an artifact of today's single-tenant, single-config instance —
+    see `design-config-is-content.md` §8 for what a second user or a second config would need
+    to keep the agreement true.
+    EVIDENCE TIER — the mechanism is proven; the PIN (that it stays true as a design commitment,
+    not only as today's measured fact) is not enforceable by a check that could fail on a
+    principle being violated, only on a number changing. See
+    docs/implementation-artifacts/design-the-three-layers.md §3.
+  tier: foundational
+  status: undeclared
+- id: the-working-set-is-a-declared-bounded-query-not-a-view
+  intent: >-
+    The surface holds everything that COULD appear in any view next — a declared query
+    (everything selected by any registered view, plus one hop, plus anything touched recently),
+    not the current view alone and not `status = open`. A rule like "completing the last child
+    completes the parent" needs the completed siblings in scope to know it was the last;
+    selecting only open nodes silently breaks the most obvious rule anyone would write.
+    Default generous: a user with 50,000 nodes narrows the query; a user with ~1,600 does not
+    bother. A view that selects the whole graph (`everything-work`, 607 of 1,501 nodes measured
+    directly, `research-the-resolution-universe.md` §2.3) legitimately makes the working set the
+    whole graph — that is the model working correctly for a view whose declared job is
+    "everything," not a defect in the model.
+    WHAT EXISTS TODAY: nothing. There is no declared working-set query, no generator that
+    compiles one, and no server route that serves a bounded node set — the graph is either
+    entirely on the wire and unread (`graphData`'s six reads all reach `?.snapshot?.views`,
+    zero reach `.graph`) or entirely absent from a given request. This capability names the
+    target the-scoped-node-wire and the-declared-working-set-bound backlog rows build toward.
+    EVIDENCE TIER — NONE. THIS IS A PLAN, NOT A PROOF. See
+    docs/implementation-artifacts/design-the-three-layers.md §6.
+  tier: foundational
+  status: undeclared
+- id: the-engine-owns-durability-and-the-named-global-class-only
+  intent: >-
+    The engine's job is NOT speed. It is durability (browser memory is not a source of truth)
+    and multiple devices (the phone must see the same thing), plus the genuinely global class —
+    aggregates, unbounded traversal — which must be SMALL, NAMED and DECLARED, never "whatever
+    we did not build." CORRECTED FRAMING, and the correction is the operator's own: it is NOT
+    true that "nothing waits on the engine" — the engine's output is user-facing (flip a task to
+    an outcome, open the outcomes view, it must be there). The correct statement is "nothing
+    waits on the engine for anything the surface could have worked out itself." What happens on
+    a node change: the surface applies it, resolves it, works out consequences, updates its own
+    local graph, writes the change — the engine persists it, catches the global class, and is
+    the copy another device reads. The engine is never the thing that tells you what just
+    happened.
+    THE GLOBAL CLASS, MEASURED: six whole-graph aggregate rules of 94 (`coverage-overall/
+    personal/work`, `age-of-intent-overall/personal/work`, `research-the-rule-closure.md` §7),
+    plus 3 of 20 event-query patterns rooted on an unbounded `find:{}` (that document's own
+    reproduction script). A browser-side rule evaluator stays refused specifically because of
+    this class, not because the browser lacks capability — `design-the-three-layers.md` §5/§7
+    is explicit that the limit is scope, never capability.
+    EVIDENCE TIER — the global class is measured; the ENGINE-ONLY-OWNS-IT split is a target, not
+    yet built (there is no scoped-node wire for the surface to work things out against, per
+    the-scoped-node-wire backlog row). See docs/implementation-artifacts/design-the-three-layers.md
+    §7.
+  tier: foundational
+  status: undeclared
+- id: the-graph-is-an-indexed-store-not-a-linear-scan
+  intent: >-
+    The graph answers `what exists` in milliseconds because it is an index, not a scan. THE
+    ID-LOOKUP PATH IS ALREADY THERE: PR #69 (monorepo) took `qntm_id` lookups from 3,094 µs to
+    3.7 µs (~755x), flat at 5,000 nodes. THE FIELD-PREDICATE PATH IS NOT: `find_nodes`
+    (`core/graph/src/qntm_graph/core/queries.py:16-28`) reconstructs EVERY node in the graph
+    unconditionally before filtering by type or field — `node_type`/`field_predicates` narrow
+    the output, never the scan. Verified directly this session: `all_nodes = [_reconstruct_node(
+    store, nid) for nid in store.all_node_ids()]` runs on every call, with no attribute index
+    behind it. This is the general case the id-index fix did not close, and it is why "the graph
+    answers in milliseconds" is a budget this capability states as a target for the WHOLE query
+    surface, not only the one path already measured meeting it.
+    EVIDENCE TIER — the gap is measured directly (the source code itself, not a profile); the fix
+    (an attribute index inside `GraphStore`) is not built. This is monorepo-side code this repo
+    has no write access to change; filed here as the target and left for the monorepo's own
+    backlog. See docs/implementation-artifacts/design-the-three-layers.md §2, §9.
+  tier: foundational
+  status: undeclared

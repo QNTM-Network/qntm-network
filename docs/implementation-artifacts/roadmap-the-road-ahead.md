@@ -1,5 +1,13 @@
 # Roadmap: the road ahead — the order, the decision rule, and what each step commits us to
 
+**SUPERSEDED IN PART, 2026-08-06.** `design-the-three-layers.md` pins the target architecture (the
+graph, resolution, presentation split) that this roadmap's five steps serve. **Nothing here is
+contradicted** — the five-step order and the three-band decision rule (§4) remain the plan of record
+for the honesty half of the arc. What the superseding document adds, which this roadmap predates, is
+the working-set/scoped-node target that step 3's "engine has ruled" motion will eventually need a
+working set to correct *against*, rather than a markdown re-render to correct *into*
+(`design-the-three-layers.md` §10, item 4).
+
 **Status: the plan of record. The operator approved this ordering. This branch adds documents and
 backlog rows. It modifies no application source.**
 **Branch:** `docs/road-ahead`, based on `origin/main` @ `2e9561a`.

@@ -1,7 +1,11 @@
 # Research: the resolution universe — what KINDS of config resolution exist, and which of them can the browser mirror?
 
-**Status: research. No application source is modified on this branch. This document is the only
-file it adds.**
+**SUPERSEDED IN PART, 2026-08-06.** `design-the-three-layers.md` pins the target architecture and
+draws directly on this document's taxonomy (§4) and config-only-table measurement (§6) without
+contradiction. **What is superseded is §7's ranked rung order as a final priority list** — the
+superseding document's §8/§12 reorder around a scoped-node wire and a declared working-set query,
+neither of which this document had as a candidate rung because neither had been named as the target
+yet. Every number cited from this document elsewhere still stands.
 
 **Branch:** `design/unlock-universe`, based on `origin/main` @ `bd7ecfa`.
 
