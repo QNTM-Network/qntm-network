@@ -1045,7 +1045,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=4ffce56481";
+} from "/dist/present.js?v=e8471122bf";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2945,28 +2945,41 @@ async function bootRead(delays = BOOT_READ_DELAYS) {
 
 /**
  * Where a fresh read of the graph lands you: the view you were already in if the snapshot still
- * has it, else the default.
+ * has it, else the DECLARED landing view, else the first view in the snapshot.
  *
  * THIS IS WHAT MAKES A REFRESH CONTROL POSSIBLE AT ALL. `loadGraph` used to land on `this-week`
- * unconditionally; now it lands on `inbox`, and either way this is the ONLY place that default is
- * written — a button wired straight to the default id would have thrown the reader out of the
- * view they were reading in order to tell them it was up to date. The fall-through is deliberate
- * rather than an assertion: a view really can leave between two reads, because the file behind it
- * was renamed on the laptop.
+ * unconditionally, then on a hard-coded `"inbox"`; now it lands on whatever
+ * `views/default_registration.yaml`'s own `default_registration.landing_view` names
+ * (`declaration.landingView`, read off `presentation.json` by `app/present/declaration.ts` — see
+ * `scripts/compile-landing.mjs`'s header for exactly where that is and why). This is the ONLY
+ * place that default is READ — a button wired straight to a view id would have thrown the reader
+ * out of the view they were reading in order to tell them it was up to date. The `keep` fall-
+ * through is deliberate rather than an assertion: a view really can leave between two reads,
+ * because the file behind it was renamed on the laptop.
  *
- * THE DEFAULT IS A LITERAL STRING HERE, ON PURPOSE, AND IT SHOULD NOT STAY ONE. Nothing in the
- * snapshot a view arrives in (`DrawerView`: `id`/`path`/`title`) declares "open on me" — there is
- * no config-resolution rung this could be pulled from today, so hard-coding one named id in the
- * one function that already owns the fallback is the honest version of "resolve, don't scatter":
- * one place, not a view name copied into the boot path a second time. It should become a declared
- * fact (a flag on a view's config, resolved the same way `declaration` resolves qualification/
- * resolution/structural/rules) rather than a string this function has to know — see backlog row
- * `declare-the-default-view`.
+ * NO VIEW NAME LIVES IN THIS FUNCTION, and that is the whole point of the change: a different
+ * operator, or a renamed Inbox, changes nothing here — only the config block changes.
+ *
+ * SILENCE IS THE WRONG ANSWER, on purpose. Before this, "nothing declared" and "inbox" were the
+ * same fallback and nobody could tell them apart — that indistinguishability is exactly how a
+ * hard-coded literal survived unnoticed as long as it did. Now, "nothing declared" (or "the
+ * declared view isn't in this snapshot") still lands on the first view — this app boots either
+ * way, the same "costs nothing but a warning" posture every other declaration axis already takes
+ * — but it SAYS SO, loudly, every single time, until the operator declares one.
  */
-function landOn(views, keep) {
-  return views.find((v) => v.id === keep)
-      ?? views.find((v) => v.id === "inbox")
-      ?? views[0];
+function landOn(views, keep, landingViewId) {
+  const kept = views.find((v) => v.id === keep);
+  if (kept) return kept;
+  const declared = views.find((v) => v.id === landingViewId);
+  if (declared) return declared;
+  console.warn(
+    landingViewId === undefined
+      ? "no landing view is declared (views/default_registration.yaml's " +
+        "'default_registration.landing_view') — landing on the first view instead"
+      : `the declared landing view '${landingViewId}' is not in this snapshot — landing on the ` +
+        "first view instead",
+  );
+  return views[0];
 }
 
 /**
@@ -3024,7 +3037,7 @@ async function loadGraph(keep = null, why = "chosen", pending = null) {
     return;
   }
   hideEmpty();
-  const def = landOn(data.snapshot.views, keep);
+  const def = landOn(data.snapshot.views, keep, declaration.landingView);
   // Before the tree, so the folders holding the view we are about to paint land OPEN.
   currentViewId = def.id;
   buildDrawer(data.snapshot.views);

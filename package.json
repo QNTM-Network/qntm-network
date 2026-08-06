@@ -20,7 +20,9 @@
     "generate:operator-set": "node scripts/generate-operator-set.mjs",
     "generate:operator-set:check": "node scripts/generate-operator-set.mjs --check",
     "generate:rules": "node scripts/generate-rules-declaration.mjs",
-    "generate:rules:check": "node scripts/generate-rules-declaration.mjs --check"
+    "generate:rules:check": "node scripts/generate-rules-declaration.mjs --check",
+    "generate:landing": "node scripts/generate-landing-declaration.mjs",
+    "generate:landing:check": "node scripts/generate-landing-declaration.mjs --check"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",

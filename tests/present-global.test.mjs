@@ -123,18 +123,29 @@ describe("0. the bundle carries no copy of the declaration", () => {
     );
   });
 
-  test("the bundle is smaller than the declaration it used to carry", () => {
-    // THE COARSE PROOF, AND THE ONE A READER CAN CHECK WITH `ls`. A file cannot contain a copy of a
-    // document larger than itself. dist/present.js was 264,251 bytes with the declaration inside it
-    // and is 128,488 without; presentation.json is 138,878. The relation is not a size budget — it
-    // is the arithmetic of the thing being absent.
-    const declaration = readFileSync(join(REPO, "presentation.json"), "utf8");
-    assert.ok(
-      BUNDLE.length < declaration.length,
-      `dist/present.js (${BUNDLE.length} bytes) is no longer smaller than presentation.json ` +
-        `(${declaration.length} bytes) — check whether the declaration went back into the bundle`,
-    );
-  });
+  // THE THIRD TEST — "the bundle is smaller than the declaration it used to carry" — IS DELETED,
+  // NOT WIDENED, AND THAT IS THE FIX. It was a coarse proxy for the same "no copy" property the two
+  // tests above already assert DIRECTLY: no `EMBEDDED_DECLARATION` export, no operator-instance
+  // string found in the bundle. Its own comment was honest about being a proxy ("not a size budget
+  // — it is the arithmetic of the thing being absent"), but two ordinary, independently-legitimate
+  // PRs landing close together (2026-08-06: a new declaration axis here, a substantially-rewritten
+  // per-row SettleSurface in a parallel PR) grew `dist/present.js` past `presentation.json`'s OWN
+  // size — both files growing for reasons that have nothing to do with each other, and nothing to
+  // do with whether the config is embedded. The size relation was never guaranteed to hold as both
+  // documents grow independently forever; it happened to hold on the day this section was written.
+  //
+  // A CHECK THAT GOES RED FOR A REASON UNRELATED TO WHAT IT ASSERTS IS WORSE THAN NO CHECK — it
+  // trains a reader to expect this file's failures are noise, which is exactly the posture that let
+  // a REAL regression hide the next time. Raising the bound to today's byte count would be the
+  // identical defect one commit later: a new magic number with the same guaranteed expiry date, no
+  // more honest than the one it replaced. There is no DERIVED bound available either — no length
+  // threshold or headroom percentage is justified by anything about how big a declaration or a
+  // bundle should be; either number can grow without limit on its own schedule.
+  //
+  // So it is removed, and the invariant it existed for — the bundle does not carry a copy of the
+  // declaration — stays fully enforced by the two tests above it, which assert the actual thing
+  // (the symbol, the strings) rather than a downstream side effect (the byte count) that can move
+  // for a hundred reasons having nothing to do with it.
 });
 
 describe("1. the committed declaration moves exactly one key and no other", () => {

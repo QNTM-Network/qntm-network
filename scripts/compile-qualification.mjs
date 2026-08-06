@@ -86,6 +86,47 @@ export const DEFAULT_REGISTRATION_KEY = `${VIEWS_PREFIX}default_registration.yam
  */
 export const RESOLVABLE_FIELDS = Object.freeze(["node_type", "domain", "status"]);
 
+// ── THE DECLARED TRAVERSAL DEPTH — how many hops off the candidate node THIS GRAMMAR can express,
+//    published so the browser reads what it is allowed to attempt instead of this file silently
+//    deciding for it (backlog: `declare-the-default-view`'s sibling row for rule abstention) ──
+//
+// THE OPERATOR'S OWN CORRECTION, WHICH THIS CONSTANT EXISTS TO HONOUR: graph traversal is normal,
+// not exotic, and the limit this file has today is not a boundary someone else owns — it is a
+// number, and numbers move. Before this constant existed, "how far can the browser look" was an
+// implicit fact about `normaliseStep`'s own admitted shapes (`normaliseSelfStep`/
+// `normaliseEdgeStep`, above) that nothing published — a config author, or a future widening of
+// this grammar, had no single place to read or change it. This is that place.
+//
+// WHY THE VALUE IS 1, MEASURED RATHER THAN ASSERTED. `normaliseStep` admits exactly two step
+// shapes: a SELF-test (`{not: [{find_nodes: F}], min: 1}`, zero hops — it re-tests the candidate)
+// and a ONE-HOP edge-existence test (`children:`/`parents:` with `edge_type`, `exists`/
+// `not_exists` — `normaliseEdgeStep`'s own header). `ancestors:`/`descendants:` — UNBOUNDED,
+// transitive traversal — are refused outright, with the same `traverses (...)` wording a self-step
+// refusal already uses. So 1 is not a guess at what "feels safe"; it is the exact ceiling this
+// closed grammar's own `EdgeStep` shape can express — `app/present/qualification.ts`'s `EdgeStep`
+// type has no field for a SECOND hop, so a value greater than 1 would publish a number this
+// grammar cannot yet honour, which is precisely the "config value that lies" this generator's own
+// discipline (drop-and-record, never guess) refuses to ship.
+//
+// MEASURED AGAINST THE OPERATOR'S REAL CONFIG (2026-08-06, `scripts/measure-the-divergence.mjs`'s
+// own posture: cited, not assumed): of 297 declared patterns, 137 normalise into this grammar
+// today, 43 of those BECAUSE of a one-hop `children:`/`parents:` step — depth 1 is not
+// hypothetical, it is already load-bearing. Of the 160 that do not normalise, exactly 4 are
+// refused for graph depth beyond one hop, and all 4 need `ancestors:`/`descendants:` — UNBOUNDED
+// depth, by the operator's own design comments ("a sub-sub-step must not escape the reset by being
+// nested deeper"; "any depth resolves in ONE evaluation rather than propagating a hop per cycle").
+// ZERO patterns in the whole config ask for exactly 2 or exactly 3 bounded hops — see this repo's
+// PR for the full histogram. Raising this constant to 2 or 3 today would recover NOTHING; only an
+// unbounded transitive walk (this grammar's own next arc, explicitly not built here) recovers
+// those 4.
+//
+// SHARED, NOT DUPLICATED. `scripts/compile-rules.mjs` imports `normalisePattern` from this file
+// (`normalisePattern`'s own export, below) rather than re-implementing pattern matching, so a
+// rule's `for_each` pattern is bound by this SAME ceiling automatically — one published number
+// covers both the section-membership axis (`qualification`) and the rules axis (`rules`), and
+// `compile-rules.mjs` is not touched to say so.
+export const TRAVERSAL_DEPTH = 1;
+
 const isScalar = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
 
 // ── the pattern normaliser — pure over a parsed config object, no files map involved ───────────
@@ -674,6 +715,9 @@ export function compile(files, ledger = new Ledger()) {
     // `sections` above because their qualification was refused.
     sectionOrder,
     refused,
+    // AN ENGINE-FACT-SHAPED CONSTANT, published unconditionally — see `TRAVERSAL_DEPTH`'s own
+    // header, above, for what it is and why it is 1, not read out of any YAML.
+    traversalDepth: TRAVERSAL_DEPTH,
   };
   // EVERY DECLARATION THIS GENERATOR READ AND DID NOT PUBLISH, with its reason. `refused` above
   // is ONE kind of that — a pattern that would not normalise. `dropped` is all the others.

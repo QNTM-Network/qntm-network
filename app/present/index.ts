@@ -44,7 +44,7 @@ export type {
   WordSpan,
 } from "./rendition.js";
 
-export { DEFAULT_INDENT_UNIT, readDeclaration } from "./declaration.js";
+export { DEFAULT_INDENT_UNIT, LANDING_VIEW_KEY, readDeclaration } from "./declaration.js";
 export type { DeclarationReading } from "./declaration.js";
 
 export { readStructuralDeclaration, STRUCTURAL_KEY } from "./structural.js";
@@ -59,7 +59,12 @@ export type {
 
 export { sectionAt, sectionForInsertAt, sectionOrderFor, sectionOrdinalAt } from "./address.js";
 
-export { QUALIFICATION_KEY, readQualificationDeclaration, qualifierNeedsGraph } from "./qualification.js";
+export {
+  QUALIFICATION_KEY,
+  DEFAULT_TRAVERSAL_DEPTH,
+  readQualificationDeclaration,
+  qualifierNeedsGraph,
+} from "./qualification.js";
 export type {
   EdgeStep,
   FieldPredicate,

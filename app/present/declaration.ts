@@ -86,6 +86,20 @@ const NOTE = "note";
 const RULES_KEY = "rules";
 
 /**
+ * WHICH VIEW A FRESH BOOT LANDS ON — `scripts/compile-landing.mjs`'s own published fact, read
+ * directly HERE rather than by a dedicated axis module, the same way `indentUnit` below is: it is
+ * one scalar, not a lookup table, and `app/index.html`'s `landOn` is its one consumer.
+ *
+ * SILENCE IS LEGAL: no `landingView` key at all means no view has been declared as the landing
+ * spot, and `landOn` treats that exactly the way every other missing declaration in this app is
+ * treated — a visible `console.warn`, never a silent guess wearing a config's name. See
+ * `scripts/compile-landing.mjs`'s header for where the operator declares this
+ * (`views/default_registration.yaml`'s `default_registration.landing_view`) and why it is
+ * published as a sibling top-level key rather than folded into `resolution.registration` today.
+ */
+export const LANDING_VIEW_KEY = "landingView";
+
+/**
  * The instance's indent unit, in spaces — how many leading spaces make one nesting level. Read
  * here (see the header) because it is a RENDITION fact, not a structural one: changing it changes
  * no edge (`content_diff.py`'s depth detection is unit-free), only whether a re-rendered line
@@ -114,6 +128,10 @@ export interface DeclarationReading {
   /** The instance's indent unit, in spaces. Always present — falls back to
    * `DEFAULT_INDENT_UNIT` when the key is absent or malformed, same as every other silent key. */
   readonly indentUnit: number;
+  /** Which view id a fresh boot should land on — `undefined` when the served document declares
+   * none. See `LANDING_VIEW_KEY`'s own comment for where that comes from and what `undefined`
+   * means to `app/index.html`'s `landOn`. */
+  readonly landingView: string | undefined;
   readonly problems: readonly string[];
 }
 
@@ -135,6 +153,7 @@ export function readDeclaration(document: unknown): DeclarationReading {
     return {
       contribution: {},
       indentUnit: DEFAULT_INDENT_UNIT,
+      landingView: undefined,
       problems: [
         `the declaration is ${Array.isArray(document) ? "an array" : typeof document}, not an ` +
           "object — every key stays silent and every line falls through to the default",
@@ -145,6 +164,7 @@ export function readDeclaration(document: unknown): DeclarationReading {
   const entries = Object.entries(document as Record<string, unknown>);
   const contribution: Record<string, Rendition> = {};
   let indentUnit = DEFAULT_INDENT_UNIT;
+  let landingView: string | undefined;
 
   for (const [key, value] of entries) {
     if (key === NOTE) {
@@ -184,6 +204,17 @@ export function readDeclaration(document: unknown): DeclarationReading {
       }
       continue;
     }
+    if (key === LANDING_VIEW_KEY) {
+      if (typeof value !== "string" || value === "") {
+        problems.push(
+          `'${LANDING_VIEW_KEY}' is ${JSON.stringify(value)}, which is not a non-empty view id — ` +
+            "no landing view is adopted from this document",
+        );
+      } else {
+        landingView = value;
+      }
+      continue;
+    }
     if (!(RESOLUTION_KEYS as readonly string[]).includes(key)) {
       problems.push(
         `'${key}' is not a resolution key and was NOT applied — the keys are ` +
@@ -201,5 +232,5 @@ export function readDeclaration(document: unknown): DeclarationReading {
     contribution[key] = value;
   }
 
-  return { contribution: contribution as Contribution, indentUnit, problems };
+  return { contribution: contribution as Contribution, indentUnit, landingView, problems };
 }
