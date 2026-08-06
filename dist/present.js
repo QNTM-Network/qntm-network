@@ -4515,8 +4515,7 @@ function paint(body, source, context, deps) {
   }
   const settle = deps.settle;
   if (settle !== void 0) {
-    const instruction = settle.take(source, deps.view ?? "");
-    if (instruction !== null) {
+    for (const instruction of settle.take(source, deps.view ?? "")) {
       const movingEl = rowsByLineIndex.get(instruction.placement.lineIndex);
       const beforeLineIndex = instruction.placement.beforeLineIndex;
       const beforeEl = beforeLineIndex === null ? null : rowsByLineIndex.get(beforeLineIndex) ?? null;
@@ -4565,89 +4564,107 @@ function paint(body, source, context, deps) {
 // app/present/settle.ts
 var SettleSurface = class {
   #view = "";
-  /** The moving row's identity, at arm time — `null` means nothing is armed. */
-  #moving = null;
-  /** Whether a "before" row was armed at all — `RowPlacement.beforeLineIndex === null` ("last")
-   * carries no row to re-anchor, so this is tracked separately from `#before` being `null`. */
-  #hasBefore = false;
-  /** The "before" row's identity, at arm time — meaningless unless `#hasBefore`. */
-  #before = null;
-  #animated = false;
+  /** One entry per row with an unconfirmed placement, keyed by that row's OWN identity string
+   * (`InstanceAnchor.instance`, taken at arm time) — never a second entry for the same physical row;
+   * see `arm()`. The class header states the bound this gives the map's size. */
+  #pending = /* @__PURE__ */ new Map();
   /**
    * Arm a placement, computed elsewhere, against the identity of the row it is about — not the
-   * exact string it was computed from. `source`/`view` are still required: they are what
-   * `instanceAnchorFor` needs to TAKE the anchor in the first place, exactly once, here. Overwrites
-   * whatever was armed before — there is one cursor and, for the same reason, one pending settle: a
-   * second commit before the first one's motion has even shown describes a NEWER prediction, and
-   * the newer one is the only one worth keeping.
+   * exact string it was computed from, and not against whatever else is currently pending for OTHER
+   * rows. `source`/`view` are still required: they are what `instanceAnchorFor` needs to TAKE the
+   * anchor in the first place, exactly once, here.
+   *
+   * REPLACES ONLY THIS ROW'S OWN PRIOR ENTRY, keyed by `moving.instance` — a second arm for a row
+   * already holding a pending claim describes a NEWER prediction about the SAME row (the one case
+   * "there is one cursor" ever meant), and overwrites it; every OTHER row's own pending entry is
+   * untouched. This is the whole of the fix: the single-slot version overwrote regardless of WHICH
+   * row the new arm was about, discarding a still-correct claim about a row nothing here has
+   * touched — see the class header for the reproduction.
+   *
+   * A DIFFERENT VIEW THAN THE ONE CURRENTLY HELD clears every pending entry before arming this one
+   * — see the class header's "A VIEW CHANGE" condition.
    *
    * IF EITHER ROW HAS NO IDENTITY TO TAKE — `placement.lineIndex` or a non-null
-   * `placement.beforeLineIndex` names a blank line or a line out of range — NOTHING IS ARMED, and
-   * whatever was armed before is cleared with it. `orderingPlacementFor` never returns such an
-   * index (a blank line has no marker value to rank), so this is a defensive floor, not a live
-   * path; it exists so an unrealistic caller fails by arming nothing rather than by arming a
-   * placement this class could never re-find.
+   * `placement.beforeLineIndex` names a blank line or a line out of range — NOTHING IS ARMED FOR
+   * THIS PLACEMENT, and every OTHER row's own pending entry is left exactly as it was.
+   * `orderingPlacementFor` never returns such an index (a blank line has no marker value to rank),
+   * so this is a defensive floor, not a live path; it exists so an unrealistic caller fails by
+   * arming nothing rather than by arming a placement this class could never re-find.
    */
   arm(source, view, placement) {
     const moving = instanceAnchorFor(source, placement.lineIndex, view);
     if (moving === null) {
-      this.#clear();
       return;
     }
     let before = null;
     if (placement.beforeLineIndex !== null) {
       before = instanceAnchorFor(source, placement.beforeLineIndex, view);
       if (before === null) {
-        this.#clear();
         return;
       }
     }
-    this.#view = view;
-    this.#moving = moving;
-    this.#hasBefore = placement.beforeLineIndex !== null;
-    this.#before = before;
-    this.#animated = false;
+    if (view !== this.#view) {
+      this.#pending.clear();
+      this.#view = view;
+    }
+    this.#pending.set(moving.instance, {
+      moving,
+      hasBefore: placement.beforeLineIndex !== null,
+      before,
+      animated: false
+    });
   }
   /**
-   * What THIS repaint of `source`/`view` should do, or `null` when nothing is armed, the view does
-   * not match, or the armed row(s) can no longer be found in `source` — see this class's own header
-   * for the three discard conditions and why none of them can be skipped.
+   * What THIS repaint of `source`/`view` should do — one `SettleInstruction` per row that still has
+   * a live, re-resolvable claim, in no particular order (`paint.ts` applies each independently by
+   * the LINE INDEX it carries, not by array position). `[]` for "nothing to do" — no rows armed, a
+   * view that does not match, or every armed row's own claim now fails to resolve — never `null`;
+   * an empty list and "nothing happened" are the same fact stated as a length.
+   *
+   * A ROW THAT CANNOT BE RE-FOUND IS DELETED FROM `#pending` HERE, not merely skipped — see the
+   * class header's "THE ROW LEAVING THE VIEW" condition. Every OTHER row's entry, found or not,
+   * is judged independently and never affects this one.
    *
    * THE LINE INDICES RETURNED ARE THIS REPAINT'S OWN, NEVER THE ONES ARMED AGAINST — recomputed
    * fresh, every call, from `resolveInstanceAnchor`'s current answer. A caller can act on them
    * without knowing anything moved.
    */
   take(source, view) {
-    if (this.#moving === null || this.#view !== view) {
-      return null;
+    if (view !== this.#view || this.#pending.size === 0) {
+      return [];
     }
-    const movingReading = resolveInstanceAnchor(this.#moving, source, view);
-    if (movingReading.outcome !== "found") {
-      this.#clear();
-      return null;
-    }
-    let beforeLineIndex = null;
-    if (this.#hasBefore) {
-      if (this.#before === null) {
-        this.#clear();
-        return null;
+    const instructions = [];
+    for (const [key, entry] of this.#pending) {
+      const movingReading = resolveInstanceAnchor(entry.moving, source, view);
+      if (movingReading.outcome !== "found") {
+        this.#pending.delete(key);
+        continue;
       }
-      const beforeReading = resolveInstanceAnchor(this.#before, source, view);
-      if (beforeReading.outcome !== "found") {
-        this.#clear();
-        return null;
+      let beforeLineIndex = null;
+      if (entry.hasBefore) {
+        if (entry.before === null) {
+          this.#pending.delete(key);
+          continue;
+        }
+        const beforeReading = resolveInstanceAnchor(entry.before, source, view);
+        if (beforeReading.outcome !== "found") {
+          this.#pending.delete(key);
+          continue;
+        }
+        beforeLineIndex = beforeReading.lineIndex;
       }
-      beforeLineIndex = beforeReading.lineIndex;
+      const animate = !entry.animated;
+      entry.animated = true;
+      instructions.push({
+        placement: { lineIndex: movingReading.lineIndex, beforeLineIndex },
+        animate
+      });
     }
-    const animate = !this.#animated;
-    this.#animated = true;
-    return {
-      placement: { lineIndex: movingReading.lineIndex, beforeLineIndex },
-      animate
-    };
+    return instructions;
   }
   /**
-   * A LINE IS ABOUT TO BE COMMITTED — discard the armed placement if it describes THIS row.
+   * A LINE IS ABOUT TO BE COMMITTED — discard the ONE pending entry that describes THIS row, if
+   * there is one; every other row's own pending entry is untouched.
    *
    * Called from `commitLine` (app/index.html), before the resolver walk that might re-arm, on
    * EVERY commit — the same "always called" posture `armPredict` already has, for the identical
@@ -4662,11 +4679,11 @@ var SettleSurface = class {
    *
    * `source`/`lineIndex` ARE THE COMMIT'S OWN "BEFORE" — `commit.source`/`commit.lineIndex`, the
    * file and the position as they stood the instant before this edit landed, which is the same
-   * source the currently-armed anchor would resolve against if nothing else had happened since it
-   * was armed. If it resolves there, to that exact line, this commit is re-touching the row the arm
-   * is about; the arm is cleared. If it resolves anywhere else, or not at all, this commit is about
-   * a DIFFERENT row and the standing arm is left exactly as it was — still a live claim about a row
-   * nothing here has touched.
+   * source each currently-armed anchor would resolve against if nothing else had happened since it
+   * was armed. Every entry is checked; the first (and, by construction, only) one that resolves to
+   * that exact line is the row this commit is re-touching, and it alone is removed. An edit that
+   * resolves nowhere, or to a different line, is about a DIFFERENT row, and every standing entry is
+   * left exactly as it was.
    *
    * CALL THIS ONLY FOR A `"set-line"` COMMIT. `LineCommit.source`'s own header states why: for
    * `"insert-line"`, `source.split("\n")[lineIndex]` is a DIFFERENT, unrelated line about to be
@@ -4678,20 +4695,16 @@ var SettleSurface = class {
    * exist when the arm was taken — so `"insert-line"` never needs this call at all.
    */
   supersede(source, view, lineIndex) {
-    if (this.#moving === null || this.#view !== view) {
+    if (view !== this.#view) {
       return;
     }
-    const reading = resolveInstanceAnchor(this.#moving, source, view);
-    if (reading.outcome === "found" && reading.lineIndex === lineIndex) {
-      this.#clear();
+    for (const [key, entry] of this.#pending) {
+      const reading = resolveInstanceAnchor(entry.moving, source, view);
+      if (reading.outcome === "found" && reading.lineIndex === lineIndex) {
+        this.#pending.delete(key);
+        return;
+      }
     }
-  }
-  #clear() {
-    this.#view = "";
-    this.#moving = null;
-    this.#hasBefore = false;
-    this.#before = null;
-    this.#animated = false;
   }
 };
 
