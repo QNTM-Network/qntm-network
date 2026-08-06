@@ -492,18 +492,18 @@ describe("one row geometry, two renditions", () => {
     }
   });
 
-  test("the predict affordance's own chip is held to the chip's row-safety rule too", () => {
-    // THE FOURTH WAY IN, and the same argument as the tag chip's own test above: `.row-prediction`
-    // is a PILL (padding, border, a background), appended onto a row that already exists, so its
-    // whole row-safety claim rests on being an ATOMIC INLINE whose box is its own content area —
-    // exactly the chip's own measured argument, reused rather than re-derived unmeasured.
+  test("the predict affordance's own run of text is held to the chip's row-safety rule too", () => {
+    // THE FOURTH WAY IN, and the same argument as the tag chip's own test above: `.row-prediction` is
+    // appended onto a row that already exists, so its whole row-safety claim rests on being an ATOMIC
+    // INLINE whose box is its own content area — exactly the chip's own measured argument, reused
+    // rather than re-derived unmeasured. UNLIKE THE CHIP, IT IS NOT A PILL — see the assertions below.
     const CHIP = ".viewbody .row-prediction";
-    assert.ok(rulesFor(CHIP).length > 0, "the predict chip has no rule at all");
+    assert.ok(rulesFor(CHIP).length > 0, "the predict affordance has no rule at all");
 
     assert.equal(declared(CHIP, "display"), "inline-block");
     assert.ok(
       rulesFor(".viewbody .task.done span .row-prediction").length > 0,
-      "the predict chip is atomic for the sake of a rule that no longer exists — remove one, remove both",
+      "the predict affordance is atomic for the sake of a rule that no longer exists — remove one, remove both",
     );
 
     const lineHeight = declared(CHIP, "line-height");
@@ -514,14 +514,17 @@ describe("one row geometry, two renditions", () => {
       assert.equal(declared(CHIP, property), undefined, `${CHIP} sets ${property}, which the row cannot absorb`);
     }
 
-    // AND IT MUST NOT LOOK LIKE THE TAG CHIP OR THE STAMP MARK — the operator's own principle for
-    // this whole feature is "the browser's first answer is a claim, not a fact", so a prediction
-    // sharing either token's own colour would let a claim pass as something the engine confirmed.
-    assert.notEqual(
-      declared(CHIP, "border"), declared(".viewbody .tagchip", "border"),
-      "the predict chip must not share the confirmed tag chip's own border",
-    );
-    assert.match(String(declared(CHIP, "border")), /dashed/, "a dashed border is this chip's own claim-not-fact marker");
+    // THE PERCEPTION RULE, PINNED IN CSS: the browser is authoritative until the engine disagrees, so
+    // a pending prediction MUST NOT be visually distinguishable from the row's own ordinary
+    // characters — no border, no background, no colour of its own. `design-the-two-rules.md` §5
+    // measured zero disagreement across every axis this repo can check; a border style that reads as
+    // "provisional" would be latency surfaced as a border, the same anti-pattern the status line was
+    // deleted for. This is a reversal of an earlier design (a dashed, accent-coloured pill) — the
+    // reversal is deliberate and is the fix, not a regression.
+    for (const property of ["border", "border-style", "background", "padding", "border-radius"]) {
+      assert.equal(declared(CHIP, property), undefined, `${CHIP} sets ${property} — that makes it a pill, and a pill reads as provisional`);
+    }
+    assert.equal(declared(CHIP, "color"), "inherit", `${CHIP} must take the row's own colour, not one of its own`);
   });
 
   test("the identity mark is held to the chip's rule, not to a second opinion", () => {

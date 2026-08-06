@@ -253,8 +253,61 @@ export function measurePromotion() {
   };
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// RENDERED OUTPUT — NOT MEASURABLE, and this is the gap the operator found live that every axis
+// above misses BY CONSTRUCTION, not by oversight. Filed 2026-08-06 against the ordering/predict
+// diagnosis (fix/the-prediction-is-the-answer): every measurement above compares what a RESOLVER
+// DECIDES (a boolean, a rank, a date) against the engine's own decision function. NONE of them
+// compare what `paint.ts` actually PAINTS onto the screen — the composed characters of a line —
+// against what the engine's renderer actually composes. The operator found a real divergence there
+// in one day of driving the live app (a rule-added token's POSITION on the line, and — unconfirmed
+// in this repo's own config — its GLYPH) that this harness, as it stood, could not have caught.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+export function measureRenderedOutput() {
+  return {
+    axis: "rendered-output",
+    measured: false,
+    reason:
+      "No fixture in this repo carries the engine's own COMPOSED LINE TEXT for a node with a " +
+      "rule-added field — only the DECIDED VALUE (membership/ordering/rules above all stop at 'what " +
+      "does the resolver return', never 'what does the string on screen say'). A read-only " +
+      "investigation of apps/qntm-md/ (2026-08-06, this branch's own PR) found the engine composes " +
+      "every line's tail through ONE function, `_field_expression_cells` " +
+      "(src/qntm_md/render/renderer.py:1138-1194), in a FIXED order — id stamp, then date cell, " +
+      "then tag cells, then marker cells (created_at's own cell — order_markers.yaml names it " +
+      "explicitly UNRANKED, trailing stable among markers), then chrome — called from all three " +
+      "render shapes (renderer.py:1216, 1254, 1280), always a FULL RECONSTRUCTION FROM GRAPH STATE " +
+      "('render = f(graph_state, view_config)... reads NO prior line_cache', that module's own " +
+      "docstring), never a positional patch of what the operator typed. THAT ORDER PUTS TAGS AFTER " +
+      "THE TITLE. This app's own `app/present/newline.ts` (`seedFor`) does the opposite for a fresh " +
+      "capture's DEFAULT NODE-TYPE TAG — it seeds `chrome.text + tokens.join(' ') + ' '` (tag BEFORE " +
+      "the cursor, so the operator's own title lands AFTER it) — while `app/present/rules.ts` " +
+      "(`renderRuleEffects`, the created-at stamp's own predictor) does `line + appended` (AFTER the " +
+      "operator's text), the opposite convention, IN THE SAME CODEBASE, for two things both claiming " +
+      "to preview 'what the engine will print'. That internal disagreement is real and checkable " +
+      "without an engine (see tests/app-seed-from-cascade.test.mjs's own pinned " +
+      "`seed.text === '- #person #personal '` against app/present/rules.ts's own trailing-append " +
+      "contract), but WHETHER seedFor's leading placement is actually wrong for a FIRST-CYCLE INGEST " +
+      "(as opposed to a later re-render) is not something this read-only investigation could confirm " +
+      "— the engine's own docstring describes steady-state re-rendering, not necessarily the very " +
+      "first cycle a freshly authored line goes through. What is needed: a NEW engine-side fixture, " +
+      "the same posture qualification-agreement.py/resolution-agreement.py already take — author a " +
+      "line with a leading tag exactly the way seedFor seeds one, run it through ONE real cycle " +
+      "against a read-only copy of state.db, and record the composed line text the engine actually " +
+      "returns. Until that fixture exists, this axis stays NOT MEASURABLE rather than guessed at — " +
+      "the same posture measurePromotion above takes for its own graph-dependent gap.",
+  };
+}
+
 function report() {
-  const results = [measureMembership(), measureOrdering(), measureRules(), measurePromotion()];
+  const results = [
+    measureMembership(),
+    measureOrdering(),
+    measureRules(),
+    measurePromotion(),
+    measureRenderedOutput(),
+  ];
   for (const r of results) {
     console.log(`\n── ${r.axis} ──`);
     if (!r.measured) {
