@@ -427,13 +427,17 @@ describe("1. REGISTRATION + DEFAULTS — `o` on a line under a section declared 
     return row.value;
   };
 
+  // 2026-08-06: seed text carries a reserved double space at the title slot rather than a single
+  // trailing space at the string's end — see `app-seed-from-cascade.test.mjs`'s own note, and
+  // `newline.ts`'s `NewLine.cursorOffset` header, "THE `o` SEED".
+
   test("REGISTRATION: a line opened in `queued` seeds the new type tag `#gentest_widget`", () => {
-    assert.equal(openAt(1), "- [ ] #gentest_widget #dev ");
+    assert.equal(openAt(1), "- [ ]  #gentest_widget #dev");
   });
 
   test("DEFAULTS: `queued` and `done` seed DIFFERENT tags for the SAME type — the section's OWN default, not a copied neighbour", () => {
-    assert.equal(openAt(1), "- [ ] #gentest_widget #dev ", "queued should seed its own default, #dev");
-    assert.equal(openAt(5), "- [ ] #gentest_widget #qntm ", "done should seed its own default, #qntm, not queued's");
+    assert.equal(openAt(1), "- [ ]  #gentest_widget #dev", "queued should seed its own default, #dev");
+    assert.equal(openAt(5), "- [ ]  #gentest_widget #qntm", "done should seed its own default, #qntm, not queued's");
   });
 
   test("SECTION ADDRESSING, the registration half: `archived` — MEMBERSHIP-UNPUBLISHED but still ADDRESSABLE — still seeds correctly", () => {
@@ -441,7 +445,7 @@ describe("1. REGISTRATION + DEFAULTS — `o` on a line under a section declared 
     // own header: "what a new line BECOMES does not depend on what already belongs"). `archived`'s
     // qualification was refused (§5's negative half) but its registration/defaults were not, and
     // this is the browser proving that distinction rather than this file merely asserting it.
-    assert.equal(openAt(7), "- [ ] #gentest_widget #dev ");
+    assert.equal(openAt(7), "- [ ]  #gentest_widget #dev");
   });
 
   test("the trailing blank line of THIS brand-new view seeds exactly like the line above it (app-seed-from-cascade's own fix, re-proven on new config)", () => {

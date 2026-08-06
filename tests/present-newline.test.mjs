@@ -246,14 +246,22 @@ describe("3. the new line is what the cascade says, and the cascade says which r
   });
 
   test("the rung that answered is reported, and it is the most specific one that could", () => {
+    // No `declared` argument in any of these — `cursorOffset` falls back to `text.length` (see
+    // `NewLine.cursorOffset`'s own header), the same "cursor at the end" a caller with no
+    // composition declaration always got.
     // LINE — the line directly above.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4), { text: "- [ ] ", level: "LINE", tokens: [] });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4), { text: "- [ ] ", level: "LINE", tokens: [], cursorOffset: 6 });
     // STRUCTURAL_NODE — the section's own lines, reached by looking DOWN, because a line opened
     // directly under a heading has nothing above it inside its own section.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 3), { text: "- [ ] ", level: "STRUCTURAL_NODE", tokens: [] });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 3), {
+      text: "- [ ] ",
+      level: "STRUCTURAL_NODE",
+      tokens: [],
+      cursorOffset: 6,
+    });
     // VIEW — the `## Notes` section has no node lines at all, so the answer comes from across a
     // heading. `## Notes` is at index 6; a line opened at 7 sits inside it.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 7), { text: "- [ ] ", level: "VIEW", tokens: [] });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 7), { text: "- [ ] ", level: "VIEW", tokens: [], cursorOffset: 6 });
     // GLOBAL — nothing in the view has ever been printed as a node, so nothing is resolved.
     assert.equal(seedFor(EMPTY_VIEW, 1), null);
   });
@@ -261,7 +269,7 @@ describe("3. the new line is what the cascade says, and the cascade says which r
   test("the indent is inherited from the line above and from nowhere else", () => {
     // Enter at the end of a nested child makes its SIBLING. A section-level or view-level answer
     // carries no indent, because a stranger's nesting is not a fact about this line.
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 5), { text: "  - [ ] ", level: "LINE", tokens: [] });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 5), { text: "  - [ ] ", level: "LINE", tokens: [], cursorOffset: 8 });
     assert.equal(seedFor("## a\n\n## b\n  - [ ] deep\n", 1)?.text, "- [ ] ");
   });
 
@@ -521,10 +529,12 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
 
   test("a checkbox-shaped declared type seeds a checkbox, from an empty view", () => {
     // Line 1 is the blank line directly under `## high-priority` — the FIRST heading, ordinal 0.
+    // `declared(...)` carries no `composition` — `cursorOffset` falls back to `text.length`.
     assert.deepEqual(seedFor(EMPTY_SECTIONED_VIEW, 1, declared("high-priority", "task")), {
       text: "- [ ] ",
       level: "GLOBAL",
       tokens: [],
+      cursorOffset: 6,
     });
   });
 
@@ -536,6 +546,7 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
       text: "- ",
       level: "GLOBAL",
       tokens: [],
+      cursorOffset: 2,
     });
   });
 
@@ -549,6 +560,7 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
       text: "- ",
       level: "GLOBAL",
       tokens: [],
+      cursorOffset: 2,
     });
   });
 
@@ -587,7 +599,12 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
     // one section away. `CHECKBOX_VIEW` prints checkbox lines, so LINE/STRUCTURAL_NODE/VIEW answer
     // long before the GLOBAL rung is even reached, whatever `declared` claims.
     const misleading = { view: "daily-work", sectionOrder: {}, sections: {}, chromeShapes: {} };
-    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4, misleading), { text: "- [ ] ", level: "LINE", tokens: [] });
+    assert.deepEqual(seedFor(CHECKBOX_VIEW, 4, misleading), {
+      text: "- [ ] ",
+      level: "LINE",
+      tokens: [],
+      cursorOffset: 6,
+    });
   });
 
   test("openLine threads `declared` through exactly the same way it threads everything else", () => {
@@ -611,5 +628,97 @@ describe("7. THE GLOBAL RUNG BECOMES A READ — design-the-resolution-architectu
     const opened = openLine(EMPTY_SECTIONED_VIEW, 1, draft, (at) => declined.push(at));
     assert.equal(opened, false);
     assert.deepEqual(declined, [1]);
+  });
+});
+
+describe("8. THE `o` SEED — the cursor lands where the TITLE belongs, not after the declared tag", () => {
+  // The engine's own declared order (`resolution.composition`) — checkbox HEAD is
+  // [checkbox, title], tail is [stamp, date, tags, markers, chrome]. See `scripts/compile-
+  // resolution.mjs`'s own "COMPOSITION" header for the renderer.py citations this mirrors.
+  const COMPOSITION = {
+    heads: { checkbox: ["checkbox", "title"], plain_line: ["title"] },
+    tail: ["stamp", "date", "tags", "markers", "chrome"],
+    separator: " ",
+  };
+
+  const EMPTY_SECTIONED_VIEW = "## high-priority\n\n## capture\n\n## backlog\n";
+
+  function declaredWithTokens(sectionId, nodeType, tokens, chromeShapes = { task: "checkbox", note: "plain_line" }) {
+    return {
+      view: "daily-work",
+      sectionOrder: { "daily-work": ["high-priority", "capture", "backlog"] },
+      sections: { "daily-work": { [sectionId]: { nodeType } } },
+      chromeShapes,
+      sectionRegistration: { "daily-work": { [sectionId]: { nodeType, tokens } } },
+      composition: COMPOSITION,
+    };
+  }
+
+  test("BEFORE THE FIX (documented, not exercised): the cursor sat at the string's end, AFTER " +
+    "the tag — this is the shape that moved the operator's line under him on the next render", () => {
+    // Without a `composition` declaration, cursorOffset falls back to text.length — the old
+    // behaviour, preserved for a caller that predates this field. Shown here so the CONTRAST with
+    // the fixed behaviour below is explicit, not implied.
+    const noComposition = {
+      view: "daily-work",
+      sectionOrder: { "daily-work": ["high-priority"] },
+      sections: { "daily-work": { "high-priority": { nodeType: "task" } } },
+      chromeShapes: { task: "checkbox" },
+      sectionRegistration: { "daily-work": { "high-priority": { nodeType: "task", tokens: ["#task"] } } },
+    };
+    const seed = seedFor(EMPTY_SECTIONED_VIEW, 1, noComposition);
+    assert.equal(seed.text, "- [ ] #task ");
+    assert.equal(seed.cursorOffset, seed.text.length, "old behaviour: cursor at the very end, after #task");
+  });
+
+  test("AFTER THE FIX: the cursor sits BEFORE the declared tag, where the title goes", () => {
+    const seed = seedFor(EMPTY_SECTIONED_VIEW, 1, declaredWithTokens("high-priority", "task", ["#task"]));
+    // Chrome is "- [ ] " (6 chars) — the cursor belongs immediately after it, before the reserved
+    // separator that leads into the tag.
+    assert.equal(seed.cursorOffset, 6);
+    // Typing "Buy milk" AT that offset reproduces the engine's own title-before-tag order exactly.
+    const typed = seed.text.slice(0, seed.cursorOffset) + "Buy milk" + seed.text.slice(seed.cursorOffset);
+    assert.equal(typed, "- [ ] Buy milk #task");
+  });
+
+  test("plain_line shape: the cursor sits right after the bullet, before the tag", () => {
+    const seed = seedFor(EMPTY_SECTIONED_VIEW, 1, declaredWithTokens("high-priority", "note", ["#note"]));
+    assert.equal(seed.cursorOffset, 2);
+    const typed = seed.text.slice(0, seed.cursorOffset) + "A note" + seed.text.slice(seed.cursorOffset);
+    assert.equal(typed, "- A note #note");
+  });
+
+  test("no declared tokens at all: the cursor still lands at the end (nothing to place it before)", () => {
+    const seed = seedFor(EMPTY_SECTIONED_VIEW, 1, declaredWithTokens("high-priority", "task", []));
+    assert.equal(seed.text, "- [ ] ");
+    assert.equal(seed.cursorOffset, 6, "with no tokens the title-slot and the string's end coincide");
+  });
+
+  test("multiple declared tokens: they all follow the title, in the engine's own order", () => {
+    const seed = seedFor(
+      EMPTY_SECTIONED_VIEW,
+      1,
+      declaredWithTokens("high-priority", "task", ["#task", "#personal"]),
+    );
+    assert.equal(seed.cursorOffset, 6);
+    const typed = seed.text.slice(0, seed.cursorOffset) + "Call mum" + seed.text.slice(seed.cursorOffset);
+    assert.equal(typed, "- [ ] Call mum #task #personal");
+  });
+
+  test("openLine carries cursorOffset into the DraftSurface", () => {
+    const draft = new DraftSurface();
+    const opened = openLine(
+      EMPTY_SECTIONED_VIEW,
+      1,
+      draft,
+      undefined,
+      declaredWithTokens("high-priority", "task", ["#task"]),
+    );
+    assert.equal(opened, true);
+    // The seed carries a reserved double space at the title slot — one from the checkbox's own
+    // trailing separator, one from the separator reserved between the (not-yet-typed) title and the
+    // tag. Both collapse into a single, correctly-placed space the instant the operator types.
+    assert.equal(draft.draft.seed, "- [ ]  #task");
+    assert.equal(draft.draft.cursorOffset, 6);
   });
 });

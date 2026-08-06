@@ -115,6 +115,14 @@ export interface Draft {
   readonly typed: string;
   /** Where the row sits, or `null` when nothing beside it could be anchored. See `DraftPlace`. */
   readonly place: DraftPlace | null;
+  /**
+   * WHERE THE CURSOR BELONGS WITHIN `seed`, the instant the row is opened — `NewLine.cursorOffset`
+   * from `newline.ts`'s `seedFor`, carried through unchanged. `undefined` for a caller that never
+   * computed one (a draft opened by something other than `seedFor`'s own `openLine`), in which case
+   * the row keeps the browser's own default for a freshly focused value — its end, unchanged from
+   * before this field existed. See `paint.ts`'s `paintDraft` for the one place this is consumed.
+   */
+  readonly cursorOffset: number | undefined;
 }
 
 /**
@@ -232,9 +240,13 @@ export class DraftSurface {
     return this.#draft?.lineIndex === lineIndex;
   }
 
-  /** Open a line. One at a time — there is one cursor, and a draft always has it. */
-  open(lineIndex: number, seed: string, place: DraftPlace | null = null): void {
-    this.#draft = { lineIndex, seed, typed: seed, place };
+  /** Open a line. One at a time — there is one cursor, and a draft always has it.
+   *
+   * `cursorOffset` is OPTIONAL and additive — see `Draft.cursorOffset`'s own header. Every existing
+   * caller that passes only `(lineIndex, seed, place)` keeps getting `undefined`, which `paint.ts`'s
+   * `paintDraft` reads as "let the browser place the caret", exactly as it always has. */
+  open(lineIndex: number, seed: string, place: DraftPlace | null = null, cursorOffset?: number): void {
+    this.#draft = { lineIndex, seed, typed: seed, place, cursorOffset };
     this.#generation += 1;
   }
 

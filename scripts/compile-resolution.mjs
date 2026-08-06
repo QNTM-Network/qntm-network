@@ -137,6 +137,49 @@ export const ENGINE_LITERAL_DEFAULT_ORDERING = Object.freeze([
 // `normal` and `medium` really do share rank 2 in the engine's own dict.
 export const ENGINE_LITERAL_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
 
+// ── COMPOSITION — the SECOND direction of a line grammar, and why it is not in `lineGrammars` ──
+//
+// `line_grammars.yaml` declares RECOGNITION — what a whole LINE may look like, at parse-boundary
+// granularity (blank / fenced-code-delimiter / heading-prefix). Its own header says the emit
+// direction is NOT shape-driven: "render/renderer.py composes a body line's `- ` bullet ... directly"
+// — a composition row added there would load clean and read by nothing. So this is a DIFFERENT
+// fact at a DIFFERENT granularity: given a body line already recognised as checkbox / plain_line,
+// WHERE each CELL goes — the checkbox glyph, the title, the `[[qntm:N]]` stamp, the tags, the
+// markers, the outgoing-edge chrome.
+//
+// Unlike `defaultOrdering`, there is NO config surface for this at all — `apps/qntm-md/config/`
+// carries no key that could express it, so this is always the engine's own literal, never a
+// per-operator override; there is no `"config"` vs `"engine-fallback"` split to publish.
+//
+// Read LIVE off `apps/qntm-md/src/qntm_md/render/renderer.py`:
+//   `_field_expression_cells` (renderer.py:1138-1194) — the ONE tail every shape emits:
+//     stamp (`qntm_id_cell`), then date (`date_cell` — ALWAYS "" today, the dissolved 2026-05-30
+//     #35 path; `due_date` now round-trips through the marker path like any other marker field,
+//     kept here for faithfulness to the real function shape, not tidiness), then tags, then
+//     markers, then outgoing-edge chrome.
+//   `_emit_checkbox_shape` (renderer.py:1197-1225) — HEAD = [checkbox, title], then the tail above.
+//   `_emit_plain_line_shape` (renderer.py:1267-1290) — HEAD = [title], then the tail above.
+//   (`stat_line`'s HEAD is one FUSED `title: value` cell composed by
+//   `grammar.node_type_form.compose_stat_line_head` — never spelled here — and is not published
+//   below because `SEEDABLE_SHAPES` above already excludes it from anything this app composes.)
+//   The whole line (renderer.py:1003): `"    " * depth + "- " + " ".join(cell for cell in cells if cell)`
+//   — 4 spaces per depth level, a literal `- ` bullet, every non-empty cell joined by one space.
+//
+// Pinned against a LIVE import of that renderer by `scripts/composition-agreement.py` (the same
+// discipline `resolution-agreement.py` established for `defaultOrdering`/`priorityRank`) — see
+// `tests/composition-agreement.test.mjs` for the second, independent half: it recomposes
+// `tests/fixtures/composition-agreement.json`'s own cell values through
+// `app/present/express/composition.ts`'s `composeLine`, using ONLY this declared order, and
+// asserts the result against that fixture's `expectedLine` — the engine's own committed output.
+export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
+  heads: Object.freeze({
+    checkbox: Object.freeze(["checkbox", "title"]),
+    plain_line: Object.freeze(["title"]),
+  }),
+  tail: Object.freeze(["stamp", "date", "tags", "markers", "chrome"]),
+  separator: " ",
+});
+
 const CAPTURE_FIELDS_NOTE =
   "a new line carries its resolved node type, the schema's declared field defaults and its " +
   "section's own 'defaults:' block, and nothing else";
@@ -1005,6 +1048,9 @@ export function compile(files, ledger = new Ledger()) {
     // so the fallback is a visible fact, never the silent one this file used to publish.
     defaultOrdering: defaultOrderingResult.ordering,
     defaultOrderingSource: defaultOrderingResult.source,
+    // THE SECOND DIRECTION OF THE LINE GRAMMAR — see "COMPOSITION" above. Always the engine's own
+    // literal (no config surface exists for it), published unconditionally like `lineGrammars`.
+    composition: ENGINE_LITERAL_COMPOSITION,
   };
   // `priorityRank` follows the same "absent means nothing to say" convention every other optional
   // key in this declaration already uses (see resolutiontable.ts's own header) — omitted, not

@@ -1045,7 +1045,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=ff4c964490";
+} from "/dist/present.js?v=ae03af58fb";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1146,6 +1146,11 @@ function globalRegistrationFor(viewId) {
     // and `.nodeType` only as the last-resort chrome source for the 137 sections
     // `qualification.sections` drops. See that module's header.
     sectionRegistration: resolution.sectionRegistration,
+    // THE `o` SEED (2026-08-06): where the operator's own words belong relative to the declared
+    // tokens above. `undefined` falls back to the previous cursor placement — see `newline.ts`'s
+    // `NewLine.cursorOffset` header — so a stale `presentation.json` predating this key degrades to
+    // exactly what shipped before it existed, never a guess.
+    composition: resolution.composition,
   };
 }
 /**

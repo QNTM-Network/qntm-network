@@ -155,6 +155,32 @@ export interface DayBoundary {
 export type ChromeShape = "checkbox" | "plain_line";
 
 /**
+ * ONE CELL CLASS — the vocabulary `resolution.composition` orders, and nothing more specific than
+ * that. `"tags"`/`"markers"`/`"chrome"` name FAMILIES of cell (a line may carry several tag cells),
+ * `"checkbox"`/`"title"`/`"stamp"`/`"date"` name a single cell. This IS the closed alphabet a
+ * composition may speak in — not an operator-declared field or token, which never appears here (see
+ * `app/present/express/composition.ts`'s own header for why that boundary matters).
+ */
+export type CompositionCellClass = "checkbox" | "title" | "stamp" | "date" | "tags" | "markers" | "chrome";
+
+/**
+ * THE SECOND DIRECTION OF A LINE GRAMMAR — where a cell GOES, given a line already recognised as
+ * one of `heads`' keys. See `scripts/compile-resolution.mjs`'s own header ("COMPOSITION") for the
+ * full citation of `renderer.py`'s composition order this mirrors, and this module's own header for
+ * why it is a fourth reader on this table rather than a widening of `lineGrammars`.
+ *
+ * `heads` is keyed by render shape (`chromeShapes`' own two values — `stat_line`/`heading` are
+ * never seeded by this app and so never appear here, the same restriction `SEEDABLE_SHAPES` already
+ * applies elsewhere on this table). `tail` is the ONE cell-class order every shape's body shares
+ * after its head — see `_field_expression_cells` in the citation above.
+ */
+export interface Composition {
+  readonly heads: Readonly<Record<ChromeShape, readonly CompositionCellClass[]>>;
+  readonly tail: readonly CompositionCellClass[];
+  readonly separator: string;
+}
+
+/**
  * WHAT A NEW LINE UNDER ONE SECTION BECOMES — rungs 1 and 2 of `design-the-rule-mirror.md`.
  *
  * `nodeType` is the registration answer, cascaded STRUCTURAL_NODE -> VIEW -> GLOBAL by the
@@ -267,6 +293,14 @@ export interface ConfigResolutionTable {
    */
   readonly priorityRank: Readonly<Record<string, number>>;
   /**
+   * THE SECOND DIRECTION OF THE LINE GRAMMAR — where a cell goes, once a line's shape is known. See
+   * the `Composition` type's own header. Unlike `defaultOrdering`, there is no config-vs-engine-
+   * fallback split to publish: no config surface for this exists at all, so it is always the
+   * engine's own literal — `undefined` only when the served document predates this key or the key
+   * is malformed, never as a per-operator answer.
+   */
+  readonly composition: Composition | undefined;
+  /**
    * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. The two comments
    * above ("a field absent here has no known marker", "a type absent here is one whose chrome this
    * app does not know how to produce") described a refusal the operator had no way to see: absence
@@ -305,6 +339,7 @@ const TOP_KEYS = [
   "defaultOrdering",
   "defaultOrderingSource",
   "priorityRank",
+  "composition",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
@@ -318,6 +353,8 @@ const TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"] as const;
 const DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"] as const;
 const DIRECTIONS = ["asc", "desc"] as const;
 const CHROME_SHAPES = ["checkbox", "plain_line"] as const;
+const COMPOSITION_KEYS = ["heads", "tail", "separator"] as const;
+const COMPOSITION_CELL_CLASSES = ["checkbox", "title", "stamp", "date", "tags", "markers", "chrome"] as const;
 
 // THERE IS NO `EMPTY` TABLE, AND THERE CANNOT BE ONE. This module used to keep a constant with
 // every field at its "nothing to say" value and hand it back for a document that declared no
@@ -814,6 +851,80 @@ function readPriorityRank(value: unknown, problems: string[]): Record<string, nu
   return out;
 }
 
+/** One cell-class order (a `heads.<shape>` entry, or `tail`) — a non-empty array drawn ONLY from
+ * `COMPOSITION_CELL_CLASSES`, reported and dropped otherwise. */
+function readCellClassOrder(
+  path: string,
+  value: unknown,
+  problems: string[],
+): readonly CompositionCellClass[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not a non-empty array — this order stays unknown`);
+    return undefined;
+  }
+  const out: CompositionCellClass[] = [];
+  for (const [i, entry] of value.entries()) {
+    if (!(COMPOSITION_CELL_CLASSES as readonly string[]).includes(entry as string)) {
+      problems.push(
+        `'${path}[${i}]' is ${JSON.stringify(entry)}, not one of ${COMPOSITION_CELL_CLASSES.join(", ")}`,
+      );
+      return undefined;
+    }
+    out.push(entry as CompositionCellClass);
+  }
+  return out;
+}
+
+/**
+ * `resolution.composition` — see the `Composition` type's own header. A malformed shape yields
+ * `undefined` for the WHOLE fact (unlike `chromeShapes`/`ordering`'s per-entry tolerance): a
+ * composer fed a half-declared order — a `tail` but no `heads.checkbox` — would silently compose a
+ * line missing its own bullet or title, which is a worse failure than declining to compose at all.
+ */
+function readComposition(value: unknown, problems: string[]): Composition | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.composition`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — composition stays unknown`);
+    return undefined;
+  }
+  for (const key of Object.keys(value)) {
+    if (!(COMPOSITION_KEYS as readonly string[]).includes(key)) {
+      problems.push(`'${path}.${key}' is not a recognised key — the keys are ${COMPOSITION_KEYS.join(", ")}`);
+    }
+  }
+  const { heads, tail, separator } = value;
+  if (!isPlainObject(heads)) {
+    problems.push(`'${path}.heads' is ${shapeOf(heads)}, not an object`);
+    return undefined;
+  }
+  const readHeads: Partial<Record<ChromeShape, readonly CompositionCellClass[]>> = {};
+  for (const shape of CHROME_SHAPES) {
+    if (!(shape in heads)) {
+      problems.push(`'${path}.heads.${shape}' is missing — every seedable shape needs a declared head`);
+      return undefined;
+    }
+    const read = readCellClassOrder(`${path}.heads.${shape}`, (heads as Record<string, unknown>)[shape], problems);
+    if (read === undefined) return undefined;
+    readHeads[shape] = read;
+  }
+  for (const key of Object.keys(heads)) {
+    if (!(CHROME_SHAPES as readonly string[]).includes(key)) {
+      problems.push(`'${path}.heads.${key}' is not a recognised shape — the shapes are ${CHROME_SHAPES.join(", ")}`);
+    }
+  }
+  const readTail = readCellClassOrder(`${path}.tail`, tail, problems);
+  if (readTail === undefined) return undefined;
+  if (typeof separator !== "string" || separator === "") {
+    problems.push(`'${path}.separator' is ${JSON.stringify(separator)}, not a non-empty string`);
+    return undefined;
+  }
+  return {
+    heads: readHeads as Readonly<Record<ChromeShape, readonly CompositionCellClass[]>>,
+    tail: readTail,
+    separator,
+  };
+}
+
 /**
  * Read the `resolution` key of a served presentation declaration.
  *
@@ -911,6 +1022,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       defaultOrderingSource:
         "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : undefined,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
+      composition: "composition" in raw ? readComposition(raw.composition, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
     problems,

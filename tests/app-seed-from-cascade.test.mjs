@@ -178,18 +178,28 @@ describe("1. `o` ON THE TRAILING BLANK LINE — the browser's own observation, d
     press("G");
   };
 
-  test("in `personal/all` it seeds `- [ ] #task #personal `, the same as one line higher", () => {
+  // 2026-08-06: the SEED TEXT changed shape once `resolution.composition` is declared and
+  // `newline.ts`'s `seedFor` composes it (see that module's own header, "THE `o` SEED"). The title
+  // slot reserves ITS OWN separator on both sides — one from the checkbox's trailing space, one
+  // from the separator between the (not-yet-typed) title and the declared tag — so the seed carries
+  // a double space where the title goes, rather than a single trailing space at the string's end.
+  // That double space is not a defect: `openAt`'s row also carries `cursorOffset` (asserted below,
+  // via `row.selectionStart` — see `paint.ts`'s `paintDraft`), placed exactly BETWEEN the two
+  // spaces, so the first character typed lands where the title belongs and both spaces resolve to
+  // one on either side of it, matching the engine's own title-then-tag order.
+
+  test("in `personal/all` it seeds `- [ ]  #task #personal`, the same as one line higher", () => {
     assert.equal(
       openAt("all-personal", toLastLine),
-      "- [ ] #task #personal ",
+      "- [ ]  #task #personal",
       "`o` on the trailing blank line copied the neighbour's chrome and dropped the declaration",
     );
   });
 
-  test("in `inbox` it seeds `- [ ] #task `, the same as one line higher", () => {
+  test("in `inbox` it seeds `- [ ]  #task`, the same as one line higher", () => {
     assert.equal(
       openAt("inbox", toLastLine),
-      "- [ ] #task ",
+      "- [ ]  #task",
       "`o` on the trailing blank line copied the neighbour's chrome and dropped the declaration",
     );
   });
@@ -198,11 +208,22 @@ describe("1. `o` ON THE TRAILING BLANK LINE — the browser's own observation, d
   // are a comparison rather than a bare literal: what the trailing blank line now gives is exactly
   // what a real line already gave, which is the operator's own way of putting it.
   test("THE CONTROL: `o` on a real line is unchanged, in both views", () => {
-    assert.equal(openAt("all-personal", (press) => (press("g"), press("g"), press("j"))), "- [ ] #task #personal ");
+    assert.equal(openAt("all-personal", (press) => (press("g"), press("g"), press("j"))), "- [ ]  #task #personal");
     assert.equal(
       openAt("inbox", (press) => (press("g"), press("g"), press("j"), press("j"))),
-      "- [ ] #task ",
+      "- [ ]  #task",
     );
+  });
+
+  test("the cursor sits BEFORE the declared tag, where the title belongs — the `o` seed fix", () => {
+    page.__setGraphData({ snapshot: snapshot() });
+    page.__setCurrentViewId("all-personal");
+    page.paintView("all-personal", "chosen");
+    toLastLine(press);
+    press("o");
+    const row = inputs()[0];
+    assert.equal(row.value, "- [ ]  #task #personal");
+    assert.equal(row.selectionStart, 6, "cursor must land right after the checkbox, before the tag");
   });
 });
 
@@ -380,10 +401,13 @@ describe("3. THE INVARIANCE PROOF — over his own views, nothing moved that was
 
 describe("4. THE REFUSALS — each one still fires, none removed to make a case pass", () => {
   test("NO DECLARATION AT ALL still gets exactly the previous behaviour", () => {
+    // No `declared` argument — `cursorOffset` falls back to `text.length` (see `NewLine.
+    // cursorOffset`'s own header), the same "cursor at the end" every pre-existing caller got.
     assert.deepEqual(seedFor("## Overdue\n- [ ] a row [[qntm:1]] #task\n", 2), {
       text: "- [ ] ",
       level: "LINE",
       tokens: [],
+      cursorOffset: 6,
     });
   });
 
