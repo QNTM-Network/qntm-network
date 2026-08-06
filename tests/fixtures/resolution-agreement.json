@@ -130,6 +130,60 @@
       }
     },
     {
+      "view": "backlog",
+      "section": "unscoped",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "stage": "unscoped"
+      }
+    },
+    {
+      "view": "backlog",
+      "section": "diagnose-ready",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "stage": "diagnose_ready"
+      }
+    },
+    {
+      "view": "backlog",
+      "section": "scoped",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "stage": "scoped"
+      }
+    },
+    {
+      "view": "backlog",
+      "section": "in-progress",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "stage": "in_progress"
+      }
+    },
+    {
+      "view": "backlog",
+      "section": "passing",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "stage": "passing"
+      }
+    },
+    {
+      "view": "backlog",
+      "section": "retired",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "stage": "retired"
+      }
+    },
+    {
       "view": "blogs",
       "section": "to-check",
       "nodeType": "blog",
@@ -300,6 +354,224 @@
       }
     },
     {
+      "view": "flowtrace-capabilities",
+      "section": "unscoped",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "cap_state": "unscoped"
+      }
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "diagnose-ready",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "cap_state": "diagnose_ready"
+      }
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "scoped",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "cap_state": "scoped"
+      }
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "in-progress",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "cap_state": "in_progress"
+      }
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "passing",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "cap_state": "passing"
+      }
+    },
+    {
+      "view": "flowtrace-capabilities",
+      "section": "retired",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "cap_state": "retired"
+      }
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "exists",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "class_state": "exists"
+      }
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "concept",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "class_state": "concept"
+      }
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "extracted",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "class_state": "extracted"
+      }
+    },
+    {
+      "view": "flowtrace-classes",
+      "section": "subsumed",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "class_state": "subsumed"
+      }
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "exists",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "package_state": "exists"
+      }
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "concept",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "package_state": "concept"
+      }
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "extracted",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "package_state": "extracted"
+      }
+    },
+    {
+      "view": "flowtrace-packages",
+      "section": "subsumed",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "package_state": "subsumed"
+      }
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "held",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "principle_state": "held"
+      }
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "held-weak",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "principle_state": "held_weak"
+      }
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "violated",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "principle_state": "violated"
+      }
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "unverifiable",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "principle_state": "unverifiable"
+      }
+    },
+    {
+      "view": "flowtrace-principles",
+      "section": "un-anchored",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "principle_state": "un_anchored"
+      }
+    },
+    {
+      "view": "flowtrace-queue",
+      "section": "queue",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace",
+        "stage": "unscoped"
+      }
+    },
+    {
+      "view": "flowtrace-sinks",
+      "section": "sinks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace"
+      }
+    },
+    {
+      "view": "free-trial-dojo",
+      "section": "fragments",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dojo",
+        "project": "free-trial-dojo"
+      }
+    },
+    {
       "view": "god-box",
       "section": "not-discussed",
       "nodeType": "task",
@@ -323,6 +595,15 @@
       "nodeType": "group",
       "defaults": {
         "domain": "social"
+      }
+    },
+    {
+      "view": "habit-dojo",
+      "section": "classification",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dojo",
+        "project": "habit-dojo"
       }
     },
     {
@@ -640,6 +921,114 @@
       }
     },
     {
+      "view": "operator-flowtrace",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace"
+      }
+    },
+    {
+      "view": "operator-flowtrace",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace"
+      }
+    },
+    {
+      "view": "operator-flowtrace",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "flow-trace"
+      }
+    },
+    {
+      "view": "operator-qntm-network",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-network"
+      }
+    },
+    {
+      "view": "operator-qntm-network",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-network"
+      }
+    },
+    {
+      "view": "operator-qntm-network",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-network"
+      }
+    },
+    {
+      "view": "operator-qntm",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md"
+      }
+    },
+    {
+      "view": "operator-qntm",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md"
+      }
+    },
+    {
+      "view": "operator-qntm",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md"
+      }
+    },
+    {
+      "view": "operator-trace-orchestration",
+      "section": "tasks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "trace-orchestration"
+      }
+    },
+    {
+      "view": "operator-trace-orchestration",
+      "section": "outcomes",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "trace-orchestration"
+      }
+    },
+    {
+      "view": "operator-trace-orchestration",
+      "section": "waiting-for",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "trace-orchestration"
+      }
+    },
+    {
       "view": "outcomes-all",
       "section": "work-outcomes",
       "nodeType": "task",
@@ -820,6 +1209,224 @@
       }
     },
     {
+      "view": "qntm-capabilities",
+      "section": "unscoped",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "cap_state": "unscoped"
+      }
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "diagnose-ready",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "cap_state": "diagnose_ready"
+      }
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "scoped",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "cap_state": "scoped"
+      }
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "in-progress",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "cap_state": "in_progress"
+      }
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "passing",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "cap_state": "passing"
+      }
+    },
+    {
+      "view": "qntm-capabilities",
+      "section": "retired",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "cap_state": "retired"
+      }
+    },
+    {
+      "view": "qntm-classes",
+      "section": "exists",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "class_state": "exists"
+      }
+    },
+    {
+      "view": "qntm-classes",
+      "section": "concept",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "class_state": "concept"
+      }
+    },
+    {
+      "view": "qntm-classes",
+      "section": "extracted",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "class_state": "extracted"
+      }
+    },
+    {
+      "view": "qntm-classes",
+      "section": "subsumed",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "class_state": "subsumed"
+      }
+    },
+    {
+      "view": "qntm-packages",
+      "section": "exists",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "package_state": "exists"
+      }
+    },
+    {
+      "view": "qntm-packages",
+      "section": "concept",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "package_state": "concept"
+      }
+    },
+    {
+      "view": "qntm-packages",
+      "section": "extracted",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "package_state": "extracted"
+      }
+    },
+    {
+      "view": "qntm-packages",
+      "section": "subsumed",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "package_state": "subsumed"
+      }
+    },
+    {
+      "view": "qntm-principles",
+      "section": "held",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "principle_state": "held"
+      }
+    },
+    {
+      "view": "qntm-principles",
+      "section": "held-weak",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "principle_state": "held_weak"
+      }
+    },
+    {
+      "view": "qntm-principles",
+      "section": "violated",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "principle_state": "violated"
+      }
+    },
+    {
+      "view": "qntm-principles",
+      "section": "unverifiable",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "principle_state": "unverifiable"
+      }
+    },
+    {
+      "view": "qntm-principles",
+      "section": "un-anchored",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "principle_state": "un_anchored"
+      }
+    },
+    {
+      "view": "qntm-queue",
+      "section": "queue",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md",
+        "stage": "unscoped"
+      }
+    },
+    {
+      "view": "qntm-sinks",
+      "section": "sinks",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "qntm-md"
+      }
+    },
+    {
+      "view": "routine-cascade-dojo",
+      "section": "governed",
+      "nodeType": "routine",
+      "defaults": {
+        "domain": "dojo",
+        "project": "routine-cascade-dojo"
+      }
+    },
+    {
       "view": "routines-admin",
       "section": "admin-routines",
       "nodeType": "routine",
@@ -993,6 +1600,15 @@
       "nodeType": "task",
       "defaults": {
         "domain": "spirit"
+      }
+    },
+    {
+      "view": "termination-dojo",
+      "section": "fragments",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dojo",
+        "project": "termination-dojo"
       }
     },
     {
@@ -1001,6 +1617,16 @@
       "nodeType": "task",
       "defaults": {
         "domain": "personal"
+      }
+    },
+    {
+      "view": "trace-orchestration-queue",
+      "section": "queue",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dev",
+        "project": "trace-orchestration",
+        "stage": "unscoped"
       }
     },
     {
@@ -1017,6 +1643,15 @@
       "nodeType": "tv_show",
       "defaults": {
         "domain": "arts"
+      }
+    },
+    {
+      "view": "unlocks-dojo",
+      "section": "chain",
+      "nodeType": "task",
+      "defaults": {
+        "domain": "dojo",
+        "project": "dojo"
       }
     },
     {

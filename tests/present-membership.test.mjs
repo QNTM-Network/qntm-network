@@ -127,10 +127,20 @@ describe("2. what it refuses, and why each refusal is not timidity", () => {
     // old grammar refused every edge traversal outright. `compile-qualification.mjs`'s one-hop
     // `children:`/`parents:` widening now resolves it (see the NEXT test), so it moved to
     // `needs-graph-traversal` instead — a DIFFERENT, more specific abstention, not this one.
-    // `habit-dojo.yaml`'s `classification` section names `habit-dojo-heads`, which ranges over
-    // `project` (outside `RESOLVABLE_FIELDS`) — refused for a reason this widening never touches —
-    // and stands in for this test's original claim instead.
-    assert.equal(because("habit-dojo", "classification", "- [ ] Anything"), "no-section-declaration");
+    // `habit-dojo.yaml`'s `classification` section named `habit-dojo-heads`, which used to range
+    // over `project` (outside `RESOLVABLE_FIELDS`) — refused for a reason this widening never
+    // touched — and stood in for this test's original claim instead.
+    //
+    // RESTATED AGAIN, SAME DAY: resolvability became a CASCADE WALK
+    // (`deriveStructuralFieldsByQualification`, `compile-qualification.mjs`) — `project` is fixed
+    // by EVERY section that registers `habit-dojo-heads` via a section-level `defaults:`, so it is
+    // published now too (`because("habit-dojo", "classification", ...)` would answer
+    // `needs-graph-traversal`, not this abstention — `habit-dojo-heads` also carries an edge step).
+    // `daily-personal.yaml`'s `due-soon` section names `due-soon-tasks`, which ranges over
+    // `due_date < $cycle_today` — the CLOCK, not the value, is what this widening never touches
+    // (question 2, not question 1 — see this PR's own residue classification) — and stands in for
+    // this test's claim now.
+    assert.equal(because("daily-personal", "due-soon", "- [ ] Anything"), "no-section-declaration");
     assert.equal(because("inbox", "no-such-section", "- [ ] Anything"), "no-section-declaration");
   });
 

@@ -185,13 +185,20 @@ describe("1b. STEP 3's FALSIFIER — readQualificationDeclaration is wired into 
     // RESTATED AGAIN 2026-08-06: predicates 88 -> 112, views-with-a-published-section 51 -> 57.
     // `RESOLVABLE_FIELDS` stopped being the frozen `["node_type", "domain", "status"]` and became
     // `deriveResolvableFields`'s own measurement of the real config (18 fields) — see `compile-
-    // qualification.mjs`'s header. The counts are a census of HIS config and this generator's
-    // grammar, not a property of this wiring. What this test actually falsifies — that
-    // `presentationFromDeclaration` carries the qualification axis at all — is unchanged, and
-    // `problems` is still empty.
+    // qualification.mjs`'s header.
+    //
+    // RESTATED A THIRD TIME, SAME DAY: predicates 112 -> 178, views-with-a-published-section 57 ->
+    // 80. Resolvability became a CASCADE WALK, not a line-rung-only token lookup — a pattern
+    // referencing a field fixed by every section that registers it (`project`, `stage` — no
+    // vocabulary token, but a section-level `defaults:` in every real config site) is admitted too.
+    // `deriveStructuralFieldsByQualification` (`compile-qualification.mjs`) is the second rung; see
+    // that function's own header for the mechanism and the soundness argument. The counts are a
+    // census of HIS config and this generator's grammar, not a property of this wiring. What this
+    // test actually falsifies — that `presentationFromDeclaration` carries the qualification axis at
+    // all — is unchanged, and `problems` is still empty.
     const declared = presentationFromDeclaration(SERVED);
-    assert.equal(Object.keys(declared.qualification.predicates).length, 112);
-    assert.equal(Object.keys(declared.qualification.sections).length, 57);
+    assert.equal(Object.keys(declared.qualification.predicates).length, 178);
+    assert.equal(Object.keys(declared.qualification.sections).length, 80);
     assert.deepEqual(declared.problems, [], "wiring qualification in introduced a reported problem");
   });
 
