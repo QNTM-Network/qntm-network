@@ -4055,3 +4055,81 @@ backlog:
     once its own `tests/flow_scenarios/*.ts` scenario observes a real call.
   kind: null
   state: unscoped
+
+- id: the-graph-state-store-is-a-whole-blob-not-per-node-rows
+  title: >-
+    [batch-or-stream] [1] `orchestrator.py:_save_graph_in_transaction` (orchestrator.py:664-681)
+    writes `json.dumps(graph.to_dict())` as one row into `graph_state`, unconditionally, every
+    cycle — the exact mechanism `core/graph/…/sqlite_store.py`'s (unused) `SqliteStore.save()`
+    also implements, confirmed at `apps/qntm-md/src/qntm_md/persistence/schema.py:56` ("we never
+    call SqliteStore.save()"). `graph.to_dict()` (core/serialisation.py:46-58) has no dirty
+    tracking — every node, every edge, every cycle. This is the hard ceiling on streaming: no
+    amount of dirty-scoping upstream helps until persistence stops writing the whole graph per
+    change. See docs/implementation-artifacts/research-batch-or-stream.md §3, §5 item 3.
+  driving_capability: engine-persists-only-changed-graph-state
+  kind: capability
+  state: unscoped
+
+- id: rules-pass-becomes-scoped-to-affected-nodes-except-named-aggregates
+  title: >-
+    [batch-or-stream] [2] `qntm_rule_engine.execute` (core/rule-engine/…/executor/core.py:729-777)
+    evaluates every selected rule's pattern against current graph state every cycle, with no
+    "which rules could this change affect" narrowing. Six whole-graph aggregate rules
+    (coverage-*/age-of-intent-*, design-the-three-layers.md §7) are correctly whole-graph by
+    definition and cannot be scoped — everything else could be, in principle, given a dependency
+    index this repo does not have today. A design decision, not just an engineering task: which
+    rules are allowed to lag a stream and on what cadence. Needs the-graph-state-store-is-a-
+    whole-blob-not-per-node-rows landed first (§5 item 2 needs item 3). See §4, §5 item 2.
+  driving_capability: rules-pass-is-dirty-scoped
+  kind: capability
+  state: unscoped
+
+- id: render-phase-tracks-dirty-views-not-all-view-sheets
+  title: >-
+    [batch-or-stream] [3] `_run_render_phase` (orchestrator.py:3154, loop at :3215 on
+    origin/main) renders every view sheet every cycle; the only existing narrowing
+    (`skip_empty_render`) skips a disk WRITE, not the render computation itself.
+    `research-state-and-speed.md` §3.1 measured 8.9s for 72 views at rest — the largest named
+    remaining cost after PR #69 closed the id-lookup bottleneck. Needs a dirty-node signal from
+    rules-pass-becomes-scoped-to-affected-nodes-except-named-aggregates to know which views could
+    plausibly be affected. See §4, §5 item 4.
+  driving_capability: render-phase-is-dirty-scoped
+  kind: capability
+  state: unscoped
+
+- id: cycle-lock-stops-serialising-every-write-behind-one-mutex
+  title: >-
+    [batch-or-stream] [4] `server/app.py`'s `_cycle_lock` (a single process-wide
+    `threading.Lock()`, confirmed via worker/src/app.js:308-318's own account) blocks every
+    concurrent /cycle call — there is no partial-cycle and no priority queue, so a stream of
+    small writes queues fully behind each other's full-cycle cost (~10-14s per item,
+    worker/src/app.js:302). Finer-grained locking only helps once persistence and the rules/
+    render passes are actually scoped (needs rows 1-3) — locking a still-whole-graph-blob store
+    more finely just serialises contention differently. See §5 item 6.
+  driving_capability: writes-do-not-serialise-behind-one-global-cycle
+  kind: capability
+  state: unscoped
+
+- id: measure-graph-to-dict-serialisation-cost-in-isolation
+  title: >-
+    [batch-or-stream] [5] No document in this repo's evidence measures `graph.to_dict()` +
+    `json.dumps` + the `graph_state` INSERT in isolation, at the operator's real ~1,501-node
+    scale. Likely cheap (JSON-encoding ~741 KB of built dicts is not usually seconds), but
+    unmeasured — and the sustainable streaming rate under any future incremental design is
+    bounded by this step's own cost. A profiling task, not a build. See
+    docs/implementation-artifacts/research-batch-or-stream.md §3, §6, §5 item 9.
+  kind: null
+  state: unscoped
+
+- id: response-envelope-converges-with-the-scoped-node-wire
+  title: >-
+    [batch-or-stream] [6] `_envelope()` (server/app.py:1039-1052) rebuilds the whole graph + all
+    77 views on every single /cycle response, even for a one-checkbox write. This is the same
+    prerequisite design-the-three-layers.md §8 row 1 / §12 row 1 (the-scoped-node-wire) already
+    backlogs for the browser's working-set reason — streaming needs it on the way OUT
+    (a small write should get a small response) for exactly the reason the browser needs it on
+    the way IN. Recorded so whoever picks up the-scoped-node-wire knows it serves two masters, not
+    one. See §4, §5 item 5.
+  driving_capability: the-scoped-node-wire
+  kind: null
+  state: unscoped
