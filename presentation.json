@@ -8771,6 +8771,25 @@
       }
     ],
     "defaultOrderingSource": "engine-fallback",
+    "composition": {
+      "heads": {
+        "checkbox": [
+          "checkbox",
+          "title"
+        ],
+        "plain_line": [
+          "title"
+        ]
+      },
+      "tail": [
+        "stamp",
+        "date",
+        "tags",
+        "markers",
+        "chrome"
+      ],
+      "separator": " "
+    },
     "priorityRank": {
       "urgent": 4,
       "high": 3,

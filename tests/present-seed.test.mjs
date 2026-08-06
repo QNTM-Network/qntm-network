@@ -591,7 +591,9 @@ describe("5. THE REFUSALS — each one named, measured, and not assumed", () => 
     // declaration, and not one of them changed. Restated here because it is what makes this
     // additive rather than a new required parameter.
     const printed = "## Overdue\n- [ ] Draft the launch note [[qntm:121]] #task #work\n";
-    assert.deepEqual(seedFor(printed, 2), { text: "- [ ] ", level: "LINE", tokens: [] });
+    // `cursorOffset` falls back to `text.length` with no declaration — see `NewLine.cursorOffset`'s
+    // own header.
+    assert.deepEqual(seedFor(printed, 2), { text: "- [ ] ", level: "LINE", tokens: [], cursorOffset: 6 });
   });
 
   test("A SECTION `sectionAt` CANNOT NAME seeds no tokens", () => {

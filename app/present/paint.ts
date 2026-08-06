@@ -1440,12 +1440,22 @@ export function paint(
     if (superseded()) {
       return;
     }
-    // THE CARET GOES BACK TO THE END OF WHAT HE HAD TYPED, and only for a row that has survived a
-    // projection. A row still holding its seed is left exactly as it was — the browser lands the
-    // caret at the end of a freshly focused value anyway, and setting it here would change what
-    // every paint before this row existed produced.
+    // THE CARET GOES BACK TO THE END OF WHAT HE HAD TYPED, for a row that has survived a
+    // projection.
     if (open.typed !== open.seed) {
       (input as HTMLInputElement).setSelectionRange?.(open.typed.length, open.typed.length);
+      return;
+    }
+    // A FRESH ROW — still holding its seed, nothing typed yet. `open.cursorOffset` is `seedFor`'s
+    // own answer for where the operator's words belong (see `newline.ts`'s `NewLine.cursorOffset`
+    // header, "THE `o` SEED") and is set EXPLICITLY here rather than left to the browser's own
+    // default-to-end behaviour: that default is only correct when the seed carries no declared
+    // tokens after the title slot, which `cursorOffset` already accounts for either way — a
+    // caller with no declaration gets `cursorOffset === seed.length`, the same position the
+    // browser default would have picked, so setting it explicitly changes nothing for that case
+    // and fixes the one where tokens follow the title.
+    if (open.cursorOffset !== undefined) {
+      (input as HTMLInputElement).setSelectionRange?.(open.cursorOffset, open.cursorOffset);
     }
   };
 

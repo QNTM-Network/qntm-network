@@ -152,9 +152,12 @@
 
 import { sectionForInsertAt } from "./address.js";
 import { chromeOf, classifyLine } from "./express/rendition.js";
+import { composeSeed } from "./express/composition.js";
 import { placeFor } from "./draft.js";
 import type { PresentationLevel } from "./express/levels.js";
 import type { DraftSurface } from "./draft.js";
+import type { ChromeShape, Composition } from "./resolutiontable.js";
+import type { KnownCells } from "./express/composition.js";
 
 /**
  * What the GLOBAL rung needs to become a read instead of a refusal — design-the-resolution-
@@ -195,14 +198,22 @@ export interface GlobalRegistration {
       Readonly<Record<string, { readonly nodeType: string; readonly tokens: readonly string[] }>>
     >
   >;
+  /**
+   * `ConfigResolutionTable.composition` — where the operator's own words belong relative to the
+   * declared tokens above. See this module's header, "THE `o` SEED", and `express/composition.ts`'s
+   * own header. OPTIONAL, like every other slice on this interface: a caller that omits it gets the
+   * previous cursor placement (end of `text`) — see `NewLine.cursorOffset` for exactly what that
+   * fallback is and why it is safe.
+   */
+  readonly composition?: Composition;
 }
 
-/** A new line's opening characters, and the rung of the cascade that decided them. */
+/** A new line's opening characters, the rung of the cascade that decided them, and where the
+ * operator's own words belong inside them. */
 export interface NewLine {
   /**
    * The characters the line starts with. The chrome — `- [ ] `, `  - ` — followed by the DECLARED
-   * TOKENS, when a declaration was supplied and the section has any. Never the operator's content:
-   * everything here is something the config said, and the cursor sits after all of it.
+   * TOKENS, when a declaration was supplied and the section has any.
    */
   readonly text: string;
   /** Which rung decided the CHROME. `GLOBAL` appears only when a `GlobalRegistration` was supplied
@@ -217,6 +228,24 @@ export interface NewLine {
    * report WHAT was said without re-parsing the characters it just asked for.
    */
   readonly tokens: readonly string[];
+  /**
+   * WHERE THE OPERATOR'S OWN WORDS BELONG — "THE `o` SEED", the defect this field exists to fix.
+   *
+   * The engine composes a node line TITLE-FIRST: `_emit_checkbox_shape`/`_emit_plain_line_shape`
+   * put the title in the HEAD, and the stamp/tags/markers/chrome tail comes AFTER it
+   * (`renderer.py:1197-1290`, cited in full in `scripts/compile-resolution.mjs`'s own
+   * "COMPOSITION" header). Placing the cursor at the END of `text` — after the declared tokens —
+   * put the operator's typed words AFTER the tag instead. The characters still round-tripped (a tag
+   * is recognised anywhere on the line), but the VERY NEXT RENDER moved his line under him: the
+   * engine reprints title-then-tag, disagreeing with what he had just typed tag-then-title.
+   *
+   * Derived from `declared.composition` via `express/composition.ts`'s `composeSeed` — never
+   * hardcoded as "after the chrome" — when a declaration was supplied and named a shape for this
+   * chrome. FALLS BACK TO `text.length` (the previous, always-at-the-end placement) when no
+   * `composition` was supplied on `declared`, so a caller that predates this field, or one that
+   * never passes `declared` at all, gets EXACTLY its previous behaviour.
+   */
+  readonly cursorOffset: number;
 }
 
 /**
@@ -281,11 +310,33 @@ export function seedFor(
       ? []
       : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
 
-  // `chrome` already ends in the separator its own form carries (`- [ ] `, `- `), so the tokens
-  // join straight on, and the trailing space is what puts the cursor after them rather than
-  // between the last token and the operator's first character.
+  // THE `o` SEED. See `NewLine.cursorOffset`'s own header for the defect this fixes. When a
+  // `composition` declaration was supplied, the SEED — its text AND its cursor — is composed by
+  // `composeSeed` from the declared order, never assumed to sit "after the chrome": the indent is
+  // `chrome`'s own (a fact about the printed neighbour the GLOBAL rung does not have), stripped off
+  // and reattached around `composeSeed`'s own depth-0 answer so an irregular operator indent is
+  // preserved byte for byte rather than canonicalised to a clean 4-space multiple.
+  if (declared?.composition !== undefined) {
+    const indentMatch = /^\s*/.exec(chrome.text);
+    const indent = indentMatch === null ? "" : indentMatch[0];
+    const known: KnownCells =
+      chrome.shape === "checkbox" ? { checkbox: "[ ]", tags: tokens } : { tags: tokens };
+    const seed = composeSeed(chrome.shape, known, declared.composition, 0);
+    return {
+      text: `${indent}${seed.text}`,
+      level: chrome.level,
+      tokens,
+      cursorOffset: indent.length + seed.cursorOffset,
+    };
+  }
+
+  // NO DECLARATION — exactly the previous behaviour: `chrome` already ends in the separator its own
+  // form carries (`- [ ] `, `- `), the tokens join straight on with a trailing space, and the
+  // cursor falls at the very end (the browser's own default for a freshly focused value — see
+  // `paint.ts`'s `paintDraft`), which is the "after the tag" placement this whole branch exists to
+  // move away from once a declaration IS supplied.
   const text = tokens.length === 0 ? chrome.text : `${chrome.text}${tokens.join(" ")} `;
-  return { text, level: chrome.level, tokens };
+  return { text, level: chrome.level, tokens, cursorOffset: text.length };
 }
 
 /**
@@ -298,7 +349,7 @@ function chromeFor(
   lineIndex: number,
   declared: GlobalRegistration | undefined,
   sectionId: string | null,
-): { readonly text: string; readonly level: PresentationLevel } | null {
+): { readonly text: string; readonly level: PresentationLevel; readonly shape: ChromeShape } | null {
   // 1. UP, stopping at the heading that opens this section. The first evidence found is the LINE
   //    rung if it is the line directly above, and the STRUCTURAL_NODE rung if the search had to
   //    step over blanks or lines that are not node lines to reach it.
@@ -309,7 +360,11 @@ function chromeFor(
     }
     const chrome = chromeOf(line);
     if (chrome !== null) {
-      return { text: chrome, level: at === lineIndex - 1 ? "LINE" : "STRUCTURAL_NODE" };
+      return {
+        text: chrome,
+        level: at === lineIndex - 1 ? "LINE" : "STRUCTURAL_NODE",
+        shape: shapeOfChrome(chrome),
+      };
     }
   }
 
@@ -327,7 +382,7 @@ function chromeFor(
       // Enter at the end of a nested child makes its sibling — and not a fact about what the
       // section's nodes are. Carrying a stranger's indent would nest a new line under something
       // it has nothing to do with.
-      return { text: chrome.trimStart(), level: "STRUCTURAL_NODE" };
+      return { text: chrome.trimStart(), level: "STRUCTURAL_NODE", shape: shapeOfChrome(chrome) };
     }
   }
 
@@ -336,7 +391,7 @@ function chromeFor(
   for (const line of lines) {
     const chrome = chromeOf(line);
     if (chrome !== null) {
-      return { text: chrome.trimStart(), level: "VIEW" };
+      return { text: chrome.trimStart(), level: "VIEW", shape: shapeOfChrome(chrome) };
     }
   }
 
@@ -364,10 +419,22 @@ function chromeFor(
       declared.sectionRegistration?.[declared.view]?.[sectionId]?.nodeType;
     const shape = nodeType === undefined ? undefined : declared.chromeShapes[nodeType];
     if (shape !== undefined) {
-      return { text: shape === "checkbox" ? "- [ ] " : "- ", level: "GLOBAL" };
+      return { text: shape === "checkbox" ? "- [ ] " : "- ", level: "GLOBAL", shape };
     }
   }
   return null;
+}
+
+/**
+ * Which render shape `chrome` (a string `chromeFor` above read off a printed line, via
+ * `express/rendition.ts`'s `chromeOf`) came from. Sniffed from `chromeOf`'s OWN documented
+ * contract — it returns exactly one of two suffixes, `"[ ] "` (a checkbox line's glyph, per its
+ * `TASK`-branch) or `"- "` with no glyph (its bullet-only prose branch) — rather than widening
+ * `chromeOf`'s return type to an object, which several existing tests (`tests/present-newline.
+ * test.mjs`) pin to a bare string today.
+ */
+function shapeOfChrome(chrome: string): ChromeShape {
+  return chrome.endsWith("[ ] ") ? "checkbox" : "plain_line";
 }
 
 /**
@@ -413,6 +480,11 @@ export function openLine(
     onDeclined?.(lineIndex);
     return false;
   }
-  draft.open(lineIndex, seed.text, placeFor(from, lineIndex, view ?? declared?.view ?? ""));
+  draft.open(
+    lineIndex,
+    seed.text,
+    placeFor(from, lineIndex, view ?? declared?.view ?? ""),
+    seed.cursorOffset,
+  );
   return true;
 }

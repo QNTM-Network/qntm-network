@@ -807,6 +807,7 @@ var TOP_KEYS2 = [
   "defaultOrdering",
   "defaultOrderingSource",
   "priorityRank",
+  "composition",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
@@ -820,6 +821,8 @@ var TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"];
 var DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"];
 var DIRECTIONS2 = ["asc", "desc"];
 var CHROME_SHAPES = ["checkbox", "plain_line"];
+var COMPOSITION_KEYS = ["heads", "tail", "separator"];
+var COMPOSITION_CELL_CLASSES = ["checkbox", "title", "stamp", "date", "tags", "markers", "chrome"];
 var isScalarOrNull = (value) => value === null || ["string", "number", "boolean"].includes(typeof value);
 function readSectionRegistrationEntry(path, value, problems) {
   if (!isPlainObject3(value)) {
@@ -1217,6 +1220,66 @@ function readPriorityRank(value, problems) {
   }
   return out;
 }
+function readCellClassOrder(path, value, problems) {
+  if (!Array.isArray(value) || value.length === 0) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not a non-empty array \u2014 this order stays unknown`);
+    return void 0;
+  }
+  const out = [];
+  for (const [i, entry] of value.entries()) {
+    if (!COMPOSITION_CELL_CLASSES.includes(entry)) {
+      problems.push(
+        `'${path}[${i}]' is ${JSON.stringify(entry)}, not one of ${COMPOSITION_CELL_CLASSES.join(", ")}`
+      );
+      return void 0;
+    }
+    out.push(entry);
+  }
+  return out;
+}
+function readComposition(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.composition`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 composition stays unknown`);
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!COMPOSITION_KEYS.includes(key)) {
+      problems.push(`'${path}.${key}' is not a recognised key \u2014 the keys are ${COMPOSITION_KEYS.join(", ")}`);
+    }
+  }
+  const { heads, tail, separator } = value;
+  if (!isPlainObject3(heads)) {
+    problems.push(`'${path}.heads' is ${shapeOf2(heads)}, not an object`);
+    return void 0;
+  }
+  const readHeads = {};
+  for (const shape of CHROME_SHAPES) {
+    if (!(shape in heads)) {
+      problems.push(`'${path}.heads.${shape}' is missing \u2014 every seedable shape needs a declared head`);
+      return void 0;
+    }
+    const read = readCellClassOrder(`${path}.heads.${shape}`, heads[shape], problems);
+    if (read === void 0) return void 0;
+    readHeads[shape] = read;
+  }
+  for (const key of Object.keys(heads)) {
+    if (!CHROME_SHAPES.includes(key)) {
+      problems.push(`'${path}.heads.${key}' is not a recognised shape \u2014 the shapes are ${CHROME_SHAPES.join(", ")}`);
+    }
+  }
+  const readTail = readCellClassOrder(`${path}.tail`, tail, problems);
+  if (readTail === void 0) return void 0;
+  if (typeof separator !== "string" || separator === "") {
+    problems.push(`'${path}.separator' is ${JSON.stringify(separator)}, not a non-empty string`);
+    return void 0;
+  }
+  return {
+    heads: readHeads,
+    tail: readTail,
+    separator
+  };
+}
 function readConfigResolutionDeclaration(document2) {
   if (!isPlainObject3(document2)) {
     return { resolution: void 0, problems: [] };
@@ -1260,6 +1323,7 @@ function readConfigResolutionDeclaration(document2) {
       defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],
       defaultOrderingSource: "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : void 0,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
+      composition: "composition" in raw ? readComposition(raw.composition, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}
     },
     problems
@@ -1396,6 +1460,55 @@ function sectionOrderFor(view, declared) {
     return declared;
   }
   return { ...declared, [view.id]: view.sections };
+}
+
+// app/present/express/composition.ts
+function readCell(cellClass, cells) {
+  const value = cells[cellClass];
+  if (value === void 0 || value === "") {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value.filter((v) => typeof v === "string" && v !== "");
+  }
+  return typeof value === "string" ? [value] : [];
+}
+function indentFor(depth) {
+  return "    ".repeat(Math.max(0, Math.trunc(depth)));
+}
+function composeLine(shape, cells, composition, depth = 0) {
+  const order = [...composition.heads[shape], ...composition.tail];
+  const parts = [];
+  for (const cellClass of order) {
+    if (cellClass === "title") {
+      if (cells.title !== "") {
+        parts.push(cells.title);
+      }
+      continue;
+    }
+    parts.push(...readCell(cellClass, cells));
+  }
+  return `${indentFor(depth)}- ${parts.join(composition.separator)}`;
+}
+var TITLE_SLOT = String.fromCharCode(0);
+function composeSeed(shape, known, composition, depth = 0) {
+  const order = [...composition.heads[shape], ...composition.tail];
+  const parts = [];
+  for (const cellClass of order) {
+    if (cellClass === "title") {
+      parts.push(TITLE_SLOT);
+      continue;
+    }
+    parts.push(...readCell(cellClass, known));
+  }
+  const joined = parts.join(composition.separator);
+  const prefix = `${indentFor(depth)}- `;
+  const slotIndex = joined.indexOf(TITLE_SLOT);
+  if (slotIndex === -1) {
+    return { text: `${prefix}${joined}`, cursorOffset: (prefix + joined).length };
+  }
+  const bare = joined.slice(0, slotIndex) + joined.slice(slotIndex + 1);
+  return { text: `${prefix}${bare}`, cursorOffset: prefix.length + slotIndex };
 }
 
 // app/present/arrange/ordering.ts
@@ -3497,9 +3610,13 @@ var DraftSurface = class {
   isDraftAt(lineIndex) {
     return this.#draft?.lineIndex === lineIndex;
   }
-  /** Open a line. One at a time — there is one cursor, and a draft always has it. */
-  open(lineIndex, seed, place = null) {
-    this.#draft = { lineIndex, seed, typed: seed, place };
+  /** Open a line. One at a time — there is one cursor, and a draft always has it.
+   *
+   * `cursorOffset` is OPTIONAL and additive — see `Draft.cursorOffset`'s own header. Every existing
+   * caller that passes only `(lineIndex, seed, place)` keeps getting `undefined`, which `paint.ts`'s
+   * `paintDraft` reads as "let the browser place the caret", exactly as it always has. */
+  open(lineIndex, seed, place = null, cursorOffset) {
+    this.#draft = { lineIndex, seed, typed: seed, place, cursorOffset };
     this.#generation += 1;
   }
   /**
@@ -4037,8 +4154,20 @@ function seedFor(source, lineIndex, declared) {
     return null;
   }
   const tokens = sectionId === null || declared === void 0 ? [] : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
+  if (declared?.composition !== void 0) {
+    const indentMatch = /^\s*/.exec(chrome.text);
+    const indent = indentMatch === null ? "" : indentMatch[0];
+    const known = chrome.shape === "checkbox" ? { checkbox: "[ ]", tags: tokens } : { tags: tokens };
+    const seed = composeSeed(chrome.shape, known, declared.composition, 0);
+    return {
+      text: `${indent}${seed.text}`,
+      level: chrome.level,
+      tokens,
+      cursorOffset: indent.length + seed.cursorOffset
+    };
+  }
   const text = tokens.length === 0 ? chrome.text : `${chrome.text}${tokens.join(" ")} `;
-  return { text, level: chrome.level, tokens };
+  return { text, level: chrome.level, tokens, cursorOffset: text.length };
 }
 function chromeFor(lines, lineIndex, declared, sectionId) {
   for (let at = lineIndex - 1; at >= 0; at -= 1) {
@@ -4048,7 +4177,11 @@ function chromeFor(lines, lineIndex, declared, sectionId) {
     }
     const chrome = chromeOf(line);
     if (chrome !== null) {
-      return { text: chrome, level: at === lineIndex - 1 ? "LINE" : "STRUCTURAL_NODE" };
+      return {
+        text: chrome,
+        level: at === lineIndex - 1 ? "LINE" : "STRUCTURAL_NODE",
+        shape: shapeOfChrome(chrome)
+      };
     }
   }
   for (let at = lineIndex; at < lines.length; at += 1) {
@@ -4058,23 +4191,26 @@ function chromeFor(lines, lineIndex, declared, sectionId) {
     }
     const chrome = chromeOf(line);
     if (chrome !== null) {
-      return { text: chrome.trimStart(), level: "STRUCTURAL_NODE" };
+      return { text: chrome.trimStart(), level: "STRUCTURAL_NODE", shape: shapeOfChrome(chrome) };
     }
   }
   for (const line of lines) {
     const chrome = chromeOf(line);
     if (chrome !== null) {
-      return { text: chrome.trimStart(), level: "VIEW" };
+      return { text: chrome.trimStart(), level: "VIEW", shape: shapeOfChrome(chrome) };
     }
   }
   if (declared !== void 0 && sectionId !== null) {
     const nodeType = declared.sections[declared.view]?.[sectionId]?.nodeType ?? declared.sectionRegistration?.[declared.view]?.[sectionId]?.nodeType;
     const shape = nodeType === void 0 ? void 0 : declared.chromeShapes[nodeType];
     if (shape !== void 0) {
-      return { text: shape === "checkbox" ? "- [ ] " : "- ", level: "GLOBAL" };
+      return { text: shape === "checkbox" ? "- [ ] " : "- ", level: "GLOBAL", shape };
     }
   }
   return null;
+}
+function shapeOfChrome(chrome) {
+  return chrome.endsWith("[ ] ") ? "checkbox" : "plain_line";
 }
 function openLine(from, lineIndex, draft, onDeclined, declared, view) {
   const seed = seedFor(from, lineIndex, declared);
@@ -4082,7 +4218,12 @@ function openLine(from, lineIndex, draft, onDeclined, declared, view) {
     onDeclined?.(lineIndex);
     return false;
   }
-  draft.open(lineIndex, seed.text, placeFor(from, lineIndex, view ?? declared?.view ?? ""));
+  draft.open(
+    lineIndex,
+    seed.text,
+    placeFor(from, lineIndex, view ?? declared?.view ?? ""),
+    seed.cursorOffset
+  );
   return true;
 }
 
@@ -4524,6 +4665,10 @@ function paint(body, source, context, deps) {
     }
     if (open.typed !== open.seed) {
       input.setSelectionRange?.(open.typed.length, open.typed.length);
+      return;
+    }
+    if (open.cursorOffset !== void 0) {
+      input.setSelectionRange?.(open.cursorOffset, open.cursorOffset);
     }
   };
   let lastPaintedIndex = -1;
@@ -5977,6 +6122,8 @@ export {
   classifyLine,
   cleanTitleFor,
   closeDrawer,
+  composeLine,
+  composeSeed,
   coverageOf,
   declarationFrom,
   defaultOrderingFor,

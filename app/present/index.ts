@@ -79,6 +79,8 @@ export type {
 export { RESOLUTION_TABLE_KEY, readConfigResolutionDeclaration } from "./resolutiontable.js";
 export type {
   ChromeShape,
+  Composition,
+  CompositionCellClass,
   ConfigResolutionReading,
   ConfigResolutionTable,
   DayBoundary,
@@ -88,6 +90,9 @@ export type {
   RegistrationTable,
   SectionOrdering,
 } from "./resolutiontable.js";
+
+export { composeLine, composeSeed } from "./express/composition.js";
+export type { KnownCells, LineCells } from "./express/composition.js";
 
 export {
   markerValue,
