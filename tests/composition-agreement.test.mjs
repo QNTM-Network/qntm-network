@@ -48,7 +48,18 @@ describe("1. resolution.composition is present and shaped as this file expects",
 describe("2. every fixture recomposes byte-identical to the engine's own committed line", () => {
   for (const fixture of FIXTURE.fixtures) {
     test(`${fixture.id}: composeLine(...) === the real renderer's own output`, () => {
-      const composed = composeLine(fixture.shape, fixture.cells, RESOLUTION.composition, fixture.depth);
+      // Each fixture carries its OWN `composition` (bullet + titleStyles alongside heads/tail) —
+      // most fixtures declare neither override and so carry the same "-" / [] the served
+      // `RESOLUTION.composition` also answers today, but a fixture that DOES declare a form
+      // (F7-F9, the capability proof) must compose against ITS OWN declared form, not the served
+      // instance's default. `?? RESOLUTION.composition` is defence for an older, pre-form fixture
+      // file that carried no per-fixture `composition` key at all.
+      const composed = composeLine(
+        fixture.shape,
+        fixture.cells,
+        fixture.composition ?? RESOLUTION.composition,
+        fixture.depth,
+      );
       assert.equal(composed, fixture.expectedLine);
     });
   }
@@ -89,5 +100,40 @@ describe("3. the fixture set actually exercises every cell class — a compariso
   test("at least one fixture has NO stamp (read-only), proving falsy cells are cleanly omitted, " +
     "not left as an empty slot", () => {
     assert.ok(FIXTURE.fixtures.some((f) => !f.cells.stamp), "no read-only fixture — omission untested");
+  });
+});
+
+describe("4. FORM — composition's own optional bullet + title-style wrap, the CAPABILITY this " +
+  "slice adds beyond cell ORDER", () => {
+  test("positive control: at least one fixture declares a non-default bullet", () => {
+    assert.ok(FIXTURE.fixtures.some((f) => f.composition?.bullet && f.composition.bullet !== "-"),
+      "no fixture declares a bullet other than '-' — the declared-bullet capability is untested");
+  });
+
+  test("positive control: at least one fixture declares a title_styles wrap", () => {
+    assert.ok(FIXTURE.fixtures.some((f) => f.composition?.titleStyles?.length),
+      "no fixture declares title_styles — the declared-title-affix capability is untested");
+  });
+
+  test("positive control: at least one fixture declares MORE THAN ONE title style, proving " +
+    "nesting order (bold outside strikethrough, per _apply_title_style's fixed emission order)", () => {
+    assert.ok(FIXTURE.fixtures.some((f) => (f.composition?.titleStyles?.length ?? 0) > 1),
+      "no fixture combines two styles — multi-style nesting is untested");
+  });
+
+  test("positive control: at least one fixture proves ABSENCE — default bullet, no title wrap — " +
+    "byte-identical to what this repo emitted before FORM existed", () => {
+    assert.ok(
+      FIXTURE.fixtures.some((f) => f.composition?.bullet === "-" && !f.composition?.titleStyles?.length),
+      "no fixture proves the absence case",
+    );
+  });
+
+  test("THE OPERATOR'S OWN EXAMPLE — a declared italic title_styles composes '*Buy gift*'", () => {
+    const fixture = FIXTURE.fixtures.find((f) => f.id === "declared_italic_title");
+    assert.ok(fixture, "declared_italic_title fixture is missing");
+    assert.ok(fixture.expectedLine.includes("*Buy gift*"), fixture.expectedLine);
+    const composed = composeLine(fixture.shape, fixture.cells, fixture.composition, fixture.depth);
+    assert.equal(composed, fixture.expectedLine);
   });
 });

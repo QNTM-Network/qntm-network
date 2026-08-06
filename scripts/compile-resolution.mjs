@@ -198,6 +198,12 @@ export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
   }),
   tail: Object.freeze(["stamp", "date", "tags", "markers", "chrome"]),
   separator: " ",
+  // FORM — mirrors renderer.py's own `_COMPOSITION_BULLET` / `_COMPOSITION_TITLE_STYLES`. See
+  // that module's "COMPOSITION FORM" header for the two capabilities admitted (a declared GFM
+  // bullet; an additional unconditional title wrap drawn from the SAME three-member vocabulary
+  // `canonicalise_title_segment` already strips on ingest) and everything this slice refused.
+  bullet: "-",
+  titleStyles: Object.freeze([]),
 });
 
 // The cell-class vocabulary a declared `composition:` may use — mirrors `bundle/loader.py`'s own
@@ -208,6 +214,13 @@ export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
 const COMPOSITION_REQUIRED_HEAD_SHAPES = ["checkbox", "plain_line"];
 const COMPOSITION_HEAD_CELL_CLASSES = new Set(["checkbox", "title"]);
 const COMPOSITION_TAIL_CELL_CLASSES = new Set(["stamp", "date", "tags", "markers", "chrome"]);
+// FORM — mirrors `bundle/loader.py`'s own `_COMPOSITION_FORM_KEYS` / `_COMPOSITION_BULLET_CHARS` /
+// `_COMPOSITION_TITLE_STYLE_VOCABULARY` (monorepo, read-only). See `renderer.py`'s "COMPOSITION
+// FORM" header for why each closed set is exactly the set it is.
+const COMPOSITION_TOP_KEYS = new Set(["heads", "tail", "form"]);
+const COMPOSITION_FORM_KEYS = new Set(["bullet", "title_styles"]);
+const COMPOSITION_BULLET_CHARS = new Set(["-", "*", "+"]);
+const COMPOSITION_TITLE_STYLE_VOCABULARY = new Set(["italic", "bold", "strikethrough"]);
 
 const CAPTURE_FIELDS_NOTE =
   "a new line carries its resolved node type, the schema's declared field defaults and its " +
@@ -654,6 +667,13 @@ export function compile(files, ledger = new Ledger()) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition:' is not a mapping`);
     }
+    const unknownTop = Object.keys(raw).filter((k) => !COMPOSITION_TOP_KEYS.has(k));
+    if (unknownTop.length > 0) {
+      throw new GenerationError(
+        `${GLOBAL_DEFAULTS_KEY}: 'composition:' has unknown key(s) ${JSON.stringify(unknownTop)} ` +
+          `(known: ${[...COMPOSITION_TOP_KEYS].sort().join(", ")})`,
+      );
+    }
     const rawHeads = raw.heads;
     if (!rawHeads || typeof rawHeads !== "object" || Array.isArray(rawHeads) || Object.keys(rawHeads).length === 0) {
       throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition.heads:' is not a non-empty mapping`);
@@ -697,10 +717,64 @@ export function compile(files, ledger = new Ledger()) {
     // `separator` is not a declared key on either side of this pair — see the domain header's own
     // paragraph on why: the engine always joins with `" "` (renderer.py:1003), unchanged by the
     // monorepo PR that made heads/tail declarable, so this generator always publishes it too.
+    const { bullet, titleStyles } = readCompositionForm(raw.form);
     return {
-      composition: { heads, tail: [...rawTail], separator: " " },
+      composition: { heads, tail: [...rawTail], separator: " ", bullet, titleStyles },
       source: "config",
     };
+  }
+
+  /** `composition.form:` — see `ENGINE_LITERAL_COMPOSITION`'s own header for the two capabilities
+   * this admits. `undefined` (no `form:` key at all) is legitimate — a root may order cells
+   * without wrapping anything — and answers the engine's own literal for each, exactly the
+   * `heads`/`tail` absence-is-opt-out convention `readGlobalComposition` already follows. */
+  function readCompositionForm(raw) {
+    if (raw === undefined) {
+      return { bullet: ENGINE_LITERAL_COMPOSITION.bullet, titleStyles: ENGINE_LITERAL_COMPOSITION.titleStyles };
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition.form:' is not a mapping`);
+    }
+    const unknown = Object.keys(raw).filter((k) => !COMPOSITION_FORM_KEYS.has(k));
+    if (unknown.length > 0) {
+      throw new GenerationError(
+        `${GLOBAL_DEFAULTS_KEY}: 'composition.form:' has unknown key(s) ${JSON.stringify(unknown)} ` +
+          `(known: ${[...COMPOSITION_FORM_KEYS].sort().join(", ")})`,
+      );
+    }
+    let bullet = ENGINE_LITERAL_COMPOSITION.bullet;
+    if ("bullet" in raw) {
+      if (typeof raw.bullet !== "string" || !COMPOSITION_BULLET_CHARS.has(raw.bullet)) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: 'composition.form.bullet:' is ${JSON.stringify(raw.bullet)}, ` +
+            `not one of ${[...COMPOSITION_BULLET_CHARS].sort().join(", ")}`,
+        );
+      }
+      bullet = raw.bullet;
+    }
+    let titleStyles = ENGINE_LITERAL_COMPOSITION.titleStyles;
+    if ("title_styles" in raw) {
+      const rawStyles = raw.title_styles;
+      if (!Array.isArray(rawStyles) || rawStyles.length === 0 || !rawStyles.every((s) => typeof s === "string")) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: 'composition.form.title_styles:' is not a non-empty list of strings`,
+        );
+      }
+      const unknownStyles = rawStyles.filter((s) => !COMPOSITION_TITLE_STYLE_VOCABULARY.has(s));
+      if (unknownStyles.length > 0) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: 'composition.form.title_styles:' names unknown style(s) ` +
+            `${JSON.stringify(unknownStyles)} (known: ${[...COMPOSITION_TITLE_STYLE_VOCABULARY].sort().join(", ")})`,
+        );
+      }
+      if (new Set(rawStyles).size !== rawStyles.length) {
+        throw new GenerationError(
+          `${GLOBAL_DEFAULTS_KEY}: 'composition.form.title_styles:' repeats a style`,
+        );
+      }
+      titleStyles = [...rawStyles];
+    }
+    return { bullet, titleStyles };
   }
 
   // ── 5. schema.yaml -> node type -> chrome shape, for every default_node_type candidate ─────────

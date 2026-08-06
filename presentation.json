@@ -9339,7 +9339,9 @@
         "markers",
         "chrome"
       ],
-      "separator": " "
+      "separator": " ",
+      "bullet": "-",
+      "titleStyles": []
     },
     "compositionSource": "engine-fallback",
     "priorityRank": {

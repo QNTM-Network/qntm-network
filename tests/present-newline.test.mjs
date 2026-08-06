@@ -639,6 +639,8 @@ describe("8. THE `o` SEED — the cursor lands where the TITLE belongs, not afte
     heads: { checkbox: ["checkbox", "title"], plain_line: ["title"] },
     tail: ["stamp", "date", "tags", "markers", "chrome"],
     separator: " ",
+    bullet: "-",
+    titleStyles: [],
   };
 
   const EMPTY_SECTIONED_VIEW = "## high-priority\n\n## capture\n\n## backlog\n";

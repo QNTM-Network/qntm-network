@@ -79,10 +79,30 @@ function indentFor(depth: number): string {
 }
 
 /**
+ * Apply composition's OWN declared, unconditional title wrap — `composition.titleStyles`, zero
+ * or more of `"italic"` / `"bold"` / `"strikethrough"`. Byte-identical to `renderer.py`'s
+ * `_apply_title_style` for the SAME styles set: fixed emission order (italic innermost, then
+ * bold, then strikethrough outermost) regardless of the declared array's own order, because
+ * `_apply_title_style` decides by membership (`"italic" in styles`), never by list position —
+ * `canonicalise_title_segment`'s ingest-side peel loop (outermost-in: `~~`, `**`, `*`) is this
+ * nesting's proven inverse. `cells.title` is expected UNSTYLED by anything else — this app has no
+ * per-node rule-based title-style resolver (that is `render_title_style`, engine-only), so this is
+ * the ONE wrap a composed title ever receives here.
+ */
+function applyTitleStyles(text: string, titleStyles: readonly string[]): string {
+  let styled = text;
+  if (titleStyles.includes("italic")) styled = `*${styled}*`;
+  if (titleStyles.includes("bold")) styled = `**${styled}**`;
+  if (titleStyles.includes("strikethrough")) styled = `~~${styled}~~`;
+  return styled;
+}
+
+/**
  * Compose one COMPLETE line — every cell known, including its title. Byte-identical to the real
- * renderer's own `"    " * depth + "- " + " ".join(cell for cell in cells if cell)`
- * (`renderer.py:1003`) when fed that render's own cell values, proven for the fixture set by
- * `tests/composition-agreement.test.mjs`.
+ * renderer's own line assembly (`renderer.py`'s `_render_node_line`: declared `bullet` + " " +
+ * every non-empty cell joined by `composition.separator`, the title cell wrapped by
+ * `composition.titleStyles` before joining) when fed that render's own cell values, proven for
+ * the fixture set by `tests/composition-agreement.test.mjs`.
  *
  * `shape` selects `composition.heads[shape]`; `composition.tail` is the one order every shape's
  * body shares after its head (see `Composition`'s own header, `resolutiontable.ts`).
@@ -98,13 +118,13 @@ export function composeLine(
   for (const cellClass of order) {
     if (cellClass === "title") {
       if (cells.title !== "") {
-        parts.push(cells.title);
+        parts.push(applyTitleStyles(cells.title, composition.titleStyles));
       }
       continue;
     }
     parts.push(...readCell(cellClass, cells));
   }
-  return `${indentFor(depth)}- ${parts.join(composition.separator)}`;
+  return `${indentFor(depth)}${composition.bullet} ${parts.join(composition.separator)}`;
 }
 
 /**
@@ -146,13 +166,18 @@ export function composeSeed(
   const parts: string[] = [];
   for (const cellClass of order) {
     if (cellClass === "title") {
-      parts.push(TITLE_SLOT);
+      // Wrap the SENTINEL, not yet any title text, in the declared style — `applyTitleStyles("",
+      // …)` on an as-yet-untyped title, so `*` + NUL + `*` seeds the cursor BETWEEN the wrap
+      // markers. `indexOf(TITLE_SLOT)` below still finds the sentinel's own position exactly
+      // (the wrap characters carry no NUL of their own), so this composes with zero change to the
+      // slot-location arithmetic that follows.
+      parts.push(applyTitleStyles(TITLE_SLOT, composition.titleStyles));
       continue;
     }
     parts.push(...readCell(cellClass, known));
   }
   const joined = parts.join(composition.separator);
-  const prefix = `${indentFor(depth)}- `;
+  const prefix = `${indentFor(depth)}${composition.bullet} `;
   const slotIndex = joined.indexOf(TITLE_SLOT);
   if (slotIndex === -1) {
     // No declared "title" cell in this shape's own order — nothing to place a cursor before. Every

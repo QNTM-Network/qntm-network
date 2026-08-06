@@ -34,11 +34,24 @@
   ],
   "declaration": {
     "heads": {
-      "checkbox": ["title", "checkbox"],
-      "plain_line": ["title"]
+      "checkbox": [
+        "title",
+        "checkbox"
+      ],
+      "plain_line": [
+        "title"
+      ]
     },
-    "tail": ["tags", "stamp", "markers", "chrome", "date"],
-    "separator": " "
+    "tail": [
+      "tags",
+      "stamp",
+      "markers",
+      "chrome",
+      "date"
+    ],
+    "separator": " ",
+    "bullet": "-",
+    "titleStyles": []
   },
   "fixtures": [
     {
@@ -50,9 +63,16 @@
         "title": "Ship the thing",
         "stamp": "[[qntm:x1]]",
         "date": "",
-        "tags": ["#task", "#work"],
-        "markers": ["⏫"],
-        "chrome": ["#requires [[Get approval]]"]
+        "tags": [
+          "#task",
+          "#work"
+        ],
+        "markers": [
+          "⏫"
+        ],
+        "chrome": [
+          "#requires [[Get approval]]"
+        ]
       },
       "engineLine": "- Ship the thing [ ] #task #work [[qntm:x1]] ⏫ #requires [[Get approval]]"
     },
@@ -65,7 +85,9 @@
         "title": "A note",
         "stamp": "",
         "date": "",
-        "tags": ["#note"],
+        "tags": [
+          "#note"
+        ],
         "markers": [],
         "chrome": []
       },
@@ -80,8 +102,12 @@
         "title": "Nested",
         "stamp": "[[qntm:x3]]",
         "date": "",
-        "tags": ["#task"],
-        "markers": ["🔽"],
+        "tags": [
+          "#task"
+        ],
+        "markers": [
+          "🔽"
+        ],
         "chrome": []
       },
       "engineLine": "    - Nested [ ] #task [[qntm:x3]] 🔽"

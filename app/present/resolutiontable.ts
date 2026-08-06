@@ -178,6 +178,24 @@ export interface Composition {
   readonly heads: Readonly<Record<ChromeShape, readonly CompositionCellClass[]>>;
   readonly tail: readonly CompositionCellClass[];
   readonly separator: string;
+  /**
+   * THE GFM bullet character every line opens with — one of `-`, `*`, `+`. Declared via
+   * `composition.form.bullet` (`global_defaults.yaml`); `"-"` when a root declares none, byte-
+   * identical to the pre-existing literal. Always one of these three: `io.parser.parse_checkbox`
+   * (monorepo, read-only) already recognises all three regardless of which one was typed, so a
+   * declared bullet round-trips with no ingest-side change — see `compile-resolution.mjs`'s own
+   * "COMPOSITION FORM" header for the full argument.
+   */
+  readonly bullet: string;
+  /**
+   * AN ADDITIONAL, UNCONDITIONAL wrap applied to every composed title — zero or more of `"italic"`
+   * / `"bold"` / `"strikethrough"`, declared via `composition.form.title_styles`. `[]` when a root
+   * declares none, byte-identical to the pre-existing literal. Restricted to this closed three-
+   * member vocabulary because `io.render_context_parse.canonicalise_title_segment` (monorepo,
+   * read-only) already strips exactly these wrappers (`*…*` / `**…**` / `~~…~~`) off a title on
+   * ingest — see `express/composition.ts`'s `applyTitleStyles` for the emission order this mirrors.
+   */
+  readonly titleStyles: readonly string[];
 }
 
 /**
@@ -369,8 +387,12 @@ const TRAILING_ORDERING_FIELD_KINDS = ["date", "int", "float"] as const;
 const DAY_BOUNDARY_KEYS = ["timezone", "dayStartHour", "weekStartsOn"] as const;
 const DIRECTIONS = ["asc", "desc"] as const;
 const CHROME_SHAPES = ["checkbox", "plain_line"] as const;
-const COMPOSITION_KEYS = ["heads", "tail", "separator"] as const;
+const COMPOSITION_KEYS = ["heads", "tail", "separator", "bullet", "titleStyles"] as const;
 const COMPOSITION_CELL_CLASSES = ["checkbox", "title", "stamp", "date", "tags", "markers", "chrome"] as const;
+/** Mirrors `bundle/loader.py`'s own `_COMPOSITION_BULLET_CHARS` (monorepo, read-only). */
+const COMPOSITION_BULLET_CHARS = ["-", "*", "+"] as const;
+/** Mirrors `bundle/loader.py`'s own `_COMPOSITION_TITLE_STYLE_VOCABULARY` (monorepo, read-only). */
+const COMPOSITION_TITLE_STYLES = ["italic", "bold", "strikethrough"] as const;
 
 // THERE IS NO `EMPTY` TABLE, AND THERE CANNOT BE ONE. This module used to keep a constant with
 // every field at its "nothing to say" value and hand it back for a document that declared no
@@ -908,7 +930,7 @@ function readComposition(value: unknown, problems: string[]): Composition | unde
       problems.push(`'${path}.${key}' is not a recognised key — the keys are ${COMPOSITION_KEYS.join(", ")}`);
     }
   }
-  const { heads, tail, separator } = value;
+  const { heads, tail, separator, bullet, titleStyles } = value;
   if (!isPlainObject(heads)) {
     problems.push(`'${path}.heads' is ${shapeOf(heads)}, not an object`);
     return undefined;
@@ -934,10 +956,30 @@ function readComposition(value: unknown, problems: string[]): Composition | unde
     problems.push(`'${path}.separator' is ${JSON.stringify(separator)}, not a non-empty string`);
     return undefined;
   }
+  if (!(COMPOSITION_BULLET_CHARS as readonly string[]).includes(bullet as string)) {
+    problems.push(
+      `'${path}.bullet' is ${JSON.stringify(bullet)}, not one of ${COMPOSITION_BULLET_CHARS.join(", ")}`,
+    );
+    return undefined;
+  }
+  if (!Array.isArray(titleStyles) || !titleStyles.every((s) => typeof s === "string")) {
+    problems.push(`'${path}.titleStyles' is ${shapeOf(titleStyles)}, not an array of strings`);
+    return undefined;
+  }
+  for (const [i, style] of titleStyles.entries()) {
+    if (!(COMPOSITION_TITLE_STYLES as readonly string[]).includes(style as string)) {
+      problems.push(
+        `'${path}.titleStyles[${i}]' is ${JSON.stringify(style)}, not one of ${COMPOSITION_TITLE_STYLES.join(", ")}`,
+      );
+      return undefined;
+    }
+  }
   return {
     heads: readHeads as Readonly<Record<ChromeShape, readonly CompositionCellClass[]>>,
     tail: readTail,
     separator,
+    bullet: bullet as string,
+    titleStyles: titleStyles as readonly string[],
   };
 }
 
