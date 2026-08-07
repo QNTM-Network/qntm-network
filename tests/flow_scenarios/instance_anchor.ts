@@ -20,8 +20,12 @@
  *    scanning for an `import` statement — never by re-reading the module graph, which TypeScript
  *    has already stripped by the time a scenario runs.
  *
- * 2. `instance.ts` REACHES EXACTLY TWO MODULES — `resolution.ts` for the grammar (which lines are
- *    headings, where the `[[qntm:N]]` spans are) and `relative.ts` for the two weak rungs. No edge
+ * 2. `instance.ts` REACHES EXACTLY TWO MODULES — `express/rendition.ts` for the grammar (which
+ *    lines are headings, where the `[[qntm:N]]` spans are) and `relative.ts` for the two weak
+ *    rungs. `rendition.ts` moved from a flat `app/present/` home to `app/present/express/` in
+ *    #134 (2026-08-06); its own header names this deliberately — "EXPRESS is allowed to be the
+ *    layer other layers borrow vocabulary from" — so an anchor reaching its GRAMMAR functions
+ *    (`classifyLine`, `qntmIdSpans`) across that boundary is sanctioned, not a violation. No edge
  *    to `context.ts` (an anchor is not a rendition), none to `source.ts` (it produces no edit), none
  *    to the DOM, the network or the clock.
  *
@@ -44,7 +48,7 @@
  *
  * ── WHAT IS STUBBED, AND WHY THAT IS HONEST ──
  *
- * Nothing under `app/` is stubbed — the real `instance.ts`, `relative.ts` and `resolution.ts` run.
+ * Nothing under `app/` is stubbed — the real `instance.ts`, `relative.ts` and `rendition.ts` run.
  * What is replaced is the ENVIRONMENT, the same three capabilities `section_addressing.ts` poisons:
  * `document`, `fetch` and `Date.now` all throw for the whole of the drive, so a module that reached
  * for one says which one instead of being asserted about.
@@ -164,10 +168,17 @@ function assertRelativeImportsNothing(): void {
   }
 }
 
-/** CLAIM 2 — `instance.ts` reaches `rendition.ts` and `relative.ts`, and nothing else under app/. */
+/**
+ * CLAIM 2 — `instance.ts` reaches `express/rendition.ts` and `relative.ts`, and nothing else
+ * under app/. `express/rendition.js` (not a flat `./rendition.js`) since #134 (2026-08-06) moved
+ * the grammar module under the EXPRESS verb's own directory — a path-only move, no behaviour
+ * change (PR #134's own verification: typecheck clean, 2301/2301 tests passing, dist unchanged
+ * apart from source-path comments) — and `rendition.ts`'s header documents the straddle
+ * deliberately: "EXPRESS is allowed to be the layer other layers borrow vocabulary from."
+ */
 function assertInstanceReachesOnlyTwo(): void {
   const source = readFileSync(resolve(HERE, "../../app/present/instance.ts"), "utf8");
-  const allowed = new Set(["./rendition.js", "./relative.js"]);
+  const allowed = new Set(["./express/rendition.js", "./relative.js"]);
   for (const line of source.split(/\r?\n/)) {
     const match = /^\s*import\b[^"']*["']([^"']+)["']/.exec(line);
     if (match === null) {
@@ -177,8 +188,8 @@ function assertInstanceReachesOnlyTwo(): void {
     if (!allowed.has(from)) {
       throw new Error(
         `app/present/instance.ts imports ${from} — the anchor walk may reach only the grammar ` +
-          "(rendition.ts) and the relative anchor (relative.ts); an anchor is not a rendition and " +
-          "produces no edit",
+          "(express/rendition.ts) and the relative anchor (relative.ts); an anchor is not a " +
+          "rendition and produces no edit",
       );
     }
   }
