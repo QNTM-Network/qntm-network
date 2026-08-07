@@ -96,3 +96,29 @@ sinks:
 #
 # So: two sinks were correct before this row and are correct after it. What changed is that the
 # claim is now load-bearing rather than assumed.
+
+# ── 2026-08-07, `view-painted` GAINED A SECOND GOVERNING CLASS — `commit-line-routing` ──
+#
+# `commitLine` relocated to app/present/commit.ts (`createCommitLine` — see that module's own
+# header), closing the gap `capture-rule-application`'s own note named: the connecting act
+# building a context, walking the resolver registry, and reaching `paint` with what came back was
+# hand-authored HTML until this move, invisible to flow-trace by construction. `classes.yaml`'s
+# new `commit-line-routing` class names `commitLine` itself as `view-painted`'s second canonical
+# home, alongside `presentation-painting` (`paint` calling itself through `repaint`, unchanged).
+#
+# `reportAbstentions`, NAMED ABOVE AS NOT-YET-RELOCATED, IS STILL NOT RELOCATED. `commitLine`
+# moved; `resolverContextFor` and `reportAbstentions` deliberately did not (commit.ts's own header
+# states why — both are small and genuinely page-shaped, and neither is what made the
+# resolver-to-paint path unobservable). So the non-addition above still holds, unchanged: no third
+# sink is declared here today.
+#
+# WHAT `commit-line-routing` DOES NOT CLAIM, STATED SO IT IS NOT ASSUMED FROM THE NAME ALONE: it
+# does not mean any of the four resolvers (membership/ordering/rules/promotion) themselves govern
+# `view-painted`. They cannot, by a mechanism rather than by omission — see
+# `capture-rule-application`'s own 2026-08-07 addendum in classes.yaml for the argument (a
+# resolver's own frame has always already returned, unwound, by the time any later repaint reaches
+# `paint`; flow-trace's AsyncLocalStorage-based caller tracking records whichever instrumented
+# frame is ACTIVE at that moment, and only `commitLine` — the frame spanning the whole gap, from
+# the resolver walk through the write's own answer — ever qualifies). `commit-line-routing` is the
+# closest true statement flow-trace can check: not "a resolver reaches the screen" but "the ONE
+# function through which every resolver's answer must pass before it can" does.

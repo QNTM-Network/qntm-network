@@ -40,7 +40,6 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  assertMutated,
   importPage,
   installBrowser,
   makeWorkDir,
@@ -413,10 +412,17 @@ describe("6. THE WRITE PATH IS UNTOUCHED", () => {
       assert.doesNotMatch(source, /\.text\s*=(?!=)/, `${name} assigns .text`);
       assert.doesNotMatch(source, /\bonLineCommit\b|\bonCheckboxToggle\b/, `${name} reaches a write callback`);
     }
-    // AND THE ONE CALL SITE ON THE PAGE. `armPredict` is reached from exactly one place, in
-    // `commitLine`, synchronously, before the write leaves.
+    // AND THE ONE CALL SITE, RELOCATED (2026-08-07). `armPredict` used to be reached from exactly
+    // one place ON THE PAGE, inside hand-authored `commitLine`; `commitLine` itself has since
+    // moved to app/present/commit.ts (see that module's own header — the relocation this leg's
+    // brief asked for, so a caller-chain probe can see it call `runResolvers`) and the call moved
+    // with it. The invariant is unchanged — armPredict is reached from exactly one place — only
+    // WHERE that one place is has moved, so this checks both halves: zero occurrences left behind
+    // on the page, exactly one in the module that now owns the call.
     const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
-    assert.equal((APP_SOURCE.match(/\barmPredict\(/g) ?? []).length, 1, "predict is armed from more than one place");
+    assert.equal((APP_SOURCE.match(/\barmPredict\(/g) ?? []).length, 0, "app/index.html must call armPredict nowhere — it moved to commit.ts");
+    const COMMIT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "commit.ts"), "utf8");
+    assert.equal((COMMIT_SOURCE.match(/\barmPredict\(/g) ?? []).length, 1, "predict is armed from more than one place");
   });
 });
 
@@ -426,16 +432,16 @@ describe("6. THE WRITE PATH IS UNTOUCHED", () => {
 
 describe("7. MUTATION PROOFS — this leg's own tests are not vacuously green", () => {
   test("MUTATION: skip armPrediction entirely — the headline scenario 1 goes red", async () => {
-    // THE ONE MUTATION IN THIS SECTION STILL AIMED AT THE PAGE — `armPredict` is called from
-    // `commitLine`, which is still hand-authored HTML. The other two moved into the bundle with the
-    // resolvers whose `arm` they target.
+    // THIS MUTATION MOVED, WITH THE CALL IT TARGETS (2026-08-07). `armPredict` used to be called
+    // from hand-authored `commitLine`, on the page — the ONE mutation in this section that could
+    // not use `mutatingBundle` yet, unlike the other two below. `commitLine` now lives in
+    // app/present/commit.ts (compiled into dist/present.js), so the call this mutation disables
+    // is in the bundle too, and this joins the other two.
     const workDir = makeWorkDir("predict-mutation-skip-arm");
-    const mutate = (source) =>
-      assertMutated(
-        source,
-        "armPredict(predict, commit.markdown, view.id, outcome.predictions);",
-        "/* the predict arm skipped */",
-      );
+    const mutate = mutatingBundle([
+      "armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);",
+      "/* the predict arm skipped */",
+    ])(workDir);
     const { elements } = installBrowser();
     globalThis.fetch = withDeclaration(async () => ({
       ok: true, json: async () => ({ ok: true, handle: "luke", pending_edits: 0, snapshot: { generated_at: "x", views: [] } }),

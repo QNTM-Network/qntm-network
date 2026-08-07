@@ -287,6 +287,20 @@ export type {
 } from "./resolve.js";
 
 export { RESOLVERS } from "./resolvers/registry.js";
+
+// ── commitLine ITSELF — THE CONNECTING ACT, RELOCATED (see commit.ts's own header) ──
+//
+// `app/index.html` used to hand-author this function; it now constructs one via
+// `createCommitLine(deps)`, once, at page scope. See commit.ts for what stayed on the page
+// (`resolverContextFor`, `reportAbstentions`) and why.
+export { createCommitLine } from "./commit.js";
+export type {
+  CommitLineDeps,
+  CommitLineQueue,
+  CommitLineSettle,
+  CommitLineView,
+  CommitLineWrites,
+} from "./commit.js";
 // THE SPECS THEMSELVES, BESIDE THE REGISTRY THAT ERASES THEM. `RESOLVERS` holds `Resolver`s, whose
 // reading type is deliberately erased (see `Resolver`'s own header) — a caller that wants to drive
 // ONE axis's `read`/`say`/`show` against a reading it is holding needs the spec, and the page's own

@@ -6226,6 +6226,71 @@ var RESOLVERS = [
   defineResolver(promotionSpec)
 ];
 
+// app/present/commit.ts
+function createCommitLine(deps) {
+  async function commitLine(view, commit) {
+    if (commit.markdown === null) {
+      queueMicrotask(deps.drainPainted);
+      return;
+    }
+    const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
+    deps.reportAbstentions(outcome.diagnostics);
+    if (commit.kind === "set-line") {
+      deps.settle.supersede(commit.source, view.id, commit.lineIndex);
+    }
+    deps.queued.drop(view.path);
+    armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
+    armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
+    const token = mintWriteToken();
+    try {
+      const data = await deps.writeFile(view, commit.markdown, commit.source, token);
+      deps.arrive(view.path, data, { markdown: commit.markdown, token, source: commit.source });
+    } catch (error) {
+      const e = error;
+      if (e?.status === 409) {
+        if (commit.text.trim() === "") {
+          if (token !== null) {
+            deps.writes.concludeGiveUp(token);
+          }
+          deps.healFromRefusal(view.path, e.current);
+          return;
+        }
+        const refusedCurrent = typeof e.current === "string" ? e.current : null;
+        const rebase = commit.kind === "set-line" && refusedCurrent !== null ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, refusedCurrent) : null;
+        if (rebase?.outcome === "rebased" && refusedCurrent !== null) {
+          if (token !== null) {
+            deps.writes.concludeGiveUp(token);
+          }
+          const retryToken = mintWriteToken();
+          try {
+            const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken);
+            deps.arrive(view.path, data, {
+              markdown: rebase.markdown,
+              token: retryToken,
+              source: refusedCurrent
+            });
+          } catch (retryFailure) {
+            const retryError = retryFailure;
+            if (retryError?.status === 409 && retryToken !== null) {
+              deps.writes.concludeGiveUp(retryToken);
+            }
+            if (retryError?.status !== 409) {
+              deps.repaintArrived();
+            }
+          }
+          return;
+        }
+        if (token !== null) {
+          deps.writes.concludeGiveUp(token);
+        }
+        return;
+      }
+      deps.repaintArrived();
+    }
+  }
+  return commitLine;
+}
+
 // app/shell/drawer.ts
 var folderOf = (path) => {
   const at = String(path ?? "").lastIndexOf("/");
@@ -6464,6 +6529,7 @@ export {
   composeLine,
   composeSeed,
   coverageOf,
+  createCommitLine,
   declarationFrom,
   defaultOrderingFor,
   defaultOrderingPlacementFor,

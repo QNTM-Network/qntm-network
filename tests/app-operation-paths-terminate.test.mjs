@@ -163,13 +163,22 @@ describe("2. THE REAL PAGE — every write operation reaches a terminal state on
   });
 
   test("the site count is pinned — a new or vanished operation site needs a deliberate look here", () => {
-    // 3 writeFile(...) call sites (toggleTask, commitLine, commitLine's rebase retry) + 1
-    // collect()-exhausted site, as of 65ba882 + this change. If this number moves, something about
-    // where writes begin or end changed — update this pin as part of that change, deliberately,
-    // rather than letting it drift unnoticed.
+    // 1 writeFile(...) call site (toggleTask) + 1 collect()-exhausted site, as of this change
+    // (2026-08-07). It WAS 4 — 3 writeFile(...) call sites (toggleTask, commitLine, commitLine's
+    // rebase retry) + 1 collect()-exhausted site, as of 65ba882 — until `commitLine` relocated to
+    // app/present/commit.ts (see that module's own header for why). This checker parses ONLY
+    // app/index.html's inline `<script type="module">` (its own header, point 5) and has NOT been
+    // extended to also parse `.ts` modules, so commitLine's own two write sites are now genuinely
+    // OUTSIDE what this checker can see — a real, deliberate coverage gap this relocation opens,
+    // not a silent one: commit.ts's own try/catch shape is unchanged from what shipped here
+    // (verified by the byte-for-byte relocation in commit.ts's own header, and by
+    // tests/app-operation-completes.test.mjs §2/§5, which re-targeted their own checks at
+    // commit.ts), but nothing STRUCTURALLY re-proves that the way this file's AST walk did. If
+    // this number moves again, something about where writes begin or end changed — update this
+    // pin as part of that change, deliberately, rather than letting it drift unnoticed.
     const html = readFileSync(APP_HTML_PATH, "utf8");
     const { sitesChecked } = checkOperationCompleteness(html);
-    assert.equal(sitesChecked, 4);
+    assert.equal(sitesChecked, 2);
   });
 });
 

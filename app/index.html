@@ -1030,6 +1030,12 @@ import {
   armSettle,
   armPredict,
   graphSnapshotOf,
+  // `commitLine` ITSELF (app/present/commit.ts) — the connecting act, relocated so a caller-chain
+  // probe can see it call `runResolvers` and, on the write's own answer, reach `paint`. This page
+  // still builds it: `createCommitLine(deps)` below hands it the page state it cannot hold itself
+  // (`settle`, `predict`, `queued`, `writeFile`, `arrive`, `healFromRefusal`, `writes`, and the
+  // two page functions that deliberately did not move — see commit.ts's own header for why).
+  createCommitLine,
   // ── THE VIEW DRAWER (app/shell/drawer.ts) ──
   // `folderOf`/`foldersOf`/`drawerStops`/`viewButtons`/`drawerIsOpen` take no page state, so this
   // page uses them directly, under their own names. `buildDrawer`/`openDrawer`/`closeDrawer`/
@@ -1046,7 +1052,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=36e505b94b";
+} from "/dist/present.js?v=9a1c55ddc4";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2752,211 +2758,39 @@ function reportAbstentions(diagnostics) {
 // one line replaced, computed by app/present/source.js#applyEdit from the source string the
 // painter was given plus the characters the input held. `null` means the edit was refused — the
 // line was left unchanged, or the text was not one line — and a refusal is not a POST.
-async function commitLine(view, commit) {
-  if (commit.markdown === null) {
-    // THE LINE SETTLED AND CHANGED NOTHING — WHICH IS STILL A SETTLEMENT, AND THE QUEUE WAS
-    // WAITING FOR ONE. He opened a line, a projection arrived and was held, and he left the line
-    // without typing. There is no write to make and there is a screen to catch up: a blur that
-    // changes nothing is the commonest way an open line closes, and returning here without draining
-    // would leave the projection waiting for a gesture that has already happened.
-    //
-    // ONE TURN LATER, AND THE REASON IS EXACT RATHER THAN DEFENSIVE. `paint.ts`'s `settle` calls
-    // this callback IN THE MIDDLE of the settlement — `mode.enterNormal()` and the repaint both
-    // happen after it returns — so at this instant the line is still open and the gate would
-    // (correctly) refuse. Measured: draining here directly leaves the projection queued until the
-    // next keystroke. Scheduling it is what makes "the moment the line settles" mean the moment the
-    // settlement is FINISHED. The other write path needs no such thing: its own `await` is already
-    // a turn, and by the time it returns the mode has changed.
-    queueMicrotask(drainPainted);
-    return;
-  }
-  // ── ONE CONTEXT, ONE WALK, AND THIS FUNCTION NAMES NO RESOLVER ──
-  //
-  // What used to be here: four readings computed by name, four notes assembled by name, four badge
-  // writers called by name, and two arming functions called by name. Fourteen names for four axes,
-  // and six more axes declared. This is the whole of it now — and adding a tenth axis is a spec
-  // module and one line in `app/present/resolvers/registry.ts`, with nothing to change here.
-  //
-  // EVERY `read` RUNS EXACTLY ONCE PER COMMIT, which is the tie each axis's own header already
-  // argued for: two separately-written evaluations of one question drift apart. Ordering was the
-  // one axis that did NOT have that tie — its note and its badge each recomputed the same pure
-  // function and threw the other's answer away — and the walk gives it the tie for free.
-  //
-  // READ-ONLY, AND STILL: nothing below assigns `commit.markdown`/`commit.text`. See the comment
-  // above `resolverContextFor` for the invariant and for how far it now reaches.
-  const outcome = runResolvers(RESOLVERS, resolverContextFor(view, commit));
-  // `outcome.notes` USED TO FEED THE FRESHNESS LINE'S "PREDICTION" CLAUSE AND `outcome.diagnostics`
-  // THE FOUR ABSTENTION BADGES (`chore/retire-the-status-line`) — both ON-SCREEN sinks, both gone,
-  // and the operator's own reason for killing them stands: "it excuses things not working 'as long
-  // as they are reported'... we are building a working app." `.notes` stays unconsumed here; a
-  // sentence narrating what the app already decided is exactly the surface that commit retired.
-  //
-  // `.diagnostics` IS DIFFERENT, AND IS READ AGAIN AS OF THIS COMMIT (2026-08-07,
-  // design-the-rule-mirror.md §9.2 / roadmap-the-road-ahead.md step 2). Not every `Diagnostic` in
-  // it — `reportAbstentions`, below, narrows to the ones `abstentionsOf` names a genuine refusal
-  // ("I do not know"), never a confident "X: decided" that would be the same on-screen noise the
-  // freshness line was killed for. See that function's own header for why the venue is
-  // `console.debug` and not a DOM node, and `abstentionsOf`'s (resolve.ts) for why the filter lives
-  // there and not here.
-  reportAbstentions(outcome.diagnostics);
-  //
-  // THE TWO SURFACES, ARMED BEFORE THE OPTIMISTIC REPAINT THAT FOLLOWS THIS FUNCTION RETURNS — and
-  // never after the `await` below, because `paint.ts`'s own `settle` repaints into
-  // `commit.markdown` the instant this returns. Armed against that same string for the same reason:
-  // anything else would describe a paint that has already happened by the time it could be read.
-  //
-  // A SECOND COMMIT TO THE ROW `settle` IS CURRENTLY ARMED FOR, BEFORE THE WALK ABOVE CAN RE-ARM
-  // IT. `settle.ts`'s own header names this as one of three ways an arm is discarded: the row's
-  // identity survives a same-row edit (that is the whole point of keying by identity rather than by
-  // string), so an un-rearmed OLD placement would otherwise keep resolving against a value the row
-  // no longer carries. Scoped to `"set-line"` — an `"insert-line"`'s own `source`/`lineIndex` name
-  // an unrelated pushed-down line, never the new row's own before-state, and `supersede`'s own
-  // header states why calling it there would risk a false match instead.
-  if (commit.kind === "set-line") {
-    settle.supersede(commit.source, view.id, commit.lineIndex);
-  }
-  // WHATEVER IS STILL QUEUED FOR THIS PATH IS NOW STALE, AND MUST NOT SURVIVE TO BE INSTALLED OVER
-  // THE PLACEMENT THIS COMMIT IS ABOUT TO ARM — this is the OTHER discard `settle.ts`'s "TWO
-  // CAPTURES IN A ROW" header did not have to name, because it lives on this side of the wire, not
-  // inside `SettleSurface`. A projection can only ever be sitting in `queued` (`app/present/
-  // queue.ts`) because an EARLIER write's own cycle answered while a line here was open — and
-  // "open" always means "before this edit", since the edit this function is committing right now
-  // has not even reached `writeFile` yet, let alone a cycle. So anything queued for `view.path` at
-  // this instant necessarily describes the file as it stood BEFORE this line existed, and installing
-  // it later — the document-level keydown handler's own "third drain point" (`drainPainted`) runs
-  // UNCONDITIONALLY on literally the same Enter keystroke that just committed this row, and again on
-  // every ordinary keystroke after — would silently overwrite `graphData` with that older answer,
-  // discarding the placement just armed below before the operator ever sees it (or, on a later
-  // keystroke, after `settle.take` has already found and painted it once). MEASURED: reproduced
-  // through the real page — a queued projection left standing here, for a wholly unrelated earlier
-  // write, made a freshly captured row vanish on this same keystroke, then reappear unsorted, at
-  // plain file order, the moment its OWN write's answer next landed — exactly the operator's own
-  // report, "correct only once the engine's projection arrives seconds later". Dropping loses
-  // nothing: whatever that older projection knew (a stamp, a resort) is not information THIS commit
-  // depends on, and it is superseded for good the moment this write's own cycle answers, which
-  // `queued.offer`'s own `generated_at` ordering already guarantees reaches the screen instead.
-  queued.drop(view.path);
-  // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST. See `armSettle`
-  // and `armPredict` (resolve.ts) for why the two differ — an un-rearmed placement keeps describing
-  // a still-correct claim, whereas a stale predict arm gets reconciled by a LATER, unrelated
-  // commit's repaint and reported as "withdrawn" when nothing has contradicted it.
-  armSettle(settle, commit.markdown, view.id, outcome.placements);
-  armPredict(predict, commit.markdown, view.id, outcome.predictions);
-  // THE HANDLE THAT SAYS WHICH WRITE THIS WAS. Minted here rather than inside `writeFile` because
-  // two things need it and they are on opposite sides of the `await`: the POST body carries it, and
-  // `writes.waiting(token)` (below, via `arrive`/`collect`) is asked against it after the line turns
-  // out to be absent from what came back.
-  const token = mintWriteToken();
-  try {
-    const data = await writeFile(view, commit.markdown, commit.source, token);
-    // OFFERED, NOT INSTALLED — the same one statement the checkbox path makes, for the same reason.
-    // The commonest shape this catches is his own two-captures-in-a-row gesture: Enter settles this
-    // line and opens the next one, so by the time this answer lands there is already a row open,
-    // and installing it here is exactly what used to destroy that row's characters.
-    // THE SAME ONE STATEMENT THE CHECKBOX PATH MAKES, carrying the same two facts — see its own
-    // comment. `commit.markdown` is non-null here: a `null` returned above without posting.
-    // `commit.source` RIDES WITH IT for the reason the checkbox path states: it is the only string
-    // that says what this file held BEFORE this write, so it is the only one that can say which
-    // lines the write introduced. On a create that is exactly one line, and it is the line the
-    // pickup now waits to see stamped.
-    arrive(view.path, data, { markdown: commit.markdown, token, source: commit.source });
-  } catch (e) {
-    // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ──
-    //
-    // 409 means the server DECLINED this write and the vault is untouched — and the painter is
-    // holding his edited source, so the page is showing the characters he typed. NOT REPAINTING IS
-    // THE WHOLE OF THE ANSWER: the repaint below is what would destroy them. It leaves the screen
-    // showing a line the vault does not have, which is a real cost. It is the cheaper cost by a
-    // distance — the clobber this row exists to stop loses work nobody typed, and a refusal that
-    // answered it by deleting work he DID type would be strictly worse than the defect.
-    if (e?.status === 409) {
-      // ── AN OPERATION COMPLETES (design-the-two-rules.md §2.2, §3 item 11) ─────────────────────
-      //
-      // WHO STARTED THIS: the operator, committing this line. `healFromRefusal` ONLY ADOPTS THE
-      // SERVER'S FILE WHEN `commit.text` IS EMPTY — nothing his own typing produced is on screen to
-      // lose in that case, so the token is closed and the view heals, unconditionally.
-      if (commit.text.trim() === "") {
-        if (token !== null) {
-          writes.concludeGiveUp(token);
-        }
-        healFromRefusal(view.path, e.current);
-        return;
-      }
-      // ── A SAFE RETRY: THE REBASE (rebase.ts) ──────────────────────────────────────────────────
-      //
-      // Blindly reposting `commit.markdown` — computed against the OLD base — over `e.current`
-      // would silently discard whatever changed server-side, which is the exact clobber the
-      // base/token mechanism exists to refuse. `rebaseLineEdit` asks the narrower, safe question:
-      // is the operator's ONE edited line still cleanly applicable to `e.current`, found
-      // unambiguously by the same anchor walk `RowStore`/`healFromRefusal` already trust, with the
-      // line itself unchanged server-side. Scoped to `"set-line"` — a brand-new line
-      // (`"insert-line"`) has no identity of its own yet to anchor by (`instance.ts`'s own honest
-      // floor) and rebasing one is a different, harder construct this change does not build.
-      const rebase =
-        commit.kind === "set-line" && typeof e.current === "string"
-          ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, e.current)
-          : null;
-      if (rebase?.outcome === "rebased") {
-        // THE FIRST WRITE'S TOKEN ENDS HERE EITHER WAY — this refused POST is done; the retry
-        // below is a NEW write with its own token, correlated to its own answer.
-        if (token !== null) {
-          writes.concludeGiveUp(token);
-        }
-        // BOUND: ONE rebase attempt, never more. A second refusal below — of either kind — falls
-        // through to the same terminal act a rebase that never ran would have reached.
-        const retryToken = mintWriteToken();
-        try {
-          const data = await writeFile(view, rebase.markdown, e.current, retryToken);
-          // THE SAME ONE STATEMENT EVERY SUCCESSFUL WRITE MAKES (see the non-refused branch
-          // below). A landed rebase is INVISIBLE by construction from here: it goes through
-          // `arrive` exactly as an ordinary commit does, so nothing on screen marks that a retry
-          // ever happened — the only thing that can ever appear is the SETTLE a later projection
-          // brings, same as any other write.
-          arrive(view.path, data, { markdown: rebase.markdown, token: retryToken, source: e.current });
-        } catch (retryError) {
-          if (retryError?.status === 409 && retryToken !== null) {
-            writes.concludeGiveUp(retryToken);
-          }
-          if (retryError?.status !== 409) {
-            // Same terminal act the plain write-failure branch below takes: the screen stops
-            // claiming something the vault does not have.
-            paintView(currentViewId, "arrived");
-          }
-          // A 409 here leaves the screen exactly as it is, for the identical reason the no-rebase
-          // branch does: the row already holds his characters and nothing here may destroy them.
-        }
-        return;
-      }
-      // NO REBASE WAS POSSIBLE — refused, not guessed (`rebase?.reason`, unread here: THE
-      // PERCEPTION RULE governs, and nothing on screen may say why). BOUND: ZERO further retries.
-      if (token !== null) {
-        writes.concludeGiveUp(token);
-      }
-      // "return-to-row", THE ONLY ACT LEFT WHEN NEITHER HEALING NOR A REBASE COULD RUN. Not a new
-      // write, not a repaint — the row already holds what he typed (`paint.ts`'s optimistic
-      // settle called `rows.edited` with this exact string before this write was ever posted;
-      // NOT repainting here, unchanged from before this change, is what keeps it there). THE
-      // PERCEPTION RULE governs what happens on screen: nothing does, on purpose — no badge, no
-      // sentence says this write was abandoned, because the row is indistinguishable from an
-      // ordinary open edit and that is the correct terminal appearance, not a gap. A reload before
-      // his next edit loses it, same as any unsent edit — the accepted, stated limit
-      // (`state-edits-are-ephemeral`, docs/architecture/state.yaml:197). See
-      // `tests/app-operation-completes.test.mjs` §2 for the driven proof that the characters and
-      // the row's editability both survive this branch, and `tests/app-refusal-rebases.test.mjs`
-      // for the rebase's own drive.
-      return;
-    }
-    // The painter has already repainted this view from the edited source, so the page is showing
-    // the edit; what failed is the write. Repaint from the LAST KNOWN SERVER STATE so the screen
-    // stops claiming something the vault does not have.
-    //
-    // `"arrived"` RATHER THAN `"chosen"`, THOUGH NOTHING ARRIVED. The distinction the parameter
-    // carries is "did the operator choose to be somewhere else", and he did not — this is the view
-    // he is in, repainted from the last string the server sent. A row he is making has the same
-    // claim on surviving it that it has on surviving a projection.
-    paintView(currentViewId, "arrived");
-  }
-}
+//
+// ── THE FUNCTION ITSELF NOW LIVES IN app/present/commit.ts (2026-08-07) ──
+//
+// `commitLine` was the only code on this page that called both `runResolvers` and (through
+// `arrive`/`paintView`) reached `paint` — and it lived inside this `<script type="module">`,
+// which flow-trace's node module-load hook cannot import, so neither call was ever observable.
+// `createCommitLine(deps)` builds the identical function — same statements, same order, nothing
+// renamed beyond turning the free variables it closed over into one `deps` object — in a module
+// under `app/`, where a caller-chain probe can see it. See commit.ts's own header for the full
+// argument, for what stayed here on purpose (`resolverContextFor`, `reportAbstentions` — both
+// below, unmoved), and for `tests/flow_scenarios/commit_line_routes_to_paint.ts`, the scenario
+// that drives the relocated function end to end.
+//
+// EVERY DEPENDENCY BELOW IS EITHER A `const` TAKEN ONCE (`settle`, `predict`, `queued`, `writes`
+// — none is ever reassigned, so a reference taken here stays correct for the page's whole
+// lifetime) OR A THIN WRAPPER THAT READS A LIVE `let` AT CALL TIME rather than at construction
+// time (`buildContext` calls `resolverContextFor`, which itself reads `declaration`/`graphData`/
+// `graphBlob` fresh on every commit; `repaintArrived` calls `paintView` with whatever
+// `currentViewId` is when the write's own answer comes back, not whatever it was when this
+// object was built).
+const commitLine = createCommitLine({
+  buildContext: (view, commit) => resolverContextFor(view, commit),
+  reportAbstentions,
+  settle,
+  predict,
+  queued,
+  drainPainted,
+  writeFile,
+  arrive,
+  healFromRefusal,
+  writes,
+  repaintArrived: () => paintView(currentViewId, "arrived"),
+});
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE EMPTY ENVIRONMENT — what a brand-new account is shown, and what it is honestly not shown

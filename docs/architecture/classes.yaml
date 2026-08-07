@@ -299,5 +299,75 @@ classes:
       (app/present/resolvers/{membership,ordering,promotion}.ts) — have no canonical class home at
       all, not even a broken one; this row does not add one, for the identical reason stated above
       applies to each of them symmetrically and none is closer to true than the others.
+
+      ── 2026-08-07, ADDENDUM: THE RELOCATION HAPPENED, AND `governs_sinks: [view-painted]` IS
+      STILL NOT ADDED HERE, FOR A DIFFERENT AND STRONGER REASON THAN "NOT YET MOVED" ──
+
+      `commitLine` DID move, to `app/present/commit.ts` (`createCommitLine`) — see that module's
+      own header. The FALSE claim named above ("no TypeScript-to-TypeScript call edge from any
+      resolver into `paint.ts`") is now checkable rather than assumed, and checking it changes the
+      conclusion, not just its status: `runResolvers` (and every resolver's own `read`/`arm`) is a
+      SYNCHRONOUS call that returns, fully unwound, long before `paint` is ever reached — the
+      earliest a resolver-armed placement can affect the screen is a LATER repaint, reached via
+      `deps.arrive`/`deps.repaintArrived`, after `commitLine`'s own `await`. flow-trace's JS
+      observer threads the logical caller through `AsyncLocalStorage`
+      (`tools/flow-trace/js/src/runtime.mjs`), which records, for any given call to `paint`,
+      whichever INSTRUMENTED frame was still active at that exact moment — and by the time `paint`
+      runs, `resolvers/rules:read`'s own frame has already returned and left no trace. This is not
+      a gap that closes when a resolver moves somewhere else; it is a structural property of WHEN
+      a resolver's answer and WHEN the paint it eventually influences happen. `commitLine` itself
+      — the frame active across the whole gap, sync prefix through the async continuation — is the
+      only thing that can EVER appear in `paint`'s own caller-chain here, which is why the new
+      `commit-line-routing` class below governs `view-painted` and no resolver-anchored class ever
+      will, by this mechanism. `tests/flow_scenarios/commit_line_routes_to_paint.ts` is the scenario
+      that establishes this — driving the real `commitLine`, the real registry walk (ordering arms
+      a real placement), and the real `paint` — and its own header states the same argument as a
+      falsifiable claim rather than a proof.
     canonical_class: app/present/resolvers/rules:read
+    status: working
+
+  # ── ADDED 2026-08-07 — THE CONNECTING ACT ITSELF, THE ONLY THING THAT CAN GOVERN view-painted ──
+  #
+  # See `capture-rule-application`'s own addendum immediately above for why this is a SEPARATE
+  # class rather than a `governs_sinks` line added to that one: the concern here is not "applying
+  # the rules axis" (capture-rule-application's own subject, unaffected) but "reaching paint at
+  # all, with whatever any resolver decided" — a concern no individual resolver's home could ever
+  # canonically route through, by construction (AsyncLocalStorage records whichever instrumented
+  # frame was active WHEN paint fires; a resolver's own frame has always already returned by then).
+  - id: commit-line-routing
+    concern: >
+      THE ONE PLACE A COMMITTED LINE'S RESOLVED FATE REACHES THE SCREEN. `createCommitLine`
+      (app/present/commit.ts) builds the context every resolver reads, walks the registry
+      (`runResolvers`), arms the two surfaces `paint` itself later reads (`armSettle`,
+      `armPredict`), sends the write, and — on the write's own answer, whether that is an
+      accepted ack or a refusal with nothing safe to retry — is the frame still active when a
+      repaint next reaches `paint`. Not because it calls `paint` directly (it does not, and never
+      did — see commit.ts's own header for the two acts that remained page-shaped on purpose,
+      `resolverContextFor`/`reportAbstentions`, and `app/index.html`'s own
+      `paintView`/`repaintCurrentView`, which stayed behind too) but because nothing between
+      `commitLine`'s own continuation and `paint` is itself instrumented, so the logical caller
+      flow-trace records for that call is `commitLine`, unbroken across the gap.
+
+      THIS IS THE SAME MOVE `presentation-painting` MADE IN MIGRATION STAGE 1, ONE LAYER UP THE
+      CHAIN. Stage 1 made `paint` itself observable by moving it out of `app.html`, where node's
+      module-load hook could not reach it. This class makes the CALLER of the resolver walk
+      observable the identical way — `commitLine` was the one function on this page that called
+      both `runResolvers` and reached `paint`, and until this move that fact was true and
+      unverifiable for the same reason: it lived inside a `<script type="module">` in an HTML
+      document, which flow-trace cannot import, `.flow-trace.yaml`'s own note explains why, and no
+      entry in `modules.include` can fix.
+
+      GOVERNS view-painted, NOT BECAUSE IT PAINTS, BUT BECAUSE IT IS THE CHOKEPOINT. Every one of
+      the four resolvers' own answers — membership, ordering, rules, parent promotion — reaches
+      the screen through this one function's write path or not at all; there is no second route a
+      resolved placement or prediction could take to `paint` that does not pass through
+      `commitLine` first. `tests/flow_scenarios/commit_line_routes_to_paint.ts` drives it real:
+      the ordering resolver arms a genuine placement, `commitLine` sends the (stubbed) write,
+      and — gated behind the write's own accepted answer — reaches `paint`. Proven at the SCENARIO
+      level (flow-trace's own capture); `tests/app-predict-wiring.test.mjs` and
+      `tests/app-settle-wiring.test.mjs` prove the identical wiring again at the APPLICATION level,
+      through the real page, against `#viewBody`'s real children.
+    canonical_class: app/present/commit:commitLine
+    governs_sinks:
+      - view-painted
     status: working

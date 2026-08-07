@@ -384,13 +384,19 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
     );
   });
 
-  test("`writeFile` has exactly two CALLERS — toggleTask and commitLine, now four occurrences", () => {
-    // Declaration (1) + toggleTask (1) + commitLine's own attempt (1) + commitLine's bounded
-    // rebase retry (1) — `app/present/rebase.ts`, `feat/a-refusal-rebases`. The retry reuses
-    // `writeFile`, the one write path, rather than inventing a second; the CALLER count (two
-    // functions) is what this assertion is really protecting, and it is unchanged.
-    const occurrences = APP_SOURCE.match(/\bwriteFile\(/g) ?? [];
-    assert.equal(occurrences.length, 4, "a new call site outside toggleTask/commitLine would mean a third write path exists");
+  test("`writeFile` has exactly two CALLERS — toggleTask and commitLine, now split across two files", () => {
+    // Declaration (1) + toggleTask (1) on the page, commitLine's own attempt (1) + commitLine's
+    // bounded rebase retry (1) in dist/present.js — `commitLine` relocated to app/present/
+    // commit.ts (2026-08-07, see that module's own header), and its two `writeFile` calls moved
+    // with it. The retry still reuses `writeFile`, the one write path, rather than inventing a
+    // second; the CALLER count (two functions) is what this assertion is really protecting, and
+    // it is unchanged — only where two of its four occurrences are written moved.
+    const BUNDLE_SOURCE = readFileSync(resolve(HERE, "..", "dist", "present.js"), "utf8");
+    const pageOccurrences = APP_SOURCE.match(/\bwriteFile\(/g) ?? [];
+    const bundleOccurrences = BUNDLE_SOURCE.match(/\bdeps\.writeFile\(/g) ?? [];
+    assert.equal(pageOccurrences.length, 2, "toggleTask's call and writeFile's own declaration should be all that is left on the page");
+    assert.equal(bundleOccurrences.length, 2, "commitLine's own attempt and its bounded rebase retry should both be in the bundle");
+    assert.equal(pageOccurrences.length + bundleOccurrences.length, 4, "a new call site outside toggleTask/commitLine would mean a third write path exists");
   });
 
   test("`applyEdit` is reached from exactly five sites outside its own module", () => {

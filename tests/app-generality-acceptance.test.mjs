@@ -726,11 +726,14 @@ describe("6. NOTHING LOCAL IS WRITTEN beyond the seed characters and the stubbed
     assert.equal((APP.match(/\bgraphData\s*=(?!=)/g) ?? []).length, 4);
   });
 
-  test("`writeFile(` is called in exactly four places — this file adds no new write path", () => {
-    // Declaration + toggleTask + commitLine's own attempt + commitLine's bounded rebase retry
-    // (`app/present/rebase.ts`, `feat/a-refusal-rebases`) — one more OCCURRENCE, the same two
-    // CALLERS. The retry reuses `writeFile` rather than opening a second write path.
-    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 4);
+  test("`writeFile(` is called in exactly four places, split across the page and the bundle — this file adds no new write path", () => {
+    // Declaration + toggleTask on the page, commitLine's own attempt + commitLine's bounded
+    // rebase retry (`app/present/rebase.ts`, `feat/a-refusal-rebases`) in dist/present.js —
+    // `commitLine` relocated to app/present/commit.ts (2026-08-07). Two OCCURRENCES each, the
+    // same two CALLERS. The retry reuses `writeFile` rather than opening a second write path.
+    const BUNDLE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
+    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 2);
+    assert.equal((BUNDLE.match(/\bdeps\.writeFile\(/g) ?? []).length, 2);
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {
