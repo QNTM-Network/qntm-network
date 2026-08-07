@@ -2540,21 +2540,34 @@ function tagFromFamily(line, family) {
   }
   return void 0;
 }
+function tagSpanFromFamily(line, family) {
+  for (const span of tagSpans(line)) {
+    if (Object.prototype.hasOwnProperty.call(family, span.text)) return span;
+  }
+  return void 0;
+}
 function formatMarkerValue(value) {
   return value === null ? "" : String(value);
 }
 function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMarkers) {
   if (effects.length === 0) return { kind: "unchanged" };
-  let appended = "";
+  const original = line;
+  let text = line;
+  const deltaParts = [];
   for (const effect of effects) {
     if (effect.verb === "retype") {
       const byValue = invertTokenFamily(nodeTypeTokens);
       const token = byValue.get(effect.to);
       if (token === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
-      const existing = tagFromFamily(line, nodeTypeTokens);
-      if (existing === token) continue;
-      if (existing !== void 0) return { kind: "abstains", because: "conflicting-token-present", effect };
-      appended += ` ${token}`;
+      const existingSpan = tagSpanFromFamily(text, nodeTypeTokens);
+      if (existingSpan === void 0) {
+        text += ` ${token}`;
+        deltaParts.push(token);
+        continue;
+      }
+      if (existingSpan.text === token) continue;
+      text = text.slice(0, existingSpan.start) + token + text.slice(existingSpan.end);
+      deltaParts.push(token);
       continue;
     }
     if (effect.verb === "set") {
@@ -2563,30 +2576,33 @@ function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMark
         const byValue = invertTokenFamily(enumFamily2);
         const token = byValue.get(effect.to);
         if (token === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
-        const existing = tagFromFamily(line, enumFamily2);
+        const existing = tagFromFamily(original, enumFamily2);
         if (existing === token) continue;
         if (existing !== void 0) return { kind: "abstains", because: "conflicting-token-present", effect };
-        appended += ` ${token}`;
+        text += ` ${token}`;
+        deltaParts.push(token);
         continue;
       }
       const marker2 = fieldMarkers[effect.field];
       if (marker2 === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
-      if (line.includes(marker2.token)) {
+      if (original.includes(marker2.token)) {
         return { kind: "abstains", because: "conflicting-token-present", effect };
       }
-      appended += ` ${marker2.token} ${formatMarkerValue(effect.to)}`;
+      const piece = `${marker2.token} ${formatMarkerValue(effect.to)}`;
+      text += ` ${piece}`;
+      deltaParts.push(piece);
       continue;
     }
     const enumFamily = fieldTokens[effect.field];
-    if (enumFamily !== void 0 && tagFromFamily(line, enumFamily) !== void 0) {
+    if (enumFamily !== void 0 && tagFromFamily(original, enumFamily) !== void 0) {
       return { kind: "abstains", because: "conflicting-token-present", effect };
     }
     const marker = fieldMarkers[effect.field];
-    if (marker !== void 0 && line.includes(marker.token)) {
+    if (marker !== void 0 && original.includes(marker.token)) {
       return { kind: "abstains", because: "conflicting-token-present", effect };
     }
   }
-  return appended === "" ? { kind: "unchanged" } : { kind: "rendered", text: line + appended };
+  return deltaParts.length === 0 ? { kind: "unchanged" } : { kind: "rendered", text, delta: deltaParts.join(" ") };
 }
 
 // app/present/graphmatch.ts
@@ -5815,12 +5831,15 @@ var promotionSpec = {
     if (pass.applied.length === 0 && pass.undecidable.length > 0) {
       return { kind: "abstains", because: "graph-match-undecidable" };
     }
+    const retypes = pass.applied.filter((effect) => effect.verb === "retype");
+    const render = retypes.length === 0 ? { kind: "unchanged" } : renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
     return {
       kind: "answer",
       coverage: coverageOf(pass.undecidable),
       parentLineIndex: parentAt,
       applied: pass.applied,
-      partial: pass.partial.length > 0
+      partial: pass.partial.length > 0,
+      render
     };
   },
   say(reading) {
@@ -5844,43 +5863,25 @@ var promotionSpec = {
     if (reading.applied.length === 0) {
       return "parent: decided \u2014 no change";
     }
+    if (reading.render.kind === "abstains") {
+      return `parent: abstained \u2014 rendering-${reading.render.because}`;
+    }
     return reading.partial ? "parent: decided (partial \u2014 action(s) not modelled)" : "parent: decided";
   },
   /**
    * THE PARENT'S OWN PREDICTION — the row ABOVE `commit`, decorated with the retype a promotion rule
-   * decided for it, when this app can spell that retype onto a line at all.
-   *
-   * WHY ONLY THE `retype` EFFECTS. `task-with-open-part-of-child-becomes-outcome` and its three
-   * siblings ALWAYS pair their retype with a `set_field` targeting `auto_outcome`/`auto_habit`, and
-   * `vocabulary/markers.yaml` declares no trailing marker for either — `renderRuleEffects`'s
-   * ALL-OR-NOTHING rule ("never show a line half-corrected") would therefore abstain on EVERY real
-   * promotion this app will ever see, silencing the one scenario this whole axis exists to paint.
-   * That rule protects a claim about what a LINE'S OWN CHARACTERS will become; `auto_outcome` never
-   * becomes characters at all, in this decoration OR in the engine's own eventual content. Filtering
-   * to `retype` before rendering is not routing around the guard; it is asking the guard the
-   * question it can answer, and `show` above still reports the retype AND the un-renderable set
-   * together, in words.
+   * decided for it, when `read` above could spell that retype onto a line at all. All of the
+   * rendering happened in `read` (`reading.render`); this only ever turns a `"rendered"` outcome
+   * into an `Arming`, or arms nothing.
    */
-  arm(ctx, reading) {
-    const { commit } = ctx;
-    const qualification = ctx.declared.qualification;
+  arm(_ctx, reading) {
     if (reading.kind !== "answer" || reading.applied.length === 0) {
       return [];
     }
-    if (qualification === void 0 || commit.markdown === null) {
+    if (reading.render.kind !== "rendered") {
       return [];
     }
-    const retypes = reading.applied.filter((effect) => effect.verb === "retype");
-    if (retypes.length === 0) {
-      return [];
-    }
-    const parentLine = commit.markdown.split("\n")[reading.parentLineIndex] ?? "";
-    const rendered = renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
-    if (rendered.kind !== "rendered") {
-      return [];
-    }
-    const text = rendered.text.slice(parentLine.length).trim();
-    return text === "" ? [] : [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text } }];
+    return [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta } }];
   }
 };
 

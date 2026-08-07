@@ -37,7 +37,7 @@ import { resolveLineFields } from "../select/membership.js";
 import type { ResolvedFields } from "../select/membership.js";
 import type { QualificationLanguage, SectionQualification } from "../select/qualification.js";
 import { applyRules, renderRuleEffects } from "../rules.js";
-import type { RuleEffect } from "../rules.js";
+import type { RuleEffect, RuleRenderOutcome } from "../rules.js";
 import { applyGraphAwareRules, resolvedQntmId } from "../graphmatch.js";
 import type { GraphSnapshot } from "../graphmatch.js";
 import { stampSpans, tagSpans } from "../express/rendition.js";
@@ -282,6 +282,20 @@ export interface PromotionOutcome {
   /** A fired rule carries an unmodelled `emit_event`. See the rules resolver for the distinction
    * between this and `coverage`. */
   readonly partial: boolean;
+  /**
+   * WHETHER — AND HOW — `applied`'s own `retype` effect(s) can be SPELLED onto the parent's actual
+   * line, computed exactly once, here, rather than re-derived (and its own abstention swallowed
+   * silently) inside `arm` below. `{kind: "unchanged"}` when `applied` carries no `retype` at all.
+   *
+   * COMPUTED IN `read`, NOT `arm`, ON PURPOSE (2026-08-07) — see `show` below for the reason this
+   * matters beyond "one fewer render call": `arm` used to call `renderRuleEffects` itself and treat
+   * ANY non-`"rendered"` result as "arm nothing", which discarded a genuine `conflicting-token-
+   * present` refusal with no trace anywhere — not in `outcome.diagnostics`, not on the console
+   * register that already reads it. Carrying the render outcome on the READING is what lets `show`
+   * report the SAME refusal `arm` would otherwise have swallowed, through the one diagnostics
+   * channel every other abstention in this bundle already uses.
+   */
+  readonly render: RuleRenderOutcome;
 }
 
 export type PromotionCommitReading = Reading<PromotionOutcome>;
@@ -379,12 +393,31 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
     if (pass.applied.length === 0 && pass.undecidable.length > 0) {
       return { kind: "abstains", because: "graph-match-undecidable" };
     }
+    // WHETHER THE `retype` EFFECT(S) CAN BE SPELLED ONTO THE PARENT'S OWN LINE — computed here,
+    // once, rather than inside `arm` below. See `PromotionOutcome.render`'s own header for why this
+    // moved (2026-08-07): `arm` used to call `renderRuleEffects` itself and drop a genuine
+    // `conflicting-token-present` refusal on the floor, with no trace anywhere.
+    //
+    // WHY ONLY THE `retype` EFFECTS ARE RENDERED HERE. `task-with-open-part-of-child-becomes-
+    // outcome` and its three siblings ALWAYS pair their retype with a `set_field` targeting
+    // `auto_outcome`/`auto_habit`, and `vocabulary/markers.yaml` declares no trailing marker for
+    // either — `renderRuleEffects`'s ALL-OR-NOTHING rule ("never show a line half-corrected") would
+    // therefore abstain on EVERY real promotion this app will ever see, silencing the one scenario
+    // this whole axis exists to paint. That rule protects a claim about what a LINE'S OWN CHARACTERS
+    // will become; `auto_outcome` never becomes characters at all, in this decoration OR in the
+    // engine's own eventual content. Filtering to `retype` before rendering is not routing around
+    // the guard; it is asking the guard the question it can answer, and `say` above still reports
+    // the retype AND the un-renderable set together, in words.
+    const retypes = pass.applied.filter((effect) => effect.verb === "retype");
+    const render: RuleRenderOutcome =
+      retypes.length === 0 ? { kind: "unchanged" } : renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
     return {
       kind: "answer",
       coverage: coverageOf(pass.undecidable),
       parentLineIndex: parentAt,
       applied: pass.applied,
       partial: pass.partial.length > 0,
+      render,
     };
   },
 
@@ -412,43 +445,34 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
     if (reading.applied.length === 0) {
       return "parent: decided — no change";
     }
+    // THE ABSTENTION `arm` USED TO SWALLOW, NOW REPORTED THROUGH THE SAME CHANNEL EVERY OTHER
+    // REFUSAL IN THIS BUNDLE USES (2026-08-07, design-the-rule-mirror.md §9.2's own follow-up). The
+    // graph-aware PASS decided correctly — `reading.kind` stays `"answer"`, and `say` above still
+    // narrates the retype in words, exactly as it did before this branch existed — but this app
+    // cannot SPELL that decision onto the parent's own line, and a caller reading only `show()`'s
+    // sentence deserves to know that as plainly as any other abstention. `diagnosticOf` (resolve.ts)
+    // derives `abstained` from the `"parent: abstained"` PREFIX alone, so this reaches
+    // `abstentionsOf`/`reportAbstentions` (the console register) exactly as a `kind: "abstains"`
+    // reading already does, with no change to either of those.
+    if (reading.render.kind === "abstains") {
+      return `parent: abstained — rendering-${reading.render.because}`;
+    }
     return reading.partial ? "parent: decided (partial — action(s) not modelled)" : "parent: decided";
   },
 
   /**
    * THE PARENT'S OWN PREDICTION — the row ABOVE `commit`, decorated with the retype a promotion rule
-   * decided for it, when this app can spell that retype onto a line at all.
-   *
-   * WHY ONLY THE `retype` EFFECTS. `task-with-open-part-of-child-becomes-outcome` and its three
-   * siblings ALWAYS pair their retype with a `set_field` targeting `auto_outcome`/`auto_habit`, and
-   * `vocabulary/markers.yaml` declares no trailing marker for either — `renderRuleEffects`'s
-   * ALL-OR-NOTHING rule ("never show a line half-corrected") would therefore abstain on EVERY real
-   * promotion this app will ever see, silencing the one scenario this whole axis exists to paint.
-   * That rule protects a claim about what a LINE'S OWN CHARACTERS will become; `auto_outcome` never
-   * becomes characters at all, in this decoration OR in the engine's own eventual content. Filtering
-   * to `retype` before rendering is not routing around the guard; it is asking the guard the
-   * question it can answer, and `show` above still reports the retype AND the un-renderable set
-   * together, in words.
+   * decided for it, when `read` above could spell that retype onto a line at all. All of the
+   * rendering happened in `read` (`reading.render`); this only ever turns a `"rendered"` outcome
+   * into an `Arming`, or arms nothing.
    */
-  arm(ctx: CommitContext, reading: PromotionCommitReading): readonly Arming[] {
-    const { commit } = ctx;
-    const qualification = ctx.declared.qualification;
+  arm(_ctx: CommitContext, reading: PromotionCommitReading): readonly Arming[] {
     if (reading.kind !== "answer" || reading.applied.length === 0) {
       return [];
     }
-    if (qualification === undefined || commit.markdown === null) {
+    if (reading.render.kind !== "rendered") {
       return [];
     }
-    const retypes = reading.applied.filter((effect) => effect.verb === "retype");
-    if (retypes.length === 0) {
-      return [];
-    }
-    const parentLine = commit.markdown.split("\n")[reading.parentLineIndex] ?? "";
-    const rendered = renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
-    if (rendered.kind !== "rendered") {
-      return [];
-    }
-    const text = rendered.text.slice(parentLine.length).trim();
-    return text === "" ? [] : [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text } }];
+    return [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta } }];
   },
 };

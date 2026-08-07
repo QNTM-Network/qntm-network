@@ -51,6 +51,16 @@ import {
   RESOLVER_SOURCES,
 } from "./fixtures/app-html-page.mjs";
 import { todayFor } from "../dist/present.js";
+import {
+  PROMOTION_DECLARATION,
+  PROMOTION_VIEW,
+  BARE_PARENT_TYPED,
+  BARE_AFTER_PARENT,
+  BARE_AFTER_CHILD,
+  TAGGED_PARENT_TYPED,
+  TAGGED_AFTER_PARENT,
+  TAGGED_AFTER_CHILD,
+} from "./fixtures/promotion-scenarios.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -147,80 +157,21 @@ describe("1. THE HEADLINE — he adds a task, and sees the 🆕 stamp appear on 
 // 2. THE HEADLINE, SCENARIO 2 — an indent, the #outcome claim lands on the PARENT's row
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-// A hand-built declaration shaped like the operator's real one — the SAME shape
-// tests/app-parent-promotion.test.mjs uses for the identical reason (mirrors the real
-// tasks-with-open-part-of-child pattern's structure without depending on the real 35-type list).
-const PROMOTION_DECLARATION = {
-  qualification: {
-    defaultNodeType: "task",
-    structuralNodeTypes: [],
-    tokens: {
-      node_type: { "#task": "task", "#routine": "routine", "#outcome": "outcome", "#habit": "habit" },
-      domain: {},
-      status: { "[ ]": "open", "[x]": "done" },
-    },
-    predicates: { "open-tasks": { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
-    sections: { "this-week": { capture: { qualification: "open-tasks", nodeType: "task", name: "Capture" } } },
-    sectionOrder: { "this-week": ["capture"] },
-    refused: {},
-    dropped: {},
-  },
-  resolution: {
-    registration: {}, lineGrammars: {}, ordering: {}, orderingFields: {},
-    dayBoundary: { timezone: "Europe/London", dayStartHour: 4, weekStartsOn: "monday" },
-    chromeShapes: {}, sectionRegistration: {}, defaultOrdering: [], priorityRank: {}, dropped: {},
-  },
-  structural: {
-    indent: { edgeType: "PART_OF", edgeSource: "self" },
-    edgeCardinality: { PART_OF: "many_to_one", WAITING_FOR: "many_to_many" },
-    sections: {}, dropped: {},
-  },
-  rules: {
-    order: { established: true, sequence: ["task-with-open-part-of-child-becomes-outcome"] },
-    rules: {
-      "task-with-open-part-of-child-becomes-outcome": {
-        pattern: "tasks-with-open-part-of-child",
-        when: { op: "null", field: "change_type" },
-        priority: 0,
-        actions: [
-          { verb: "retype", to: "outcome" },
-          { verb: "set", field: "auto_outcome", to: true },
-        ],
-        partial: true,
-      },
-    },
-    patterns: {
-      "tasks-with-open-part-of-child": {
-        find: { nodeType: ["task"], fields: { status: { eq: "open" } } },
-        exclude: [],
-        edgeSteps: [
-          {
-            direction: "children", mustExist: true, edgeType: ["PART_OF"],
-            nodeType: ["task", "outcome"], fields: { status: { not: { eq: "done" } } },
-          },
-        ],
-      },
-    },
-    fieldMarkers: {},
-    dropped: {},
-  },
-};
-
-const PROMOTION_VIEW = { id: "this-week", path: "this_week.md" };
+// `PROMOTION_DECLARATION`/`PROMOTION_VIEW` now live in `tests/fixtures/promotion-scenarios.mjs` — a
+// hand-built declaration shaped like the operator's real one (mirrors the real
+// tasks-with-open-part-of-child pattern's structure without depending on the real 35-type list),
+// extracted 2026-08-07 so this file and `tests/app-parent-promotion-on-indent.test.mjs` can never
+// silently disagree again about what "the operator's real gesture" looks like — see that fixture's
+// own header for the defect this closes.
 
 describe("2. THE HEADLINE — he indents a task under a task, and sees the parent become an outcome", () => {
   let page, elements;
 
-  // NEITHER LINE CARRIES AN EXPLICIT #task TAG, THE OPERATOR'S OWN IDIOMATIC STYLE
-  // (tests/app-rules-stamp.test.mjs's own headline capture is bare too) — and load-bearing here:
-  // `renderRuleEffects` refuses to retype a line that already carries a DIFFERENT token from the
-  // SAME family (`conflicting-token-present`, rules.ts), so a line explicitly tagged `#task` would
-  // correctly abstain rather than paint "#outcome" beside a tag the operator typed that still says
-  // otherwise. See section 3 below for that abstention proven directly.
-  const PARENT_TYPED = "## Capture\n";
-  const AFTER_PARENT = "## Capture\n- [ ] Ship the launch note\n";
-  const AFTER_CHILD = "## Capture\n- [ ] Ship the launch note\n    - [ ] Draft the copy\n";
-
+  // NEITHER LINE CARRIES AN EXPLICIT #task TAG, THE OPERATOR'S OTHER OWN IDIOMATIC STYLE
+  // (tests/app-rules-stamp.test.mjs's own headline capture is bare too). Section 8 below drives the
+  // TAGGED shape — a parent line carrying `#task` explicitly, the SAME family the promotion rule's
+  // `retype` effect targets — which used to hit `conflicting-token-present` and abstain silently;
+  // see that section's own header for the defect and the fix.
   before(async () => {
     ({ elements } = installBrowser());
     globalThis.fetch = echoStub(PROMOTION_VIEW);
@@ -231,12 +182,12 @@ describe("2. THE HEADLINE — he indents a task under a task, and sees the paren
 
   test("OBSERVED ON THIS BRANCH: the parent's own row is armed, the CHILD's row is not", async () => {
     await page.commitLine(PROMOTION_VIEW, {
-      lineIndex: 1, text: "- [ ] Ship the launch note", markdown: AFTER_PARENT, source: PARENT_TYPED, kind: "insert-line",
+      lineIndex: 1, text: "- [ ] Ship the launch note", markdown: BARE_AFTER_PARENT, source: BARE_PARENT_TYPED, kind: "insert-line",
     });
     const write = page.commitLine(PROMOTION_VIEW, {
-      lineIndex: 2, text: "    - [ ] Draft the copy", markdown: AFTER_CHILD, source: AFTER_PARENT, kind: "insert-line",
+      lineIndex: 2, text: "    - [ ] Draft the copy", markdown: BARE_AFTER_CHILD, source: BARE_AFTER_PARENT, kind: "insert-line",
     });
-    const instruction = page.__predict().take(AFTER_CHILD, PROMOTION_VIEW.id);
+    const instruction = page.__predict().take(BARE_AFTER_CHILD, PROMOTION_VIEW.id);
     assert.notEqual(instruction, null);
     assert.deepEqual(instruction.predictions, [{ lineIndex: 1, text: "#outcome" }], "the PARENT's row (1), never the committed child's row (2)");
     await write;
@@ -244,12 +195,12 @@ describe("2. THE HEADLINE — he indents a task under a task, and sees the paren
 
   test("OBSERVED ON THIS BRANCH: painted — the chip lands on the parent row, and the committed row carries none", async () => {
     await page.commitLine(PROMOTION_VIEW, {
-      lineIndex: 1, text: "- [ ] Ship the launch note", markdown: AFTER_PARENT, source: PARENT_TYPED, kind: "insert-line",
+      lineIndex: 1, text: "- [ ] Ship the launch note", markdown: BARE_AFTER_PARENT, source: BARE_PARENT_TYPED, kind: "insert-line",
     });
     const write = page.commitLine(PROMOTION_VIEW, {
-      lineIndex: 2, text: "    - [ ] Draft the copy", markdown: AFTER_CHILD, source: AFTER_PARENT, kind: "insert-line",
+      lineIndex: 2, text: "    - [ ] Draft the copy", markdown: BARE_AFTER_CHILD, source: BARE_AFTER_PARENT, kind: "insert-line",
     });
-    paint(page, PROMOTION_VIEW, AFTER_CHILD);
+    paint(page, PROMOTION_VIEW, BARE_AFTER_CHILD);
 
     const body = elements.get("viewBody");
     const rows = walk(body).filter((el) => el.tagName === "label");
@@ -509,10 +460,15 @@ describe("7. MUTATION PROOFS — this leg's own tests are not vacuously green", 
     // cosmetic: without it, every real published promotion rule (which always pairs its retype
     // with an unrenderable auto_outcome/auto_habit set) abstains, and the headline scenario 2 goes
     // red exactly the way it did before this leg's own instinct was corrected.
+    //
+    // 2026-08-07: the retype filter moved from `arm` into `read` (`resolvers/promotion.ts`) — see
+    // `PromotionOutcome.render`'s own header — so the exact text this mutation targets moved with
+    // it, from `reading.applied.filter(...)` to `pass.applied.filter(...)`. The BEHAVIOUR this
+    // mutation proves is unchanged; only its source location is.
     const workDir = makeWorkDir("predict-mutation-no-retype-filter");
     const mutate = mutatingBundle([
-      'const retypes = reading.applied.filter((effect) => effect.verb === "retype");',
-      "const retypes = reading.applied;",
+      'const retypes = pass.applied.filter((effect) => effect.verb === "retype");',
+      "const retypes = pass.applied;",
     ])(workDir);
     const { elements } = installBrowser();
     globalThis.fetch = echoStub(PROMOTION_VIEW);
@@ -533,6 +489,132 @@ describe("7. MUTATION PROOFS — this leg's own tests are not vacuously green", 
       page.__predict().take(AFTER_CHILD, PROMOTION_VIEW.id), null,
       "with the all-or-nothing render restored, the real published rule shape (retype + unrenderable set) must abstain again",
     );
+    await write;
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. THE OPERATOR'S REAL GESTURE — a parent line that ALREADY carries `#task`, the shape that
+//    silently abstained in production on 2026-08-07 (`conflicting-token-present`, swallowed inside
+//    `arm`, never reported anywhere). FAILS ON UNFIXED CODE — see this section's own header.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("8. THE OPERATOR'S REAL GESTURE — a #task-tagged parent, indented under, still becomes #outcome", () => {
+  /**
+   * THE DEFECT, AND WHY NEITHER EXISTING FILE CAUGHT IT. `tests/app-parent-promotion-on-indent.test
+   * .mjs` proves `promotionSpec.read()`/`say()` decide correctly for a `#task`-tagged parent line —
+   * but it never calls `.arm()` and never touches the DOM, so it could not see `arm`'s own silent
+   * `[] `. Section 2 above (this file) DOES call `.arm()`, through the real `commitLine`, but its
+   * own fixture was BARE on purpose (see its comment, now retired) "because a tagged line would hit
+   * `conflicting-token-present`" — it was written AROUND the bug rather than proving it does not
+   * happen. Neither file, alone or together before this leg, ever drove a `#task`-tagged parent
+   * through `arm()` to `#viewBody`. This section is that missing drive, using the SAME shared
+   * fixture (`tests/fixtures/promotion-scenarios.mjs`) section 2 now imports, so the two files
+   * cannot silently diverge on what "a real task line" looks like again.
+   *
+   * PROVEN AT APPLICATION LEVEL: real `commitLine`, real `armPredict`, real `repaintCurrentView`,
+   * real `#viewBody` children — not the resolver alone.
+   */
+  test("OBSERVED ON THIS BRANCH: the #outcome chip paints on the tagged parent's row — the swap, not a refusal", async () => {
+    const { elements } = installBrowser();
+    globalThis.fetch = echoStub(PROMOTION_VIEW);
+    const page = await importPage(makeWorkDir("predict-tagged-parent-headline"));
+    page.__applyPresentation(PROMOTION_DECLARATION);
+    page.__setGraphData({ snapshot: { generated_at: "2026-08-07T00:00:00Z", views: [], graph: { nodes: [], edges: [] } } });
+
+    await page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 1, text: "- [ ] Ship the launch note #task", markdown: TAGGED_AFTER_PARENT, source: TAGGED_PARENT_TYPED, kind: "insert-line",
+    });
+    const write = page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: TAGGED_AFTER_CHILD, source: TAGGED_AFTER_PARENT, kind: "insert-line",
+    });
+
+    // THE ARMED PREDICTION — read synchronously, before the write's own answer lands.
+    const instruction = page.__predict().take(TAGGED_AFTER_CHILD, PROMOTION_VIEW.id);
+    assert.notEqual(instruction, null, "ON UNFIXED CODE: `arm` swallows `conflicting-token-present` and arms nothing here — this is the red assertion");
+    assert.deepEqual(instruction.predictions, [{ lineIndex: 1, text: "#outcome" }]);
+
+    paint(page, PROMOTION_VIEW, TAGGED_AFTER_CHILD);
+    const body = elements.get("viewBody");
+    const rows = walk(body).filter((el) => el.tagName === "label");
+    assert.equal(rows.length, 2, "precondition: parent row and child row both painted");
+    assert.equal(chipsIn(rows[0]).length, 1, "the tagged parent row must still carry the promotion claim");
+    assert.equal(chipsIn(rows[0])[0].textContent, "#outcome");
+    await write;
+  });
+
+  test("THE OLD `#task` TAG IS GONE, NOT DOUBLED — the real write is still untouched, and the resolver's own reading matches", async () => {
+    // A regression guard for the SWAP mechanism itself, distinct from the paint assertion above:
+    // `promotionSpec.read()`'s own `reading.render` must carry the REPLACED line — `#outcome`, not
+    // `#task #outcome` — even though nothing here ever writes it back to `commit.markdown`.
+    const { elements } = installBrowser();
+    globalThis.fetch = echoStub(PROMOTION_VIEW);
+    const page = await importPage(makeWorkDir("predict-tagged-parent-swap-shape"));
+    page.__applyPresentation(PROMOTION_DECLARATION);
+    page.__setGraphData({ snapshot: { generated_at: "2026-08-07T00:00:00Z", views: [], graph: { nodes: [], edges: [] } } });
+
+    await page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 1, text: "- [ ] Ship the launch note #task", markdown: TAGGED_AFTER_PARENT, source: TAGGED_PARENT_TYPED, kind: "insert-line",
+    });
+    const write = page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: TAGGED_AFTER_CHILD, source: TAGGED_AFTER_PARENT, kind: "insert-line",
+    });
+    const reading = page.__parentPromotionFor(PROMOTION_VIEW, {
+      lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: TAGGED_AFTER_CHILD, source: TAGGED_AFTER_PARENT, kind: "insert-line",
+    });
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.render.kind, "rendered");
+    assert.equal(reading.render.text, "- [ ] Ship the launch note #outcome", "the swap replaces #task in place; it does not append #outcome beside it");
+    // PROMOTION_DECLARATION's own rule declares `partial: true` (an unmodelled `emit_event`) — see
+    // that fixture's own comment — so the sentence carries that clause too; this is not about the
+    // swap, only about matching the fixture's real shape rather than a simplified one.
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided (partial — action(s) not modelled)");
+    await write;
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 9. THE ABSTENTION IS NOW VISIBLE — `arm`'s own refusal, when one still happens, reaches the SAME
+//    diagnostics channel every other resolver abstention already does. `conflicting-token-present`
+//    can no longer fire for a `retype` (section 8 proves the swap), so this exercises the OTHER
+//    reason `arm` can still refuse — `unrenderable-effect`, a `retype` targeting a value the
+//    declaration's own `node_type` family has no token for at all.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("9. THE ABSTENTION IS NOW VISIBLE — a render `arm` cannot spell reaches show()/abstentionsOf, not just []", () => {
+  test("an unspellable retype target abstains through the SAME sentence a read()-level refusal already uses, and paints nothing", async () => {
+    // `#outcome` is deliberately ABSENT from `node_type` here — every other shape of this
+    // declaration is `PROMOTION_DECLARATION` (promotion-scenarios.mjs), so this is the ONE
+    // controlled difference the test exists to exploit.
+    const declaration = JSON.parse(JSON.stringify(PROMOTION_DECLARATION));
+    delete declaration.qualification.tokens.node_type["#outcome"];
+
+    const { elements } = installBrowser();
+    globalThis.fetch = echoStub(PROMOTION_VIEW);
+    const page = await importPage(makeWorkDir("predict-abstain-unrenderable-retype"));
+    page.__applyPresentation(declaration);
+    page.__setGraphData({ snapshot: { generated_at: "2026-08-07T00:00:00Z", views: [], graph: { nodes: [], edges: [] } } });
+
+    await page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 1, text: "- [ ] Ship the launch note", markdown: BARE_AFTER_PARENT, source: BARE_PARENT_TYPED, kind: "insert-line",
+    });
+    const write = page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 2, text: "    - [ ] Draft the copy", markdown: BARE_AFTER_CHILD, source: BARE_AFTER_PARENT, kind: "insert-line",
+    });
+    const reading = page.__parentPromotionFor(PROMOTION_VIEW, {
+      lineIndex: 2, text: "    - [ ] Draft the copy", markdown: BARE_AFTER_CHILD, source: BARE_AFTER_PARENT, kind: "insert-line",
+    });
+    assert.equal(reading.kind, "answer", "the graph-aware PASS still decides correctly — this is arm's own refusal, not read's");
+    assert.equal(reading.render.kind, "abstains");
+    assert.equal(reading.render.because, "unrenderable-effect");
+    assert.equal(
+      page.__parentPromotionDiagnosticFor(reading),
+      "parent: abstained — rendering-unrenderable-effect",
+      "arm's own refusal must be readable through show(), the same channel every other resolver abstention already uses",
+    );
+    assert.equal(page.__predict().take(BARE_AFTER_CHILD, PROMOTION_VIEW.id), null, "arm must still arm nothing for an unspellable retype");
+    paint(page, PROMOTION_VIEW, BARE_AFTER_CHILD);
+    assert.equal(chipsIn(elements.get("viewBody")).length, 0);
     await write;
   });
 });
