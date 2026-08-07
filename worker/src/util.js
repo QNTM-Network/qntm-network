@@ -33,6 +33,14 @@ export function json(obj, status, origin, extraHeaders = {}) {
   });
 }
 
+// A real 304 for a route the caller already holds a current `ETag` for — no body, ever. `json()`
+// cannot be reused here: `JSON.stringify(obj)` always produces a body, and RFC 9110 §15.4.5 makes
+// a 304 with one a protocol violation, not a smaller success. `etag` is carried back so the
+// caller still has something to re-send as `If-None-Match` next time.
+export function notModified(origin, etag) {
+  return new Response(null, { status: 304, headers: { ...cors(origin), ETag: etag } });
+}
+
 // WebAuthn relying-party config, derived from the calling origin. The RP ID is the domain
 // the ceremony runs on (qntm.network, where the app is served from /app/) — NOT the Worker's
 // own host.
