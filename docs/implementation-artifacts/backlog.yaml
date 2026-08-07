@@ -4055,3 +4055,37 @@ backlog:
     once its own `tests/flow_scenarios/*.ts` scenario observes a real call.
   kind: null
   state: unscoped
+
+- id: scenario-the-membership-ordering-promotion-resolver-axes
+  title: >-
+    [rules-leg] [flow-trace] `app/present/resolvers/registry.ts`'s `RESOLVERS` array walks FOUR
+    resolvers on every real commit — membership, ordering, rules, promotion.
+    `tests/flow_scenarios/capture_rules.ts` (this pass) closed the flow-trace gap for the RULES
+    axis only: `docs/architecture/flows.yaml`'s `capture-rule-application` class, gated by the
+    `the-published-rule-order-is-applied-at-commit` capability. The other three axes still have
+    ZERO `flows.yaml` entries and no scenario drives `resolvers/membership.ts`,
+    `resolvers/ordering.ts` or `resolvers/promotion.ts` — checked with `rg`, not assumed, same
+    method the rules-axis gap was found with. Each is real, live, wired production code, proven at
+    the VALUE level by `node --test` (`tests/app-resolver-registry.test.mjs` and others) but never
+    at the SHAPE level. Closing each is the same small shape `capture_rules.ts` already is: a
+    hand-built `CommitContext`, the real `RESOLVERS` array, `runResolvers`, and an assertion on
+    `outcome.runs`/`outcome.notes`/`outcome.predictions` — not three new mechanisms, three more
+    instances of the one just built.
+  kind: null
+  state: unscoped
+
+- id: verify-crashes-on-instance-anchor-independent-of-any-of-this-passs-changes
+  title: >-
+    [flow-trace] [tool] `flow-trace verify .` (no flags beyond the target) exits 2 — a CRASH, not a
+    verdict — on this worktree, at `origin/main` @ af24e1a, with NO files from this pass present:
+    `Scenario 'instance_anchor' raised during execution: RuntimeError(... 'app/present/instance.ts
+    imports ./express/rendition.js — the anchor walk may reach only the grammar (rendition.ts) and
+    the relative anchor (relative.ts); an anchor is not a rendition and produces no edit')`.
+    Reproduced 3 of 3 runs of `tests/flow_scenarios/instance_anchor.ts` standalone (`node
+    run-scenario.mjs`), confirmed present with this pass's own new scenario file physically removed
+    from the worktree, so it predates this pass and is not caused by it. `--scenario capture_rules`
+    and `--scenario <other-name>` each avoid it and return a verdict; the unscoped, whole-suite
+    `verify .` cannot today. Filed rather than fixed: `instance_anchor.ts`'s own assertion is the
+    thing raising, and diagnosing it is outside the rules leg's scope.
+  kind: null
+  state: unscoped
