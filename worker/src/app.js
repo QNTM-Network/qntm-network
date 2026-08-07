@@ -220,8 +220,21 @@ async function graphGet(request, env, origin, session) {
               version: null,
               generated_at: e.generated_at,
               views: e.views || [],
-              graph: e.graph || {},
-              locations: e.locations || {},
+              // ABSENT WHEN Fly SENT NONE, NEVER FABRICATED AS `{}` — graph-envelope-composition-
+              // separates-blob-from-view-markdown (2026-08-07). `server/app.py`'s `GET /graph` no
+              // longer carries `graph`/`locations` by default at all (see that route's own
+              // docstring), so `e.graph`/`e.locations` are `undefined` on the ordinary path now,
+              // not `{}` — and spreading nothing in rather than `{graph: {}}` matters: `{}` reads
+              // to `graphSnapshotOf` (app/present/resolve.ts) as "present but empty", the SAME
+              // shape as a brand-new account's genuinely-empty graph, where an ABSENT key reads as
+              // "not sent this response" and correctly falls through to the separately-cached
+              // `graphBlob` instead (`app/index.html`'s `refreshGraphBlob`, fetched from the new
+              // `GET /app/graph/blob` route below). A Fly deployment that predates this PR (or a
+              // future caller that explicitly asked Fly for the blob some other way) still has its
+              // `graph`/`locations` relayed exactly as before — this is additive, not a refusal to
+              // forward what Fly actually sent.
+              ...("graph" in e ? { graph: e.graph } : {}),
+              ...("locations" in e ? { locations: e.locations } : {}),
               // The echo, when the graph server names one — see `echoFields`. This is the READ
               // path the contract names in as many words: "the server echoes it in the envelope
               // that GET /graph later serves".
@@ -286,6 +299,62 @@ async function graphGet(request, env, origin, session) {
     200,
     origin
   );
+}
+
+// GET /app/graph/blob (session) — the graph blob, fetched and cached SEPARATELY from GET
+// /app/graph's projection (graph-envelope-composition-separates-blob-from-view-markdown,
+// 2026-08-07). `app/index.html`'s `refreshGraphBlob` is the one caller — see its own header for
+// WHEN it calls this route and why that is "fetched when needed" rather than "on every read".
+//
+// SAME CONDITIONAL SHAPE AS `graphGet`, NARROWED TO THIS ROUTE'S OWN ETAG. The browser's
+// `If-None-Match` is forwarded to Fly's `GET /graph/blob`, and Fly's `304` (or `200` plus its
+// own `ETag`) is answered the same way here — never Fly's `GET /graph` ETag, and never minted
+// fresh by this Worker. `server/app.py`'s own docstring for `GET /graph/blob` states why the two
+// routes' ETags must stay disjoint hashes rather than sharing one: a caller revalidating THIS
+// route with `GET /graph`'s tag (or vice versa) must never coincidentally 304, because the two
+// response bodies are genuinely different bytes.
+//
+// THE D1 FALLBACK MIRRORS `graphGet`'s OWN, reading the identical `graph_json` column
+// `graphPush`/`graphGet` already write and read — there is no second store to invent here, only
+// a second reader of the one that exists, for the same non-operator / Fly-unreachable cases
+// `graphGet` already covers.
+async function graphGetBlob(request, env, origin, session) {
+  if (env.GRAPH_SERVER_URL && env.SERVER_TOKEN && isOperatorSession(env, session)) {
+    try {
+      const flyHeaders = { Authorization: `Bearer ${env.SERVER_TOKEN}` };
+      const inm = request.headers.get("If-None-Match");
+      if (inm) flyHeaders["If-None-Match"] = inm;
+
+      const r = await fetch(`${env.GRAPH_SERVER_URL}/graph/blob`, { headers: flyHeaders });
+
+      if (r.status === 304) {
+        return notModified(origin, r.headers.get("ETag") || inm);
+      }
+
+      if (r.ok) {
+        const e = await r.json();
+        const etag = r.headers.get("ETag");
+        return json(
+          { ok: true, source: "server", snapshot: { graph: e.graph || {} } },
+          200,
+          origin,
+          etag ? { ETag: etag } : {}
+        );
+      }
+    } catch {
+      // fall through to the D1 snapshot
+    }
+  }
+
+  const head = await env.DB.prepare(
+    `SELECT graph_json FROM graph_snapshots WHERE user_id = ? ORDER BY version DESC LIMIT 1`
+  )
+    .bind(session.user_id)
+    .first();
+  if (!head) {
+    return json({ ok: true, snapshot: null }, 200, origin);
+  }
+  return json({ ok: true, snapshot: { graph: JSON.parse(head.graph_json) } }, 200, origin);
 }
 
 // POST /app/edit (session) — enqueue one web gesture. Never writes the graph; the laptop drains
@@ -566,6 +635,15 @@ async function editFile(request, env, origin, session, ctx) {
     if (again) cd = again;
   }
   // 3. hand back the fresh projection, same shape as GET /app/graph
+  //
+  // `graph`/`locations` ARE ABSENT HERE BY DEFAULT NOW, NOT `{}` — server/app.py's `POST /cycle`
+  // no longer includes them unless the caller asked for `?include_blob=true` (this Worker does
+  // not; the cycle here runs to ingest the write and re-render the views, and the graph it may
+  // have changed is picked up by the browser's own separately-scheduled `refreshGraphBlob`, not
+  // by riding this response) — graph-envelope-composition-separates-blob-from-view-markdown,
+  // 2026-08-07. Spreading nothing in when the key is absent (rather than defaulting to `{}`) is
+  // the same distinction `graphGet`'s own comment makes: `{}` reads as "present but empty" to
+  // `graphSnapshotOf`, which is a different fact from "this response did not carry it".
   return json(
     {
       ok: true,
@@ -575,8 +653,8 @@ async function editFile(request, env, origin, session, ctx) {
         version: null,
         generated_at: cd.snapshot?.generated_at,
         views: cd.snapshot?.views || [],
-        graph: cd.snapshot?.graph || {},
-        locations: cd.snapshot?.locations || {},
+        ...(cd.snapshot && "graph" in cd.snapshot ? { graph: cd.snapshot.graph } : {}),
+        ...(cd.snapshot && "locations" in cd.snapshot ? { locations: cd.snapshot.locations } : {}),
         // The echo, when the cycle names one, from either altitude of its own answer — see
         // `echoFields`. This is the WRITE path's own acknowledgement, and it is the first place an
         // echoing server can put one: the answer to the very POST that carried the token.
@@ -716,6 +794,7 @@ export async function handleApp(request, env, url, origin, ctx) {
     "POST /app/capture": capture,
     "POST /app/done": markDone,
     "GET /app/graph": graphGet,
+    "GET /app/graph/blob": graphGetBlob,
     "POST /app/edit": editPost,
     "POST /app/edit-file": editFile,
   };

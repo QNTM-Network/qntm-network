@@ -123,22 +123,50 @@ export interface CommitContext {
  *
  * `snapshot: null` is a real shape a brand-new account gets (the D1 fallback in
  * `worker/src/app.js`), not a defect, which is why every rung here tolerates it.
+ *
+ * `snapshot.graph` ITSELF IS NOW OPTIONAL ON THE WIRE, AND THAT IS A NEW FACT, NOT A LOOSER TYPE
+ * (graph-envelope-composition-separates-blob-from-view-markdown, 2026-08-07). `GET /app/graph`'s
+ * default response no longer carries `graph` at all — the server-side split moved it to a
+ * separate route, `GET /app/graph/blob` (`server/app.py`'s `GET /graph/blob`), fetched and cached
+ * independently (`app/index.html`'s `refreshGraphBlob`). The D1 fallback path (a non-operator
+ * session, or the operator session when the Fly server is unreachable) is UNCHANGED and still
+ * inlines `graph` on `snapshot` — this interface's `graph` key stays exactly as optional as it
+ * always was for that reason alone; `graphSnapshotOf`, below, is what reconciles the two shapes.
  */
 export interface GraphPayload {
   readonly snapshot?: { readonly graph?: { readonly nodes?: unknown; readonly edges?: unknown } | null } | null;
+}
+
+/** The shape `GET /app/graph/blob` delivers — see that route's own docstring (`server/app.py`). */
+export interface GraphBlobPayload {
+  readonly graph?: { readonly nodes?: unknown; readonly edges?: unknown } | null;
 }
 
 /**
  * `graphData.snapshot.graph`, narrowed to exactly the `{nodes, edges}` shape `graphmatch.ts` needs
  * — `null` when the graph has not been read yet, or was read and carries neither array.
  *
+ * `blob`, WHEN GIVEN, IS THE FALLBACK — NEVER THE PREFERENCE. `graphData.snapshot.graph` wins
+ * whenever it is present (the D1-fallback path already carries the whole graph inline; asking the
+ * caller to also hold a separately-fetched blob for that path would be a second source of truth
+ * for the identical bytes). `blob` is consulted only when `graphData` carries no `graph` key at
+ * all — exactly the shape the Fly-server-backed `GET /app/graph` now serves by default. A caller
+ * on the Fly path that has not yet fetched the blob (or whose fetch is still in flight) passes
+ * `blob: null`/`undefined` and gets `null` here, same as before this parameter existed — see
+ * `promotion.ts`'s `structuralNodeCandidateFor` and `ordering.ts`'s `classifierFor` for the
+ * pre-existing, honest `"graph-not-loaded"` abstain this produces; nothing downstream had to change
+ * to tolerate a graph that arrives late.
+ *
  * THE ELEMENT SHAPES ARE TRUSTED, AND THE ASSERTION SAYS SO OUT LOUD. This checks that both keys
  * hold arrays and does not walk them; the page's own version did exactly the same, and validating
  * every node on every commit would be a per-keystroke cost paid to catch a server that has never
  * been wrong. Where the trust lives is now one line a reviewer can find, rather than an implication.
  */
-export function graphSnapshotOf(graphData: GraphPayload | null | undefined): GraphSnapshot | null {
-  const graph = graphData?.snapshot?.graph;
+export function graphSnapshotOf(
+  graphData: GraphPayload | null | undefined,
+  blob?: GraphBlobPayload | null,
+): GraphSnapshot | null {
+  const graph = graphData?.snapshot?.graph ?? blob?.graph;
   if (graph === undefined || graph === null) {
     return null;
   }

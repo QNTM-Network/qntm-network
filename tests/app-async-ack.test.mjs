@@ -617,6 +617,19 @@ async function standUpPage(label, mutate) {
     if (route === "/app/graph") {
       return { ok: true, status: 200, json: async () => control.readAnswer() };
     }
+    // `refreshGraphBlob` (app/index.html) — fired, fire-and-forget, every time `installProjection`
+    // or `loadGraph` installs a fresh envelope (graph-envelope-composition-separates-blob-from-
+    // view-markdown, 2026-08-07). Not this suite's concern (it is about the WRITE/PICKUP shape,
+    // not the graph blob), so it is stubbed here rather than left to throw "unstubbed fetch" and
+    // fail a test that never meant to exercise it.
+    if (route === "/app/graph/blob") {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({ ok: true, source: "server", snapshot: { graph: { nodes: [], edges: [] } } }),
+      };
+    }
     throw new Error(`unstubbed fetch: ${url}`);
   };
   const page = await importPage(makeWorkDir(label), mutate);
@@ -713,7 +726,14 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
     d.control.readAnswer = () => echoing(d, CYCLED, T2);
     await d.fireTimers();
 
-    assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph"]);
+    // A THIRD CALL NOW RIDES ALONG, FIRE-AND-FORGET: `GET /app/graph/blob`
+    // (graph-envelope-composition-separates-blob-from-view-markdown, 2026-08-07) —
+    // `installProjection` kicks a background, conditional refresh of the separately-cached graph
+    // blob every time a fresh envelope lands, since a fresh envelope is the only signal available
+    // that the graph might have moved. It is not on this test's critical path (nothing here reads
+    // `ctx.graph`), so it is asserted present rather than re-proven; `app-graph-blob.test.mjs`
+    // owns the blob cache's own behaviour.
+    assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph", "GET /app/graph/blob"]);
     assert.match(d.onScreen(), /🛫 2026-08-04/, "the projection did not reach the screen");
     assert.equal(d.page.__pickups().waiting(PATH), false, "an answered pickup is still waiting");
   });
@@ -992,7 +1012,13 @@ describe("3b. A PICKUP STOPS ON THE LINE BEING STAMPED, NOT ON A NEWER PROJECTIO
     d.control.readAnswer = () => echoing(d, CYCLED, T2);
     await d.fireTimers();
 
-    assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph"], "the tick cost more than one read");
+    // `GET /app/graph/blob` rides along, fire-and-forget, on every fresh envelope — see the
+    // identical note on this suite's §3 test above.
+    assert.deepEqual(
+      d.control.calls,
+      ["POST /app/edit-file", "GET /app/graph", "GET /app/graph/blob"],
+      "the tick cost more than one read",
+    );
     assert.equal(d.page.__pickups().waiting(PATH), false, "the tick's pickup is still waiting");
   });
 

@@ -5561,8 +5561,8 @@ var RowStore = class {
 };
 
 // app/present/resolve.ts
-function graphSnapshotOf(graphData) {
-  const graph = graphData?.snapshot?.graph;
+function graphSnapshotOf(graphData, blob) {
+  const graph = graphData?.snapshot?.graph ?? blob?.graph;
   if (graph === void 0 || graph === null) {
     return null;
   }
