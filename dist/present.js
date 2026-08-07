@@ -5713,6 +5713,7 @@ function coverageOf(unconsulted) {
   return unconsulted.length === 0 ? COMPLETE : { kind: "partial", unconsulted };
 }
 var NOT_EVALUATED = { kind: "not-evaluated" };
+var ARMS_NOTHING = { kind: "answer", coverage: COMPLETE, armings: [] };
 function diagnosticOf(spec, reading) {
   const text = spec.show(reading);
   if (text === "") {
@@ -5720,16 +5721,24 @@ function diagnosticOf(spec, reading) {
   }
   return { badge: spec.badge, text, abstained: text.startsWith(`${spec.id}: abstained`) };
 }
+function armDiagnosticOf(spec, armed) {
+  if (armed.kind !== "abstains") {
+    return null;
+  }
+  return { badge: spec.badge, text: `${spec.id}: abstained \u2014 arm-${armed.because}`, abstained: true };
+}
 function defineResolver(spec) {
   return {
     id: spec.id,
     run(ctx) {
       const reading = spec.read(ctx);
+      const armed = spec.arm === void 0 ? NOT_EVALUATED : spec.arm(ctx, reading);
       return {
         id: spec.id,
         note: spec.say(reading),
         diagnostic: diagnosticOf(spec, reading),
-        armings: spec.arm === void 0 ? [] : spec.arm(ctx, reading)
+        armDiagnostic: armDiagnosticOf(spec, armed),
+        armings: armed.kind === "answer" ? armed.armings : []
       };
     }
   };
@@ -5748,6 +5757,9 @@ function runResolvers(resolvers, ctx) {
     }
     if (run.diagnostic !== null) {
       diagnostics.push(run.diagnostic);
+    }
+    if (run.armDiagnostic !== null) {
+      diagnostics.push(run.armDiagnostic);
     }
     for (const arming of run.armings) {
       if (arming.surface === "settle") {
@@ -6009,20 +6021,29 @@ var promotionSpec = {
    * decided for it, when `read` above could spell that retype onto a line at all. All of the
    * rendering happened in `read` (`reading.render`); this only ever turns a `"rendered"` outcome
    * into an `Arming`, or arms nothing.
+   *
+   * ALWAYS `"answer"`, NEVER `"abstains"` — see `ArmResult`'s own header (resolve.ts). A genuine
+   * render refusal is `reading.render.kind === "abstains"`, already surfaced through `show` above
+   * (`"parent: abstained — rendering-..."`), which is WHY this fix (#149) moved the render call into
+   * `read`: there is no second, independent computation left in here for `arm` itself to refuse.
    */
   arm(_ctx, reading) {
     if (reading.kind !== "answer" || reading.applied.length === 0) {
-      return [];
+      return ARMS_NOTHING;
     }
     if (reading.render.kind !== "rendered") {
-      return [];
+      return ARMS_NOTHING;
     }
-    return [
-      {
-        surface: "predict",
-        prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta, fullText: reading.render.text }
-      }
-    ];
+    return {
+      kind: "answer",
+      coverage: reading.coverage,
+      armings: [
+        {
+          surface: "predict",
+          prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta, fullText: reading.render.text }
+        }
+      ]
+    };
   }
 };
 
@@ -6096,20 +6117,33 @@ var orderingSpec = {
    * against a different address source for an insert. The two questions do not reduce to one, so
    * `arm` takes the context and asks its own. It is still PURE, and it still runs exactly once per
    * commit, which is what the shared-reading rule is actually protecting.
+   *
+   * ── THE ONE PLACE THIS RESOLVER CAN GENUINELY SAY `"abstains"` (2026-08-07, step 3) ──
+   *
+   * `resolveOrderingPlacementFor` is the SECOND, INDEPENDENT computation `ArmResult`'s own header
+   * (resolve.ts) warns about — for an `insert-line` commit, `read` above never calls it at all
+   * (`read` only handles `"set-line"`, so `reading` is `NOT_EVALUATED`), so THIS call is the only
+   * place this app ever asks "where does the freshly typed row belong", and its own abstention
+   * (`OrderingAbstention` — `"unclassifiable-siblings"`, `"nested-section"`, …) used to vanish into
+   * a bare `return []`, exactly the mechanism `promotion.ts` had before #149. Found live, unreported,
+   * by this leg: `tests/present-resolver-arm-refusal.test.mjs`, RED against unmodified `main` through
+   * a real `o`/type/`Enter` gesture. `"not-evaluated"` covers the two PRECONDITION gates above (no
+   * declaration, no section) — this resolver was never asked, not refused; `"abstains"` covers the
+   * genuine refusal, now carried rather than dropped.
    */
   arm(ctx) {
     const { view, commit } = ctx;
     const { qualification, resolution } = ctx.declared;
     if (resolution === void 0 || qualification === void 0 || commit.markdown === null) {
-      return [];
+      return { kind: "not-evaluated" };
     }
     const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
     const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
     const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
     if (sectionId === null) {
-      return [];
+      return { kind: "not-evaluated" };
     }
-    const reading = resolveOrderingPlacementFor(
+    const placement = resolveOrderingPlacementFor(
       view.id,
       sectionId,
       addressSource,
@@ -6121,19 +6155,23 @@ var orderingSpec = {
       resolution.priorityRank,
       classifierFor(ctx, view.id, sectionId, addressSource)
     );
-    if (reading.kind !== "answer") {
-      return [];
+    if (placement.kind !== "answer") {
+      return { kind: "abstains", because: placement.because };
     }
-    const needsPlacement = commit.kind === "insert-line" ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex : reading.placement.moved;
+    const needsPlacement = commit.kind === "insert-line" ? placement.placement.currentBeforeLineIndex !== placement.placement.beforeLineIndex : placement.placement.moved;
     if (!needsPlacement) {
-      return [];
+      return ARMS_NOTHING;
     }
-    return [
-      {
-        surface: "settle",
-        placement: { lineIndex: commit.lineIndex, beforeLineIndex: reading.placement.beforeLineIndex }
-      }
-    ];
+    return {
+      kind: "answer",
+      coverage: COMPLETE,
+      armings: [
+        {
+          surface: "settle",
+          placement: { lineIndex: commit.lineIndex, beforeLineIndex: placement.placement.beforeLineIndex }
+        }
+      ]
+    };
   }
 };
 
@@ -6224,18 +6262,25 @@ var rulesSpec = {
    * THE TEXT IS THE DELTA, NOT THE WHOLE LINE. `reading.text` is `renderRuleEffects`'s own
    * `line + appended`, so the characters the operator already typed are sliced back off — the row
    * already shows them, and repeating them would be the chip doubling the line rather than adding.
+   *
+   * ALWAYS `"answer"`, NEVER `"abstains"` — see `ArmResult`'s own header (resolve.ts). Every fact
+   * this needs already lives on `reading`, itself already classified by `read` above; there is no
+   * SECOND, independent computation in here for arm's own logic to refuse.
    */
   arm(ctx, reading) {
     const { commit } = ctx;
     if (commit.kind !== "insert-line" || commit.markdown === null) {
-      return [];
+      return ARMS_NOTHING;
     }
     if (reading.kind !== "answer" || reading.text === null) {
-      return [];
+      return ARMS_NOTHING;
     }
     const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
     const delta = reading.text.slice(line.length).trim();
-    return delta === "" ? [] : [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }];
+    if (delta === "") {
+      return ARMS_NOTHING;
+    }
+    return { kind: "answer", coverage: COMPLETE, armings: [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }] };
   }
 };
 

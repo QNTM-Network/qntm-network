@@ -42,8 +42,8 @@ import { applyGraphAwareRules, resolvedQntmId } from "../graphmatch.js";
 import type { GraphSnapshot } from "../graphmatch.js";
 import { stampSpans, tagSpans } from "../express/rendition.js";
 import type { StructuralLanguage } from "../arrange/structural.js";
-import type { Arming, CommitContext, Reading, ResolverSpec } from "../resolve.js";
-import { NOT_EVALUATED, coverageOf } from "../resolve.js";
+import type { ArmResult, CommitContext, Reading, ResolverSpec } from "../resolve.js";
+import { ARMS_NOTHING, NOT_EVALUATED, coverageOf } from "../resolve.js";
 
 /**
  * THE ONE EDGE BINDING THIS APP KNOWS BY NAME, AND WHY IT IS NOT A SECOND `structural.indent`.
@@ -469,22 +469,31 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
    * decided for it, when `read` above could spell that retype onto a line at all. All of the
    * rendering happened in `read` (`reading.render`); this only ever turns a `"rendered"` outcome
    * into an `Arming`, or arms nothing.
+   *
+   * ALWAYS `"answer"`, NEVER `"abstains"` — see `ArmResult`'s own header (resolve.ts). A genuine
+   * render refusal is `reading.render.kind === "abstains"`, already surfaced through `show` above
+   * (`"parent: abstained — rendering-..."`), which is WHY this fix (#149) moved the render call into
+   * `read`: there is no second, independent computation left in here for `arm` itself to refuse.
    */
-  arm(_ctx: CommitContext, reading: PromotionCommitReading): readonly Arming[] {
+  arm(_ctx: CommitContext, reading: PromotionCommitReading): ArmResult {
     if (reading.kind !== "answer" || reading.applied.length === 0) {
-      return [];
+      return ARMS_NOTHING;
     }
     if (reading.render.kind !== "rendered") {
-      return [];
+      return ARMS_NOTHING;
     }
     // `fullText` — see `RowPrediction`'s own header. Carried so `paint.ts` can show the row's
     // BYTE-EXACT predicted line immediately, rather than the row's own stale text plus an appended
     // badge (the operator's own report, 2026-08-07: "it added it at end, not replaced task").
-    return [
-      {
-        surface: "predict",
-        prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta, fullText: reading.render.text },
-      },
-    ];
+    return {
+      kind: "answer",
+      coverage: reading.coverage,
+      armings: [
+        {
+          surface: "predict",
+          prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta, fullText: reading.render.text },
+        },
+      ],
+    };
   },
 };

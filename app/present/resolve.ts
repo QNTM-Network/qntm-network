@@ -258,13 +258,54 @@ export const NOT_EVALUATED = { kind: "not-evaluated" } as const;
 /**
  * A SURFACE TO PRIME, DESCRIBED RATHER THAN CALLED.
  *
- * `arm` returns these; the runner collects them; `armSettle`/`armPredict` below make the calls. See
- * this module's header for the fact that forced the indirection — `PredictSurface.arm` overwrites,
- * and two resolvers contribute to ONE arm.
+ * `arm` returns these, WRAPPED in an `ArmResult` (below) rather than bare — the runner collects
+ * them; `armSettle`/`armPredict` below make the calls. See this module's header for the fact that
+ * forced the indirection — `PredictSurface.arm` overwrites, and two resolvers contribute to ONE arm.
  */
 export type Arming =
   | { readonly surface: "settle"; readonly placement: RowPlacement }
   | { readonly surface: "predict"; readonly prediction: RowPrediction };
+
+/**
+ * WHAT `arm` PRODUCES — `Reading`-SHAPED, ON PURPOSE, SO A REFUSAL `arm` MAKES CANNOT BECOME A BARE
+ * `[]` INDISTINGUISHABLE FROM "NOTHING TO PRIME."
+ *
+ * 2026-08-07, roadmap step 3 / the survey this leg answers — "the joint," restated as a type. Every
+ * resolver's `read()` already had this three-way shape (`Reading`) wired to `outcome.diagnostics`;
+ * `arm()` had none, and `arm()` is exactly the place a SECOND, INDEPENDENT computation can happen —
+ * `promotion.ts`'s `arm()` used to call `renderRuleEffects` a second time and swallow a genuine
+ * refusal with a bare `return []` (fixed 2026-08-07, #149, before this leg — see that resolver's own
+ * header for the incident). `ordering.ts`'s `arm()` does the identical thing TODAY, undiscovered
+ * until this leg: it calls `resolveOrderingPlacementFor`, a DIFFERENT function from the one `read()`
+ * calls, and drops `"unclassifiable-siblings"` and every other `OrderingAbstention` it can reach on
+ * the floor — see `tests/present-resolver-arm-refusal.test.mjs` for the falsifier, driven through a
+ * real `o`/type/`Enter` gesture, RED against unmodified `main`.
+ *
+ * THE THREE ARMS, READ AGAINST WHAT `arm` ACTUALLY DOES:
+ *
+ *   `"answer"`      `arm` ran its own logic (independent computation or not) and reached a real
+ *                   conclusion — `armings` names what to prime, and EMPTY IS A REAL ANSWER ("I
+ *                   decided, and there is nothing to prime"), exactly as `Reading`'s own header
+ *                   already establishes for `read()`.
+ *   `"abstains"`    `arm`'s OWN computation — something `read()` never attempted, or attempted
+ *                   differently — could not decide. `because` names the reason, and `defineResolver`
+ *                   (below) turns this into a `Diagnostic` automatically, so an author cannot forget
+ *                   the step `promotion.ts` and `ordering.ts` each forgot once already.
+ *   `"not-evaluated"` `arm` never got the chance to try (a precondition its own logic gates on was
+ *                   not met) — kept distinct from `"abstains"` for the identical reason `Reading`
+ *                   keeps them distinct: a gesture `arm` was never asked about must not read as a
+ *                   refusal it made.
+ *
+ * A RESOLVER THAT NEVER DOES INDEPENDENT WORK IN `arm` (rules.ts, promotion.ts after #149) ONLY EVER
+ * RETURNS `"answer"` — every fact it needs already lives on `reading`, which `read()` already
+ * classified, so there is nothing left for `arm` itself to refuse. `ordering.ts` is the one resolver
+ * whose `arm` can genuinely say `"abstains"`, because it is the one resolver whose `arm` asks a
+ * question `read()` did not already ask (see that module's own header, "TWO KINDS, TWO GATES").
+ */
+export type ArmResult = Reading<{ readonly armings: readonly Arming[] }>;
+
+/** `arm` decided, and there is nothing to prime — the common, unremarkable case. */
+export const ARMS_NOTHING: ArmResult = { kind: "answer", coverage: COMPLETE, armings: [] };
 
 /** What `show()` decided, addressed to the element that shows it. Never a DOM write. */
 export interface Diagnostic {
@@ -293,8 +334,14 @@ export interface ResolverSpec<R> {
   say(reading: R): string;
   /** The abstention register's sentence, or `""` for "do not touch the badge". */
   show(reading: R): string;
-  /** What to prime before the optimistic repaint. Absent when this axis primes nothing. */
-  arm?(ctx: CommitContext, reading: R): readonly Arming[];
+  /**
+   * What to prime before the optimistic repaint. Absent when this axis primes nothing AT ALL — the
+   * common case (`membership.ts` has no `arm`). When present, MUST return an `ArmResult`
+   * (`Reading`-shaped), never a bare array: see `ArmResult`'s own header for why a bare `Arming[]`
+   * return type let two resolvers' `arm`s each independently drop a refusal with `return []` and no
+   * trace anywhere.
+   */
+  arm?(ctx: CommitContext, reading: R): ArmResult;
 }
 
 /** What one resolver produced for one commit. */
@@ -302,6 +349,14 @@ export interface ResolverRun {
   readonly id: string;
   readonly note: string;
   readonly diagnostic: Diagnostic | null;
+  /**
+   * `arm`'s OWN refusal, surfaced the identical way `diagnostic` (above) surfaces `read`'s — `null`
+   * when `arm` is absent, answered, or was never evaluated. See `ArmResult`'s own header for why
+   * this exists: without it, `arm`'s abstention had no channel to reach `outcome.diagnostics`
+   * through at all, which is exactly how `promotion.ts` (before #149) and `ordering.ts` (found by
+   * this leg) each dropped one silently.
+   */
+  readonly armDiagnostic: Diagnostic | null;
   readonly armings: readonly Arming[];
 }
 
@@ -329,6 +384,26 @@ export function diagnosticOf<R>(spec: ResolverSpec<R>, reading: R): Diagnostic |
 }
 
 /**
+ * `arm`'s OWN refusal, addressed the identical way `diagnosticOf` addresses `read`'s — `null` unless
+ * `armed.kind === "abstains"`. THIS IS THE AUTOMATIC PART OF STEP 3: an author who writes an `arm`
+ * that reaches its own `"abstains"` gets this for free, from `defineResolver`, without writing a
+ * `show`-shaped sentence for it themselves — the exact step `promotion.ts` and `ordering.ts` each
+ * had to (and one of them did not) remember on their own before this function existed.
+ *
+ * `"arm-"`-PREFIXED, mirroring `promotion.ts`'s own `rendering-${because}` convention for the
+ * identical shape (a refusal nested inside a resolver's own second question) — so a reader of the
+ * console register can tell "the answer itself was refused" (`"<id>: abstained — <because>"`) apart
+ * from "the answer was reached but arming it hit its own wall" (`"<id>: abstained — arm-<because>"`)
+ * without cross-referencing which resolver produced which line.
+ */
+function armDiagnosticOf<R>(spec: ResolverSpec<R>, armed: ArmResult): Diagnostic | null {
+  if (armed.kind !== "abstains") {
+    return null;
+  }
+  return { badge: spec.badge, text: `${spec.id}: abstained — arm-${armed.because}`, abstained: true };
+}
+
+/**
  * THE SINGLE POINT OF ENTRY — the seam a later leg publishes the registry through.
  *
  * ── THE SEAM, STATED AS A COMMENT AND NOT AS A FILE ──
@@ -353,11 +428,16 @@ export function defineResolver<R>(spec: ResolverSpec<R>): Resolver {
       // header. Two separately written evaluations of the same question drift apart; this is what
       // stops there being two.
       const reading = spec.read(ctx);
+      // `arm` NOW ANSWERS THROUGH THE SAME THREE-WAY SHAPE `read` DOES — see `ArmResult`'s own
+      // header (2026-08-07, step 3). `NOT_EVALUATED` (a `Reading` already, not a fresh literal) is
+      // exactly right for "no `arm` at all": nothing was asked, nothing was refused.
+      const armed: ArmResult = spec.arm === undefined ? NOT_EVALUATED : spec.arm(ctx, reading);
       return {
         id: spec.id,
         note: spec.say(reading),
         diagnostic: diagnosticOf(spec, reading),
-        armings: spec.arm === undefined ? [] : spec.arm(ctx, reading),
+        armDiagnostic: armDiagnosticOf(spec, armed),
+        armings: armed.kind === "answer" ? armed.armings : [],
       };
     },
   };
@@ -402,6 +482,12 @@ export function runResolvers(resolvers: readonly Resolver[], ctx: CommitContext)
     if (run.diagnostic !== null) {
       diagnostics.push(run.diagnostic);
     }
+    // `arm`'s OWN refusal, pushed into the IDENTICAL list `read`'s does — one register, both
+    // sources, see `ArmResult`'s own header. `abstentionsOf` (below) does not care which of the two
+    // produced an entry; `reportAbstentions` (commit.ts) reads this list, not either field alone.
+    if (run.armDiagnostic !== null) {
+      diagnostics.push(run.armDiagnostic);
+    }
     for (const arming of run.armings) {
       if (arming.surface === "settle") {
         placements.push(arming.placement);
@@ -426,6 +512,12 @@ export function runResolvers(resolvers: readonly Resolver[], ctx: CommitContext)
  * wrong". `runResolvers` collects both without judging between them — that judgement belongs one
  * layer up, where it can be named, tested and reused, not repeated at every call site that only
  * wants one half of it. This function IS that judgement: the abstentions, and only the abstentions.
+ *
+ * (2026-08-07, step 3.) THE LIST NOW ALSO CARRIES `arm`'s OWN REFUSALS (`ResolverRun.armDiagnostic`,
+ * `armDiagnosticOf` above), pushed by `runResolvers` into the identical array `show()`'s entries land
+ * in. This function does not change for it — `abstained: true` is `abstained: true` regardless of
+ * which of `read`/`arm` produced the `Diagnostic` — which is the whole point: a caller filtering for
+ * refusals does not need to know there are now two sources feeding this list.
  *
  * ── THE DEFECT THIS CLOSES, STATED AGAINST THE CODE THAT SHIPPED IT ──
  *

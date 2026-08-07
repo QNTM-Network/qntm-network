@@ -45,8 +45,8 @@ import { resolveLineFields } from "../select/membership.js";
 import { applyRules, renderRuleEffects } from "../rules.js";
 import type { RuleEffect } from "../rules.js";
 import { todayFor } from "../today.js";
-import type { Arming, CommitContext, Reading, ResolverSpec } from "../resolve.js";
-import { COMPLETE, NOT_EVALUATED, coverageOf } from "../resolve.js";
+import type { ArmResult, CommitContext, Reading, ResolverSpec } from "../resolve.js";
+import { ARMS_NOTHING, COMPLETE, NOT_EVALUATED, coverageOf } from "../resolve.js";
 
 /** What a rules pass decided for the committed line. */
 export interface RulesOutcome {
@@ -188,17 +188,24 @@ export const rulesSpec: ResolverSpec<RulesCommitReading> = {
    * THE TEXT IS THE DELTA, NOT THE WHOLE LINE. `reading.text` is `renderRuleEffects`'s own
    * `line + appended`, so the characters the operator already typed are sliced back off — the row
    * already shows them, and repeating them would be the chip doubling the line rather than adding.
+   *
+   * ALWAYS `"answer"`, NEVER `"abstains"` — see `ArmResult`'s own header (resolve.ts). Every fact
+   * this needs already lives on `reading`, itself already classified by `read` above; there is no
+   * SECOND, independent computation in here for arm's own logic to refuse.
    */
-  arm(ctx: CommitContext, reading: RulesCommitReading): readonly Arming[] {
+  arm(ctx: CommitContext, reading: RulesCommitReading): ArmResult {
     const { commit } = ctx;
     if (commit.kind !== "insert-line" || commit.markdown === null) {
-      return [];
+      return ARMS_NOTHING;
     }
     if (reading.kind !== "answer" || reading.text === null) {
-      return [];
+      return ARMS_NOTHING;
     }
     const line = commit.markdown.split("\n")[commit.lineIndex] ?? "";
     const delta = reading.text.slice(line.length).trim();
-    return delta === "" ? [] : [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }];
+    if (delta === "") {
+      return ARMS_NOTHING;
+    }
+    return { kind: "answer", coverage: COMPLETE, armings: [{ surface: "predict", prediction: { lineIndex: commit.lineIndex, text: delta } }] };
   },
 };
