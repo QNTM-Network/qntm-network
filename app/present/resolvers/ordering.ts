@@ -64,8 +64,8 @@ import { resolveOrderingFor, resolveOrderingPlacementFor } from "../arrange/orde
 import type { OrderingAbstention, OrderingAnswer, QualifyingClassifier } from "../arrange/ordering.js";
 import { qualifyingClassifierFor } from "../arrange/orderingqualify.js";
 import { edgeSourceOfFor } from "./promotion.js";
-import type { Arming, CommitContext, Coverage, Reading, ResolverSpec } from "../resolve.js";
-import { NOT_EVALUATED } from "../resolve.js";
+import type { ArmResult, CommitContext, Coverage, Reading, ResolverSpec } from "../resolve.js";
+import { ARMS_NOTHING, COMPLETE, NOT_EVALUATED } from "../resolve.js";
 
 /**
  * The default/title path's own qualifying-vs-context signal, built from whatever this commit's
@@ -181,20 +181,33 @@ export const orderingSpec: ResolverSpec<OrderingCommitReading> = {
    * against a different address source for an insert. The two questions do not reduce to one, so
    * `arm` takes the context and asks its own. It is still PURE, and it still runs exactly once per
    * commit, which is what the shared-reading rule is actually protecting.
+   *
+   * ── THE ONE PLACE THIS RESOLVER CAN GENUINELY SAY `"abstains"` (2026-08-07, step 3) ──
+   *
+   * `resolveOrderingPlacementFor` is the SECOND, INDEPENDENT computation `ArmResult`'s own header
+   * (resolve.ts) warns about — for an `insert-line` commit, `read` above never calls it at all
+   * (`read` only handles `"set-line"`, so `reading` is `NOT_EVALUATED`), so THIS call is the only
+   * place this app ever asks "where does the freshly typed row belong", and its own abstention
+   * (`OrderingAbstention` — `"unclassifiable-siblings"`, `"nested-section"`, …) used to vanish into
+   * a bare `return []`, exactly the mechanism `promotion.ts` had before #149. Found live, unreported,
+   * by this leg: `tests/present-resolver-arm-refusal.test.mjs`, RED against unmodified `main` through
+   * a real `o`/type/`Enter` gesture. `"not-evaluated"` covers the two PRECONDITION gates above (no
+   * declaration, no section) — this resolver was never asked, not refused; `"abstains"` covers the
+   * genuine refusal, now carried rather than dropped.
    */
-  arm(ctx: CommitContext): readonly Arming[] {
+  arm(ctx: CommitContext): ArmResult {
     const { view, commit } = ctx;
     const { qualification, resolution } = ctx.declared;
     if (resolution === undefined || qualification === undefined || commit.markdown === null) {
-      return [];
+      return { kind: "not-evaluated" };
     }
     const sectionOrder = sectionOrderFor(view, qualification.sectionOrder);
     const addressSource = commit.kind === "insert-line" ? commit.markdown : commit.source;
     const sectionId = sectionAt(addressSource, commit.lineIndex, view.id, sectionOrder);
     if (sectionId === null) {
-      return [];
+      return { kind: "not-evaluated" };
     }
-    const reading = resolveOrderingPlacementFor(
+    const placement = resolveOrderingPlacementFor(
       view.id,
       sectionId,
       addressSource,
@@ -206,21 +219,29 @@ export const orderingSpec: ResolverSpec<OrderingCommitReading> = {
       resolution.priorityRank,
       classifierFor(ctx, view.id, sectionId, addressSource),
     );
-    if (reading.kind !== "answer") {
-      return [];
+    if (placement.kind !== "answer") {
+      // THE REFUSAL THIS STEP EXISTS TO STOP DROPPING — `placement.because` is an `OrderingAbstention`
+      // (`"unclassifiable-siblings"`, `"nested-section"`, `"style-ambiguous-title"`, …), named and
+      // carried, never a silent `[]`. `defineResolver` (resolve.ts) turns this into a `Diagnostic`
+      // automatically; this function does not need to know that happens.
+      return { kind: "abstains", because: placement.because };
     }
     const needsPlacement =
       commit.kind === "insert-line"
-        ? reading.placement.currentBeforeLineIndex !== reading.placement.beforeLineIndex
-        : reading.placement.moved;
+        ? placement.placement.currentBeforeLineIndex !== placement.placement.beforeLineIndex
+        : placement.placement.moved;
     if (!needsPlacement) {
-      return [];
+      return ARMS_NOTHING;
     }
-    return [
-      {
-        surface: "settle",
-        placement: { lineIndex: commit.lineIndex, beforeLineIndex: reading.placement.beforeLineIndex },
-      },
-    ];
+    return {
+      kind: "answer",
+      coverage: COMPLETE,
+      armings: [
+        {
+          surface: "settle",
+          placement: { lineIndex: commit.lineIndex, beforeLineIndex: placement.placement.beforeLineIndex },
+        },
+      ],
+    };
   },
 };
