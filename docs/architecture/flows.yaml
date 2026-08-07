@@ -789,6 +789,34 @@ expected_flows:
     class: capture-rule-application
     gates_capabilities: [the-published-rule-order-is-applied-at-commit]
 
+  # ── THE CONNECTING ACT ITSELF (2026-08-07) — commitLine relocated to app/present/commit.ts,
+  # where these three calls (already real before the move — see resolve.ts's own header) become
+  # module-to-module edges a caller-chain probe can see. See classes.yaml's new
+  # `commit-line-routing` row for what this closes and `capture-rule-application`'s own addendum
+  # for why NONE of the four resolvers gets an edge here instead: they are reached FROM
+  # `runResolvers`, not the other way round, and none of them ever calls back into `commit.ts`.
+
+  - id: commit-line-walks-the-registry
+    from: app/present/commit
+    to:   app/present/resolve
+    callee: runResolvers
+    event: app.walks-every-resolver-for-a-committed-line
+    class: commit-line-routing
+
+  - id: commit-line-arms-settle
+    from: app/present/commit
+    to:   app/present/resolve
+    callee: armSettle
+    event: app.arms-the-settle-surface-with-whatever-a-resolver-placed
+    class: commit-line-routing
+
+  - id: commit-line-arms-predict
+    from: app/present/commit
+    to:   app/present/resolve
+    callee: armPredict
+    event: app.arms-the-predict-surface-with-whatever-a-resolver-claimed
+    class: commit-line-routing
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the

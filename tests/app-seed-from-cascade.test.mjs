@@ -743,11 +743,14 @@ describe("7. NOTHING LOCAL IS WRITTEN beyond the seed characters themselves", ()
     );
   });
 
-  test("`writeFile(` is called in exactly four places, and every argument is the server's own", () => {
-    // Declaration + toggleTask + commitLine's own attempt + commitLine's bounded rebase retry
-    // (`app/present/rebase.ts`, `feat/a-refusal-rebases`) — one more OCCURRENCE, the same two
-    // CALLERS. Unrelated to the seed fix this suite is about.
-    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 4, "the seed fix must not add a write");
+  test("`writeFile(` is called in exactly four places, split across the page and the bundle, and every argument is the server's own", () => {
+    // Declaration + toggleTask on the page, commitLine's own attempt + commitLine's bounded
+    // rebase retry (`app/present/rebase.ts`, `feat/a-refusal-rebases`) in dist/present.js —
+    // `commitLine` relocated to app/present/commit.ts (2026-08-07). Two OCCURRENCES each, the
+    // same two CALLERS. Unrelated to the seed fix this suite is about.
+    const BUNDLE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
+    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 2, "the seed fix must not add a write");
+    assert.equal((BUNDLE.match(/\bdeps\.writeFile\(/g) ?? []).length, 2, "the seed fix must not add a write");
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {

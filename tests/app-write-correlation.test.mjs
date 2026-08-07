@@ -632,10 +632,13 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     }
   });
 
-  test("`writeFile` STILL has exactly two CALLERS — toggleTask and commitLine, now four occurrences", () => {
-    // Declaration (1) + toggleTask (1) + commitLine's own attempt (1) + commitLine's bounded
-    // rebase retry (1) — `app/present/rebase.ts`, `feat/a-refusal-rebases`. Same two callers.
-    assert.equal((APP_SOURCE.match(/\bwriteFile\(/g) ?? []).length, 4, "a new write path appeared");
+  test("`writeFile` STILL has exactly two CALLERS — toggleTask and commitLine, now split across two files", () => {
+    // Declaration (1) + toggleTask (1) on the page, commitLine's own attempt (1) + commitLine's
+    // bounded rebase retry (1) in dist/present.js — `commitLine` relocated to app/present/
+    // commit.ts (2026-08-07, see that module's own header). Same two callers, still.
+    const BUNDLE_SOURCE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
+    assert.equal((APP_SOURCE.match(/\bwriteFile\(/g) ?? []).length, 2, "toggleTask's call and writeFile's own declaration should be all that is left on the page");
+    assert.equal((BUNDLE_SOURCE.match(/\bdeps\.writeFile\(/g) ?? []).length, 2, "a new write path appeared");
   });
 
   test("`applyEdit` is STILL reached from exactly five sites outside its own module", () => {

@@ -639,12 +639,16 @@ describe("7b. every resolver's abstention sentence carries its own id — the ba
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
 describe("8. `commitLine` names no resolver — it builds a context, walks the registry, joins the result", () => {
-  const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
+  // `commitLine` relocated to app/present/commit.ts (2026-08-07, see that module's own header) —
+  // read that module instead of the page. The signature carries TS types now (`view: CommitLineView,
+  // commit: LineCommit`), so the anchor string matches on the name and the open paren only.
+  const COMMIT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "commit.ts"), "utf8");
   const commitLineBody = (() => {
-    const at = APP_SOURCE.indexOf("async function commitLine(view, commit) {");
+    const at = COMMIT_SOURCE.indexOf("async function commitLine(");
     assert.ok(at > 0, "commitLine was not found — this test is checking the wrong source");
-    const end = APP_SOURCE.indexOf("\n}\n", at);
-    return APP_SOURCE.slice(at, end);
+    const end = COMMIT_SOURCE.indexOf("\n  }\n  return commitLine;\n}", at);
+    assert.ok(end > at, "commitLine's own closing could not be found — this test is checking the wrong source");
+    return COMMIT_SOURCE.slice(at, end);
   })();
 
   test("no axis is named in commitLine's own body", () => {
@@ -658,7 +662,10 @@ describe("8. `commitLine` names no resolver — it builds a context, walks the r
   });
 
   test("it walks the registry exactly once and arms exactly what does real work with what comes back", () => {
-    assert.match(commitLineBody, /runResolvers\(RESOLVERS, resolverContextFor\(view, commit\)\)/);
+    // `deps.buildContext(view, commit)`, not the bare `resolverContextFor(view, commit)` the page
+    // used to call directly — `resolverContextFor` itself DID NOT move (see commit.ts's own header
+    // for why); this module reaches it only through the deps object.
+    assert.match(commitLineBody, /runResolvers\(RESOLVERS, deps\.buildContext\(view, commit\)\)/);
     assert.equal((commitLineBody.match(/runResolvers\(/g) ?? []).length, 1);
     // `outcome.notes.join(" · ")` (the freshness line's prediction clause) is GONE
     // (chore/retire-the-status-line) and STAYS gone — commitLine must never re-narrate what it
@@ -679,9 +686,9 @@ describe("8. `commitLine` names no resolver — it builds a context, walks the r
       1,
       "commitLine must read outcome.diagnostics exactly once, and only to hand it to reportAbstentions",
     );
-    assert.match(codeOnly, /reportAbstentions\(outcome\.diagnostics\)/, "commitLine must route outcome.diagnostics through reportAbstentions, never a bare loop or a DOM write");
-    assert.match(commitLineBody, /armSettle\(settle, commit\.markdown, view\.id, outcome\.placements\)/);
-    assert.match(commitLineBody, /armPredict\(predict, commit\.markdown, view\.id, outcome\.predictions\)/);
+    assert.match(codeOnly, /deps\.reportAbstentions\(outcome\.diagnostics\)/, "commitLine must route outcome.diagnostics through reportAbstentions, never a bare loop or a DOM write");
+    assert.match(commitLineBody, /armSettle\(deps\.settle, commit\.markdown, view\.id, outcome\.placements\)/);
+    assert.match(commitLineBody, /armPredict\(deps\.predict, commit\.markdown, view\.id, outcome\.predictions\)/);
   });
 
   test("MUTATION PROOF: a page that named one axis fails the grep above", () => {

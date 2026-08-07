@@ -56,6 +56,7 @@ import {
   walk,
   withDeclaration,
   assertMutated,
+  mutatingBundle,
   REPO,
 } from "./fixtures/app-html-page.mjs";
 
@@ -214,23 +215,31 @@ describe("2. ITEM 11 — a 409 with real text at stake reaches 'return-to-row'",
   });
 
   test("MUTATION PROOF: without the new call, the token is never concluded — the fix is what closes it", async () => {
-    // THREE call sites now read `writes.concludeGiveUp(token);` verbatim (the empty-text heal, the
-    // landed-rebase handoff, and this test's own branch — no safe rebase, `rebase.ts` §"the-refusal-
-    // rebases"), so the bare literal is no longer unique. This scenario (SERVER_MOVED) always takes
-    // the "no rebase was possible" branch, so the mutation targets that block by its own comment.
-    const mutate = (source) =>
-      assertMutated(
-        source,
-        "      // NO REBASE WAS POSSIBLE — refused, not guessed (`rebase?.reason`, unread here: THE\n" +
-          "      // PERCEPTION RULE governs, and nothing on screen may say why). BOUND: ZERO further retries.\n" +
-          "      if (token !== null) {\n" +
-          "        writes.concludeGiveUp(token);\n" +
-          "      }",
-        "      if (token !== null) {\n" +
-          "        /* MUTATED FOR THE TEST: not called */ void 0;\n" +
-          "      }",
-      );
-    const d = await standUp409Page(makeWorkDir("op-completes-409-mutant"), mutate);
+    // THREE call sites now read `deps.writes.concludeGiveUp(token);` verbatim (the empty-text
+    // heal, the landed-rebase handoff, and this test's own branch — no safe rebase, `rebase.ts`
+    // §"the-refusal-rebases"), so the bare literal is no longer unique. `commitLine` relocated to
+    // app/present/commit.ts (2026-08-07, compiled into dist/present.js, where esbuild strips the
+    // comments the page-source version of this mutation used to anchor on) — so this now
+    // disambiguates on CODE SHAPE instead: the "no rebase was possible" branch is the only one of
+    // the three immediately followed by `return;` and then the enclosing `if`'s own close and the
+    // non-409 fallthrough (`deps.repaintArrived()`), which `mutatingBundle`'s uniqueness check
+    // below confirms.
+    const workDir = makeWorkDir("op-completes-409-mutant");
+    const mutate = mutatingBundle([
+      "        if (token !== null) {\n" +
+        "          deps.writes.concludeGiveUp(token);\n" +
+        "        }\n" +
+        "        return;\n" +
+        "      }\n" +
+        "      deps.repaintArrived();",
+      "        if (token !== null) {\n" +
+        "          /* MUTATED FOR THE TEST: not called */ void 0;\n" +
+        "        }\n" +
+        "        return;\n" +
+        "      }\n" +
+        "      deps.repaintArrived();",
+    ])(workDir);
+    const d = await standUp409Page(workDir, mutate);
     await drive409GiveUp(d);
 
     // The value claim (characters survive) is UNCHANGED by this mutation — it does not depend on
@@ -417,6 +426,10 @@ const codeOf = (source) =>
     .replace(/^\s*\/\/.*$/gm, "");
 
 const CODE = codeOf(APP_SOURCE);
+// `commitLine` relocated to app/present/commit.ts (2026-08-07) — its own 409 branch, the subject
+// of the third test below, moved with it. Read separately, same `codeOf` stripping.
+const COMMIT_SOURCE = readFileSync(join(REPO, "app", "present", "commit.ts"), "utf8");
+const COMMIT_CODE = codeOf(COMMIT_SOURCE);
 const DOM_MUTATORS = /document\.|\$\(|\.textContent\s*=|\.innerHTML\s*=|\.setAttribute\(|\.classList\.|aria-busy/;
 
 describe("5. THE PERCEPTION RULE — structural: none of the three new code paths touches the DOM", () => {
@@ -437,9 +450,14 @@ describe("5. THE PERCEPTION RULE — structural: none of the three new code path
   });
 
   test("commitLine's return-to-row branch touches no DOM beyond healFromRefusal (unchanged, and gated on empty text)", () => {
-    const block = /if \(e\?\.status === 409\) \{[\s\S]*?\n      return;\n    \}/.exec(CODE)?.[0] ?? "";
+    // `commitLine` (and its 409 branch) now lives in app/present/commit.ts, one indent level
+    // deeper than it was on the page (nested inside `createCommitLine`'s returned function) — the
+    // pattern below matches that module's own indentation, not app/index.html's.
+    const block = /if \(e\?\.status === 409\) \{[\s\S]*?\n        return;\n      \}/.exec(COMMIT_CODE)?.[0] ?? "";
     assert.ok(block, "the 409 branch was not found");
-    const withoutTheOneKnownCall = block.replace(/healFromRefusal\(view\.path, e\.current\);/, "");
+    // `deps.healFromRefusal`, not the bare `healFromRefusal` the page used to call directly — same
+    // call, now reached through the deps object every relocated collaborator takes.
+    const withoutTheOneKnownCall = block.replace(/deps\.healFromRefusal\(view\.path, e\.current\);/, "");
     assert.doesNotMatch(withoutTheOneKnownCall, DOM_MUTATORS, "the give-up branch touches the DOM");
   });
 });

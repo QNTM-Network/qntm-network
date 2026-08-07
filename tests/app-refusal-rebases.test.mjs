@@ -361,22 +361,31 @@ describe("5. a brand-new line (insert-line) has no anchor yet — never attempts
 // 6. THE PERCEPTION RULE — structural
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-const APP_SOURCE = (await import("node:fs")).readFileSync(join(REPO, "app", "index.html"), "utf8");
+// `commitLine` relocated to app/present/commit.ts (2026-08-07, see that module's own header) — its
+// 409 branch, this section's whole subject, moved with it. Read that module instead of the page.
+const COMMIT_SOURCE = (await import("node:fs")).readFileSync(join(REPO, "app", "present", "commit.ts"), "utf8");
 const codeOf = (source) =>
   source
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
-const CODE = codeOf(APP_SOURCE);
+const CODE = codeOf(COMMIT_SOURCE);
 const DOM_MUTATORS = /document\.|\$\(|\.textContent\s*=|\.innerHTML\s*=|\.setAttribute\(|\.classList\.|aria-busy/;
 
 describe("6. THE PERCEPTION RULE — the whole 409 branch touches no DOM beyond healFromRefusal/paintView", () => {
   test("no spinner, no pending class, no sentence — the rebase branch is silent by construction", () => {
-    const block = /if \(e\?\.status === 409\) \{[\s\S]*?\n      return;\n    \}/.exec(CODE)?.[0] ?? "";
+    // ONE INDENT LEVEL DEEPER than the page's own version was — commit.ts's `commitLine` is nested
+    // inside `createCommitLine`'s returned function.
+    const block = /if \(e\?\.status === 409\) \{[\s\S]*?\n        return;\n      \}/.exec(CODE)?.[0] ?? "";
     assert.ok(block, "the 409 branch was not found");
+    // `deps.healFromRefusal`/`deps.repaintArrived()`, not the bare `healFromRefusal`/
+    // `paintView(currentViewId, "arrived")` the page used to call directly — the same two acts,
+    // reached through the deps object every relocated collaborator takes. `repaintArrived` is
+    // itself just `() => paintView(currentViewId, "arrived")` on the page (unmoved) — this module
+    // never sees `paintView`'s own name at all, which is the point of the indirection.
     const withoutKnownCalls = block
-      .replace(/healFromRefusal\(view\.path, e\.current\);/, "")
-      .replace(/paintView\(currentViewId, "arrived"\);/, "");
+      .replace(/deps\.healFromRefusal\(view\.path, e\.current\);/, "")
+      .replace(/deps\.repaintArrived\(\);/g, "");
     assert.doesNotMatch(withoutKnownCalls, DOM_MUTATORS, "the rebase branch touches the DOM directly");
   });
 });
