@@ -485,6 +485,43 @@ describe("3. the drawer opens, closes, and hands the cursor back", () => {
     drawerShowing("qntm-queue");
   });
 
+  test("`ArrowDown` typed while the drawer is open never reaches the page's own vim motion either", () => {
+    // THE SAME PROOF AS `j`, ABOVE, FOR ITS NEW SECOND NAME. `app/present/motions.ts` now binds
+    // `ArrowDown`/`ArrowUp` alongside `j`/`k` (job 1, this branch) — this is the check that wiring
+    // them there did not also leak an arrow keystroke past the drawer's own modal guard, which
+    // gates on `!drawerIsOpen` exactly as it always has and does not know or care which KEY it is
+    // refusing. `app/shell/drawer.ts`'s `drawerKey` legitimately owns `ArrowDown` for the picker's
+    // own row list while a drawer stop holds focus — see the test above this describe block's own
+    // `ArrowDown`/`ArrowUp` picker test — so this proves the two ownerships stay disjoint rather
+    // than one starting to shadow the other now that both exist.
+    page.paintView("this-week");
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    const before = page.__focusIndex();
+    el("viewsBtn").dispatch("click");
+    assert.ok(page.__drawerIsOpen());
+
+    doc.dispatch("keydown", makeEvent({ key: "ArrowDown" }));
+    assert.equal(page.__focusIndex(), before, "ArrowDown leaked through the open drawer into the vim motion");
+
+    page.closeDrawer();
+    drawerShowing("qntm-queue");
+  });
+
+  test("ArrowDown is not swallowed once the drawer is closed — it reaches the vim motion again", () => {
+    page.paintView("this-week");
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    doc.dispatch("keydown", makeEvent({ key: "g" }));
+    const before = page.__focusIndex();
+    el("viewsBtn").dispatch("click");
+    page.closeDrawer();
+    assert.ok(!page.__drawerIsOpen());
+
+    doc.dispatch("keydown", makeEvent({ key: "ArrowDown" }));
+    assert.notEqual(page.__focusIndex(), before, "ArrowDown did nothing after the drawer that just closed");
+    drawerShowing("qntm-queue");
+  });
+
   test("the close button is the first stop, and every row after it is one", () => {
     assert.equal(page.drawerStops[0], el("drawerClose"));
     assert.equal(page.drawerStops.length, 1 + buttonsOfClass("foldbtn").length + VIEWS.length);

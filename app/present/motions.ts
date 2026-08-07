@@ -415,11 +415,26 @@ export class ModeSurface {
 
     switch (key) {
       case "j":
+      case "ArrowDown":
+        // `ArrowDown` ALONGSIDE `j`, NOT INSTEAD OF IT — the SAME two-names-one-motion shape
+        // `app/shell/drawer.ts`'s `drawerKey` already commits to for its own row list (`ArrowDown`/
+        // `j` there, bound per-stop, only while a drawer row holds focus). The operator's own words
+        // named the gesture, not the letter: "selecting up and down sort of has the old placed
+        // order, not the resolved post ordering rules order" — pressed live, `ArrowDown` reached
+        // NOTHING here (this `switch` had no case for it, so `handleKey` fell to `default` and
+        // returned `handled: false`; the caller's `if (!outcome.handled) return;` then never even
+        // called `e.preventDefault()`) while `j` moved correctly. This was never a routing
+        // problem — `document`'s global `keydown` handler (`app/index.html`) already reaches this
+        // module for every unmodified keystroke outside the drawer/an `<input>`; the key was simply
+        // never one of this switch's cases. Composes with a pending count exactly as `j` does:
+        // `3` then `ArrowDown` moves three lines, the same arithmetic `10j` already shares.
         return {
           handled: true,
           effect: { kind: "move", lineIndex: clampLine(current + (pending ?? 1), lastIndex) },
         };
       case "k":
+      case "ArrowUp":
+        // See `ArrowDown`, immediately above — the same alias, the other direction.
         return {
           handled: true,
           effect: { kind: "move", lineIndex: clampLine(current - (pending ?? 1), lastIndex) },
