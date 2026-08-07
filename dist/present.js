@@ -868,10 +868,15 @@ var TOP_KEYS2 = [
   "priorityRank",
   "composition",
   "compositionSource",
+  "tagOrder",
+  "tagOrderSource",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
 var COMPOSITION_SOURCES = ["config", "engine-fallback"];
+var TAG_ORDER_SOURCES = ["engine-literal"];
+var TAG_ORDER_KEYS = ["canonicalOrder", "unrankedPolicy"];
+var TAG_ORDER_UNRANKED_POLICIES = ["append_stable", "prepend_stable", "reject"];
 var SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"];
 var REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"];
 var ORDERING_KEY_KEYS = ["field", "direction"];
@@ -1372,6 +1377,42 @@ function readCompositionSource(value, problems) {
   }
   return value;
 }
+function readTagOrder(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.tagOrder`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 tag order stays unknown`);
+    return void 0;
+  }
+  for (const key of Object.keys(value)) {
+    if (!TAG_ORDER_KEYS.includes(key)) {
+      problems.push(`'${path}.${key}' is not a recognised key \u2014 the keys are ${TAG_ORDER_KEYS.join(", ")}`);
+    }
+  }
+  const { canonicalOrder, unrankedPolicy } = value;
+  if (!Array.isArray(canonicalOrder) || canonicalOrder.length === 0 || !canonicalOrder.every((t) => typeof t === "string")) {
+    problems.push(`'${path}.canonicalOrder' is ${shapeOf2(canonicalOrder)}, not a non-empty array of strings`);
+    return void 0;
+  }
+  if (!TAG_ORDER_UNRANKED_POLICIES.includes(unrankedPolicy)) {
+    problems.push(
+      `'${path}.unrankedPolicy' is ${JSON.stringify(unrankedPolicy)}, not one of ${TAG_ORDER_UNRANKED_POLICIES.join(", ")}`
+    );
+    return void 0;
+  }
+  return {
+    canonicalOrder,
+    unrankedPolicy
+  };
+}
+function readTagOrderSource(value, problems) {
+  if (!TAG_ORDER_SOURCES.includes(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.tagOrderSource' is ${JSON.stringify(value)}, not one of ${TAG_ORDER_SOURCES.join(", ")} \u2014 which answer tagOrder is stays unknown`
+    );
+    return void 0;
+  }
+  return value;
+}
 function readConfigResolutionDeclaration(document2) {
   if (!isPlainObject3(document2)) {
     return { resolution: void 0, problems: [] };
@@ -1417,6 +1458,8 @@ function readConfigResolutionDeclaration(document2) {
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : void 0,
       compositionSource: "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems) : void 0,
+      tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : void 0,
+      tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}
     },
     problems
@@ -2549,7 +2592,15 @@ function tagSpanFromFamily(line, family) {
 function formatMarkerValue(value) {
   return value === null ? "" : String(value);
 }
-function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMarkers) {
+function orderTags(tags, tagOrder) {
+  const index = new Map(tagOrder.canonicalOrder.map((token, i) => [token, i]));
+  const ranked = tags.filter((t) => index.has(t));
+  const unranked = tags.filter((t) => !index.has(t));
+  ranked.sort((a, b) => (index.get(a) ?? 0) - (index.get(b) ?? 0));
+  if (tagOrder.unrankedPolicy === "prepend_stable") return [...unranked, ...ranked];
+  return [...ranked, ...unranked];
+}
+function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMarkers, tagOrder) {
   if (effects.length === 0) return { kind: "unchanged" };
   const original = line;
   let text = line;
@@ -2560,13 +2611,30 @@ function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMark
       const token = byValue.get(effect.to);
       if (token === void 0) return { kind: "abstains", because: "unrenderable-effect", effect };
       const existingSpan = tagSpanFromFamily(text, nodeTypeTokens);
-      if (existingSpan === void 0) {
-        text += ` ${token}`;
+      if (existingSpan !== void 0 && existingSpan.text === token) continue;
+      const boundary = markerSpans(text)[0]?.start ?? text.length;
+      const cellSpans = tagSpans(text).filter((s) => s.start < boundary);
+      if (cellSpans.length === 0) {
+        text = boundary === text.length ? `${text} ${token}` : `${text.slice(0, boundary)}${token} ${text.slice(boundary)}`;
         deltaParts.push(token);
         continue;
       }
-      if (existingSpan.text === token) continue;
-      text = text.slice(0, existingSpan.start) + token + text.slice(existingSpan.end);
+      if (existingSpan !== void 0 && tagOrder === void 0) {
+        text = text.slice(0, existingSpan.start) + token + text.slice(existingSpan.end);
+        deltaParts.push(token);
+        continue;
+      }
+      if (tagOrder === void 0) {
+        const cellEnd2 = cellSpans[cellSpans.length - 1]?.end ?? boundary;
+        text = text.slice(0, cellEnd2) + ` ${token}` + text.slice(cellEnd2);
+        deltaParts.push(token);
+        continue;
+      }
+      const cellStart = cellSpans[0]?.start ?? boundary;
+      const cellEnd = cellSpans[cellSpans.length - 1]?.end ?? boundary;
+      const keep = cellSpans.filter((s) => existingSpan === void 0 || s.start !== existingSpan.start).map((s) => s.text);
+      const reordered = orderTags([...keep, token], tagOrder);
+      text = text.slice(0, cellStart) + reordered.join(" ") + text.slice(cellEnd);
       deltaParts.push(token);
       continue;
     }
@@ -4801,6 +4869,21 @@ function appendPrediction(row, text, kind, animate) {
     }
   }
 }
+function replacePredictedSwap(entry, fullText, delta, kind) {
+  const shape = classifyLine(fullText);
+  const rebuiltSource = shape.kind === "checkbox" ? shape.tail : shape.kind === "heading" ? shape.text : shape.kind === "prose" ? shape.source : null;
+  if (rebuiltSource === null) return false;
+  const html = renderTokens(rebuiltSource, entry.tagsRendition, entry.stampRendition, entry.render);
+  const oldChip = CHIP_OPEN + delta + CHIP_CLOSE;
+  const chipIndex = html.indexOf(oldChip);
+  if (chipIndex === -1) return false;
+  const classes = [PREDICT_CLASS];
+  if (kind === "withdrawn") classes.push(PREDICT_WITHDRAWN_CLASS);
+  const titleAttr = kind === "withdrawn" ? "predicted \u2014 the engine answered differently" : "predicted \u2014 not yet confirmed by the engine";
+  const newChip = `<span class="${classes.join(" ")}" title="${titleAttr}">${delta}</span>`;
+  entry.contentEl.innerHTML = html.slice(0, chipIndex) + newChip + html.slice(chipIndex + oldChip.length);
+  return true;
+}
 function paint(body, source, context, deps) {
   paintGeneration += 1;
   const mine = paintGeneration;
@@ -4905,6 +4988,7 @@ function paint(body, source, context, deps) {
   };
   let lastPaintedIndex = -1;
   const rowsByLineIndex = /* @__PURE__ */ new Map();
+  const predictableByLineIndex = /* @__PURE__ */ new Map();
   source.split("\n").forEach((line, index) => {
     if (superseded()) {
       return;
@@ -4944,17 +5028,21 @@ function paint(body, source, context, deps) {
         deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
       });
       const span = document.createElement("span");
-      span.innerHTML = renderTokens(
-        shape.tail,
-        cascade.resolve("tags").rendition,
-        cascade.resolve("stamp").rendition,
-        (markdown) => deps.markdown.renderInline(markdown)
-      );
+      const checkboxTagsRendition = cascade.resolve("tags").rendition;
+      const checkboxStampRendition = cascade.resolve("stamp").rendition;
+      const checkboxRender = (markdown) => deps.markdown.renderInline(markdown);
+      span.innerHTML = renderTokens(shape.tail, checkboxTagsRendition, checkboxStampRendition, checkboxRender);
       focusable(span, index);
       stampInstance(row, index);
       row.append(box, span);
       body.append(row);
       rowsByLineIndex.set(index, row);
+      predictableByLineIndex.set(index, {
+        contentEl: span,
+        tagsRendition: checkboxTagsRendition,
+        stampRendition: checkboxStampRendition,
+        render: checkboxRender
+      });
       return;
     }
     if (shape.kind === "heading") {
@@ -4963,16 +5051,20 @@ function paint(body, source, context, deps) {
         return;
       }
       const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      el.innerHTML = renderTokens(
-        shape.text,
-        cascade.resolve("tags").rendition,
-        cascade.resolve("stamp").rendition,
-        (markdown) => deps.markdown.renderInline(markdown)
-      );
+      const headingTagsRendition = cascade.resolve("tags").rendition;
+      const headingStampRendition = cascade.resolve("stamp").rendition;
+      const headingRender = (markdown) => deps.markdown.renderInline(markdown);
+      el.innerHTML = renderTokens(shape.text, headingTagsRendition, headingStampRendition, headingRender);
       focusable(el, index);
       stampInstance(el, index);
       body.append(el);
       rowsByLineIndex.set(index, el);
+      predictableByLineIndex.set(index, {
+        contentEl: el,
+        tagsRendition: headingTagsRendition,
+        stampRendition: headingStampRendition,
+        render: headingRender
+      });
       return;
     }
     if (cascade.resolve("prose").rendition === "raw") {
@@ -4980,16 +5072,20 @@ function paint(body, source, context, deps) {
       return;
     }
     const div = document.createElement("div");
-    div.innerHTML = renderTokens(
-      shape.source,
-      cascade.resolve("tags").rendition,
-      cascade.resolve("stamp").rendition,
-      (markdown) => deps.markdown.render(markdown)
-    );
+    const proseTagsRendition = cascade.resolve("tags").rendition;
+    const proseStampRendition = cascade.resolve("stamp").rendition;
+    const proseRender = (markdown) => deps.markdown.render(markdown);
+    div.innerHTML = renderTokens(shape.source, proseTagsRendition, proseStampRendition, proseRender);
     focusable(div, index);
     stampInstance(div, index);
     body.append(div);
     rowsByLineIndex.set(index, div);
+    predictableByLineIndex.set(index, {
+      contentEl: div,
+      tagsRendition: proseTagsRendition,
+      stampRendition: proseStampRendition,
+      render: proseRender
+    });
   });
   if (superseded()) {
     return;
@@ -5011,7 +5107,10 @@ function paint(body, source, context, deps) {
     if (instruction !== null) {
       for (const prediction of instruction.predictions) {
         const el = rowsByLineIndex.get(prediction.lineIndex);
-        if (el !== void 0) {
+        if (el === void 0) continue;
+        const predictable = prediction.fullText === void 0 ? void 0 : predictableByLineIndex.get(prediction.lineIndex);
+        const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
+        if (!replaced) {
           appendPrediction(el, prediction.text, "pending", instruction.animate);
         }
       }
@@ -5848,7 +5947,7 @@ var promotionSpec = {
       return { kind: "abstains", because: "graph-match-undecidable" };
     }
     const retypes = pass.applied.filter((effect) => effect.verb === "retype");
-    const render = retypes.length === 0 ? { kind: "unchanged" } : renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
+    const render = retypes.length === 0 ? { kind: "unchanged" } : renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {}, resolution.tagOrder);
     return {
       kind: "answer",
       coverage: coverageOf(pass.undecidable),
@@ -5897,7 +5996,12 @@ var promotionSpec = {
     if (reading.render.kind !== "rendered") {
       return [];
     }
-    return [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta } }];
+    return [
+      {
+        surface: "predict",
+        prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta, fullText: reading.render.text }
+      }
+    ];
   }
 };
 
@@ -6052,7 +6156,8 @@ var rulesSpec = {
       pass.applied,
       qualification.tokens.node_type ?? {},
       qualification.tokens,
-      rulesTable.fieldMarkers
+      rulesTable.fieldMarkers,
+      resolution.tagOrder
     );
     if (rendered.kind === "abstains") {
       return { kind: "abstains", because: `rendering-${rendered.because}` };

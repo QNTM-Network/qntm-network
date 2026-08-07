@@ -132,6 +132,7 @@ export const rulesSpec: ResolverSpec<RulesCommitReading> = {
       qualification.tokens.node_type ?? {},
       qualification.tokens,
       rulesTable.fieldMarkers,
+      resolution.tagOrder,
     );
     if (rendered.kind === "abstains") {
       return { kind: "abstains", because: `rendering-${rendered.because}` };

@@ -206,6 +206,51 @@ export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
   titleStyles: Object.freeze([]),
 });
 
+// ── TAG ORDER — WITHIN the "tags" cell composition names, WHICH TAG COMES FIRST ──
+//
+// `composition.tail` (above) says a NEW type tag belongs somewhere before markers/chrome. It says
+// NOTHING about where that tag lands relative to OTHER tags already in the same cell (a domain tag,
+// an edge-shorthand tag) — that is a THIRD, separate fact, published here for the first time
+// (2026-08-07). Found while fixing `renderRuleEffects`'s `retype` append path: it was landing a
+// fresh type tag by string-concatenation ("wherever nothing else already is"), which happens to
+// agree with the engine for `#outcome`/`#habit` (both rank far above every domain tag) but is not
+// the actual rule and would silently disagree for any node type ranked BELOW an already-present tag.
+//
+// Read LIVE off `apps/qntm-md/src/qntm_md/render/contracts/order_tags.yaml` — that file's own
+// header states it flatly: "THIS FILE IS THE SOURCE OF TRUTH FOR TAG ORDER. Nothing else is." — and
+// `OrderTagsActionDispatcher` (`capabilities/decision_tables/runtime/dispatchers/order_tags.py`) is
+// the ONE place that reads it: partition the node's tags into RANKED (a member of `canonical_order`)
+// and UNRANKED, stable-sort the ranked pool by its position in `canonical_order`, then concatenate
+// per `unranked_policy` (`append_stable` today — unranked tags trail, in their own original order).
+//
+// UNLIKE `composition`, THIS FILE NAMES NO CONFIG OVERRIDE SURFACE — it is not `global_defaults.
+// yaml`-declarable (its own header: "To change the order the operator sees, edit THIS list", i.e.
+// the engine's own source, not the operator's vault config) — so there is no "config" vs
+// "engine-fallback" split to publish here; this generator always publishes the literal, and
+// `tagOrderSource` is always `"engine-literal"` so a reader can still tell WHICH kind of fact this
+// is (an engine-internal contract, never operator-declared) rather than assuming it is silent about
+// its own provenance the way an unconditional literal elsewhere in this file would be.
+//
+// Pinned against a LIVE import by `scripts/retype-agreement.py` (same discipline `composition-
+// agreement.py` established) — see `tests/retype-agreement.test.mjs` for the exhaustive, family-wide
+// proof (every `qualification.tokens.node_type` entry, not a sample).
+export const ENGINE_LITERAL_TAG_ORDER = Object.freeze({
+  canonicalOrder: Object.freeze([
+    "#project",
+    "#outcome",
+    "#habit",
+    "#task",
+    "#routine",
+    "#work",
+    "#personal",
+    "#health",
+    "#next",
+    "#parallel",
+    "#waiting-for",
+  ]),
+  unrankedPolicy: "append_stable",
+});
+
 // The cell-class vocabulary a declared `composition:` may use — mirrors `bundle/loader.py`'s own
 // `_COMPOSITION_REQUIRED_HEAD_SHAPES` / `_COMPOSITION_HEAD_CELL_CLASSES` /
 // `_COMPOSITION_TAIL_CELL_CLASSES` (monorepo, read-only) field for field. Kept as data here, the
@@ -1230,6 +1275,12 @@ export function compile(files, ledger = new Ledger()) {
     // (`"config"` or `"engine-fallback"`), the same visible-fallback discipline.
     composition: compositionResult.composition,
     compositionSource: compositionResult.source,
+    // WITHIN "tags" — see `ENGINE_LITERAL_TAG_ORDER`'s own header. Always the engine literal (no
+    // config override surface exists for this file), always published (never optional the way
+    // `priorityRank` below is) — a caller with no notion of tag order at all is exactly the caller
+    // this axis was silently missing for until today.
+    tagOrder: ENGINE_LITERAL_TAG_ORDER,
+    tagOrderSource: "engine-literal",
   };
   // `priorityRank` follows the same "absent means nothing to say" convention every other optional
   // key in this declaration already uses (see resolutiontable.ts's own header) — omitted, not

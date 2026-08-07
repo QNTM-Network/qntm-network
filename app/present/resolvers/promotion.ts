@@ -409,8 +409,12 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
     // the guard; it is asking the guard the question it can answer, and `say` above still reports
     // the retype AND the un-renderable set together, in words.
     const retypes = pass.applied.filter((effect) => effect.verb === "retype");
+    // `resolution.tagOrder` (2026-08-07) — see `TagOrder`'s own header. `undefined` on an older
+    // served declaration; `renderRuleEffects` degrades gracefully rather than guessing a rank.
     const render: RuleRenderOutcome =
-      retypes.length === 0 ? { kind: "unchanged" } : renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {});
+      retypes.length === 0
+        ? { kind: "unchanged" }
+        : renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {}, resolution.tagOrder);
     return {
       kind: "answer",
       coverage: coverageOf(pass.undecidable),
@@ -473,6 +477,14 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
     if (reading.render.kind !== "rendered") {
       return [];
     }
-    return [{ surface: "predict", prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta } }];
+    // `fullText` — see `RowPrediction`'s own header. Carried so `paint.ts` can show the row's
+    // BYTE-EXACT predicted line immediately, rather than the row's own stale text plus an appended
+    // badge (the operator's own report, 2026-08-07: "it added it at end, not replaced task").
+    return [
+      {
+        surface: "predict",
+        prediction: { lineIndex: reading.parentLineIndex, text: reading.render.delta, fullText: reading.render.text },
+      },
+    ];
   },
 };

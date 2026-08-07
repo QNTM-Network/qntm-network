@@ -66,6 +66,22 @@ export interface RowPrediction {
   /** The characters expected to appear on that row — never posted, never written into `source`;
    * see `paint.ts`'s own consumption for the DOM-only shape this takes. */
   readonly text: string;
+  /**
+   * THE WHOLE LINE this row's own claim describes, when the claim is about a SWAP rather than a
+   * bare addition — `RuleRenderOutcome.text` (rules.ts), already byte-identical to the engine's own
+   * render for the SAME retype (`tests/retype-agreement.test.mjs`, exhaustive over the declared
+   * node-type family). `undefined` for an ordinary append-only claim (`stamp-created-at-on-task`),
+   * which has no "whole line" answer distinct from `text` itself appended.
+   *
+   * WHY THIS EXISTS: `text` alone tells a caller WHAT characters to show, never WHERE — `paint.ts`
+   * used to always append it after a row's own SETTLED content, which is correct for a genuine
+   * addition and wrong for a same-family swap (the operator's own report, 2026-08-07: "it added it
+   * at end, not replaced task"). `fullText`, when present, is what `paint.ts` renders the row FROM
+   * instead of the row's own literal source line — the operator sees the byte-exact predicted line
+   * immediately, the SAME text a settle would eventually confirm, rather than stale content plus a
+   * floating badge for the 14 seconds until the engine's own answer lands.
+   */
+  readonly fullText?: string;
 }
 
 /** A prediction reconciled against a NEW source and found nowhere in it — contradicted, not merely

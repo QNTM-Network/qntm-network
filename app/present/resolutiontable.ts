@@ -199,6 +199,25 @@ export interface Composition {
 }
 
 /**
+ * WITHIN the "tags" cell `Composition.tail` names — which tag comes first, when several coexist on
+ * one line (a node's own type tag, a domain tag, an edge-shorthand tag). See
+ * `scripts/compile-resolution.mjs`'s own header ("TAG ORDER") for the full citation of
+ * `order_tags.yaml` this mirrors — that file's own words: "THIS FILE IS THE SOURCE OF TRUTH FOR TAG
+ * ORDER. Nothing else is."
+ *
+ * THE ALGORITHM (`OrderTagsActionDispatcher`, transcribed exactly — `orderTags` in `rules.ts` is the
+ * one function that reads this type and performs it): partition a candidate tag list into RANKED
+ * (a member of `canonicalOrder`) and UNRANKED; stable-sort the ranked pool by its position in
+ * `canonicalOrder`; concatenate per `unrankedPolicy`. `"append_stable"` (the only value the engine
+ * declares today) puts the unranked pool AFTER the ranked one, in the unranked items' own original
+ * relative order — never alphabetised, never re-sorted a second way.
+ */
+export interface TagOrder {
+  readonly canonicalOrder: readonly string[];
+  readonly unrankedPolicy: "append_stable" | "prepend_stable" | "reject";
+}
+
+/**
  * WHAT A NEW LINE UNDER ONE SECTION BECOMES — rungs 1 and 2 of `design-the-rule-mirror.md`.
  *
  * `nodeType` is the registration answer, cascaded STRUCTURAL_NODE -> VIEW -> GLOBAL by the
@@ -329,6 +348,21 @@ export interface ConfigResolutionTable {
    */
   readonly compositionSource: "config" | "engine-fallback" | undefined;
   /**
+   * WITHIN "tags" — see the `TagOrder` type's own header. `undefined` when the served document
+   * predates this key (2026-08-07) or the key is malformed — a caller with no tag-order fact must
+   * abstain from reordering rather than guess one, the same posture `composition: undefined` already
+   * requires of a composing caller.
+   */
+  readonly tagOrder: TagOrder | undefined;
+  /**
+   * WHICH ANSWER `tagOrder` IS. UNLIKE `compositionSource`, this is never `"config"` —
+   * `order_tags.yaml` names no operator-config override surface at all (see its own header,
+   * transcribed in `compile-resolution.mjs`), so the only real value is `"engine-literal"`.
+   * Published anyway, for the same reason `compositionSource` is: so a reader can tell "this IS the
+   * engine's own answer" from "this document predates the key" without the two looking identical.
+   */
+  readonly tagOrderSource: "engine-literal" | undefined;
+  /**
    * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. The two comments
    * above ("a field absent here has no known marker", "a type absent here is one whose chrome this
    * app does not know how to produce") described a refusal the operator had no way to see: absence
@@ -369,6 +403,8 @@ const TOP_KEYS = [
   "priorityRank",
   "composition",
   "compositionSource",
+  "tagOrder",
+  "tagOrderSource",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
@@ -377,6 +413,10 @@ const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
 // answer unrelated questions that happen to share a domain; a future third source value for one
 // must not silently become valid for the other.
 const COMPOSITION_SOURCES = ["config", "engine-fallback"] as const;
+/** `tagOrderSource`'s own closed set — see `TagOrder`'s header for why this is ONE member, not two. */
+const TAG_ORDER_SOURCES = ["engine-literal"] as const;
+const TAG_ORDER_KEYS = ["canonicalOrder", "unrankedPolicy"] as const;
+const TAG_ORDER_UNRANKED_POLICIES = ["append_stable", "prepend_stable", "reject"] as const;
 const SECTION_REGISTRATION_KEYS = ["nodeType", "defaults", "tokens"] as const;
 const REGISTRATION_KEYS = ["defaultNodeType", "baseNodeType", "inputGrammar", "defaultTags"] as const;
 const ORDERING_KEY_KEYS = ["field", "direction"] as const;
@@ -999,6 +1039,52 @@ function readCompositionSource(value: unknown, problems: string[]): "config" | "
   return value as "config" | "engine-fallback";
 }
 
+/** `resolution.tagOrder` — see the `TagOrder` type's own header. Malformed yields `undefined` for
+ * the WHOLE fact, the same posture `readComposition` takes: a half-declared order (a
+ * `canonicalOrder` but no `unrankedPolicy`) is a worse failure to hand a caller silently than
+ * declining to publish an order at all. */
+function readTagOrder(value: unknown, problems: string[]): TagOrder | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.tagOrder`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — tag order stays unknown`);
+    return undefined;
+  }
+  for (const key of Object.keys(value)) {
+    if (!(TAG_ORDER_KEYS as readonly string[]).includes(key)) {
+      problems.push(`'${path}.${key}' is not a recognised key — the keys are ${TAG_ORDER_KEYS.join(", ")}`);
+    }
+  }
+  const { canonicalOrder, unrankedPolicy } = value;
+  if (!Array.isArray(canonicalOrder) || canonicalOrder.length === 0 || !canonicalOrder.every((t) => typeof t === "string")) {
+    problems.push(`'${path}.canonicalOrder' is ${shapeOf(canonicalOrder)}, not a non-empty array of strings`);
+    return undefined;
+  }
+  if (!(TAG_ORDER_UNRANKED_POLICIES as readonly string[]).includes(unrankedPolicy as string)) {
+    problems.push(
+      `'${path}.unrankedPolicy' is ${JSON.stringify(unrankedPolicy)}, not one of ` +
+        `${TAG_ORDER_UNRANKED_POLICIES.join(", ")}`,
+    );
+    return undefined;
+  }
+  return {
+    canonicalOrder: canonicalOrder as readonly string[],
+    unrankedPolicy: unrankedPolicy as TagOrder["unrankedPolicy"],
+  };
+}
+
+/** `resolution.tagOrderSource` — see `TagOrder`'s own header for why `"engine-literal"` is the
+ * only real value. Mirrors `readCompositionSource` exactly, one member narrower. */
+function readTagOrderSource(value: unknown, problems: string[]): "engine-literal" | undefined {
+  if (!(TAG_ORDER_SOURCES as readonly string[]).includes(value as string)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.tagOrderSource' is ${JSON.stringify(value)}, not one of ` +
+        `${TAG_ORDER_SOURCES.join(", ")} — which answer tagOrder is stays unknown`,
+    );
+    return undefined;
+  }
+  return value as "engine-literal";
+}
+
 /**
  * Read the `resolution` key of a served presentation declaration.
  *
@@ -1099,6 +1185,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       composition: "composition" in raw ? readComposition(raw.composition, problems) : undefined,
       compositionSource:
         "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems) : undefined,
+      tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : undefined,
+      tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
     },
     problems,

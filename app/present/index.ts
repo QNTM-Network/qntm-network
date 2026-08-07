@@ -89,6 +89,7 @@ export type {
   OrderingKey,
   RegistrationTable,
   SectionOrdering,
+  TagOrder,
 } from "./resolutiontable.js";
 
 export { composeLine, composeSeed } from "./express/composition.js";
