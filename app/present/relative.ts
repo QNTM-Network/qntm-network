@@ -202,8 +202,52 @@ export type RelativeReading =
   | { readonly outcome: "refused"; readonly because: RelativeRefusal };
 
 /**
+ * The engine's own `[[qntm:N]]` stamp — the SAME pattern `express/rendition.ts`'s `QNTM_ID`
+ * matches, duplicated rather than imported: this module imports nothing (see the module header),
+ * the same reason `extendsLine` below is itself written twice rather than shared with `held.ts`.
+ */
+const STAMP_TOKEN = /\[\[qntm:[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?\]\]/g;
+
+/**
+ * `arrived` with the stamp token spanning `[start, end)` removed, and the space that joined it to
+ * its neighbours collapsed back to the ONE space that was there before the engine composed it in —
+ * never two, never zero. `renderer.py`'s `_field_expression_cells` always joins tail cells with a
+ * single `" "` (`_COMPOSITION_TAIL`'s own `separator`, `presentation.json`'s `composition.
+ * separator`), so undoing exactly that join is what "as if the engine had never composed this one
+ * cell" means, characters for characters.
+ */
+function withStampRemoved(arrived: string, start: number, end: number): string {
+  const before = arrived.slice(0, start);
+  const after = before.endsWith(" ") && arrived.slice(end).startsWith(" ")
+    ? arrived.slice(end + 1) // the join space on EITHER side is the same one space — drop only one
+    : arrived.slice(end);
+  return (before + after).trimEnd();
+}
+
+/**
  * Does `arrived` still carry `held` — the same characters, or the same characters with the cycle's
- * own tokens appended after them?
+ * own tokens ADDED, either after them or with the stamp INSERTED somewhere inside them?
+ *
+ * THE ENGINE DOES NOT ONLY APPEND. `apps/qntm-md/src/qntm_md/render/renderer.py`'s
+ * `_field_expression_cells` composes a node's tail in ONE fixed, declared order —
+ * `presentation.json`'s own `composition.tail`, `["stamp", "date", "tags", "markers", "chrome"]`
+ * for this instance, read directly rather than assumed — so a line the operator captured WITH its
+ * own trailing tag or marker already on it (`- [ ] Buy milk 🔢 3`, the section's own ordering
+ * marker, typed at capture time) gets its stamp composed BEFORE that marker on the engine's own
+ * very next answer (`- [ ] Buy milk [[qntm:9]] 🔢 3`), not after everything. A check that only ever
+ * tried the END would refuse that still-correct row on the one event it exists to survive.
+ *
+ * SO THIS TRIES BOTH SHAPES, IN ORDER: the plain append first (unchanged from before — covers a
+ * BARE capture, nothing typed beyond the title, and any other case where the addition genuinely
+ * lands at the end), and, only if that fails, "the arrived line WITH one stamp token taken back
+ * out" against the same append rule. The second branch is not a looser match: it still requires
+ * the non-stamp characters on either side of the stamp to reproduce `held` EXACTLY (bar the one
+ * join space `withStampRemoved` accounts for), or `held` plus a further append — an insertion
+ * ANYWHERE ELSE (two tags swapping order, a value changing) still refuses, exactly as it did
+ * before. Tried at every stamp span `arrived` carries, because nothing here assumes there is
+ * exactly one — it does not need to: `held` is guaranteed stamp-free (`relativeAnchorFor` never
+ * takes this anchor for an already-stamped line — see the module header), so the ONE genuine match
+ * is the row's own new stamp, wherever it appears.
  *
  * THE APPENDED BRANCH IS NARROWED SO IT CANNOT MATCH BY ACCIDENT, with no magic number in it: the
  * held text must end in a non-space and the arrived line must continue with a space. That is what
@@ -218,7 +262,17 @@ export function extendsLine(held: string, arrived: string): boolean {
   if (held === "" || held.trimEnd() !== held) {
     return false;
   }
-  return arrived.startsWith(held + " ");
+  if (arrived.startsWith(held + " ")) {
+    return true;
+  }
+  for (const match of arrived.matchAll(STAMP_TOKEN)) {
+    const start = match.index as number;
+    const stripped = withStampRemoved(arrived, start, start + match[0].length);
+    if (stripped === held || stripped.startsWith(held + " ")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** The first and last index of `section` in `places`, or `null` when the section is not there. */

@@ -631,6 +631,107 @@ describe("3. IT REFUSES RATHER THAN GUESSES — every named case", () => {
     assert.equal(extendsLine("- [ ] Ring", "- [ ] Ringing the bell"), false, "a word boundary is required");
     assert.equal(extendsLine("", "anything"), false);
   });
+
+  test("`extendsLine` recognises the stamp INSERTED before an existing trailing marker or tag, not only appended after everything", () => {
+    // `renderer.py`'s `_field_expression_cells` composes a node's tail in ONE fixed, declared
+    // order — `stamp` FIRST, then tags/markers/chrome (`presentation.json`'s own `composition.
+    // tail` — see the exhaustive suite below). A capture typed WITH its own marker or tag already
+    // on it gets the stamp INSERTED before that cell, not appended after it.
+    assert.equal(extendsLine("- [ ] Buy milk 🔢 3", "- [ ] Buy milk [[qntm:9]] 🔢 3"), true, "stamp inserted before a single trailing marker");
+    assert.equal(extendsLine("- [ ] Buy milk #task", "- [ ] Buy milk [[qntm:9]] #task"), true, "stamp inserted before a single trailing tag");
+    assert.equal(extendsLine("- [ ] Buy milk #task 🔢 3", "- [ ] Buy milk [[qntm:9]] #task 🔢 3"), true, "stamp inserted before a tag AND a marker, composition's own order preserved");
+    // NOT A LOOSER MATCH — everything the append-only check already refused still refuses. Only
+    // the STAMP may be found inserted; anything else that differs is a genuine change, not a
+    // stamp landing, and must still be refused.
+    assert.equal(extendsLine("- [ ] Buy milk 🔢 3", "- [ ] Buy milk [[qntm:9]] 🔢 4"), false, "the marker's VALUE changed — not the same row's stamp landing");
+    assert.equal(extendsLine("- [ ] Buy milk #task 🔢 3", "- [ ] Buy milk [[qntm:9]] 🔢 3 #task"), false, "the tag and marker swapped ORDER — a genuine reorder, not an insertion");
+    assert.equal(extendsLine("- [ ] Buy milk 🔢 3", "- [ ] Ring the dentist [[qntm:9]] 🔢 3"), false, "a stranger's line must not be recognised merely for carrying A stamp somewhere");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 3b. THE STAMP CAN LAND BEFORE ANY DECLARED MARKER OR TAG — EXHAUSTIVE OVER THE COMPILED
+//     DECLARATION, NOT A SAMPLE. `presentation.json` is the SERVED bundle this instance actually
+//     runs — the same file `tests/qualification-agreement.test.mjs`/`tests/present-replay.test.mjs`
+//     already read as the one true set of what the operator can type. Every member of that set is
+//     tried here; nothing is hand-picked, and the suite grows on its own the day he declares a new
+//     tag or marker — no test file needs editing for that to happen.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("3b. THE STAMP CAN LAND BEFORE A DECLARED MARKER OR TAG — exhaustive over presentation.json", () => {
+  const SERVED_TAGS_MARKERS = JSON.parse(readFileSync(resolve(HERE, "..", "presentation.json"), "utf8"));
+  const q = SERVED_TAGS_MARKERS.qualification;
+
+  // Composition's declared tail order (`resolution.composition.tail`) is `[stamp, date, tags,
+  // markers, chrome]` — the stamp is composed BEFORE every one of these. Confirmed live, not
+  // assumed: the suite fails loudly if the served bundle ever declares a different order.
+  test("precondition: the stamp is declared FIRST in composition's own tail — the fact this whole suite rests on", () => {
+    const tail = SERVED_TAGS_MARKERS.resolution?.composition?.tail;
+    assert.ok(Array.isArray(tail) && tail.length > 0, "presentation.json must declare resolution.composition.tail");
+    assert.equal(tail[0], "stamp", `composition.tail's own first cell must be "stamp", got: ${JSON.stringify(tail)}`);
+  });
+
+  // Every declared TYPE TAG (`#task`, `#outcome`, ...) — the vocabulary the operator types to
+  // declare a node's TYPE at capture time.
+  const typeTags = Object.keys(q.tokens?.node_type ?? {});
+  test(`every declared type tag (${typeTags.length} of them, read from presentation.json) — stamp inserted between title and tag`, () => {
+    assert.ok(typeTags.length > 0, "precondition: the served bundle must declare at least one type tag, or this proves nothing");
+    for (const tag of typeTags) {
+      const held = `- [ ] Buy milk ${tag}`;
+      const arrived = `- [ ] Buy milk [[qntm:9]] ${tag}`;
+      assert.equal(extendsLine(held, arrived), true, `stamp inserted before declared type tag "${tag}" must still extend`);
+    }
+  });
+
+  // Every declared EXTRACTION marker (`queue_position` -> 🔢, `due_date` -> 📅, ...) — a token
+  // PLUS a value, `kind`-typed. One sample value per `kind` this bundle actually declares — closed
+  // over what is DECLARED, not invented per marker.
+  const extractionMarkers = Object.entries(q.extractionFields ?? {});
+  const SAMPLE_BY_KIND = { date: "2026-08-10", int: "3", float: "0.5" };
+  test(`every declared extraction marker (${extractionMarkers.length} of them, read from presentation.json) — stamp inserted between title and marker`, () => {
+    assert.ok(extractionMarkers.length > 0, "precondition: the served bundle must declare at least one extraction marker, or this proves nothing");
+    for (const [field, spec] of extractionMarkers) {
+      const value = SAMPLE_BY_KIND[spec.kind];
+      assert.notEqual(value, undefined, `no sample value declared for kind "${spec.kind}" (field "${field}") — the set is not exhaustively covered; add one`);
+      const held = `- [ ] Buy milk ${spec.token} ${value}`;
+      const arrived = `- [ ] Buy milk [[qntm:9]] ${spec.token} ${value}`;
+      assert.equal(extendsLine(held, arrived), true, `stamp inserted before declared marker "${field}" (${spec.token}) must still extend`);
+    }
+  });
+
+  // Every declared VALUE-MATCH marker (`⛔` blocked, `📌` lead, `🏳️`/`💤` asserted, `🔽`/`⏫`
+  // priority, ...) — a token with NO separate value, read generically off every field in
+  // `qualification.tokens` whose own token is emoji-shaped rather than `#tag`-shaped. `"status"` is
+  // excluded on purpose: the checkbox glyph is part of the line's HEAD (before the title), a
+  // structurally different position from the TAIL cells the stamp lands in front of — not a hidden
+  // omission, a different cell class entirely (`_COMPOSITION_HEADS` vs `_COMPOSITION_TAIL`,
+  // renderer.py).
+  const valueMatchMarkers = [];
+  for (const [field, mapping] of Object.entries(q.tokens ?? {})) {
+    if (field === "status" || typeof mapping !== "object" || mapping === null) continue;
+    for (const token of Object.keys(mapping)) {
+      if (!token.startsWith("#")) valueMatchMarkers.push({ field, token });
+    }
+  }
+  test(`every declared value-match marker (${valueMatchMarkers.length} of them, read from presentation.json) — stamp inserted between title and marker`, () => {
+    assert.ok(valueMatchMarkers.length > 0, "precondition: the served bundle must declare at least one value-match marker, or this proves nothing");
+    for (const { field, token } of valueMatchMarkers) {
+      const held = `- [ ] Buy milk ${token}`;
+      const arrived = `- [ ] Buy milk [[qntm:9]] ${token}`;
+      assert.equal(extendsLine(held, arrived), true, `stamp inserted before declared value-match marker "${field}" (${token}) must still extend`);
+    }
+  });
+
+  test("the REAL shape from the operator's own inbox — a stamp, a type tag, and a marker, in composition's own printed order", () => {
+    // `REAL_INBOX` above, literal: `[[qntm:2603]] #task 🆕 2026-07-31` — stamp, tag, marker. This
+    // is the shape a SECOND stamp-bearing repaint of an already-round-tripped node shows; the
+    // insertion case this suite proves is what the SAME row's line looked like the cycle before —
+    // no stamp yet, tag and marker already typed.
+    assert.equal(
+      extendsLine("- [ ] Lesley pay tenner #task 🆕 2026-07-31", "- [ ] Lesley pay tenner [[qntm:2603]] #task 🆕 2026-07-31"),
+      true,
+    );
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
