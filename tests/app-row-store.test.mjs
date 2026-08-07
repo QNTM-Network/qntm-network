@@ -518,8 +518,8 @@ describe("6. break the store's readers and the acceptance test goes red", () => 
       );
       out = assertMutated(
         out,
-        "    const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);\n    const lastIndex",
-        "    const source = v.markdown;\n    const lastIndex",
+        "    const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);\n    const current",
+        "    const source = v.markdown;\n    const current",
       );
       return out;
     });

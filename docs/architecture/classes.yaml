@@ -371,3 +371,77 @@ classes:
     governs_sinks:
       - view-painted
     status: working
+
+  # ── ADDED 2026-08-07, DURING THE ORDER-CONSUMER STRAIGHTENING — A CONCERN NAMED FOR THE FIRST
+  # TIME, WITH NO GOVERNS_SINKS, FOR A MECHANICAL REASON STATED IN FULL BELOW ──
+  #
+  # The operator's own report: a row's paint position now resolves correctly (`commit-line-routing`,
+  # above, closed that), but "hovering over it still shows the old random order" and "selecting up
+  # and down sort of has the old placed order, not the resolved post-ordering-rules order." The
+  # census: `app/present/arrange/ordering.ts`'s `orderingPlacementFor`/`defaultOrderingPlacementFor`
+  # decide the RULE (where a committed row now belongs); `app/present/settle.ts` + `paint.ts`'s
+  # `settleRow` MATERIALISE that rule into `#viewBody`'s own child order, one `insertBefore` at a
+  # time, on every repaint a live placement survives for. That move is COSMETIC ONLY — it repositions
+  # the DOM and never edits `source`, which the real reorder only catches up to once the engine's own
+  # next cycle answers. So `source.split("\n")`'s own line numbering and "the row painted Nth" are
+  # two different facts the instant any settle has fired for a view, and `app/present/paint.ts`'s
+  # `visualLineOrder` (added the same day) is the ONE place the second fact — the DOM's own current,
+  # materialised order — is published for a reader outside `paint.ts` to consult, rather than a
+  # second copy of "what order are the rows in" computed from `source` again. `app/index.html`'s vim
+  # keydown handler now reads it for `j`/`k`/`gg`/`G` — `tests/app-vim-visual-order.test.mjs` proves
+  # this at the APPLICATION level, the real page, real DOM, red against unmodified `origin/main`
+  # before the fix landed.
+  #
+  # NO `governs_sinks` HERE, AND IT IS A MECHANICAL FINDING, NOT AN OVERSIGHT — the identical shape
+  # `capture-rule-application`'s own note states for the other three resolver axes, for a
+  # DIFFERENT-but-related reason this time:
+  #
+  #   1. THE REAL CALLER IS `app/index.html`, WHICH FLOW-TRACE CANNOT IMPORT. `visualLineOrder`'s
+  #      one production call site is the page's own global `keydown` listener — hand-authored HTML,
+  #      outside `.flow-trace.yaml`'s `include: [app]` by construction (a node module-load hook
+  #      cannot import an HTML document; see that file's own note, restated at `markdown-rendering`
+  #      and `capture-rule-application` for the identical reason). A call flow-trace cannot see is a
+  #      call canonical-routing has no evidence about, in either direction.
+  #   2. A SCENARIO CANNOT STAND IN FOR IT WITHOUT BEING DISCARDED. `canonical_routing.py`'s own
+  #      rule — cited in `commit-line-routing`'s own header and in `sinks.yaml`'s survey — throws out
+  #      any chain reached by a scenario calling the target directly as its own top-level driver
+  #      ("harness-only"). `visualLineOrder` takes one DOM element and returns an array; a scenario
+  #      that called it to manufacture evidence would be exactly that harness-only shape, proving
+  #      nothing about the real page.
+  #   3. THE SHAPE THAT WOULD CLOSE IT IS KNOWN, BECAUSE IT ALREADY HAPPENED ONCE. `commit-line-
+  #      routing` (above) closed the identical gap for the resolver-to-paint path by relocating the
+  #      CONNECTING ACT — `commitLine` — out of `app/index.html` into `app/present/commit.ts`, so ONE
+  #      instrumented frame spans the whole operation and is still active, via `AsyncLocalStorage`,
+  #      when the sink fires. The same move here would be extracting the keydown handler's OWN
+  #      "translate a `ModeSurface` move effect into a real focus target" glue — today three
+  #      statements split across `app/index.html` around `visualLineOrder`, `mode.handleKey`, and
+  #      `focus.focus` — into ONE `app/present/` function spanning all three. THAT ALONE IS STILL NOT
+  #      ENOUGH FOR `view-painted` SPECIFICALLY: `repaintCurrentView` (the call that actually reaches
+  #      `paint`) is itself page-shaped glue, reading a dozen more module-scoped variables
+  #      (`graphData`, `mode`, `md`, `draftLine`, `rows`, `declaration`, …) that a present/ module
+  #      cannot hold without becoming a second `CommitContext` — a real, separately-scoped relocation,
+  #      not attempted here. A NARROWER sink — the resolved cursor target itself, before any repaint —
+  #      is the more tractable next step, and is not declared here either, because no such sink exists
+  #      in `sinks.yaml` yet and inventing one to immediately govern is exactly the kind of
+  #      "declaration with no reader" this file's own header warns against.
+  #
+  # This class exists so the concern has a NAMED, CORRECT HOME the day either extraction happens —
+  # not to claim evidence that was never gathered.
+  - id: row-order-materialisation
+    concern: >
+      Publishing the DOM's OWN current row order — the materialised consequence of every placement
+      `app/present/arrange/ordering.ts` has decided and `paint.ts`/`settle.ts` have applied so far —
+      so a consumer that needs "what row is next, on screen" reads it rather than re-deriving an
+      order of its own from `source`'s line numbering, which is an ADDRESS, not a screen position,
+      and drifts from the DOM the instant an optimistic settle has fired even once for a view.
+
+      THE FAILURE THIS CLASS EXISTS TO CATCH: a consumer computing or caching its OWN idea of row
+      order instead of reading the one this class publishes. Three consumers were found to disagree
+      before this class existed — `paint`/`settle` (correct, DOM-driven), `app/index.html`'s vim
+      motions (arithmetic on `source.split("\n")`, wrong the instant a settle has moved a row), and
+      the file-line-index addressing every resolver, `applyEdit` and the write path correctly still
+      use for CONTENT (a different, legitimate concern this class does not touch). Any FOURTH
+      consumer that re-derives adjacency from `source` rather than calling `visualLineOrder` would be
+      the identical failure recurring.
+    canonical_class: app/present/paint:visualLineOrder
+    status: working

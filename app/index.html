@@ -988,6 +988,7 @@ import { MarkdownIt, startRegistration, startAuthentication } from "/dist/vendor
 // resolve to /app/dist/present.js and 404.
 import {
   paint,
+  visualLineOrder,
   applyEdit,
   boundaryLine,
   classifyLine,
@@ -1052,7 +1053,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=9a1c55ddc4";
+} from "/dist/present.js?v=1a7fbbd272";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3285,23 +3286,45 @@ document.addEventListener("keydown", (e) => {
     // same string — one expression, one answer, and the two can no longer disagree about what the
     // operator is looking at.
     const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);
-    const lastIndex = Math.max(0, source.split("\n").length - 1);
     const current = focus.lineIndex ?? 0;
-    // `focus.column` IS THE FOURTH ARGUMENT FOR THE SAME REASON `current` IS THE SECOND: the cursor
-    // has two axes now and `mode.handleKey` decides `i`/`a` relative to both. It reads the column
-    // and never writes it — every column that lands back on the surface goes through
+    // ── `j`/`k`/`gg`/`G` MOVE THROUGH THE ROWS AS THEY ARE PAINTED, NOT THROUGH `source`'S OWN
+    // LINE NUMBERS — the census this fixes: `settleRow` (app/present/paint.ts) moves a row's DOM
+    // element the instant its placement is armed, and that move is COSMETIC ONLY — it never edits
+    // `source`, which the real reorder only catches up to once the engine's own next cycle answers.
+    // So "line index N" and "the row painted Nth" are two different facts the moment any settle has
+    // fired for this view, and only the DOM's own current child order is the one the operator is
+    // looking at. `visualLineOrder` (app/present/paint.ts) reads that order back — the MATERIALISED
+    // CONSEQUENCE of every placement `paint`/`settleRow` have applied so far — rather than this
+    // handler recomputing an order of its own from `source.split("\n")`, which is the exact second
+    // definition the census this fixes is about. `current`, above, stays the REAL file line index:
+    // every OTHER branch below (`x`, `>`/`<`, `w`/`b`/`e`, `0`/`$`) addresses CONTENT by that index,
+    // which `source.split("\n")[current]` still answers correctly regardless of screen position —
+    // only the MOVE motions' own arithmetic runs over the visual order instead.
+    const visualOrder = visualLineOrder($("viewBody"));
+    const visualPos = visualOrder.indexOf(current);
+    const visualCurrent = visualPos === -1 ? 0 : visualPos;
+    const visualLastIndex = Math.max(0, visualOrder.length - 1);
+    // `focus.column` IS THE FOURTH ARGUMENT FOR THE SAME REASON `visualCurrent` IS THE SECOND: the
+    // cursor has two axes now and `mode.handleKey` decides `i`/`a` relative to both. It reads the
+    // column and never writes it — every column that lands back on the surface goes through
     // `focus.moveColumn`/`focus.focus` below.
-    const outcome = mode.handleKey(e.key, current, lastIndex, focus.column);
+    const outcome = mode.handleKey(e.key, visualCurrent, visualLastIndex, focus.column);
     if (!outcome.handled) return;
     e.preventDefault();
     // THE PAINTER STILL DOES NOT DECIDE. `mode.handleKey` is the one place a keystroke becomes a
-    // line index, a mode change, a new-line request or a checkbox toggle (app/present/motions.ts);
+    // position, a mode change, a new-line request or a checkbox toggle (app/present/motions.ts);
     // this is the thin DOM wiring the brief asks for — apply the outcome, repaint.
     // `repaintCurrentView`, not `paintView`: the latter forces NORMAL on the way in, which would
     // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
     const effect = outcome.effect;
     if (effect.kind === "move") {
-      focus.focus(effect.lineIndex, source, 0, v.id);
+      // `effect.lineIndex` IS A POSITION WITHIN `visualOrder` HERE, NOT A FILE LINE INDEX —
+      // `mode.handleKey` clamped it against `visualLastIndex`, above, so it has to be translated
+      // back through the SAME order it was computed against. `?? current` is the honest fallback
+      // for the one case that order cannot name a target (an empty view, or the selected row
+      // missing its own `data-line-index`): stay on the line the cursor already holds rather than
+      // jump to a raw number that would name the wrong content.
+      focus.focus(visualOrder[effect.lineIndex] ?? current, source, 0, v.id);
       repaintCurrentView();
     } else if (effect.kind === "boundary") {
       // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)

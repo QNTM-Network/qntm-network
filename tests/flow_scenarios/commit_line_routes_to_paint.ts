@@ -81,6 +81,12 @@ class StubElement {
   textContent = "";
   readonly style: Record<string, string> = {};
   readonly children: StubElement[] = [];
+  // `data-line-index` (`app/present/paint.ts`'s `markLineIndex`) is now written UNCONDITIONALLY,
+  // on every row this scenario's `paint()` call builds — see `paint.ts`'s own header for why: it
+  // is a fact about `source` alone, not about a supplied view id, unlike `data-instance`
+  // (`stampInstance`), which stays conditional and needs no entry here because it never touches
+  // this object when `deps.view` is absent, as it is in this scenario.
+  readonly dataset: Record<string, string> = {};
   readonly #listeners = new Map<string, Listener[]>();
 
   constructor(tagName: string) {

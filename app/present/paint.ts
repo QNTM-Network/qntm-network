@@ -1316,6 +1316,19 @@ export function paint(
   };
 
   /**
+   * `data-line-index` on `element` — THE ONE FACT `visualLineOrder` (this module's own export,
+   * below) READS BACK, and the seam that makes the DOM's own current child order legible to a
+   * caller outside this file without that caller re-deriving anything this function already
+   * decided. Unconditional, unlike `stampInstance`: a line index needs no view to namespace it,
+   * it is a fact about THIS paint's own `source` alone, and every row this function ever builds
+   * has one — see `visualLineOrder`'s own header for why this is the seam a caller reads rather
+   * than a second copy of "what order are the rows in" computed from `source.split("\n")` again.
+   */
+  const markLineIndex = (element: HTMLElement, lineIndex: number): void => {
+    element.dataset.lineIndex = String(lineIndex);
+  };
+
+  /**
    * Paint the whole view again, from a source string.
    *
    * The focus surface reacts by REPAINTING rather than by mutating one element in place, and that
@@ -1410,6 +1423,7 @@ export function paint(
     if (focus === undefined) {
       const text = rawText(lineSource);
       stampInstance(text, lineIndex);
+      markLineIndex(text, lineIndex);
       body.append(text);
       rowsByLineIndex.set(lineIndex, text);
       return;
@@ -1421,6 +1435,7 @@ export function paint(
       // because the keyboard has reached it.
       focusable(line, lineIndex);
       stampInstance(line, lineIndex);
+      markLineIndex(line, lineIndex);
       body.append(line);
       rowsByLineIndex.set(lineIndex, line);
       return;
@@ -1432,6 +1447,7 @@ export function paint(
     // "file" one line long: tests/present-focus.test.mjs caught it in section 2.
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
     stampInstance(input, lineIndex);
+    markLineIndex(input, lineIndex);
     // APPEND BEFORE FOCUS. `focus()` on an element that is not in the document does nothing, so
     // the order here is what puts the cursor in the line a person just clicked.
     body.append(input);
@@ -1668,6 +1684,7 @@ export function paint(
       // click the box to tick it.
       focusable(span, index);
       stampInstance(row, index);
+      markLineIndex(row, index);
       row.append(box, span);
       body.append(row);
       rowsByLineIndex.set(index, row);
@@ -1697,6 +1714,7 @@ export function paint(
       el.innerHTML = renderTokens(shape.text, headingTagsRendition, headingStampRendition, headingRender);
       focusable(el, index);
       stampInstance(el, index);
+      markLineIndex(el, index);
       body.append(el);
       rowsByLineIndex.set(index, el);
       predictableByLineIndex.set(index, {
@@ -1726,6 +1744,7 @@ export function paint(
     div.innerHTML = renderTokens(shape.source, proseTagsRendition, proseStampRendition, proseRender);
     focusable(div, index);
     stampInstance(div, index);
+    markLineIndex(div, index);
     body.append(div);
     rowsByLineIndex.set(index, div);
     predictableByLineIndex.set(index, {
@@ -1887,4 +1906,54 @@ export function paint(
   if (deps.view !== undefined) {
     deps.rows?.seat(deps.view, source, focus?.lineIndex ?? null);
   }
+}
+
+/**
+ * THE FILE LINE INDEX OF EVERY PRINTED ROW, IN THE ORDER `body` HOLDS THEM RIGHT NOW — the ONE
+ * place a caller outside this module may ask "what order are the rows in" without recomputing an
+ * order this file already decided.
+ *
+ * ── WHY THIS EXISTS: THE CENSUS THAT MOTIVATED IT ──
+ *
+ * There are (at least) two representations of "row order" in this bundle, and until this function
+ * existed only one of them was published in a form anything outside `paint.ts` could read.
+ * `source.split("\n")`'s own line numbering is an ADDRESS — stable, and every resolver, every
+ * `SourceEdit`, and the write path itself correctly speak nothing else — but it is NOT a claim
+ * about screen position. `settleRow`, above, moves ONE row's element via `insertBefore` on every
+ * repaint a live `SettleSurface` entry survives for (see `settle.ts`'s own header) — a COSMETIC
+ * move that repositions `body`'s children and never touches `source`, because the real reorder of
+ * the text only happens once the engine's own next cycle sends a new projection. The instant that
+ * has fired even once for a view, "line index N" and "the row painted Nth" are two different
+ * facts, and the DOM — `body`'s own current children — is the only place the second one is ever
+ * written down.
+ *
+ * A caller that needs "what row is next, on screen" (vim's `j`/`k`/`gg`/`G` — see
+ * `app/index.html`'s keydown handler) must not re-derive that from `source`, the same drift this
+ * function exists to close: `source`'s line numbering is exactly the representation `settleRow`
+ * moves the DOM AWAY from. It must not re-implement `orderingPlacementFor`'s rule either — that
+ * would be a SECOND, independent claim about order, liable to disagree with what `paint`/
+ * `settleRow` actually painted the instant either one changes. This function is neither: it reads
+ * back the one fact `markLineIndex` (above) already wrote onto every row this function built,
+ * which is to say it reads the MATERIALISED CONSEQUENCE of every placement `paint`/`settleRow`
+ * have applied so far, exactly as painted — never a rule, never a recomputation.
+ *
+ * `body` IS TAKEN AS AN ARGUMENT, NOT CLOSED OVER, so this can be called at any point AFTER a
+ * `paint()` call has returned — the DOM it reads is a plain fact about the page at the moment of
+ * the call, not a snapshot this module holds an opinion about.
+ *
+ * Skips any child with no `data-line-index` — the draft row (`draftInput`, a genuinely new,
+ * uncommitted line with no address in `source` yet) and the "click below the last line" target
+ * (`paintDraft`'s own trailing `div.newline`) are both real children of `body` that are not rows,
+ * and neither ever gets the attribute `markLineIndex` sets — see this file's own row-building
+ * loop, which calls it on every branch that also calls `rowsByLineIndex.set`, and no other.
+ */
+export function visualLineOrder(body: HTMLElement): readonly number[] {
+  const order: number[] = [];
+  for (const child of Array.from(body.children) as HTMLElement[]) {
+    const raw = child.dataset?.lineIndex;
+    if (raw !== undefined) {
+      order.push(Number(raw));
+    }
+  }
+  return order;
 }
