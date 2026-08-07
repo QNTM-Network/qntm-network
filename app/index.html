@@ -2692,6 +2692,27 @@ async function commitLine(view, commit) {
   if (commit.kind === "set-line") {
     settle.supersede(commit.source, view.id, commit.lineIndex);
   }
+  // WHATEVER IS STILL QUEUED FOR THIS PATH IS NOW STALE, AND MUST NOT SURVIVE TO BE INSTALLED OVER
+  // THE PLACEMENT THIS COMMIT IS ABOUT TO ARM — this is the OTHER discard `settle.ts`'s "TWO
+  // CAPTURES IN A ROW" header did not have to name, because it lives on this side of the wire, not
+  // inside `SettleSurface`. A projection can only ever be sitting in `queued` (`app/present/
+  // queue.ts`) because an EARLIER write's own cycle answered while a line here was open — and
+  // "open" always means "before this edit", since the edit this function is committing right now
+  // has not even reached `writeFile` yet, let alone a cycle. So anything queued for `view.path` at
+  // this instant necessarily describes the file as it stood BEFORE this line existed, and installing
+  // it later — the document-level keydown handler's own "third drain point" (`drainPainted`) runs
+  // UNCONDITIONALLY on literally the same Enter keystroke that just committed this row, and again on
+  // every ordinary keystroke after — would silently overwrite `graphData` with that older answer,
+  // discarding the placement just armed below before the operator ever sees it (or, on a later
+  // keystroke, after `settle.take` has already found and painted it once). MEASURED: reproduced
+  // through the real page — a queued projection left standing here, for a wholly unrelated earlier
+  // write, made a freshly captured row vanish on this same keystroke, then reappear unsorted, at
+  // plain file order, the moment its OWN write's answer next landed — exactly the operator's own
+  // report, "correct only once the engine's projection arrives seconds later". Dropping loses
+  // nothing: whatever that older projection knew (a stamp, a resort) is not information THIS commit
+  // depends on, and it is superseded for good the moment this write's own cycle answers, which
+  // `queued.offer`'s own `generated_at` ordering already guarantees reaches the screen instead.
+  queued.drop(view.path);
   // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST. See `armSettle`
   // and `armPredict` (resolve.ts) for why the two differ — an un-rearmed placement keeps describing
   // a still-correct claim, whereas a stale predict arm gets reconciled by a LATER, unrelated
