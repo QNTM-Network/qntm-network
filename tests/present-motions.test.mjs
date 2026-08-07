@@ -104,6 +104,54 @@ describe("2. ModeSurface starts NORMAL and j/k move by the pending count", () =>
   });
 });
 
+// ArrowDown/ArrowUp — the operator's own gesture ("selecting up and down"), added alongside j/k
+// rather than instead of them, the same second-name-one-motion shape `app/shell/drawer.ts`'s own
+// `drawerKey` already commits to for the picker's row list. Before this, `handleKey("ArrowDown", …)`
+// fell to the `default` case and reported `handled: false` — proven live: pressed in the operator's
+// real "Admin" view, `j` moved the selection and `ArrowDown` did nothing at all. This section proves
+// the SAME arithmetic j/k already have (count composition, clamping) now also answers to the arrow
+// names, not a second, parallel implementation of it.
+describe("2b. ArrowDown/ArrowUp are the same motion as j/k, under a second name", () => {
+  test("ArrowDown moves down by one with no count, identically to j", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("ArrowDown", 3, 10);
+    assert.equal(outcome.handled, true);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 4 });
+  });
+
+  test("ArrowUp moves up by one with no count, identically to k", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("ArrowUp", 3, 10);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 2 });
+  });
+
+  test("ArrowDown clamps at the last line and does not wrap to the first", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("ArrowDown", 10, 10);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 10 });
+  });
+
+  test("ArrowUp clamps at the first line and does not wrap to the last", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("ArrowUp", 0, 10);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 0 });
+  });
+
+  test("a pending count composes with ArrowDown exactly as it does with j", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey("ArrowDown", 5, 100);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 8 });
+  });
+
+  test("a pending count composes with ArrowUp exactly as it does with k", () => {
+    const mode = new ModeSurface();
+    mode.handleKey("3", 0, 100);
+    const outcome = mode.handleKey("ArrowUp", 20, 100);
+    assert.deepEqual(outcome.effect, { kind: "move", lineIndex: 17 });
+  });
+});
+
 describe("3. a count prefix applies once and then clears", () => {
   test("12j moves twelve lines and clears the count", () => {
     const mode = new ModeSurface();

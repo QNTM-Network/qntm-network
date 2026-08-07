@@ -3369,11 +3369,13 @@ var ModeSurface = class {
     this.#count = "";
     switch (key) {
       case "j":
+      case "ArrowDown":
         return {
           handled: true,
           effect: { kind: "move", lineIndex: clampLine(current + (pending ?? 1), lastIndex) }
         };
       case "k":
+      case "ArrowUp":
         return {
           handled: true,
           effect: { kind: "move", lineIndex: clampLine(current - (pending ?? 1), lastIndex) }
