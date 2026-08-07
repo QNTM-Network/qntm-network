@@ -9344,6 +9344,23 @@
       "titleStyles": []
     },
     "compositionSource": "engine-fallback",
+    "tagOrder": {
+      "canonicalOrder": [
+        "#project",
+        "#outcome",
+        "#habit",
+        "#task",
+        "#routine",
+        "#work",
+        "#personal",
+        "#health",
+        "#next",
+        "#parallel",
+        "#waiting-for"
+      ],
+      "unrankedPolicy": "append_stable"
+    },
+    "tagOrderSource": "engine-literal",
     "priorityRank": {
       "urgent": 4,
       "high": 3,

@@ -1206,6 +1206,66 @@ function appendPrediction(row: HTMLElement, text: string, kind: "pending" | "wit
 }
 
 /**
+ * Rebuild ONE row's content-bearing element from `fullText` — the byte-exact predicted line
+ * (`RowPrediction.fullText`, `predict.ts`) — with the changed token (`delta`) marked as a pending
+ * claim IN PLACE, rather than the row keeping its own stale content with `delta` appended after it.
+ * This is the fix for the operator's own report (2026-08-07): "it added it at end, not replaced
+ * task" — `appendPrediction` alone can only ever ADD a decoration after a row's existing content,
+ * which is correct for a genuine addition and was wrong for a same-family retype swap.
+ *
+ * Returns `true` when the delta's own rendered chip was found and marked; `false` when it was not
+ * (tags rendition resolved `"raw"` for this row, or `renderTokens`'s own `intact` fallback dropped
+ * every chip because a hostile line broke markdown-it's inline parse) — a caller falls back to
+ * `appendPrediction` rather than silently showing nothing, the same "abstain visibly" posture this
+ * whole predict axis already takes for every other refusal.
+ *
+ * WHY A STRING REPLACE OF THE DELTA'S OWN CHIP MARKUP, NOT A SECOND PARAMETER ON `renderTokens`
+ * ITSELF: `renderTokens` already wraps EVERY tag span in `CHIP_OPEN`/`CHIP_CLOSE`, byte-identically
+ * for every tag on the predicted line including the new one — the ONE difference a "pending" claim
+ * needs is that SINGLE chip's own class, so re-deriving the row's whole HTML from the predicted
+ * text and then patching one substring is the smaller, more legible change over widening
+ * `renderTokens`'s own injection engine for a single caller.
+ */
+function replacePredictedSwap(
+  entry: {
+    readonly contentEl: HTMLElement;
+    readonly tagsRendition: Rendition;
+    readonly stampRendition: Rendition;
+    readonly render: (markdown: string) => string;
+  },
+  fullText: string,
+  delta: string,
+  kind: "pending" | "withdrawn",
+): boolean {
+  const shape = classifyLine(fullText);
+  const rebuiltSource =
+    shape.kind === "checkbox"
+      ? shape.tail
+      : shape.kind === "heading"
+        ? shape.text
+        : shape.kind === "prose"
+          ? shape.source
+          : null; // "blank" — a predicted swap never targets a blank line
+  if (rebuiltSource === null) return false;
+  const html = renderTokens(rebuiltSource, entry.tagsRendition, entry.stampRendition, entry.render);
+  const oldChip = CHIP_OPEN + delta + CHIP_CLOSE;
+  const chipIndex = html.indexOf(oldChip);
+  if (chipIndex === -1) return false;
+  const classes = [PREDICT_CLASS];
+  if (kind === "withdrawn") classes.push(PREDICT_WITHDRAWN_CLASS);
+  const titleAttr =
+    kind === "withdrawn" ? "predicted — the engine answered differently" : "predicted — not yet confirmed by the engine";
+  const newChip = `<span class="${classes.join(" ")}" title="${titleAttr}">${delta}</span>`;
+  entry.contentEl.innerHTML = html.slice(0, chipIndex) + newChip + html.slice(chipIndex + oldChip.length);
+  // ANIMATION IS INTENTIONALLY NOT REPRODUCED HERE. `appendPrediction`'s rise-in is a JS-driven
+  // rAF start/clear dance against a LIVE element reference it still holds; this function assigns
+  // `innerHTML` as a plain string, so there is no live prediction node left to animate afterward.
+  // A caller that wants the rise-in for a swap specifically is separately-scoped follow-up work —
+  // named here rather than silently absent.
+  return true;
+}
+
+/**
  * Paint a view's markdown into `body`.
  *
  * The DOM this produces for a silent context is byte-identical to what `paintView`
@@ -1470,6 +1530,19 @@ export function paint(
   // `instruction.placement.beforeLineIndex`) and nothing else reads it.
   const rowsByLineIndex = new Map<number, HTMLElement>();
 
+  // EVERY ROW'S OWN CONTENT-BEARING ELEMENT AND THE RENDITION IT WAS BUILT WITH — what a live
+  // `RowPrediction.fullText` (predict.ts) needs to show the row's BYTE-EXACT predicted line instead
+  // of decorating its stale, already-built content with an appended badge. `contentEl` is the SAME
+  // element `renderTokens` already wrote `innerHTML` onto for this row (the checkbox shape's own
+  // `span`, or the row itself for a heading/prose line) — never `rowsByLineIndex`'s own value for a
+  // checkbox row, which is the `<label>` wrapping BOTH the toggle and this span. Populated at build
+  // time, alongside `rowsByLineIndex`, because the tags/stamp rendition and the markdown-it render
+  // callback a rebuild needs are only in scope inside this very loop.
+  const predictableByLineIndex = new Map<
+    number,
+    { readonly contentEl: HTMLElement; readonly tagsRendition: Rendition; readonly stampRendition: Rendition; readonly render: (markdown: string) => string }
+  >();
+
   source.split("\n").forEach((line, index) => {
     // A ROW BUILT BY A SUPERSEDED FRAME CLOSES OVER A SOURCE THE PAGE NO LONGER HAS, and its
     // affordances POST the whole file. `forEach` cannot be broken out of, so every remaining
@@ -1586,12 +1659,10 @@ export function paint(
       // asked on every line the painter reaches, so a declaration that never changes the DOM is
       // still a declaration that was READ — the difference between a key with a reader and a key
       // that happens to agree with the default.
-      span.innerHTML = renderTokens(
-        shape.tail,
-        cascade.resolve("tags").rendition,
-        cascade.resolve("stamp").rendition,
-        (markdown) => deps.markdown.renderInline(markdown),
-      );
+      const checkboxTagsRendition = cascade.resolve("tags").rendition;
+      const checkboxStampRendition = cascade.resolve("stamp").rendition;
+      const checkboxRender = (markdown: string): string => deps.markdown.renderInline(markdown);
+      span.innerHTML = renderTokens(shape.tail, checkboxTagsRendition, checkboxStampRendition, checkboxRender);
       // THE TEXT IS THE CURSOR TARGET AND THE BOX IS THE TOGGLE. Two affordances on one line,
       // kept apart by which element carries which listener: click the words to read the source,
       // click the box to tick it.
@@ -1600,6 +1671,12 @@ export function paint(
       row.append(box, span);
       body.append(row);
       rowsByLineIndex.set(index, row);
+      predictableByLineIndex.set(index, {
+        contentEl: span,
+        tagsRendition: checkboxTagsRendition,
+        stampRendition: checkboxStampRendition,
+        render: checkboxRender,
+      });
       return;
     }
 
@@ -1614,16 +1691,20 @@ export function paint(
       // The heading's OWN `#`es are not tags and cannot be: `classifyLine` has already taken them
       // off, and the grammar would refuse them anyway (`#` then a space is not a tag body). What
       // is left is the heading's text, which may carry tags like any other line.
-      el.innerHTML = renderTokens(
-        shape.text,
-        cascade.resolve("tags").rendition,
-        cascade.resolve("stamp").rendition,
-        (markdown) => deps.markdown.renderInline(markdown),
-      );
+      const headingTagsRendition = cascade.resolve("tags").rendition;
+      const headingStampRendition = cascade.resolve("stamp").rendition;
+      const headingRender = (markdown: string): string => deps.markdown.renderInline(markdown);
+      el.innerHTML = renderTokens(shape.text, headingTagsRendition, headingStampRendition, headingRender);
       focusable(el, index);
       stampInstance(el, index);
       body.append(el);
       rowsByLineIndex.set(index, el);
+      predictableByLineIndex.set(index, {
+        contentEl: el,
+        tagsRendition: headingTagsRendition,
+        stampRendition: headingStampRendition,
+        render: headingRender,
+      });
       return;
     }
 
@@ -1639,16 +1720,20 @@ export function paint(
     // not a task and lands here. It is also the branch where the renderer sometimes refuses the
     // chip — four spaces of indent is an indented code block to markdown-it — which is what
     // renderTags's all-or-nothing fallback is for.
-    div.innerHTML = renderTokens(
-      shape.source,
-      cascade.resolve("tags").rendition,
-      cascade.resolve("stamp").rendition,
-      (markdown) => deps.markdown.render(markdown),
-    );
+    const proseTagsRendition = cascade.resolve("tags").rendition;
+    const proseStampRendition = cascade.resolve("stamp").rendition;
+    const proseRender = (markdown: string): string => deps.markdown.render(markdown);
+    div.innerHTML = renderTokens(shape.source, proseTagsRendition, proseStampRendition, proseRender);
     focusable(div, index);
     stampInstance(div, index);
     body.append(div);
     rowsByLineIndex.set(index, div);
+    predictableByLineIndex.set(index, {
+      contentEl: div,
+      tagsRendition: proseTagsRendition,
+      stampRendition: proseStampRendition,
+      render: proseRender,
+    });
   });
 
   // NOTHING BELOW THIS LINE MAY RUN FOR A FRAME THAT HAS BEEN REPLACED. The trailing draft row and
@@ -1727,7 +1812,18 @@ export function paint(
     if (instruction !== null) {
       for (const prediction of instruction.predictions) {
         const el = rowsByLineIndex.get(prediction.lineIndex);
-        if (el !== undefined) {
+        if (el === undefined) continue;
+        // `fullText` — a SWAP claim (`RowPrediction`'s own header) — is shown IN PLACE, at the
+        // byte-exact position the predicted line puts it, rather than appended after the row's own
+        // stale content. Falls back to the ordinary append when there is no `fullText` (an
+        // append-only claim, e.g. `stamp-created-at-on-task`) or when the in-place rebuild could
+        // not find the delta's own chip to mark (see `replacePredictedSwap`'s own header).
+        const predictable = prediction.fullText === undefined ? undefined : predictableByLineIndex.get(prediction.lineIndex);
+        const replaced =
+          predictable !== undefined && prediction.fullText !== undefined
+            ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending")
+            : false;
+        if (!replaced) {
           appendPrediction(el, prediction.text, "pending", instruction.animate);
         }
       }

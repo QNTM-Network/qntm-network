@@ -56,8 +56,9 @@ import type { EdgeStep, FieldValue, Qualifier } from "./select/qualification.js"
 import { qualifierNeedsClock, qualifierNeedsGraph } from "./select/qualification.js";
 import { matchesQualifier } from "./select/membership.js";
 import type { ResolvedFields } from "./select/membership.js";
-import { tagSpans } from "./express/rendition.js";
+import { markerSpans, tagSpans } from "./express/rendition.js";
 import type { TagSpan } from "./express/rendition.js";
+import type { TagOrder } from "./resolutiontable.js";
 
 /** Mirrors `compile-rules.mjs`'s `normaliseWhen` output exactly — the closed predicate grammar a
  * published rule's `when:` was reduced to. */
@@ -759,6 +760,30 @@ function formatMarkerValue(value: FieldValue): string {
 }
 
 /**
+ * `OrderTagsActionDispatcher` (`apps/qntm-md/src/qntm_md/capabilities/decision_tables/runtime/
+ * dispatchers/order_tags.py`), transcribed exactly: partition `tags` into RANKED (a member of
+ * `tagOrder.canonicalOrder`) and UNRANKED, stable-sort the ranked pool by its position in
+ * `canonicalOrder`, then concatenate per `unrankedPolicy`. `Array.prototype.sort` has been stable
+ * since ES2019 (every runtime this app ships to), so a tie — two tags the input never actually
+ * produces, since a tag string cannot repeat within one node's own tag list — would preserve
+ * relative order the same way Python's `list.sort` does; this is not relied upon, only preserved.
+ *
+ * `"reject"` — the engine raises when an unranked item is present under that policy. This function
+ * has no exception to raise into (a caller mid-render, not mid-parse), so it degrades to the same
+ * answer `"append_stable"` gives; `ENGINE_LITERAL_TAG_ORDER` never declares `"reject"` today, so
+ * this branch is unreached in production and exists only so the type's third member has a defined,
+ * non-throwing answer rather than a silent fallthrough.
+ */
+export function orderTags(tags: readonly string[], tagOrder: TagOrder): readonly string[] {
+  const index = new Map(tagOrder.canonicalOrder.map((token, i) => [token, i]));
+  const ranked = tags.filter((t) => index.has(t));
+  const unranked = tags.filter((t) => !index.has(t));
+  ranked.sort((a, b) => (index.get(a) ?? 0) - (index.get(b) ?? 0));
+  if (tagOrder.unrankedPolicy === "prepend_stable") return [...unranked, ...ranked];
+  return [...ranked, ...unranked];
+}
+
+/**
  * Render every effect `applyRules` produced onto `line`, or refuse — see `RuleRenderAbstention`.
  * ALL-OR-NOTHING: if ANY effect cannot be rendered, NONE of the others are written either, so a
  * caller never shows a line half-corrected — the same posture `readFindClause` (qualification.ts)
@@ -773,6 +798,15 @@ function formatMarkerValue(value: FieldValue): string {
  * `created_at`). Three separate maps, not one merged table, because that is exactly the shape
  * `qualification.tokens`/`RulesLanguage.fieldMarkers` are already published in — this function
  * reads, it does not re-key.
+ *
+ * `tagOrder` is `resolution.tagOrder` (`TagOrder`'s own header) — OPTIONAL, and only a `retype`
+ * effect ever consults it (2026-08-07). `undefined` (an older served declaration, or a caller —
+ * `tests/present-rules-render.test.mjs`'s pre-existing fixtures among them — that never had a
+ * reason to know about tag order) degrades to the SAME single-tag behaviour this function always
+ * had: a `retype` still lands its token correctly relative to markers/chrome (see `tagsCellSpan`
+ * below — that boundary needs no declared order, only the closed grammar `tagSpans`/`markerSpans`
+ * already read), it just cannot promise a byte-exact position relative to OTHER coexisting tags
+ * without knowing which one outranks which.
  */
 export function renderRuleEffects(
   line: string,
@@ -780,6 +814,7 @@ export function renderRuleEffects(
   nodeTypeTokens: Readonly<Record<string, FieldValue>>,
   fieldTokens: Readonly<Record<string, Readonly<Record<string, FieldValue>>>>,
   fieldMarkers: Readonly<Record<string, FieldMarker>>,
+  tagOrder?: TagOrder,
 ): RuleRenderOutcome {
   if (effects.length === 0) return { kind: "unchanged" };
 
@@ -798,16 +833,67 @@ export function renderRuleEffects(
       const token = byValue.get(effect.to);
       if (token === undefined) return { kind: "abstains", because: "unrenderable-effect", effect };
       const existingSpan = tagSpanFromFamily(text, nodeTypeTokens);
-      if (existingSpan === undefined) {
-        text += ` ${token}`;
+      if (existingSpan !== undefined && existingSpan.text === token) continue; // already spelled
+
+      // THE "tags" CELL BOUNDARY — every `#`-tag up to (not including) the first marker, since
+      // `resolution.composition`'s declared tail order (stamp, date, tags, markers, chrome) puts
+      // every tag BEFORE any marker or chrome. Needs no declared composition to compute here — a
+      // stamp (`[[qntm:N]]`) matches neither `tagSpans` nor `markerSpans`, so whatever is already
+      // earlier in `text` than the first tag (a title, a stamp) stays untouched either way; only
+      // the grammar's own closed regexes are consulted.
+      const boundary = markerSpans(text)[0]?.start ?? text.length;
+      const cellSpans = tagSpans(text).filter((s) => s.start < boundary);
+
+      if (cellSpans.length === 0) {
+        // NOTHING TO ORDER AGAINST — the new token is the only tag this line will carry, so where
+        // it goes needs no `tagOrder` at all: immediately before the first marker/chrome, never
+        // past it. THIS IS THE FIX (2026-08-07): every version of this branch before it — #149
+        // included — wrote `text += ' ' + token'` unconditionally, landing a fresh type tag AFTER a
+        // trailing marker the engine's own declared composition puts it BEFORE. Proven wrong
+        // against a live engine render (`scripts/retype-agreement.py`), not asserted: a bare
+        // "Renew passport 📅 2026-09-01" retyped to `#outcome` rendered
+        // "Renew passport 📅 2026-09-01 #outcome" here and "Renew passport #outcome 📅 2026-09-01"
+        // in the engine.
+        text =
+          boundary === text.length
+            ? `${text} ${token}`
+            : `${text.slice(0, boundary)}${token} ${text.slice(boundary)}`;
         deltaParts.push(token);
         continue;
       }
-      if (existingSpan.text === token) continue; // already spelled — nothing to add
-      // THE SWAP — see this function's own header ("EXCEPT ... A retype EFFECT'S OWN NODE-TYPE
-      // TOKEN") for why `retype` alone replaces rather than refuses. Splices the new token in at
-      // exactly the old one's offset; nothing else on the line moves.
-      text = text.slice(0, existingSpan.start) + token + text.slice(existingSpan.end);
+
+      if (existingSpan !== undefined && tagOrder === undefined) {
+        // NO DECLARED `tagOrder` TO CONSULT, but a same-family token was already on the line — the
+        // ORIGINAL (2026-08-07, #149) swap, byte-identical: splice the new token in at exactly the
+        // old one's own offset, touching nothing else in the cell. This is what every existing
+        // caller/test that never had a `tagOrder` to pass still gets.
+        text = text.slice(0, existingSpan.start) + token + text.slice(existingSpan.end);
+        deltaParts.push(token);
+        continue;
+      }
+      if (tagOrder === undefined) {
+        // Coexisting tags, none of them same-family (a bare/default-typed line carrying a domain
+        // tag, say), and no declared order to place the new one against them — append at the
+        // cell's own end rather than guess a rank. A caller that HAS a `tagOrder` never reaches
+        // this branch; see `orderTags`'s own header for the one that does.
+        const cellEnd = cellSpans[cellSpans.length - 1]?.end ?? boundary;
+        text = text.slice(0, cellEnd) + ` ${token}` + text.slice(cellEnd);
+        deltaParts.push(token);
+        continue;
+      }
+
+      // THE FULL ANSWER — every existing tag in this cell (minus the old same-family token, if
+      // there was one), plus the new token, reordered via the SAME declared `canonicalOrder` /
+      // `unrankedPolicy` the engine's own `OrderTagsActionDispatcher` applies, then spliced back
+      // over exactly the cell's own span. `tests/retype-agreement.test.mjs` proves this branch
+      // byte-identical to a live engine render for EVERY declared node type, not a sample.
+      const cellStart = cellSpans[0]?.start ?? boundary;
+      const cellEnd = cellSpans[cellSpans.length - 1]?.end ?? boundary;
+      const keep = cellSpans
+        .filter((s) => existingSpan === undefined || s.start !== existingSpan.start)
+        .map((s) => s.text);
+      const reordered = orderTags([...keep, token], tagOrder);
+      text = text.slice(0, cellStart) + reordered.join(" ") + text.slice(cellEnd);
       deltaParts.push(token);
       continue;
     }

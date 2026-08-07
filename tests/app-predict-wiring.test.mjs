@@ -68,9 +68,31 @@ const TODAY = todayFor(Date.now(), SERVED_DECLARATION.resolution.dayBoundary);
 assert.equal(TODAY.kind, "answer", "fixture precondition — the real config's day boundary must resolve");
 const STAMP_TEXT = `🆕 ${TODAY.answer.logicalDate}`;
 
-/** `#viewBody`'s own chip(s), anywhere under it — `.row-prediction`, including its withdrawn form. */
+/**
+ * `#viewBody`'s own chip(s), anywhere under it — `.row-prediction`, including its withdrawn form.
+ *
+ * TWO SHAPES, BOTH READ (2026-08-07). An APPEND-ONLY claim (`stamp-created-at-on-task`, or a retype
+ * with nothing already on the line to swap) is still a real, appended DOM child, found by `walk`
+ * exactly as before. A SWAP claim (`paint.ts`'s `replacePredictedSwap`) is marked INSIDE a content
+ * element's own `innerHTML` STRING, at the position the superseded token occupied — never appended
+ * — so `walk`'s `.children` traversal cannot see it: this fixture's mock DOM stores an assigned
+ * `innerHTML` as an opaque string, never parsed into real child nodes (`app-html-page.mjs`'s own
+ * `_html`/`_text` split). Reading that string directly is not a workaround for a test limitation —
+ * a REAL browser's DOM would show both shapes as ordinary elements either way; this mock is simply
+ * more literal about the fact that `innerHTML` is a serialisation, and `chipsIn` reads both
+ * serialisations of the identical claim so a caller never has to know which mechanism produced it.
+ */
 function chipsIn(body) {
-  return walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("row-prediction"));
+  const real = walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("row-prediction"));
+  const embedded = [];
+  const CHIP_RE = /<span class="(row-prediction(?: row-prediction-withdrawn)?)"[^>]*>([^<]*)<\/span>/g;
+  for (const el of [body, ...walk(body)]) {
+    const html = typeof el.innerHTML === "string" ? el.innerHTML : "";
+    for (const match of html.matchAll(CHIP_RE)) {
+      embedded.push({ className: match[1], textContent: match[2] });
+    }
+  }
+  return [...real, ...embedded];
 }
 
 /** A synchronous, non-`ack` POST answer that echoes the posted markdown back — the same shape
@@ -189,7 +211,11 @@ describe("2. THE HEADLINE — he indents a task under a task, and sees the paren
     });
     const instruction = page.__predict().take(BARE_AFTER_CHILD, PROMOTION_VIEW.id);
     assert.notEqual(instruction, null);
-    assert.deepEqual(instruction.predictions, [{ lineIndex: 1, text: "#outcome" }], "the PARENT's row (1), never the committed child's row (2)");
+    assert.deepEqual(
+      instruction.predictions,
+      [{ lineIndex: 1, text: "#outcome", fullText: "- [ ] Ship the launch note #outcome" }],
+      "the PARENT's row (1), never the committed child's row (2) — `fullText` (2026-08-07) carries the whole predicted line so paint.ts can show it byte-exact rather than only the delta",
+    );
     await write;
   });
 
@@ -532,7 +558,11 @@ describe("8. THE OPERATOR'S REAL GESTURE — a #task-tagged parent, indented und
     // THE ARMED PREDICTION — read synchronously, before the write's own answer lands.
     const instruction = page.__predict().take(TAGGED_AFTER_CHILD, PROMOTION_VIEW.id);
     assert.notEqual(instruction, null, "ON UNFIXED CODE: `arm` swallows `conflicting-token-present` and arms nothing here — this is the red assertion");
-    assert.deepEqual(instruction.predictions, [{ lineIndex: 1, text: "#outcome" }]);
+    assert.deepEqual(
+      instruction.predictions,
+      [{ lineIndex: 1, text: "#outcome", fullText: "- [ ] Ship the launch note #outcome" }],
+      "`fullText` (2026-08-07) carries the whole predicted line, byte-identical to `renderRuleEffects`'s own swap — see `RowPrediction`'s own header",
+    );
 
     paint(page, PROMOTION_VIEW, TAGGED_AFTER_CHILD);
     const body = elements.get("viewBody");
@@ -540,6 +570,61 @@ describe("8. THE OPERATOR'S REAL GESTURE — a #task-tagged parent, indented und
     assert.equal(rows.length, 2, "precondition: parent row and child row both painted");
     assert.equal(chipsIn(rows[0]).length, 1, "the tagged parent row must still carry the promotion claim");
     assert.equal(chipsIn(rows[0])[0].textContent, "#outcome");
+
+    // ── THE STRONGER PROOF: IN PLACE, NOT APPENDED ─────────────────────────────────────────────
+    //
+    // `chipsIn` finding one "#outcome" claim is necessary but not sufficient — it would ALSO be
+    // true of the pre-2026-08-08 defect, which appended that exact claim AFTER the row's own STALE
+    // content while `#task` stayed put (the operator's own report: "it added it at end. Not
+    // replaced task."). The row's own content-bearing element (`walk`'s second child under a
+    // checkbox row — `row.append(box, span)`, paint.ts) is where that stale `#task` would still be
+    // read directly, since the mock DOM stores an assigned `innerHTML` as an opaque string never
+    // parsed into real children (`chipsIn`'s own header). Byte-exact: `#task` must be gone from it
+    // entirely, not merely joined by a second claim.
+    const contentSpan = walk(rows[0]).find((el) => el.tagName === "span" && el !== rows[0]);
+    assert.ok(contentSpan, "precondition: the parent row has its own content span");
+    assert.doesNotMatch(
+      contentSpan.innerHTML,
+      /#task/,
+      "THE OLD #task TAG MUST BE GONE FROM THE ROW'S OWN RENDERED CONTENT, not merely joined by a floating '#outcome' badge",
+    );
+    await write;
+  });
+
+  test("MUTATION: disable the in-place swap render — the old #task tag reappears, reproducing the operator's exact report", async () => {
+    // `replacePredictedSwap` (paint.ts) is what turns `fullText` into the row's own byte-exact
+    // content instead of an appended badge. Disabling ONLY the call site that consumes it — nothing
+    // about `renderRuleEffects`'s own (already-correct) swap computation — reproduces the operator's
+    // exact symptom: #task visible, #outcome merely appended beside it. Proves this leg's own new
+    // assertion (above) is not vacuously green.
+    const workDir = makeWorkDir("predict-tagged-parent-inplace-mutation");
+    const mutate = mutatingBundle([
+      'const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;',
+      "const replaced = false;",
+    ])(workDir);
+    const { elements } = installBrowser();
+    globalThis.fetch = echoStub(PROMOTION_VIEW);
+    const page = await importPage(workDir, mutate);
+    page.__applyPresentation(PROMOTION_DECLARATION);
+    page.__setGraphData({ snapshot: { generated_at: "2026-08-07T00:00:00Z", views: [], graph: { nodes: [], edges: [] } } });
+
+    await page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 1, text: "- [ ] Ship the launch note #task", markdown: TAGGED_AFTER_PARENT, source: TAGGED_PARENT_TYPED, kind: "insert-line",
+    });
+    const write = page.commitLine(PROMOTION_VIEW, {
+      lineIndex: 2, text: "    - [ ] Draft the copy #task", markdown: TAGGED_AFTER_CHILD, source: TAGGED_AFTER_PARENT, kind: "insert-line",
+    });
+
+    paint(page, PROMOTION_VIEW, TAGGED_AFTER_CHILD);
+    const body = elements.get("viewBody");
+    const rows = walk(body).filter((el) => el.tagName === "label");
+    const contentSpan = walk(rows[0]).find((el) => el.tagName === "span" && el !== rows[0]);
+    assert.match(
+      contentSpan.innerHTML,
+      /#task/,
+      "MUTANT: with the in-place render disabled, the row's own stale content must still carry #task — this is the RED this leg's fix turns GREEN",
+    );
+    assert.equal(chipsIn(rows[0]).length, 1, "MUTANT: the claim still arrives, but only as a separate appended badge, exactly the operator's report");
     await write;
   });
 
