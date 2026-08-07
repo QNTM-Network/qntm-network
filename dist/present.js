@@ -1875,12 +1875,21 @@ function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText,
     }
     const parentOf2 = parentLineOf(lines, start, end);
     const group = parentOf2.get(lineIndex) ?? null;
+    let anyCandidateUnknown = false;
     for (let at = start; at < end; at += 1) {
       if (at === lineIndex) continue;
       if (!parentOf2.has(at)) continue;
       if (parentOf2.get(at) !== group) continue;
-      if (classifyQualifying(at) !== true) continue;
+      const verdict = classifyQualifying(at);
+      if (verdict === void 0) {
+        anyCandidateUnknown = true;
+        continue;
+      }
+      if (verdict !== true) continue;
       siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
+    if (siblingsRaw.length === 0 && anyCandidateUnknown) {
+      return { kind: "abstains", because: "unclassifiable-siblings" };
     }
   }
   if (beforeTuple === "style-ambiguous" || afterTuple === "style-ambiguous" || siblingsRaw.some((sibling) => sibling.tuple === "style-ambiguous")) {
@@ -2581,6 +2590,10 @@ function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMark
 }
 
 // app/present/graphmatch.ts
+function resolvedQntmId(node) {
+  const raw = node.fields["qntm_id"];
+  return String(raw === void 0 || raw === null ? node.id : raw);
+}
 function candidateFieldsOf(node) {
   return { node_type: node.type, ...node.fields };
 }
@@ -2680,7 +2693,7 @@ function publishedQualifierFor(viewId, sectionId, qualification) {
 function qualifyingClassifierFor(lines, viewId, sectionId, qualification, graph, edgeSourceOf) {
   const qualifier = publishedQualifierFor(viewId, sectionId, qualification);
   if (qualifier === void 0) return void 0;
-  const byId = new Map(graph.nodes.map((node) => [bareId(node.id), node]));
+  const byId = new Map(graph.nodes.map((node) => [bareId(resolvedQntmId(node)), node]));
   return (lineIndex) => {
     const line = lines[lineIndex] ?? "";
     const stamped = stampSpans(line);
@@ -5708,7 +5721,7 @@ function parentCandidateFor(parentLine, parentSection, snapshot, qualification) 
       return { abstain: "graph-not-loaded" };
     }
     const wanted = bareId2(first.id);
-    const node = snapshot.nodes.find((n) => bareId2(n.id) === wanted);
+    const node = snapshot.nodes.find((n) => bareId2(resolvedQntmId(n)) === wanted);
     if (node === void 0) {
       return { abstain: "parent-not-in-graph" };
     }
@@ -6380,6 +6393,7 @@ export {
   resolveOrderingPlacementFor,
   resolveRelativeAnchor,
   resolveWeekEnd,
+  resolvedQntmId,
   rulesSpec,
   runResolvers,
   sectionAt,

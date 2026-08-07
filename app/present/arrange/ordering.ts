@@ -145,6 +145,23 @@
  * own last cycle, never approximated from characters. See that function's own header for the
  * mechanism and `orderingqualify.ts`'s header for why no text-only version can exist. Without the
  * parameter this file's behaviour is unchanged, byte for byte.
+ *
+ * **2026-08-07, "NO" AND "DON'T KNOW" STOPPED SHARING A REPRESENTATION.** The operator's own report,
+ * traced live: a single `o` -> type -> Enter left the row where it was typed, reaching its sorted
+ * slot only once the engine's cycle caught up. Root cause was `orderingqualify.ts`'s node lookup
+ * comparing a stamp against `node.id` (the graph engine's internal UUID) instead of `fields.qntm_id`
+ * (what a `[[qntm:N]]` stamp actually names — `graphmatch.ts`'s `resolvedQntmId`), which made
+ * `classifyQualifying` answer `undefined` for every stamped sibling, not only the genuinely stale
+ * ones. That is fixed at the source. This file's OWN part of the incident: with EVERY sibling
+ * excluded, `siblingsRaw` emptied out to the same shape a genuinely-empty, confidently-decided group
+ * already produces — `beforeLineIndex`/`currentBeforeLineIndex` both `null`, which `arm`'s insert
+ * gate reads as "nothing to place" rather than "could not tell." `classifyQualifying`'s node-lookup
+ * bug is what CAUSED this incident; this file's `null`-for-both-"no" and `null`-for-"don't-know" is
+ * what let it fail SILENTLY rather than loudly, and would let the NEXT unknown (a genuinely stale
+ * graph snapshot, or a qualifier whose one-hop edge type `edgeSourceOfFor` cannot resolve — both
+ * still real, see `orderingqualify.ts`'s own header) do the identical silent thing. `siblingsRaw`
+ * emptying out because EVERY candidate was UNKNOWN now abstains `unclassifiable-siblings` instead
+ * of answering — see that abstention's own header on `OrderingAbstention`.
  */
 
 import { classifyLine, cleanTitleFor } from "../express/rendition.js";
@@ -178,6 +195,18 @@ import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "../resol
  *   NOT-QUALIFYING. Reachable only with `classifyQualifying` supplied AND confidently saying the
  *   EDITED line itself is CONTEXT, not qualifying — `_order_children` (`section_builder.py:319-345`)
  *   never gives a context row a title-ordered rank, so there is nothing to place it against.
+ *
+ *   UNCLASSIFIABLE-SIBLINGS. **2026-08-07.** Reachable only with `classifyQualifying` supplied —
+ *   every OTHER same-parent-group line was excluded from the ranked set, AND at least one of them
+ *   was excluded because the classifier could not decide (`undefined` — unknown), not because it
+ *   confidently read CONTEXT (`false`). Without this abstention, "everyone I could read said
+ *   context" and "I could not read anyone" produce the IDENTICAL `siblingCount: 0` answer — and for
+ *   a `defaultOrderingPlacementFor` caller that empty set collapses `beforeLineIndex` AND
+ *   `currentBeforeLineIndex` to `null`, which the insert gate (`resolvers/ordering.ts`'s `arm`,
+ *   `currentBeforeLineIndex !== beforeLineIndex`) reads as "already correct" — the exact silent
+ *   failure this abstention exists to make visible instead. See `evaluateDefaultSection`'s own call
+ *   site for the precise trigger, and this module's own header, "2026-08-07", for the incident this
+ *   answers.
  */
 export type OrderingAbstention =
   | "no-section-declaration"
@@ -188,7 +217,8 @@ export type OrderingAbstention =
   | "container-ordering-directive"
   | "style-ambiguous-title"
   | "has-declared-ordering"
-  | "not-qualifying";
+  | "not-qualifying"
+  | "unclassifiable-siblings";
 
 /** The answer, when there is one. `moved` is the whole of it; the rest is provenance. */
 export interface OrderingAnswer {
@@ -925,17 +955,37 @@ function evaluateDefaultSection(
     // header for the citation this rests on.
     const parentOf = parentLineOf(lines, start, end);
     const group = parentOf.get(lineIndex) ?? null;
+    // TRACKED SEPARATELY FROM `siblingsRaw.length === 0` — see `unclassifiable-siblings`'s own
+    // header on `OrderingAbstention`. A candidate this classifier confidently calls CONTEXT (`false`)
+    // and a candidate it genuinely CANNOT read (`undefined`) both stay excluded from the ranked set
+    // (PR #131's own protection, unchanged) — but only the second kind means this function does not
+    // actually know whether the ranked set below is complete.
+    let anyCandidateUnknown = false;
     for (let at = start; at < end; at += 1) {
       if (at === lineIndex) continue;
       if (!parentOf.has(at)) continue; // blank line — not a member of any group
       if (parentOf.get(at) !== group) continue; // a different parent — not a true sibling
+      const verdict = classifyQualifying(at);
       // STRICT `=== true`: a sibling this classifier calls CONTEXT (`false`) is excluded because
       // the engine never ranks it here; a sibling it cannot decide (`undefined` — no stamp, or
       // stamped but not in a possibly-stale graph) is ALSO excluded, the same "cannot read, so
       // cannot include" rule `tupleFor`'s marker check already applies on the declared path. Both
       // are silent drops, not refusals of the whole section — see `orderingqualify.ts`'s header.
-      if (classifyQualifying(at) !== true) continue;
+      if (verdict === undefined) {
+        anyCandidateUnknown = true;
+        continue;
+      }
+      if (verdict !== true) continue;
       siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
+    // THE GUARD `unclassifiable-siblings` EXISTS FOR — see `OrderingAbstention`'s own header for
+    // the full argument. Deliberately narrow: only when the ranked set came back EMPTY *and* at
+    // least one same-group candidate existed but could not be read. A group with SOME known
+    // qualifying siblings and one stray unknown still answers (the pre-existing, accepted "cannot
+    // read, so cannot include" behaviour, §12e's own original shape) — only the case
+    // indistinguishable from "no real information at all" escalates to an abstention.
+    if (siblingsRaw.length === 0 && anyCandidateUnknown) {
+      return { kind: "abstains", because: "unclassifiable-siblings" };
     }
   }
 

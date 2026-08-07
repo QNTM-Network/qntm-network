@@ -152,7 +152,7 @@ export type {
   RuleWhen,
 } from "./rules.js";
 
-export { matchesQualifierGraphAware, applyGraphAwareRules } from "./graphmatch.js";
+export { matchesQualifierGraphAware, applyGraphAwareRules, resolvedQntmId } from "./graphmatch.js";
 export type {
   EdgeSourceOf,
   GraphAwareRulePassResult,

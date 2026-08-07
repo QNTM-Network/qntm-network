@@ -1518,14 +1518,52 @@ describe("12. THE DEFAULT/TITLE PATH'S OWN QUALIFYING CLASSIFIER — narrowing n
     assert.equal(classify, undefined, "118 of 159 real section qualifications are exactly this shape — see this module's own header");
   });
 
-  test("12e. A STAMPED SIBLING NOT IN THE GRAPH (a stale snapshot) — dropped from ranking, never guessed either way", () => {
+  test("12e. A STAMPED SIBLING NOT IN THE GRAPH (a stale snapshot) — unreadable, and NOW that is said out loud, not silently answered as 'no siblings'", () => {
+    // 2026-08-07: this fixture used to assert `reading.kind === "answer"` with `siblingCount: 0` —
+    // exactly the shape this whole fix exists to retire. The ONE candidate in "Apple task"'s own
+    // parent group is unreadable (stale), so `siblingsRaw` comes back empty for the SAME reason a
+    // real placement would have gone silently wrong: nothing here distinguishes "I checked and there
+    // truly is nothing" from "I could not check". See `OrderingAbstention`'s own
+    // `unclassifiable-siblings` header.
     const source = ["## Inbox", "- [ ] stale sibling, not in this graph [[qntm:999]]", "- [ ] Apple task [[qntm:102]]"].join("\n");
     const graph = { nodes: [{ id: "102", type: "task", fields: {} }], edges: [] };
     const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
     assert.equal(classify(1), undefined, "stamped but absent from the graph — unknown, not context");
     const reading = defaultOrderingFor("v", "s", source, 2, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
-    assert.equal(reading.kind, "answer");
-    assert.equal(reading.answer.siblingCount, 0, "the stale sibling is silently dropped — the same 'cannot read, so cannot include' rule an unreadable marker already gets");
+    assert.equal(reading.kind, "abstains", "an empty ranked set caused ENTIRELY by unreadable siblings must say so, not answer as if it were genuinely empty");
+    assert.equal(reading.because, "unclassifiable-siblings");
+
+    // THE PLACEMENT TWIN AGREES — this is the function the live defect actually broke:
+    // `beforeLineIndex`/`currentBeforeLineIndex` must not both silently collapse to `null` here.
+    const placement = defaultOrderingPlacementFor("v", "s", source, 2, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(placement.kind, "abstains");
+    assert.equal(placement.because, "unclassifiable-siblings");
+  });
+
+  test("12e2. A MIX OF KNOWN AND UNKNOWN SIBLINGS — the known ones still rank; one stray unknown does not abstain the whole comparison", () => {
+    // The narrow trigger, proven narrow: `unclassifiable-siblings` fires only when the ranked set
+    // comes back EMPTY *and* unreadable siblings are why. With a real, confidently-qualifying
+    // sibling also present, the pre-existing "cannot read, so cannot include" behaviour (§12e's
+    // ORIGINAL claim) still holds for the stray unknown, and this still answers.
+    const source = [
+      "## Inbox",
+      "- [ ] stale sibling, not in this graph [[qntm:999]]",
+      "- [ ] Banana task [[qntm:101]]",
+      "- [ ] Apple task [[qntm:102]]",
+    ].join("\n");
+    const graph = {
+      nodes: [
+        { id: "101", type: "task", fields: {} },
+        { id: "102", type: "task", fields: {} },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(classify(1), undefined, "the stale sibling stays unknown");
+    assert.equal(classify(2), true, "the readable sibling still qualifies");
+    const reading = defaultOrderingFor("v", "s", source, 3, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(reading.kind, "answer", "one known, ranked sibling is enough to answer — this must NOT abstain merely because another sibling was unreadable");
+    assert.equal(reading.answer.siblingCount, 1, "only the readable sibling is ranked; the stale one is still silently dropped, not counted and not blocking");
   });
 
   test("12f. PARENT-AWARE GROUPING STILL APPLIES — a qualifying row under a DIFFERENT parent is never compared, mirroring §11c", () => {
@@ -1612,5 +1650,126 @@ describe("12. THE DEFAULT/TITLE PATH'S OWN QUALIFYING CLASSIFIER — narrowing n
     const placeDispatched = resolveOrderingPlacementFor("v", "s", source, 3, after, {}, ORDERING_FIELDS, DEFAULT_ORDERING, PRIORITY_RANK, classify);
     assert.deepEqual(placeDispatched, placeDirect);
     assert.equal(placeDirect.kind, "answer");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 13. THE LIVE DEFECT, REPRODUCED EXACTLY — `node.id` (the graph engine's own internal id,
+//     `core/graph/.../nodes.py::create_node`'s `str(uuid.uuid4())`) is NEVER what a `[[qntm:N]]`
+//     stamp names (`fields.qntm_id`, `identity/mint.py`'s own small monotonic counter). Every
+//     fixture in §12 above used `id: "100"`-style node ids that happen to equal their own bare stamp
+//     number, which is why §12 stayed green while the live page did not: it never exercised the
+//     shape the operator's real graph actually ships. These fixtures use REALISTIC ids — a UUID for
+//     `id`, a small integer in `fields.qntm_id` — to prove the fix against the actual wire shape, not
+//     a fixture convenience that happened to hide the bug.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("13. NODE.ID IS A UUID; A STAMP NAMES fields.qntm_id — the classifier must match the RIGHT one", () => {
+  const qualification = {
+    defaultNodeType: undefined,
+    structuralNodeTypes: [],
+    tokens: {},
+    predicates: { "quali-task": { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
+    sections: { v: { s: { qualification: "quali-task", nodeType: "task", defaults: undefined, name: undefined } } },
+    sectionOrder: {},
+    refused: {},
+    dropped: {},
+  };
+  const edgeSourceOf = () => undefined;
+
+  // Realistic UUIDs — the exact shape `uuid.uuid4()` mints, never colliding by construction with a
+  // small `qntm_id` integer, which is the whole point of this fixture.
+  const UUID_ZEBRA = "3f1a9c2e-6b7d-4e5a-9c1a-2b3c4d5e6f70";
+  const UUID_APPLE = "8a2b6c1d-4e3f-4a5b-8c9d-0e1f2a3b4c5d";
+  const UUID_DESCENDANT = "5c6d7e8f-9a0b-4c1d-8e2f-3a4b5c6d7e8f";
+
+  test("13a. A REALISTIC NODE (UUID id, qntm_id field) — the classifier reads it correctly, id and qntm_id never conflated", () => {
+    const source = ["## Inbox", "- [ ] Apple task [[qntm:102]]"].join("\n");
+    const graph = { nodes: [{ id: UUID_APPLE, type: "task", fields: { qntm_id: "102" } }], edges: [] };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(
+      classify(1),
+      true,
+      "MUTATION-PROOF: reverting orderingqualify.ts's byId lookup to key by `node.id` instead of " +
+        "`resolvedQntmId(node)` turns this back into `undefined` — the exact live defect. A UUID " +
+        "and the bare stamp '102' can never be equal, so `byId.get(bareId('102'))` finds nothing " +
+        "unless the lookup key is built from `fields.qntm_id`, not `node.id`.",
+    );
+  });
+
+  test("13b. THE FULL LIVE SCENARIO — a domain-empty-shaped section, an insert, siblings with real UUIDs: the placement is no longer blanked", () => {
+    // The exact shape traced live: an insert with real, qualifying, stamped siblings whose graph
+    // nodes carry UUID ids. Before the fix, `classify(at)` was `undefined` for every one of these —
+    // never `false` — because the lookup itself was broken, not because any candidate was genuinely
+    // unreadable. `siblingsRaw` emptied out, `beforeLineIndex`/`currentBeforeLineIndex` both went
+    // `null`, and the insert gate in `resolvers/ordering.ts` (`currentBeforeLineIndex !==
+    // beforeLineIndex`, `null !== null`) read that as "already correct" — the blanked placement.
+    const source = [
+      "## Inbox",
+      "- [ ] existing task one [[qntm:5]]",
+      "- [ ] existing task two [[qntm:6]]",
+      "- [ ] brand new capture",
+    ].join("\n");
+    const after = "- [ ] brand new capture [[qntm:7]]";
+    const graph = {
+      nodes: [
+        { id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f", type: "task", fields: { qntm_id: "5" } },
+        { id: "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a", type: "task", fields: { qntm_id: "6" } },
+        { id: "3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a7b", type: "task", fields: { qntm_id: "7" } },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(classify(1), true, "sibling one reads as a real qualifying task, not unknown");
+    assert.equal(classify(2), true, "sibling two reads as a real qualifying task, not unknown");
+
+    const placement = defaultOrderingPlacementFor("v", "s", source, 3, after, {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(placement.kind, "answer", "a real, decidable placement — not the abstention a genuinely stale graph would still produce");
+    // Title-tiered default ordering: "brand new capture" sorts BEFORE "existing task one"/"existing
+    // task two" (codepoint order, 'b' < 'e'), so the new row belongs immediately before line 1 —
+    // and, being freshly appended at the end of the file, nothing currently sits after it there.
+    assert.equal(placement.placement.beforeLineIndex, 1, "the real destination — this used to be null");
+    assert.equal(placement.placement.currentBeforeLineIndex, null, "nothing follows the new row in file order yet");
+    // THE GATE ITSELF (`resolvers/ordering.ts`'s `arm`): `currentBeforeLineIndex !== beforeLineIndex`.
+    // Before the id-namespace fix this was `null !== null` (false — no placement armed, the live
+    // defect). Now it is `null !== 1` (true) — the row WOULD be armed to move.
+    assert.notEqual(
+      placement.placement.currentBeforeLineIndex,
+      placement.placement.beforeLineIndex,
+      "MUTATION-PROOF: with the pre-fix `byId` keyed by node.id, classify(1)/classify(2) both go " +
+        "undefined, siblingsRaw empties out, and beforeLineIndex/currentBeforeLineIndex both come " +
+        "back null — this assertion is exactly what distinguishes the fixed behaviour from the bug",
+    );
+  });
+
+  test("13c. PR #131's OWN PROTECTION SURVIVES THE FIX — a genuine context row, realistic UUID and all, is still never ranked", () => {
+    // The negative the operator asked to see proven: fixing the id lookup must not turn every
+    // stamped row into a match. A context row (wrong node_type) still classifies false, and is still
+    // excluded, exactly as before — this is not a case the id-namespace fix touches at all, and this
+    // test is here so a change that accidentally widened `find` could not slip through unnoticed.
+    const source = ["## Inbox", "- [ ] Zebra context row [[qntm:100]]", "- [ ] Apple task [[qntm:102]]"].join("\n");
+    const graph = {
+      nodes: [
+        { id: UUID_ZEBRA, type: "outcome", fields: { qntm_id: "100" } }, // CONTEXT — wrong node_type
+        { id: UUID_APPLE, type: "task", fields: { qntm_id: "102" } },
+      ],
+      edges: [],
+    };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(classify(1), false, "the context row is correctly IDENTIFIED (id lookup works) and correctly EXCLUDED (still not a task)");
+    const reading = defaultOrderingFor("v", "s", source, 2, "- [ ] Apple task edited [[qntm:102]]", {}, DEFAULT_ORDERING, ORDERING_FIELDS, PRIORITY_RANK, classify);
+    assert.equal(reading.kind, "answer");
+    assert.equal(reading.answer.siblingCount, 0, "the context row is still never ranked against the qualifying one — PR #131's protection, unchanged");
+  });
+
+  test("13d. A NODE WHOSE TYPE MINTS NO qntm_id AT ALL — falls back to node.id, mirroring renderer.py's own _resolved_qntm_id exactly", () => {
+    // `_resolved_qntm_id` (renderer.py) is `fields.get('qntm_id')` WHEN NOT None, ELSE `node.id`.
+    // A node whose graph entry carries no `qntm_id` field must still be found by whatever DID get
+    // stamped — `node.id` itself, in that fallback case. Not the shape a real qntm_id-bearing type
+    // hits, but the classifier must not regress the identity-unique/no-qntm_id case either.
+    const source = ["## Inbox", "- [ ] Apple task [[qntm:9f8e7d6c]]"].join("\n");
+    const graph = { nodes: [{ id: "9f8e7d6c", type: "task", fields: {} }], edges: [] };
+    const classify = qualifyingClassifierFor(source.split("\n"), "v", "s", qualification, graph, edgeSourceOf);
+    assert.equal(classify(1), true, "no qntm_id field on this node — falls back to node.id, exactly as renderer.py's _resolved_qntm_id does");
   });
 });

@@ -30,7 +30,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { matchesQualifierGraphAware, applyGraphAwareRules } from "../dist/present.js";
+import { matchesQualifierGraphAware, applyGraphAwareRules, resolvedQntmId, parentCandidateFor } from "../dist/present.js";
 
 const graph = (nodes, edges) => ({ nodes, edges });
 
@@ -369,5 +369,60 @@ describe("applyGraphAwareRules — one pass, the SAME order model applyRules (ru
     assert.deepEqual(pass.applied, []);
     assert.deepEqual(pass.undecidable, []);
     assert.equal(pass.fields.node_type, "task");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// `resolvedQntmId` — `node.id` (this app's `GraphNode.id`) is the graph ENGINE's own internal id
+// (`core/graph/.../nodes.py::create_node`'s `str(uuid.uuid4())`); a `[[qntm:N]]` stamp names
+// `fields.qntm_id` (`identity/mint.py`'s small monotonic counter), a DIFFERENT namespace entirely.
+// 2026-08-07: both `orderingqualify.ts`'s classifier and `resolvers/promotion.ts`'s
+// `parentCandidateFor` used to compare a stamp against `node.id` directly — which a UUID and a small
+// integer can never satisfy — making every stamped node lookup fail. Proven here at both levels: the
+// bare function, and `parentCandidateFor`'s own live wiring.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("resolvedQntmId — the id a [[qntm:N]] stamp actually names", () => {
+  test("a node with a qntm_id field resolves to it, NEVER to its own (UUID) node.id", () => {
+    const node = { id: "8a2b6c1d-4e3f-4a5b-8c9d-0e1f2a3b4c5d", type: "task", fields: { qntm_id: "102" } };
+    assert.equal(resolvedQntmId(node), "102");
+  });
+
+  test("a node with NO qntm_id field falls back to node.id — mirrors renderer.py's _resolved_qntm_id exactly", () => {
+    const node = { id: "9f8e7d6c", type: "header", fields: {} };
+    assert.equal(resolvedQntmId(node), "9f8e7d6c");
+  });
+
+  test("a null qntm_id field (present but unset) still falls back to node.id, not the literal string 'null'", () => {
+    const node = { id: "fallback-id", type: "task", fields: { qntm_id: null } };
+    assert.equal(resolvedQntmId(node), "fallback-id");
+  });
+});
+
+describe("parentCandidateFor — the SAME id-namespace bug orderingqualify.ts had, at promotion.ts's own call site", () => {
+  const parentSection = { qualification: "q", nodeType: "task", defaults: undefined, name: undefined };
+  const qualification = { predicates: {}, sections: {} };
+
+  test("a stamped parent, realistic UUID node.id + qntm_id field — found by qntm_id, never by node.id", () => {
+    const snapshot = graph(
+      [{ id: "3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a7b", type: "task", fields: { qntm_id: "42", status: "open" } }],
+      [],
+    );
+    const result = parentCandidateFor("- [ ] Parent task [[qntm:42]]", parentSection, snapshot, qualification);
+    assert.equal(
+      "abstain" in result,
+      false,
+      "MUTATION-PROOF: reverting the `bareId(n.id) === wanted` comparison back to comparing " +
+        "node.id directly (instead of resolvedQntmId(n)) turns this back into " +
+        "{ abstain: 'parent-not-in-graph' } — a UUID can never equal the bare stamp '42'",
+    );
+    assert.equal(result.id, "3e4f5a6b-7c8d-4e9f-0a1b-2c3d4e5f6a7b", "the RETURNED candidate id stays the UUID — edges reference nodes by that same internal id");
+    assert.equal(result.fields.status, "open");
+  });
+
+  test("a stamped parent genuinely absent from the graph still abstains parent-not-in-graph — the fix does not turn 'absent' into 'found'", () => {
+    const snapshot = graph([{ id: "unrelated-uuid", type: "task", fields: { qntm_id: "999" } }], []);
+    const result = parentCandidateFor("- [ ] Parent task [[qntm:42]]", parentSection, snapshot, qualification);
+    assert.deepEqual(result, { abstain: "parent-not-in-graph" });
   });
 });
