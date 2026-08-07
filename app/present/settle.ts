@@ -110,23 +110,31 @@
  * IDENTITY WALK — it is the one the engine's own `levels.py` is on record as having paid, twice, for
  * writing a second copy of.
  *
- * ── A KNOWN, NAMED LIMIT OF RUNG 3 — NOT SILENTLY SWEPT UNDER THIS FIX ──
+ * ── RUNG 3'S FORMER LIMIT — CLOSED, NOT SILENTLY SWEPT UNDER THIS FIX ──
  *
- * `extendsLine` confirms an APPENDED tail (`arrived.startsWith(held + " ")`), never an INSERTED one.
- * `apps/qntm-md/src/qntm_md/render/renderer.py`'s `_field_expression_cells` (read directly, engine
- * source, never edited) composes a rendered line's tail in ONE fixed order — the `[[qntm:N]]` stamp
- * FIRST, then the date/tag/marker/chrome cells — so a captured row that ALREADY carries the
- * section's own ordering marker (typed by the operator at capture time; `orderingPlacementFor`
- * cannot rank an insert-line with no marker at all) gets its stamp INSERTED between the title and
- * that marker, not appended after everything. `extendsLine` does not recognise that as the same
- * row, so THIS shape does not yet survive the stamp. A bare capture (title only, nothing else typed
- * yet — the shape `relative.ts`'s own header measured against the operator's real inbox, and the
- * shape a DEFAULT-ordering or `insertion_order` capture actually is) is unaffected: there is nothing
- * on the line for the stamp to be inserted before, so the appended tail IS the whole tail and rung 3
- * holds. `tests/app-settle-wiring.test.mjs` §2 proves the shape this fixes; §4 proves, rather than
- * hides, exactly where that coverage still ends. Closing it is separately-scoped work in a module
- * this change does not touch — `extendsLine` is shared with `held.ts`, `rows.ts` and `focus.ts`, and
- * widening what it confirms is a decision about ALL of their correctness, not only this one's.
+ * `extendsLine` USED TO confirm only an APPENDED tail (`arrived.startsWith(held + " ")`), never an
+ * INSERTED one. `apps/qntm-md/src/qntm_md/render/renderer.py`'s `_field_expression_cells` (read
+ * directly, engine source, never edited) composes a rendered line's tail in ONE fixed, DECLARED
+ * order — `presentation.json`'s own `composition.tail`, `["stamp", "date", "tags", "markers",
+ * "chrome"]` for this instance — the `[[qntm:N]]` stamp FIRST, then the tag/marker/chrome cells. So
+ * a captured row that ALREADY carries the section's own ordering marker (typed by the operator at
+ * capture time; `orderingPlacementFor` cannot rank an insert-line with no marker at all) gets its
+ * stamp INSERTED between the title and that marker, not appended after everything. `extendsLine`
+ * now tries the stamp-inserted shape too (`relative.ts`'s own header on the function), so this row
+ * survives its own first stamp exactly as a bare capture always did — proven for every tag/marker
+ * `presentation.json` declares, not asserted for one hand-picked shape
+ * (`tests/present-relative.test.mjs`, generated from the compiled declaration). `extendsLine` is
+ * shared with `rows.ts`, `draft.ts` and `focus.ts` (`held.ts` itself is retired — see
+ * `tests/app-held-panel-removed.test.mjs`), so this closes the same gap for all of them at once,
+ * not only for settle. `tests/app-settle-wiring.test.mjs` §2 and §4 both prove a stamp-and-tag-or-
+ * marker capture survives now, through the real page.
+ *
+ * WHAT STILL REFUSES, NAMED RATHER THAN HIDDEN: `extendsLine` requires the non-stamp characters to
+ * reproduce `held` EXACTLY once the stamp is taken back out. Two markers or two tags typed in an
+ * order that DIFFERS from the engine's own canonical print order (`order_markers`/`order_tags`,
+ * `renderer.py`) is a genuine reordering, not merely an insertion, and still refuses — correctly:
+ * that shape's characters really did change, not just gain a stamp. This is a narrower, real
+ * limit, not the append-only one this leg closes; see `relative.ts`'s own header for the boundary.
  *
  * (Every discard condition — a view change, a row leaving the view, a second commit to the same
  * row, a fresh arm for the same row — is named once, above, in "EVERY CONDITION THAT DISCARDS A

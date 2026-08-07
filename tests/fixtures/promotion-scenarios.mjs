@@ -112,3 +112,27 @@ export const BARE_AFTER_CHILD = "## Capture\n- [ ] Ship the launch note\n    - [
 export const TAGGED_PARENT_TYPED = "## Capture\n";
 export const TAGGED_AFTER_PARENT = "## Capture\n- [ ] Ship the launch note #task\n";
 export const TAGGED_AFTER_CHILD = "## Capture\n- [ ] Ship the launch note #task\n    - [ ] Draft the copy #task\n";
+
+// ── SETTLE / MARKER — the operator's capture ALREADY carrying the section's own ordering marker
+// (or a hand-typed type tag) at capture time, added 2026-08-07 so `app-settle-wiring.test.mjs`'s
+// own §4 does not silently disagree with `present-relative.test.mjs`'s exhaustive proof about what
+// this shape looks like. This is the exact shape `relative.ts`'s `extendsLine` used to refuse: the
+// engine's canonical render (`renderer.py`'s `_field_expression_cells`) composes the `[[qntm:N]]`
+// stamp BEFORE an already-typed marker or tag, never after it (`presentation.json`'s
+// `resolution.composition.tail`, `["stamp", "date", "tags", "markers", "chrome"]`).
+export const MARKER_QUEUE_BEFORE = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
+export const MARKER_QUEUE_AFTER_CAPTURE = [
+  "## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] NEW ROW 🔢 0",
+].join("\n");
+export const MARKER_QUEUE_STAMPED = [
+  "## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] NEW ROW [[qntm:9]] 🔢 0",
+].join("\n");
+
+// The same capture, ALSO carrying a hand-typed `#task` tag ahead of the marker — composition's own
+// order (tags before markers, both after the stamp) preserved on the engine's first real answer.
+export const TAGGED_MARKER_QUEUE_AFTER_CAPTURE = [
+  "## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] NEW ROW #task 🔢 0",
+].join("\n");
+export const TAGGED_MARKER_QUEUE_STAMPED = [
+  "## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] NEW ROW [[qntm:9]] #task 🔢 0",
+].join("\n");

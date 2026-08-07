@@ -2882,6 +2882,12 @@ function declarationFrom(declared) {
 }
 
 // app/present/relative.ts
+var STAMP_TOKEN = /\[\[qntm:[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?\]\]/g;
+function withStampRemoved(arrived, start, end) {
+  const before = arrived.slice(0, start);
+  const after = before.endsWith(" ") && arrived.slice(end).startsWith(" ") ? arrived.slice(end + 1) : arrived.slice(end);
+  return (before + after).trimEnd();
+}
 function extendsLine(held, arrived) {
   if (arrived === held) {
     return true;
@@ -2889,7 +2895,17 @@ function extendsLine(held, arrived) {
   if (held === "" || held.trimEnd() !== held) {
     return false;
   }
-  return arrived.startsWith(held + " ");
+  if (arrived.startsWith(held + " ")) {
+    return true;
+  }
+  for (const match of arrived.matchAll(STAMP_TOKEN)) {
+    const start = match.index;
+    const stripped = withStampRemoved(arrived, start, start + match[0].length);
+    if (stripped === held || stripped.startsWith(held + " ")) {
+      return true;
+    }
+  }
+  return false;
 }
 function boundsOf(places, section) {
   let first = -1;

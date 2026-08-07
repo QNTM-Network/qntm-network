@@ -50,15 +50,18 @@
  *      real edit to the SAME row that the resolver can no longer rank (via `commitLine`'s own
  *      `settle.supersede`, settle.ts's third discard condition) leaves no stale claim behind for a
  *      later repaint to act on.
- *   4. A KNOWN REMAINING GAP, NAMED RATHER THAN HIDDEN — a capture that ALREADY carries the
- *      section's own ordering marker (typed by the operator at capture time — required for
- *      `orderingPlacementFor` to rank an insert-line at all) does NOT yet survive the stamp: the
- *      engine's canonical render (`renderer.py`'s `_field_expression_cells`, read directly) inserts
- *      `[[qntm:N]]` BEFORE that marker, not after it, and `relative.ts`'s `extendsLine` — an
- *      append-only confirmation, shared by `rows.ts`/`held.ts`/`focus.ts` — does not recognise an
- *      insertion in the middle of the line as the same row. This is the honest edge of what this
- *      change fixes; closing it is separately-scoped work in a shared module this change does not
- *      touch. See §4's own test for the proof and app/present/settle.ts's header for the pointer.
+ *   4. THE FORMER GAP, CLOSED — a capture that ALREADY carries the section's own ordering marker
+ *      (typed by the operator at capture time — required for `orderingPlacementFor` to rank an
+ *      insert-line at all), or a hand-typed type tag, now survives the stamp too: the engine's
+ *      canonical render (`renderer.py`'s `_field_expression_cells`, read directly) inserts
+ *      `[[qntm:N]]` BEFORE that marker/tag, not after it, and `relative.ts`'s `extendsLine` — shared
+ *      by `rows.ts`/`draft.ts`/`focus.ts` — now tries the arrived line with the stamp taken back out
+ *      as well as the plain append, so an insertion in the middle of the line is recognised as the
+ *      same row. `tests/present-relative.test.mjs` proves this exhaustively over every marker/tag
+ *      token `presentation.json` (the compiled declaration) actually declares, not for one hand-
+ *      picked shape. See §4's own tests for the proof and app/present/settle.ts's header for the
+ *      pointer to the narrower limit that remains (two markers/tags typed out of the engine's own
+ *      canonical print order — a genuine reordering, not an insertion).
  *   5. PLACEMENT APPLIES AT COMMIT, IN THE SAME TURN AS THE KEYSTROKE — added 2026-08-06, per
  *      `design-the-two-rules.md`'s Perception Rule and the operator's own words: "it should happen
  *      instantly... that it resolves in the same [turn] from front end live, not from sync from
@@ -84,6 +87,13 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
+import {
+  MARKER_QUEUE_AFTER_CAPTURE,
+  MARKER_QUEUE_BEFORE,
+  MARKER_QUEUE_STAMPED,
+  TAGGED_MARKER_QUEUE_AFTER_CAPTURE,
+  TAGGED_MARKER_QUEUE_STAMPED,
+} from "./fixtures/promotion-scenarios.mjs";
 
 process.setMaxListeners(30);
 
@@ -491,28 +501,30 @@ describe("3. THE NEGATIVE — a placement that is no longer true never fires, th
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// 4. A KNOWN REMAINING GAP, NAMED RATHER THAN HIDDEN
+// 4. THE FORMER GAP, CLOSED — a marker-bearing capture now survives the stamp too
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 
-describe("4. A KNOWN REMAINING GAP — a capture that ALREADY carries a trailing ordering marker does not yet survive the stamp", () => {
-  test("DOCUMENTED, NOT FIXED: the engine inserts [[qntm:N]] BEFORE an existing trailing marker, which relative.ts's extendsLine (an append-only check) does not recognise as the same row", async () => {
+describe("4. THE FORMER GAP, CLOSED — a capture that ALREADY carries a trailing ordering marker now survives the stamp", () => {
+  test("FIXED: the engine inserts [[qntm:N]] BEFORE an existing trailing marker, and relative.ts's extendsLine now recognises that as the same row", async () => {
     // `apps/qntm-md/src/qntm_md/render/renderer.py`'s `_field_expression_cells` composes a
-    // rendered line's tail in ONE fixed order: qntm_id_cell, THEN date/tag/marker/chrome cells —
+    // rendered line's tail in ONE fixed, DECLARED order — `presentation.json`'s own
+    // `composition.tail`, `["stamp", "date", "tags", "markers", "chrome"]` for this instance —
     // confirmed by reading that function directly (read-only; this repo never edits the engine).
     // So when the operator's own capture ALREADY carries the section's ordering marker (a
     // `queue_position` value typed at capture time — required for `orderingPlacementFor` to rank an
     // insert-line at all; see ordering.ts's own header), the engine's canonical re-render does not
     // APPEND the stamp after everything the operator typed — it INSERTS it between the title and
     // that marker. `relative.ts`'s `extendsLine` (the RELATIVE/TEXT rungs' only confirmation, and
-    // the rung `settle.ts` now depends on for an unstamped row) requires the arrived line to equal
-    // the remembered text with characters ADDED ONLY AT THE END — `arrived.startsWith(held + " ")`.
-    // An insertion in the MIDDLE fails that check, so this ONE case — a row captured WITH its
-    // ordering marker already on it — still discards the placement on the stamp's arrival. §2 above
-    // proves the fix DOES hold for a bare capture (no marker/date/tag typed at capture); this test
-    // proves, rather than asserts in prose, exactly where that coverage currently ends.
-    const BEFORE = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n");
-    const AFTER = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] NEW ROW 🔢 0"].join("\n");
-    const { page, elements, view } = await freshQueuePage("settle-known-gap-marker", BEFORE);
+    // the rung `settle.ts` depends on for an unstamped row) used to require the arrived line to
+    // equal the remembered text with characters ADDED ONLY AT THE END. It now also tries the
+    // arrived line WITH the stamp taken back out, so an insertion in the MIDDLE is recognised too.
+    // §2 above already proved the fix holds for a bare capture; this test proves the SAME survival
+    // for the shape that used to be the honest, named exception — through the real page, not only
+    // `extendsLine` in isolation (`tests/present-relative.test.mjs` proves that half, exhaustively
+    // over every marker/tag `presentation.json` declares).
+    const BEFORE = MARKER_QUEUE_BEFORE;
+    const AFTER = MARKER_QUEUE_AFTER_CAPTURE;
+    const { page, elements, view } = await freshQueuePage("settle-marker-gap-closed", BEFORE);
 
     await page.commitLine(view, { lineIndex: 3, text: "- [ ] NEW ROW 🔢 0", markdown: AFTER, source: BEFORE, kind: "insert-line" });
     paintProjection(page, view, AFTER);
@@ -521,16 +533,45 @@ describe("4. A KNOWN REMAINING GAP — a capture that ALREADY carries a trailing
 
     // THE ENGINE STAMPS IT, INSERTED before the existing marker — `_field_expression_cells`'s own
     // composition order, not a fixture invented for this test.
-    const STAMPED = ["## Queue", "- [ ] a [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2", "- [ ] NEW ROW [[qntm:9]] 🔢 0"].join("\n");
+    const STAMPED = MARKER_QUEUE_STAMPED;
     paintProjection(page, view, STAMPED);
 
-    // THE GAP, PROVEN: the placement does NOT survive, and the row falls back to plain (unsorted)
-    // file order — the exact regression this whole change exists to end, for this one shape only.
-    assert.deepEqual(page.__settle().take(STAMPED, view.id), [], "KNOWN GAP: a marker-bearing capture's placement is still discarded on stamp arrival");
+    // THE FIX, PROVEN: the placement DOES survive, and the row stays sorted exactly as §2 already
+    // proved for a bare capture — the shape that used to be this suite's own named exception.
+    const [instruction] = page.__settle().take(STAMPED, view.id);
+    assert.notEqual(instruction, undefined, "FIXED: a marker-bearing capture's placement must survive the stamp landing on its own row");
+    assert.deepEqual(instruction.placement, { lineIndex: 3, beforeLineIndex: 1 }, "\"NEW ROW\" (queue_position 0) still belongs immediately before \"a\" (queue_position 1)");
     texts = rowTexts(elements.get("viewBody"));
     const newAt = texts.findIndex((t) => t.includes("NEW ROW"));
     const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
-    assert.ok(newAt > aAt, "KNOWN GAP: the row is shown back in its unsorted, as-typed position once stamped");
+    assert.ok(newAt !== -1 && aAt !== -1 && newAt < aAt, `FIXED: the row must still be shown sorted before "a" once it is stamped, got: ${JSON.stringify(texts)}`);
+  });
+
+  test("FIXED: the same survival for a capture carrying a hand-typed TYPE TAG, stamped and re-tagged in the SAME composed order the engine always uses", async () => {
+    // The real shape `tests/present-relative.test.mjs`'s own `REAL_INBOX` fixture carries —
+    // `[[qntm:N]] #task 🆕 ...` — a stamp, THEN a type tag, THEN a marker, all in composition's own
+    // tail order. A fresh capture typed WITH its own `#task` tag (the operator's other common
+    // gesture — `tests/fixtures/promotion-scenarios.mjs`'s own `TAGGED_*` shapes) must survive its
+    // first stamp the same way a marker-bearing one now does.
+    const BEFORE = MARKER_QUEUE_BEFORE;
+    const AFTER = TAGGED_MARKER_QUEUE_AFTER_CAPTURE;
+    const { page, elements, view } = await freshQueuePage("settle-tag-and-marker-gap-closed", BEFORE);
+
+    await page.commitLine(view, { lineIndex: 3, text: "- [ ] NEW ROW #task 🔢 0", markdown: AFTER, source: BEFORE, kind: "insert-line" });
+    paintProjection(page, view, AFTER);
+
+    // THE ENGINE STAMPS IT, INSERTED before BOTH the tag and the marker — composition's tail order
+    // is stamp, then tags, then markers; neither cell moves relative to the other, only the stamp
+    // lands in front of both.
+    const STAMPED = TAGGED_MARKER_QUEUE_STAMPED;
+    paintProjection(page, view, STAMPED);
+
+    const [instruction] = page.__settle().take(STAMPED, view.id);
+    assert.notEqual(instruction, undefined, "FIXED: a tag-and-marker-bearing capture's placement must survive the stamp landing on its own row");
+    const texts = rowTexts(elements.get("viewBody"));
+    const newAt = texts.findIndex((t) => t.includes("NEW ROW"));
+    const aAt = texts.findIndex((t) => t.includes("[[qntm:1]]"));
+    assert.ok(newAt !== -1 && aAt !== -1 && newAt < aAt, `FIXED: the row must still be shown sorted before "a" once it is stamped, got: ${JSON.stringify(texts)}`);
   });
 });
 
