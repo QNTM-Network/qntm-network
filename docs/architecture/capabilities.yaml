@@ -4139,3 +4139,45 @@ capabilities:
     reads `outcome.diagnostics` exactly once and only through `reportAbstentions`, never a bare loop
     or a DOM write.
   status: working
+- id: graph-blob-fetched-separately-from-the-envelope
+  intent: >-
+    APP-REPO DESCENT of the monorepo's `graph-blob-served-separately-with-its-own-conditional-
+    request` (docs/architecture/capabilities.yaml, qntm monorepo, 2026-08-07), itself the
+    module-level descent of the pin `graph-envelope-composition-separates-blob-from-view-markdown`.
+    `GET /app/graph` no longer carries `graph` by default — `server/app.py`'s `_envelope()` omits
+    it unless the caller opts in, cutting the ~741 KB blob that used to ride on every page load and
+    every post-write pickup read (up to 3 more times per write, `PICKUP_DELAYS`). This row is what
+    the CLIENT does instead. `app/present/resolve.ts`'s `graphSnapshotOf` grew a second, optional
+    `blob` parameter: `graphData.snapshot.graph` (the pre-existing D1-fallback shape, still inline
+    for a non-operator session) wins when present; a separately-fetched `blob` is the fallback,
+    consulted only when the envelope carries no graph at all — the shape `GET /app/graph` now
+    serves by default. `app/index.html`'s `refreshGraphBlob` is the fetch: fire-and-forget,
+    conditional (`If-None-Match` against the ETag `GET /app/graph/blob` minted last), triggered
+    from `installProjection`/`loadGraph` every time a fresh envelope lands (the only available
+    signal the graph might have moved), and cleared on `logout` (so a second sign-in on the same
+    tab cannot resolve a promotion/ordering commit against a stranger's graph before the first
+    background refresh overwrites it — found and fixed in this same change, not a pre-existing
+    guard). THE PRE-EXISTING TOLERANCE THAT MAKES THIS SAFE: `resolvers/promotion.ts`'s
+    `structuralNodeCandidateFor` and `resolvers/ordering.ts`'s `classifierFor` already treated
+    `ctx.graph === null` as an honest abstain (`"graph-not-loaded"` / a classifier of `undefined`)
+    rather than a crash, before this row existed — a commit made before the background fetch
+    resolves degrades exactly as it always has, never differently.
+  tier: non-functional
+  rooting: >-
+    SPLIT, the same shape `an-abstention-is-visible-to-the-operator` already uses. `graphSnapshotOf`
+    is ROOTED in the sense that matters for this arc: it lives under `app/present/`, inside
+    `.flow-trace.yaml`'s capture filter, and `tests/flow_scenarios/graph_blob_fallback.ts` drives it
+    directly (verified this session: `flow-trace verify . --scenario graph_blob_fallback` exits 0,
+    0 FAIL, against this tree) — though no class in `docs/architecture/classes.yaml` covers
+    `app/present/resolve.ts` today, so it is not CLASS-rooted, only scenario-reachable.
+    `refreshGraphBlob`, `installProjection`'s and `loadGraph`'s trigger calls, and the `logout` reset
+    are ISOLATED inside `app/index.html`, the identical posture every sibling page-level row in
+    this file already carries: node cannot import an HTML document, so flow-trace cannot see those
+    edges however real they are. `tests/app-graph-blob.test.mjs` (the fetch/cache/merge contract,
+    8 arms) and `tests/app-async-ack.test.mjs` (the trigger wiring — a fresh envelope lands, exactly
+    one background `GET /app/graph/blob` follows) are the substitute, both driving the real lifted
+    page through `tests/fixtures/app-html-page.mjs`'s extractor rather than a reimplementation of
+    it. `tests/worker-graph-blob.test.mjs` covers the Worker hop (`GET /app/graph/blob`'s own
+    conditional forwarding and its ETag's independence from `GET /app/graph`'s) — also outside
+    flow-trace's reach (the app repo's own capabilities already state a scenario cannot cover the
+    Worker), also substituted rather than skipped.

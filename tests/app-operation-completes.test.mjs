@@ -352,7 +352,16 @@ describe("4. ITEM 14 — bootRead retries a failed read, bounded, before giving 
   test("a read that fails once then succeeds needs no more than the bound", async () => {
     let calls = 0;
     globalThis.fetch = withDeclaration(async (url) => {
-      if (!String(url).includes("/app/graph")) throw new Error("unexpected url " + url);
+      const path = new URL(String(url)).pathname;
+      // `loadGraph`'s success path also fires `refreshGraphBlob` (graph-envelope-composition-
+      // separates-blob-from-view-markdown, 2026-08-07), a SEPARATE, fire-and-forget request this
+      // test does not care about — answered here without touching `calls`, or it would inflate
+      // this test's own bound-of-3 count (`/app/graph/blob` otherwise also matches a loose
+      // `.includes("/app/graph")` check).
+      if (path === "/app/graph/blob") {
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ ok: true, snapshot: { graph: {} } }) };
+      }
+      if (path !== "/app/graph") throw new Error("unexpected url " + url);
       calls += 1;
       return calls <= 2 ? graphFail(500) : graphOk([{ id: "this-week", path: PATH, title: "T", domain: "work", markdown: "# hi\n" }]);
     });

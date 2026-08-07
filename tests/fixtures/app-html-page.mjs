@@ -140,6 +140,17 @@ export function __setToken(next) { token = next; }
 export const __currentViewId = () => currentViewId;
 export function __setGraphData(next) { graphData = next; }
 export function __setCurrentViewId(next) { currentViewId = next; }
+// THE GRAPH BLOB CACHE (graph-envelope-composition-separates-blob-from-view-markdown,
+// 2026-08-07). Getters, the same reason \`__served\`/\`__queued\` are: a suite reads what the page
+// is holding NOW. \`__setGraphBlob\`/\`__setGraphBlobEtag\` let a suite seed the cache directly
+// (proving what a commit does once the blob HAS arrived, without waiting out a real fetch);
+// \`__refreshGraphBlob\` drives the real fetch-and-merge function itself, the same "alias for the
+// real thing, not a restatement of it" posture \`__collect\`/\`__correlate\` take for their own axes.
+export const __graphBlob = () => graphBlob;
+export const __graphBlobEtag = () => graphBlobEtag;
+export function __setGraphBlob(next) { graphBlob = next; }
+export function __setGraphBlobEtag(next) { graphBlobEtag = next; }
+export { refreshGraphBlob as __refreshGraphBlob };
 export const __drawerIsOpen = () => drawerIsOpen;
 // VIM. \`mode\` and \`focus\` are module-scoped consts, same shape as \`currentViewId\` above —
 // getters rather than raw exports so a test reads the live value instead of a snapshot from

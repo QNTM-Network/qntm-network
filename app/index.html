@@ -1046,7 +1046,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=6b6dd5bd1f";
+} from "/dist/present.js?v=5c8fa8eaf3";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1285,6 +1285,62 @@ async function api(path, { method = "POST", body, auth = false } = {}) {
 
 // --- graph viewer: the rendering of the graph, fetched behind the passkey ---
 let graphData = null;
+
+// --- the graph BLOB — fetched and cached SEPARATELY from `graphData`
+// (graph-envelope-composition-separates-blob-from-view-markdown, 2026-08-07) ---
+//
+// `GET /app/graph`'s default response no longer carries `graph` at all — see `graphSnapshotOf`'s
+// own header (app/present/resolve.ts) for the wire-shape change this cache answers, and
+// `server/app.py`'s `GET /graph/blob` docstring for the server side of the same split. THE THREE
+// GRAPH-AWARE RESOLVERS (`resolve.ts`'s `graphSnapshotOf`, `resolvers/promotion.ts`,
+// `resolvers/ordering.ts`) already treat "the graph has not arrived yet" as an HONEST ABSTAIN
+// (`"graph-not-loaded"` / `classifierFor` returning `undefined`) rather than a crash — that
+// pre-existing tolerance is what makes fetching this in the BACKGROUND, never blocking a paint,
+// safe: a commit made before the first fetch resolves simply abstains, exactly as it would have
+// on the very first commit of a session before this cache existed.
+//
+// WHEN IT REFRESHES, AND WHY THAT IS "FETCHED WHEN NEEDED" RATHER THAN "FETCHED ON EVERY READ".
+// `refreshGraphBlob` is called (fire-and-forget, never awaited by a painter) every time a fresh
+// projection is installed (boot, the re-read button, a pickup arrival) — because a projection
+// change is the only available signal that the graph MIGHT have moved, and there is no per-node
+// dirty flag on the wire to check instead. That is NOT the same cost as re-sending the blob every
+// time: every call after the first is a CONDITIONAL request (`If-None-Match` on `graphBlobEtag`),
+// so a projection change that did not touch the graph (a view-only save) costs one small 304, not
+// 741 KB again. This is what replaces the old behaviour of the full blob riding on every one of
+// `PICKUP_DELAYS`'s up to three post-write reads.
+let graphBlob = null;
+let graphBlobEtag = null;
+let graphBlobInFlight = null;
+
+/**
+ * Refresh `graphBlob` in the background, or do nothing at all. Never throws — a resolver reading
+ * `graphBlob` mid-fetch, or after a failed fetch, sees whatever it saw before (or `null`, before
+ * the first successful fetch) and abstains honestly; nothing here is on the critical path of a
+ * paint. `graphBlobInFlight` collapses concurrent callers (boot and a pickup arrival landing close
+ * together) into the one request already running, the same "one outstanding, newest wins" posture
+ * `pickup.ts` documents for the read it schedules.
+ */
+async function refreshGraphBlob() {
+  if (!token) return;
+  if (graphBlobInFlight) return graphBlobInFlight;
+  graphBlobInFlight = (async () => {
+    try {
+      const headers = { Authorization: "Bearer " + token };
+      if (graphBlobEtag) headers["If-None-Match"] = graphBlobEtag;
+      const res = await fetch(API + "/app/graph/blob", { method: "GET", headers });
+      if (res.status === 304 || !res.ok) return; // unchanged, or a fetch worth abandoning silently
+      const data = await res.json().catch(() => null);
+      if (!data || !data.snapshot) return;
+      graphBlob = data.snapshot;
+      graphBlobEtag = res.headers.get("ETag") || graphBlobEtag;
+    } catch {
+      // best-effort, on purpose — see this function's own header.
+    } finally {
+      graphBlobInFlight = null;
+    }
+  })();
+  return graphBlobInFlight;
+}
 
 let currentViewId = null;
 
@@ -1530,6 +1586,9 @@ function paintedPath() {
 function installProjection(pending) {
   graphData = pending.data;
   paintView(currentViewId, "arrived");
+  // A fresh projection is the only signal available that the graph MIGHT have moved (see
+  // `refreshGraphBlob`'s own header) — fire-and-forget, never on the paint's own critical path.
+  refreshGraphBlob();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -2464,8 +2523,11 @@ function resolverContextFor(view, commit) {
     },
     // READ, NEVER REQUESTED. `graphSnapshotOf` (resolve.ts) narrows whatever `graphData` is holding
     // to the `{nodes, edges}` shape the graph-aware pass needs, and answers `null` — honestly —
-    // for a brand-new account whose snapshot is genuinely absent.
-    graph: graphSnapshotOf(graphData),
+    // for a brand-new account whose snapshot is genuinely absent. `graphBlob` is the SEPARATELY
+    // fetched fallback for the Fly-server path, where `graphData.snapshot.graph` is no longer
+    // sent at all (graph-envelope-composition-separates-blob-from-view-markdown) — see
+    // `graphSnapshotOf`'s own header for which of the two wins when both are present.
+    graph: graphSnapshotOf(graphData, graphBlob),
     now: () => Date.now(),
   };
 }
@@ -3129,6 +3191,9 @@ async function loadGraph(keep = null, why = "chosen", pending = null) {
   currentViewId = def.id;
   buildDrawer(data.snapshot.views);
   paintView(def.id, why);
+  // Same reasoning as `installProjection`'s own call — a fresh projection is the only signal
+  // this page has that the graph might have moved, and the fetch is conditional either way.
+  refreshGraphBlob();
 }
 
 // READ THE GRAPH AGAIN, AND STAY WHERE YOU ARE.
@@ -3282,6 +3347,13 @@ function logout() {
   api("/auth/logout", { auth: true }).catch(() => {});
   localStorage.removeItem(tokenKey); token = null;
   graphData = null;
+  // AND SO DOES THE SEPARATELY-CACHED BLOB. `graphBlob` is a copy of the PREVIOUS session's graph
+  // held outside `graphData` on purpose (see its own header) — leaving it behind here would let a
+  // next sign-in on this same tab resolve promotion/ordering against a stranger's neighbours until
+  // the first background refresh overwrites it. The ETag goes with it: a stale tag would make the
+  // first fetch for the NEW session risk a 304 against bytes that session never held.
+  graphBlob = null;
+  graphBlobEtag = null;
   currentViewId = null;
   // AND THE BASE GOES WITH THE GRAPH IT DESCRIBED. A base held past the projection it was taken
   // from is a claim about a file this session can no longer see.
