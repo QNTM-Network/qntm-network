@@ -109,6 +109,44 @@ export interface GraphSnapshot {
 }
 
 /**
+ * THE ID A `[[qntm:N]]` STAMP ACTUALLY NAMES — NEVER `node.id`, AND THIS IS NOT A STYLE CHOICE.
+ *
+ * `node.id` (this module's own `GraphNode.id`, above) is the graph ENGINE's internal identifier —
+ * `core/graph/src/qntm_graph/core/nodes.py::create_node` mints it as `str(uuid.uuid4())`, and
+ * `core/graph/src/qntm_graph/core/serialisation.py::to_dict` (the ONLY function that ever produces
+ * the wire's `snapshot.graph.nodes[].id`) writes that UUID straight through — never `fields.qntm_id`,
+ * never any other rewrite. `GraphEdge.source`/`.target` name the SAME UUID space (an edge's own
+ * `source`/`target` come from `store.all_edges()`, the identical internal store this `id` does), so
+ * `node.id` stays the right value to hand `matchesQualifierGraphAware` as `candidateId` and to
+ * `neighboursOf`'s own `e.source === candidateId` comparisons — this function is NOT a replacement
+ * for `node.id` everywhere, only for the one place a caller is matching a STAMP.
+ *
+ * A `[[qntm:N]]` stamp is a DIFFERENT number, from a DIFFERENT namespace: `renderer.py::decide_stamp`
+ * emits `f"[[qntm:{qntm_id_value}]]"` where `qntm_id_value` is `_resolved_qntm_id(node)`
+ * (`renderer.py:1389-1391`) — `node.fields.get("qntm_id")` when the node's schema declares one
+ * (`identity/mint.py`'s `next_qntm_id`, a small monotonic counter, "max existing qntm_id + 1"),
+ * falling back to `node.id` only for the rare type that mints none. These two ids are never the
+ * same value for a normal, `qntm_id`-bearing node — a UUID and a small integer cannot collide, and
+ * nothing in the pipeline from `graph.to_dict()` through `POST /app/graph` to `GET /app/graph`
+ * (`worker/src/app.js`'s `graphPush`/`graphGet`, `server/app.py`'s `_read_graph`/`_envelope`) ever
+ * reconciles them — the blob is relayed byte-for-byte at every hop.
+ *
+ * A caller trying to find WHICH node a printed `[[qntm:N]]` names — `stampSpans`'s own `id`,
+ * bare-numeric, never `node.id`-shaped — must compare `N` against THIS function's answer, never
+ * against `node.id` directly. Comparing against `node.id` looks plausible (both are "the node's id"
+ * in prose) and fails SILENTLY for every node the schema mints a `qntm_id` for, which is the common
+ * case: not a thrown error, not a type error, just a `Map`/`.find()` that never matches —
+ * indistinguishable from a genuinely absent or stale node. `2026-08-07`: this was exactly the
+ * divergence PR #131's `orderingqualify.ts` (and `resolvers/promotion.ts`'s pre-existing,
+ * structurally identical `parentCandidateFor` lookup) both had: `bareId(node.id) ===
+ * bareId(stampedId)` can never be true for a real, present node.
+ */
+export function resolvedQntmId(node: GraphNode): string {
+  const raw = node.fields["qntm_id"];
+  return String(raw === undefined || raw === null ? node.id : raw);
+}
+
+/**
  * The edit still missing from `graph`: the line the operator just committed, described as the
  * child it would become once the engine mints it. `edgeType` is which edge this local gesture
  * creates to ITS OWN structural parent (`PART_OF` for an ordinary indent, or whatever else the

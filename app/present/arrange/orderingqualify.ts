@@ -64,14 +64,32 @@
  * Per-line, the classifier returns `undefined` (unknown — dropped from the ranked set, the same
  * "cannot read, so cannot include" rule the marker path already applies to an unreadable marker)
  * when: the line carries no `[[qntm:N]]` at all (the ordinary shape of the line CURRENTLY BEING
- * EDITED, a fresh capture — not a defect); the stamped id is not in `graph` (a stale snapshot,
- * accepted the same way `promotion.ts` already accepts it); or the qualifier's one-hop edge step
- * cannot be resolved (`matchesQualifierGraphAware`'s own `undefined`).
+ * EDITED, a fresh capture — not a defect); the stamped id is genuinely not in `graph` (a stale
+ * snapshot, accepted the same way `promotion.ts` already accepts it); or the qualifier's one-hop
+ * edge step cannot be resolved (`matchesQualifierGraphAware`'s own `undefined` — reachable when the
+ * step's `edgeType` is one `edgeSourceOfFor`, `resolvers/promotion.ts`, was never taught the
+ * direction of; that function knows only the structural indent binding and `#waiting-for`, so a
+ * qualification pattern's OWN `children:`/`parents:` step over any other edge type is undecidable
+ * here too — measured against the operator's real config, 2026-08-07: 28 of 192 published
+ * predicates carry an `edgeSteps` entry at all, and this app has no general per-edge-type direction
+ * table, only `promotion.ts`'s narrow two-entry one. Real, reachable, and NOT fixed here — widening
+ * `edgeSourceOfFor` past its own original two callers is a separate change).
+ *
+ * ── 2026-08-07, THE ACTUAL DEFECT THIS FILE HAD — id NAMESPACE, NOT COVERAGE ──
+ *
+ * The three reasons above describe when `undefined` is the CORRECT, honest answer. Before this
+ * date, this module returned `undefined` for EVERY stamped sibling, correct or not, because its own
+ * node lookup compared a stamp's bare id against `node.id` — the graph engine's internal UUID
+ * (`core/graph/.../nodes.py::create_node`'s `str(uuid.uuid4())`), never what a `[[qntm:N]]` stamp
+ * names (`fields.qntm_id`, a separate small-integer namespace — `graphmatch.ts`'s `resolvedQntmId`,
+ * this file's own header for the full citation). A UUID and a small integer never collide, so
+ * `byId.get(...)` failed for every real node, not only the stale ones this section already
+ * documented as an accepted gap. See `resolvedQntmId`'s own header for the fix.
  */
 
 import { stampSpans } from "../express/rendition.js";
 import type { QualificationLanguage, Qualifier } from "../select/qualification.js";
-import { matchesQualifierGraphAware } from "../graphmatch.js";
+import { matchesQualifierGraphAware, resolvedQntmId } from "../graphmatch.js";
 import type { EdgeSourceOf, GraphSnapshot } from "../graphmatch.js";
 
 /** `[[qntm:N]]` -> `N`, and `qntm:N` -> `N` — the same normalisation `promotion.ts`'s own `bareId`
@@ -116,7 +134,14 @@ export function qualifyingClassifierFor(
 
   // Built once per call, not once per line — `graph.nodes` is walked here exactly once regardless
   // of how many lines the returned closure is later asked about.
-  const byId = new Map(graph.nodes.map((node) => [bareId(node.id), node] as const));
+  //
+  // KEYED BY `resolvedQntmId`, NEVER `node.id` — see that function's own header
+  // (`graphmatch.ts`). `node.id` is the graph engine's internal UUID; a `[[qntm:N]]` stamp names
+  // `fields.qntm_id`, a completely different, small-integer namespace. Keying this map by `node.id`
+  // (as this line originally did) meant `byId.get(bareId(first.id))` could never find a match for
+  // any node whose type mints a `qntm_id` — the common case — which is why this classifier answered
+  // `undefined` for every stamped sibling instead of only the genuinely stale/absent ones.
+  const byId = new Map(graph.nodes.map((node) => [bareId(resolvedQntmId(node)), node] as const));
 
   return (lineIndex: number): boolean | undefined => {
     const line = lines[lineIndex] ?? "";

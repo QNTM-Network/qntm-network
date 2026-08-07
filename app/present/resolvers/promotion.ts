@@ -38,7 +38,7 @@ import type { ResolvedFields } from "../select/membership.js";
 import type { QualificationLanguage, SectionQualification } from "../select/qualification.js";
 import { applyRules, renderRuleEffects } from "../rules.js";
 import type { RuleEffect } from "../rules.js";
-import { applyGraphAwareRules } from "../graphmatch.js";
+import { applyGraphAwareRules, resolvedQntmId } from "../graphmatch.js";
 import type { GraphSnapshot } from "../graphmatch.js";
 import { stampSpans, tagSpans } from "../express/rendition.js";
 import type { StructuralLanguage } from "../arrange/structural.js";
@@ -129,9 +129,9 @@ export function structuralParentLineIndex(lines: readonly string[], lineIndex: n
   return null;
 }
 
-/** `[[qntm:N]]` -> `N`, and `qntm:N` -> `N` — normalises whichever spelling a graph node's own `id`
- * carries against the bare id `stampSpans` extracts from a line's stamp, so a real match is never
- * missed over a prefix this app is not certain about either way. */
+/** `[[qntm:N]]` -> `N`, and `qntm:N` -> `N` — normalises whichever spelling is being compared against
+ * the bare id `stampSpans` extracts from a line's stamp, so a real match is never missed over a
+ * prefix this app is not certain about either way. */
 const bareId = (id: string): string => String(id).replace(/^qntm:/i, "");
 
 /** Either a resolved candidate or the reason there is none. */
@@ -160,7 +160,14 @@ export function parentCandidateFor(
       return { abstain: "graph-not-loaded" };
     }
     const wanted = bareId(first.id);
-    const node = snapshot.nodes.find((n) => bareId(n.id) === wanted);
+    // MATCHED BY `resolvedQntmId`, NEVER `n.id` — see that function's own header (`graphmatch.ts`).
+    // `n.id` is the graph engine's internal UUID; `first.id` (the stamp `stampSpans` read off the
+    // line) names `fields.qntm_id`, a different, small-integer namespace. Comparing against `n.id`
+    // directly (as this line originally did) could never match a real, present node — the identical
+    // defect `orderingqualify.ts` had, fixed the same way, the same day. `node.id` (the UUID) is
+    // still what this function RETURNS below: edges reference nodes by that same internal id, so the
+    // candidate id handed to `applyGraphAwareRules`/`matchesQualifierGraphAware` must stay the UUID.
+    const node = snapshot.nodes.find((n) => bareId(resolvedQntmId(n)) === wanted);
     if (node === undefined) {
       return { abstain: "parent-not-in-graph" };
     }
