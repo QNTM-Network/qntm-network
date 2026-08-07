@@ -151,7 +151,10 @@ const PROMOTION_QUALIFICATION: QualificationLanguage = {
   structuralNodeTypes: [],
   resolvableFields: [],
   extractionFields: {},
-  tokens: { node_type: { "#task": "task" }, domain: {}, status: { "[ ]": "open", "[x]": "done" } },
+  // `#outcome` MUST BE DECLARED — the rule table below retypes to `"outcome"`, and claim 3 (below)
+  // now reads `show()`'s own sentence, which (2026-08-07) reports `arm`'s own render abstention
+  // honestly rather than staying silent about it.
+  tokens: { node_type: { "#task": "task", "#outcome": "outcome" }, domain: {}, status: { "[ ]": "open", "[x]": "done" } },
   predicates: { "open-tasks": { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
   sections: { demo: { capture: { qualification: "open-tasks", nodeType: "task", name: "Capture", defaults: undefined } } },
   sectionOrder: { demo: ["capture"] },

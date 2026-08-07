@@ -67,8 +67,11 @@ const DECLARATION = {
   qualification: {
     defaultNodeType: "task",
     structuralNodeTypes: [],
+    // `#outcome` MUST BE DECLARED — the rule table below retypes to `"outcome"`, and this file now
+    // reads `show()`'s own sentence in places, which (2026-08-07) reports `arm`'s own render
+    // abstention honestly rather than staying silent about it.
     tokens: {
-      node_type: { "#task": "task" },
+      node_type: { "#task": "task", "#outcome": "outcome" },
       domain: { "#work": "work" },
       status: { "[ ]": "open", "[x]": "done" },
     },

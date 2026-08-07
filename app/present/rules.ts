@@ -57,6 +57,7 @@ import { qualifierNeedsClock, qualifierNeedsGraph } from "./select/qualification
 import { matchesQualifier } from "./select/membership.js";
 import type { ResolvedFields } from "./select/membership.js";
 import { tagSpans } from "./express/rendition.js";
+import type { TagSpan } from "./express/rendition.js";
 
 /** Mirrors `compile-rules.mjs`'s `normaliseWhen` output exactly — the closed predicate grammar a
  * published rule's `when:` was reduced to. */
@@ -690,12 +691,36 @@ function resolveRuleValue(
  *   commit-boundary discipline exists to avoid elsewhere in this bundle; this module refuses
  *   rather than edit in place, the same "the caret must not be disturbed" boundary the operator
  *   himself drew for this feature.
+ *
+ *   ── EXCEPT, AS OF 2026-08-07, A `retype` EFFECT'S OWN NODE-TYPE TOKEN ──
+ *
+ *   A parent line the operator already tagged `#task` hits `conflicting-token-present` on EVERY
+ *   real promotion (`task-with-open-part-of-child-becomes-outcome` and its three siblings), because
+ *   the tag the operator typed and the retype the graph-aware pass just decided are, definitionally,
+ *   the SAME family. Refusing here was never protecting a value the operator meant to keep: the
+ *   engine's own next settle performs EXACTLY this swap — `_field_expression_cells` (the canonical
+ *   renderer, read directly) writes the node's CURRENT type, not the one the operator happened to
+ *   type before the graph decided otherwise. A browser that refuses to spell the retype it just
+ *   computed is disagreeing with the cycle it exists to front-run, not protecting anything from it.
+ *   So `retype` alone REPLACES a same-family token in place rather than abstaining; `set` and
+ *   `unset` are unchanged and still refuse — a `set` targets a field the operator may have written
+ *   for a reason this app cannot see (an enum value chosen on purpose), and an `unset` is, by this
+ *   module's own header two paragraphs up, a refusal to strip characters. A node's TYPE is not that:
+ *   it is the one field every published promotion rule exists to overrule, on purpose, every time.
  */
 export type RuleRenderAbstention = "unrenderable-effect" | "conflicting-token-present";
 
 export type RuleRenderOutcome =
   | { readonly kind: "unchanged" }
-  | { readonly kind: "rendered"; readonly text: string }
+  /**
+   * `delta` is the characters a CALLER should show as the pending decoration — never derived by a
+   * caller slicing `text` against the line's own length. A same-family `retype` SWAP changes
+   * characters INSIDE the line (a shorter or longer token replacing an existing one at its own
+   * offset), so `text.slice(line.length)` — every caller's own suffix-slice before this leg — reads
+   * garbage or an empty string the moment a swap happens. `delta` is exactly what this function
+   * already knows (which token it just wrote, and where), so it is carried rather than re-derived.
+   */
+  | { readonly kind: "rendered"; readonly text: string; readonly delta: string }
   | { readonly kind: "abstains"; readonly because: RuleRenderAbstention; readonly effect: RuleEffect };
 
 /** `{token: value}` -> `{value: token}`, first token (sorted) wins a tie — the same "one real
@@ -715,6 +740,16 @@ function invertTokenFamily(family: Readonly<Record<string, FieldValue>>): Map<Fi
 function tagFromFamily(line: string, family: Readonly<Record<string, FieldValue>>): string | undefined {
   for (const span of tagSpans(line)) {
     if (Object.prototype.hasOwnProperty.call(family, span.text)) return span.text;
+  }
+  return undefined;
+}
+
+/** The same lookup as `tagFromFamily`, but the SPAN — position included — rather than just the
+ * text, so a `retype` SWAP (below) can replace exactly the characters of the existing token rather
+ * than merely detecting that one is there. */
+function tagSpanFromFamily(line: string, family: Readonly<Record<string, FieldValue>>): TagSpan | undefined {
+  for (const span of tagSpans(line)) {
+    if (Object.prototype.hasOwnProperty.call(family, span.text)) return span;
   }
   return undefined;
 }
@@ -748,16 +783,32 @@ export function renderRuleEffects(
 ): RuleRenderOutcome {
   if (effects.length === 0) return { kind: "unchanged" };
 
-  let appended = "";
+  // `original` NEVER CHANGES — every `set`/`unset` conflict check below reads it, byte-identical to
+  // this function's behaviour before 2026-08-07 (neither verb's own logic changed). `text` is the
+  // one value that accumulates both an APPEND (every verb) and, new as of the same date, a `retype`
+  // SWAP done IN PLACE at the existing token's own offset — which is why `text`, not `line`, is what
+  // a `retype` effect searches when deciding whether a same-family tag is already there.
+  const original = line;
+  let text = line;
+  const deltaParts: string[] = [];
+
   for (const effect of effects) {
     if (effect.verb === "retype") {
       const byValue = invertTokenFamily(nodeTypeTokens);
       const token = byValue.get(effect.to);
       if (token === undefined) return { kind: "abstains", because: "unrenderable-effect", effect };
-      const existing = tagFromFamily(line, nodeTypeTokens);
-      if (existing === token) continue; // already spelled — nothing to add
-      if (existing !== undefined) return { kind: "abstains", because: "conflicting-token-present", effect };
-      appended += ` ${token}`;
+      const existingSpan = tagSpanFromFamily(text, nodeTypeTokens);
+      if (existingSpan === undefined) {
+        text += ` ${token}`;
+        deltaParts.push(token);
+        continue;
+      }
+      if (existingSpan.text === token) continue; // already spelled — nothing to add
+      // THE SWAP — see this function's own header ("EXCEPT ... A retype EFFECT'S OWN NODE-TYPE
+      // TOKEN") for why `retype` alone replaces rather than refuses. Splices the new token in at
+      // exactly the old one's offset; nothing else on the line moves.
+      text = text.slice(0, existingSpan.start) + token + text.slice(existingSpan.end);
+      deltaParts.push(token);
       continue;
     }
     if (effect.verb === "set") {
@@ -766,18 +817,21 @@ export function renderRuleEffects(
         const byValue = invertTokenFamily(enumFamily);
         const token = byValue.get(effect.to);
         if (token === undefined) return { kind: "abstains", because: "unrenderable-effect", effect };
-        const existing = tagFromFamily(line, enumFamily);
+        const existing = tagFromFamily(original, enumFamily);
         if (existing === token) continue;
         if (existing !== undefined) return { kind: "abstains", because: "conflicting-token-present", effect };
-        appended += ` ${token}`;
+        text += ` ${token}`;
+        deltaParts.push(token);
         continue;
       }
       const marker = fieldMarkers[effect.field];
       if (marker === undefined) return { kind: "abstains", because: "unrenderable-effect", effect };
-      if (line.includes(marker.token)) {
+      if (original.includes(marker.token)) {
         return { kind: "abstains", because: "conflicting-token-present", effect };
       }
-      appended += ` ${marker.token} ${formatMarkerValue(effect.to)}`;
+      const piece = `${marker.token} ${formatMarkerValue(effect.to)}`;
+      text += ` ${piece}`;
+      deltaParts.push(piece);
       continue;
     }
     // unset — a fresh capture with nothing to unset is the common case (see this module's own
@@ -785,14 +839,14 @@ export function renderRuleEffects(
     // field's own token or marker glyph IS somehow already present, refuse rather than strip
     // characters the operator typed.
     const enumFamily = fieldTokens[effect.field];
-    if (enumFamily !== undefined && tagFromFamily(line, enumFamily) !== undefined) {
+    if (enumFamily !== undefined && tagFromFamily(original, enumFamily) !== undefined) {
       return { kind: "abstains", because: "conflicting-token-present", effect };
     }
     const marker = fieldMarkers[effect.field];
-    if (marker !== undefined && line.includes(marker.token)) {
+    if (marker !== undefined && original.includes(marker.token)) {
       return { kind: "abstains", because: "conflicting-token-present", effect };
     }
   }
 
-  return appended === "" ? { kind: "unchanged" } : { kind: "rendered", text: line + appended };
+  return deltaParts.length === 0 ? { kind: "unchanged" } : { kind: "rendered", text, delta: deltaParts.join(" ") };
 }

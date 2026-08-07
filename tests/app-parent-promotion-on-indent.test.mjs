@@ -47,6 +47,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assertMutated, importPage, installBrowser, makeEvent, makeWorkDir, mutatingBundle } from "./fixtures/app-html-page.mjs";
+import {
+  PROMOTION_DECLARATION,
+  PROMOTION_VIEW,
+  TAGGED_AFTER_PARENT,
+  TAGGED_AFTER_CHILD,
+} from "./fixtures/promotion-scenarios.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -66,7 +72,15 @@ const DECLARATION = {
     defaultNodeType: "task",
     structuralNodeTypes: [],
     tokens: {
-      node_type: { "#task": "task" },
+      // `#outcome` MUST BE DECLARED, NOT JUST `#task` — 2026-08-07. Every rule in this fixture
+      // retypes to `"outcome"`; before this leg, `arm()`'s own render call (and its abstention) was
+      // never read by anything (`show()` did not look at `render` yet), so an incomplete node_type
+      // family here went unnoticed — the resolver's `read()`/`say()` answer never touched rendering
+      // at all. Now that `show()` surfaces `arm`'s own abstention (`PromotionOutcome.render`), a
+      // missing token here reads as a real "parent: abstained — rendering-unrenderable-effect" and
+      // this fixture must be as complete as the real published vocabulary for the ONE value every
+      // rule in this file's own table targets.
+      node_type: { "#task": "task", "#outcome": "outcome" },
       domain: {},
       status: { "[ ]": "open", "[x]": "done" },
     },
@@ -728,5 +742,44 @@ describe("MUTATION PROOF — the pre-fix bare `resolveLineFields` child lookup r
     };
     const reading = page.__parentPromotionFor(VIEW, commit);
     assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. THE SHARED FIXTURE — the SAME tagged parent/child markdown and declaration
+//    `tests/app-predict-wiring.test.mjs` §8/§9 drive through `arm()`/paint, proven here at the
+//    RESOLVER level only (`read`/`say`). See `tests/fixtures/promotion-scenarios.mjs`'s own header:
+//    this file and that one used to invent their own opinions about "what a real task line looks
+//    like" — this one tagged (`SOURCE`, above), that one bare — and the divergence was never
+//    noticed because neither file drove the OTHER file's shape all the way to paint. One shared
+//    fixture, imported by both, is what makes that specific silent divergence impossible to repeat.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe("8. THE SHARED FIXTURE — read()/say() decide correctly for the SAME tagged shape §8/§9 of app-predict-wiring proves end to end", () => {
+  test("the resolver's own answer: a tagged parent's promotion is decided, narrated, and — as of this leg — actually spellable", async () => {
+    const work = makeWorkDir("shared-fixture-tagged-headline");
+    installBrowser();
+    globalThis.fetch = postStub();
+    const page = await importPage(work);
+    page.__applyPresentation(PROMOTION_DECLARATION);
+    page.__setGraphData({ snapshot: { generated_at: "2026-08-07T00:00:00Z", views: [], graph: { nodes: [], edges: [] } } });
+
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy #task",
+      markdown: TAGGED_AFTER_CHILD,
+      source: TAGGED_AFTER_PARENT,
+      kind: "insert-line",
+    };
+    const reading = page.__parentPromotionFor(PROMOTION_VIEW, commit);
+    assert.equal(reading.kind, "answer");
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome/);
+    // THE HALF THIS FILE COULD NEVER SEE ON ITS OWN BEFORE THIS LEG: `read()`'s own `render` field
+    // says whether `arm()` can actually spell this decision onto the parent's line.
+    // `app-predict-wiring.test.mjs` §8/§9 prove the PAINT; this proves the DECISION the paint is
+    // built from, off the byte-identical markdown — the resolver answers correctly, AND (now) the
+    // rendering it feeds does too.
+    assert.equal(reading.render.kind, "rendered");
+    assert.equal(reading.render.text, "- [ ] Ship the launch note #outcome");
   });
 });

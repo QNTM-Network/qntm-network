@@ -181,7 +181,11 @@ const PROMOTION_DECLARATION = {
   qualification: {
     defaultNodeType: "task",
     structuralNodeTypes: [],
-    tokens: { node_type: { "#task": "task" }, domain: {}, status: { "[ ]": "open", "[x]": "done" } },
+    // `#outcome` MUST BE DECLARED — this rule table's own action retypes to `"outcome"`, and §1's
+    // headline test below now reads `show()`'s own sentence, which (2026-08-07) reports `arm`'s own
+    // render abstention honestly. A `node_type` family missing the value a rule targets is a real
+    // "cannot spell it" abstention, not a fixture nicety.
+    tokens: { node_type: { "#task": "task", "#outcome": "outcome" }, domain: {}, status: { "[ ]": "open", "[x]": "done" } },
     predicates: { "open-tasks": { find: { nodeType: ["task"], fields: {} }, exclude: [] } },
     sections: { demo: { capture: { qualification: "open-tasks", nodeType: "task", name: "Capture" } } },
     sectionOrder: { demo: ["capture"] },
