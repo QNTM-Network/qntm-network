@@ -657,15 +657,26 @@ describe("8. `commitLine` names no resolver — it builds a context, walks the r
   test("it walks the registry exactly once and arms exactly what does real work with what comes back", () => {
     assert.match(commitLineBody, /runResolvers\(RESOLVERS, resolverContextFor\(view, commit\)\)/);
     assert.equal((commitLineBody.match(/runResolvers\(/g) ?? []).length, 1);
-    // `outcome.notes.join(" · ")` (the freshness line's prediction clause) and
-    // `for (const diagnostic of outcome.diagnostics)` (the four abstention badges) are GONE
-    // (chore/retire-the-status-line) — commitLine no longer consumes either field. `.placements`/
-    // `.predictions` still do real work (row settling/prediction) and are still armed.
+    // `outcome.notes.join(" · ")` (the freshness line's prediction clause) is GONE
+    // (chore/retire-the-status-line) and STAYS gone — commitLine must never re-narrate what it
+    // already decided into an on-screen sentence, the operator's own reason for killing it.
+    //
+    // `outcome.diagnostics` IS DIFFERENT, AND IS DELIBERATELY BACK (2026-08-07,
+    // design-the-rule-mirror.md §9.2 / roadmap-the-road-ahead.md step 2) — but ONLY through
+    // `reportAbstentions`, which narrows to genuine refusals (`abstentionsOf`) and writes to
+    // `console.debug`, never a DOM badge. `tests/app-abstention-diagnostic.test.mjs` is the
+    // falsifier for that mechanism; this test only pins that `commitLine`'s OWN body reads the
+    // field through that one function and no other way.
     // CODE ONLY — commitLine's own comment explains what used to be here, in prose, and a bare
     // string search would mistake that sentence for the code it describes.
     const codeOnly = commitLineBody.replace(/\/\/.*$/gm, "");
     assert.doesNotMatch(codeOnly, /outcome\.notes\b/, "commitLine still reads outcome.notes — the retired narration is back");
-    assert.doesNotMatch(codeOnly, /outcome\.diagnostics\b/, "commitLine still reads outcome.diagnostics — the retired badges are back");
+    assert.equal(
+      (codeOnly.match(/outcome\.diagnostics\b/g) ?? []).length,
+      1,
+      "commitLine must read outcome.diagnostics exactly once, and only to hand it to reportAbstentions",
+    );
+    assert.match(codeOnly, /reportAbstentions\(outcome\.diagnostics\)/, "commitLine must route outcome.diagnostics through reportAbstentions, never a bare loop or a DOM write");
     assert.match(commitLineBody, /armSettle\(settle, commit\.markdown, view\.id, outcome\.placements\)/);
     assert.match(commitLineBody, /armPredict\(predict, commit\.markdown, view\.id, outcome\.predictions\)/);
   });

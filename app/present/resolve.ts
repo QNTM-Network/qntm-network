@@ -385,6 +385,45 @@ export function runResolvers(resolvers: readonly Resolver[], ctx: CommitContext)
   return { runs, notes, diagnostics, placements, predictions };
 }
 
+/**
+ * THE DIAGNOSTIC REGISTER'S OWN FILTER — 2026-08-07, design-the-rule-mirror.md §9.2 / roadmap-the-
+ * road-ahead.md step 2, "make an abstention visible".
+ *
+ * ── WHAT THIS NARROWS, AND WHY THAT NARROWING IS THE WHOLE FIX ──
+ *
+ * `CommitOutcome.diagnostics` already carries a `Diagnostic` for EVERY resolver that said anything
+ * at all in `show()` — a genuine refusal (`abstained: true`) AND a confident "membership: decided"
+ * (`abstained: false`) read exactly the same way, because `show()`'s own contract (`resolve.ts`,
+ * `ResolverSpec`) is "a sentence, or `''` for silence", not "a sentence only when something is
+ * wrong". `runResolvers` collects both without judging between them — that judgement belongs one
+ * layer up, where it can be named, tested and reused, not repeated at every call site that only
+ * wants one half of it. This function IS that judgement: the abstentions, and only the abstentions.
+ *
+ * ── THE DEFECT THIS CLOSES, STATED AGAINST THE CODE THAT SHIPPED IT ──
+ *
+ * Before `#membershipBadge` existed (`membershipNoteFor`, retired `15cb626`) and after it was
+ * retired for narrating rather than working (the operator, on that commit: "it excuses things not
+ * working 'as long as they are reported'... we are building a working app"), an abstention and a
+ * confident silence were BYTE-IDENTICAL on screen — both produced `""` in the one sentence a
+ * resolver contributed. `#membershipBadge`'s own fix was correct in kind (a second register) and
+ * wrong in venue (an on-screen sink the operator killed two days later, for reasons unrelated to
+ * whether the register itself was worth keeping). This function is the register, kept; a new venue
+ * (`commitLine`'s own `console.debug`, never the page) is the surface — see that call site's own
+ * header for why quiet-by-construction is not a compromise here but the actual requirement.
+ *
+ * ── "I DO NOT KNOW" IS STILL NEVER GUESSED PAST, ONLY NAMED ──
+ *
+ * `"not-evaluated"` readings never reach here at all — `diagnosticOf` returns `null` for them
+ * (`show()`'s own `if (reading.kind === "not-evaluated") return "";` in every resolver), so a
+ * precondition a resolver never got to judge (no declaration loaded, the wrong commit kind, an
+ * unpublished section address) stays exactly as absent from this list as it always has been. This
+ * function only ever separates a REFUSAL a resolver DID make from an ANSWER it reached — the one
+ * distinction `design-the-rule-mirror.md` §9.2 names as missing, and no other.
+ */
+export function abstentionsOf(diagnostics: readonly Diagnostic[]): readonly Diagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.abstained);
+}
+
 /** `SettleSurface`'s arming half, narrowed — this module never holds the surface itself. */
 export interface SettleArm {
   arm(source: string, view: string, placement: RowPlacement): void;

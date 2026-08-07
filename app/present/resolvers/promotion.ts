@@ -140,20 +140,39 @@ type ParentCandidate =
   | { readonly abstain: string };
 
 /**
- * The structural parent's own id + resolved fields — from the LIVE GRAPH when the parent line
- * already carries a `[[qntm:N]]` stamp (the graph, never a re-derivation off the line, is this
- * app's source of truth for an existing node — the same posture `resolveLineFields` takes when it
- * refuses "already-a-node"), or resolved the SAME way a fresh candidate's fields are when the
- * parent line carries no stamp yet, because an unstamped parent is ITSELF not yet a node the graph
- * can answer for. Returns `{ abstain }` rather than guessing when neither source can answer.
+ * ONE NODE-CANDIDATE LOOKUP, SHARED BY BOTH ENDS OF A PROMOTED EDGE.
+ *
+ * `parentCandidateFor` (below) has always read the structural PARENT this way: from the LIVE GRAPH
+ * when the line already carries a `[[qntm:N]]` stamp (the graph, never a re-derivation off the
+ * line, is this app's source of truth for an existing node — the same posture `resolveLineFields`
+ * takes when it refuses "already-a-node"), or resolved the SAME way a fresh candidate's fields are
+ * when the line carries no stamp yet, because an unstamped line is ITSELF not yet a node the graph
+ * can answer for.
+ *
+ * 2026-08-07: THE CHILD NEEDED THE SAME TREATMENT AND DID NOT HAVE IT. `read`, below, used to read
+ * the child's fields with `resolveLineFields` ALONE — correct for a fresh capture, but a flat
+ * `"already-a-node"` abstain for the operator's other own commonest gesture: capture a task flat,
+ * let it round-trip and gain a real stamp, THEN indent it under a parent. That line is not being
+ * typed into existence; it is an EXISTING node whose fields the graph already knows, exactly the
+ * shape `parentCandidateFor` already had a branch for — the child side of the same edge just never
+ * got it. `childCandidateFor` (below) is that branch, reusing this one lookup rather than a second,
+ * driftable copy of the `bareId`/`resolvedQntmId` matching `orderingqualify.ts`'s own header
+ * already names as the exact defect class a duplicate risks.
+ *
+ * `notFoundPrefix` is the one string that differs between the two callers — `parentCandidateFor`'s
+ * own `"parent-not-in-graph"` stays byte-identical (the mutation proof in
+ * `tests/present-graphmatch.test.mjs` pins it); `childCandidateFor` reports `"child-not-in-graph"`,
+ * matching the `child-<reason>` wording its OWN fresh-capture branch already used. Every other
+ * fresh-capture abstain is prefixed the same way for both, unchanged from before this split.
  */
-export function parentCandidateFor(
-  parentLine: string,
-  parentSection: SectionQualification,
+function structuralNodeCandidateFor(
+  line: string,
+  section: SectionQualification,
   snapshot: GraphSnapshot | null,
   qualification: QualificationLanguage,
+  notFoundPrefix: "parent" | "child",
 ): ParentCandidate {
-  const stamped = stampSpans(parentLine);
+  const stamped = stampSpans(line);
   const first = stamped[0];
   if (first !== undefined) {
     if (snapshot === null) {
@@ -169,15 +188,44 @@ export function parentCandidateFor(
     // candidate id handed to `applyGraphAwareRules`/`matchesQualifierGraphAware` must stay the UUID.
     const node = snapshot.nodes.find((n) => bareId(resolvedQntmId(n)) === wanted);
     if (node === undefined) {
-      return { abstain: "parent-not-in-graph" };
+      return { abstain: `${notFoundPrefix}-not-in-graph` };
     }
     return { id: node.id, fields: { node_type: node.type, ...node.fields } };
   }
-  const fields = resolveLineFields(parentLine, parentSection, qualification);
+  const fields = resolveLineFields(line, section, qualification);
   if (typeof fields === "string") {
-    return { abstain: `parent-${fields}` };
+    return { abstain: `${notFoundPrefix}-${fields}` };
   }
   return { id: null, fields };
+}
+
+/**
+ * The structural parent's own id + resolved fields. See `structuralNodeCandidateFor`'s own header
+ * for the lookup this delegates to; unchanged in every way a caller or a test can observe.
+ */
+export function parentCandidateFor(
+  parentLine: string,
+  parentSection: SectionQualification,
+  snapshot: GraphSnapshot | null,
+  qualification: QualificationLanguage,
+): ParentCandidate {
+  return structuralNodeCandidateFor(parentLine, parentSection, snapshot, qualification, "parent");
+}
+
+/**
+ * The CHILD's own id + resolved fields — the freshly committed line itself, `read` (below) is
+ * evaluating a structural promotion for. See `structuralNodeCandidateFor`'s own header for why this
+ * exists (2026-08-07): a child that already carries a `[[qntm:N]]` stamp is an EXISTING node being
+ * reorganised, not a fresh capture, and the graph — not a refused `resolveLineFields` call — is
+ * this app's source of truth for what it currently is.
+ */
+function childCandidateFor(
+  childLine: string,
+  childSection: SectionQualification,
+  snapshot: GraphSnapshot | null,
+  qualification: QualificationLanguage,
+): ParentCandidate {
+  return structuralNodeCandidateFor(childLine, childSection, snapshot, qualification, "child");
 }
 
 /**
@@ -279,10 +327,19 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
       return { kind: "abstains", because: "no-section-declaration" };
     }
     const childLine = lines[commit.lineIndex] ?? "";
-    const childFieldsRaw = resolveLineFields(childLine, childSection, qualification);
-    if (typeof childFieldsRaw === "string") {
-      return { kind: "abstains", because: `child-${childFieldsRaw}` };
+    const snapshot = ctx.graph;
+    // `childCandidateFor` — NOT a bare `resolveLineFields` call — because the committed line is not
+    // always a fresh capture: the operator's OTHER commonest gesture is capturing a task flat, and
+    // only indenting it under a parent once it has already round-tripped and gained a
+    // `[[qntm:N]]` stamp. `resolveLineFields` alone refuses that line outright
+    // (`"already-a-node"`), which used to abstain the WHOLE promotion rather than reading the
+    // child's already-known fields off the graph, exactly as `parentCandidateFor` already does for
+    // the other end of the same edge. See `structuralNodeCandidateFor`'s own header (2026-08-07).
+    const childCandidate = childCandidateFor(childLine, childSection, snapshot, qualification);
+    if ("abstain" in childCandidate) {
+      return { kind: "abstains", because: childCandidate.abstain };
     }
+    const childFieldsRaw = childCandidate.fields;
 
     const binding = prospectiveEdgeBinding(childLine, structural);
     if (binding === undefined) {
@@ -295,7 +352,6 @@ export const promotionSpec: ResolverSpec<PromotionCommitReading> = {
       return { kind: "abstains", because: "no-section-declaration" };
     }
     const parentLine = lines[parentAt] ?? "";
-    const snapshot = ctx.graph;
     const parentCandidate = parentCandidateFor(parentLine, parentSection, snapshot, qualification);
     if ("abstain" in parentCandidate) {
       return { kind: "abstains", because: parentCandidate.abstain };

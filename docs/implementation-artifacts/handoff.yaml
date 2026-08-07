@@ -62,22 +62,93 @@ handoff:
   - id: resolve-from-the-model-not-the-text
   - id: carry-presentation-through-the-snapshot-envelope
   - id: token-renditions-chips-titles-and-pills
+  - id: an-indented-prose-line-cannot-carry-a-token-rendition
   - id: author-in-the-browser-not-in-obsidian
   - id: a-write-refuses-a-stale-base
   - id: the-cursor-anchors-to-a-node-not-a-line-number
   - id: the-open-line-survives-a-new-projection
   - id: the-vanished-line-is-parked-not-dropped
   - id: the-write-is-refused-server-side
-  - id: stop-awaiting-the-cycle-safely
+  - id: vault-file-accepts-a-precondition
+  - id: a-refused-edit-is-held-unanchored
   - id: the-projection-arrives-without-being-asked-for
   - id: a-line-being-made-survives-a-projection-too
   - id: correct-the-dangerous-sentence-in-app-source
+  - id: memoise-the-painters-embodiment
+  - id: the-scoped-node-wire
+  - id: the-declared-working-set-bound
+  - id: close-the-composition-asymmetry-in-the-browsers-declaration
   - id: the-focused-line-shows-its-source-rule
   - id: add-the-mode-presentation-level
+  - id: vim-normal-mode
+  - id: vim-normal-mode-slice-2
+  - id: vim-normal-mode-slice-3
+  - id: vim-normal-mode-slice-4
+  - id: vim-normal-mode-slice-5
   - id: add-the-user-presentation-level
+  - id: bundle-vendor-libraries-locally
   - id: flag-one-markdown-implementation-is-now-three
+  - id: scenario-the-vim-gesture-layer
+  - id: scenario-instance-ts-coverage-gap
   - id: flag-every-verify-pass-in-capabilities-yaml
+  - id: flow-trace-gate-added-advisory
   - id: declare-the-hosted-application
+  - id: stop-awaiting-the-cycle-safely
+  - id: show-something-before-the-script-runs
+  - id: cache-the-cors-preflight
+  - id: wake-the-fly-machine-or-price-min-machines-running
+  - id: take-graph-and-locations-off-first-paint
+  - id: skeleton-rows-in-viewbody
+  - id: delete-the-dead-capture-one-thing-half
+  - id: cache-last-snapshot-client-side
+  - id: index-qntm-id-lookups-in-qntm-graph
+  - id: adopt-nanostores-for-currentviewid-and-graphdata
+  - id: a-save-round-trip-clobbers-mid-typing
+  - id: the-held-strip-shows-rows-nothing-was-lost-for
+  - id: the-page-clock-goes-stale
+  - id: keys-that-do-nothing
+  - id: held-is-really-held
+  - id: the-declaration-is-fetched-not-baked
+  - id: an-engine-correction-is-a-visible-event
+  - id: config-compiles-without-a-build
+  - id: config-is-per-user-not-per-server
+  - id: escape-discards-typed-text
+  - id: the-mode-badge-lies
+  - id: the-operator-set-has-no-single-address
+  - id: the-reachability-set-is-proven-not-compiled
+  - id: a-never-seen-config-passes-the-acceptance-test
+  - id: resolution-ts-is-not-a-resolution
+  - id: the-grammars-have-no-shared-index
+  - id: accepted-ts-misdescribes-two-siblings
+  - id: an-unrecognised-token-may-pass-silently
+  - id: the-structural-slice-proves-the-runtime-compile
+  - id: a-config-write-lands-on-both-consumers-or-neither
+  - id: the-declaration-is-served-by-version-not-by-file
+  - id: the-acceptance-test-backlog-row-is-stale
+  - id: gate-two-declines-a-config-it-cannot-load
+  - id: stage-three-does-not-tenant-ize-config
+  - id: starter-package-and-six-empty-directories-are-monorepo-cleanup
+  - id: flow-trace-derives-a-time-axis-from-enforcer-git-history
+  - id: declare-the-default-ordering-in-config
+  - id: consolidate-declaration-lets-into-one-value
+  - id: the-cascade-terminates-for-a-new-line
+  - id: write-register-gains-a-terminal-state
+  - id: refused-write-hands-content-back
+  - id: boot-and-refresh-reads-retry-before-giving-up
+  - id: a-one-hop-graph-agreement-fixture-for-parent-promotion
+  - id: declare-the-default-view
+  - id: size-the-column-to-a-declared-measure
+  - id: per-section-field-admission-not-per-field-name
+  - id: declare-the-scoped-node-wire-and-working-set-in-flows-yaml
+  - id: the-engine-reads-default-ordering-from-config
+  - id: per-cell-affixes-a-declared-bullet-a-declared-separator
+  - id: does-placement-beat-derivation
+  - id: divergence-measured-on-rendered-output-not-only-on-decisions
+  - id: the-dist-rebuild-moves-to-a-bot-step-on-merge
+  - id: the-166-pre-existing-engine-test-failures-are-unexamined
+  - id: flows-yaml-entries-for-this-passs-new-capability-rows-once-real-calls-exist
+  - id: scenario-the-membership-ordering-promotion-resolver-axes
+  - id: verify-crashes-on-instance-anchor-independent-of-any-of-this-passs-changes
   instance_queue: []  # DERIVED by flow_trace.prioritization.derive_queue(layer='config') — the CONFIG (admin/instance) stratum, partitioned OUT of `queue:` (code); the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
 
   qualitative:

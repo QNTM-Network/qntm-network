@@ -579,3 +579,154 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
     await new Promise((r) => setImmediate(r));
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 7. THE ALREADY-STAMPED CHILD — 2026-08-07's live defect: "added a child under a parent... the
+//    parent did not flip to outcome" (front end), "it came back as outcome" (server round trip).
+//
+// Section 1's own SOURCE fixture states, in as many words, that its unstamped sibling "may already
+// have one" — a `[[qntm:N]]` stamp — and that this file did not exercise that half on purpose. This
+// section is that other half. The operator's other own commonest gesture is not "type a task,
+// immediately indent it" (section 1) but "capture a task flat, let it round-trip and gain a real
+// stamp, THEN reorganise it under a parent" — and on `main` before this leg, that gesture never
+// reached the promotion prediction at all: `resolveLineFields` refuses ANY stamped line outright
+// (`"already-a-node"`), and `read` (`resolvers/promotion.ts`) used to call it on the CHILD with no
+// fallback, so an indent of an EXISTING task abstained `child-already-a-node` — silently, since
+// `#parentBadge`/`#freshness` are retired — even though the graph already knows that child's fields
+// exactly as well as it knows the parent's. `childCandidateFor` closes the gap the same way
+// `parentCandidateFor` always has: the graph when the line is stamped, `resolveLineFields` when it
+// is not.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+const STAMPED_SIBLING_SOURCE = [
+  "## Capture",
+  "- [ ] Ship the launch note [[qntm:501]] #task",
+  "- [ ] Draft the copy [[qntm:502]] #task",
+].join("\n");
+
+// BOTH nodes are already in the graph — the child is not a fresh capture, it is an EXISTING task
+// the operator is only now reorganising under a parent. No `PART_OF` edge yet: the graph has not
+// caught up with this indent, which has not even been posted.
+const STAMPED_SIBLING_GRAPH = {
+  nodes: [
+    { id: "qntm:501", type: "task", fields: { status: "open" } },
+    { id: "qntm:502", type: "task", fields: { status: "open" } },
+  ],
+  edges: [],
+};
+
+describe("7. THE ALREADY-STAMPED CHILD: an EXISTING task, indented beneath another with `>`", () => {
+  test("through the real page: the parent's promotion is predicted for an already-stamped child, not just a fresh one", async () => {
+    const { page, press, posted } = await freshPage("stamped-child-headline", STAMPED_SIBLING_SOURCE, STAMPED_SIBLING_GRAPH);
+    press("j"); // line 1: the parent
+    press("j"); // line 2: the already-stamped sibling about to be indented
+
+    press(">");
+    // READ SYNCHRONOUSLY, BEFORE THE WRITE'S OWN ANSWER LANDS — see section 1's own comment.
+    const write = posted[0];
+    assert.ok(write, "> never reached the write endpoint");
+    assert.equal(
+      write.body.markdown,
+      "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy [[qntm:502]] #task",
+      "the indent itself did not post the expected file",
+    );
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy [[qntm:502]] #task",
+      markdown: write.body.markdown,
+      source: STAMPED_SIBLING_SOURCE,
+      kind: "set-line",
+    };
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(
+      page.__parentPromotionDiagnosticFor(reading),
+      "parent: decided",
+      "an already-stamped child must not silently abstain 'child-already-a-node' — the graph knows its fields exactly as it knows the parent's",
+    );
+    assert.match(page.__parentPromotionNoteFor(reading), /the row above becomes outcome/);
+    await new Promise((r) => setImmediate(r));
+  });
+
+  test("THE PURE ANSWER, driven directly: the reading is a real 'answer', never the abstention this defect used to produce", async () => {
+    const { page } = await freshPage("stamped-child-pure", STAMPED_SIBLING_SOURCE, STAMPED_SIBLING_GRAPH);
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy [[qntm:502]] #task",
+      markdown: "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy [[qntm:502]] #task",
+      source: STAMPED_SIBLING_SOURCE,
+      kind: "set-line",
+    };
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(reading.kind, "answer");
+    assert.notEqual(reading.kind, "abstains");
+  });
+});
+
+// ── MUTATION PROOF — reverting the child lookup to a bare `resolveLineFields` call reproduces the
+// exact silent abstention this section exists to close ──
+
+/**
+ * The precise text `read` calls today, right after the child's section is found — AS THE BUNDLE
+ * SPELLS IT — matched exactly so a drift in the module's own wording fails this file loudly rather
+ * than silently mutating nothing.
+ */
+const CHILD_CANDIDATE_LOOKUP =
+  'const childCandidate = childCandidateFor(childLine, childSection, snapshot, qualification);\n' +
+  '    if ("abstain" in childCandidate) {\n' +
+  '      return { kind: "abstains", because: childCandidate.abstain };\n' +
+  '    }\n' +
+  '    const childFieldsRaw = childCandidate.fields;';
+
+/** The ORIGINAL, pre-fix shape — a bare `resolveLineFields` call with no graph fallback, refusing
+ * every stamped child outright regardless of what the graph already knows about it. */
+const withBareResolveLineFieldsForChild = mutatingBundle([
+  CHILD_CANDIDATE_LOOKUP,
+  'const childFieldsRaw = resolveLineFields(childLine, childSection, qualification);\n' +
+    '    if (typeof childFieldsRaw === "string") {\n' +
+    '      return { kind: "abstains", because: `child-${childFieldsRaw}` };\n' +
+    '    }',
+]);
+
+describe("MUTATION PROOF — the pre-fix bare `resolveLineFields` child lookup reproduces the defect, and only that lookup", () => {
+  test("RED: with the old child lookup restored, an already-stamped child abstains 'child-already-a-node'", async () => {
+    const { page, press } = await freshPage(
+      "stamped-child-mutation-red",
+      STAMPED_SIBLING_SOURCE,
+      STAMPED_SIBLING_GRAPH,
+      withBareResolveLineFieldsForChild,
+    );
+    press("j");
+    press("j");
+    press(">");
+    await new Promise((r) => setImmediate(r));
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy [[qntm:502]] #task",
+      markdown: "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy [[qntm:502]] #task",
+      source: STAMPED_SIBLING_SOURCE,
+      kind: "set-line",
+    };
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.deepEqual(
+      reading,
+      { kind: "abstains", because: "child-already-a-node" },
+      "the pre-fix lookup must reproduce the exact silent abstention this leg closes — main's own defect, reproduced",
+    );
+  });
+
+  test("GREEN: the unmutated page (this branch) answers for the identical gesture", async () => {
+    const { page, press } = await freshPage("stamped-child-mutation-green", STAMPED_SIBLING_SOURCE, STAMPED_SIBLING_GRAPH);
+    press("j");
+    press("j");
+    press(">");
+    const commit = {
+      lineIndex: 2,
+      text: "    - [ ] Draft the copy [[qntm:502]] #task",
+      markdown: "## Capture\n- [ ] Ship the launch note [[qntm:501]] #task\n    - [ ] Draft the copy [[qntm:502]] #task",
+      source: STAMPED_SIBLING_SOURCE,
+      kind: "set-line",
+    };
+    const reading = page.__parentPromotionFor(VIEW, commit);
+    assert.equal(page.__parentPromotionDiagnosticFor(reading), "parent: decided");
+  });
+});
