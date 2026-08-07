@@ -4898,6 +4898,9 @@ function paint(body, source, context, deps) {
       element.dataset.instance = info.instance;
     }
   };
+  const markLineIndex = (element, lineIndex) => {
+    element.dataset.lineIndex = String(lineIndex);
+  };
   const repaint = (nextSource) => {
     if (deps.view !== void 0) {
       deps.rows?.edited(deps.view, nextSource);
@@ -4925,6 +4928,7 @@ function paint(body, source, context, deps) {
     if (focus === void 0) {
       const text = rawText(lineSource);
       stampInstance(text, lineIndex);
+      markLineIndex(text, lineIndex);
       body.append(text);
       rowsByLineIndex.set(lineIndex, text);
       return;
@@ -4933,12 +4937,14 @@ function paint(body, source, context, deps) {
       const line = normalLine(lineSource, focus.column);
       focusable(line, lineIndex);
       stampInstance(line, lineIndex);
+      markLineIndex(line, lineIndex);
       body.append(line);
       rowsByLineIndex.set(lineIndex, line);
       return;
     }
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
     stampInstance(input, lineIndex);
+    markLineIndex(input, lineIndex);
     body.append(input);
     rowsByLineIndex.set(lineIndex, input);
     if (focus.isFocused(lineIndex)) {
@@ -5034,6 +5040,7 @@ function paint(body, source, context, deps) {
       span.innerHTML = renderTokens(shape.tail, checkboxTagsRendition, checkboxStampRendition, checkboxRender);
       focusable(span, index);
       stampInstance(row, index);
+      markLineIndex(row, index);
       row.append(box, span);
       body.append(row);
       rowsByLineIndex.set(index, row);
@@ -5057,6 +5064,7 @@ function paint(body, source, context, deps) {
       el.innerHTML = renderTokens(shape.text, headingTagsRendition, headingStampRendition, headingRender);
       focusable(el, index);
       stampInstance(el, index);
+      markLineIndex(el, index);
       body.append(el);
       rowsByLineIndex.set(index, el);
       predictableByLineIndex.set(index, {
@@ -5078,6 +5086,7 @@ function paint(body, source, context, deps) {
     div.innerHTML = renderTokens(shape.source, proseTagsRendition, proseStampRendition, proseRender);
     focusable(div, index);
     stampInstance(div, index);
+    markLineIndex(div, index);
     body.append(div);
     rowsByLineIndex.set(index, div);
     predictableByLineIndex.set(index, {
@@ -5139,6 +5148,16 @@ function paint(body, source, context, deps) {
   if (deps.view !== void 0) {
     deps.rows?.seat(deps.view, source, focus?.lineIndex ?? null);
   }
+}
+function visualLineOrder(body) {
+  const order = [];
+  for (const child of Array.from(body.children)) {
+    const raw = child.dataset?.lineIndex;
+    if (raw !== void 0) {
+      order.push(Number(raw));
+    }
+  }
+  return order;
 }
 
 // app/present/settle.ts
@@ -6609,6 +6628,7 @@ export {
   titleSpans,
   todayFor,
   viewButtons,
+  visualLineOrder,
   wikiLinkSpans,
   wordCaret
 };
