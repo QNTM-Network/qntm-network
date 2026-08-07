@@ -1926,6 +1926,17 @@ capabilities:
     (`section-membership-is-said-in-the-freshness-line`) gained a second, honestly-separate way to
     report a state it previously could not distinguish — not a new depth of enforcement reaching a
     sink for the first time, which is the day-boundary row's own VERTICAL story, not this one's.
+    SUPERSEDED, 2026-08-07 — READ BEFORE TRUSTING `rooting`/`status` BELOW. `#membershipBadge`
+    itself (the DOM sink this row built) was deleted by `15cb626` (`chore(app): retire the status
+    line`, 2026-08-05) — the operator's own reason, on that commit, is recorded on the backlog row
+    this capability drives (`an-abstention-is-visible-to-the-operator`). `membershipDiagnosticFor`
+    and `updateMembershipBadge` no longer exist; `tests/app-membership-diagnostic.test.mjs` was
+    deleted with them. The MECHANISM this row argued for (a second register, never the same
+    sentence a confident answer uses) is not wrong and is not gone — it now lives as
+    `abstention-diagnostic-register` (below), writing to `console.debug` for all four resolvers
+    rather than a badge for one. `rooting`/`status` immediately below describe the DELETED code and
+    are kept, unedited, as the historical record of what this row actually built and proved at the
+    time — not a claim that any of it still runs.
   tier: functional
   rooting: >-
     isolated inside `app/index.html`, the identical posture
@@ -4008,4 +4019,123 @@ capabilities:
     the-published-rule-order-is-applied-at-commit` is the scoped, crash-avoiding way to check this
     capability alone; see the intent's own account of why the unscoped whole-suite run cannot be
     used as evidence on this worktree today.
+  status: working
+
+- id: resolvers-child-candidate-reads-the-graph
+  intent: >-
+    THE OPERATOR'S OWN REPORT, 2026-08-07: he indented a task under a parent in the browser; the
+    parent did not flip to `outcome`; when the engine's own cycle settled back, it had. The browser
+    front-ran nothing and said nothing about why — `#parentBadge` was retired 2026-08-05
+    (`chore(app): retire the status line`), so a silent abstain had no venue left to reach at all.
+    THE DIAGNOSIS, VERIFIED AGAINST THE COMPILED DECLARATION AND BY DRIVING `resolvers/promotion.ts`
+    DIRECTLY (never reasoned to). `task-with-open-part-of-child-becomes-outcome` IS compiled into
+    `presentation.json` (`partial: true`, a two-step `edgeSteps` pattern), `structural.indent`
+    publishes `{edgeType: "PART_OF", edgeSource: "self"}` generically, and `promotion.ts` already
+    synthesises the pending child as a `ProspectiveChild` — none of the four previously-suspected
+    abstains (`NOT_EVALUATED`, `no-section-declaration`, `parent-not-in-graph`,
+    `graph-match-undecidable`) fired for the operator's own gesture, reproduced with the REAL
+    compiled rule/pattern. A FIFTH, undocumented abstain did: `parentCandidateFor` (the PARENT's own
+    lookup) already read a stamped line off the LIVE GRAPH rather than refusing it — but `read`'s
+    CHILD-side lookup called `resolveLineFields` alone, which flatly refuses ANY line already
+    carrying a `[[qntm:N]]` stamp (`"already-a-node"`). The operator's commonest gesture — capture a
+    task flat, let it round-trip and gain a real stamp, THEN reorganise it under a parent — commits
+    an ALREADY-STAMPED child, and `read` abstained `child-already-a-node` for it, silently, on every
+    such indent. `tests/app-parent-promotion-on-indent.test.mjs`'s own section 1 fixture comment
+    said as much in as many words before this row: "the indented child may already have one... is
+    deliberately NOT exercised".
+    THE FIX. `structuralNodeCandidateFor` (promotion.ts) is `parentCandidateFor`'s own lookup,
+    generalised and shared: the graph, by `resolvedQntmId`, when the line is stamped; the
+    fresh-capture cascade (`resolveLineFields`) when it is not — ONE function, not two driftable
+    copies of the `bareId`/`resolvedQntmId` matching `graphmatch.ts`'s own header already names as
+    the exact defect class a duplicate risks (`orderingqualify.ts`'s identical bug, fixed the same
+    way, 2026-08-07). `parentCandidateFor` keeps its exact name and behaviour (the mutation proof in
+    `tests/present-graphmatch.test.mjs` pins its abstain string, `"parent-not-in-graph"`, unchanged);
+    `childCandidateFor` is the new sibling, reporting `"child-not-in-graph"` for the equivalent gap.
+    WHAT THIS DOES NOT CLOSE. The reverse rule, `auto-outcome-without-open-children-reverts-to-task`,
+    is DROPPED from the compiled set (`presentation.json`'s own `rules.dropped`, verified 2026-08-07:
+    reason "not a `$current.node.fields.<name>` reference — this closed grammar only models
+    predicates over the candidate node's own fields") — confirmed real, and confirmed to still be a
+    permanent, unrelated gap: the browser can predict a promotion to `outcome` and can never predict
+    a revert back to `task`. Widening the closed-grammar's `RuleWhen` union to admit that reference
+    shape is separately-scoped work, not attempted here.
+  tier: functional
+  rooting: >-
+    ROOTED, at the `node --test` level — `resolvers/promotion.ts` is a real TS module under
+    `app/present/`, imported directly by `tests/app-parent-promotion-on-indent.test.mjs` §7 (the
+    real page, driven through `>`) and by `tests/flow_scenarios/abstention_diagnostic.ts` CLAIM 3
+    (the resolver driven directly, cross-checked against its own `show()`). §7's own MUTATION PROOF
+    reverts `childCandidateFor` to the pre-fix bare `resolveLineFields` call (a literal string
+    replace against `dist/present.js`) and reproduces `{kind: "abstains", because:
+    "child-already-a-node"}` exactly — the RED arm this capability's own evidence is falsified
+    against. `flow-trace verify . --scenario abstention_diagnostic` reaches `promotionSpec.read`
+    for real (`app/present/` is inside `.flow-trace.yaml`'s capture filter); `app/index.html`'s own
+    `>`/`<` wiring that gets a real keystroke there is NOT flow-trace-observable (node cannot import
+    an HTML document — the same limit every page-level capability in this file already states), so
+    `tests/app-parent-promotion-on-indent.test.mjs` is the proof for that half, the same posture
+    `an-abstention-is-visible-to-the-operator`'s own capability rows take.
+  status: working
+
+- id: abstention-diagnostic-register
+  intent: >-
+    "I DO NOT KNOW" LOOKS DIFFERENT FROM "YES, THIS BELONGS" AGAIN — 2026-08-07,
+    `design-the-rule-mirror.md` §9.2 / `roadmap-the-road-ahead.md` step 2 / backlog.yaml
+    `an-abstention-is-visible-to-the-operator`, REDESIGNED for the world `chore/retire-the-status-
+    line` (`15cb626`, 2026-08-05) left behind: `#membershipBadge` (2026-08-03) closed this exact
+    defect for the membership axis with a second DOM sink, and that sink was retired two days later
+    — not because the mechanism was wrong, but because ANY on-screen register was, in the
+    operator's own words, "excuses things not working 'as long as they are reported'... we are
+    building a working app." The retirement also deleted `commitLine`'s only read of
+    `outcome.diagnostics`, so the underlying defect came back for ALL FOUR resolvers and in every
+    channel: computed every commit (`runResolvers` -> `diagnosticOf`), read nowhere.
+    THE MECHANISM, KEPT. `abstentionsOf` (`app/present/resolve.ts`) narrows `CommitOutcome.
+    diagnostics` (which carries a `Diagnostic` for EVERY resolver that said anything in `show()` —
+    a genuine refusal AND a confident "X: decided" alike) to the genuine refusals only
+    (`Diagnostic.abstained`), reusing the SAME `Diagnostic` `diagnosticOf` already produced from the
+    SAME `read()` `say`/`arm` also consult — never a second, re-derived evaluation.
+    THE VENUE, CHANGED. `commitLine`'s `reportAbstentions` (`app/index.html`) writes each surviving
+    `Diagnostic.text` to `console.debug`, never a DOM node — the one channel this app already treats
+    as "an honest, unglamorous fact, addressed to whoever is actually asking" (`console.warn`'s own
+    precedent, `loadPresentation`'s "presentation.json could not be read..."). Nothing appears on
+    the screen the operator is looking at; the register is there for the moment "the app just
+    works" is actually in question — DevTools, an agent driving this page, or a test — never for the
+    ordinary keystroke that needed none of it.
+    QUIET BY CONSTRUCTION, MEASURED RATHER THAN ASSERTED. `abstentionsOf` already excludes every
+    confident "X: decided" and every `not-evaluated` precondition, so `reportAbstentions` fires only
+    on commits where a resolver GENUINELY could not decide something — never on the overwhelming
+    majority where every resolver either had nothing to evaluate or answered. Against the operator's
+    real, current `presentation.json` (2026-08-07): `qualification.refused` is EMPTY (0 of 225
+    published sections, a number `design-the-rule-mirror.md` §11 row 6's own "137 of 186" — cited
+    at commit `2e9561a` — is now stale about, in the good direction), so the ROADMAP'S OWN WORRY
+    ("routing abstentions... reintroduces exactly the noise the refusal exists to prevent") is
+    measurably smaller today than when step 2 was priced.
+    THE FALSIFIER, TWICE, PER THIS LEG'S OWN BRIEF. Drive one line in a section whose qualification
+    is refused, and one line in a section that publishes cleanly and does not move — the two now
+    produce different `console.debug` output (`tests/app-abstention-diagnostic.test.mjs` §1); the
+    IDENTICAL property, a second time, through `resolvers-child-candidate-reads-the-graph`'s own
+    outcome-flip gesture — `structural-relationship-removed` vs a decided `parent: decided` (§2).
+    WHAT THIS ROW DOES NOT CLOSE, NAMED RATHER THAN LEFT IMPLIED. No on-screen affordance exists or
+    is proposed — this row's own judgement is that reviving one would repeat what `15cb626` already
+    rejected, wearing a different axis's name, and the operator may disagree and want the venue back
+    even with the register kept. `resolvers/ordering.ts` abstains far more often than the other
+    three (no per-section `ordering:` declared for the overwhelming majority of real sections) —
+    quiet by the SAME construction, but the console channel will carry that volume the moment a
+    commit touches an undeclared-ordering section, which is common; not measured against a full
+    operator session, only against the fixtures this row's own tests build.
+  tier: functional
+  rooting: >-
+    SPLIT, the same way `an-abstention-is-visible-to-the-operator`'s own capability rows already
+    are. `abstentionsOf` is ROOTED — a real, pure function under `app/present/resolve.ts`, exercised
+    directly by `tests/flow_scenarios/abstention_diagnostic.ts` (flow-trace's node observer reaches
+    it: `app/present/` is inside `.flow-trace.yaml`'s capture filter) and cross-checked there against
+    each resolver's own `show(read(ctx))`, never a value the scenario invented independently.
+    `reportAbstentions` and its ONE call site (`commitLine`) are ISOLATED inside `app/index.html`,
+    the identical posture `section-membership-is-said-in-the-freshness-line` and every sibling
+    page-level row in this file already have: node cannot import an HTML document, so flow-trace
+    cannot see the edge from `commitLine` to `console.debug` however real it is.
+    `tests/app-abstention-diagnostic.test.mjs` is the proof instead, driving `app/index.html`'s own
+    lifted script through `tests/fixtures/app-html-page.mjs` and stubbing `console.debug` directly
+    — the same save/restore convention `tests/present-global.test.mjs` already uses for
+    `console.warn`. `tests/app-resolver-registry.test.mjs` §8 additionally pins that `commitLine`
+    reads `outcome.diagnostics` exactly once and only through `reportAbstentions`, never a bare loop
+    or a DOM write.
   status: working

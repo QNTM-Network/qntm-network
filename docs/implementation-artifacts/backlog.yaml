@@ -3213,6 +3213,32 @@ backlog:
     full record, including the axis this row moves (HORIZONTAL — completeness of an already-rooted
     capability's reporting surface, not a new depth of enforcement).
   state: passing
+  record_2026_08_07: >-
+    THE VENUE THIS ROW SHIPPED WAS RETIRED, THE DEFECT IT CLOSED CAME BACK, AND IT IS CLOSED AGAIN
+    IN A DIFFERENT VENUE. `#membershipBadge` (2026-08-03, above) was deleted by `15cb626`
+    (`chore(app): retire the status line`, 2026-08-05) — the operator's own words, on that commit:
+    "it excuses things not working 'as long as they are reported'... we are building a working
+    app." That retirement ALSO deleted `commitLine`'s only read of `outcome.diagnostics`, so the
+    exact defect this row's title names ("I DO NOT KNOW" AND "YES, THIS BELONGS" ARE BYTE-
+    IDENTICAL) came back — this time for all FOUR resolvers (membership, ordering, rules, promotion)
+    and in every channel, not only on screen: `outcome.diagnostics` was computed and discarded
+    every commit, reaching neither the page nor DevTools. VERIFIED LIVE, 2026-08-07: the operator
+    hit this exact class of gap for real — see `resolvers-child-candidate-reads-the-graph` below;
+    `resolvers/promotion.ts` abstained `child-already-a-node` on indenting an already-stamped task,
+    silently, because the venue that would have said so had already been removed.
+    THE REDESIGN. `abstentionsOf` (`app/present/resolve.ts`) is the SAME register, kept — it narrows
+    `CommitOutcome.diagnostics` to genuine refusals, exactly what `#membershipBadge` did. The VENUE
+    changed: `commitLine`'s `reportAbstentions` writes to `console.debug`, never a DOM node.
+    Nothing on screen changed by this row; nothing on screen was asked to. `console.warn` already
+    set this precedent (`loadPresentation`'s "presentation.json could not be read..."). Falsifier
+    (unchanged from this row's own title, now proven again, for TWO resolvers, in
+    `tests/app-abstention-diagnostic.test.mjs` and `tests/flow_scenarios/abstention_diagnostic.ts`):
+    drive one line in a refused section and one in a clean, unchanged one; the two now produce
+    different `console.debug` output, where before this date they produced none at all.
+    NOT DONE: ordering still has no register (unchanged from this row's own 2026-08-03 gap); no
+    on-screen affordance exists or is proposed — see this leg's own PR body for why that is a
+    judgement, not an oversight, and the operator may reject the register kept here and still want
+    the venue.
 - id: an-engine-correction-is-a-visible-event
   title: >-
     [road] [3] [AN ARC, AND IT SPLITS] THREE SEPARATE PROBLEMS ARE ONE PROBLEM - a row moving to its
@@ -4073,6 +4099,14 @@ backlog:
     instances of the one just built.
   kind: null
   state: unscoped
+  record: >-
+    2026-08-07 (`an-abstention-is-visible-to-the-operator` / `resolvers-child-candidate-reads-the-
+    graph`) — PARTIAL. `tests/flow_scenarios/abstention_diagnostic.ts` drives the real `RESOLVERS`/
+    `runResolvers` for BOTH the membership axis (a refused-section abstention vs a clean, decided
+    commit) and the promotion axis (`structural-relationship-removed` vs a decided outcome-flip),
+    proven at the SHAPE level: the surviving `Diagnostic.text` is cross-checked byte-identical
+    against that resolver's own `show(read(ctx))`, called directly. `resolvers/ordering.ts` is
+    STILL uncovered — this row is not closed, only two of its three named gaps are.
 
 - id: verify-crashes-on-instance-anchor-independent-of-any-of-this-passs-changes
   title: >-

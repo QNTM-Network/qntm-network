@@ -1026,6 +1026,7 @@ import {
   // MODULES that use them now, and this page imports none of them any more.
   RESOLVERS,
   runResolvers,
+  abstentionsOf,
   armSettle,
   armPredict,
   graphSnapshotOf,
@@ -1045,7 +1046,7 @@ import {
   openDrawer as revealDrawer,
   closeDrawer as hideDrawer,
   markWhereWeAre as markDrawerCurrent,
-} from "/dist/present.js?v=01856b0cac";
+} from "/dist/present.js?v=7a01cfc391";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2630,6 +2631,57 @@ async function toggleTask(view, toggle) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE DIAGNOSTIC REGISTER — "I DO NOT KNOW" NOW LOOKS DIFFERENT FROM "YES, THIS BELONGS", AGAIN
+// (2026-08-07, design-the-rule-mirror.md §9.2 / roadmap-the-road-ahead.md step 2 / backlog.yaml
+// `an-abstention-is-visible-to-the-operator`).
+//
+// ── THE DEFECT THIS CLOSES ──
+//
+// Every resolver's `show()` already computes a real sentence for a genuine refusal — `"membership:
+// abstained — no-section-declaration"`, `"parent: abstained — child-already-a-node"` (the exact
+// defect this leg's other half fixed) — and `runResolvers` already collects it into
+// `outcome.diagnostics`. Nothing before this commit ever READ that field: `chore/retire-the-status-
+// line` deleted the four DOM badges it used to feed and left the field itself unconsumed, so a
+// resolver that could not decide something and a resolver that decided nothing needed to change
+// were, once again, indistinguishable — this time not merely on screen but EVERYWHERE, DevTools
+// included. `abstentionsOf` (resolve.ts) narrows that field to genuine refusals; this is the one
+// place the result is read.
+//
+// ── WHY `console.debug`, AND WHY NOT THE BADGE THAT SHIPPED 2026-08-03 AND WAS KILLED TWO DAYS
+//    LATER ──
+//
+// `#membershipBadge` was the first answer to this exact defect, and it was RIGHT ABOUT THE
+// MECHANISM (a second register, never the same sentence a confident answer would use) and WRONG
+// ABOUT THE VENUE — an on-screen sink is exactly what `chore/retire-the-status-line` removed, and
+// the operator's own words for why travel with that commit: "it excuses things not working 'as
+// long as they are reported'... we are building a working app." Reviving any on-screen text for
+// this would not be a new idea reaching him fresh; it would be the same idea he has already
+// rejected once, wearing a second axis's name. `console.debug` is not that: nothing appears on the
+// screen he is looking at, nothing competes with "the app just works" as the thing that page says.
+// It is there for the moment that claim is actually in question — a DevTools session, an agent
+// driving this page, or `tests/app-abstention-diagnostic.test.mjs`'s own assertions — never for the
+// ordinary keystroke that needed none of it. `console.warn` already sets the precedent
+// (`loadPresentation`'s own "presentation.json could not be read..." message) that this app treats
+// the console as the honest, unglamorous channel for "here is a real fact, addressed to whoever is
+// actually asking" — `.debug` rather than `.warn` because an abstention is an ACCEPTED, EXPECTED
+// shape of "I cannot answer this one" (the browser refusing to guess, exactly as designed), never a
+// malformed document or a dropped write.
+//
+// ── QUIET BY CONSTRUCTION, NOT BY DISCIPLINE ──
+//
+// `abstentionsOf` already excludes every confident "X: decided" and every `not-evaluated`
+// precondition — the two states that are NOT the ambiguity this closes (see that function's own
+// header). So this function logs on exactly the commits where at least one resolver genuinely
+// could not decide something, and never on the overwhelming majority where every resolver either
+// had nothing to evaluate or evaluated and answered. It cannot become the noise the freshness
+// line's own header refused, because it is never called for the cases that noise came from.
+function reportAbstentions(diagnostics) {
+  for (const diagnostic of abstentionsOf(diagnostics)) {
+    console.debug("qntm: " + diagnostic.text);
+  }
+}
+
 // The cursor leaves a line it changed: POST the edited view, let the server cycle, re-render from
 // the fresh projection. Same write path as the checkbox, and deliberately so — one endpoint, one
 // whole-file write unit, one place where a view is replaced.
@@ -2671,11 +2723,20 @@ async function commitLine(view, commit) {
   // READ-ONLY, AND STILL: nothing below assigns `commit.markdown`/`commit.text`. See the comment
   // above `resolverContextFor` for the invariant and for how far it now reaches.
   const outcome = runResolvers(RESOLVERS, resolverContextFor(view, commit));
-  // `outcome.notes` AND `outcome.diagnostics` USED TO FEED THE FRESHNESS LINE'S "PREDICTION" CLAUSE
-  // AND THE FOUR ABSTENTION BADGES (`chore/retire-the-status-line`). Both DOM sinks are gone; the
-  // walk that produces those two fields also produces `.placements`/`.predictions` below, which
-  // still do real work, so the walk itself stays and its two now-unread fields are simply not
-  // consumed here any more. See that branch's own PR body for why the walk was not split apart.
+  // `outcome.notes` USED TO FEED THE FRESHNESS LINE'S "PREDICTION" CLAUSE AND `outcome.diagnostics`
+  // THE FOUR ABSTENTION BADGES (`chore/retire-the-status-line`) — both ON-SCREEN sinks, both gone,
+  // and the operator's own reason for killing them stands: "it excuses things not working 'as long
+  // as they are reported'... we are building a working app." `.notes` stays unconsumed here; a
+  // sentence narrating what the app already decided is exactly the surface that commit retired.
+  //
+  // `.diagnostics` IS DIFFERENT, AND IS READ AGAIN AS OF THIS COMMIT (2026-08-07,
+  // design-the-rule-mirror.md §9.2 / roadmap-the-road-ahead.md step 2). Not every `Diagnostic` in
+  // it — `reportAbstentions`, below, narrows to the ones `abstentionsOf` names a genuine refusal
+  // ("I do not know"), never a confident "X: decided" that would be the same on-screen noise the
+  // freshness line was killed for. See that function's own header for why the venue is
+  // `console.debug` and not a DOM node, and `abstentionsOf`'s (resolve.ts) for why the filter lives
+  // there and not here.
+  reportAbstentions(outcome.diagnostics);
   //
   // THE TWO SURFACES, ARMED BEFORE THE OPTIMISTIC REPAINT THAT FOLLOWS THIS FUNCTION RETURNS — and
   // never after the `await` below, because `paint.ts`'s own `settle` repaints into

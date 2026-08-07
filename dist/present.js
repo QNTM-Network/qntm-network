@@ -5607,6 +5607,9 @@ function runResolvers(resolvers, ctx) {
   }
   return { runs, notes, diagnostics, placements, predictions };
 }
+function abstentionsOf(diagnostics) {
+  return diagnostics.filter((diagnostic) => diagnostic.abstained);
+}
 function armSettle(surface, base, viewId, placements) {
   if (base === null) {
     return;
@@ -5713,8 +5716,8 @@ function structuralParentLineIndex(lines, lineIndex) {
   return null;
 }
 var bareId2 = (id) => String(id).replace(/^qntm:/i, "");
-function parentCandidateFor(parentLine, parentSection, snapshot, qualification) {
-  const stamped = stampSpans(parentLine);
+function structuralNodeCandidateFor(line, section, snapshot, qualification, notFoundPrefix) {
+  const stamped = stampSpans(line);
   const first = stamped[0];
   if (first !== void 0) {
     if (snapshot === null) {
@@ -5723,15 +5726,21 @@ function parentCandidateFor(parentLine, parentSection, snapshot, qualification) 
     const wanted = bareId2(first.id);
     const node = snapshot.nodes.find((n) => bareId2(resolvedQntmId(n)) === wanted);
     if (node === void 0) {
-      return { abstain: "parent-not-in-graph" };
+      return { abstain: `${notFoundPrefix}-not-in-graph` };
     }
     return { id: node.id, fields: { node_type: node.type, ...node.fields } };
   }
-  const fields = resolveLineFields(parentLine, parentSection, qualification);
+  const fields = resolveLineFields(line, section, qualification);
   if (typeof fields === "string") {
-    return { abstain: `parent-${fields}` };
+    return { abstain: `${notFoundPrefix}-${fields}` };
   }
   return { id: null, fields };
+}
+function parentCandidateFor(parentLine, parentSection, snapshot, qualification) {
+  return structuralNodeCandidateFor(parentLine, parentSection, snapshot, qualification, "parent");
+}
+function childCandidateFor(childLine, childSection, snapshot, qualification) {
+  return structuralNodeCandidateFor(childLine, childSection, snapshot, qualification, "child");
 }
 function structuralRelationshipChangeFor(commit, afterParentLineIndex) {
   const beforeParentLineIndex = commit.kind === "set-line" ? structuralParentLineIndex(commit.source.split("\n"), commit.lineIndex) : null;
@@ -5772,10 +5781,12 @@ var promotionSpec = {
       return { kind: "abstains", because: "no-section-declaration" };
     }
     const childLine = lines[commit.lineIndex] ?? "";
-    const childFieldsRaw = resolveLineFields(childLine, childSection, qualification);
-    if (typeof childFieldsRaw === "string") {
-      return { kind: "abstains", because: `child-${childFieldsRaw}` };
+    const snapshot = ctx.graph;
+    const childCandidate = childCandidateFor(childLine, childSection, snapshot, qualification);
+    if ("abstain" in childCandidate) {
+      return { kind: "abstains", because: childCandidate.abstain };
     }
+    const childFieldsRaw = childCandidate.fields;
     const binding = prospectiveEdgeBinding(childLine, structural);
     if (binding === void 0) {
       return NOT_EVALUATED;
@@ -5786,7 +5797,6 @@ var promotionSpec = {
       return { kind: "abstains", because: "no-section-declaration" };
     }
     const parentLine = lines[parentAt] ?? "";
-    const snapshot = ctx.graph;
     const parentCandidate = parentCandidateFor(parentLine, parentSection, snapshot, qualification);
     if ("abstain" in parentCandidate) {
       return { kind: "abstains", because: parentCandidate.abstain };
@@ -6312,6 +6322,7 @@ export {
   WAITING_FOR_TAG_BINDING,
   WRITE_ECHO_KEY,
   WriteRegister,
+  abstentionsOf,
   applyEdit,
   applyGraphAwareRules,
   applyRuleActions,

@@ -259,6 +259,7 @@ export type { EngineRowId, LocalRowId, Row, RowIdentity, RowSink } from "./rows.
 export {
   COMPLETE,
   NOT_EVALUATED,
+  abstentionsOf,
   armPredict,
   armSettle,
   coverageOf,
