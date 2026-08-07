@@ -3,7 +3,7 @@
 // v1 = the oldest still-open capture — the thing you've known needed doing the longest.
 // (prioritization-is-derived — sharpen the heuristic later without a data migration.)
 
-import { json, getSession, uuid, isoIn, bearer } from "./util.js";
+import { json, notModified, getSession, uuid, isoIn, bearer } from "./util.js";
 
 async function loadState(env, userId, handle) {
   const rows = await env.DB.prepare(
@@ -161,6 +161,32 @@ function echoFields(...sources) {
 
 // GET /app/graph (session) — serve the projection. The hosted model (Fly) is the source of
 // truth; the D1 snapshot is a fallback for when the server is unreachable.
+//
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// CONDITIONAL, BOTH DIRECTIONS — efficient-graph-read-path (2026-08-07)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// THIS FUNCTION IS NOT THE PURE RELAY AN EARLIER SURVEY CALLED IT. It never forwards Fly's bytes —
+// it parses `e` and rebuilds a DIFFERENT JSON object (`ok`, `handle`, `source`, a `snapshot`
+// wrapper, `pending_edits` from D1). That reshaping is exactly why this route cannot simply repeat
+// Fly's `ETag` back to the browser as if the two responses were the same representation — they are
+// not, byte for byte. What IS true, and what this comment stakes the design on: `pending_edits` is
+// the ONLY field here Fly's ETag does not govern, it comes from a cheap, independent D1 read
+// (`graph_edits`, the web-gesture queue — a different write path from the one `pickup.ts` polls
+// for), and treating it as "may lag by one poll" rather than folding it into a second hash is a
+// bounded, self-correcting imprecision, not the stale-304-hides-a-real-change failure the brief
+// warns about. Fly's ETag is reused VERBATIM as this route's own `ETag` on exactly that basis.
+//
+// THE FORWARD DIRECTION. `If-None-Match` the BROWSER sent (revalidating ITS OWN cached copy of
+// THIS route's prior response) is read off `request` and forwarded to Fly as ITS `If-None-Match` —
+// the same value, because this route's ETag IS Fly's ETag. Skipping this is the exact failure
+// named in the brief: an ETag Fly can check but a browser's revalidation never reaches is a
+// declaration that does not reach.
+//
+// THE BACK DIRECTION. Fly's `304` (no body, `graph`/`views`/`writes` provably unchanged) is
+// answered with the Worker's OWN `304` — no body, `pending_edits` simply not refreshed on this
+// particular answer (see above). Fly's `200` is answered as today, PLUS the `ETag` header this
+// route did not carry before.
 async function graphGet(request, env, origin, session) {
   // Prefer the hosted model — FOR THE ONE PERSON IT BELONGS TO. A non-operator session falls
   // through to the D1 path below, which is already keyed by `user_id`, so a second person sees
@@ -170,11 +196,21 @@ async function graphGet(request, env, origin, session) {
   // The WRITE path is not so forgiving — see `editFile`.
   if (env.GRAPH_SERVER_URL && env.SERVER_TOKEN && isOperatorSession(env, session)) {
     try {
-      const r = await fetch(`${env.GRAPH_SERVER_URL}/graph`, {
-        headers: { Authorization: `Bearer ${env.SERVER_TOKEN}` },
-      });
+      const flyHeaders = { Authorization: `Bearer ${env.SERVER_TOKEN}` };
+      const inm = request.headers.get("If-None-Match");
+      if (inm) flyHeaders["If-None-Match"] = inm;
+
+      const r = await fetch(`${env.GRAPH_SERVER_URL}/graph`, { headers: flyHeaders });
+
+      if (r.status === 304) {
+        // Fly's own answer already proves the tag is still current, so it is the fallback even in
+        // the (should-never-happen) case Fly's 304 omitted its own `ETag` header.
+        return notModified(origin, r.headers.get("ETag") || inm);
+      }
+
       if (r.ok) {
         const e = await r.json();
+        const etag = r.headers.get("ETag");
         return json(
           {
             ok: true,
@@ -194,7 +230,13 @@ async function graphGet(request, env, origin, session) {
             pending_edits: await pendingCount(env, session.user_id),
           },
           200,
-          origin
+          origin,
+          // ABSENT, NEVER EMPTY, when Fly sent none — an older Fly deployment must not make this
+          // route hand back an ETag nothing ever validates, which would fail CLOSED (every future
+          // read looks changed) rather than open. `undefined` here means `json()`'s spread adds no
+          // `ETag` key at all, so a browser that gets no ETag simply asks unconditionally next
+          // time, exactly as it does today.
+          etag ? { ETag: etag } : {}
         );
       }
     } catch {
