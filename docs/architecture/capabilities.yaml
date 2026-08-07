@@ -3931,3 +3931,81 @@ capabilities:
     backlog. See docs/implementation-artifacts/design-the-three-layers.md §2, §9.
   tier: foundational
   status: undeclared
+
+- id: the-published-rule-order-is-applied-at-commit
+  intent: >-
+    THE ROW `design-the-rule-mirror.md` §11 CALLED FOR — publish the two capture rules and their
+    order as a closed grammar — WAS ALREADY SHIPPED AND SUPERSEDED BEFORE THIS ROW, AND THIS ROW
+    IS THE PART THAT WAS MISSING: A SCENARIO PROVING THE SHAPE, NOT ONLY THE VALUE.
+    THE FIRST TASK THIS ROW SET WAS "CHECK WHETHER ROWS 0-3 ARE DONE." THEY ARE, AND BEYOND WHAT
+    THE DESIGN DOC ASKED. `scripts/compile-rules.mjs` / `generate-rules-declaration.mjs` (the row-4
+    ask) is not a two-rule-only compiler — that version was BUILT AND RETIRED
+    (`compile-capture-rules.mjs`, named at length in `a-compiler-knows-the-category-not-the-
+    instance`) because it named `routine-without-cadence-becomes-task` and `stamp-created-at-on-
+    task` BY ID, which `tests/app-generality-acceptance.test.mjs` proved would keep passing forever
+    against a third rule of the same shape. `presentation.json`'s `rules` key today publishes 25
+    rules (the operator's real config) in one established order — `order.derivedFrom` states the
+    tiebreak explicitly: priority, descending, ties broken by the compiled-list order the bundle
+    loader's config-tree walk produces (file name) — SETTLING the one UNVERIFIED item `design-the-
+    rule-mirror.md`'s own closing section named ("whether the alphabetical order of
+    `config/rules/*.yaml` is what the loader actually uses"). Row 0 (the silent-drop path) is
+    closed far past one line: `scripts/ledger.mjs` plus per-drop-path `ledger.drop(what, why)`
+    calls thread through all four category compilers, enforced by `tests/declaration-drop.test.mjs`
+    (55 tests) and the `a-config-declaration-the-app-drops-says-so` capability. Row 1 (CI wiring)
+    is done: `.github/workflows/build.yml`'s "declaration freshness" step runs all four `--check`
+    invocations, exit 3 = not-checked (no monorepo in CI) rendered as a `::warning::`, never a
+    silent pass. Rows 2 and 3 (registration, defaults) are `a-new-line-acquires-its-node-type-and-
+    its-defaults`, `status: working` — including the §3.3 finding itself: `generate-resolution-
+    declaration.mjs` reads every `set_node_type` rule and REFUSES the type tag in exactly the 13
+    sections where a rule would overrule it, rather than seeding a value the cycle would then
+    contradict.
+    WHAT THIS ROW ADDS: the row-4 ask's OWN acceptance test — "publish the two capture rules and
+    their order" — is met twice over, by a published DECLARATION (`compile-rules.mjs`) and by a
+    live APPLICATION of it: `app/present/resolvers/rules.ts`'s `rulesSpec`, wired into
+    `app/present/resolvers/registry.ts`'s `RESOLVERS` array and walked by every real commit
+    (`app/index.html`'s `commitLine` -> `runResolvers`). `tests/app-rules-stamp.test.mjs` proves
+    its VALUE — a fresh capture under a routine-default section with no cadence gets `#rulesBadge`
+    reading `rules: decided` and the freshness line naming `becomes task, sets created_at`, the
+    instant the write leaves, against the REAL served declaration. What NOTHING proved before this
+    row was the SHAPE: that `runResolvers` actually reaches `resolvers/rules.read`, that `read`
+    reaches `applyRules`, and that `applyRules` reuses `select/membership.ts`'s OWN
+    `matchesQualifier` rather than a second, private grammar interpreter. `docs/architecture/
+    flows.yaml` carried zero entries for `resolvers/registry.ts` or any of the four resolvers it
+    walks before this row — checked with `rg`, not assumed, over this file and every
+    `tests/flow_scenarios/*.ts`.
+    `tests/flow_scenarios/capture_rules.ts` closes that for the RULES axis: it drives the real
+    `RESOLVERS` array through the real `runResolvers`, over an INVENTED (not the operator's real
+    config) two-rule fixture carrying the exact shape `tests/fixtures/rules-category/rules/
+    retype_and_stamp.yaml` already uses for the same two rules, and asserts both the joined
+    freshness sentence ("this line becomes task, sets created_at") and the armed prediction's text
+    (`#task`) — proving the published ORDER is respected as one pass over a mutating candidate, not
+    two independent checks against the original fields, which is exactly §3.3's own point.
+    WHAT THIS ROW DOES NOT CLOSE, NAMED RATHER THAN LEFT IMPLIED. `resolvers/membership.ts`,
+    `resolvers/ordering.ts` and `resolvers/promotion.ts` — the other three axes the SAME registry
+    walks on every commit — remain UNDECLARED in `flows.yaml` and undriven by any scenario. Each
+    would need its own small scenario, built the same way; none is added here, because widening
+    beyond the rules axis was not this row's job and a scenario padded out to cover axes it was not
+    asked to prove would cost the observer's budget for no reason (`.flow-trace.yaml`'s own
+    standing note on scenario size).
+    `flow-trace verify .` ITSELF CRASHES ON THIS WORKTREE, UNRELATED TO THIS ROW — MEASURED, NOT
+    ASSUMED. `instance_anchor.ts` raises `RuntimeError` inside its own
+    `assertInstanceReachesOnlyTwo` on every run, 3 of 3, reproduced with this row's scenario file
+    REMOVED from the worktree entirely — so it predates this row and is not caused by it. Filed
+    here rather than fixed: diagnosing a different scenario's own assertion is out of scope for the
+    rules leg, and `verify .`'s crash-vs-verdict distinction (exit 2, not exit 1) is the reason this
+    capability's own evidence below is `--scenario capture_rules` scoped rather than a whole-suite
+    run.
+  tier: functional
+  rooting: >-
+    ROOTED. `tests/flow_scenarios/capture_rules.ts` imports four real modules under `app/present/`
+    (`resolvers/registry.ts`, `resolve.ts` for `runResolvers`'s type, `select/qualification.ts` and
+    `resolutiontable.ts` and `rules.ts` for types only) and drives them with a hand-built
+    `CommitContext` — no DOM, no fetch, no clock beyond the `now` reader the real interface
+    requires. Run standalone (`node run-scenario.mjs --root . --include app/
+    tests/flow_scenarios/capture_rules.ts`), it exits 0 and reports 48 observed cross-module call
+    records, including every edge `flows.yaml`'s seven new entries under `class:
+    capture-rule-application` name. `flow-trace verify . --scenario capture_rules --capability
+    the-published-rule-order-is-applied-at-commit` is the scoped, crash-avoiding way to check this
+    capability alone; see the intent's own account of why the unscoped whole-suite run cannot be
+    used as evidence on this worktree today.
+  status: working

@@ -713,6 +713,82 @@ expected_flows:
     class: section-addressing
     gates_capabilities: [a-line-being-made-survives-a-projection-too]
 
+  # ── THE RULES AXIS, THROUGH THE RESOLVER REGISTRY (2026-08-07) ─────────────────────────────
+  #
+  # `app/present/resolvers/registry.ts`'s `RESOLVERS` array, walked by `runResolvers` on every
+  # real commit (`app/index.html`'s `commitLine`), had FOUR resolvers and ZERO flow declarations
+  # for any of them before this row — checked by `rg` over this whole file and every
+  # `tests/flow_scenarios/*.ts`, not assumed. `tests/flow_scenarios/capture_rules.ts` closes the
+  # gap for the RULES axis only: `resolve.runResolvers` reaching `resolvers/rules.read`, and that
+  # function's own reach into `address.ts`, `select/membership.ts`, `today.ts` and `rules.ts` for
+  # the two-rule, one-pass chain `design-the-rule-mirror.md` §3.3 named
+  # (`routine-without-cadence-becomes-task` retyping the candidate, `stamp-created-at-on-task`
+  # then matching the NOW-task candidate in the SAME pass). Membership, ordering and promotion —
+  # the other three axes the same registry walks — remain UNDECLARED here; each would need its
+  # own scenario, and none is added by this row. That gap is real and is not this row's to close.
+  #
+  # THE LOAD-BEARING EDGE IS `rules.applyRules -> select/membership.matchesQualifier`: the closed
+  # grammar's OWN matcher is the SAME function `membership.ts`'s section-membership axis already
+  # uses, not a second, private interpreter — the structural form of "generate-once, no second
+  # copy of the language" `design-the-rule-mirror.md`'s own refutations section states for this
+  # exact axis ("Upheld, and this document does not challenge it").
+
+  - id: registry-runs-the-rules-resolver
+    from: app/present/resolve
+    to:   app/present/resolvers/rules
+    callee: read
+    event: app.evaluates-the-published-rules-for-a-fresh-capture
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
+  - id: rules-resolver-addresses-the-committed-line
+    from: app/present/resolvers/rules
+    to:   app/present/address
+    callee: sectionAt
+    event: app.finds-the-section-the-new-line-was-typed-under
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
+  - id: rules-resolver-resolves-the-lines-fields
+    from: app/present/resolvers/rules
+    to:   app/present/select/membership
+    callee: resolveLineFields
+    event: app.resolves-the-candidates-own-fields-before-the-rule-pass
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
+  - id: rules-resolver-reads-the-day-boundary
+    from: app/present/resolvers/rules
+    to:   app/present/today
+    callee: todayFor
+    event: app.resolves-cycle-today-the-way-the-engine-would
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
+  - id: rules-resolver-runs-the-published-pass
+    from: app/present/resolvers/rules
+    to:   app/present/rules
+    callee: applyRules
+    event: app.applies-the-closed-rule-grammar-to-the-resolved-fields
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
+  - id: applyrules-reuses-the-membership-matcher
+    from: app/present/rules
+    to:   app/present/select/membership
+    callee: matchesQualifier
+    event: app.matches-a-rules-for-each-pattern-with-no-second-interpreter
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
+  - id: rules-resolver-renders-the-fired-effects
+    from: app/present/resolvers/rules
+    to:   app/present/rules
+    callee: renderRuleEffects
+    event: app.spells-the-fired-rules-effects-onto-the-line-or-refuses
+    class: capture-rule-application
+    gates_capabilities: [the-published-rule-order-is-applied-at-commit]
+
 forbidden_flows:
 
   # The renderer is PURE and the session holds nothing but mode and text — neither may reach the
