@@ -253,3 +253,51 @@ classes:
       tests/qualification-agreement.test.mjs (agreement with the engine's own `matches_pattern`
       over 61 real field triples covering 1501 nodes, and 2184 reachable ones).
     status: working
+
+  # ── ADDED 2026-08-07, DURING THE SINKS SURVEY — A DECLARATION THAT ALREADY EXISTED AND DID NOT
+  # LAND. `docs/architecture/flows.yaml`'s "THE RULES AXIS, THROUGH THE RESOLVER REGISTRY" block
+  # (PR #144) tags six edges `class: capture-rule-application`. No class of that id existed here,
+  # so `capability_rollup.py`'s `declared_class_ids` check (schema.py:185) silently dropped every
+  # one of them from `class_ids` — the rules resolver could never be counted as class-rooted, not
+  # because it lacked a home, but because the home was named and never built. Found by reading the
+  # capability_rollup consumer, not assumed. Fixing that drift is this row's whole job.
+  - id: capture-rule-application
+    concern: >
+      Applying the operator's published capture rules to a freshly committed line — the RULES axis
+      of the four the resolver registry (app/present/resolvers/registry.ts) walks on every commit.
+      `read` addresses the line (`address.ts`), resolves its fields the same way `section-
+      membership` does (`select/membership.ts`, so there is one field-resolution reader, not two),
+      reads the day boundary (`today.ts`), then runs the published grammar (`rules.ts`'s
+      `applyRules`, re-using `membership.ts`'s own matcher — one interpreter, not a second copy)
+      and spells the fired effect onto the line or refuses (`renderRuleEffects`).
+
+      THIS IS THE AXIS THE 2026-08-07 PRODUCTION DEFECT LIVES ON. `renderRuleEffects` can abstain
+      `conflicting-token-present` when the line already carries a token its own fired effect would
+      collide with — a decided rule whose effect the app cannot spell without overwriting or
+      inventing characters. That refusal is real and correct; what made it a silent defect is a
+      question about the caller (`resolvers/promotion.ts`'s `arm`) and the diagnostics venue, not
+      about this concern, and is not this row's to re-litigate — see capability
+      `resolvers-child-candidate-reads-the-graph` and the flow-trace scenario
+      `tests/flow_scenarios/capture_rules.ts` (PR #144) for what is already proven about this path.
+
+      NO `governs_sinks` HERE, AND THAT IS A FINDING, NOT AN OVERSIGHT. `read`'s answer reaches the
+      screen only through `app/index.html`'s `commitLine` — it builds a `CommitContext`, walks
+      `RESOLVERS`, and separately calls `paint(...)` with a `predict`/`settle` state the resolvers'
+      output primed. There is no TypeScript-to-TypeScript call edge from any resolver into
+      `paint.ts` at all: checked directly (`rg -n "paint(" app/present app/main.ts`, and neither
+      `paint.ts` nor any resolver imports the other), not assumed. Declaring `governs_sinks:
+      [view-painted]` here today would be FALSE, not merely unobserved — the edge it would assert
+      does not exist in code for any scenario to ever discover, however many are written. It
+      becomes true, and then declarable, only once the connecting act — building a context, walking
+      the registry, handing the result to `paint` — moves out of `app/index.html` (which flow-trace
+      cannot import; see `.flow-trace.yaml`'s own note) into a module under `app/`, mirroring the
+      move `presentation-painting` itself made in migration stage 1. That relocation, and the
+      flow-trace scenario that would then drive it end to end, are both real, separately-scoped
+      work this row does not attempt.
+
+      The other three axes the same registry walks — `membership`, `ordering`, `promotion`
+      (app/present/resolvers/{membership,ordering,promotion}.ts) — have no canonical class home at
+      all, not even a broken one; this row does not add one, for the identical reason stated above
+      applies to each of them symmetrically and none is closer to true than the others.
+    canonical_class: app/present/resolvers/rules:read
+    status: working

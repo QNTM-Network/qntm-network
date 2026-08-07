@@ -40,3 +40,59 @@ sinks:
       effect the app exists to produce. mount() is where the pure renderer's output and the
       session's state become something a reader can see and type into; everything upstream is
       preparation and everything inside it is presentation.
+
+# ── 2026-08-07, THE SINKS SURVEY — CORRECTION AND A DELIBERATE NON-ADDITION ──
+#
+# CORRECTION FIRST. `view-painted`'s own description above still says "NOT MEASURED YET ...
+# depth-to-sink runs under `flow-trace verify`, which exits 2 in this environment." That was true
+# 2026-07-30 and is stale now: `.flow-trace.yaml`'s header was corrected 2026-07-30 (stage 2) —
+# `flow-trace verify .` exits 0 given the two documented preconditions (`npm ci` in the tool's own
+# `js/`, `npm ci` here). Confirmed again today: `flow-trace sinks .` and `flow-trace canonical-
+# routing . --class presentation-painting` both run clean. Left un-rewritten above (this file
+# corrects by addendum, the way `.flow-trace.yaml` and `classes.yaml` both already do) so the
+# history of why the sentence was once true is not erased.
+#
+# WHO READS THIS FILE, PROVEN BY MUTATION RATHER THAN ASSUMED (the question that mattered most
+# before adding anything to it). Two real consumers, not one, and they are not the same strength:
+#
+#   1. `flow-trace sinks` (src/flow_trace/sinks.py, also folded into `verify`'s own fan) — a PURE
+#      cross-reference against classes.yaml's `governs_sinks`. Removing `governs_sinks: [view-
+#      painted]` from `presentation-painting` (tested, reverted) flips the finding PASS -> INFO
+#      "UNGOVERNED ANCHOR" — a real, live reaction. But it is EXPLICITLY never a FAIL (`sinks.py`'s
+#      own comment: "surfacing the residue IS the job") — advisory, not gating, by design.
+#   2. `flow-trace canonical-routing` (also folded into `verify`) — a REAL, GATING behavioural
+#      check. Pointing `view-painted`'s `sink:` at a module that does not exist
+#      (`app/present/nonexistent_module_xyz:paint`, tested, reverted) produced a genuine
+#      `UNPROBEABLE ANCHOR` FAIL and a process exit code of 1 — not 0, not 2. This is a live
+#      instrument, not theatre: a sink declared here and then unreachable in code is caught, hard.
+#
+# BOTH READERS ONLY FIRE FOR A SINK SOME CLASS ACTUALLY `governs_sinks`. That is the real gap in
+# this repo (see classes.yaml's `capture-rule-application` note, added the same day): the two
+# sinks above have governing classes and are therefore live-checked; the four resolvers
+# (app/present/resolvers/{membership,ordering,promotion,rules}.ts) govern nothing, so neither
+# reader has ever looked at them — not a weak pass, an absence. `class_routing_verdicts`
+# (canonical_routing.py) states this precisely: a class with no `governs_sinks` produces no
+# finding and is "ABSENT from the map ... never a vacuous held."
+#
+# THE DELIBERATE NON-ADDITION. The brief this row answers asked whether the browser stack has
+# more terminal effects than these two — the armed prediction (`predict.ts`), the settled repaint
+# (`settle.ts`), the painted chip, the diagnostics channel (`reportAbstentions`, app/index.html).
+# Checked, not assumed:
+#
+#   - `predict.ts` and `settle.ts` are each imported ONLY by `resolve.ts`, `paint.ts` and
+#     `index.ts` (grep, not inference) — both are CONTRIBUTORS whose output becomes an argument
+#     `paint()` reads, never a second place work terminates. Intermediate, not sinks.
+#   - the painted chip is a rendition DECISION inside `paint()` (see `presentation-painting`'s own
+#     concern text) — detail within `view-painted`, not a second terminal.
+#   - `reportAbstentions` (app/index.html:2679) genuinely IS a distinct terminal effect — a
+#     `console.debug` write, not a repaint — and is NOT declared here, on purpose. `view-painted`
+#     itself could not be declared until its code moved under `app/`, inside flow-trace's capture
+#     filter (this file's own history, above); `reportAbstentions` has not made that move and
+#     still lives in the one file flow-trace structurally cannot import (a node module-load hook;
+#     node cannot import HTML — `.flow-trace.yaml`'s own note). Declaring it now would be a sink
+#     nothing can ever reach until that relocation happens — worse than leaving it absent. The
+#     relocation is real, scoped work (the same one `classes.yaml`'s `markdown-rendering` and
+#     `capture-rule-application` notes both name for their own gaps) and is not attempted here.
+#
+# So: two sinks were correct before this row and are correct after it. What changed is that the
+# claim is now load-bearing rather than assumed.
