@@ -446,6 +446,106 @@ classes:
     canonical_class: app/present/paint:visualLineOrder
     status: working
 
+  # ══════════════════════════════════════════════════════════════════════════════════════════════
+  # THE DRAWER MOVES FOCUS ITS OWN WAY, ON PURPOSE. A FUTURE MERGE IS A REGRESSION, NOT A CLEANUP.
+  # Recorded 2026-08-10, as a declaration rather than a chat message, because the argument for it
+  # is not visible from the code and the code LOOKS like duplication.
+  #
+  # WHAT LOOKS WRONG. Two modules answer "what does down mean". `app/present/motions.ts` maps
+  # `j`/`k` to a line selection; `app/shell/drawer.ts:367` maps `ArrowDown`/`j` to
+  # `moveTo(index, 1)`. They agree today by coincidence and by an author remembering — drawer.ts's
+  # own comment at :362 says so, and calls itself "a second name for the one movement rather than
+  # a second mechanism".
+  #
+  # WHY MERGING THEM WOULD BREAK THE APP. drawer.ts does not use `FocusSurface`. It calls NATIVE
+  # DOM focus (`candidate.focus()`, `drawerStops[0]?.focus()`), and that is CORRECT for a listbox:
+  # native focus is what a screen reader follows and what tab order reads. `FocusSurface` is a
+  # cursor position inside a text document — a line index, a column, an identity anchor into a
+  # markdown string. Routing the drawer through it would give a tree of buttons a column and an
+  # anchor it has no use for, and would take the drawer's rows out of the accessibility tree's own
+  # focus model. That is a real regression traded for a tidier diagram.
+  #
+  # THE ANSWER IS TO SHARE THE DECISION, NOT THE EFFECT. `motions.ts` should be the one place that
+  # answers "what does `j` mean" — for the reading column and for the drawer both — and each
+  # surface then APPLIES that answer with its own mechanism: `FocusSurface` for the document,
+  # native focus for the listbox. One class serving two capabilities; no false merge. That is the
+  # fat middle of the diamond, reached by widening a decision rather than by collapsing two
+  # effects.
+  #
+  # SO, PLAINLY, FOR WHOEVER READS THIS NEXT: making drawer.ts call `FocusSurface`, or making
+  # `cursor-position` govern the drawer's focus ring, is a REGRESSION. If you are here because
+  # `movement` and the drawer look duplicated — they are, at the DECISION layer, and that half is
+  # worth fixing. The EFFECT layer is meant to differ.
+  # ══════════════════════════════════════════════════════════════════════════════════════════════
+  # DECLARED 2026-08-10. WHERE THE CURSOR IS had a single home in the code and no name in the
+  # declarations. `FocusSurface` (app/present/focus.ts) already held the line index, the column and
+  # the identity anchor, and every one of the six routes that positions the cursor already went
+  # through it. This entry is a DESCRIPTION of that, not a refactor — no TypeScript changed.
+  #
+  # IT IS ONE LAYER BELOW `movement`, AND THE TWO ARE NOT THE SAME CONCERN. `movement` decides what
+  # a gesture MEANS ("the operator pressed down — down to WHERE"). This decides where the cursor
+  # ENDS UP, for a movement gesture and equally for a click (paint.ts:1378, "A CLICK POSITIONS. IT
+  # DOES NOT ARM.") and a post-edit settle (paint.ts:790). Folding them together would claim a
+  # click is a movement gesture, which it is not.
+  #
+  # SERVING SEVERAL CONCERNS IS THE POINT, not an accident of where the code sat: three distinct
+  # capabilities reach this one home, which is the fat middle a diamond is supposed to have and a
+  # class serving exactly one capability is not.
+  - id: cursor-position
+    concern: >
+      Where the cursor IS — the line it is on, the column within that line, and the identity
+      anchor that lets it be found again after a projection replaces the text underneath it.
+      `FocusSurface` is the one place that holds those three facts together, and holding them
+      together is the concern: an index is meaningful only against the string it indexes, which is
+      why the anchor lives here and not beside it.
+
+      THE FAILURE THIS CLASS EXISTS TO CATCH: a second answer to "where is the cursor" — a module
+      keeping its own line-index variable, or positioning the caret without telling this surface,
+      so that a projection arriving moves the cursor onto somebody else's line. That is a defect
+      this app has actually shipped (see `the-cursor-anchors-to-a-node-not-a-line-number`, whose
+      intent records both reproductions).
+
+      WHAT IT DELIBERATELY DOES NOT GOVERN, AND THIS IS A DECISION RATHER THAN AN OMISSION: the
+      drawer's focus ring. `app/shell/drawer.ts` moves focus with NATIVE DOM focus
+      (`candidate.focus()`, `drawerStops[0]?.focus()`) and must keep doing so — native focus is
+      what a screen reader follows and what tab order reads, and routing a listbox through
+      `FocusSurface` would break accessibility to satisfy a diagram. See this file's note above
+      this entry for the full record of that divergence.
+    canonical_class: app/present/focus:FocusSurface
+    # NO `governs_sinks: [selection-moved]`, AND IT WAS WIRED, MEASURED AND UNWIRED RATHER THAN
+    # REASONED ABOUT — 2026-08-10. The link was declared, `canonical-routing . --class
+    # cursor-position` was run, and it produced TWO BYPASSES ON CORRECT CODE:
+    #
+    #   BYPASS — reached app/present/focus:FocusSurface.focus without routing through canonical
+    #     class app/present/focus:FocusSurface (count=1): app/present/paint:<anonymous> -> FocusSurface.focus
+    #   BYPASS — reached app/present/focus:FocusSurface.focus without routing through canonical
+    #     class app/present/focus:FocusSurface (count=2): app/shell/keys:globalKey -> FocusSurface.focus
+    #
+    # One is the click/settle, the other is the movement gesture. Both are exactly the routes this
+    # class exists to bless.
+    #
+    # WHY IT CANNOT PASS, which is a fact about the CHECK and not about this code:
+    # `canonical_routing.py`'s `_chain_routes_through` looks for the canonical class among a
+    # chain's CALLERS. When the canonical class OWNS the sink — `FocusSurface` and
+    # `FocusSurface.focus` — the only chain that can satisfy it is a self-call, so every
+    # legitimate external caller reds by construction. The model can express "everything must go
+    # through X to reach Y" (`commit-line-routing` PASSES that way, X=commitLine, Y=paint); it
+    # cannot express "X is the one home for its OWN effect", which is what this class is.
+    #
+    # THIS IS NOT A NEW DEFECT AND THIS REPO IS ALREADY CARRYING ONE UNREMARKED. `presentation-
+    # painting` has the identical shape (canonical_class `app/present/paint:paint` governing
+    # `view-painted` = `app/present/paint:paint`) and has been reporting `BYPASS —
+    # app/present/commit:commitLine -> paint` against correct code, with no note anywhere saying
+    # the red is false. Flagged (`flag-canonical-routing-cannot-express-a-class`).
+    #
+    # THE SINK STAYS DECLARED EITHER WAY — see sinks.yaml. It is a real terminal effect, it is what
+    # depth-to-sink should measure against, and declaring it costs nothing that a false red costs.
+    # What is withheld is one link that is measured to red correct code, which is a different thing
+    # from an unsure pin: an unsure pin is visible until revised, and this one could never go green
+    # because there is nothing to fix. When the tool can express a self-owned home, add the two
+    # words back.
+    status: declared
+
   # DECLARED 2026-08-10. A gesture's MEANING had no home. Two modules independently decide that
   # `j` and ArrowDown mean "go down", and each was individually compliant precisely because no
   # class named the concern: `app/present/motions.ts` decides it for the reading column
