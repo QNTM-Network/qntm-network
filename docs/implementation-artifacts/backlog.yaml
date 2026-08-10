@@ -4142,3 +4142,33 @@ backlog:
     view-painted = app/present/paint:paint) has the identical shape and has been shipping
     BYPASS commitLine -> paint against correct code, unremarked.'
   captured: '2026-08-10'
+- id: flag-capability-rollup-destroys-declarations-it-cannot
+  title: '[asserted] capability-rollup DESTROYS declarations it cannot load. Capability.tier
+    is a required Literal; a-write-does-not-wait-for-the-cycle and the-browser-recognises-its-own-write
+    lacked it, so they were dropped at load (capability_count 59 against 61 rows) and
+    the verb''s write-back then REWROTE capabilities.yaml from what it loaded, deleting
+    both rows from disk. Observed directly 2026-08-10, reverted, tier supplied. A read
+    verb that silently drops is bad; a write verb that persists the drop is data loss.
+    It should refuse to write a file whose loaded count is below its parsed row count.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: capability-rollup DESTROYS declarations it cannot load. Capability.tier
+    is a required Literal; a-write-does-not-wait-for-the-cycle and the-browser-recognises-its-own-write
+    lacked it, so they were dropped at load (capability_count 59 against 61 rows) and
+    the verb's write-back then REWROTE capabilities.yaml from what it loaded, deleting
+    both rows from disk. Observed directly 2026-08-10, reverted, tier supplied. A read
+    verb that silently drops is bad; a write verb that persists the drop is data loss.
+    It should refuse to write a file whose loaded count is below its parsed row count.
+  captured: '2026-08-10'
+- id: flag-9-flows-in-docs-architecture-flows
+  title: '[asserted] 9 flows in docs/architecture/flows.yaml cite class: section-addressing,
+    and no class of that id exists in classes.yaml. Same shape capture-rule-application''s
+    own comment records (''the home was named and never built'') and the mirror of presentation-resolution/section-membership
+    (''built and never named''). Counted 2026-08-10: section-addressing is the second-most-cited
+    class id in flows.yaml after presentation-resolution''s 22.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: '9 flows in docs/architecture/flows.yaml cite class: section-addressing,
+    and no class of that id exists in classes.yaml. Same shape capture-rule-application''s
+    own comment records (''the home was named and never built'') and the mirror of presentation-resolution/section-membership
+    (''built and never named''). Counted 2026-08-10: section-addressing is the second-most-cited
+    class id in flows.yaml after presentation-resolution''s 22.'
+  captured: '2026-08-10'
