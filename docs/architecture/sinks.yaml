@@ -33,6 +33,31 @@ sinks:
       `flow-trace verify`, which exits 2 in this environment for a reason outside this repo. The
       sink is declared so the measurement exists the moment the tool does.
 
+  - id: selection-moved
+    sink: app/present/focus:FocusSurface.focus
+    description: >
+      WHERE THE CURSOR IS — the terminal effect of every gesture that positions it. Added
+      2026-08-10.
+
+      IT IS A REAL TERMINAL EFFECT, not a staging post, and that is the test this file's own
+      header sets. When the cursor lands on the wrong line, or loses its place across a
+      projection, THIS is the one place that would tell you: `FocusSurface` holds the line index,
+      the column, and the identity anchor, and every route that moves the selection ends here.
+
+      THE ROUTES, ALL SIX, COUNTED RATHER THAN ASSUMED (grep for `focus.focus(` outside focus.ts):
+        app/shell/keys.ts:185      a movement gesture — j/k/gg/G, through motions.ts
+        app/shell/keys.ts:191      a boundary motion — {/}, through boundary.ts
+        app/present/paint.ts:1378  a CLICK. Its own comment: "A CLICK POSITIONS. IT DOES NOT ARM."
+        app/present/paint.ts:790   a post-edit settle — the cursor lands on the resulting line
+        app/index.html:2231        view-entry seeding, in `paintView`
+        app/index.html:2316        repaint re-seeding, in `repaintCurrentView`
+
+      THE LAST TWO ARE IN THE PAGE AND THEREFORE UNOBSERVABLE — node cannot import an HTML
+      document, so no capture records them. They are listed anyway: a sink whose caller census is
+      quietly two-thirds of the truth is worse than one that says which third is missing. They
+      become visible when the view-picker/repaint half of that script follows the keyboard out
+      (app/shell/keys.ts, 2026-08-10).
+
   - id: document-mounted
     sink: app/main:mount
     description: >
