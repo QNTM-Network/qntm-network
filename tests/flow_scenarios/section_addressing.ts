@@ -122,7 +122,20 @@ function assertAddressImportsOnlyRendition(): void {
   const source = readFileSync(resolve(HERE, "../../app/present/address.ts"), "utf8");
   for (const line of source.split(/\r?\n/)) {
     if (!/^\s*import\b/.test(line)) continue;
-    if (!/["']\.\/rendition\.js["']/.test(line)) {
+    // THE CLAIM IS *WHAT* IT IMPORTS, NOT *WHERE FROM* — corrected 2026-08-10. This read
+    // `["']\.\/rendition\.js["']`, pinned to a sibling path, and `ad16c42` moved the module to
+    // `./express/rendition.js` when SELECT/ARRANGE/EXPRESS were homed under `app/present/`. The
+    // scenario has thrown on every run since, and the cost was far larger than one red scenario:
+    // `verify` and `spotlight` ABORTED on it (unusable unscoped on this repo for ~10 commits) and
+    // `canonical-routing` did the opposite — counted the dead scenario as probed and fed its
+    // PARTIAL records into a routing verdict, so numbers taken here read clean off a suite with a
+    // silently dead member.
+    //
+    // Matching `rendition.js` at any relative path keeps the assertion's real claim intact — one
+    // import, and it is the line grammar — while surviving a relocation, which is what actually
+    // happened rather than a second import appearing. A SECOND import, or a different module,
+    // still throws.
+    if (!/["']\.[./]*(?:[\w-]+\/)*rendition\.js["']/.test(line)) {
       throw new Error(`address.ts imports something other than rendition.js: ${line.trim()}`);
     }
   }
