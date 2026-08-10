@@ -510,19 +510,35 @@ describe("6. break the store's readers and the acceptance test goes red", () => 
   before(async () => {
     ({ elements: mutantElements, document: mutantDoc } = installBrowser());
     globalThis.fetch = () => new Promise(() => {});
-    const file = extractPageScript(makeWorkDir("app-row-store-mutant"), (source) => {
-      let out = assertMutated(
-        source,
-        "  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);\n  //",
-        "  const source = accepted.sourceFor(v.path) ?? v.markdown;\n  //",
-      );
-      out = assertMutated(
-        out,
-        "    const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);\n    const current",
-        "    const source = v.markdown;\n    const current",
-      );
-      return out;
-    });
+    // ── THE SECOND READER MOVED, SO THE SECOND MUTATION MOVED WITH IT (2026-08-10) ──
+    //
+    // There have always been TWO expressions that ask the store what is on screen, and breaking
+    // both is what this proof is. One is still `repaintCurrentView`'s, on the page. The other was
+    // the vim keydown handler's, and that handler is now `app/shell/keys.ts` — a MODULE, reached
+    // through `dist/present.js`, so a mutation applied to the page script can no longer see it.
+    //
+    // MUTATING THE BUNDLE IS NOT A WEAKER PROOF THAN MUTATING THE PAGE, and it is worth saying why
+    // rather than leaving it to look like a concession: the bundle is built from `keys.ts` by
+    // `scripts/build.mjs` and CI fails if it drifts from source, so the line broken below is the
+    // line that ships, exactly as before. `assertMutated` still refuses a pattern that is not
+    // present exactly once, on both halves, so a relocation that silently stopped this reaching
+    // its target goes red rather than green.
+    const workDir = makeWorkDir("app-row-store-mutant");
+    const file = extractPageScript(
+      workDir,
+      (source) =>
+        assertMutated(
+          source,
+          "  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);\n  //",
+          "  const source = accepted.sourceFor(v.path) ?? v.markdown;\n  //",
+        ),
+      (bundle) =>
+        assertMutated(
+          bundle,
+          "const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);",
+          "const source = v.markdown;",
+        ),
+    );
     mutant = await import(`file://${file}`);
   });
 

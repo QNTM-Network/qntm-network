@@ -344,6 +344,22 @@ export {
 } from "../shell/drawer.js";
 export type { DrawerDeps, DrawerView, FolderNode } from "../shell/drawer.js";
 
+// ── THE GLOBAL KEYBOARD — THE SECOND RE-EXPORT OUT OF app/shell/ ──
+//
+// `app/shell/keys.ts`, re-exported here for the SAME reason the drawer is: the page keeps ONE
+// site-root-absolute import (`/dist/present.js`), so a module that has to reach it comes through
+// this barrel rather than the page growing a second bundle and a second `<script>` path to get
+// wrong. It sits in `app/shell/` rather than `app/present/` because it touches the document, and
+// `paint.ts`'s header claims `app/present/` has exactly one module that does.
+//
+// WHAT MOVING IT BOUGHT, stated here because a re-export line is where a reader will ask: the
+// page's `keydown` handler was ~190 lines of decisions inside a `<script type="module">` that
+// `tsconfig.json` cannot read and flow-trace's node module-load hook cannot import. It is now
+// compiled and observable, which is what lets `classes.yaml`'s `movement` class be asked anything
+// at all. See keys.ts's own header for the two defects that lived in that blind spot.
+export { globalKey, installGlobalKeys } from "../shell/keys.js";
+export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";
+
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
 //
 // `app/present/embedded-declaration.ts` used to `import presentationJson from

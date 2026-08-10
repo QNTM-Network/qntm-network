@@ -445,3 +445,66 @@ classes:
       the identical failure recurring.
     canonical_class: app/present/paint:visualLineOrder
     status: working
+
+  # DECLARED 2026-08-10. A gesture's MEANING had no home. Two modules independently decide that
+  # `j` and ArrowDown mean "go down", and each was individually compliant precisely because no
+  # class named the concern: `app/present/motions.ts` decides it for the reading column
+  # (`ModeSurface.handleKey`, motions.ts:415-425), and `app/shell/drawer.ts` decides it again for
+  # the drawer's focus ring (`drawerKey`, drawer.ts:367). Neither module imports the other —
+  # neither imports ANYTHING — so no caller-chain census can connect them, and none did. The
+  # author of the second one SAW the duplication and wrote it into a comment (drawer.ts:362, "a
+  # second name for the one movement rather than a second mechanism"). This entry is that comment
+  # turned into something a tool can read.
+  #
+  # NOTHING IS CONSOLIDATED BY THIS ENTRY, deliberately. Declaring the class is the whole of the
+  # change: no TypeScript moved, drawer.ts still answers for itself. What the declaration buys is
+  # that the second answer becomes SAYABLE as a violation instead of invisible.
+  #
+  # `status: declared`, NOT `working` — the other five entries here claim `working` and this one
+  # cannot: a bypass is live in drawer.ts as this lands. Stamping `working` on a class whose
+  # single known violation is still in the tree is the rubber stamp the file exists to prevent.
+  #
+  # NO `governs_sinks`, AND THE CONSEQUENCE IS SILENCE — measured, not predicted. sinks.yaml
+  # declares `view-painted` and `document-mounted`; a moved selection reaches neither as its
+  # terminal effect — it changes which line is selected, and the repaint that follows belongs to
+  # `presentation-painting`. Declaring a sink this class does not own, to fill the field, is the
+  # "declaration with no reader" this file's header warns against. But the omission is not free,
+  # and pretending otherwise would repeat the mistake `markdown-rendering` documents about itself:
+  #
+  #   1. A SINK-LESS CLASS IS NEVER PROBED. `canonical_routing.py:454` filters to
+  #      `[c for c in classes if c.governs_sinks]`, and its own docstring (:552) says a class
+  #      producing no findings is "ABSENT from the map — it carries no verdict". Measured here on
+  #      the commit that declared this class: `canonical-routing . --class movement` returns
+  #      `classes_verified: 0`, `findings: []`. Not a PASS and not a FAIL. Silence.
+  #   2. A SINK WOULD NOT HAVE SAVED IT EITHER, because the real caller is unreachable. This is
+  #      the IDENTICAL shape `row-order-materialisation` records above, reason (1): the one
+  #      production call site of BOTH `ModeSurface` and `drawerKey` is `app/index.html`
+  #      (:1377 and :1049-1055) — hand-authored HTML, outside `.flow-trace.yaml`'s
+  #      `include: [app]` by construction, because a node module-load hook cannot import an HTML
+  #      document. Proven by mutation on 2026-08-10: `governs_sinks: [view-painted]` was bolted
+  #      on temporarily and the class DID then report a bypass — but the bypass was
+  #      `app/present/commit:commitLine -> paint`, a chain with nothing to do with movement. A
+  #      borrowed anchor buys a verdict about somebody else's traffic. The mutation was reverted.
+  #
+  # SO THIS ENTRY IS A NAMED, CORRECT HOME AND NOT YET AN ENFORCED ONE, and it is written down
+  # here rather than left to be rediscovered. What makes it enforceable is bundling index.html's
+  # script through the build so the caller enters the capture filter — the same fix
+  # `markdown-rendering` names for the same reason. Until then this class states where movement
+  # belongs; it does not yet catch a path that goes around.
+  - id: movement
+    concern: >
+      Deciding what a movement gesture MEANS — which line or stop `j`, `k`, and the arrow keys
+      select next, and by how much. It is the DECISION, not the repaint that follows it and not
+      the order the rows are in: `presentation-painting` owns putting the result on screen and
+      `row-order-materialisation` owns what "next" is in DOM order. This class owns only the
+      answer to "the operator pressed down — down to WHERE".
+
+      THE FAILURE THIS CLASS EXISTS TO CATCH: a second module answering that question for its own
+      surface. Two do today. `ModeSurface.handleKey` answers it for the reading column, with a
+      count prefix and a clamp against the last line. `drawerKey` answers it again for the drawer,
+      mapping `ArrowDown`/`j` onto `moveTo(index, 1)` with its own wrap-around and its own
+      reachability rule. The two agree today by coincidence and by an author remembering; nothing
+      holds them together. Any THIRD surface that binds a key to a direction without routing
+      through this home is the identical failure recurring.
+    canonical_class: app/present/motions:ModeSurface
+    status: declared

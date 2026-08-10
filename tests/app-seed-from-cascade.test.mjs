@@ -754,8 +754,15 @@ describe("7. NOTHING LOCAL IS WRITTEN beyond the seed characters themselves", ()
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {
+    // NARROWED 2026-08-10, NOT RELAXED — the claim is unchanged, the SPLIT moved. The page's two
+    // `applyEdit` calls (`x` and `>`/`<`) went to `app/shell/keys.ts` when the global keydown
+    // handler left `app/index.html` for a file the compiler and the tracer can both read. Five
+    // sites outside `source.ts`, as before; the page now holds ZERO, which is stronger than the
+    // two this used to assert.
+    const KEYS = readFileSync(join(REPO, "app", "shell", "keys.ts"), "utf8");
     assert.equal((PAINT.match(/\bapplyEdit\(/g) ?? []).length, 3);
-    assert.equal((APP.match(/\bapplyEdit\(/g) ?? []).length, 2);
+    assert.equal((KEYS.match(/\bapplyEdit\(/g) ?? []).length, 2);
+    assert.equal((APP.match(/\bapplyEdit\(/g) ?? []).length, 0);
   });
 
   test("`.markdown` is never assigned — the page reads the envelope and never rewrites it", () => {

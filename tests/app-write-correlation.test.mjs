@@ -642,7 +642,14 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
   });
 
   test("`applyEdit` is STILL reached from exactly five sites outside its own module", () => {
-    assert.equal((APP_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 2);
+    // NARROWED 2026-08-10, NOT RELAXED — the claim is unchanged, the SPLIT moved. The page's two
+    // `applyEdit` calls (`x` and `>`/`<`) went to `app/shell/keys.ts` when the global keydown
+    // handler left `app/index.html` for a file the compiler and the tracer can both read. Five
+    // sites outside `source.ts`, as before; the page now holds ZERO, which is stronger than the
+    // two this used to assert.
+    const KEYS_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "keys.ts"), "utf8");
+    assert.equal((APP_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 0);
+    assert.equal((KEYS_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 2);
     assert.equal((PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 3);
   });
 

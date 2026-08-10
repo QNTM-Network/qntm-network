@@ -39,18 +39,30 @@ export const REPO = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
  * logic and cannot be silently undone by a rewrite that runs later. It receives the finished source
  * and returns the source to write; the default is identity, so every existing caller is unchanged.
  *
+ * `mutateBundle` IS THE SAME SEAM ONE LAYER DOWN, ADDED 2026-08-10 WHEN THE PAGE STOPPED BEING THE
+ * ONLY PLACE THE LOGIC LIVES. The global keydown handler moved to `app/shell/keys.ts`, so an
+ * expression a mutation proof needs to break may now be in the BUNDLE rather than in the page
+ * script. Given, it receives dist/present.js's source and returns the source to write as a mutant
+ * copy in `workDir`; the page is then pointed at that copy. Omitted, the page loads the real
+ * bundle exactly as before, so every existing caller is unchanged. This NARROWS the proofs rather
+ * than relaxing them: without it, a mutation aimed at a relocated expression would fail
+ * `assertMutated` and the suite would go red for a reason that has nothing to do with the property.
+ *
  * A GUARD THAT CANNOT GO RED IS DECORATION, and a suite proving that the page holds a vanished
  * edit has no other way to show its assertions would fail if the holding were removed: the page is
  * one hand-authored file with no seam to inject at. Breaking one named expression and re-importing
- * is that seam. `assertMutated` below is what stops a typo in the pattern from producing a green
- * "mutation proof" against an unmodified page.
+ * is that seam. (That "no seam" reason is now weaker for anything that has moved into a module —
+ * `keys.ts` has a real import boundary a test can drive directly — and `mutateBundle` exists for
+ * the half that has NOT moved yet rather than as a permanent preference.)
+ *
+ * `assertMutated` below is what stops a typo in the pattern from producing a green "mutation
+ * proof" against an unmodified page.
  */
-export function extractPageScript(workDir, mutate = (source) => source) {
+export function extractPageScript(workDir, mutate = (source) => source, mutateBundle = undefined) {
   const html = readFileSync(join(REPO, "app", "index.html"), "utf8");
   const match = /<script type="module">([\s\S]*?)<\/script>/.exec(html);
   assert.ok(match, "app/index.html no longer contains a module script");
   let source = match[1];
-  const bundle = JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href);
 
   const swapped = [];
   const swap = (pattern, replacement, label) => {
@@ -96,9 +108,30 @@ export function extractPageScript(workDir, mutate = (source) => source) {
   //    dir. THE BUNDLE ITSELF IS NOT SUBSTITUTED: this is the same dist/present.js the browser
   //    loads. The leading `/` is asserted, not tolerated — a page that went back to a relative
   //    "./dist/present.js" would 404 at /app/ in a browser and this swap fails instead.
+  //
+  //    UNLESS `mutateBundle` IS GIVEN, WHICH IS NEW AND IS A NARROWING RATHER THAN A LOOSENING —
+  //    see this function's own header. Half of what a mutation proof needs to break now lives in
+  //    a MODULE (`app/shell/keys.ts`, since the global keydown handler left the page), so a
+  //    mutation applied to the page script alone can no longer reach it and `assertMutated` fails
+  //    loudly rather than passing over an unreachable target. The mutant bundle is written beside
+  //    the mutant page in the caller's own work dir, so the real `dist/present.js` is never
+  //    touched and an unmutated run still loads the exact artifact the browser loads.
+  const bundlePath =
+    mutateBundle === undefined
+      ? join(REPO, "dist", "present.js")
+      : (() => {
+          const to = join(workDir, "present.mutant.js");
+          writeFileSync(to, mutateBundle(readFileSync(join(REPO, "dist", "present.js"), "utf8")));
+          return to;
+        })();
+  // THE EXPORT BLOCK BELOW IMPORTS FROM THE SAME PATH THE PAGE DOES, mutant or not. Two different
+  // specifiers would load TWO module instances of the presentation bundle, so the page's painter
+  // and the test's `__armSettleWith` would be operating on separate copies of the same state —
+  // which is a subtler failure than a crash and would make a mutation proof measure the wrong one.
+  const bundle = JSON.stringify(pathToFileURL(bundlePath).href);
   swap(
     /"\/dist\/present\.js(?:\?v=[0-9a-f]+)?"/,
-    JSON.stringify(pathToFileURL(join(REPO, "dist", "present.js")).href),
+    JSON.stringify(pathToFileURL(bundlePath).href),
     "/dist/present.js",
   );
 
