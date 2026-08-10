@@ -6540,6 +6540,105 @@ function markWhereWeAre(deps, views, currentViewId) {
   deps.barView.textContent = v ? v.title : "";
   for (const [id, button] of viewButtons) button.classList.toggle("current", id === currentViewId);
 }
+
+// app/shell/keys.ts
+var typingIn = (target) => {
+  const tag = String(target?.tagName ?? "").toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
+};
+function globalKey(deps, e) {
+  if (e.key === "Escape" && deps.drawerIsOpen()) {
+    e.preventDefault();
+    deps.closeDrawer();
+    return;
+  }
+  if (e.key === "\\" && !deps.drawerIsOpen() && !typingIn(e.target)) {
+    e.preventDefault();
+    deps.openDrawer();
+    return;
+  }
+  deps.drainPainted();
+  const viewId = deps.currentViewId();
+  if (deps.mode.mode !== "NORMAL" || deps.drawerIsOpen() || typingIn(e.target) || viewId === null) return;
+  const v = deps.viewOf(viewId);
+  if (v === void 0) return;
+  const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
+  const current = deps.focus.lineIndex ?? 0;
+  const visualOrder = visualLineOrder(deps.viewBody);
+  const visualPos = visualOrder.indexOf(current);
+  const visualCurrent = visualPos === -1 ? 0 : visualPos;
+  const visualLastIndex = Math.max(0, visualOrder.length - 1);
+  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex, deps.focus.column);
+  if (!outcome.handled) return;
+  e.preventDefault();
+  const effect = outcome.effect;
+  if (effect.kind === "move") {
+    deps.focus.focus(visualOrder[effect.lineIndex] ?? current, source, 0, v.id);
+    deps.repaintCurrentView();
+  } else if (effect.kind === "boundary") {
+    deps.focus.focus(
+      boundaryLine(source.split("\n"), current, effect.direction, effect.count),
+      source,
+      0,
+      v.id
+    );
+    deps.repaintCurrentView();
+  } else if (effect.kind === "open") {
+    const targetIndex = effect.direction === "below" ? current + 1 : current;
+    const opened = openLine(
+      source,
+      targetIndex,
+      deps.draftLine,
+      void 0,
+      deps.globalRegistrationFor(v.id),
+      // THE VIEW THE ROW'S PLACE IS TAKEN IN, passed explicitly because it must be the same id
+      // `paintView` resolves against and `globalRegistrationFor` can return nothing at all (no
+      // declaration read yet), in which case there would be no view id inside it to fall back to.
+      v.id
+    );
+    if (opened) {
+      deps.focus.blur();
+      deps.mode.enterInsert();
+    }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "toggle-done") {
+    const line = source.split("\n")[current] ?? "";
+    const shape = classifyLine(line);
+    if (shape.kind === "checkbox") {
+      const markdown = applyEdit(source, {
+        kind: "set-checkbox",
+        lineIndex: current,
+        checked: !shape.done
+      });
+      if (markdown !== null) {
+        deps.commitLine(v, existingLineCommit(source, current, markdown));
+      }
+    }
+  } else if (effect.kind === "indent") {
+    const line = source.split("\n")[current] ?? "";
+    const text = indentedLine(line, effect.direction, effect.count, deps.declaration().indentUnit);
+    const markdown = applyEdit(source, { kind: "set-line", lineIndex: current, text });
+    if (markdown !== null) {
+      deps.commitLine(v, existingLineCommit(source, current, markdown));
+    }
+  } else if (effect.kind === "word") {
+    const line = source.split("\n")[current] ?? "";
+    const at = wordCaret(line, effect.motion, effect.count, deps.focus.column);
+    if (at !== null) {
+      deps.focus.moveColumn(at, line);
+      deps.repaintCurrentView();
+    }
+  } else if (effect.kind === "column") {
+    const line = source.split("\n")[current] ?? "";
+    deps.focus.moveColumn(effect.to === "start" ? 0 : line.length, line);
+    deps.repaintCurrentView();
+  } else {
+    deps.repaintCurrentView();
+  }
+}
+function installGlobalKeys(deps, on = document) {
+  on.addEventListener("keydown", (e) => globalKey(deps, e));
+}
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -6610,8 +6709,10 @@ export {
   extendsLine,
   folderOf,
   foldersOf,
+  globalKey,
   graphSnapshotOf,
   indentedLine,
+  installGlobalKeys,
   instanceAnchorFor,
   instanceOf,
   instancesOf,

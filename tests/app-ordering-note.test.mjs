@@ -288,9 +288,19 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor'
   });
 
   test("`applyEdit` is still reached from exactly five sites outside its own module", () => {
+    // NARROWED 2026-08-10, NOT RELAXED — the claim is unchanged, the SPLIT moved. The page's two
+    // `applyEdit` calls (`x` and `>`/`<`) went to `app/shell/keys.ts` when the global keydown
+    // handler left `app/index.html` for a file the compiler and the tracer can both read. Still
+    // exactly five sites outside `source.ts`; the page now holds none of them, which is a
+    // STRONGER claim than the one this replaces, so the total is asserted as before AND each side
+    // is named so a future drift says which one moved.
+    const KEYS_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "keys.ts"), "utf8");
     const pageCalls = APP_SOURCE.match(/\bapplyEdit\(/g) ?? [];
+    const keysCalls = KEYS_SOURCE.match(/\bapplyEdit\(/g) ?? [];
     const paintCalls = PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? [];
-    assert.equal(pageCalls.length + paintCalls.length, 5, "orderingNoteFor must reach applyEdit zero times");
+    assert.equal(pageCalls.length, 0, "the page must hold no edit constructor at all now");
+    assert.equal(keysCalls.length, 2, "`x` and `>`/`<` are the two, and they live in keys.ts");
+    assert.equal(pageCalls.length + keysCalls.length + paintCalls.length, 5, "orderingNoteFor must reach applyEdit zero times");
   });
 
   test("`.markdown` is still never ASSIGNED in app/ — the page, the painter, AND every resolver", () => {

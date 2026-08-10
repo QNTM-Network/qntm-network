@@ -4128,3 +4128,89 @@ backlog:
     is broken'' note is how a working instrument goes unused - the same failure that
     header''s own neighbours document.'
   captured: '2026-08-10'
+- id: flag-vim-gestures-ts-imports-modesurface-boundaryline
+  title: '[asserted] vim_gestures.ts imports ModeSurface/boundaryLine/indentedLine/wordCaret
+    DIRECTLY and calls each itself, re-implementing the wiring it claims to prove.
+    That was unavoidable while the wiring was in app/index.html; it is not now that
+    app/shell/keys.ts exists. This is the harness-only shape canonical_routing.py
+    discards by name - a scenario driving production would catch a wiring regression,
+    this one cannot.'
+  asserted: vim_gestures.ts imports ModeSurface/boundaryLine/indentedLine/wordCaret
+    DIRECTLY and calls each itself, re-implementing the wiring it claims to prove.
+    That was unavoidable while the wiring was in app/index.html; it is not now that
+    app/shell/keys.ts exists. This is the harness-only shape canonical_routing.py
+    discards by name - a scenario driving production would catch a wiring regression,
+    this one cannot.
+  captured: '2026-08-10'
+- id: flag-the-same-applyedit-call-site-count
+  title: '[asserted] The same applyEdit call-site count invariant is copy-pasted across
+    SEVEN test files (app-ordering-note, app-write-correlation, app-seed-from-cascade,
+    app-today-note, app-generality-acceptance, app-membership-diagnostic, app-membership-note).
+    One rule, seven expressions, all needing the identical edit when a call site moves
+    - which is exactly what happened on 2026-08-10. One shared helper asserting the
+    split would make a relocation a one-line change instead of seven.'
+  asserted: The same applyEdit call-site count invariant is copy-pasted across SEVEN
+    test files (app-ordering-note, app-write-correlation, app-seed-from-cascade, app-today-note,
+    app-generality-acceptance, app-membership-diagnostic, app-membership-note). One
+    rule, seven expressions, all needing the identical edit when a call site moves
+    - which is exactly what happened on 2026-08-10. One shared helper asserting the
+    split would make a relocation a one-line change instead of seven.
+  captured: '2026-08-10'
+- id: flag-one-broken-scenario-blinds-two-whole
+  title: '[asserted] ONE broken scenario blinds TWO whole verbs. section_addressing.ts
+    throws (address.ts imports classifyLine from express/rendition.js, which its own
+    assertion forbids) and both ''flow-trace verify .'' and ''flow-trace spotlight
+    .'' ABORT on it rather than degrading to a per-scenario FAIL. canonical-routing
+    catches it and reports 15 probed. So the project''s two most useful diagnostic
+    verbs are unusable unscoped for a defect in one file - measured 2026-08-10.'
+  asserted: ONE broken scenario blinds TWO whole verbs. section_addressing.ts throws
+    (address.ts imports classifyLine from express/rendition.js, which its own assertion
+    forbids) and both 'flow-trace verify .' and 'flow-trace spotlight .' ABORT on
+    it rather than degrading to a per-scenario FAIL. canonical-routing catches it
+    and reports 15 probed. So the project's two most useful diagnostic verbs are unusable
+    unscoped for a defect in one file - measured 2026-08-10.
+  captured: '2026-08-10'
+- id: flag-tests-flow-scenarios-ts-is-typescript
+  title: '[asserted] tests/flow_scenarios/*.ts is TypeScript that tsc never checks.
+    tsconfig.json include is [app/**/*.ts, app/**/*.d.ts], so ''npx tsc --listFiles
+    | grep flow_scenarios'' returns 0. These files import real app modules and assert
+    against real types; a signature change breaks them only at flow-trace runtime,
+    never at typecheck. Same blind-spot class as the one app/shell/keys.ts was extracted
+    to end, one directory over.'
+  asserted: tests/flow_scenarios/*.ts is TypeScript that tsc never checks. tsconfig.json
+    include is [app/**/*.ts, app/**/*.d.ts], so 'npx tsc --listFiles | grep flow_scenarios'
+    returns 0. These files import real app modules and assert against real types;
+    a signature change breaks them only at flow-trace runtime, never at typecheck.
+    Same blind-spot class as the one app/shell/keys.ts was extracted to end, one directory
+    over.
+  captured: '2026-08-10'
+- id: flag-the-14-pre-existing-test-failures
+  title: '[asserted] The 14 pre-existing test failures on main are presentation.json
+    drifting from the qntm monorepo''s YAML - every one is a ''generating from the
+    monorepo reproduces presentation.json''s X key'' assertion. The committed declaration
+    is stale against its source of truth, and the suite has been red long enough that
+    a NEW failure is hard to distinguish from the standing 14. Measured as the baseline
+    on 2026-08-10 before unrelated work.'
+  asserted: The 14 pre-existing test failures on main are presentation.json drifting
+    from the qntm monorepo's YAML - every one is a 'generating from the monorepo reproduces
+    presentation.json's X key' assertion. The committed declaration is stale against
+    its source of truth, and the suite has been red long enough that a NEW failure
+    is hard to distinguish from the standing 14. Measured as the baseline on 2026-08-10
+    before unrelated work.
+  captured: '2026-08-10'
+- id: flag-classes-yaml-movement-declares-no-governs
+  title: '[asserted] classes.yaml movement declares no governs_sinks, so canonical-routing
+    never probes it (classes_verified 0) even now the path is observable. The honest
+    candidate sink is the terminal effect of a movement - FocusSurface.focus - which
+    sinks.yaml does not declare. Declaring ''selection-moved: app/present/focus:FocusSurface.focus''
+    is what would turn the movement class from a correct name into an enforced one.
+    NOT done here: it is a real design decision (focus is also reached by clicks and
+    by boundary/word motions) and deserves its own bite rather than being bolted on.'
+  asserted: 'classes.yaml movement declares no governs_sinks, so canonical-routing
+    never probes it (classes_verified 0) even now the path is observable. The honest
+    candidate sink is the terminal effect of a movement - FocusSurface.focus - which
+    sinks.yaml does not declare. Declaring ''selection-moved: app/present/focus:FocusSurface.focus''
+    is what would turn the movement class from a correct name into an enforced one.
+    NOT done here: it is a real design decision (focus is also reached by clicks and
+    by boundary/word motions) and deserves its own bite rather than being bolted on.'
+  captured: '2026-08-10'
