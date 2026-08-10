@@ -3553,6 +3553,14 @@ capabilities:
   status: 'working'
 
 - id: the-browser-recognises-its-own-write
+  # `tier` RESTORED 2026-08-10 — IT WAS MISSING AND THE ROW DID NOT LOAD. `Capability.tier`
+  # is a required Literal, so pydantic rejected this row and every count read 59 of 61.
+  # WORSE THAN INVISIBLE: `flow-trace capability-rollup .` REWRITES capabilities.yaml from
+  # what it loaded, so a run of that verb DELETED this capability from the file outright.
+  # Observed directly on 2026-08-10 — a rollup run dropped this row and
+  # `the-browser-recognises-its-own-write` from disk; the write was reverted and the field
+  # supplied instead. `functional` because it is a behaviour the operator experiences (the held strip stops reporting rows that saved), same family as the write path above.
+  tier: functional
   intent: >-
     THE BROWSER CAN TELL THAT ITS OWN WRITE LANDED, AND THE RECOVERY STRIP STOPS LYING TO HIM.
     THE MEASURED DEFECT. A real browser session on 2026-08-01 found the held strip carrying FIVE
@@ -3631,6 +3639,14 @@ capabilities:
     live graph server, no engine cycle, no real POST, and no run against the deployed Worker.
   status: 'working'
 - id: a-write-does-not-wait-for-the-cycle
+  # `tier` RESTORED 2026-08-10 — IT WAS MISSING AND THE ROW DID NOT LOAD. `Capability.tier`
+  # is a required Literal, so pydantic rejected this row and every count read 59 of 61.
+  # WORSE THAN INVISIBLE: `flow-trace capability-rollup .` REWRITES capabilities.yaml from
+  # what it loaded, so a run of that verb DELETED this capability from the file outright.
+  # Observed directly on 2026-08-10 — a rollup run dropped this row and
+  # `the-browser-recognises-its-own-write` from disk; the write was reverted and the field
+  # supplied instead. `functional` because it is a behaviour the operator experiences (the write is answered when the vault has it), sibling to a-write-refuses-a-stale-base which is also functional.
+  tier: functional
   intent: >-
     THE WRITE IS ANSWERED WHEN THE VAULT HAS IT, AND THE ENGINE'S ANSWER IS COLLECTED SEPARATELY.
     WHAT IT COST BEFORE. `POST /app/edit-file` wrote the file and then awaited the engine cycle, so

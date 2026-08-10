@@ -125,6 +125,23 @@ classes:
       different act from deciding how it is SHOWN. A tag grammar re-expressed at a call site is
       the same failure as a precedence order re-expressed at one, so it is one function with one
       declared flow (paint-finds-the-tags-in-the-line) and no second class.
+    # RESTORED 2026-08-10 — THIS FIELD WAS MISSING AND THE WHOLE CLASS NEVER LOADED. `ClassDef`
+    # requires `canonical_class`; without it pydantic rejects the row and `load_classes` drops it,
+    # silently on most surfaces. This is the class 22 flows in flows.yaml name — more than twice
+    # any other — so every class distribution and every routing verdict ever read off this repo
+    # described a world with its largest member missing.
+    #
+    # THE CHOKEPOINT, DERIVED FROM THE FEATURE. "When rendition resolution stops working, what ONE
+    # place would tell me?" — `PresentationCascade.resolve`. It walks the seven levels and chooses
+    # a rendition; it is what this concern already names as the thing a path must not go around
+    # ("ANY PATH THAT DECIDES A RENDITION WITHOUT ROUTING HERE IS THE FAILURE"); and it is what
+    # tests/present-cascade.test.mjs already spies on to prove the painter both ASKS and OBEYS.
+    #
+    # NOT `levels.ts`'s SPECIFICITY, though this concern names that too. It is a CONSTANT — a
+    # tuple holding the precedence order. Nothing routes THROUGH a constant, so a class homed
+    # there could never adjudicate a caller. The tuple is what the chokepoint reads; the
+    # chokepoint is the home.
+    canonical_class: app/present/express/cascade:PresentationCascade
     status: working
 
   - id: presentation-painting
@@ -236,9 +253,13 @@ classes:
 
       THE WHOLE CONCERN IS A READ. `scripts/generate-qualification-declaration.mjs` interprets the
       engine's pattern language ONCE, against the monorepo's config, and publishes a closed
-      predicate grammar of two operators over three node fields. `app/present/qualification.ts`
-      validates that document; `app/present/membership.ts` resolves a line's fields and tests them
-      against a predicate. Neither reads YAML and neither knows what `children:` or `$cycle_today`
+      predicate grammar of two operators over three node fields. `app/present/select/qualification.ts`
+      validates that document; `app/present/select/membership.ts` resolves a line's fields and
+      tests them against a predicate. (BOTH PATHS CORRECTED 2026-08-10 — they read
+      `app/present/qualification.ts` and `app/present/membership.ts`, which have not existed since
+      `ad16c42` homed SELECT/ARRANGE/EXPRESS under `app/present/`. Third declaration found citing
+      a module that refactor moved; `tests/flow_scenarios/section_addressing.ts` was the first.)
+      Neither reads YAML and neither knows what `children:` or `$cycle_today`
       mean — 116 of the operator's 159 qualifications are refused at publish time, with a recorded
       reason, precisely so that no code here has to.
 
@@ -252,6 +273,19 @@ classes:
       proving the answers INVERT when the declaration changes), and
       tests/qualification-agreement.test.mjs (agreement with the engine's own `matches_pattern`
       over 61 real field triples covering 1501 nodes, and 2184 reachable ones).
+    # RESTORED 2026-08-10 — missing, so this class never loaded either. Same mechanism as
+    # `presentation-resolution` above.
+    #
+    # THE CHOKEPOINT: `membershipFor`, which is the function this concern already describes —
+    # "resolves a line's fields and tests them against a predicate". The defect it exists to catch
+    # is a path deciding where a line BELONGS by re-expressing a pattern instead of reading the
+    # published predicate, and going around this function is exactly what that looks like.
+    #
+    # THE IRONY IS LEFT IN PLACE DELIBERATELY: the comment block immediately below records
+    # `capture-rule-application` being dropped because "the home was named and never built". This
+    # row had the mirror half — the home was built and never named — and sat one entry away,
+    # undetected, the whole time.
+    canonical_class: app/present/select/membership:membershipFor
     status: working
 
   # ── ADDED 2026-08-07, DURING THE SINKS SURVEY — A DECLARATION THAT ALREADY EXISTED AND DID NOT
