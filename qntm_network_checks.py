@@ -572,80 +572,10 @@ def assert_the_view_chooser_is_one_folder_drawer(state: ScenarioState) -> Predic
         ),
         observed_ref="app/index.html",
     )
-
-
-def assert_every_class_names_a_declared_package(state: ScenarioState) -> PredicateResult:
-    """THE PACKAGE RUNG STAYS POPULATED — every declared class names a declared package home.
-
-    WHAT THIS RATCHETS, and why a one-time edit was not enough. `docs/architecture/packages.yaml`
-    was authored on 2026-08-11, taking `flow-trace packages .` from `class_package_ungoverned: 12`
-    to 0. Nothing then stopped the thirteenth class landing with no `packages:` line — the tool
-    reports that as INFO residue, never FAIL, deliberately (`derive_class_package_findings`:
-    surfacing is the job, not gating). An INFO nobody reads is how a rung empties again. This
-    predicate is the gate the tool declines to be, scoped to this project, where the decision that
-    every class here HAS a package home has actually been made.
-
-    IT CHECKS TWO THINGS, AND THE SECOND IS THE ONE THE TOOL CANNOT DO HERE. First, that every
-    class cites at least one package. Second, that each cited id resolves against packages.yaml —
-    which flow-trace DOES check and which is the only half of its `packages` verb that works on a
-    TypeScript target at all: `verify_packages` resolves `module:` through `importlib`, so both
-    entries in packages.yaml report FAIL "not importable" and always will until flow-trace grows a
-    JS resolution backend. That FAIL is the tool's, not this repo's; see packages.yaml's header.
-    The citation cross-reference needs no import, so it is real governance here, and this predicate
-    re-states it locally rather than depending on a verb whose verdict is half-red for an unrelated
-    reason.
-    """
-    if guard := _guard(state):
-        return guard
-    root = _root(state)
-    arch = root / "docs" / "architecture"
-
-    try:
-        packages = yaml.safe_load(_read(arch / "packages.yaml")) or {}
-        classes = yaml.safe_load(_read(arch / "classes.yaml")) or {}
-    except yaml.YAMLError as exc:
-        return PredicateResult(
-            status="FAIL",
-            message=f"architecture declarations do not parse: {exc}",
-            observed_ref="docs/architecture/packages.yaml",
-        )
-
-    declared = {p.get("id") for p in (packages.get("packages") or []) if p.get("id")}
-    if not declared:
-        return PredicateResult(
-            status="FAIL",
-            message="no packages declared — the rung is empty, so no class can name a package home",
-            observed_ref="docs/architecture/packages.yaml",
-        )
-
-    unhomed: list[str] = []
-    dangling: list[str] = []
-    for klass in classes.get("classes") or []:
-        cited = klass.get("packages") or []
-        if not cited:
-            unhomed.append(str(klass.get("id")))
-            continue
-        for package_id in cited:
-            if package_id not in declared:
-                dangling.append(f"{klass.get('id')} -> {package_id}")
-
-    problems: list[str] = []
-    if unhomed:
-        problems.append(f"names no package home: {unhomed}")
-    if dangling:
-        problems.append(f"cites a package that is not declared: {dangling}")
-    if problems:
-        return PredicateResult(
-            status="FAIL",
-            message=f"the package rung has holes — {'; '.join(problems)}",
-            observed_ref="docs/architecture/classes.yaml",
-        )
-
-    return PredicateResult(
-        status="PASS",
-        message=(
-            f"all {len(classes.get('classes') or [])} declared classes resolve a package home "
-            f"among the {len(declared)} declared packages {sorted(declared)}"
-        ),
-        observed_ref="docs/architecture/classes.yaml",
-    )
+# TOMBSTONE: assert_every_class_names_a_declared_package — deleted 2026-08-11, the same day it was
+# written. It asserted that every class in classes.yaml names a package declared in packages.yaml.
+# The check was right and mutation-proven; the capability it gated
+# (`every-declared-class-names-its-package-home`) was a category error — its subject was this
+# repo's own declaration files, not anything the app does — and was retracted with it. See the
+# tombstone at the foot of docs/architecture/capabilities.yaml. The gap it covered belongs in
+# flow-trace as a declarable package-gate policy mirroring `RollupConfig.horizontal_gate_policy`.

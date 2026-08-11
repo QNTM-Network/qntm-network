@@ -4198,62 +4198,36 @@ capabilities:
     flow-trace's reach (the app repo's own capabilities already state a scenario cannot cover the
     Worker), also substituted rather than skipped.
 
-# ── THE PACKAGE RUNG (added 2026-08-11) ─────────────────────────────────────────────────────
+
+# ── TOMBSTONE: every-declared-class-names-its-package-home — RETRACTED 2026-08-11, THE SAME DAY
+#    IT WAS MINTED. A CATEGORY ERROR, RECORDED RATHER THAN QUIETLY DELETED ────────────────────
 #
-# The derived tail of this entry (status / enforced_by / enforcement_depth / enforcement_surface
-# / confidence) was TRANSCRIBED from a real `capability-rollup . --optimistic --capability
-# every-declared-class-names-its-package-home` run against this tree, not hand-authored. It is
-# transcribed rather than left for the rollup to write because THAT RUN DESTROYED ALL 34
-# AUTHORED `#` COMMENTS IN THIS FILE — it re-serialises the whole document through PyYAML
-# instead of splicing, the exact behaviour `backlog-splice-preserves-authored-comments` was
-# minted to stop one file over. The file was restored from HEAD and this block re-appended by
-# hand. Carried as an asserted flag; do not run `capability-rollup` against this repo again
-# without checking `grep -c '^\s*#' docs/architecture/capabilities.yaml` afterwards.
-- id: every-declared-class-names-its-package-home
-  intent: >-
-    THE STRUCTURAL RUNG BETWEEN CAPABILITY AND CLASS IS POPULATED AND STAYS POPULATED. This repo
-    declares its build bundles as packages (`docs/architecture/packages.yaml`) and every class
-    names the one it lives in, so a reader can ask which APPLICATION a concern belongs to and get
-    an answer from a file rather than from the directory tree.
-
-    WHAT THE RUNG SAYS THAT THE CLASSES CANNOT. The twelve classes read as one flat list of
-    concerns in one program. They are two programs. `app/main.ts` imports `render/renderer` and
-    `editor/session` and nothing under `app/present/`; `app/present/index.ts` re-exports out of
-    `app/shell/` and reaches neither. The demo page and the app page share this repo, this
-    toolchain and this build script, and share no code. A class names one home; only the rung
-    above it can name which application that home is part of. It also corrects what the tree
-    implies: `app/shell/drawer.ts` and `app/shell/keys.ts` sit outside `app/present/` on disk and
-    inside the presentation package in fact, because the barrel re-exports them and esbuild
-    bundles them into `dist/present.js`. The package is the bundle, not the folder.
-
-    WHY IT IS A CAPABILITY AND NOT JUST A FILE. flow-trace reports a class with no package as INFO
-    residue and never as FAIL — correct as a tool default, because most projects have made no such
-    decision. This one has. The thirteenth class would otherwise land with no `packages:` line and
-    nothing would go red; a rung populated by one edit and guarded by nothing empties again. The
-    enforcer is `state-every-class-names-a-declared-package`, which checks the citations resolve —
-    the half of the package rung that works on a TypeScript target.
-
-    THE HALF THAT DOES NOT WORK, STATED HERE SO NO READER TAKES A RED FOR THIS REPO'S. `flow-trace
-    packages .` resolves a package's `module:` through Python's `importlib` and reads `public_api`
-    through `hasattr`. There is no JS/TS backend, the way `capture` has one. Both entries in
-    packages.yaml therefore report FAIL "not importable", unconditionally and in every spelling
-    (slash, dotted, and with `public_api: []` — the import runs before the signature check;
-    measured three ways, 2026-08-11). That is a flow-trace gap, routed as an asserted flag, and
-    this capability's enforcer deliberately does not depend on it.
-  tier: non-functional
-  rooting: >-
-    isolated — and for the same permanent reason `app-is-a-typed-browser-application` carries, not
-    a deferred one. The subject of this capability is the ARCHITECTURE DECLARATIONS themselves —
-    `docs/architecture/packages.yaml` and `classes.yaml` — not any behaviour of the shipped app.
-    There is no call path through any class that could host it, and rooting a "the declarations are
-    structurally complete" capability against a runtime class would be a fiction of exactly the
-    kind `classes.yaml`'s own header warns about. The predicate reads two yaml files; that is the
-    whole surface.
-  status: working
-  enforced_by:
-  - declared_state: state-every-class-names-a-declared-package
-    verify: PASS
-  enforcement_depth: 1
-  enforcement_surface: 0
-  confidence: thin
-  unconfirmed_since: '2026-08-11'
+# WHAT IT CLAIMED. That every class in classes.yaml names a package declared in packages.yaml,
+# enforced by a predicate (`state-every-class-names-a-declared-package`) that read those two
+# files and FAILed on an unhomed class or a citation that did not resolve. It was correct,
+# mutation-proven twice, and green. It was still wrong to be here.
+#
+# WHY IT WAS RETRACTED, IN THE OPERATOR'S WORDS: "that's just how flow trace works. capability
+# is capabilities of qntm network. that's not a feature. or nonfunctional requirement."
+#
+# THE SIGNAL WAS IN THE ENTRY ITSELF AND WAS READ BACKWARDS. Its `rooting:` field argued for
+# `isolated` on the grounds that "the subject of this capability is the ARCHITECTURE DECLARATIONS
+# themselves — docs/architecture/packages.yaml and classes.yaml — not any behaviour of the shipped
+# app." That sentence is true, and it should have ENDED the capability rather than justified a
+# weaker rooting. Nothing a user of qntm.network can do changes because of it and no non-functional
+# requirement of the app is expressed by it. THE TEST THIS LEAVES BEHIND: when the honest rooting
+# sentence has to say "this governs the declarations, not the app", the answer is that it belongs
+# in the tool, not in this file.
+#
+# WHAT THE REASONING BECAME, BECAUSE THE GAP IT NAMED IS REAL. flow-trace reports a class with no
+# package as INFO residue and never as FAIL (`derive_class_package_findings`), so the thirteenth
+# class re-opens the hole silently and nothing anywhere goes red. That gap is in the TOOL's policy
+# layer. The shape it should take already exists one axis over: `RollupConfig.horizontal_gate_policy`
+# (flow_trace/schema.py:2715) is a per-project `advisory | gating` knob, and flow-trace's own
+# class_fan_in.py:100 already names that split as where this kind of decision goes. A package-gate
+# policy resolved the same way lets a project express this in one line of .flow-trace.yaml with no
+# bespoke capability and no bespoke predicate. Carried as the backlog row
+# `flag-the-package-rung-wants-a-declarable`.
+#
+# WHAT SURVIVED THE RETRACTION: docs/architecture/packages.yaml and the twelve `packages:` citations
+# in classes.yaml. The declaration was never what was objected to.

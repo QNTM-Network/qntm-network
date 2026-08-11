@@ -345,7 +345,10 @@ handoff:
       declaration graph. `app-is-a-typed-browser-application` is about the TOOLCHAIN — package.json,
       a strict tsconfig, a CI build. Neither takes docs/architecture/*.yaml as its subject, and
       widening either to cover "the declared rungs are complete" would have made a true story into
-      a vague one. Minted: `every-declared-class-names-its-package-home`.
+      a vague one. Minted: `every-declared-class-names-its-package-home` — AND RETRACTED THE SAME
+      DAY, in the same PR. The survey ran three altitudes and never asked the question ABOVE all
+      three: is this a capability of qntm.network at all? It is not. See the `retracted:` field
+      below.
 
       PACKAGE (rung 2) — `package_count: 0`, the honest common answer. Nothing to fold into; this
       session IS the population of that rung.
@@ -385,8 +388,14 @@ handoff:
       (the three entryPoints the packages are derived from) · app/present/index.ts (the barrel that
       is the presentation package's public surface, and the two app/shell/ re-exports at its foot).
     pinned: >
-      capability `every-declared-class-names-its-package-home` (rooting: isolated, reasoned) ·
-      enforcer `state-every-class-names-a-declared-package`, MUTATION-PROVEN twice: removing one
+      WHAT REMAINS PINNED after the retraction below: docs/architecture/packages.yaml (2 entries)
+      and the twelve `packages:` citations in classes.yaml. `flow-trace packages .` reads
+      package_count 2, class_package_governed 12, class_package_ungoverned 0. That is the whole
+      durable pin from this arc.
+
+      WHAT WAS PINNED AND THEN WITHDRAWN, recorded because the enforcer was sound and the reasoning
+      is being reused: capability `every-declared-class-names-its-package-home` (rooting: isolated,
+      reasoned) · enforcer `state-every-class-names-a-declared-package`, MUTATION-PROVEN twice: removing one
       class's `packages:` -> FAIL "names no package home: ['markdown-rendering']"; misspelling a
       cited id -> FAIL "cites a package that is not declared: ['markdown-rendering -> demo-pag']";
       restored -> PASS. The tool's own dangling check discriminates on the same input
@@ -438,3 +447,66 @@ handoff:
       test` also fails locally in the suites that read the operator's live monorepo config; those
       suites SKIP on a GitHub runner (`monorepoAvailable = existsSync(DEFAULT_CONFIG_DIR)`), which
       is why CI is green on them and a local run is not.
+    retracted: >
+      THE CAPABILITY AND ITS ENFORCER WERE WITHDRAWN IN THE SAME PR, ON THE OPERATOR'S CORRECTION,
+      AS A CATEGORY ERROR. His words: "that's just how flow trace works. capability is capabilities
+      of qntm network. that's not a feature. or nonfunctional requirement."
+
+      THE SIGNAL WAS INSIDE THE ENTRY AND WAS READ BACKWARDS. Its `rooting:` field argued for
+      `isolated` on the grounds that "the subject of this capability is the ARCHITECTURE
+      DECLARATIONS themselves — docs/architecture/packages.yaml and classes.yaml — not any
+      behaviour of the shipped app." That sentence is true. It should have TERMINATED the
+      capability rather than justified a weaker rooting. Nothing a user of qntm.network can do
+      changes because of it, and no non-functional requirement of the app is expressed by it. THE
+      TEST THIS LEAVES BEHIND, worth carrying to any project: when the honest rooting sentence has
+      to say "this governs the declarations, not the app", the answer is that it belongs in the
+      tool, not in the project's capability set.
+
+      RETRACTED, WITH TOMBSTONES RATHER THAN SILENT DELETES: the capability (foot of
+      capabilities.yaml), the state invariant (foot of state.yaml), the predicate
+      `assert_every_class_names_a_declared_package` (foot of qntm_network_checks.py). Each
+      tombstone names the category error and points at the generalisation. Capability count is
+      back to 61, state invariants to 15.
+
+      KEPT, BECAUSE IT WAS NEVER WHAT WAS OBJECTED TO: packages.yaml and the twelve citations.
+
+      WHERE THE RATCHET WENT, because the gap it named is real. flow-trace reports a class with no
+      package as INFO and never as FAIL, so the thirteenth class re-opens the hole silently — but
+      that gap is in the TOOL's policy layer, not in this repo's feature set. The shape already
+      exists one axis over: `RollupConfig.horizontal_gate_policy` (flow_trace/schema.py:2715) is a
+      per-project `advisory | gating` knob defaulting to advisory, and flow-trace's own
+      class_fan_in.py:100 already names that split as where this class of decision goes. A
+      package-gate policy resolved the same way lets a project express the decision in one line of
+      `.flow-trace.yaml` with no bespoke capability and no bespoke predicate. Carried as
+      `flag-the-package-rung-wants-a-declarable`. The three rows from this arc were repointed to
+      `capabilities-have-runtime-enforcers`, where this repo's other declaration-hygiene rows sit.
+    capability_set_audit: >
+      THE SAME TEST, APPLIED TO ALL 61 REMAINING CAPABILITIES: does each name something the APP
+      does, or a real non-functional requirement of it? SURFACED, NOT RETRACTED — the retraction
+      call is the operator's.
+
+      ONE FAILS THE TEST ON THE SAME GROUND. `capabilities-have-runtime-enforcers` (non-functional).
+      Its intent is that "the site's claims are checked by a deterministic static-evidence runner
+      ... so `flow-trace verify .` produces real PASS/FAIL"; its subject is THIS REPO'S OWN
+      VERIFICATION APPARATUS, not the app. Its enforcer says so outright — the docstring of
+      `assert_static_evidence_runner_wired` begins "Self-referential: the runner (scenario + this
+      predicate module) exists". Nothing a user of qntm.network can do changes because of it. It is
+      the same shape as the one just retracted, and it is OLDER. Note the blast radius before
+      acting: it is now the `driving_capability` of a large share of this repo's backlog rows,
+      including all three from this arc, so retracting it needs a destination for them first.
+
+      TWO CARRY THE TELL-TALE ROOTING SENTENCE BUT PASS THE TEST ON SUBJECT, and the distinction is
+      the useful part. `push-to-deploy-loop` — "no code to root against, in any language ... a
+      property of the DEPLOY PATH (a CNAME, the Pages source setting, and a CI workflow)".
+      `app-is-a-typed-browser-application` — "a property of the TOOLCHAIN (package.json, a strict
+      tsconfig, a CI workflow), not of application code". Neither takes this repo's declaration
+      files as its subject: one is how the product REACHES a user, the other is how the product is
+      BUILT. Both are ordinary non-functional requirements of a shipped thing, the same kind as
+      `served-securely-over-https`. Unrooted is not the same failure as un-app.
+
+      A LIMIT OF THE DIAGNOSTIC, WORTH KNOWING BEFORE IT IS TRUSTED. Grepping `rooting:` for the
+      tell ("no code to root against", "not of application code", "the declarations themselves")
+      finds only the two above. It CANNOT find `capabilities-have-runtime-enforcers`, because that
+      entry has no `rooting:` field at all. The tell appears only where somebody wrote the honest
+      sentence; a capability that never justified its rooting is invisible to it. The subject test
+      has to be applied to the INTENT, one entry at a time, which is how the one above was found.
