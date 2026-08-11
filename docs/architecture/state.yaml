@@ -286,3 +286,32 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [the-app-has-a-shell-and-views-are-chosen-by-folder]
+
+  - id: state-every-class-names-a-declared-package
+    name: every declared class resolves a package home, and every citation resolves
+    description: |
+      THE RUNG BETWEEN CAPABILITY AND CLASS STAYS POPULATED. `docs/architecture/packages.yaml`
+      declares the build bundles this repo ships; every entry in classes.yaml names at least one
+      of them in `packages:`, and every id it names is one that exists.
+
+      WHY THIS IS AN INVARIANT HERE RATHER THAN A TOOL CHECK. flow-trace reports a class with no
+      package as INFO residue and never as FAIL — `derive_class_package_findings` surfaces, it
+      does not gate, which is the right default for a tool that runs against projects that have
+      made no such decision. This project HAS made it: on 2026-08-11 all twelve classes were
+      given a package home in one change. The decision is what turns residue into a rule, and it
+      needs a local enforcer because the next class to land would otherwise re-open the hole
+      silently.
+
+      WHAT IT DELIBERATELY DOES NOT CHECK: that a package's `module:` resolves or that its
+      `public_api` exports exist. `flow-trace packages` owns that half and CANNOT run it here —
+      it resolves the module through Python's `importlib`, so both TypeScript packages report
+      FAIL "not importable" unconditionally. That FAIL is a flow-trace gap, routed to flow-trace
+      as a flag; wiring this predicate to it would import a red that says nothing about this
+      repo.
+    check: "docs/architecture/packages.yaml declares >= 1 package; every class in classes.yaml
+      carries a non-empty `packages:` list; every cited package id resolves against packages.yaml"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_every_class_names_a_declared_package
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [every-declared-class-names-its-package-home]

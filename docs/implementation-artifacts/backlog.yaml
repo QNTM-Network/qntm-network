@@ -4172,3 +4172,101 @@ backlog:
     (''built and never named''). Counted 2026-08-10: section-addressing is the second-most-cited
     class id in flows.yaml after presentation-resolution''s 22.'
   captured: '2026-08-10'
+
+- id: declare-the-package-rung-and-keep-it-populated
+  title: >-
+    THE PACKAGE RUNG, POPULATED FOR THE FIRST TIME IN ANY REGISTRY MEMBER. `ClassDef.packages`
+    landed in flow-trace's schema on 2026-07-09 (`package-is-a-structural-rung-not-a-flat-sibling`,
+    dangling-checked by the `packages` verb) and was populated in none of the six members;
+    `flow-trace packages .` read `package_count: 0, class_package_ungoverned: 12` here on
+    2026-08-11. This row declares `docs/architecture/packages.yaml` (two packages: `presentation`
+    = app/present/index -> dist/present.js, `demo-page` = app/main -> demo/app.js), cites one of
+    them from every class, and pins the ratchet `state-every-class-names-a-declared-package` so the
+    thirteenth class cannot silently re-open the hole (flow-trace reports an unhomed class as INFO
+    residue, never FAIL, by design). Deliberately NOT declared: the vendor bundle (governs no
+    concern) and the Cloudflare worker (outside `.flow-trace.yaml`'s `include: [app]` capture
+    filter — a declaration over a region no check here can read). TWO THINGS THE WORK MEASURED, and
+    they are the point rather than a by-product. (1) `class_package_ungoverned` 12 -> 0 moves NO
+    derived verdict: the bare `map .` headline is byte-identical before and after (fail_count 1,
+    capability_working 43, capability_undeclared 17, queue_length 99), and no code path in
+    `capability_rollup.py` or `prioritization.py` reads packages at all, so capability status,
+    `horizontal_completeness` and the queue are all untouched. The rung is a count and a legibility
+    gain, not a gate. (2) `PackageDef` (id/module/public_api) is language-NEUTRAL as a declaration
+    and Python-ONLY as a verifier: `verify_packages` resolves `module:` with
+    `importlib.import_module`, so both entries FAIL "not importable" in every spelling tried
+    (`app/present/index`, `app.present.index`, and `public_api: []` — the import precedes the
+    signature check). Routed to flow-trace as a flag; not fixed from here.
+  summary: >-
+    Declare the two build bundles as packages so every class has a package home, and stop the rung
+    emptying again.
+  driving_capability: every-declared-class-names-its-package-home
+  lead: true
+  captured: "2026-08-11"
+- id: flag-flow-trace-defect-routed-here-because
+  title: '[asserted] FLOW-TRACE DEFECT, ROUTED HERE BECAUSE FLOW-TRACE''S OWN BACKLOG
+    REFUSED THE FLAG. verify_packages (flow_trace/packages.py:201,146) resolves PackageDef.module
+    with importlib.import_module and reads public_api with hasattr — Python only, with
+    no JS/TS backend the way capture has one. On a TypeScript target EVERY declared
+    package FAILs ''not importable'' unconditionally: measured here 2026-08-11 in three
+    spellings — ''app/present/index'', ''app.present.index'', and with public_api: []
+    (the import runs BEFORE the signature check, so an empty surface does not escape
+    it). PackageDef is language-NEUTRAL as a declaration and Python-ONLY as a verifier,
+    which is why the package rung has never been populated outside Python in any of
+    the six registry members. The half that works cross-language is derive_class_package_findings
+    — a pure declaration cross-reference, no import — and that half carried this project
+    from class_package_ungoverned 12 to 0. Suggested shape: dispatch module resolution
+    on the target''s capture backend the way js_capture.py already dispatches capture.
+    SECOND DEFECT, found trying to file the first: ''flow-trace flag ... --on package-is-a-structural-rung-not-a-flat-sibling
+    <flow-trace>'' printed ''minted asserted flag'' and wrote NOTHING — refuse_write_on_drop
+    fired because flow-trace''s own backlog.yaml carries schema-drifted rows, so written=0
+    while stdout reported a mint. The refusal is correct (PR #88); the report reads
+    as success. flow-trace cannot receive a flag until its own drifted rows are repaired.'
+  driving_capability: every-declared-class-names-its-package-home
+  asserted: 'FLOW-TRACE DEFECT, ROUTED HERE BECAUSE FLOW-TRACE''S OWN BACKLOG REFUSED
+    THE FLAG. verify_packages (flow_trace/packages.py:201,146) resolves PackageDef.module
+    with importlib.import_module and reads public_api with hasattr — Python only, with
+    no JS/TS backend the way capture has one. On a TypeScript target EVERY declared
+    package FAILs ''not importable'' unconditionally: measured here 2026-08-11 in three
+    spellings — ''app/present/index'', ''app.present.index'', and with public_api: []
+    (the import runs BEFORE the signature check, so an empty surface does not escape
+    it). PackageDef is language-NEUTRAL as a declaration and Python-ONLY as a verifier,
+    which is why the package rung has never been populated outside Python in any of
+    the six registry members. The half that works cross-language is derive_class_package_findings
+    — a pure declaration cross-reference, no import — and that half carried this project
+    from class_package_ungoverned 12 to 0. Suggested shape: dispatch module resolution
+    on the target''s capture backend the way js_capture.py already dispatches capture.
+    SECOND DEFECT, found trying to file the first: ''flow-trace flag ... --on package-is-a-structural-rung-not-a-flat-sibling
+    <flow-trace>'' printed ''minted asserted flag'' and wrote NOTHING — refuse_write_on_drop
+    fired because flow-trace''s own backlog.yaml carries schema-drifted rows, so written=0
+    while stdout reported a mint. The refusal is correct (PR #88); the report reads
+    as success. flow-trace cannot receive a flag until its own drifted rows are repaired.'
+  captured: '2026-08-11'
+- id: flag-second-flow-trace-defect-measured-here
+  title: '[asserted] SECOND FLOW-TRACE DEFECT, MEASURED HERE 2026-08-11. ''capability-rollup
+    . --optimistic --capability <id>'' DESTROYED ALL 34 AUTHORED ''#'' COMMENTS in docs/architecture/capabilities.yaml.
+    It re-serialises the whole document through PyYAML (a 4349-insertion / 3848-deletion
+    diff on a 4199-line file) instead of splicing. No capability was lost and no intent
+    string changed — only the ''#'' comments, which is why it would pass any check that
+    reads the parsed model. This is precisely the behaviour ''backlog-splice-preserves-authored-comments''
+    was minted to stop, one declaration file over: the splice discipline reached backlog.yaml
+    and never reached capabilities.yaml. The file was restored from HEAD by hand and
+    the new capability''s derived tail transcribed from the run''s own output; that
+    manual repair is not a fix and does not scale. Suggested shape: capability_rollup
+    writes through the same byte-preserving splice reconcile_backlog uses, and falls
+    back to a full render only when there is no ''capabilities:'' key to splice against.
+    CHECK AFTER ANY ROLLUP: grep -c ''^\s*#'' docs/architecture/capabilities.yaml.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: 'SECOND FLOW-TRACE DEFECT, MEASURED HERE 2026-08-11. ''capability-rollup
+    . --optimistic --capability <id>'' DESTROYED ALL 34 AUTHORED ''#'' COMMENTS in docs/architecture/capabilities.yaml.
+    It re-serialises the whole document through PyYAML (a 4349-insertion / 3848-deletion
+    diff on a 4199-line file) instead of splicing. No capability was lost and no intent
+    string changed — only the ''#'' comments, which is why it would pass any check that
+    reads the parsed model. This is precisely the behaviour ''backlog-splice-preserves-authored-comments''
+    was minted to stop, one declaration file over: the splice discipline reached backlog.yaml
+    and never reached capabilities.yaml. The file was restored from HEAD by hand and
+    the new capability''s derived tail transcribed from the run''s own output; that
+    manual repair is not a fix and does not scale. Suggested shape: capability_rollup
+    writes through the same byte-preserving splice reconcile_backlog uses, and falls
+    back to a full render only when there is no ''capabilities:'' key to splice against.
+    CHECK AFTER ANY ROLLUP: grep -c ''^\s*#'' docs/architecture/capabilities.yaml.'
+  captured: '2026-08-11'

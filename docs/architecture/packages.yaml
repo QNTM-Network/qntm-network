@@ -1,0 +1,155 @@
+# qntm.network — packages.yaml. The structural rung between capability and class (type #7).
+#
+# A package here is NOT a directory and NOT an npm package. It is a BUILD BUNDLE: an entry
+# module, everything esbuild pulls in behind it, and the export surface its one consumer
+# imports. scripts/build.mjs states the boundaries in its own header — "THREE committed
+# bundles, across two pages" — and this file declares two of the three as governance so a
+# class can name which one it lives in.
+#
+# ── WHY THIS FILE DID NOT EXIST UNTIL 2026-08-11, AND WHAT IT ADDS ────────────────────────
+#
+# `ClassDef.packages` has been in flow-trace's schema since 2026-07-09 and was populated in
+# no project anywhere — six registry members, zero packages. `flow-trace packages .` read
+# `class_package_ungoverned: 12` here. This file is the first population of the rung.
+#
+# WHAT THE RUNG SAYS THAT classes.yaml CANNOT. The twelve classes read as one flat list of
+# concerns in one application. They are not. Two of the three bundles below are DISJOINT —
+# `app/main.ts` imports `render/renderer` and `editor/session` and NOTHING under
+# `app/present/`; `app/present/index.ts` re-exports out of `app/shell/` and reaches neither.
+# The demo page and the app page share this repo, this toolchain and this build script, and
+# share no code at all. No class can say that, because a class names one home; only a rung
+# above the class can name which application the home belongs to.
+#
+# It also corrects a reading the directory tree invites. `app/shell/drawer.ts` and
+# `app/shell/keys.ts` sit OUTSIDE `app/present/` on disk and INSIDE the presentation package
+# in fact — the barrel re-exports both, so esbuild bundles both into dist/present.js and the
+# page imports them through it. The package is the bundle, not the folder.
+#
+# ── ONE THING TO KNOW BEFORE READING A VERDICT OFF THIS FILE ──────────────────────────────
+#
+# `flow-trace packages .` reports FAIL on BOTH entries below, and the FAIL is about the TOOL,
+# not about these declarations. `verify_packages` (flow_trace/packages.py:201) resolves
+# `module:` with `importlib.import_module` and reads `public_api` with `hasattr` — Python, and
+# only Python. There is no JS/TS backend the way `capture` has one. Measured here 2026-08-11,
+# three spellings, all three FAIL identically:
+#
+#   module: app/present/index   -> No module named 'app/present/index'
+#   module: app.present.index   -> No module named 'app.present.index'
+#   public_api: []              -> still FAIL; the import runs BEFORE the signature check
+#
+# So the FAIL is unconditional on a TypeScript target and no spelling escapes it. It is left
+# standing rather than avoided: a red that names a real tool gap is worth more than an
+# undeclared rung, and there is no flow-trace gate in this repo's CI for it to block
+# (.github/workflows/ holds build.yml, isolate-conformance.yml, worker.yml — the `flow-trace.yml`
+# that build.yml's comments refer to does not exist here). Routed to flow-trace as a flag.
+#
+# The half of the rung that DOES work on TypeScript is the half that does no import:
+# `derive_class_package_findings` cross-references `ClassDef.packages` against these ids purely
+# in the declarations. That is what takes `class_package_ungoverned` from 12 to 0, and it is
+# real governance — a class citing a package id that does not exist here FAILs.
+
+packages:
+
+  # ── THE PRESENTATION BUNDLE — app/present/index.ts -> dist/present.js ─────────────────────
+  #
+  # The app page (app/index.html, served at /app/) imports this ONE artifact at a site-root-
+  # absolute URL. Nine of the twelve classes live here.
+  #
+  # `module:` is the barrel, `app/present/index` — the same repo-relative-path-without-extension
+  # identity `.flow-trace.yaml`'s capture filter and classes.yaml's `canonical_class` both use, so
+  # the three files spell a module the same way. It is NOT an importable Python path and it is not
+  # meant to be; see the header.
+  #
+  # `public_api` is what the ONE consumer actually imports, read off app/index.html's import block
+  # (49 names), not a dump of the barrel's ~200 re-exports. The barrel exports more than the page
+  # takes — types, and readers the resolver modules import directly from each other. Declaring the
+  # whole barrel would declare a surface nothing consumes; declaring the consumed set is what makes
+  # a future removal from this list a question worth asking.
+  - id: presentation
+    module: app/present/index
+    public_api:
+      - paint
+      - visualLineOrder
+      - applyEdit
+      - boundaryLine
+      - classifyLine
+      - indentedLine
+      - openLine
+      - wordCaret
+      - baseOf
+      - BaseSurface
+      - DraftSurface
+      - placeDraft
+      - placeFor
+      - ProjectionQueue
+      - PickupSchedule
+      - AcceptedSource
+      - WriteRegister
+      - mintWriteToken
+      - readWriteEcho
+      - stampsOwed
+      - stampsLanded
+      - FocusSurface
+      - ModeSurface
+      - clampLine
+      - presentationFromDeclaration
+      - declarationFrom
+      - NOT_YET_DECLARED
+      - SettleSurface
+      - PredictSurface
+      - RowStore
+      - existingLineCommit
+      - rebaseLineEdit
+      - RESOLVERS
+      - runResolvers
+      - abstentionsOf
+      - armSettle
+      - armPredict
+      - graphSnapshotOf
+      - createCommitLine
+      - folderOf
+      - foldersOf
+      - drawerStops
+      - viewButtons
+      - drawerIsOpen
+      - buildDrawer
+      - openDrawer
+      - closeDrawer
+      - markWhereWeAre
+      - installGlobalKeys
+
+  # ── THE DEMO PAGE BUNDLE — app/boot.ts -> demo/app.js ────────────────────────────────────
+  #
+  # The markdown demo: read a file, render it, let the reader edit a line and write it back.
+  # Three classes live here (markdown-rendering, editing-session-state, page-presentation), and
+  # the point of declaring it is the DISJOINTNESS above — this bundle reaches nothing under
+  # app/present/, so the two applications in this repo now say so in a file a tool reads.
+  #
+  # `module:` is `app/main`, NOT the build's entry `app/boot`, and that is deliberate twice over.
+  # boot.ts exports nothing — it holds the one top-level side effect and everything importable
+  # lives in main.ts (boot.ts's own header). And `.flow-trace.yaml` EXCLUDES app/boot from the
+  # capture filter for exactly that reason. Naming boot here would name a module with no surface
+  # that no other check can see; naming main names the surface.
+  - id: demo-page
+    module: app/main
+    public_api:
+      - mount
+      - main
+      - SOURCE_URL
+
+  # ── WHAT IS DELIBERATELY NOT DECLARED HERE, AND WHY ──────────────────────────────────────
+  #
+  # THE VENDOR BUNDLE (app/vendor.ts -> dist/vendor.js). A re-export of markdown-it and
+  # @simplewebauthn/browser in one same-origin file. It is a build boundary, but it governs no
+  # concern of this project's and no class is or should be homed in it. A package here would move
+  # `package_count` and teach nothing.
+  #
+  # THE CLOUDFLARE WORKER (worker/src/index.js). A real deployment boundary with its own build and
+  # its own workflow — and OUTSIDE `.flow-trace.yaml`'s capture filter, which is `include: [app]`.
+  # Declaring a package over it would put a declaration on a region no check in this project can
+  # read. That is the shape this discipline exists to refuse: a green light over an unobservable
+  # region is worse than the honest absence. The worker's unobservability is the finding, and the
+  # fix is the capture filter, not a package id.
+  #
+  # app/index.html ITSELF. Not a module; node cannot import an HTML document, so no declaration in
+  # this file or any other reaches it. `.flow-trace.yaml`'s own header carries the long version.
