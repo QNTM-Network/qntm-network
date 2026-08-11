@@ -4197,3 +4197,37 @@ capabilities:
     conditional forwarding and its ETag's independence from `GET /app/graph`'s) — also outside
     flow-trace's reach (the app repo's own capabilities already state a scenario cannot cover the
     Worker), also substituted rather than skipped.
+
+
+# ── TOMBSTONE: every-declared-class-names-its-package-home — RETRACTED 2026-08-11, THE SAME DAY
+#    IT WAS MINTED. A CATEGORY ERROR, RECORDED RATHER THAN QUIETLY DELETED ────────────────────
+#
+# WHAT IT CLAIMED. That every class in classes.yaml names a package declared in packages.yaml,
+# enforced by a predicate (`state-every-class-names-a-declared-package`) that read those two
+# files and FAILed on an unhomed class or a citation that did not resolve. It was correct,
+# mutation-proven twice, and green. It was still wrong to be here.
+#
+# WHY IT WAS RETRACTED, IN THE OPERATOR'S WORDS: "that's just how flow trace works. capability
+# is capabilities of qntm network. that's not a feature. or nonfunctional requirement."
+#
+# THE SIGNAL WAS IN THE ENTRY ITSELF AND WAS READ BACKWARDS. Its `rooting:` field argued for
+# `isolated` on the grounds that "the subject of this capability is the ARCHITECTURE DECLARATIONS
+# themselves — docs/architecture/packages.yaml and classes.yaml — not any behaviour of the shipped
+# app." That sentence is true, and it should have ENDED the capability rather than justified a
+# weaker rooting. Nothing a user of qntm.network can do changes because of it and no non-functional
+# requirement of the app is expressed by it. THE TEST THIS LEAVES BEHIND: when the honest rooting
+# sentence has to say "this governs the declarations, not the app", the answer is that it belongs
+# in the tool, not in this file.
+#
+# WHAT THE REASONING BECAME, BECAUSE THE GAP IT NAMED IS REAL. flow-trace reports a class with no
+# package as INFO residue and never as FAIL (`derive_class_package_findings`), so the thirteenth
+# class re-opens the hole silently and nothing anywhere goes red. That gap is in the TOOL's policy
+# layer. The shape it should take already exists one axis over: `RollupConfig.horizontal_gate_policy`
+# (flow_trace/schema.py:2715) is a per-project `advisory | gating` knob, and flow-trace's own
+# class_fan_in.py:100 already names that split as where this kind of decision goes. A package-gate
+# policy resolved the same way lets a project express this in one line of .flow-trace.yaml with no
+# bespoke capability and no bespoke predicate. Carried as the backlog row
+# `flag-the-package-rung-wants-a-declarable`.
+#
+# WHAT SURVIVED THE RETRACTION: docs/architecture/packages.yaml and the twelve `packages:` citations
+# in classes.yaml. The declaration was never what was objected to.

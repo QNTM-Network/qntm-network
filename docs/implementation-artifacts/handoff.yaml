@@ -13,8 +13,8 @@
 # calls GO where we said. Neither implies the other — read each for what it asserts.
 handoff:
   project_target: qntm-network            # GATE-TARGET field
-  date: 2026-07-23
-  commit: f6d689a                       # self-ref SHA (TS-capture adoption close, 2026-07-23)
+  date: 2026-08-11
+  commit: 255beee                       # self-ref SHA (package rung declared, 2026-08-11)
 
   bootstrap:                              # the runnable onboarding block
     # flow-trace is not on PATH; it is run out of the monorepo checkout through uv. Two flags in
@@ -290,7 +290,19 @@ handoff:
       pass, so the value genuinely reaches the deriver.
   - thread: verify-and-capability-rollup-are-currently-broken-here
     note: >
-      NOT caused by this change, and NOT fixed by it — recorded because the crash is silent about
+      STALE AS OF 2026-08-11 — READ THIS LINE BEFORE THE REST OF THIS THREAD. Both verbs RUN here
+      now. Measured this session against this tree: `flow-trace verify .` exits 0 with 68 PASS /
+      2 FAIL over 14 scenarios, and `capability-rollup . --optimistic --capability <id>` derives
+      and writes. The thread is kept rather than deleted because its diagnosis of the crash is
+      still the right diagnosis if it recurs, and because `.flow-trace.yaml`'s header recorded the
+      correction on 2026-07-30 while this thread did not — a file saying the instrument is broken
+      is how a working instrument goes unused. The two remaining FAILs are pre-existing and
+      unrelated to the package rung: the `section_addressing` scenario aborts on the operator's
+      live config having moved under its precondition, and `state-the-view-chooser-is-one-folder-drawer`
+      reads app/index.html, which no recent change here has touched.
+
+      THE ORIGINAL THREAD, FROM 2026-07-30, FOLLOWS. NOT caused by this change, and NOT fixed by
+      it — recorded because the crash is silent about
       its own cause and the next agent will otherwise burn a session on it. `flow-trace verify .`
       and `flow-trace capability-rollup .` both exit 2 (a CRASH, no verdict) on this project. The
       scenario fan reaches tests/flow_scenarios/render_and_edit.ts, dispatches to flow-trace's own
@@ -317,3 +329,253 @@ handoff:
       touches Python at all. The honest follow-up is to drop the dependency (and possibly the
       whole [project] block, since qntm_network/__init__.py is a docstring and nothing else),
       after which the lock question disappears rather than being managed.
+  - thread: the-package-rung-populated-2026-08-11
+    principle: >
+      A class with no package is an empty position on the diamond, and an empty position is a
+      finding rather than a status. `ClassDef.packages` had existed in flow-trace's schema since
+      2026-07-09 and was populated in none of the six registry members; `flow-trace packages .`
+      read `package_count: 0, class_package_ungoverned: 12` here.
+    existing_architecture_survey: >
+      RUN, all three altitudes, before anything was authored.
+
+      CAPABILITY (rung 1) — surveyed all 61, nothing fits, so a 62nd was minted with the reasoning
+      the rung requires rather than a name-match. The two near misses were checked by intent, not
+      by title. `capabilities-have-runtime-enforcers` is about the SITE'S CLAIMS carrying a
+      deterministic enforcer; its subject is the live page and the repo artifacts, not the
+      declaration graph. `app-is-a-typed-browser-application` is about the TOOLCHAIN — package.json,
+      a strict tsconfig, a CI build. Neither takes docs/architecture/*.yaml as its subject, and
+      widening either to cover "the declared rungs are complete" would have made a true story into
+      a vague one. Minted: `every-declared-class-names-its-package-home` — AND RETRACTED THE SAME
+      DAY, in the same PR. The survey ran three altitudes and never asked the question ABOVE all
+      three: is this a capability of qntm.network at all? It is not. See the `retracted:` field
+      below.
+
+      PACKAGE (rung 2) — `package_count: 0`, the honest common answer. Nothing to fold into; this
+      session IS the population of that rung.
+
+      CLASS (rung 3) — all twelve read; none covers declaration integrity, and none could. Every
+      one of them names a runtime concern with a call path. The new capability's subject is two
+      yaml files, which is why its `rooting:` is a reasoned `isolated` rather than a deferred one.
+    detail: >
+      TWO PACKAGES, DERIVED FROM WHAT THE BUILD ACTUALLY EMITS RATHER THAN FROM THE DIRECTORY TREE.
+      scripts/build.mjs states the boundaries in its own header — "THREE committed bundles, across
+      two pages" — so a package here is a build bundle: an entry module, what esbuild pulls in
+      behind it, and the surface its one consumer imports. `presentation` = app/present/index ->
+      dist/present.js (9 classes). `demo-page` = app/main -> demo/app.js (3 classes).
+
+      WHAT THE RUNG SAYS THAT THE CLASS RUNG CANNOT, which is the whole case for populating it.
+      The twelve classes read as one flat list of concerns in one program. They are two programs:
+      app/main.ts imports render/renderer and editor/session and NOTHING under app/present/, and
+      app/present/index.ts re-exports out of app/shell/ and reaches neither. The demo page and the
+      app page share this repo, this toolchain and this build script and share no code at all. A
+      class names one home; only the rung above it can name which application that home belongs to.
+      It also corrects what the tree implies: app/shell/drawer.ts and app/shell/keys.ts sit OUTSIDE
+      app/present/ on disk and INSIDE the presentation package in fact, because the barrel
+      re-exports them and esbuild bundles them into dist/present.js. The package is the bundle, not
+      the folder.
+
+      NOT DECLARED, DELIBERATELY. The vendor bundle (a re-export of markdown-it and the passkey
+      lib — a real build boundary that governs no concern of this project's, so a package there
+      would move `package_count` and teach nothing). The Cloudflare worker (a real deployment
+      boundary, and OUTSIDE `.flow-trace.yaml`'s `include: [app]` capture filter — declaring a
+      package over a region no check here can read buys a green light over unobservable ground,
+      which is worse than the honest absence; the capture filter is the finding there, not a
+      package id).
+    grounding: >
+      docs/architecture/packages.yaml (new, 2 entries) · docs/architecture/classes.yaml (12
+      `packages:` citations) · qntm_network_checks.py:assert_every_class_names_a_declared_package ·
+      docs/architecture/state.yaml:state-every-class-names-a-declared-package · scripts/build.mjs
+      (the three entryPoints the packages are derived from) · app/present/index.ts (the barrel that
+      is the presentation package's public surface, and the two app/shell/ re-exports at its foot).
+    pinned: >
+      WHAT REMAINS PINNED after the retraction below: docs/architecture/packages.yaml (2 entries)
+      and the twelve `packages:` citations in classes.yaml. `flow-trace packages .` reads
+      package_count 2, class_package_governed 12, class_package_ungoverned 0. That is the whole
+      durable pin from this arc.
+
+      WHAT WAS PINNED AND THEN WITHDRAWN, recorded because the enforcer was sound and the reasoning
+      is being reused: capability `every-declared-class-names-its-package-home` (rooting: isolated,
+      reasoned) · enforcer `state-every-class-names-a-declared-package`, MUTATION-PROVEN twice: removing one
+      class's `packages:` -> FAIL "names no package home: ['markdown-rendering']"; misspelling a
+      cited id -> FAIL "cites a package that is not declared: ['markdown-rendering -> demo-pag']";
+      restored -> PASS. The tool's own dangling check discriminates on the same input
+      (`class_package_dangling: 9` when the `presentation` citations were mutated).
+    measured: >
+      TWO THINGS WERE MEASURED BECAUSE THEY ARE THE POINT, NOT A BY-PRODUCT.
+
+      (1) `class_package_ungoverned` 12 -> 0 MOVES NO DERIVED VERDICT. The bare `map .` headline is
+      identical before and after — fail_count 1, capability_working 43, capability_undeclared 17,
+      queue_length 99 — and does not carry `package_count` at all. Nothing in capability_rollup.py
+      or prioritization.py reads packages, so capability status, `horizontal_completeness` and the
+      queue are untouched. Only `flow-trace packages` and `map --full`'s summary see it. Say this
+      plainly: the rung as it stands is a count and a legibility gain, not a gate. That is a real
+      finding about the rung rather than a shortfall of this work, and it is exactly why the local
+      enforcer above exists — without it, nothing anywhere would go red when the rung empties.
+
+      (2) `PackageDef` (id / module / public_api) is LANGUAGE-NEUTRAL as a declaration and
+      PYTHON-ONLY as a verifier. `verify_packages` (flow_trace/packages.py:201,146) resolves
+      `module:` with `importlib.import_module` and reads `public_api` with `hasattr`; there is no
+      JS/TS backend the way `capture` has one. On this target every declared package FAILs "not
+      importable", unconditionally — measured in three spellings: `app/present/index`,
+      `app.present.index`, and with `public_api: []` (the import runs BEFORE the signature check,
+      so an empty surface does not escape it). The half that IS language-neutral is
+      `derive_class_package_findings`, a pure declaration cross-reference with no import, and that
+      is the half that carried 12 -> 0. Both flow-trace defects are carried as asserted rows here.
+    tracked: >
+      declare-the-package-rung-and-keep-it-populated (lead) ·
+      flag-flow-trace-defect-routed-here-because (the Python-only package verifier, and the
+      `flag` verb reporting a mint on a write its own row-loss guard refused) ·
+      flag-second-flow-trace-defect-measured-here (capability-rollup destroying all 34 authored
+      `#` comments in capabilities.yaml).
+    open: >
+      THE FLAG COULD NOT BE FILED WHERE IT BELONGS. `flow-trace flag ... --on
+      package-is-a-structural-rung-not-a-flat-sibling <flow-trace>` printed "minted asserted flag"
+      and wrote nothing: `refuse_write_on_drop` fired because flow-trace's OWN backlog.yaml carries
+      schema-drifted rows, so `written=0` while stdout read as success. The refusal is correct
+      behaviour; the report is not. Both flow-trace defects are therefore parked in THIS project's
+      backlog instead, and flow-trace cannot receive a flag from anywhere until its drifted rows
+      are repaired.
+
+      GATE-PACKAGED (trace skill) is still designed-not-adopted, and this is the arc its own text
+      names as the graduation trigger — "the first arc that mints a class in a `packages.yaml`-
+      populated project". No class was minted here, so the trigger has not fired; the ground for it
+      now exists.
+
+      TWO PRE-EXISTING FAILS remain in `verify .`, neither touched by this change: the
+      `section_addressing` scenario aborts on the operator's live config moving under its
+      precondition, and `state-the-view-chooser-is-one-folder-drawer` reads app/index.html. `npm
+      test` also fails locally in the suites that read the operator's live monorepo config; those
+      suites SKIP on a GitHub runner (`monorepoAvailable = existsSync(DEFAULT_CONFIG_DIR)`), which
+      is why CI is green on them and a local run is not.
+    retracted: >
+      THE CAPABILITY AND ITS ENFORCER WERE WITHDRAWN IN THE SAME PR, ON THE OPERATOR'S CORRECTION,
+      AS A CATEGORY ERROR. His words: "that's just how flow trace works. capability is capabilities
+      of qntm network. that's not a feature. or nonfunctional requirement."
+
+      THE SIGNAL WAS INSIDE THE ENTRY AND WAS READ BACKWARDS. Its `rooting:` field argued for
+      `isolated` on the grounds that "the subject of this capability is the ARCHITECTURE
+      DECLARATIONS themselves — docs/architecture/packages.yaml and classes.yaml — not any
+      behaviour of the shipped app." That sentence is true. It should have TERMINATED the
+      capability rather than justified a weaker rooting. Nothing a user of qntm.network can do
+      changes because of it, and no non-functional requirement of the app is expressed by it. THE
+      TEST THIS LEAVES BEHIND, worth carrying to any project: when the honest rooting sentence has
+      to say "this governs the declarations, not the app", the answer is that it belongs in the
+      tool, not in the project's capability set.
+
+      RETRACTED, WITH TOMBSTONES RATHER THAN SILENT DELETES: the capability (foot of
+      capabilities.yaml), the state invariant (foot of state.yaml), the predicate
+      `assert_every_class_names_a_declared_package` (foot of qntm_network_checks.py). Each
+      tombstone names the category error and points at the generalisation. Capability count is
+      back to 61, state invariants to 15.
+
+      KEPT, BECAUSE IT WAS NEVER WHAT WAS OBJECTED TO: packages.yaml and the twelve citations.
+
+      WHERE THE RATCHET WENT, because the gap it named is real. flow-trace reports a class with no
+      package as INFO and never as FAIL, so the thirteenth class re-opens the hole silently — but
+      that gap is in the TOOL's policy layer, not in this repo's feature set. The shape already
+      exists one axis over: `RollupConfig.horizontal_gate_policy` (flow_trace/schema.py:2715) is a
+      per-project `advisory | gating` knob defaulting to advisory, and flow-trace's own
+      class_fan_in.py:100 already names that split as where this class of decision goes. A
+      package-gate policy resolved the same way lets a project express the decision in one line of
+      `.flow-trace.yaml` with no bespoke capability and no bespoke predicate. Carried as
+      `flag-the-package-rung-wants-a-declarable`. The three rows from this arc were repointed to
+      `capabilities-have-runtime-enforcers`, where this repo's other declaration-hygiene rows sit.
+    capability_set_audit: >
+      THE SAME TEST, APPLIED TO ALL 61 REMAINING CAPABILITIES: does each name something the APP
+      does, or a real non-functional requirement of it? SURFACED, NOT RETRACTED — the retraction
+      call is the operator's.
+
+      ONE FAILS THE TEST ON THE SAME GROUND. `capabilities-have-runtime-enforcers` (non-functional).
+      Its intent is that "the site's claims are checked by a deterministic static-evidence runner
+      ... so `flow-trace verify .` produces real PASS/FAIL"; its subject is THIS REPO'S OWN
+      VERIFICATION APPARATUS, not the app. Its enforcer says so outright — the docstring of
+      `assert_static_evidence_runner_wired` begins "Self-referential: the runner (scenario + this
+      predicate module) exists". Nothing a user of qntm.network can do changes because of it. It is
+      the same shape as the one just retracted, and it is OLDER. Note the blast radius before
+      acting: it is now the `driving_capability` of a large share of this repo's backlog rows,
+      including all three from this arc, so retracting it needs a destination for them first.
+
+      TWO CARRY THE TELL-TALE ROOTING SENTENCE BUT PASS THE TEST ON SUBJECT, and the distinction is
+      the useful part. `push-to-deploy-loop` — "no code to root against, in any language ... a
+      property of the DEPLOY PATH (a CNAME, the Pages source setting, and a CI workflow)".
+      `app-is-a-typed-browser-application` — "a property of the TOOLCHAIN (package.json, a strict
+      tsconfig, a CI workflow), not of application code". Neither takes this repo's declaration
+      files as its subject: one is how the product REACHES a user, the other is how the product is
+      BUILT. Both are ordinary non-functional requirements of a shipped thing, the same kind as
+      `served-securely-over-https`. Unrooted is not the same failure as un-app.
+
+      A LIMIT OF THE DIAGNOSTIC, WORTH KNOWING BEFORE IT IS TRUSTED. Grepping `rooting:` for the
+      tell ("no code to root against", "not of application code", "the declarations themselves")
+      finds only the two above. It CANNOT find `capabilities-have-runtime-enforcers`, because that
+      entry has no `rooting:` field at all. The tell appears only where somebody wrote the honest
+      sentence; a capability that never justified its rooting is invisible to it. The subject test
+      has to be applied to the INTENT, one entry at a time, which is how the one above was found.
+  - thread: the-app-repo-gate-was-red-for-six-days-2026-08-11
+    note: >
+      THE GATE WAS NOT MISSING. IT WAS RED, AND NOBODY WAS READING IT. Recorded because the
+      premise this session was handed — "qntm.network has no flow-trace CI gate" — was wrong in
+      both halves, and the true shape is more useful.
+
+      `.github/workflows/flow-trace.yml` EXISTED and was DELETED: 8c8eeed, PR #93, 2026-08-04, 338
+      lines, "remove the flow-trace gate that could never run". It needed
+      FLOW_TRACE_CHECKOUT_TOKEN to check out tools/flow-trace from the private monorepo; that
+      secret was never created, so the job skipped on every run. The deletion was correct and its
+      commit message carries the rule: "a permanently-unavailable gate beside a working one trains
+      readers to ignore both." Re-adding it, or its `flow-trace-gate-unavailable` companion, would
+      re-commit the mistake #93 fixed. build.yml's comments at the declaration-freshness step still
+      cited both as live things; corrected in this PR, reasoning kept, premise replaced.
+
+      THE CHECK MOVED, because the dependency pointed the wrong way. The MONOREPO runs it —
+      QNTM-Network/qntm, .github/workflows/flow-trace-app-repo.yml — cloning this repo anonymously,
+      no credential, because this repo is public.
+
+      AND IT HAD BEEN FAILING SINCE 2026-08-05T06:38. Twenty consecutive runs. Not the
+      capture-truncation flake this file's own .flow-trace.yaml header documents: two deterministic
+      FAILs, `fail_count: 2, pass_count: 67`, reproducing identically in CI and locally. They
+      reproduce in CI because that job runs on the SELF-HOSTED `luke2` runner (the org's
+      private-repo Actions minutes are exhausted), so the operator's live monorepo IS present
+      there — the "those suites skip on a GitHub runner" reasoning does not transfer to it.
+
+      BOTH ARE NOW FIXED AND `verify .` READS `fail_count: 0, pass_count: 68, 15 scenarios`.
+
+      FAIL 1 — `section_addressing` DID NOT COMPLETE, "daily-work's ordinal 1 ('urgent') is now
+      published". The scenario borrowed its precondition from the operator's committed declaration:
+      it needed an addressable-but-UNPUBLISHED section and probed the one that happened to be
+      there. He published it. Its own error proposed the repair — "Move the ordinal this test
+      probes" — AND THAT REPAIR IS NOT AVAILABLE: measured through the same reader on 2026-08-11,
+      0 of 83 views have both a published section and an addressable-but-unpublished one. There is
+      no ordinal left to move to. So the decouple-versus-patch question was settled by the data, not
+      by preference. The trap is now CONSTRUCTED: the scenario derives a control view from the real
+      declaration (first view with two sections whose ordinal 0 both publishes and answers for a
+      plain task line) and removes one section from the published map to make the unpublished
+      ordinal it needs. That is not the scenario handing `sectionAt` its answer — `sectionAt` never
+      takes `sections` at all, which is the property under test. MUTATION-PROVEN: `sectionAt`
+      reduced to address only ordinal 0 -> scenario FAILs with 'ordinal 1 of "admin" should address
+      to "done" EVEN THOUGH IT IS UNPUBLISHED — got null'; restored -> PASS. The reality question the
+      old coupling answered by accident is KEPT as a printed observation (how many views exhibit
+      the shape naturally: 0/83 today) which reports and never gates.
+
+      FAIL 2 — `state-the-view-chooser-is-one-folder-drawer`, "nothing derives a folder from a
+      view's path". NOT an unmet declaration, and worth being precise about because it is the
+      opposite. The derivation did not disappear; it MOVED, in 5492786 / PR #114, out of
+      app/index.html's hand-authored `<script>` and into app/shell/drawer.ts:187 as `folderOf` —
+      inside .flow-trace.yaml's capture filter, which is strictly better. The predicate was
+      asserting `lastIndexOf` in the file the function had correctly left, so it went red BECAUSE
+      the code improved. Corrected to assert the CLAIM rather than one file's spelling of it: the
+      page must delegate (`folderOf`/`foldersOf`), the module must derive the folder from a path,
+      and NEITHER may fall back to the `domain` label — the `domain` ban now covers drawer.ts too,
+      where after PR #114 a regression would actually land and the old single-file check could not
+      have seen it. MUTATION-PROVEN three ways: derivation removed from drawer.ts -> FAIL; drawer
+      regressed to `v.domain ||` -> FAIL; page stops naming `foldersOf` -> FAIL; restored -> PASS.
+
+      WHAT IS STILL OPEN, AND HELD DELIBERATELY. (A) There is no PR-time flow-trace gate ON this
+      repo: flow-trace-app-repo.yml clones this repo's DEFAULT BRANCH and its own triggers are
+      path-filtered to tools/flow-trace/** in the monorepo, so a PR here gets `build` and
+      `isolate-conformance` and nothing else, and drift is caught up to 24 hours AFTER merge. The
+      anonymous-clone mechanism #93 proved is the right way to build it. Not built yet, on purpose:
+      a second gate reporting the same failures on a different trigger is not more governance —
+      the existing one had to go green first, which it now has. (B) WHO WRITES THE DERIVED BOARD,
+      AND TO WHICH BRANCH, is unanswered and is the reason `enforced_by` sits at 14 of 61 here:
+      that workflow runs `verify` only — no `map . --full`, no `--baseline`, no commit back — so
+      the board has never been CI-derived. It is the same question as the monorepo's batch gate and
+      wants one answer for both.

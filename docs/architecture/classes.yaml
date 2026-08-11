@@ -60,6 +60,8 @@ classes:
       Carried, still, as the asserted backlog row. Still unreachable by canonical routing for the
       same two reasons as above — verify exits 2, and app.html is outside the filter.
     canonical_class: app/render/renderer:MarkdownRenderer
+    packages:
+      - demo-page
     status: working
 
   - id: editing-session-state
@@ -69,6 +71,8 @@ classes:
       (flows.yaml#session-never-touches-the-dom), which is what keeps the mode machine reasonable
       about, and testable, without a browser.
     canonical_class: app/editor/session:EditorSession
+    packages:
+      - demo-page
     status: working
 
   # ── THE PRESENTATION CASCADE (added 2026-07-30, migration stage 1) ────────────────────────
@@ -142,6 +146,8 @@ classes:
     # there could never adjudicate a caller. The tuple is what the chokepoint reads; the
     # chokepoint is the home.
     canonical_class: app/present/express/cascade:PresentationCascade
+    packages:
+      - presentation
     status: working
 
   - id: presentation-painting
@@ -181,6 +187,8 @@ classes:
       corrupted-DOM detector able to catch an inversion on its own rather than only after the page
       is wrecked.
     canonical_class: app/present/paint:paint
+    packages:
+      - presentation
     governs_sinks:
       - view-painted
     status: working
@@ -222,6 +230,8 @@ classes:
       now discriminates explicitly and refuses. Mutation-proven 2026-07-30: removing the guard
       turns `the edit that would remove a tag does not exist` red and nothing else.
     canonical_class: app/present/source:applyEdit
+    packages:
+      - presentation
     status: working
 
   - id: page-presentation
@@ -232,6 +242,8 @@ classes:
       terminal act: the point where the renderer's output and the session's state become
       something a reader can see and type into.
     canonical_class: app/main:mount
+    packages:
+      - demo-page
     governs_sinks:
       - document-mounted
     status: working
@@ -286,6 +298,8 @@ classes:
     # row had the mirror half — the home was built and never named — and sat one entry away,
     # undetected, the whole time.
     canonical_class: app/present/select/membership:membershipFor
+    packages:
+      - presentation
     status: working
 
   # ── ADDED 2026-08-07, DURING THE SINKS SURVEY — A DECLARATION THAT ALREADY EXISTED AND DID NOT
@@ -358,6 +372,8 @@ classes:
       a real placement), and the real `paint` — and its own header states the same argument as a
       falsifiable claim rather than a proof.
     canonical_class: app/present/resolvers/rules:read
+    packages:
+      - presentation
     status: working
 
   # ── ADDED 2026-08-07 — THE CONNECTING ACT ITSELF, THE ONLY THING THAT CAN GOVERN view-painted ──
@@ -402,6 +418,8 @@ classes:
       `tests/app-settle-wiring.test.mjs` prove the identical wiring again at the APPLICATION level,
       through the real page, against `#viewBody`'s real children.
     canonical_class: app/present/commit:commitLine
+    packages:
+      - presentation
     governs_sinks:
       - view-painted
     status: working
@@ -478,6 +496,8 @@ classes:
       consumer that re-derives adjacency from `source` rather than calling `visualLineOrder` would be
       the identical failure recurring.
     canonical_class: app/present/paint:visualLineOrder
+    packages:
+      - presentation
     status: working
 
   # ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -546,6 +566,8 @@ classes:
       `FocusSurface` would break accessibility to satisfy a diagram. See this file's note above
       this entry for the full record of that divergence.
     canonical_class: app/present/focus:FocusSurface
+    packages:
+      - presentation
     # NO `governs_sinks: [selection-moved]`, AND IT WAS WIRED, MEASURED AND UNWIRED RATHER THAN
     # REASONED ABOUT — 2026-08-10. The link was declared, `canonical-routing . --class
     # cursor-position` was run, and it produced TWO BYPASSES ON CORRECT CODE:
@@ -641,4 +663,6 @@ classes:
       holds them together. Any THIRD surface that binds a key to a direction without routing
       through this home is the identical failure recurring.
     canonical_class: app/present/motions:ModeSurface
+    packages:
+      - presentation
     status: declared

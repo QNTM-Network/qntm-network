@@ -4172,3 +4172,160 @@ backlog:
     (''built and never named''). Counted 2026-08-10: section-addressing is the second-most-cited
     class id in flows.yaml after presentation-resolution''s 22.'
   captured: '2026-08-10'
+
+- id: declare-the-package-rung-and-keep-it-populated
+  title: >-
+    THE PACKAGE RUNG, POPULATED FOR THE FIRST TIME IN ANY REGISTRY MEMBER. `ClassDef.packages`
+    landed in flow-trace's schema on 2026-07-09 (`package-is-a-structural-rung-not-a-flat-sibling`,
+    dangling-checked by the `packages` verb) and was populated in none of the six members;
+    `flow-trace packages .` read `package_count: 0, class_package_ungoverned: 12` here on
+    2026-08-11. This row declares `docs/architecture/packages.yaml` (two packages: `presentation`
+    = app/present/index -> dist/present.js, `demo-page` = app/main -> demo/app.js), cites one of
+    them from every class, and pins the ratchet `state-every-class-names-a-declared-package` so the
+    thirteenth class cannot silently re-open the hole (flow-trace reports an unhomed class as INFO
+    residue, never FAIL, by design). Deliberately NOT declared: the vendor bundle (governs no
+    concern) and the Cloudflare worker (outside `.flow-trace.yaml`'s `include: [app]` capture
+    filter — a declaration over a region no check here can read). TWO THINGS THE WORK MEASURED, and
+    they are the point rather than a by-product. (1) `class_package_ungoverned` 12 -> 0 moves NO
+    derived verdict: the bare `map .` headline is byte-identical before and after (fail_count 1,
+    capability_working 43, capability_undeclared 17, queue_length 99), and no code path in
+    `capability_rollup.py` or `prioritization.py` reads packages at all, so capability status,
+    `horizontal_completeness` and the queue are all untouched. The rung is a count and a legibility
+    gain, not a gate. (2) `PackageDef` (id/module/public_api) is language-NEUTRAL as a declaration
+    and Python-ONLY as a verifier: `verify_packages` resolves `module:` with
+    `importlib.import_module`, so both entries FAIL "not importable" in every spelling tried
+    (`app/present/index`, `app.present.index`, and `public_api: []` — the import precedes the
+    signature check). Routed to flow-trace as a flag; not fixed from here.
+  summary: >-
+    Declare the two build bundles as packages so every class has a package home; the ratchet that
+    was going to guard it belongs in flow-trace, not here.
+  record: >-
+    RETRACTED IN THE SAME PR, 2026-08-11. The capability this row was minted under —
+    `every-declared-class-names-its-package-home` — and its enforcer
+    `state-every-class-names-a-declared-package` were both withdrawn as a CATEGORY ERROR, in the
+    operator's words: "that's just how flow trace works. capability is capabilities of qntm
+    network. that's not a feature. or nonfunctional requirement." The signal was inside the entry
+    and was read backwards: its own `rooting:` field argued for `isolated` because "the subject of
+    this capability is the ARCHITECTURE DECLARATIONS themselves, not any behaviour of the shipped
+    app", which should have ended the capability rather than justified a weaker rooting. Tombstones
+    at the foot of capabilities.yaml, state.yaml and qntm_network_checks.py carry the full record.
+    WHAT SURVIVES, unchanged and unobjected-to: packages.yaml and the twelve `packages:` citations.
+    WHAT THE RATCHET BECAME: `flag-the-package-rung-wants-a-declarable`, one row down.
+    This row now drives under `capabilities-have-runtime-enforcers`, which is where this repo's
+    other declaration-hygiene rows already sit.
+  driving_capability: capabilities-have-runtime-enforcers
+  lead: true
+  captured: "2026-08-11"
+- id: flag-flow-trace-defect-routed-here-because
+  title: '[asserted] FLOW-TRACE DEFECT, ROUTED HERE BECAUSE FLOW-TRACE''S OWN BACKLOG
+    REFUSED THE FLAG. verify_packages (flow_trace/packages.py:201,146) resolves PackageDef.module
+    with importlib.import_module and reads public_api with hasattr — Python only, with
+    no JS/TS backend the way capture has one. On a TypeScript target EVERY declared
+    package FAILs ''not importable'' unconditionally: measured here 2026-08-11 in three
+    spellings — ''app/present/index'', ''app.present.index'', and with public_api: []
+    (the import runs BEFORE the signature check, so an empty surface does not escape
+    it). PackageDef is language-NEUTRAL as a declaration and Python-ONLY as a verifier,
+    which is why the package rung has never been populated outside Python in any of
+    the six registry members. The half that works cross-language is derive_class_package_findings
+    — a pure declaration cross-reference, no import — and that half carried this project
+    from class_package_ungoverned 12 to 0. Suggested shape: dispatch module resolution
+    on the target''s capture backend the way js_capture.py already dispatches capture.
+    SECOND DEFECT, found trying to file the first: ''flow-trace flag ... --on package-is-a-structural-rung-not-a-flat-sibling
+    <flow-trace>'' printed ''minted asserted flag'' and wrote NOTHING — refuse_write_on_drop
+    fired because flow-trace''s own backlog.yaml carries schema-drifted rows, so written=0
+    while stdout reported a mint. The refusal is correct (PR #88); the report reads
+    as success. flow-trace cannot receive a flag until its own drifted rows are repaired.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: 'FLOW-TRACE DEFECT, ROUTED HERE BECAUSE FLOW-TRACE''S OWN BACKLOG REFUSED
+    THE FLAG. verify_packages (flow_trace/packages.py:201,146) resolves PackageDef.module
+    with importlib.import_module and reads public_api with hasattr — Python only, with
+    no JS/TS backend the way capture has one. On a TypeScript target EVERY declared
+    package FAILs ''not importable'' unconditionally: measured here 2026-08-11 in three
+    spellings — ''app/present/index'', ''app.present.index'', and with public_api: []
+    (the import runs BEFORE the signature check, so an empty surface does not escape
+    it). PackageDef is language-NEUTRAL as a declaration and Python-ONLY as a verifier,
+    which is why the package rung has never been populated outside Python in any of
+    the six registry members. The half that works cross-language is derive_class_package_findings
+    — a pure declaration cross-reference, no import — and that half carried this project
+    from class_package_ungoverned 12 to 0. Suggested shape: dispatch module resolution
+    on the target''s capture backend the way js_capture.py already dispatches capture.
+    SECOND DEFECT, found trying to file the first: ''flow-trace flag ... --on package-is-a-structural-rung-not-a-flat-sibling
+    <flow-trace>'' printed ''minted asserted flag'' and wrote NOTHING — refuse_write_on_drop
+    fired because flow-trace''s own backlog.yaml carries schema-drifted rows, so written=0
+    while stdout reported a mint. The refusal is correct (PR #88); the report reads
+    as success. flow-trace cannot receive a flag until its own drifted rows are repaired.'
+  captured: '2026-08-11'
+- id: flag-second-flow-trace-defect-measured-here
+  title: '[asserted] SECOND FLOW-TRACE DEFECT, MEASURED HERE 2026-08-11. ''capability-rollup
+    . --optimistic --capability <id>'' DESTROYED ALL 34 AUTHORED ''#'' COMMENTS in docs/architecture/capabilities.yaml.
+    It re-serialises the whole document through PyYAML (a 4349-insertion / 3848-deletion
+    diff on a 4199-line file) instead of splicing. No capability was lost and no intent
+    string changed — only the ''#'' comments, which is why it would pass any check that
+    reads the parsed model. This is precisely the behaviour ''backlog-splice-preserves-authored-comments''
+    was minted to stop, one declaration file over: the splice discipline reached backlog.yaml
+    and never reached capabilities.yaml. The file was restored from HEAD by hand and
+    the new capability''s derived tail transcribed from the run''s own output; that
+    manual repair is not a fix and does not scale. Suggested shape: capability_rollup
+    writes through the same byte-preserving splice reconcile_backlog uses, and falls
+    back to a full render only when there is no ''capabilities:'' key to splice against.
+    CHECK AFTER ANY ROLLUP: grep -c ''^\s*#'' docs/architecture/capabilities.yaml.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: 'SECOND FLOW-TRACE DEFECT, MEASURED HERE 2026-08-11. ''capability-rollup
+    . --optimistic --capability <id>'' DESTROYED ALL 34 AUTHORED ''#'' COMMENTS in docs/architecture/capabilities.yaml.
+    It re-serialises the whole document through PyYAML (a 4349-insertion / 3848-deletion
+    diff on a 4199-line file) instead of splicing. No capability was lost and no intent
+    string changed — only the ''#'' comments, which is why it would pass any check that
+    reads the parsed model. This is precisely the behaviour ''backlog-splice-preserves-authored-comments''
+    was minted to stop, one declaration file over: the splice discipline reached backlog.yaml
+    and never reached capabilities.yaml. The file was restored from HEAD by hand and
+    the new capability''s derived tail transcribed from the run''s own output; that
+    manual repair is not a fix and does not scale. Suggested shape: capability_rollup
+    writes through the same byte-preserving splice reconcile_backlog uses, and falls
+    back to a full render only when there is no ''capabilities:'' key to splice against.
+    CHECK AFTER ANY ROLLUP: grep -c ''^\s*#'' docs/architecture/capabilities.yaml.'
+  captured: '2026-08-11'
+- id: flag-the-package-rung-wants-a-declarable
+  title: '[asserted] THE PACKAGE RUNG WANTS A DECLARABLE GATE POLICY, MIRRORING horizontal_gate_policy
+    — FOR FLOW-TRACE, NOT FOR THIS REPO. flow-trace reports a class with no package
+    as INFO residue and never as FAIL (derive_class_package_findings, packages.py:83-118),
+    which is the right default for a project that has made no decision about its packages.
+    Once a project HAS made that decision the residue is exactly wrong: the thirteenth
+    class lands with no ''packages:'' line, nothing goes red, and the rung empties silently.
+    qntm.network declared packages.yaml on 2026-08-11 and hit this immediately. The
+    first attempt at a fix was a bespoke local capability plus a bespoke local predicate;
+    the operator retracted it as a category error (''capability is capabilities of qntm
+    network. that''s not a feature. or nonfunctional requirement.'') and he is right
+    — the gap is in the TOOL''s policy layer, not in this repo''s feature set. THE SHAPE
+    ALREADY EXISTS ONE AXIS OVER: RollupConfig.horizontal_gate_policy (flow_trace/schema.py:2715)
+    is a per-project Literal[''advisory'',''gating''] knob defaulting to advisory, and
+    flow-trace''s own class_fan_in.py:100 already names that advisory/gating split as
+    where this class of decision goes. A package_gate_policy resolved the same way would
+    let a project turn class-without-package from INFO into FAIL in ONE LINE of .flow-trace.yaml,
+    with no bespoke capability, no bespoke predicate, and the decision visible in config
+    beside the rest of the project''s posture. Note the ordering constraint: on a TypeScript
+    target the packages verb''s OTHER half already FAILs unconditionally (importlib),
+    so a gate policy is only useful there once module resolution dispatches on the capture
+    backend — the two flow-trace defects are coupled.'
+  driving_capability: capabilities-have-runtime-enforcers
+  asserted: 'THE PACKAGE RUNG WANTS A DECLARABLE GATE POLICY, MIRRORING horizontal_gate_policy
+    — FOR FLOW-TRACE, NOT FOR THIS REPO. flow-trace reports a class with no package
+    as INFO residue and never as FAIL (derive_class_package_findings, packages.py:83-118),
+    which is the right default for a project that has made no decision about its packages.
+    Once a project HAS made that decision the residue is exactly wrong: the thirteenth
+    class lands with no ''packages:'' line, nothing goes red, and the rung empties silently.
+    qntm.network declared packages.yaml on 2026-08-11 and hit this immediately. The
+    first attempt at a fix was a bespoke local capability plus a bespoke local predicate;
+    the operator retracted it as a category error (''capability is capabilities of qntm
+    network. that''s not a feature. or nonfunctional requirement.'') and he is right
+    — the gap is in the TOOL''s policy layer, not in this repo''s feature set. THE SHAPE
+    ALREADY EXISTS ONE AXIS OVER: RollupConfig.horizontal_gate_policy (flow_trace/schema.py:2715)
+    is a per-project Literal[''advisory'',''gating''] knob defaulting to advisory, and
+    flow-trace''s own class_fan_in.py:100 already names that advisory/gating split as
+    where this class of decision goes. A package_gate_policy resolved the same way would
+    let a project turn class-without-package from INFO into FAIL in ONE LINE of .flow-trace.yaml,
+    with no bespoke capability, no bespoke predicate, and the decision visible in config
+    beside the rest of the project''s posture. Note the ordering constraint: on a TypeScript
+    target the packages verb''s OTHER half already FAILs unconditionally (importlib),
+    so a gate policy is only useful there once module resolution dispatches on the capture
+    backend — the two flow-trace defects are coupled.'
+  captured: '2026-08-11'

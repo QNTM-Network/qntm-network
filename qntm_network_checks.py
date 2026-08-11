@@ -535,10 +535,40 @@ def assert_the_view_chooser_is_one_folder_drawer(state: ScenarioState) -> Predic
     if 'id="drawer"' not in code or 'id="viewTree"' not in code:
         problems.append("no view drawer — the app has no way to choose a view")
 
-    if "folderOf" not in code or "lastIndexOf" not in code:
-        problems.append("nothing derives a folder from a view's path")
-    if re.search(r"\bv\.domain\b|\bdomain\s*\|\|", code):
-        problems.append("the drawer groups by `domain`, which is a label and disagrees with the vault")
+    # CLAUSE 2 — CORRECTED 2026-08-11, AND THE CORRECTION IS THE INTERESTING PART.
+    #
+    # This clause used to read `if "folderOf" not in code or "lastIndexOf" not in code`, both
+    # searched in app/index.html. It went RED on 2026-08-05 and stayed red for six days across
+    # twenty consecutive CI runs, reporting "nothing derives a folder from a view's path".
+    #
+    # THAT REPORT WAS FALSE, AND IT WAS FALSE IN THE DIRECTION THAT MATTERS. The derivation did not
+    # disappear; it MOVED, in 5492786 (PR #114, "extract the view drawer into app/shell/drawer.ts,
+    # a typed component"). It now lives at app/shell/drawer.ts:187 as `folderOf`, which the page
+    # imports through the bundle. `lastIndexOf` is an IMPLEMENTATION DETAIL of that function, and
+    # this clause was asserting it in the file the function had just correctly left — so the check
+    # went red exactly because the code got better. The page moving logic out of a hand-authored
+    # `<script>` and into a typed module inside .flow-trace.yaml's capture filter is the migration
+    # this whole repo is pursuing; a predicate that fails on it is measuring the wrong thing.
+    #
+    # WHAT IT ASSERTS NOW: the CLAIM rather than one file's spelling of it. The page must DELEGATE
+    # (it names `folderOf`/`foldersOf` and does not hand-roll a second derivation), the module must
+    # actually DERIVE the folder from a path, and neither may fall back to the `domain` label. The
+    # `domain` ban is checked in BOTH places now, because after PR #114 a regression to the label
+    # would land in the drawer module, where the old single-file check could not have seen it.
+    drawer = _read(root / "app" / "shell" / "drawer.ts")
+    if "folderOf" not in code or "foldersOf" not in code:
+        problems.append("the page does not use the drawer's folder derivation (folderOf/foldersOf)")
+    if not drawer:
+        problems.append("no app/shell/drawer.ts — the folder derivation has no home")
+    elif "lastIndexOf" not in drawer or "path" not in drawer:
+        problems.append(
+            "app/shell/drawer.ts no longer derives a folder from a view's path"
+        )
+    for where, source in (("app/index.html", code), ("app/shell/drawer.ts", drawer)):
+        if source and re.search(r"\bv\.domain\b|\bdomain\s*\|\|", source):
+            problems.append(
+                f"{where} groups by `domain`, which is a label and disagrees with the vault"
+            )
 
     touch = re.search(r"--touch:\s*([\d.]+)rem", code)
     if not touch:
@@ -572,3 +602,10 @@ def assert_the_view_chooser_is_one_folder_drawer(state: ScenarioState) -> Predic
         ),
         observed_ref="app/index.html",
     )
+# TOMBSTONE: assert_every_class_names_a_declared_package — deleted 2026-08-11, the same day it was
+# written. It asserted that every class in classes.yaml names a package declared in packages.yaml.
+# The check was right and mutation-proven; the capability it gated
+# (`every-declared-class-names-its-package-home`) was a category error — its subject was this
+# repo's own declaration files, not anything the app does — and was retracted with it. See the
+# tombstone at the foot of docs/architecture/capabilities.yaml. The gap it covered belongs in
+# flow-trace as a declarable package-gate policy mirroring `RollupConfig.horizontal_gate_policy`.

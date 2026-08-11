@@ -286,3 +286,14 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [the-app-has-a-shell-and-views-are-chosen-by-folder]
+# ── TOMBSTONE: state-every-class-names-a-declared-package — RETRACTED 2026-08-11, the same day it
+#    was wired. It gated `every-declared-class-names-its-package-home`, which was retracted as a
+#    category error (see the tombstone at the foot of capabilities.yaml for the full reasoning and
+#    the operator's words). The invariant itself was sound and mutation-proven; its SUBJECT was
+#    this repo's own declaration files rather than anything the app does, which is what made the
+#    capability above it wrong to exist. The predicate
+#    `qntm_network_checks:assert_every_class_names_a_declared_package` was deleted with it — a
+#    wired invariant with no capability and a predicate with no invariant are both residue.
+#    The gap it covered is real and moved to the tool: a declarable package-gate policy mirroring
+#    `RollupConfig.horizontal_gate_policy`, carried as the backlog row
+#    `flag-the-package-rung-wants-a-declarable`.
