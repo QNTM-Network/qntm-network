@@ -510,3 +510,72 @@ handoff:
       entry has no `rooting:` field at all. The tell appears only where somebody wrote the honest
       sentence; a capability that never justified its rooting is invisible to it. The subject test
       has to be applied to the INTENT, one entry at a time, which is how the one above was found.
+  - thread: the-app-repo-gate-was-red-for-six-days-2026-08-11
+    note: >
+      THE GATE WAS NOT MISSING. IT WAS RED, AND NOBODY WAS READING IT. Recorded because the
+      premise this session was handed — "qntm.network has no flow-trace CI gate" — was wrong in
+      both halves, and the true shape is more useful.
+
+      `.github/workflows/flow-trace.yml` EXISTED and was DELETED: 8c8eeed, PR #93, 2026-08-04, 338
+      lines, "remove the flow-trace gate that could never run". It needed
+      FLOW_TRACE_CHECKOUT_TOKEN to check out tools/flow-trace from the private monorepo; that
+      secret was never created, so the job skipped on every run. The deletion was correct and its
+      commit message carries the rule: "a permanently-unavailable gate beside a working one trains
+      readers to ignore both." Re-adding it, or its `flow-trace-gate-unavailable` companion, would
+      re-commit the mistake #93 fixed. build.yml's comments at the declaration-freshness step still
+      cited both as live things; corrected in this PR, reasoning kept, premise replaced.
+
+      THE CHECK MOVED, because the dependency pointed the wrong way. The MONOREPO runs it —
+      QNTM-Network/qntm, .github/workflows/flow-trace-app-repo.yml — cloning this repo anonymously,
+      no credential, because this repo is public.
+
+      AND IT HAD BEEN FAILING SINCE 2026-08-05T06:38. Twenty consecutive runs. Not the
+      capture-truncation flake this file's own .flow-trace.yaml header documents: two deterministic
+      FAILs, `fail_count: 2, pass_count: 67`, reproducing identically in CI and locally. They
+      reproduce in CI because that job runs on the SELF-HOSTED `luke2` runner (the org's
+      private-repo Actions minutes are exhausted), so the operator's live monorepo IS present
+      there — the "those suites skip on a GitHub runner" reasoning does not transfer to it.
+
+      BOTH ARE NOW FIXED AND `verify .` READS `fail_count: 0, pass_count: 68, 15 scenarios`.
+
+      FAIL 1 — `section_addressing` DID NOT COMPLETE, "daily-work's ordinal 1 ('urgent') is now
+      published". The scenario borrowed its precondition from the operator's committed declaration:
+      it needed an addressable-but-UNPUBLISHED section and probed the one that happened to be
+      there. He published it. Its own error proposed the repair — "Move the ordinal this test
+      probes" — AND THAT REPAIR IS NOT AVAILABLE: measured through the same reader on 2026-08-11,
+      0 of 83 views have both a published section and an addressable-but-unpublished one. There is
+      no ordinal left to move to. So the decouple-versus-patch question was settled by the data, not
+      by preference. The trap is now CONSTRUCTED: the scenario derives a control view from the real
+      declaration (first view with two sections whose ordinal 0 both publishes and answers for a
+      plain task line) and removes one section from the published map to make the unpublished
+      ordinal it needs. That is not the scenario handing `sectionAt` its answer — `sectionAt` never
+      takes `sections` at all, which is the property under test. MUTATION-PROVEN: `sectionAt`
+      reduced to address only ordinal 0 -> scenario FAILs with 'ordinal 1 of "admin" should address
+      to "done" EVEN THOUGH IT IS UNPUBLISHED — got null'; restored -> PASS. The reality question the
+      old coupling answered by accident is KEPT as a printed observation (how many views exhibit
+      the shape naturally: 0/83 today) which reports and never gates.
+
+      FAIL 2 — `state-the-view-chooser-is-one-folder-drawer`, "nothing derives a folder from a
+      view's path". NOT an unmet declaration, and worth being precise about because it is the
+      opposite. The derivation did not disappear; it MOVED, in 5492786 / PR #114, out of
+      app/index.html's hand-authored `<script>` and into app/shell/drawer.ts:187 as `folderOf` —
+      inside .flow-trace.yaml's capture filter, which is strictly better. The predicate was
+      asserting `lastIndexOf` in the file the function had correctly left, so it went red BECAUSE
+      the code improved. Corrected to assert the CLAIM rather than one file's spelling of it: the
+      page must delegate (`folderOf`/`foldersOf`), the module must derive the folder from a path,
+      and NEITHER may fall back to the `domain` label — the `domain` ban now covers drawer.ts too,
+      where after PR #114 a regression would actually land and the old single-file check could not
+      have seen it. MUTATION-PROVEN three ways: derivation removed from drawer.ts -> FAIL; drawer
+      regressed to `v.domain ||` -> FAIL; page stops naming `foldersOf` -> FAIL; restored -> PASS.
+
+      WHAT IS STILL OPEN, AND HELD DELIBERATELY. (A) There is no PR-time flow-trace gate ON this
+      repo: flow-trace-app-repo.yml clones this repo's DEFAULT BRANCH and its own triggers are
+      path-filtered to tools/flow-trace/** in the monorepo, so a PR here gets `build` and
+      `isolate-conformance` and nothing else, and drift is caught up to 24 hours AFTER merge. The
+      anonymous-clone mechanism #93 proved is the right way to build it. Not built yet, on purpose:
+      a second gate reporting the same failures on a different trigger is not more governance —
+      the existing one had to go green first, which it now has. (B) WHO WRITES THE DERIVED BOARD,
+      AND TO WHICH BRANCH, is unanswered and is the reason `enforced_by` sits at 14 of 61 here:
+      that workflow runs `verify` only — no `map . --full`, no `--baseline`, no commit back — so
+      the board has never been CI-derived. It is the same question as the monorepo's batch gate and
+      wants one answer for both.

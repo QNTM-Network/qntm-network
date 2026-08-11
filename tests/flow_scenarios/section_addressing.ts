@@ -13,13 +13,35 @@
  *    network or the clock. Same posture `section_membership.ts` proves for `membership.ts`, and
  *    for the same reason: addressing a row is not an edit and not a rendition.
  *
- * 2. `sectionAt` closes THE TRAP rather than merely avoiding it. `daily-work` publishes
- *    qualifications for a PROPER SUBSET of its 5 declared sections (today: "in-progress" and
- *    "waiting"). Ordinal 1 ("urgent") is UNPUBLISHED — absent
- *    from `QualificationLanguage.sections['daily-work']` entirely — and `sectionAt` still names it
- *    correctly, because it indexes `sectionOrder` (the full declared order), never `sections` (the
- *    published subset). An implementation keyed on the subset would return the WRONG id, or throw,
- *    at this exact ordinal; this scenario fails loudly if that regresses.
+ * 2. `sectionAt` closes THE TRAP rather than merely avoiding it. Given a view whose ordinal 1 is
+ *    ADDRESSABLE BUT UNPUBLISHED — present in `sectionOrder`, absent from
+ *    `QualificationLanguage.sections[view]` entirely — `sectionAt` still names it correctly,
+ *    because it indexes `sectionOrder` (the full declared order), never `sections` (the published
+ *    subset). An implementation keyed on the subset would return the WRONG id, or throw, at this
+ *    exact ordinal; this scenario fails loudly if that regresses.
+ *
+ *    ── THE PRECONDITION IS NOW CONSTRUCTED, NOT BORROWED (2026-08-11) ──
+ *
+ *    This scenario used to read the trap straight off the operator's committed declaration:
+ *    `daily-work`'s ordinal 1, "urgent", happened to be unpublished, so the test probed it in
+ *    place. On 2026-08-05 he published it. The scenario went red — correctly, by its own design —
+ *    and STAYED red through twenty consecutive CI runs until 2026-08-11, because nobody reads a
+ *    gate that fails on somebody using the product normally. That is the whole cost of an enforcer
+ *    coupled to a person's live working config: the signal is trained into noise, and then the
+ *    real findings underneath it are invisible too.
+ *
+ *    Its own error message proposed the repair — "Move the ordinal this test probes if the config's
+ *    shape changed" — and THAT REPAIR IS NOT AVAILABLE. Measured through this same reader on
+ *    2026-08-11: across all 83 views in the shipped declaration, ZERO have both a published section
+ *    and an addressable-but-unpublished one. There is no ordinal anywhere left to move to. Patching
+ *    was not the cheaper option; it was not an option.
+ *
+ *    So the trap is BUILT. The scenario derives a control view from the real declaration, then
+ *    removes ONE section from the published map to make the unpublished ordinal it needs. That is
+ *    not the scenario handing `sectionAt` its answer — `sectionAt` never reads `sections` at all,
+ *    which is exactly the property under test. An implementation that DID read it would now return
+ *    null or the wrong id, and that is the discrimination this construction buys. What it stops
+ *    buying is a red light every time the operator edits his own daily view.
  *
  * 3. THE JOIN COMPOSES HONESTLY. Addressing a row and deciding its membership are two different
  *    layers with two different reaches: `sectionAt` succeeds at ordinal 1 (daily-work's "urgent"),
@@ -54,6 +76,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readQualificationDeclaration } from "../../app/present/select/qualification.js";
+import type { QualificationLanguage } from "../../app/present/select/qualification.js";
 import { sectionAt } from "../../app/present/address.js";
 import { membershipFor } from "../../app/present/select/membership.js";
 import { applyEdit } from "../../app/present/source.js";
@@ -63,15 +86,64 @@ import { PresentationCascade } from "../../app/present/express/cascade.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DECLARATION_PATH = resolve(HERE, "../../presentation.json");
 
-// `~/qntm/work/daily.md`'s headings, verbatim (read-only, 2026-08-01) — the operator's own
-// daily-work surface, and one of the two views the trap is about. Only "In Progress" (ordinal 0)
-// has a published qualification; "Urgent" (ordinal 1) does not.
-const DAILY_WORK = [
-  "## In Progress",
+// TWO HEADINGS AND A LINE UNDER EACH — the smallest source that has an ordinal 0 and an ordinal 1.
+// The heading TEXT is deliberately generic and carries no meaning here: `sectionAt` counts heading
+// lines and indexes `sectionOrder` by the count, so what the headings SAY is never read. It used to
+// be a verbatim copy of `~/qntm/work/daily.md`, which made the fixture look like it depended on the
+// operator's file when only its SHAPE was ever used.
+const TWO_SECTIONS = [
+  "## First",
   "- [ ] Finish the quarterly review",
-  "## Urgent",
+  "## Second",
   "- [ ] Call the client back",
 ].join("\n");
+
+const CONTROL_LINE = "- [ ] Finish the quarterly review";
+const TRAP_LINE = "- [ ] Call the client back";
+
+/**
+ * The view this run probes, and the language that exhibits the trap — DERIVED from the shipped
+ * declaration, never named in this file.
+ *
+ * `control` is the first view with at least two declared sections whose ordinal 0 is published AND
+ * actually ANSWERS for a plain task line (a section that abstains for `needs-graph-traversal` or
+ * `needs-clock` is a fine section and a useless control, so it is skipped rather than asserted at).
+ * `trap` is the same language with ordinal 1 removed from that view's published map — addressable,
+ * unpublished, constructed.
+ */
+function deriveProbe(qualification: QualificationLanguage): {
+  view: string;
+  controlId: string;
+  trapId: string;
+  trap: QualificationLanguage;
+} {
+  const skipped: string[] = [];
+  for (const [view, order] of Object.entries(qualification.sectionOrder)) {
+    if (order.length < 2) continue;
+    const [controlId, trapId] = order;
+    if (controlId === undefined || trapId === undefined) continue;
+    if (qualification.sections[view]?.[controlId] === undefined) continue;
+    const control = membershipFor(view, controlId, CONTROL_LINE, qualification);
+    if (control.kind !== "answer") {
+      skipped.push(`${view}/${controlId}:${control.kind === "abstains" ? control.because : control.kind}`);
+      continue;
+    }
+    const published = { ...qualification.sections[view] };
+    delete published[trapId];
+    return {
+      view,
+      controlId,
+      trapId,
+      trap: { ...qualification, sections: { ...qualification.sections, [view]: published } },
+    };
+  }
+  throw new Error(
+    "no view in the shipped declaration has two declared sections whose ordinal 0 both publishes " +
+      "and answers for a plain task line — the control half of the trap cannot be built. This is a " +
+      "finding about the declaration, not about addressing. Skipped: " +
+      JSON.stringify(skipped.slice(0, 10)),
+  );
+}
 
 function poisonDomFetchAndClock(): () => void {
   const globals = globalThis as Record<string, unknown>;
@@ -161,59 +233,66 @@ function driveAddressingAndItsJoinToMembership(): void {
     throw new Error(`the shipped declaration reported problems: ${JSON.stringify(problems)}`);
   }
 
-  // CLAIM 2's precondition: THE TRAP needs ordinal 0's section PUBLISHED (the control) and
-  // ordinal 1's section ADDRESSABLE-BUT-UNPUBLISHED (the trap itself, exactly the
-  // `no-section-declaration` test membership.ts:252 runs — `language.sections[viewId]?.[sectionId]
-  // === undefined`). Check that PROPERTY against the live declaration, not a snapshot of the whole
-  // published set: the operator's config GROWS the published set over time (`a482fd9`/#101 added
-  // "waiting" to daily-work without touching this trap at all), and a hardcoded published-set
-  // literal goes stale on every such growth even when the trap itself is untouched. A property
-  // keyed on the two ordinals this test actually probes cannot go stale the same way — it only
-  // breaks when one of THOSE TWO ordinals' publication status flips, which is exactly the moment
-  // this scenario needs to be re-pointed (see the throw below).
-  const order = qualification.sectionOrder["daily-work"] ?? [];
-  const published = qualification.sections["daily-work"] ?? {};
-  const [controlId, trapId] = order;
-  if (controlId === undefined || !(controlId in published)) {
+  const { view, controlId, trapId, trap } = deriveProbe(qualification);
+
+  // CLAIM 2. `sectionAt` is handed the language in which ordinal 1 is UNPUBLISHED, and must still
+  // name it. It reads `trap.sectionOrder` — and the only thing that changed between `qualification`
+  // and `trap` is `sections`, which `sectionAt` does not take and cannot read. That is the point:
+  // an implementation keyed on the published subset returns null or the wrong id here, and this
+  // construction is what makes that difference observable on demand rather than on a day the
+  // operator happens to have left a section unpublished.
+  const ordinal0 = sectionAt(TWO_SECTIONS, 0, view, trap.sectionOrder);
+  const ordinal1 = sectionAt(TWO_SECTIONS, 2, view, trap.sectionOrder);
+  if (ordinal0 !== controlId) {
     throw new Error(
-      `the trap's CONTROL precondition changed underfoot: daily-work's ordinal 0 (${JSON.stringify(controlId)}) ` +
-        `is not published — published=${JSON.stringify(Object.keys(published))} order=${JSON.stringify(order)}`,
+      `ordinal 0 of ${JSON.stringify(view)} should address to ${JSON.stringify(controlId)}, got ` +
+        JSON.stringify(ordinal0),
     );
   }
-  if (trapId === undefined || trapId in published) {
+  if (ordinal1 !== trapId) {
     throw new Error(
-      `THE TRAP's own precondition changed underfoot: daily-work's ordinal 1 (${JSON.stringify(trapId)}) is ` +
-        `${trapId === undefined ? "missing from sectionOrder" : "now published"} — this scenario needs an ` +
-        "addressable-but-UNPUBLISHED section at this ordinal to exercise the trap. Move the ordinal this " +
-        `test probes if the config's shape changed. published=${JSON.stringify(Object.keys(published))} ` +
-        `order=${JSON.stringify(order)}`,
-    );
-  }
-  const ordinal0 = sectionAt(DAILY_WORK, 0, "daily-work", qualification.sectionOrder);
-  const ordinal1 = sectionAt(DAILY_WORK, 2, "daily-work", qualification.sectionOrder); // "## Urgent"
-  if (ordinal0 !== "in-progress") {
-    throw new Error(`ordinal 0 should address to 'in-progress', got ${JSON.stringify(ordinal0)}`);
-  }
-  if (ordinal1 !== "urgent") {
-    throw new Error(
-      `ordinal 1 should address to 'urgent' EVEN THOUGH IT IS UNPUBLISHED — got ` +
-        `${JSON.stringify(ordinal1)}. Indexing the published subset instead of the full order is ` +
-        "exactly the trap this scenario exists to catch.",
+      `ordinal 1 of ${JSON.stringify(view)} should address to ${JSON.stringify(trapId)} EVEN THOUGH ` +
+        `IT IS UNPUBLISHED — got ${JSON.stringify(ordinal1)}. Indexing the published subset instead ` +
+        "of the full order is exactly the trap this scenario exists to catch.",
     );
   }
 
   // CLAIM 3: the join composes honestly — L3 addresses both; L5 answers only the published one.
-  const publishedLine = membershipFor("daily-work", ordinal0, "- [ ] Finish the quarterly review", qualification);
+  const publishedLine = membershipFor(view, ordinal0, CONTROL_LINE, trap);
   if (publishedLine.kind !== "answer") {
-    throw new Error(`the published section should get an answer: ${JSON.stringify(publishedLine)}`);
-  }
-  const unpublishedLine = membershipFor("daily-work", ordinal1, "- [ ] Call the client back", qualification);
-  if (unpublishedLine.kind !== "abstains" || unpublishedLine.because !== "no-section-declaration") {
     throw new Error(
-      `the unpublished section should abstain with 'no-section-declaration', got ` +
-        `${JSON.stringify(unpublishedLine)}`,
+      `the published section ${JSON.stringify(`${view}/${ordinal0}`)} should get an answer: ` +
+        JSON.stringify(publishedLine),
     );
   }
+  const unpublishedLine = membershipFor(view, ordinal1, TRAP_LINE, trap);
+  if (unpublishedLine.kind !== "abstains" || unpublishedLine.because !== "no-section-declaration") {
+    throw new Error(
+      `the unpublished section ${JSON.stringify(`${view}/${ordinal1}`)} should abstain with ` +
+        `'no-section-declaration', got ${JSON.stringify(unpublishedLine)}`,
+    );
+  }
+
+  // ── THE REALITY OBSERVATION, WHICH REPORTS AND NEVER GATES ──
+  //
+  // The claims above are now proved against a constructed trap, so nothing left in this scenario
+  // depends on the operator's config having an unpublished section. That is deliberate, and it
+  // loses ONE true thing worth keeping visible: whether the shape occurs in his config at all. If
+  // it never does, the trap `sectionAt` closes is one the running app may never actually meet, and
+  // a reader deciding what to work on should know that. Counted, printed, never thrown — a count
+  // that changes with his ordinary use of the product is an observation, not a commitment.
+  // Measured 2026-08-11 through this same reader: 0 of 83 views.
+  const natural = Object.entries(qualification.sectionOrder).filter(([v, order]) => {
+    const published = qualification.sections[v] ?? {};
+    return (
+      order.some((s) => published[s] !== undefined) && order.some((s) => published[s] === undefined)
+    );
+  });
+  console.log(
+    `[section_addressing] probe view=${view} control=${controlId} trap=${trapId} (constructed) · ` +
+      `views whose config exhibits the trap naturally: ${natural.length}/` +
+      `${Object.keys(qualification.sectionOrder).length}`,
+  );
 }
 
 export function run(): void {

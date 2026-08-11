@@ -73,9 +73,24 @@ jobs:
       # by construction (a closed set of exactly two hand-picked rules). It is a real category
       # compiler now, with real drops, so it belongs in this shared gate like the other three.
       #
-      # WHY HERE, IN build.yml, AND NOT IN flow-trace.yml. build.yml runs on every push AND every
-      # pull_request and is BLOCKING. flow-trace.yml is advisory, and is SKIPPED entirely until
-      # FLOW_TRACE_CHECKOUT_TOKEN exists — a gate placed there would not run at all today.
+      # WHY HERE, IN build.yml, AND NOT IN A FLOW-TRACE WORKFLOW. build.yml runs on every push AND
+      # every pull_request and is BLOCKING. The reasoning is unchanged; its PREMISE WAS CORRECTED
+      # 2026-08-11, because the file it named no longer exists.
+      #
+      # THE ORIGINAL SENTENCE said "flow-trace.yml is advisory, and is SKIPPED entirely until
+      # FLOW_TRACE_CHECKOUT_TOKEN exists — a gate placed there would not run at all today." That
+      # workflow was DELETED on 2026-08-04 (8c8eeed, PR #93, 338 lines) for exactly the reason it
+      # states: the secret was never created, so the job skipped on every run. Its own commit
+      # message is the rule worth keeping — "a permanently-unavailable gate beside a working one
+      # trains readers to ignore both."
+      #
+      # WHERE THE FLOW-TRACE CHECK LIVES NOW, so this comment points at something real: the
+      # MONOREPO runs it, `QNTM-Network/qntm` `.github/workflows/flow-trace-app-repo.yml`, which
+      # clones THIS repo anonymously — it is public, so no credential is involved and the token
+      # this file used to wait on is not needed by anyone. That job is advisory by construction and
+      # clones this repo's DEFAULT BRANCH at run time, so it does not see a pull request here. The
+      # conclusion below therefore holds MORE strongly than when it was written: build.yml is the
+      # only blocking, PR-time gate this repo has.
       #
       # WHY IT IS PLACED AFTER `npm test` RATHER THAN INSTEAD OF IT. The check CI can genuinely
       # perform runs inside `npm test`: tests/declaration-drop.test.mjs drives this same script
@@ -85,9 +100,14 @@ jobs:
       # committed declaration — and it can only do that where the config exists.
       #
       # EXIT 3 IS "NOT CHECKED", NEVER A PASS. On a GitHub-hosted runner the monorepo is absent and
-      # this step raises a ::warning:: rather than a green tick, for the same reason
-      # flow-trace.yml's `flow-trace-gate-unavailable` job exists: a check that could not run must
-      # never be indistinguishable from a check that ran and passed. Exit 1 fails the build.
+      # this step raises a ::warning:: rather than a green tick: A CHECK THAT COULD NOT RUN MUST
+      # NEVER BE INDISTINGUISHABLE FROM A CHECK THAT RAN AND PASSED. Exit 1 fails the build.
+      #
+      # THE CITATION WAS CORRECTED 2026-08-11. This used to justify the rule by pointing at
+      # "flow-trace.yml's `flow-trace-gate-unavailable` job". That job went with the workflow on
+      # 2026-08-04 (8c8eeed, PR #93) — and it went BECAUSE it had announced an unavailable gate on
+      # every PR for weeks, which is the failure mode this rule exists to prevent, not an example
+      # of it working. The rule stands on its own and needs no sibling to cite.
       - name: declaration freshness (exit 3 = NOT CHECKED, not a pass)
         run: |
           set +e
