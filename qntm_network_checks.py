@@ -508,6 +508,92 @@ def assert_caret_placement_has_one_home(state: ScenarioState) -> PredicateResult
     )
 
 
+PREDICTION_LANDING_HOME = "app/present/paint.ts"
+PREDICTION_LANDING_CALLS = ("appendprediction(", "replacepredictedswap(")
+
+
+def assert_a_rule_effect_lands_in_one_place(state: ScenarioState) -> PredicateResult:
+    """A rule's decision reaches the screen through `landPrediction` and no other way.
+
+    THE NEGATIVE HALF OF THE `rule-effect-shown` SINK. `canonical-routing` asserts that everything
+    which REACHES the sink came through its governing class; it cannot see code that never goes near
+    the sink and calls the two landing primitives directly. A sink you can sidestep by writing
+    `appendPrediction(row, text, "pending", true)` in a fresh file is observed, not governed.
+
+    THE TWO PRIMITIVES ARE THE SUBJECT, NOT THE SINK ITSELF. `appendPrediction` hangs a delta after
+    a row's settled content; `replacePredictedSwap` rebuilds the row byte-exact from `fullText`.
+    They are the two spellings of one effect, and `landPrediction` is the only code allowed to
+    choose between them. Both live in paint.ts, so this is scoped to "no OTHER app source calls
+    either" rather than to a single-file allowlist — the shape differs from
+    `assert_caret_placement_has_one_home` for that reason and the difference is deliberate: the
+    caret had ONE primitive in one home, this has TWO primitives sharing one home.
+
+    COMMENTS ARE STRIPPED FIRST, and it is load-bearing rather than copied. `paint.ts` and
+    `predict.ts` both DISCUSS `appendPrediction`/`replacePredictedSwap` in prose while explaining
+    the very invariant this checks, and `sinks.yaml` names them too. A raw substring search would
+    convict the documentation that makes the invariant legible. See `_strip_js_comments` for the
+    2026-07-23 incident that established the rule.
+
+    KNOWN BLIND SPOT, DECLARED SO NOBODY ASSUMES OTHERWISE: `_app_sources` globs
+    `{.ts,.tsx,.js,.mjs}` and never opens `app/index.html`, which carries ~2,500 lines of the
+    application in an inline module script. Neither primitive is exported from the bundle today, so
+    that page could not call them even if it tried — but that is a fact about today's exports, not
+    an enforced one.
+    """
+    if guard := _guard(state):
+        return guard
+    sources = _app_sources(state)
+    if not sources:
+        return PredicateResult(status="FAIL", message="no app sources under app/ — nothing to govern yet", observed_ref="app/")
+
+    root = _root(state)
+    home = root / PREDICTION_LANDING_HOME
+    if not home.is_file():
+        return PredicateResult(
+            status="FAIL",
+            message=f"the declared landing home {PREDICTION_LANDING_HOME} does not exist",
+            observed_ref=PREDICTION_LANDING_HOME,
+        )
+    home_code = _strip_js_comments(_read(home)).lower()
+    if "function landprediction(" not in home_code:
+        return PredicateResult(
+            status="FAIL",
+            message=(
+                f"{PREDICTION_LANDING_HOME} no longer defines `landPrediction` — the "
+                "`rule-effect-shown` sink points at a function that is not there"
+            ),
+            observed_ref=PREDICTION_LANDING_HOME,
+        )
+
+    offenders = []
+    for path in sources:
+        if path == home:
+            continue
+        code = _strip_js_comments(_read(path)).lower()
+        for call in PREDICTION_LANDING_CALLS:
+            if call in code:
+                offenders.append(f"{path.relative_to(root)}:{call.rstrip('(')}")
+    if offenders:
+        return PredicateResult(
+            status="FAIL",
+            message=(
+                f"a rule effect is landed outside its one home — {offenders}; only "
+                f"`landPrediction` in {PREDICTION_LANDING_HOME} may choose between appending a "
+                "delta and swapping the line, so `rule-effect-shown` can be sidestepped"
+            ),
+            observed_ref="app/",
+        )
+    return PredicateResult(
+        status="PASS",
+        message=(
+            f"`appendPrediction`/`replacePredictedSwap` are called only from `landPrediction` in "
+            f"{PREDICTION_LANDING_HOME}, and by none of the other {len(sources) - 1} app source(s) "
+            "— a rule effect has one landing"
+        ),
+        observed_ref=PREDICTION_LANDING_HOME,
+    )
+
+
 def assert_app_is_reachable_from_the_front_door(state: ScenarioState) -> PredicateResult:
     """The app has ONE address, a visitor can reach it in one click, and the old URL still answers.
 

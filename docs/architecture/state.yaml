@@ -214,6 +214,33 @@ state_invariants:
     wired: true
     gates_capabilities: [reader-can-toggle-edit-and-view-modes]
 
+  - id: state-a-rule-effect-lands-in-one-place
+    name: a rule's decision reaches the screen through one function
+    description: |
+      `appendPrediction` and `replacePredictedSwap` — the two spellings of a rule effect on screen —
+      are called only from `landPrediction`, the `rule-effect-shown` sink.
+
+      THE NEGATIVE HALF OF THAT SINK, and neither half is sufficient alone. `canonical-routing`
+      checks that everything which REACHES the sink came through its governing class; it is blind to
+      code that never goes near the sink and calls either primitive directly. This predicate is what
+      stops that, and unlike the routing half it needs no scenario — which matters here, because no
+      scenario reaches this sink at all today (see the backlog row
+      `no-scenario-drives-a-rule-effect-to-the-screen`).
+
+      Comments are stripped first: paint.ts, predict.ts and sinks.yaml all DISCUSS these two
+      functions while explaining this very invariant.
+
+      KNOWN BLIND SPOT: the source glob never opens `app/index.html`. Neither primitive is exported
+      from the bundle, so that page could not call them today — a fact about today's exports, not an
+      enforced one.
+    check: "appendPrediction / replacePredictedSwap appear in no app/ source outside
+      app/present/paint.ts, and paint.ts still defines landPrediction, with comments stripped first"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_a_rule_effect_lands_in_one_place
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [a-rule-effect-has-one-landing]
+
   - id: state-caret-placement-has-one-home
     name: the caret is placed in one module and nowhere else under app/
     description: |

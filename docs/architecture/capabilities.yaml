@@ -1274,6 +1274,34 @@ capabilities:
     thing it exists to catch, and the insert path is doing exactly that. The pin belongs under the
     class that already claims the concern rather than under a new one minted for the defect.
   status: undeclared
+- id: a-rule-effect-has-one-landing
+  intent: >-
+    A RULE'S DECISION REACHES THE SCREEN THROUGH ONE FUNCTION. `app/present/paint.ts`'s
+    `landPrediction` is the only code that chooses between the two spellings of a rule effect — an
+    appended delta, or the row rebuilt byte-exact from `fullText` — and it is the `rule-effect-shown`
+    sink.
+    WHY IT WAS NEEDED. The browser had three sinks and all three were presentational: `view-painted`,
+    `selection-moved`, `document-mounted`. Nothing observed a RULE becoming a LINE, so the question
+    "why did the operator see `#outcome` appended instead of swapped" was answered by reading
+    several times and by measurement never. The branch that decides it was an inline if/else inside
+    `paint`, reachable by no observer and countable by nobody.
+    THE ROUTES ARE TWO AND BOTH ARE RULE APPLICATIONS (grep `surface: "predict"`):
+    `resolvers/rules.ts:209` arms without `fullText` and can therefore only ever append;
+    `resolvers/promotion.ts:493` is the only caller that can reach the swap.
+    THE PAIR. `canonical-routing` is the positive half and cannot see code that calls the two
+    landing primitives directly; `assert_a_rule_effect_lands_in_one_place` is the absence that
+    closes it, comments stripped first, blind inside `app/index.html` by its own admission.
+    NOT YET GOVERNED BY A CLASS, AND THAT IS A MEASURED ABSENCE RATHER THAN AN OVERSIGHT — see the
+    backlog row `no-scenario-drives-a-rule-effect-to-the-screen`.
+  tier: functional
+  rooting: >-
+    isolated for now, and the reason is a measurement rather than a preference. The obvious class is
+    `capture-rule-application` (canonical home `app/present/resolvers/rules:read`), and it was wired
+    to govern this sink and RUN: `canonical-routing . --class capture-rule-application` reports
+    `chains_observed: 0`. No scenario drives a rule effect to the screen, so no routing verdict
+    exists to be right or wrong — a class declared over it would be a green computed from an empty
+    set. The rooting decision waits on a scenario, not on an opinion.
+  status: undeclared
 - id: a-write-refuses-a-stale-base
   intent: >-
     A SAVE NAMES THE COPY OF THE FILE IT WAS COMPUTED FROM, AND SAYS SO WHEN THAT COPY IS NOT THE
