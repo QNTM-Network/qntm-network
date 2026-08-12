@@ -4462,3 +4462,42 @@ backlog:
     establish a starting column. It is the one remaining number-taking entry and should go when
     there is an instruction that covers what those tests need.'
   captured: '2026-08-12'
+- id: the-column-is-resolved-once-and-never-again
+  title: '[defect] [pinned-red] The cursor column is resolved when a row is painted
+    and never updated again — not as the operator types, not when he leaves INSERT,
+    and not at all for a draft. The operator''s "combinations don''t land where we expect".'
+  driving_capability: the-cursor-surface-knows-where-the-caret-is
+  lead: true
+  record: '2026-08-12 — DIAGNOSE ONLY. Nothing fixed. Reported by the operator against the
+    DEPLOYED app after #165: "Largely working. But pressing o and a and enter and escape various
+    combinations doesn''t land where we expect."
+    THE MATRIX, measured through app/index.html''s own wiring — every entry gesture x zero/some/
+    past-the-column typing x every exit, from two starting columns, plus pairs. Columns are
+    caret@entry / col@entry / caret@typed / col@exit.
+      i  from 0, type 2, Escape    0 / 0 /  2 / 0      col is the OPEN position, not where he left
+      a  from 0, type 2, Escape    1 / 1 /  3 / 1      same
+      a  from 6, type 10, Escape   7 / 7 / 17 / 7      ten characters of drift
+      o  from ANY column           6 / 0 /  8 / 0      caret past the "- [ ] " seed, column says 0
+      O  from ANY column           6 / 0 /  8 / 0      same
+      i/a + Enter                  mode stays INSERT, col resets to 0 (Enter opens a line below)
+    ONE SHAPE AT THREE MOMENTS, not three unrelated faults. THE COLUMN IS RESOLVED EXACTLY ONCE,
+    WHEN A `rawInput` ROW IS PAINTED.
+      1. AS HE TYPES — nothing updates it; the caret runs and the surface holds the open position.
+      2. WHEN HE LEAVES — `discard()` (paint.ts:609) calls leaveInsert() and repaints, never
+         touching the focus surface. Vim steps one column LEFT leaving INSERT; nothing carries that.
+      3. WHEN A DRAFT OPENS — `o`/`O` place their caret in `paintDraft`, the OTHER caret path,
+         which does not go through `columnFor` at all. Documented as a separate concern in
+         caret.ts when the sink was declared; this is the consequence, measured.
+    WHY #165 DID NOT CATCH IT, AND IT IS A FINDING ABOUT MY OWN ENFORCER. insert_column_writeback.ts
+    asserts the column at the moment the row is OPENED — exactly the one moment the wiring got
+    right. A green enforcer sat on top of a half-closed defect because the assertion and the fix
+    shared a blind spot. The lesson is not "write more cells"; it is that an enforcer authored
+    alongside a fix inherits that fix''s idea of when the work happens.
+    THE PIN: tests/flow_scenarios/insert_exit_column.ts, RED on main, covering moment 1 only.
+    Mutation-proven: an `input` listener syncing the column flips the run 16 probed/1 failed to
+    17/0. Reverted, diff clean. The scenario fires a REAL `input` event for that reason — a first
+    draft mutated the caret fields directly, which no implementation could have reacted to.
+    DELIBERATELY NOT PINNED: whether leaving INSERT should step one column left. That is VIM''s
+    rule and this is the operator''s editor. The matrix reports what happens; the choice is his,
+    and a scenario going red about it would be deciding a design question by assertion.'
+  captured: '2026-08-12'
