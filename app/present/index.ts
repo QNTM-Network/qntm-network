@@ -193,6 +193,14 @@ export type { BoundaryDirection } from "./boundary.js";
 export { INDENT_UNIT, indentedLine } from "./indent.js";
 
 export { wordCaret } from "./word.js";
+/**
+ * THE CURSOR RESOLVER — the one place a column is computed. Exported because the tests assert
+ * against it: the arithmetic that used to sit in `motions.ts` (`column + 1` for `a`) and the clamp
+ * that used to sit in `paint.ts` both live here now, so the claims that were made about those two
+ * modules are made about this one.
+ */
+export { columnFor } from "./column.js";
+export type { CursorInstruction } from "./column.js";
 export type { WordMotion } from "./word.js";
 
 export { DraftSurface, placeDraft, placeFor } from "./draft.js";

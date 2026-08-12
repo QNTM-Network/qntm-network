@@ -3343,7 +3343,16 @@ var ModeSurface = class {
    * abandoned and the key that broke the pair is processed as an ordinary keystroke — so `g` then
    * `j` moves down by one rather than doing nothing at all.
    */
-  handleKey(key, current, lastIndex, column = 0) {
+  /**
+   * `column` IS GONE FROM THIS SIGNATURE (2026-08-12) AND ITS ABSENCE IS THE POINT. It existed so
+   * `i`/`a` could compute `column` and `column + 1`. This module imports nothing and therefore
+   * cannot see the line those numbers index, so computing them here was always arithmetic performed
+   * out of sight of its own operand — and the clamp that made `column + 1` safe lived in paint.ts,
+   * two modules away. `column.ts` holds both halves now, and once it did, this parameter was read
+   * by nothing. A parameter a module cannot use is the same "looks like data, means nothing" shape
+   * as the literal `0` this whole change removed from `focus()`; it is deleted for the same reason.
+   */
+  handleKey(key, current, lastIndex) {
     if (this.#mode !== "NORMAL") {
       return { handled: false, effect: { kind: "none" } };
     }
@@ -3390,11 +3399,11 @@ var ModeSurface = class {
         };
       case "i":
       case "Enter":
-        this.enterInsert(column);
-        return { handled: true, effect: { kind: "enter-insert", caret: column } };
+        this.enterInsert("insert");
+        return { handled: true, effect: { kind: "enter-insert", caret: "insert" } };
       case "a":
-        this.enterInsert(column + 1);
-        return { handled: true, effect: { kind: "enter-insert", caret: column + 1 } };
+        this.enterInsert("append");
+        return { handled: true, effect: { kind: "enter-insert", caret: "append" } };
       case "$":
         return { handled: true, effect: { kind: "column", to: "end" } };
       case "o":
@@ -3431,6 +3440,63 @@ var ModeSurface = class {
     }
   }
 };
+
+// app/present/word.ts
+function wordCaret(line, motion, count, from) {
+  const words = titleSpans(line);
+  if (words.length === 0) {
+    return null;
+  }
+  const n = Math.max(1, count);
+  const last = words[words.length - 1];
+  const first = words[0];
+  if (motion === "b") {
+    const before = words.map((word2) => word2.start).filter((at) => at < from);
+    if (before.length === 0) {
+      return first.start;
+    }
+    return before[Math.max(0, before.length - n)];
+  }
+  const after = motion === "e" ? words.map((word2) => word2.end - 1).filter((at) => at > from) : words.map((word2) => word2.start).filter((at) => at > from);
+  if (after.length === 0) {
+    return motion === "e" ? last.end - 1 : last.start;
+  }
+  return after[Math.min(n - 1, after.length - 1)];
+}
+
+// app/present/column.ts
+function isInsertSpace(instruction) {
+  return instruction.kind === "insert" || instruction.kind === "append";
+}
+function columnFor(instruction, lineText, from) {
+  const raw = rawColumnFor(instruction, lineText, from);
+  if (raw === null) {
+    return null;
+  }
+  if (!isInsertSpace(instruction)) {
+    return clampColumn(raw, lineText);
+  }
+  if (!Number.isFinite(raw) || raw < 0) {
+    return 0;
+  }
+  const at = Math.floor(raw);
+  return lineText === null ? at : Math.min(at, lineText.length);
+}
+function rawColumnFor(instruction, lineText, from) {
+  switch (instruction.kind) {
+    case "line-start":
+      return 0;
+    case "line-end":
+      return lineText === null ? 0 : lineText.length;
+    case "keep":
+    case "insert":
+      return from;
+    case "append":
+      return from + 1;
+    case "word":
+      return lineText === null ? from : wordCaret(lineText, instruction.motion, instruction.count, from);
+  }
+}
 
 // app/present/focus.ts
 function lineTextOf(source, lineIndex) {
@@ -3500,10 +3566,34 @@ var FocusSurface = class {
    * is given the SAME view an anchor was taken with. Every real call site is (`app/index.html`,
    * `paint.ts`), because a view's own id is already in hand wherever a line is focused.
    */
-  focus(lineIndex, source, column = 0, view = "") {
+  focus(lineIndex, source, view = "") {
+    this.place(lineIndex, { kind: "line-start" }, source, view);
+  }
+  /**
+   * MOVE THE CURSOR TO A LINE, SAYING WHAT THE COLUMN SHOULD MEAN THERE.
+   *
+   * THE COLUMN PARAMETER IS GONE AND THIS IS WHAT REPLACED IT. `focus` used to take
+   * `column = 0`, and five of its seven callers passed a literal `0` — not because they meant
+   * column zero but because they had nothing to say about the column. Those two things were
+   * spelled identically, so the second was invisible: measured 2026-08-12, `j`/`k`, `{`/`}`, a
+   * click, the post-edit settle and view entry all silently reset an established column, and the
+   * insert path never wrote one at all. Deleting the parameter was tried first and surfaced
+   * nothing, because every caller already typed the `0` explicitly (see the backlog row
+   * `focus-column-does-not-follow-the-caret`). The only way to make "I have nothing to say"
+   * unspellable was to stop accepting a number here and accept an INSTRUCTION instead.
+   *
+   * SO THIS SURFACE NEVER RECEIVES A POSITION FROM A CALLER THAT ALREADY DECIDED. It receives what
+   * the gesture MEANT and asks `columnFor` (column.ts), which is the only code in the application
+   * that computes a column. `#column` is assigned in exactly two places, both of them one line
+   * long, and both of them assign what `columnFor` returned.
+   */
+  place(lineIndex, instruction, source, view = "") {
     this.#lineIndex = lineIndex;
     this.#anchor = source === void 0 ? null : instanceAnchorFor(source, lineIndex, view);
-    this.#column = clampColumn(column, lineTextOf(source, lineIndex));
+    const resolved = columnFor(instruction, lineTextOf(source, lineIndex), this.#column);
+    if (resolved !== null) {
+      this.#column = resolved;
+    }
   }
   /**
    * Move the cursor along the line it is already on — `w`/`b`/`e`/`0`/`$`, and nothing else.
@@ -3520,6 +3610,28 @@ var FocusSurface = class {
    */
   moveColumn(column, lineText) {
     this.#column = clampColumn(column, lineText);
+  }
+  /**
+   * MOVE THE CURSOR WITHIN THE LINE IT IS ALREADY ON, saying what the gesture meant.
+   *
+   * The column-only sibling of `place`, and the replacement for `moveColumn`'s number-taking shape
+   * on every real caller. `w`/`b`/`e` and `0`/`$` were already CORRECT before this change — they
+   * are the only two gestures that were — and they were correct precisely because each of them
+   * already ran an answering module (`word.ts`) or the line's own length before writing. Routing
+   * them through `columnFor` changes none of their answers; it removes the second entry point by
+   * which a caller could write a column it had decided for itself.
+   *
+   * RETURNS WHETHER THE CURSOR MOVED, which is `wordCaret`'s "this line has no title at all"
+   * passed through: the caller repaints on `true` and does nothing on `false`, exactly as it did
+   * when it made that test itself.
+   */
+  moveTo(instruction, lineText) {
+    const resolved = columnFor(instruction, lineText, this.#column);
+    if (resolved === null) {
+      return false;
+    }
+    this.#column = resolved;
+    return true;
   }
   /**
    * THE WORLD ARRIVED. Where is the cursor's line in `source` now, and how did the walk find it?
@@ -3573,7 +3685,7 @@ var FocusSurface = class {
     }
     const reading = resolveInstanceAnchor(anchor, source, view);
     if (reading.outcome === "found") {
-      this.focus(reading.lineIndex, source, this.#column, view);
+      this.place(reading.lineIndex, { kind: "keep" }, source, view);
     }
     return reading;
   }
@@ -3830,29 +3942,6 @@ function prevHeading(lines, from) {
     }
   }
   return null;
-}
-
-// app/present/word.ts
-function wordCaret(line, motion, count, from) {
-  const words = titleSpans(line);
-  if (words.length === 0) {
-    return null;
-  }
-  const n = Math.max(1, count);
-  const last = words[words.length - 1];
-  const first = words[0];
-  if (motion === "b") {
-    const before = words.map((word2) => word2.start).filter((at) => at < from);
-    if (before.length === 0) {
-      return first.start;
-    }
-    return before[Math.max(0, before.length - n)];
-  }
-  const after = motion === "e" ? words.map((word2) => word2.end - 1).filter((at) => at > from) : words.map((word2) => word2.start).filter((at) => at > from);
-  if (after.length === 0) {
-    return motion === "e" ? last.end - 1 : last.start;
-  }
-  return after[Math.min(n - 1, after.length - 1)];
 }
 
 // app/present/draft.ts
@@ -4731,7 +4820,7 @@ function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
     deps.mode.enterNormal();
     if (deps.focus !== void 0) {
       const last = Math.max(0, source.split("\n").length - 1);
-      deps.focus.focus(Math.min(lineIndex, last), source, 0, deps.view);
+      deps.focus.place(Math.min(lineIndex, last), { kind: "keep" }, source, deps.view);
     }
   };
   const abandon = () => {
@@ -4921,7 +5010,7 @@ function paint(body, source, context, deps) {
     element.addEventListener("click", (event) => {
       event?.preventDefault?.();
       event?.stopPropagation?.();
-      focus.focus(lineIndex, source, 0, deps.view);
+      focus.place(lineIndex, { kind: "line-start" }, source, deps.view);
       repaint(source);
     });
   };
@@ -4959,10 +5048,10 @@ function paint(body, source, context, deps) {
       if (superseded()) {
         return;
       }
-      const caret = mode?.takeCaretHint();
-      if (caret !== void 0) {
-        const at = Math.max(0, Math.min(caret, lineSource.length));
-        placeCaret(input, at);
+      const asked = mode?.takeCaretHint();
+      if (asked !== void 0) {
+        focus.moveTo({ kind: asked }, lineSource);
+        placeCaret(input, focus.column);
       }
     }
   };
@@ -6573,18 +6662,20 @@ function globalKey(deps, e) {
   const visualPos = visualOrder.indexOf(current);
   const visualCurrent = visualPos === -1 ? 0 : visualPos;
   const visualLastIndex = Math.max(0, visualOrder.length - 1);
-  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex, deps.focus.column);
+  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
   if (!outcome.handled) return;
   e.preventDefault();
   const effect = outcome.effect;
   if (effect.kind === "move") {
-    deps.focus.focus(visualOrder[effect.lineIndex] ?? current, source, 0, v.id);
+    deps.focus.place(visualOrder[effect.lineIndex] ?? current, { kind: "line-start" }, source, v.id);
     deps.repaintCurrentView();
   } else if (effect.kind === "boundary") {
-    deps.focus.focus(
+    deps.focus.place(
       boundaryLine(source.split("\n"), current, effect.direction, effect.count),
+      // LINE-START, for the same reason `j`/`k` uses it: this app resets the column on a line
+      // move, and `{`/`}` is a line move. Declared rather than typed as a bare `0`.
+      { kind: "line-start" },
       source,
-      0,
       v.id
     );
     deps.repaintCurrentView();
@@ -6628,14 +6719,12 @@ function globalKey(deps, e) {
     }
   } else if (effect.kind === "word") {
     const line = source.split("\n")[current] ?? "";
-    const at = wordCaret(line, effect.motion, effect.count, deps.focus.column);
-    if (at !== null) {
-      deps.focus.moveColumn(at, line);
+    if (deps.focus.moveTo({ kind: "word", motion: effect.motion, count: effect.count }, line)) {
       deps.repaintCurrentView();
     }
   } else if (effect.kind === "column") {
     const line = source.split("\n")[current] ?? "";
-    deps.focus.moveColumn(effect.to === "start" ? 0 : line.length, line);
+    deps.focus.moveTo({ kind: effect.to === "start" ? "line-start" : "line-end" }, line);
     deps.repaintCurrentView();
   } else {
     deps.repaintCurrentView();
@@ -6696,6 +6785,7 @@ export {
   classifyLine,
   cleanTitleFor,
   closeDrawer,
+  columnFor,
   composeLine,
   composeSeed,
   coverageOf,

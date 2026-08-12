@@ -31,6 +31,7 @@ import {
   INDENT_UNIT,
   openLine,
   wordCaret,
+  columnFor,
   DraftSurface,
   FocusSurface,
   ModeSurface,
@@ -262,41 +263,56 @@ describe("5. i and Enter start INSERT; Escape's job belongs to the input, not to
     // AT THE CURSOR'S OWN COLUMN — the fourth argument, which is `FocusSurface.column`. It used to
     // be `{ kind: "enter-insert" }` with no caret at all, and the browser decided where the caret
     // landed after `value =` then `focus()`; nothing decided it, so nothing could be asserted.
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 11 });
+    // THE INTENT, NOT THE NUMBER (2026-08-12). motions.ts imports nothing, so it cannot see the
+    // line a column indexes; it reports what `i` MEANT and column.ts measures it. The column that
+    // used to be asserted here is asserted in the same breath, one module over, so the claim is
+    // whole rather than halved.
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "insert" });
     assert.equal(mode.mode, "INSERT");
-    assert.equal(mode.takeCaretHint(), 11);
+    assert.equal(mode.takeCaretHint(), "insert");
+    assert.equal(columnFor({ kind: "insert" }, "a line with plenty of characters", 11), 11);
   });
 
-  test("i with no column argument opens at column 0 — every pre-column caller still compiles", () => {
+  test("i reports the same intent whatever the cursor's column — the column is not this module's to know", () => {
+    // THE OLD NAME OF THIS TEST WAS "i with no column argument opens at column 0". There is no
+    // column argument any more: `handleKey` never read it once the arithmetic moved to column.ts,
+    // so it was deleted. What survives is the stronger claim — this module's answer to `i` does not
+    // depend on a column at all, which is what makes it safe for it to import nothing.
     const mode = new ModeSurface();
-    const outcome = mode.handleKey("i", 4, 100);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 0 });
+    assert.deepEqual(mode.handleKey("i", 4, 100).effect, { kind: "enter-insert", caret: "insert" });
+    assert.equal(columnFor({ kind: "insert" }, "abcdefghij", 0), 0);
   });
 
   test("Enter enters INSERT the same way i does", () => {
     const mode = new ModeSurface();
-    const outcome = mode.handleKey("Enter", 4, 100, 11);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 11 });
+    const outcome = mode.handleKey("Enter", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "insert" });
     assert.equal(mode.mode, "INSERT");
   });
 
   test("a enters INSERT one past the cursor — i opens AT the column, a opens after it", () => {
     const mode = new ModeSurface();
-    const outcome = mode.handleKey("a", 4, 100, 11);
+    const outcome = mode.handleKey("a", 4, 100);
     assert.equal(outcome.handled, true);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 12 });
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "append" });
     assert.equal(mode.mode, "INSERT");
-    assert.equal(mode.takeCaretHint(), 12);
+    assert.equal(mode.takeCaretHint(), "append");
+    // ONE PAST THE CURSOR, asserted where the arithmetic now lives.
+    assert.equal(columnFor({ kind: "append" }, "a line with plenty of characters", 11), 12);
   });
 
-  test("takeCaretHint is a NUMBER for i/Enter/a, and undefined for a click-equivalent enterInsert()", () => {
+  test("takeCaretHint is an INTENT for i/Enter/a, and undefined for a click-equivalent enterInsert()", () => {
+    // IT WAS A NUMBER UNTIL 2026-08-12 and is now "insert"/"append". The painter no longer reads a
+    // position out of it at all — it reads PERMISSION, and takes the position from FocusSurface,
+    // which the resolver wrote. That is what stopped `a` placing a caret the cursor surface never
+    // learned about.
     const mode = new ModeSurface();
-    mode.handleKey("i", 4, 100, 3);
-    assert.equal(mode.takeCaretHint(), 3);
+    mode.handleKey("i", 4, 100);
+    assert.equal(mode.takeCaretHint(), "insert");
 
     const mode2 = new ModeSurface();
-    mode2.handleKey("Enter", 4, 100, 3);
-    assert.equal(mode2.takeCaretHint(), 3);
+    mode2.handleKey("Enter", 4, 100);
+    assert.equal(mode2.takeCaretHint(), "insert");
 
     // THE MOUSE CLICK IS THE ONE PATH THAT STILL LEAVES IT UNSET, and it has to: a click puts the
     // caret where the person clicked, and a hint would overrule that.
@@ -307,16 +323,16 @@ describe("5. i and Enter start INSERT; Escape's job belongs to the input, not to
 
   test("takeCaretHint is consumed once — a second read after the first does not see it again", () => {
     const mode = new ModeSurface();
-    mode.handleKey("a", 4, 100, 11);
-    assert.equal(mode.takeCaretHint(), 12);
+    mode.handleKey("a", 4, 100);
+    assert.equal(mode.takeCaretHint(), "append");
     assert.equal(mode.takeCaretHint(), undefined, "the hint should have been cleared by the first read");
   });
 
   test("a discards a pending count rather than refusing — entering INSERT is the same act either way", () => {
     const mode = new ModeSurface();
     mode.handleKey("5", 0, 100);
-    const outcome = mode.handleKey("a", 4, 100, 11);
-    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: 12 });
+    const outcome = mode.handleKey("a", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "append" });
     assert.equal(mode.mode, "INSERT");
   });
 

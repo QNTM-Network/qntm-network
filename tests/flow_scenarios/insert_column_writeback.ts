@@ -62,11 +62,15 @@ import { ModeSurface } from "../../app/present/motions.js";
 import { FocusSurface } from "../../app/present/focus.js";
 import { DraftSurface } from "../../app/present/draft.js";
 import { globalKey } from "../../app/shell/keys.js";
+import { paint } from "../../app/present/paint.js";
+import { PresentationContext } from "../../app/present/context.js";
 import type { GlobalKeyDeps } from "../../app/shell/keys.js";
 
 /** One checkbox line with a real title, so a non-zero column is reachable through `w`. */
 const SOURCE = ["# This Week", "- [ ] first task [[qntm:1]] #task"].join("\n");
 const VIEW = { id: "this-week", path: "work/outcomes.md", markdown: SOURCE };
+/** The checkbox line — the one with a title, so `a` has real characters to append into. */
+const LINE_INDEX = 1;
 
 /**
  * THE MINIMUM `visualLineOrder` READS — `body.children`, each child carrying `dataset.lineIndex`
@@ -134,9 +138,9 @@ function assertAppendWritesTheColumnBack(): void {
   const repaints = { count: 0 };
   const deps = depsFor(focus, mode, repaints);
 
-  // The cursor is on the checkbox line. `focus.focus` is the surface's own setter, the same call
-  // keys.ts makes for a movement gesture.
-  focus.focus(1, SOURCE, 0, VIEW.id);
+  // The cursor is on the checkbox line. `focus()` no longer takes a column at all — it means
+  // "line-start", which is the same column 0 this scenario always started from.
+  focus.focus(LINE_INDEX, SOURCE, VIEW.id);
   const startColumn = focus.column;
 
   globalKey(deps, keydown("a"));
@@ -147,25 +151,95 @@ function assertAppendWritesTheColumnBack(): void {
   if (repaints.count === 0) {
     throw new Error("`a` did not repaint — the handler did not reach its enter-insert branch");
   }
+  // WHAT IS ASSERTED, AND WHY IT CHANGED TWICE ON 2026-08-12 — DISCLOSED, NOT QUIETLY EDITED.
+  //
+  // FIRST FORM: `focus.column` compared against the NUMBER `ModeSurface` produced (`takeCaretHint`).
+  // That number no longer exists — motions.ts emits an INTENT and `column.ts` measures it against
+  // the line — so the comparison lost its second operand.
+  //
+  // SECOND FORM (this one): compare `focus.column` against the CARET THAT ACTUALLY EXISTS, after a
+  // real paint. This is STRONGER than either predecessor and it is stronger for a reason worth
+  // stating: the claim "the cursor surface knows where the caret is" has no referent until a caret
+  // has been placed. The resolver needs the LINE, and the line is chosen by the painter, so the
+  // column is written when the row is opened — not when the key is pressed. A version of this
+  // scenario that asserted after `globalKey` alone (as the first two did) was asserting about a
+  // moment when nothing had placed a caret at all, and it went red against CORRECT wiring for
+  // exactly that reason. It now drives the painter and reads the DOM the painter wrote.
+  const body = stubBody();
+  paint(body, SOURCE, new PresentationContext(), { markdown: markdownStub(), focus, mode } as never);
 
-  // The value the painter consumes and places the caret at (paint.ts's caret seed).
-  const caretThePainterWillPlace = mode.takeCaretHint();
-  if (caretThePainterWillPlace === undefined) {
-    throw new Error('"a" produced no caret hint for the painter to consume');
+  const input = firstInput(body);
+  if (input === null) {
+    throw new Error("the paint opened no editable row, so there is no caret to compare against");
   }
-
-  if (focus.column !== caretThePainterWillPlace) {
+  if (focus.column !== input.selectionStart) {
     throw new Error(
       "THE CURSOR SURFACE DOES NOT KNOW WHERE THE CARET IS. " +
-        `After \`a\` from column ${startColumn}, ModeSurface produced caret ` +
-        `${caretThePainterWillPlace} for the painter to place, but FocusSurface.column still ` +
-        `reports ${focus.column}. \`FocusSurface\` is declared as the one place that holds where ` +
-        "the cursor is (classes.yaml, `cursor-position`), and on the insert path nothing writes " +
-        "the column back to it — app/shell/keys.ts's `enter-insert` branch only repaints. The " +
-        "column is frozen for the whole insert episode: after typing and Escape the surface still " +
-        "reports the column from BEFORE the append. See this file's header for the full " +
-        "measurement across `a`, click, `j` and `}`. THIS IS A DELIBERATE PIN — the fix is a " +
-        "design decision the operator has not made; do not loosen this assertion to make it pass.",
+        `After \`a\` from column ${startColumn}, the caret was placed at ` +
+        `${input.selectionStart} and FocusSurface.column reports ${focus.column}. ` +
+        "`FocusSurface` is declared as the one place that holds where the cursor is " +
+        "(classes.yaml, `cursor-position`), so the resolver must write the column it computed " +
+        "back to it. Otherwise the column is frozen for the whole insert episode and after " +
+        "typing and Escape the surface still reports the column from BEFORE the append. " +
+        "See this file's header for the measurement across `a`, click, `j` and `}`.",
     );
   }
+  if (input.selectionStart !== Math.min(startColumn + 1, (SOURCE.split("\n")[LINE_INDEX] ?? "").length)) {
+    throw new Error(
+      `\`a\` did not place the caret one past the cursor — got ${input.selectionStart}`,
+    );
+  }
+}
+
+/** The painter renders headings and prose through markdown-it; only these two methods are used. */
+function markdownStub(): unknown {
+  return { render: (m: string) => m, renderInline: (m: string) => m };
+}
+
+/** The minimum `paint` writes into: a body that collects children, over a stub document. */
+function stubBody(): HTMLElement {
+  interface Stub {
+    tagName: string; type: string; value: string; className: string;
+    selectionStart: number | null; children: Stub[]; dataset: Record<string, string>;
+    style: Record<string, string>; innerHTML: string; textContent: string;
+    append: (...k: Stub[]) => void; appendChild: (k: Stub) => Stub;
+    addEventListener: () => void; setAttribute: () => void; removeAttribute: () => void;
+    focus: () => void; setSelectionRange: (a: number, b: number) => void;
+    remove: () => void; contains: () => boolean; querySelector: () => null;
+    querySelectorAll: () => Stub[]; closest: () => null; getAttribute: () => null;
+    classList: { add: () => void; remove: () => void; contains: () => boolean; toggle: () => void };
+  }
+  const make = (tagName = "div"): Stub => {
+    const el: Stub = {
+      tagName, type: "", value: "", className: "", selectionStart: null,
+      children: [], dataset: {}, style: {}, innerHTML: "", textContent: "",
+      append(...kids) { el.children.push(...kids); },
+      appendChild(kid) { el.children.push(kid); return kid; },
+      addEventListener() {}, setAttribute() {}, removeAttribute() {},
+      focus() {}, setSelectionRange(a) { el.selectionStart = a; },
+      remove() {}, contains() { return false; }, querySelector() { return null; },
+      querySelectorAll() { return []; }, closest() { return null; }, getAttribute() { return null; },
+      classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
+    };
+    return el;
+  };
+  (globalThis as unknown as { document: unknown }).document = {
+    createElement: (t: string) => make(t),
+    createTextNode: () => make("#text"),
+    querySelector: () => null,
+  };
+  return make("div") as unknown as HTMLElement;
+}
+
+/** The first text `<input>` the paint produced, depth-first — the row `a` opened. */
+function firstInput(node: unknown): { selectionStart: number } | null {
+  const el = node as { tagName?: string; type?: string; children?: unknown[]; selectionStart?: number };
+  if (el.tagName === "input" && el.type === "text") {
+    return { selectionStart: el.selectionStart ?? -1 };
+  }
+  for (const kid of el.children ?? []) {
+    const found = firstInput(kid);
+    if (found !== null) return found;
+  }
+  return null;
 }

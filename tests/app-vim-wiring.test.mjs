@@ -654,9 +654,13 @@ function mutating(...pairs) {
  * THE OLD LINE, PUT BACK. `focusable`'s click handler as it read before this change: focus, THEN
  * arm INSERT, THEN repaint — all three inside one click.
  */
+// THE TARGET TEXT MOVED ON 2026-08-12 and this pair moved with it. The click handler no longer
+// says `focus.focus(lineIndex, source, 0, deps.view)` — the literal `0` that meant "nothing to say
+// about the column" is now the instruction `{ kind: "line-start" }`. The mutation itself is
+// unchanged in substance: restore the `mode?.enterInsert()` a bare click used to perform.
 const CLICK_ARMS_INSERT = [
-  "      focus.focus(lineIndex, source, 0, deps.view);\n      repaint(source);",
-  "      focus.focus(lineIndex, source, 0, deps.view);\n      mode?.enterInsert();\n      repaint(source);",
+  '      focus.place(lineIndex, { kind: "line-start" }, source, deps.view);\n      repaint(source);',
+  '      focus.place(lineIndex, { kind: "line-start" }, source, deps.view);\n      mode?.enterInsert();\n      repaint(source);',
 ];
 const withClickArmingInsert = mutating(CLICK_ARMS_INSERT);
 
