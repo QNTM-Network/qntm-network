@@ -4603,3 +4603,56 @@ backlog:
     published and sitting unread beside it. That is the "range of config resolutions" dimension —
     not a defect on its own, and the reason a node-model move has somewhere to go.'
   captured: '2026-08-12'
+- id: a-prediction-on-the-selected-row-can-never-swap
+  title: '[defect] [pinned-red] A rule effect predicted for the row the vim cursor is
+    on always appends and can never swap, because that row is never made predictable.
+    Produces the operator''s exact symptom with correct config and correct render.'
+  driving_capability: a-rule-effect-has-one-landing
+  lead: true
+  record: '2026-08-12 — DIAGNOSE ONLY, nothing fixed. Driven through the real page wiring to the
+    `rule-effect-shown` sink declared in #168.
+    MY OWN LEAD WAS REFUTED FIRST, and it is the more useful half of the result. Every fixture in
+    this repo covers a FRESH capture and the operator''s line is a stamped, round-tripped node, so
+    the stamp looked like the difference. Measured: it is not. A stamped parent renders and swaps
+    exactly like a bare one — `- [ ] Ship the launch note [[qntm:501]] #task` becomes
+    `... [[qntm:501]] #outcome`, in place, chip embedded in the row''s own markup. The
+    fresh-capture-only fixture set is therefore a COVERAGE GAP that cost nothing here, and is named
+    apart from the defect below rather than bundled with it.
+    THE DEFECT, REPRODUCED — CONDITION 2 of the three the sink names. `paint.ts`''s row builder gives
+    the row the cursor is on a block-cursor rendition and RETURNS EARLY (the `mode.mode === "NORMAL"
+    && focus.isFocused(lineIndex)` branch): it sets `rowsByLineIndex` and never
+    `predictableByLineIndex`. So `landPrediction` receives `predictable === undefined`, cannot reach
+    `replacePredictedSwap` at all, and appends — with a CORRECT `fullText` in hand and a fully wired
+    tag rendition. The stale `#task` stays beside the new `#outcome`, which is the operator''s report
+    verbatim. Measured by the chip landing as a separate ELEMENT rather than embedded in the row''s
+    own rendered HTML — the two branches'' own signature.
+    ENFORCER: tests/flow_scenarios/prediction_on_the_selected_row.ts, RED on main. Mutation-proven:
+    adding the selected row to `predictableByLineIndex` flips the run 17 probed/1 failed to 18/0.
+    Reverted, diff clean.
+    NOT PINNED, AND DELIBERATELY: what the fix should be. A selected row could be made predictable,
+    or `replacePredictedSwap` taught to rebuild a block-cursor row, or a prediction on the selected
+    row deliberately suppressed. Three different products; the operator has chosen none.'
+  captured: '2026-08-12'
+- id: the-swap-degrades-silently-when-tags-do-not-render-as-chips
+  title: '[question] [needs-decision] `replacePredictedSwap` can only swap a row whose
+    tags render as chips. For any other resolved rendition it silently appends — the
+    resolution gap, reproduced.'
+  driving_capability: a-rule-effect-has-one-landing
+  record: '2026-08-12 — MEASURED, not fixed, and reported as CONFIG rather than as a code defect
+    because which rendition a row resolves to is the operator''s own declaration.
+    THE NUMBERS, same stamped line, only the tags rendition varied:
+      tags: "wired"   ->  SWAP   (chip embedded in the row''s rendered markup)
+      tags: "raw"     ->  APPEND (chip as a separate element, stale `#task` kept)
+      tags: "plain"   ->  APPEND (same)
+    THE MECHANISM is condition 3 of the three the `rule-effect-shown` sink names.
+    `replacePredictedSwap` rebuilds the line and searches the rendered HTML for the delta''s own
+    `.tagchip` markup; a rendition that emits no chip gives `chipIndex === -1` and it refuses.
+    HIS SERVED DECLARATION PUBLISHES `tags: "wired"` GLOBALLY with no per-view or per-section
+    override in `presentation.json`, so this alone does not explain his live case — stated plainly
+    rather than left as an implication. It IS reachable, it produces the identical symptom, and the
+    rendition is resolved per ROW through the cascade, which is a level this measurement did not
+    reach.
+    WHY IT IS THE RESOLUTION GAP HE NAMED: the transformation is handed 2 of the 15 published
+    resolution tables and never learns which rendition the row it is rewriting will be drawn with.
+    It searches for chip markup and, when there is none, degrades to an append and reports nothing.'
+  captured: '2026-08-12'
