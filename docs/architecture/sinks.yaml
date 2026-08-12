@@ -34,29 +34,77 @@ sinks:
       sink is declared so the measurement exists the moment the tool does.
 
   - id: selection-moved
-    sink: app/present/focus:FocusSurface.focus
+    sink: app/present/caret:placeCaret
     description: >
-      WHERE THE CURSOR IS — the terminal effect of every gesture that positions it. Added
-      2026-08-10.
+      A CARET EXISTING AT A POSITION ON SCREEN. Declared 2026-08-10 against
+      `app/present/focus:FocusSurface.focus`; MOVED DOWN HERE 2026-08-12, and the move is the
+      whole point of this entry.
 
-      IT IS A REAL TERMINAL EFFECT, not a staging post, and that is the test this file's own
-      header sets. When the cursor lands on the wrong line, or loses its place across a
-      projection, THIS is the one place that would tell you: `FocusSurface` holds the line index,
-      the column, and the identity anchor, and every route that moves the selection ends here.
+      WHY IT MOVED, MEASURED RATHER THAN REASONED. `FocusSurface.focus` is a STATE SETTER, not a
+      terminal effect: `app/present/focus.ts` contains ZERO DOM operations, and `focus()` assigns
+      three private fields — `#lineIndex`, `#anchor`, `#column` — and returns. The app DECIDING a
+      cursor should be somewhere and a caret BLINKING there are two events, and only the second is
+      an effect on the world. Declaring the first as the sink put it at the wrong altitude, and the
+      cost was concrete: `cursor-position` could not govern it, because a class cannot stand
+      between callers and a method it owns, so every legitimate route read as a bypass. The full
+      record of that measurement is in `classes.yaml` under `cursor-position`.
 
-      THE ROUTES, ALL SIX, COUNTED RATHER THAN ASSUMED (grep for `focus.focus(` outside focus.ts):
-        app/shell/keys.ts:185      a movement gesture — j/k/gg/G, through motions.ts
-        app/shell/keys.ts:191      a boundary motion — {/}, through boundary.ts
-        app/present/paint.ts:1378  a CLICK. Its own comment: "A CLICK POSITIONS. IT DOES NOT ARM."
-        app/present/paint.ts:790   a post-edit settle — the cursor lands on the resulting line
-        app/index.html:2231        view-entry seeding, in `paintView`
-        app/index.html:2316        repaint re-seeding, in `repaintCurrentView`
+      WHAT THE MOVE BOUGHT, ALL THREE NUMBERS MEASURED ON 2026-08-12:
+        `flow-trace sinks .`               2 governed / 1 ungoverned  ->  3 governed / 0 ungoverned
+        `canonical-routing --class presentation-painting`   routed: 0  ->  routed: 1
+        the routed chain, this repo's first:
+          app/present/paint:<anonymous> -> paint:repaint -> paint:paint -> paint:paintDraft
+            -> placeCaret                                                              (PASS)
 
-      THE LAST TWO ARE IN THE PAGE AND THEREFORE UNOBSERVABLE — node cannot import an HTML
-      document, so no capture records them. They are listed anyway: a sink whose caller census is
-      quietly two-thirds of the truth is worse than one that says which third is missing. They
-      become visible when the view-picker/repaint half of that script follows the keyboard out
-      (app/shell/keys.ts, 2026-08-10).
+      AND IT BOUGHT OBSERVABILITY, WHICH WAS NOT THE INTENTION AND IS THE LARGER GAIN. The caret
+      placement used to be a bare `setSelectionRange?.(...)` expression inside `paint.ts`. The only
+      scenario that reaches `paint` supplies a document stub with no `setSelectionRange`, so the
+      optional call short-circuited and the observer recorded NOTHING. As a named function the call
+      is recorded even when its DOM effect is a no-op under the stub. An effect written as an
+      expression is invisible to the tracer; the same effect written as a function is not.
+
+      THE ROUTES — THREE CALL SITES, TWO CONCERNS, and they do not collapse into one:
+        app/present/paint.ts  the row builder    THE READING CURSOR. Guarded by
+                                                 `focus.isFocused(lineIndex)`; position from
+                                                 `mode.takeCaretHint()` (`i`/`a`/Enter, decided in
+                                                 motions.ts) clamped into the line's length at the
+                                                 call site.
+        app/present/paint.ts  paintDraft x2      THE DRAFT'S OWN CURSOR, on a row that is in NO
+                                                 file. Two branches: back to the end of what he
+                                                 typed (`open.typed.length`) when the row survived
+                                                 a repaint, or to the seed's declared offset
+                                                 (`open.cursorOffset`) when it is fresh.
+
+      The reading cursor is a position in a line of the FILE and is answerable to `FocusSurface`.
+      The draft cursor is a position in a string that is in no file, is answerable to
+      `DraftSurface`, and has no line index to be anchored against. They share this one terminal
+      effect and nothing above it. The tracer distinguishes them itself — `paintDraft` is its own
+      frame on the observed chain above.
+
+      THE GOVERNING CLASS IS `presentation-painting`, NOT `cursor-position`, AND THAT WAS ALSO
+      MEASURED. `cursor-position` was wired to govern this sink and run: it reports BYPASS, because
+      `FocusSurface` is nowhere on the chain. `focus.focus()` returns before any painting happens —
+      the repaint is a SIBLING statement at the call site (paint.ts:1377-1378), not a call from
+      inside it — so the painter's relation to the focus surface is a DATA dependency (it READS
+      `isFocused`/`column`) and `canonical-routing` only sees CALL stacks. For the observed chain it
+      is wrong twice over: that chain is the DRAFT cursor, which must not route through
+      `FocusSurface` at all.
+
+      THE TWO PAGE ROUTES ARE STILL DARK, and the extraction did not reach them.
+      `app/index.html:2231` (view-entry seeding, `paintView`) and `:2316` (repaint re-seeding,
+      `repaintCurrentView`) call `focus.focus()` — the state setter — and the painting they cause
+      happens inside that file's own inline module script, which node cannot import. They are the
+      repaint path, which is where "the cursor loses its place after a redraw" would live, so this
+      is the gap that matters most. Listed rather than omitted: a sink whose caller census is
+      quietly two-thirds of the truth is worse than one that says which third is missing.
+
+      THE PAIR THAT MAKES THIS SINK REAL. `canonical-routing` is only the POSITIVE half — it checks
+      that everything REACHING the sink came through the painter, and is blind to code that never
+      goes near the sink and calls the browser API directly. The NEGATIVE half is
+      `state-caret-placement-has-one-home` (state.yaml): `setSelectionRange` may appear in
+      `app/present/caret.ts` and nowhere else under `app/`. It is static, so unlike the routing half
+      it covers the caret paths no scenario drives — but its glob is `{.ts,.tsx,.js,.mjs}` and it
+      never opens `app/index.html`, so it is blind in the same page the two dark routes live in.
 
   - id: document-mounted
     sink: app/main:mount

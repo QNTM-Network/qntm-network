@@ -424,6 +424,90 @@ def assert_edits_are_ephemeral(state: ScenarioState) -> PredicateResult:
     )
 
 
+CARET_HOME = "app/present/caret.ts"
+
+
+def assert_caret_placement_has_one_home(state: ScenarioState) -> PredicateResult:
+    """`setSelectionRange` appears in ONE file under app/ and nowhere else.
+
+    THE NEGATIVE HALF OF THE `selection-moved` SINK, and it exists because the positive half
+    cannot do this job. `flow-trace canonical-routing` asserts that everything which REACHES the
+    sink came through its canonical class; it is blind to code that never goes near the sink and
+    calls the browser API directly. A sink you can sidestep by typing
+    `el.setSelectionRange(...)` in a fresh file is not governed — it is merely observed. This
+    predicate is the absence that closes that hole, and it needs no scenario to do it: it reads
+    the sources statically, so it keeps working over the whole of app/ including the paths no
+    scenario drives (which, for the caret, is most of them — see caret.ts's own BLINDNESS note).
+
+    AN ALLOWLIST OF ONE, not a ban. The same shape as assert_edits_are_ephemeral one function up,
+    with the polarity of the exception inverted: that check bans an API everywhere under app/,
+    this one permits it in exactly one module and bans it everywhere else. `caret.ts` is the
+    declared terminal effect for `selection-moved`; the invariant IS that it is the only one.
+
+    COMMENTS ARE STRIPPED FIRST, and this is not a precaution copied from the neighbouring check —
+    it is load-bearing HERE AND NOW. `app/present/paint.ts:453` discusses `setSelectionRange` in
+    prose (the refuted readonly-input design), and `caret.ts`'s own header names the API four
+    times while explaining the invariant. A raw substring search convicts both files instantly,
+    which would punish exactly the documentation that makes this invariant legible. See
+    _strip_js_comments for the 2026-07-23 incident that established the rule.
+
+    WHAT THIS DOES NOT COVER, STATED SO A LATER READER DOES NOT ASSUME COVERAGE IT LACKS.
+    `_app_sources` globs `{.ts,.tsx,.js,.mjs}` and therefore never opens `app/index.html`. That
+    page carries roughly 2,500 lines of application inside a `<script type="module">`, and this
+    check is BLIND inside it: someone could place a caret there and this predicate would stay
+    green. It is survivable today only because there is no `setSelectionRange` in that file at all
+    (verified 2026-08-12) — it is not a guarantee, it is a fact about today that nothing enforces.
+    The same page is why two of `selection-moved`'s routes are unobservable to the tracer, so the
+    blindness is one gap seen from two directions rather than two gaps.
+    """
+    if guard := _guard(state):
+        return guard
+    sources = _app_sources(state)
+    if not sources:
+        return PredicateResult(status="FAIL", message="no app sources under app/ — nothing to govern yet", observed_ref="app/")
+
+    root = _root(state)
+    home = root / CARET_HOME
+    if not home.is_file():
+        return PredicateResult(
+            status="FAIL",
+            message=f"the declared caret home {CARET_HOME} does not exist — `selection-moved` has no terminal effect to govern",
+            observed_ref=CARET_HOME,
+        )
+    if "setselectionrange" not in _strip_js_comments(_read(home)).lower():
+        return PredicateResult(
+            status="FAIL",
+            message=f"{CARET_HOME} no longer places a caret — the allowlist points at a module that does not do the thing",
+            observed_ref=CARET_HOME,
+        )
+
+    offenders = []
+    for path in sources:
+        if path == home:
+            continue
+        # Comments stripped first — paint.ts DISCUSSES setSelectionRange in prose and must not be
+        # convicted by its own commentary. See _strip_js_comments.
+        if "setselectionrange" in _strip_js_comments(_read(path)).lower():
+            offenders.append(str(path.relative_to(root)))
+    if offenders:
+        return PredicateResult(
+            status="FAIL",
+            message=(
+                f"the caret is placed outside its one home — `setSelectionRange` in {offenders}; "
+                f"only {CARET_HOME} may place a caret, so `selection-moved` can be sidestepped"
+            ),
+            observed_ref="app/",
+        )
+    return PredicateResult(
+        status="PASS",
+        message=(
+            f"`setSelectionRange` appears in {CARET_HOME} and in none of the other "
+            f"{len(sources) - 1} app source(s) — the caret has one home and the sink cannot be sidestepped"
+        ),
+        observed_ref=CARET_HOME,
+    )
+
+
 def assert_app_is_reachable_from_the_front_door(state: ScenarioState) -> PredicateResult:
     """The app has ONE address, a visitor can reach it in one click, and the old URL still answers.
 

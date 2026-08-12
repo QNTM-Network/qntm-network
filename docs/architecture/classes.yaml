@@ -189,8 +189,31 @@ classes:
     canonical_class: app/present/paint:paint
     packages:
       - presentation
+    # 2026-08-12 — THIS CLASS GAINED A SECOND SINK, AND `view-painted` NARROWED. Stated rather than
+    # left to be inferred, because depth-to-sink numbers on this project are defined ENTIRELY by
+    # what sinks.yaml declares, so moving an effect out of `paint` changes what depth MEANS here.
+    #
+    # WHAT CHANGED. The caret placement left `paint.ts` for `app/present/caret.ts` (see sinks.yaml's
+    # `selection-moved`). So `view-painted` — still `app/present/paint:paint` — no longer covers
+    # "and the caret ended up somewhere". It now means what its name says and nothing more: the rows
+    # are on screen. The caret is a SEPARATE terminal effect reached THROUGH this one, which is why
+    # both sinks sit under this class rather than the caret becoming somebody else's.
+    #
+    # WHY THAT IS A NARROWING AND NOT A LOSS. A chain that used to terminate at `paint` and stop can
+    # now run one rung deeper to `placeCaret`, so the caret paths gained a measurable depth where
+    # they previously had none — the observed chain in sinks.yaml is four frames before the sink.
+    # Nothing that was measured before is measured differently; something that was invisible became
+    # visible.
+    #
+    # THE PRE-EXISTING FALSE RED ON `view-painted` IS UNTOUCHED AND STILL FALSE: `canonical_class:
+    # app/present/paint:paint` governing sink `app/present/paint:paint` is the self-governance shape,
+    # so `commitLine -> paint` reports BYPASS against correct code. That is the same defect the
+    # `cursor-position` note below records, already flagged as
+    # `flag-canonical-routing-cannot-express-a-class`, and it is NOT what the caret work fixed — the
+    # caret was fixable because its effect could be moved to a real home, and `paint`'s cannot.
     governs_sinks:
       - view-painted
+      - selection-moved
     status: working
 
   - id: source-write-back
@@ -600,6 +623,45 @@ classes:
     # from an unsure pin: an unsure pin is visible until revised, and this one could never go green
     # because there is nothing to fix. When the tool can express a self-owned home, add the two
     # words back.
+    #
+    # ── 2026-08-12, THE SINK MOVED AND THIS CLASS STILL DOES NOT GOVERN IT. A DIFFERENT REASON. ──
+    #
+    # The note above diagnosed the altitude correctly: `selection-moved` pointed at a STATE SETTER
+    # (focus.ts has zero DOM operations), so this class was being asked to gatekeep its own method.
+    # The sink has now been moved down to where work actually lands — `app/present/caret:placeCaret`,
+    # the one function that puts a caret on screen — and `presentation-painting` governs it, which
+    # PASSES (see sinks.yaml for the numbers, and the first routed chain this repo has produced).
+    #
+    # THE OBVIOUS NEXT STEP WAS TRIED FIRST AND IT FAILED. `governs_sinks: [selection-moved]` was
+    # added HERE against the relocated sink, `canonical-routing . --class cursor-position` was run,
+    # and it reports BYPASS on correct code a second time — a NEW reason, not the old one:
+    #
+    #   BYPASS — reached app/present/caret:placeCaret without routing through canonical class
+    #     app/present/focus:FocusSurface (count=1): app/present/paint:<anonymous> ->
+    #     app/present/paint:repaint -> app/present/paint:paint -> app/present/paint:paintDraft ->
+    #     placeCaret
+    #
+    # `FocusSurface` is NOWHERE ON THAT CHAIN, and the cause is structural rather than incidental.
+    # `focus.focus()` ASSIGNS THREE FIELDS AND RETURNS. The repaint that draws the caret is a
+    # SIBLING statement at the call site, not a call from inside it — read paint.ts:1377-1378, where
+    # `focus.focus(...)` and `repaint(source)` sit one under the other. So the painter's relation to
+    # this surface is a DATA dependency (it READS `isFocused` and `column` while walking rows), and
+    # `canonical_routing` only ever sees CALL stacks. The first red was self-governance; this one is
+    # not-on-the-chain. Both are red against code that is doing the right thing.
+    #
+    # AND FOR THAT PARTICULAR CHAIN THE LINK IS ALSO SEMANTICALLY WRONG, which is worth separating
+    # from the mechanical objection: the observed chain is the DRAFT cursor (`paintDraft`), a row
+    # that is in NO file. It has no line index in the source and must NOT route through this
+    # surface. Wiring it here would demand a route that should not exist.
+    #
+    # WHAT WOULD MAKE THE INTENDED CLAIM TRUE — "nothing puts a caret on screen without going
+    # through the one place that knows where the cursor is" — IS A BEHAVIOURAL CHANGE, NOT A
+    # DECLARATION. The painter would have to ASK this surface for the position rather than reading
+    # `mode.takeCaretHint()` and clamping it itself: a real call, and then a real frame. That is
+    # arguably right on its own merits, and THIS CLASS'S OWN CONCERN TEXT ABOVE ALREADY ASKS FOR IT
+    # — "positioning the caret without telling this surface" is named as the failure it exists to
+    # catch, and the reading-cursor call site is doing exactly that. It changes shipped bytes, so it
+    # is HELD for the operator rather than taken inside an extraction.
     status: declared
 
   # DECLARED 2026-08-10. A gesture's MEANING had no home. Two modules independently decide that
