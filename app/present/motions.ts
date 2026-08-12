@@ -216,6 +216,25 @@ export function clampColumn(column: number, text: string | null): number {
   return Math.min(at, Math.max(0, text.length - 1));
 }
 
+/**
+ * WHAT AN INSERT GESTURE MEANT, WITH NO ARITHMETIC IN IT.
+ *
+ * `i`/Enter mean "at the cursor's own column"; `a` means "one past the character under it". This
+ * module used to answer those itself — `enterInsert(column)` and `enterInsert(column + 1)` — and it
+ * had no business doing so: it IMPORTS NOTHING, so it cannot see the line those columns index, and
+ * the clamp that made `column + 1` safe was stranded two modules away in `paint.ts`. Arithmetic
+ * split from the string it measures is how `a` came to place a caret the cursor surface never
+ * learned about (measured 2026-08-12; the backlog row is
+ * `focus-column-does-not-follow-the-caret`). Both halves now live in `column.ts`, together.
+ *
+ * SPELLED AS A LOCAL UNION RATHER THAN IMPORTED FROM `column.ts`, DELIBERATELY. This module
+ * imports nothing at all — that is what proves `ModeSurface` cannot reach the cascade even by
+ * accident, and `tests/flow_scenarios/vim_gestures.ts` ENFORCES it by reading this file's source
+ * for `import` lines. Coupling to `CursorInstruction` by string value is the price of keeping that
+ * invariant, and it is cheaper than breaking it. `column.ts` names the same two strings.
+ */
+export type CaretIntent = "insert" | "append";
+
 /** What a NORMAL-mode keystroke does, once it is fully decided. */
 export type NormalEffect =
   | { readonly kind: "none" }
@@ -232,7 +251,7 @@ export type NormalEffect =
    * now decided, so neither guess is left. `a` still lands at the end of the line when the cursor is
    * on its last character — that is `column + 1` arriving there, not a special case.
    */
-  | { readonly kind: "enter-insert"; readonly caret: number }
+  | { readonly kind: "enter-insert"; readonly caret: CaretIntent }
   /**
    * `0`/`$` asked for the START or the END of the selected line. UNLIKE `w`/`b`/`e` these need no
    * grammar at all — column zero and "the last character" are facts about the STRING, not about its
@@ -298,7 +317,7 @@ export class ModeSurface {
   #mode: Mode = "NORMAL";
   #count = "";
   #pendingG = false;
-  #caretHint: number | undefined = undefined;
+  #caretHint: CaretIntent | undefined = undefined;
 
   get mode(): Mode {
     return this.#mode;
@@ -320,7 +339,7 @@ export class ModeSurface {
    * the second coordinate system this change is under instruction not to introduce.
    * See `takeCaretHint` for how the painter reads it back.
    */
-  enterInsert(caret?: number): void {
+  enterInsert(caret?: CaretIntent): void {
     this.#mode = "INSERT";
     this.#caretHint = caret;
     this.#count = "";
@@ -336,7 +355,7 @@ export class ModeSurface {
    * operator has since moved the caret by hand) cannot reapply it. The painter calls this exactly
    * once, at the moment it builds the `<input>` the hint was for.
    */
-  takeCaretHint(): number | undefined {
+  takeCaretHint(): CaretIntent | undefined {
     const hint = this.#caretHint;
     this.#caretHint = undefined;
     return hint;
@@ -379,7 +398,16 @@ export class ModeSurface {
    * abandoned and the key that broke the pair is processed as an ordinary keystroke — so `g` then
    * `j` moves down by one rather than doing nothing at all.
    */
-  handleKey(key: string, current: number, lastIndex: number, column = 0): NormalKeyOutcome {
+  /**
+   * `column` IS GONE FROM THIS SIGNATURE (2026-08-12) AND ITS ABSENCE IS THE POINT. It existed so
+   * `i`/`a` could compute `column` and `column + 1`. This module imports nothing and therefore
+   * cannot see the line those numbers index, so computing them here was always arithmetic performed
+   * out of sight of its own operand — and the clamp that made `column + 1` safe lived in paint.ts,
+   * two modules away. `column.ts` holds both halves now, and once it did, this parameter was read
+   * by nothing. A parameter a module cannot use is the same "looks like data, means nothing" shape
+   * as the literal `0` this whole change removed from `focus()`; it is deleted for the same reason.
+   */
+  handleKey(key: string, current: number, lastIndex: number): NormalKeyOutcome {
     if (this.#mode !== "NORMAL") {
       return { handled: false, effect: { kind: "none" } };
     }
@@ -454,8 +482,8 @@ export class ModeSurface {
         // AT THE CURSOR'S OWN COLUMN, which is what `i` has always meant in vim and what this app
         // could not offer until NORMAL had a column to be at. Before this, `i` opened the `<input>`
         // and took whatever caret position the browser chose after `value =` then `focus()`.
-        this.enterInsert(column);
-        return { handled: true, effect: { kind: "enter-insert", caret: column } };
+        this.enterInsert("insert");
+        return { handled: true, effect: { kind: "enter-insert", caret: "insert" } };
       case "a":
         // ONE PAST THE CURSOR — vim's own `a`, "append AFTER the character under the cursor". On the
         // line's LAST character that is the end of the line, which is what `a` did before this
@@ -467,8 +495,8 @@ export class ModeSurface {
         // once regardless of a count, because the count's only vim meaning (repeat the typed text
         // on Escape) is not implemented, so there is no counted behaviour a bare `a` could be
         // mistaken for skipping.
-        this.enterInsert(column + 1);
-        return { handled: true, effect: { kind: "enter-insert", caret: column + 1 } };
+        this.enterInsert("append");
+        return { handled: true, effect: { kind: "enter-insert", caret: "append" } };
       case "$":
         // THE OTHER HALF OF `0`, AND THE SAME NON-COST. "The last character of the line" needs the
         // line's LENGTH and nothing else, so like `0` it asks no module a second question — the

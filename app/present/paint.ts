@@ -788,7 +788,12 @@ function draftInput(
       // string (`markdown ?? fileSource`, the argument this closure was handed) and not the string
       // the draft opened against. Anchoring against the pre-insert source would describe a line at
       // an index that has just moved.
-      deps.focus.focus(Math.min(lineIndex, last), source, 0, deps.view);
+      // KEEP THE COLUMN ACROSS THE SETTLE. The operator was typing at a column and the line he
+      // was typing into still exists; resetting him to the start of it was a literal `0` that
+      // meant "nothing to say", not a decision. `keep` re-measures that column against the line
+      // the settle produced, which is the resolver answering the same question it answers for
+      // every other path — no re-placing, no compensation for the edit.
+      deps.focus.place(Math.min(lineIndex, last), { kind: "keep" }, source, deps.view);
     }
   };
 
@@ -1376,7 +1381,13 @@ export function paint(
       // what that used to cost. `source` is the string this paint was handed, which is the string
       // the line the person just clicked came out of; `deps.view` is the same id `data-instance`
       // above is computed from, so the anchor and the row's own key agree.
-      focus.focus(lineIndex, source, 0, deps.view);
+      // LINE-START, SAID OUT LOUD. This is what the literal `0` here always did, now stated as a
+      // meaning rather than typed as a number. IT IS ALSO STILL WRONG, and declaring it is how it
+      // stops being invisible: a click destroys an established column and never learns the column
+      // the person actually clicked at, because the browser places that caret after this runs and
+      // nothing reads it back. Fixing that needs the real click offset, which is a separate
+      // question from this rewiring — see the backlog row `focus-column-does-not-follow-the-caret`.
+      focus.place(lineIndex, { kind: "line-start" }, source, deps.view);
       // A CLICK POSITIONS. IT DOES NOT ARM. Before vim, clicking was the only way to reach a line
       // at all, so it had to do both jobs. Now `i`/`a`/`o`/`O` exist — see motions.ts's
       // `handleKey` — so a click can go back to meaning only "the cursor is here", which is what
@@ -1462,24 +1473,31 @@ export function paint(
       if (superseded()) {
         return;
       }
-      // THE CARET SEED, AND THE ONLY PLACE IT IS EMBODIED. `mode.takeCaretHint()` is data
-      // motions.ts already decided — `enterInsert(column)` for `i`/Enter and `enterInsert(column+1)`
-      // for `a`, both measured in the NORMAL cursor's own column. Turning it into a real selection
-      // range is a DOM fact the painter builds, not a decision — the same family as
-      // `focus === undefined ? rawText(...) : rawInput(...)`. A mouse click leaves the hint unset,
-      // so the caret lands where the person clicked and the painter does not overrule it.
-      const caret = mode?.takeCaretHint();
-      if (caret !== undefined) {
-        // CLAMPED INTO THE LINE'S LENGTH, AND HERE IT IS LOAD-BEARING RATHER THAN DEFENSIVE. `a`
-        // asks for `column + 1` and motions.ts cannot know how long the line is — it imports
-        // nothing — so this is the one place that arithmetic meets the string it indexes. On the
-        // last character `column + 1` IS `lineSource.length`, which is one past the last character
-        // and exactly where a caret belongs when appending.
-        const at = Math.max(0, Math.min(caret, lineSource.length));
-        // THE CLAMP STAYS HERE AND THE PLACEMENT LEAVES. `caret.ts` performs the DOM call and
-        // decides nothing; the arithmetic above is a decision about THIS line and belongs beside
-        // the string it indexes. See caret.ts's header for why the two are split.
-        placeCaret(input, at);
+      // THE PAINTER NO LONGER KNOWS WHERE THE CARET GOES, AND THAT IS THE CHANGE. It used to read a
+      // NUMBER off the mode surface and clamp it here — the one place the arithmetic met the string
+      // it indexed, because the module that did the arithmetic could not see the string. Both halves
+      // moved to `column.ts`, and the position is now already in `focus.column`, written by the
+      // resolver when the gesture was handled (app/shell/keys.ts's enter-insert branch).
+      //
+      // SO WHAT IS TAKEN HERE IS NOT A POSITION, IT IS PERMISSION. `takeCaretHint` answers "did a
+      // gesture ask for a caret", consumed once, and nothing else. A mouse click still leaves it
+      // unset, so the caret lands where the person clicked and the painter does not overrule it —
+      // the one behaviour in this block that had to survive the rewiring, and the reason a bare
+      // "always place at focus.column" would have been wrong.
+      const asked = mode?.takeCaretHint();
+      if (asked !== undefined) {
+        // THE RESOLVER IS ASKED HERE BECAUSE THIS IS WHERE BOTH FACTS MEET, and that is the whole
+        // reason this call is not in the key handler. `app/shell/keys.ts` knows the gesture but the
+        // line it opens is decided here; a write placed there is one every OTHER route into INSERT
+        // silently skips — Enter mid-edit, `o`/`O` through `openLineAt`, and any harness driving the
+        // painter without the shell. That is not a sole writer, it is one caller remembering.
+        // Putting it where the intent is CONSUMED means every path that opens a line gets it.
+        //
+        // THE PAINTER STILL DECIDES NOTHING. It computes no position: it hands `columnFor` the
+        // intent and the line, and reads back what `FocusSurface` then holds. The line is the one
+        // fact only this frame has.
+        focus.moveTo({ kind: asked }, lineSource);
+        placeCaret(input, focus.column);
       }
     }
   };

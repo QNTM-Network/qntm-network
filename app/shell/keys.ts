@@ -162,11 +162,13 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   const visualPos = visualOrder.indexOf(current);
   const visualCurrent = visualPos === -1 ? 0 : visualPos;
   const visualLastIndex = Math.max(0, visualOrder.length - 1);
-  // `focus.column` IS THE FOURTH ARGUMENT FOR THE SAME REASON `visualCurrent` IS THE SECOND: the
-  // cursor has two axes now and `mode.handleKey` decides `i`/`a` relative to both. It reads the
-  // column and never writes it — every column that lands back on the surface goes through
-  // `focus.moveColumn`/`focus.focus` below.
-  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex, deps.focus.column);
+  // THE COLUMN IS NO LONGER PASSED, AND THE CLAIM THAT USED TO STAND HERE WAS FALSE. It read:
+  // "every column that lands back on the surface goes through `focus.moveColumn`/`focus.focus`
+  // below". True of the two writers it named, and untrue of the insert path, which wrote nothing
+  // at all — `a` placed a caret the surface never learned about (measured 2026-08-12). `handleKey`
+  // now reports what the gesture MEANT and `column.ts` resolves it against the line, so there is
+  // no column for this call to hand over.
+  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
   if (!outcome.handled) return;
   e.preventDefault();
   // THE PAINTER STILL DOES NOT DECIDE. `mode.handleKey` is the one place a keystroke becomes a
@@ -182,16 +184,26 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     // for the one case that order cannot name a target (an empty view, or the selected row
     // missing its own `data-line-index`): stay on the line the cursor already holds rather than
     // jump to a raw number that would name the wrong content.
-    deps.focus.focus(visualOrder[effect.lineIndex] ?? current, source, 0, v.id);
+    // LINE-START, AND THIS IS A DECISION THIS APP HAS ALREADY MADE RATHER THAN A LEFTOVER. Vim
+    // preserves the column across `j`/`k`; this app resets it, deliberately — see
+    // tests/app-vim-wiring.test.mjs, "a line move resets the column, so j after w starts the next
+    // line at its head", whose assertion message calls a surviving column the failure. The literal
+    // `0` that used to stand here was RIGHT; what was wrong is that it was indistinguishable from
+    // the four other sites where `0` meant "I have nothing to say". Saying `line-start` is the
+    // whole change: the meaning is now declared and reviewable, and revisiting it is a decision
+    // someone can find rather than a number they have to interpret.
+    deps.focus.place(visualOrder[effect.lineIndex] ?? current, { kind: "line-start" }, source, v.id);
     deps.repaintCurrentView();
   } else if (effect.kind === "boundary") {
     // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)
     // is the one place "which line is that" is answered, from the SAME source string, never a
     // second opinion parsed here.
-    deps.focus.focus(
+    deps.focus.place(
       boundaryLine(source.split("\n"), current, effect.direction, effect.count),
+      // LINE-START, for the same reason `j`/`k` uses it: this app resets the column on a line
+      // move, and `{`/`}` is a line move. Declared rather than typed as a bare `0`.
+      { kind: "line-start" },
       source,
-      0,
       v.id,
     );
     deps.repaintCurrentView();
@@ -273,10 +285,13 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     // that by using it: "right now word jump also does insert. so i can't jump through it just
     // does first jump then wwww typed". A motion that changes the mode is a motion that cannot
     // repeat. `focus.lineIndex` is already `current`, so only the column moves.
+    // THROUGH THE RESOLVER, WHICH CHANGES NO ANSWER HERE. `w`/`b`/`e` was one of the two gestures
+    // already writing a correct column, and it was correct precisely because `wordCaret` answered
+    // it before anything was written. `columnFor` now makes that call, so this file no longer holds
+    // a second way to put a number into the focus surface. `moveTo` returns `wordCaret`'s own
+    // "this line has no title at all", which is still the repaint test it always was.
     const line = source.split("\n")[current] ?? "";
-    const at = wordCaret(line, effect.motion, effect.count, deps.focus.column);
-    if (at !== null) {
-      deps.focus.moveColumn(at, line);
+    if (deps.focus.moveTo({ kind: "word", motion: effect.motion, count: effect.count }, line)) {
       deps.repaintCurrentView();
     }
   } else if (effect.kind === "column") {
@@ -284,8 +299,11 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     // clamps `line.length` down to the last character that exists, so `$` is stated as "past the
     // end" and lands on the end. See motions.ts for why these are the SOURCE line's ends and not
     // the title's.
+    // The other gesture that was already right. `line.length` was this file computing a position,
+    // which is the resolver's job even when the arithmetic is one property access — `line-end` says
+    // what `$` MEANS and column.ts turns it into the last character that exists.
     const line = source.split("\n")[current] ?? "";
-    deps.focus.moveColumn(effect.to === "start" ? 0 : line.length, line);
+    deps.focus.moveTo({ kind: effect.to === "start" ? "line-start" : "line-end" }, line);
     deps.repaintCurrentView();
   } else {
     // "none" (a bare digit accumulating a count, or a refused `o`/`O`/`x` under a pending count)

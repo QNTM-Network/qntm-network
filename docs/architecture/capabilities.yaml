@@ -1220,9 +1220,25 @@ capabilities:
 - id: the-cursor-surface-knows-where-the-caret-is
   intent: >-
     `FocusSurface.column` REPORTS WHERE THE CARET ACTUALLY IS, for every gesture that moves it.
-    NOT HELD TODAY, AND THE ENFORCER IS RED ON PURPOSE. This row is a PIN: the divergence below is
-    measured, the fix is a design decision the operator has not made, and nothing is to be
-    "fixed" into green until he makes it.
+    HELD 2026-08-12. The row was pinned RED on 2026-08-11 and the enforcer
+    (tests/flow_scenarios/insert_column_writeback.ts) went green when the wiring landed, not before.
+    WHAT WAS BUILT — ONE RESOLVER, AND `focus()` NO LONGER TAKES A COLUMN AT ALL.
+    `app/present/column.ts` (`columnFor`) is the only code in the application that computes a
+    column. `FocusSurface` is never handed a number by a caller that already decided: it takes an
+    INSTRUCTION ("line-start" / "line-end" / "keep" / "insert" / "append" / "word") and asks the
+    resolver. That is what made "I have nothing to say about the column" unspellable — deleting the
+    `= 0` default was measured first and surfaced nothing, because all five wrong sites already
+    typed the literal.
+    `motions.ts` STOPPED DOING ARITHMETIC. It emits "append", not `column + 1`. Its `column`
+    parameter is gone entirely: once the arithmetic moved, nothing in `handleKey` read it, and a
+    parameter a module cannot use is the same "looks like data, means nothing" shape as the literal
+    `0`. The clamp moved with it, so the arithmetic now meets the string it indexes — in one place
+    rather than split across motions.ts and paint.ts.
+    THE RESOLVER IS ASKED BY THE PAINTER, WHICH THE ENFORCER DECIDED RATHER THAN THE AUTHOR. The
+    first wiring put the write in `app/shell/keys.ts`; the node suite caught that every other route
+    into INSERT (Enter mid-edit, `o`/`O` through `openLineAt`, any harness driving the painter
+    without the shell) skipped it. That is not a sole writer, it is one caller remembering. The
+    painter is the only place that knows BOTH the intent and the line being opened.
     THE MEASUREMENT, taken 2026-08-12 through app/index.html's own wiring
     (tests/fixtures/app-html-page.mjs), reading `__focusColumn()` against the painted input's real
     `selectionStart`:

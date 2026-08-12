@@ -260,7 +260,10 @@ describe("2. IT SURVIVES THE STAMP — the apex capability's blocker, over real 
     ].join("\n");
 
     const focus = new FocusSurface();
-    focus.focus(2, before, 20, VIEW);
+    // `focus()` no longer takes a column — it means "line-start". A starting column is
+    // established the way the app establishes one, by moving to it.
+    focus.focus(2, before, VIEW);
+    focus.moveColumn(20, before.split("\n")[2] ?? "");
     assert.equal(focus.column, 20, "he is mid-word when the cycle lands");
     const reading = focus.reanchor(after, VIEW);
     assert.equal(reading.outcome, "found");
@@ -351,7 +354,8 @@ describe("2b. AN EMPTY SECTION — the heading is the landmark, and the capture 
     ].join("\n");
 
     const focus = new FocusSurface();
-    focus.focus(2, before, 18, VIEW);
+    focus.focus(2, before, VIEW);
+    focus.moveColumn(18, before.split("\n")[2] ?? "");
     const reading = focus.reanchor(after, VIEW);
     assert.equal(reading.outcome, "found");
     assert.equal(focus.lineIndex, 2, "the cursor really moved, not merely reported");

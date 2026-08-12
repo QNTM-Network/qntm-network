@@ -1058,7 +1058,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=f926e738bd";
+} from "/dist/present.js?v=bc1d0bcee0";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2228,10 +2228,13 @@ function paintView(id, why) {
       // with whichever line the clamp landed on. `focus.reanchor` deliberately left the vanished
       // line's anchor intact — that is where the parked row's identity has to be read from — so
       // when that row lands it must take `focus.anchor` BEFORE this seeding runs, not after.
-      focus.focus(
+      focus.place(
         clampLine(focus.lineIndex ?? 0, Math.max(0, entering.markdown.split("\n").length - 1)),
+        // LINE-START — entering a view puts the cursor at the head of its line, which is what the
+        // literal `0` here always meant. Declared now rather than typed as a number: this file is
+        // outside tsconfig, so nothing would have caught it if the meaning had drifted.
+        { kind: "line-start" },
         entering.markdown,
-        0,
         id,
       );
     }
@@ -2313,10 +2316,13 @@ function repaintCurrentView() {
   // `focus` clamp it into whatever characters the line now has.
   const carried = rows.carry(focus.lineIndex);
   if (focus.lineIndex !== null) {
-    focus.focus(
+    focus.place(
       carried ?? clampLine(focus.lineIndex, Math.max(0, source.split("\n").length - 1)),
+      // KEEP — this call was already one of the only two in the application passing a REAL column
+      // rather than a literal `0`, and `keep` is what it was saying. A repaint must not move the
+      // operator's cursor along its line.
+      { kind: "keep" },
       source,
-      focus.column,
       v.id,
     );
   }

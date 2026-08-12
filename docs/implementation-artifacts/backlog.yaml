@@ -4424,3 +4424,41 @@ backlog:
     removing the column parameter from `focus()` altogether does, and is why the sole-writer
     resolver is the actual first move rather than a later one.'
   captured: '2026-08-12'
+- id: one-resolver-owns-the-cursor-column
+  title: '[architecture] One resolver computes every cursor column. `focus()` stops
+    taking a number, `motions.ts` stops doing arithmetic, and the caret the painter
+    places is the column the surface holds.'
+  driving_capability: the-cursor-surface-knows-where-the-caret-is
+  record: '2026-08-12 — CLOSES the RED pinned on 2026-08-11. Enforcer green, mutation-proven
+    twice: remove the resolver call and it reds; place the caret anywhere other than
+    `focus.column` and it reds. Node suite 2578 tests, 14 failures — the same pre-existing 14,
+    zero new.
+    SURVEY FIRST, AND IT DECIDED THE DESIGN. `word.ts`/`boundary.ts`/`indent.ts` already ARE
+    resolvers, and word.ts''s own header documents the split as deliberate: motions.ts asks
+    "which column", a sibling module answers. The two gestures that were already CORRECT
+    (`w`/`b`/`e`, `0`/`$`) are exactly the two that had an answering module. The five broken
+    ones computed out of sight of the line or typed a literal `0`. So the resolver is not a
+    fourth thing invented for a diagram — it is that pattern extended to the paths that never
+    got one, and it ABSORBS word.ts rather than sitting beside it.
+    TWO CLAMPS, NOT A SPECIAL CASE. A NORMAL cursor sits ON a character (last column
+    `length - 1`); an INSERT caret sits BETWEEN characters (last position `length`). Two spaces,
+    and the instruction says which. Both halves used to exist too — `clampColumn` in motions.ts
+    and `Math.min(caret, lineSource.length)` in paint.ts, in modules that could not see each other.
+    THE ENFORCER MOVED THE WRITE, NOT THE AUTHOR. First wiring put it in keys.ts; the node suite
+    proved every other route into INSERT skipped it. The painter is the only place holding both
+    the intent and the line, so the write belongs where the intent is CONSUMED.
+    A CORRECTION TO THIS ROW''S OWN EARLIER TEXT, AND TO THE BRIEF. `j`/`k` resetting the column
+    was called a defect ("vim preserves it"). It is not — it is a DELIBERATE, TESTED decision:
+    tests/app-vim-wiring.test.mjs, "a line move resets the column, so j after w starts the next
+    line at its head", whose assertion message calls a surviving column the failure. The literal
+    `0` there was RIGHT; what was wrong is that it was indistinguishable from the four sites where
+    `0` meant nothing. It now says `line-start`. Wiring it as `keep` was tried, broke that test,
+    and was reverted rather than argued with.
+    STILL OPEN, DECLARED NOT FIXED: a CLICK says `line-start`, which is what it always did, so it
+    still destroys an established column and never learns the column the person actually clicked
+    at. Fixing it needs the real click offset, which the browser writes after the handler runs.
+    That is a separate question from this rewiring and no compensation mechanism was built for it.
+    `moveColumn(number, text)` also survives on FocusSurface with NO app caller — tests use it to
+    establish a starting column. It is the one remaining number-taking entry and should go when
+    there is an instruction that covers what those tests need.'
+  captured: '2026-08-12'

@@ -55,6 +55,7 @@ import type { NormalKeyOutcome } from "../../app/present/motions.js";
 import { boundaryLine } from "../../app/present/boundary.js";
 import { indentedLine, INDENT_UNIT } from "../../app/present/indent.js";
 import { wordCaret } from "../../app/present/word.js";
+import { columnFor } from "../../app/present/column.js";
 import { PresentationContext } from "../../app/present/context.js";
 import { PresentationCascade } from "../../app/present/express/cascade.js";
 
@@ -195,19 +196,42 @@ function poisonDomFetchAndClock(): () => void {
 /** Drives all four modules through a realistic key sequence and checks the real answers. */
 function driveTheGestureLayer(): void {
   const mode = new ModeSurface();
+  const checkboxLineForCaret = LINES[1] ?? "";
 
   // j/k/gg/G — plain line motion, the count-prefix arithmetic every other gesture below reuses.
   requireMove(mode.handleKey("j", 0, LAST_INDEX), 1);
   requireMove(mode.handleKey("k", 1, LAST_INDEX), 0);
   requireMove(mode.handleKey("G", 0, LAST_INDEX), LAST_INDEX);
 
-  // i — enters INSERT at a specific column, and ModeSurface really flips mode.
-  const insert = mode.handleKey("i", 1, LAST_INDEX, 3);
-  if (insert.effect.kind !== "enter-insert" || insert.effect.caret !== 3) {
-    throw new Error(`"i" at column 3 did not enter INSERT there: ${JSON.stringify(insert)}`);
+  // i/a — report an INTENT and flip the mode. THE ASSERTION MOVED ON 2026-08-12 AND DID NOT SHRINK.
+  // It used to read `insert.effect.caret !== 3`, i.e. that `handleKey` had computed the COLUMN. It
+  // no longer computes one: `motions.ts` imports nothing, so it cannot see the line a column
+  // indexes, and `column.ts` now measures the intent against the line (the `a` arithmetic used to
+  // live here and its clamp lived in paint.ts, two modules apart — that split is what let `a` place
+  // a caret the cursor surface never learned about). So the same claim is checked in two halves:
+  // this module reports the intent, and the resolver turns it into the column that used to be
+  // asserted here. Both halves are checked, so nothing that was proven before is unproven now.
+  const insert = mode.handleKey("i", 1, LAST_INDEX);
+  if (insert.effect.kind !== "enter-insert" || insert.effect.caret !== "insert") {
+    throw new Error(`"i" did not report the "insert" intent: ${JSON.stringify(insert)}`);
   }
   if (mode.mode !== "INSERT") {
     throw new Error('"i" did not flip ModeSurface into INSERT');
+  }
+  const insertColumn = columnFor({ kind: "insert" }, checkboxLineForCaret, 3);
+  if (insertColumn !== 3) {
+    throw new Error(`"i" at column 3 does not resolve to column 3 — got ${insertColumn}`);
+  }
+  const appendColumn = columnFor({ kind: "append" }, checkboxLineForCaret, 3);
+  if (appendColumn !== 4) {
+    throw new Error(`"a" at column 3 does not resolve to one past it — got ${appendColumn}`);
+  }
+  // AND THE BOUNDARY THE OLD ARITHMETIC COULD NOT REACH, because it could not see the line: `a` on
+  // the LAST character lands one past it, which is the end of the line and where a caret belongs
+  // when appending — never past characters that exist.
+  const atEnd = columnFor({ kind: "append" }, checkboxLineForCaret, checkboxLineForCaret.length - 1);
+  if (atEnd !== checkboxLineForCaret.length) {
+    throw new Error(`"a" on the last character did not land at the line's end — got ${atEnd}`);
   }
   mode.enterNormal();
 
@@ -247,7 +271,7 @@ function driveTheGestureLayer(): void {
   // w/b/e — motions.ts reports the motion letter+count; word.ts (real import of
   // resolution.titleSpans) decides the caret column, measured from the title, past the checkbox
   // chrome and the qntm-id stamp that a naive column count would land inside.
-  const word = mode.handleKey("w", 1, LAST_INDEX, 0);
+  const word = mode.handleKey("w", 1, LAST_INDEX);
   if (word.effect.kind !== "word" || word.effect.motion !== "w") {
     throw new Error(`"w" did not report a word motion: ${JSON.stringify(word)}`);
   }

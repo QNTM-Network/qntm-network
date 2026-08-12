@@ -95,6 +95,8 @@ import { PresentationContext } from "./context.js";
 import { instanceAnchorFor, resolveInstanceAnchor } from "./instance.js";
 import type { InstanceAnchor, InstanceReading } from "./instance.js";
 import { clampColumn } from "./motions.js";
+import { columnFor } from "./column.js";
+import type { CursorInstruction } from "./column.js";
 import { RESOLUTION_KEYS } from "./express/rendition.js";
 import type { Contribution, Rendition } from "./express/rendition.js";
 
@@ -189,10 +191,37 @@ export class FocusSurface {
    * is given the SAME view an anchor was taken with. Every real call site is (`app/index.html`,
    * `paint.ts`), because a view's own id is already in hand wherever a line is focused.
    */
-  focus(lineIndex: number, source?: string, column = 0, view = ""): void {
+  focus(lineIndex: number, source?: string, view = ""): void {
+    this.place(lineIndex, { kind: "line-start" }, source, view);
+  }
+
+  /**
+   * MOVE THE CURSOR TO A LINE, SAYING WHAT THE COLUMN SHOULD MEAN THERE.
+   *
+   * THE COLUMN PARAMETER IS GONE AND THIS IS WHAT REPLACED IT. `focus` used to take
+   * `column = 0`, and five of its seven callers passed a literal `0` — not because they meant
+   * column zero but because they had nothing to say about the column. Those two things were
+   * spelled identically, so the second was invisible: measured 2026-08-12, `j`/`k`, `{`/`}`, a
+   * click, the post-edit settle and view entry all silently reset an established column, and the
+   * insert path never wrote one at all. Deleting the parameter was tried first and surfaced
+   * nothing, because every caller already typed the `0` explicitly (see the backlog row
+   * `focus-column-does-not-follow-the-caret`). The only way to make "I have nothing to say"
+   * unspellable was to stop accepting a number here and accept an INSTRUCTION instead.
+   *
+   * SO THIS SURFACE NEVER RECEIVES A POSITION FROM A CALLER THAT ALREADY DECIDED. It receives what
+   * the gesture MEANT and asks `columnFor` (column.ts), which is the only code in the application
+   * that computes a column. `#column` is assigned in exactly two places, both of them one line
+   * long, and both of them assign what `columnFor` returned.
+   */
+  place(lineIndex: number, instruction: CursorInstruction, source?: string, view = ""): void {
     this.#lineIndex = lineIndex;
     this.#anchor = source === undefined ? null : instanceAnchorFor(source, lineIndex, view);
-    this.#column = clampColumn(column, lineTextOf(source, lineIndex));
+    const resolved = columnFor(instruction, lineTextOf(source, lineIndex), this.#column);
+    // `null` is the word motions' "this line has no title, so this gesture does nothing" — the
+    // cursor has still MOVED LINE, so the column keeps whatever it held rather than being invented.
+    if (resolved !== null) {
+      this.#column = resolved;
+    }
   }
 
   /**
@@ -210,6 +239,29 @@ export class FocusSurface {
    */
   moveColumn(column: number, lineText: string): void {
     this.#column = clampColumn(column, lineText);
+  }
+
+  /**
+   * MOVE THE CURSOR WITHIN THE LINE IT IS ALREADY ON, saying what the gesture meant.
+   *
+   * The column-only sibling of `place`, and the replacement for `moveColumn`'s number-taking shape
+   * on every real caller. `w`/`b`/`e` and `0`/`$` were already CORRECT before this change — they
+   * are the only two gestures that were — and they were correct precisely because each of them
+   * already ran an answering module (`word.ts`) or the line's own length before writing. Routing
+   * them through `columnFor` changes none of their answers; it removes the second entry point by
+   * which a caller could write a column it had decided for itself.
+   *
+   * RETURNS WHETHER THE CURSOR MOVED, which is `wordCaret`'s "this line has no title at all"
+   * passed through: the caller repaints on `true` and does nothing on `false`, exactly as it did
+   * when it made that test itself.
+   */
+  moveTo(instruction: CursorInstruction, lineText: string): boolean {
+    const resolved = columnFor(instruction, lineText, this.#column);
+    if (resolved === null) {
+      return false;
+    }
+    this.#column = resolved;
+    return true;
   }
 
   /**
@@ -264,7 +316,9 @@ export class FocusSurface {
     }
     const reading = resolveInstanceAnchor(anchor, source, view);
     if (reading.outcome === "found") {
-      this.focus(reading.lineIndex, source, this.#column, view);
+      // KEEP, not a number. The column this surface already holds is exactly what `keep` means,
+      // so re-anchoring says so instead of reading its own field and handing it back to itself.
+      this.place(reading.lineIndex, { kind: "keep" }, source, view);
     }
     return reading;
   }
