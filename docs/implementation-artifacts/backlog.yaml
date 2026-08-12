@@ -4329,3 +4329,49 @@ backlog:
     so a gate policy is only useful there once module resolution dispatches on the capture
     backend — the two flow-trace defects are coupled.'
   captured: '2026-08-11'
+- id: the-caret-is-the-sink-not-the-decision-to-move-it
+  title: '[architecture] Move the `selection-moved` sink off `FocusSurface.focus` (a
+    state setter with zero DOM operations) down to the caret placement itself, extract
+    that placement into one home, and pair the routing check with an absence check so
+    the sink cannot be sidestepped.'
+  driving_capability: the-caret-has-one-home
+  lead: true
+  record: '2026-08-12 — OPERATOR-PRIORITISED. Landed: app/present/caret.ts:placeCaret
+    extracted from paint.ts (three call sites, :1478/:1522/:1534), sinks.yaml repointed,
+    presentation-painting governs it, assert_caret_placement_has_one_home added.
+    MEASURED, not reasoned: sinks 2-governed/1-ungoverned -> 3/0; canonical-routing
+    --class presentation-painting -> routed:1, this repo''s FIRST routed chain
+    (paint:<anonymous> -> repaint -> paint -> paintDraft -> placeCaret, PASS).
+    THREE CALL SITES ARE TWO CONCERNS, decided by evidence: :1478 is the READING cursor
+    (guarded by focus.isFocused, position from mode.takeCaretHint clamped into the line);
+    :1522 and :1534 are both inside paintDraft on a draftInput, positions from
+    open.typed.length and open.cursorOffset — the DRAFT''s own cursor, a row in no file
+    with no line index to anchor. Two branches of one concern. The tracer distinguishes
+    them itself: paintDraft is its own frame on the observed chain.
+    THE ASK''S STEP 3 DOES NOT HOLD, and this is the finding that changes its shape.
+    cursor-position/FocusSurface CANNOT be the doorway in front of placeCaret either.
+    Wired and measured before being reasoned about: canonical-routing --class
+    cursor-position over the extracted sink reports BYPASS, chain
+    `paint:<anonymous> -> paint:repaint -> paint:paint -> paint:paintDraft -> placeCaret`
+    with FocusSurface nowhere on it. The cause is structural rather than incidental:
+    focus.focus() ASSIGNS THREE FIELDS AND RETURNS — the repaint is a SIBLING statement
+    at the call site (paint.ts:1377-1378), not a call from inside it. So the painter''s
+    relation to FocusSurface is a DATA dependency (it READS isFocused/column) and
+    canonical-routing only sees CALL stacks. The old red was self-governance; the new red
+    is not-on-the-chain. Both are red on correct code.
+    AND FOR THIS PARTICULAR CHAIN IT IS ALSO SEMANTICALLY WRONG: the observed chain is the
+    DRAFT cursor, which must NOT route through FocusSurface — a draft line is in no file.
+    WHAT WOULD MAKE THE OPERATOR''S SENTENCE TRUE ("nothing puts a caret on screen without
+    going through the one place that knows where the cursor is"): the painter would have to
+    ASK the focus surface for the position — a real call, e.g. focus.caretFor(...) — instead
+    of reading takeCaretHint off the mode surface and clamping it itself. That is arguably
+    right on its own merits and cursor-position''s own concern text already asks for it
+    ("positioning the caret without telling this surface" is the failure it exists to catch,
+    and paint.ts:1478 is doing exactly that). It is a behavioural change to shipped bytes,
+    not an extraction, so it is HELD for the operator rather than taken.
+    THE TWO app/index.html ROUTES STAY DARK — the extraction does not reach them. They call
+    focus.focus(), the state setter, and the painting they cause happens inside the page''s
+    own inline module script, which node cannot import. Unchanged by this work, and the
+    absence check is blind there too (its glob is {.ts,.tsx,.js,.mjs}); both are declared in
+    caret.ts and state.yaml rather than left for a reader to assume coverage.'
+  captured: '2026-08-12'

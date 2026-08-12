@@ -1179,6 +1179,44 @@ capabilities:
     optional-dependency posture `PaintDeps` already draws for `focus`/`mode`/`draft`), so every
     caller that predates anchoring goes on painting what it always painted.
   status: undeclared
+- id: the-caret-has-one-home
+  intent: >-
+    A CARET REACHES THE SCREEN THROUGH ONE FUNCTION AND NO OTHER WAY. `app/present/caret.ts`'s
+    `placeCaret` performs the only `setSelectionRange` call under `app/`; every other module that
+    wants a caret somewhere calls it. This is the terminal effect the `selection-moved` sink names.
+    WHY IT WAS NEEDED, MEASURED RATHER THAN REASONED. `selection-moved` was declared as
+    `app/present/focus:FocusSurface.focus`, which is a STATE SETTER: `app/present/focus.ts` contains
+    ZERO DOM operations and `focus()` assigns three private fields and returns. The sink was at the
+    wrong altitude, so `cursor-position` could not govern it — a class cannot stand between callers
+    and a method it owns, and every legitimate caller read as a bypass (the full record is in
+    classes.yaml under `cursor-position`). Moving the sink down to where work actually LANDS made it
+    governable: `flow-trace sinks .` went 2 governed / 1 ungoverned to 3 governed / 0 ungoverned, and
+    `canonical-routing . --class presentation-painting` produced this repo's FIRST routed chain —
+    `paint:<anonymous> -> paint:repaint -> paint:paint -> paint:paintDraft -> placeCaret`, PASS.
+    THE EXTRACTION ALSO BOUGHT OBSERVABILITY, which was not the point and is the larger gain. The
+    caret placement used to be a bare `setSelectionRange?.(...)` expression, and the scenario stub
+    (`tests/flow_scenarios/render_and_edit.ts`) has no `setSelectionRange`, so the optional call
+    short-circuited and the tracer saw NOTHING. As a named function the call is recorded even when
+    its DOM effect is a no-op under the stub. An effect that is an expression is invisible to the
+    observer; the same effect as a function is not.
+    TWO CONCERNS REACH IT AND THEY DO NOT COLLAPSE. The READING cursor (paint.ts's row builder,
+    guarded by `focus.isFocused`, position from `mode.takeCaretHint()` clamped into the line) and
+    the DRAFT's own cursor (`paintDraft`, position from `open.typed.length` or `open.cursorOffset`,
+    on a row that is in no file and has no line index to be anchored against). They share one
+    terminal effect and nothing above it.
+    THE POSITIVE HALF CANNOT DO THIS ALONE. `canonical-routing` asserts that everything REACHING the
+    sink came through the painter; it is blind to a fresh file calling the browser API directly.
+    `assert_caret_placement_has_one_home` is the absence that closes it — an allowlist of one file,
+    comments stripped first, and blind inside `app/index.html` by its own admission.
+  tier: functional
+  rooting: >-
+    class-rooted to `presentation-painting`. The caret is DOM, and `presentation-painting` is the
+    only concern in `app/present/` permitted to touch the document — so the painter is the doorway,
+    and that is not a choice made to satisfy the checker but the one the observed chains actually
+    support. It is deliberately NOT rooted to `cursor-position`: see that class's note for the
+    measurement showing `FocusSurface` is read by the painter rather than called by it, and is
+    therefore never a frame on the chain that places a caret.
+  status: undeclared
 - id: a-write-refuses-a-stale-base
   intent: >-
     A SAVE NAMES THE COPY OF THE FILE IT WAS COMPUTED FROM, AND SAYS SO WHEN THAT COPY IS NOT THE

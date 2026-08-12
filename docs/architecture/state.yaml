@@ -214,6 +214,38 @@ state_invariants:
     wired: true
     gates_capabilities: [reader-can-toggle-edit-and-view-modes]
 
+  - id: state-caret-placement-has-one-home
+    name: the caret is placed in one module and nowhere else under app/
+    description: |
+      `setSelectionRange` appears in `app/present/caret.ts` and in no other app source. That module
+      is the declared terminal effect for the `selection-moved` sink, so this is the ABSENCE that
+      makes the sink real rather than merely observed.
+
+      IT IS THE NEGATIVE HALF OF A PAIR AND NEITHER HALF IS SUFFICIENT. `flow-trace
+      canonical-routing` checks that everything which REACHES the sink came through its canonical
+      class (`presentation-painting`) — it is blind to code that never goes near the sink and calls
+      the browser API directly. A sink that can be sidestepped by writing `el.setSelectionRange(...)`
+      in a fresh file is not governed. This predicate is what stops that, and unlike the routing
+      half it needs no scenario: it reads the sources, so it covers the caret paths no scenario
+      drives, which today is most of them.
+
+      AN ALLOWLIST OF ONE, NOT A BAN — the inverse polarity of `state-edits-are-ephemeral` above,
+      which bans a set of APIs everywhere under app/. Comments are stripped before the search, and
+      that is load-bearing here rather than copied: `paint.ts:453` discusses `setSelectionRange` in
+      prose and `caret.ts`'s own header names it four times while explaining the invariant.
+
+      KNOWN BLIND SPOT, DECLARED SO NOBODY ASSUMES COVERAGE IT LACKS: the source glob is
+      `{.ts,.tsx,.js,.mjs}` and never opens `app/index.html`, which carries ~2,500 lines of the
+      application in an inline module script. There is no `setSelectionRange` in that file today
+      (verified 2026-08-12); nothing enforces that there will not be.
+    check: "setSelectionRange appears in app/present/caret.ts and in no other app/ source, with
+      comments stripped before the search"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_caret_placement_has_one_home
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [the-caret-has-one-home]
+
   # ── THE APP'S ADDRESS AND THE WAY IN (2026-07-30) ────────────────────────────────────────────
   #
   # Every invariant above this line asserts that something RENDERS. None asserted that anything

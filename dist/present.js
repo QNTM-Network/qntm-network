@@ -4625,6 +4625,11 @@ var PresentationCascade = class {
   }
 };
 
+// app/present/caret.ts
+function placeCaret(element, at) {
+  element.setSelectionRange?.(at, at);
+}
+
 // app/present/paint.ts
 function existingLineCommit(source, lineIndex, markdown) {
   const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
@@ -4957,7 +4962,7 @@ function paint(body, source, context, deps) {
       const caret = mode?.takeCaretHint();
       if (caret !== void 0) {
         const at = Math.max(0, Math.min(caret, lineSource.length));
-        input.setSelectionRange?.(at, at);
+        placeCaret(input, at);
       }
     }
   };
@@ -4987,11 +4992,11 @@ function paint(body, source, context, deps) {
       return;
     }
     if (open.typed !== open.seed) {
-      input.setSelectionRange?.(open.typed.length, open.typed.length);
+      placeCaret(input, open.typed.length);
       return;
     }
     if (open.cursorOffset !== void 0) {
-      input.setSelectionRange?.(open.cursorOffset, open.cursorOffset);
+      placeCaret(input, open.cursorOffset);
     }
   };
   let lastPaintedIndex = -1;

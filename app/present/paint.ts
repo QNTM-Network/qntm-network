@@ -100,6 +100,7 @@
  */
 
 import { PresentationCascade } from "./express/cascade.js";
+import { placeCaret } from "./caret.js";
 import type { PresentationContext } from "./context.js";
 import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
@@ -1475,7 +1476,10 @@ export function paint(
         // last character `column + 1` IS `lineSource.length`, which is one past the last character
         // and exactly where a caret belongs when appending.
         const at = Math.max(0, Math.min(caret, lineSource.length));
-        (input as HTMLInputElement).setSelectionRange?.(at, at);
+        // THE CLAMP STAYS HERE AND THE PLACEMENT LEAVES. `caret.ts` performs the DOM call and
+        // decides nothing; the arithmetic above is a decision about THIS line and belongs beside
+        // the string it indexes. See caret.ts's header for why the two are split.
+        placeCaret(input, at);
       }
     }
   };
@@ -1519,7 +1523,7 @@ export function paint(
     // THE CARET GOES BACK TO THE END OF WHAT HE HAD TYPED, for a row that has survived a
     // projection.
     if (open.typed !== open.seed) {
-      (input as HTMLInputElement).setSelectionRange?.(open.typed.length, open.typed.length);
+      placeCaret(input, open.typed.length);
       return;
     }
     // A FRESH ROW — still holding its seed, nothing typed yet. `open.cursorOffset` is `seedFor`'s
@@ -1531,7 +1535,7 @@ export function paint(
     // browser default would have picked, so setting it explicitly changes nothing for that case
     // and fixes the one where tokens follow the title.
     if (open.cursorOffset !== undefined) {
-      (input as HTMLInputElement).setSelectionRange?.(open.cursorOffset, open.cursorOffset);
+      placeCaret(input, open.cursorOffset);
     }
   };
 
