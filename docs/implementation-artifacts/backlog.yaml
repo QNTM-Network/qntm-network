@@ -4656,3 +4656,41 @@ backlog:
     resolution tables and never learns which rendition the row it is rewriting will be drawn with.
     It searches for chip markup and, when there is none, degrades to an append and reports nothing.'
   captured: '2026-08-12'
+- id: a-sink-must-live-in-its-own-module-to-be-observable
+  title: '[architecture] A sink declared at a function called only from inside its own
+    module is unobservable — `chains_observed: 0` — while every declaration check
+    reports it healthy. Found by measurement, general to this project.'
+  driving_capability: a-rule-effect-has-one-landing
+  record: '2026-08-12 — MEASURED. `rule-effect-shown` was declared in #168 against
+    `app/present/paint:landPrediction` while that function lived inside paint.ts. A scenario driving
+    it directly still produced `chains_observed: 0`. EXPORTING it changed nothing. Moving it to
+    `app/present/landing.ts`, unchanged in body, produced `chains_observed: 1` immediately.
+    THE CAUSE IS STRUCTURAL: the observer wraps a module''s EXPORT BINDINGS, so a call from `paint`
+    to a function defined in the same file never crosses a boundary it can see. `placeCaret` is
+    observable for the complementary reason — the caret arc extracted it into `caret.ts`, so every
+    call to it is cross-module. That extraction was made for legibility and bought observability by
+    accident; this row is the same fact stated on purpose.
+    WHY IT IS DANGEROUS RATHER THAN MERELY AWKWARD: nothing reports it. `flow-trace sinks` checks
+    that a canonical class EXISTS, never that a chain was ever seen, so an intra-module sink reads
+    GOVERNED and green while measuring nothing at all. The only surface that tells you is
+    `canonical-routing`''s own `chains_observed`, and a reader has to know to look at it.'
+  captured: '2026-08-12'
+- id: the-withdrawn-prediction-path-bypasses-the-sink
+  title: '[defect] A WITHDRAWN prediction reaches the screen without going through
+    `landPrediction` — a second, undeclared landing that the sink''s own route census
+    missed.'
+  driving_capability: a-rule-effect-has-one-landing
+  record: '2026-08-12 — FOUND BY THE ABSENCE CHECK, not by reading. `paint.ts` calls
+    `appendPrediction` a second time for a WITHDRAWN prediction (a retraction — "that claim is
+    off"), and that call does not go through `landPrediction`. So it stamps no
+    `data-prediction-landing`, contributes no chain to `rule-effect-shown`, and is invisible to the
+    routing check.
+    WHY #168 MISSED IT: that census counted the two ARMERS (`resolvers/rules.ts:209`,
+    `resolvers/promotion.ts:493`) and treated them as the routes. They are the routes IN; the routes
+    OUT are the landings, and there are two of those — pending and withdrawn. Counting one axis and
+    calling it the census is the error, and it is the same shape as counting `focus.focus(` callers
+    when the question was about carets.
+    NOT FIXED — routing it through `landPrediction` is a behaviour change to the prediction path and
+    this pass was scoped to seeing. The absence check EXCLUDES this one call site explicitly and
+    names this row; closing the row means deleting that exclusion in the same commit.'
+  captured: '2026-08-12'
