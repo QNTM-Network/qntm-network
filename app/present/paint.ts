@@ -101,6 +101,7 @@
 
 import { PresentationCascade } from "./express/cascade.js";
 import { placeCaret } from "./caret.js";
+import { landPrediction } from "./landing.js";
 import type { PresentationContext } from "./context.js";
 import type { DraftSurface } from "./draft.js";
 import type { FocusSurface } from "./focus.js";
@@ -1187,7 +1188,7 @@ const PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
  * not need a claim about characters he is choosing himself) or has just landed the cursor back on it
  * (same reason). Skipping is a choice made for clarity, not a workaround for a crash.
  */
-function appendPrediction(row: HTMLElement, text: string, kind: "pending" | "withdrawn", animate: boolean): void {
+export function appendPrediction(row: HTMLElement, text: string, kind: "pending" | "withdrawn", animate: boolean): void {
   if (row.tagName.toLowerCase() === "input") {
     return;
   }
@@ -1252,7 +1253,7 @@ function appendPrediction(row: HTMLElement, text: string, kind: "pending" | "wit
  * text and then patching one substring is the smaller, more legible change over widening
  * `renderTokens`'s own injection engine for a single caller.
  */
-function replacePredictedSwap(
+export function replacePredictedSwap(
   entry: {
     readonly contentEl: HTMLElement;
     readonly tagsRendition: Rendition;
@@ -1291,70 +1292,6 @@ function replacePredictedSwap(
   return true;
 }
 
-/**
- * A RULE'S DECISION REACHING THE SCREEN — the terminal effect of a rule application.
- *
- * ── WHY THIS IS THE SINK, AND WHY `renderRuleEffects` IS NOT ──
- *
- * `renderRuleEffects` (rules.ts) computes characters and RETURNS them. It is the arithmetic, not
- * the landing: nothing a person can see has happened when it returns, and a caller is free to throw
- * the result away — `promotion.ts` does exactly that when the render abstains (`arm` returns
- * `ARMS_NOTHING` and no pixel changes). Declaring it the sink would repeat the mistake
- * `selection-moved` was declared with: a function that DECIDES, at the altitude of one that lands.
- * THIS is where a rule stops being a decision and becomes something the operator can see.
- *
- * ── THE ROUTES, COUNTED RATHER THAN ASSERTED (grep `surface: "predict"`) ──
- *
- * Exactly TWO surfaces arm a prediction, and both are rule applications. There is no third caller
- * and no non-rule prediction in this app:
- *   app/present/resolvers/rules.ts:209      the RULES axis, for the line just committed. Arms with
- *                                          `text` only and NO `fullText`, so it can only ever take
- *                                          the append branch below — never the swap.
- *   app/present/resolvers/promotion.ts:493  the PARENT-PROMOTION axis, for the row above. The only
- *                                          caller that supplies `fullText`, i.e. the only one that
- *                                          can reach the in-place swap at all.
- *
- * ── THE TWO SPELLINGS ARE ONE EFFECT, WHICH IS WHY THEY GET ONE HOME ──
- *
- * A swap shows the byte-exact predicted line in place; an append hangs the delta after the row's
- * settled content. The operator sees one thing either way — his rule, on his line — so the effect
- * is one, and the branch between them is a rendition decision rather than two different jobs.
- * Until this function they were an inline if/else inside `paint`, reachable by no observer and
- * countable by nobody, which is why "why did it append instead of swapping" has been answered
- * several times by reading and never once by measurement.
- *
- * ── THE THREE WAYS AN APPEND HAPPENS, AND ONLY ONE OF THEM IS VISIBLE FROM THE CALL SITE ──
- *
- *   1. NO `fullText` — an append-only claim. Every rules-axis prediction, by construction.
- *   2. THE ROW IS NOT PREDICTABLE — `predictableByLineIndex` holds no entry for it, so there is no
- *      rendition or render callback to rebuild the line from.
- *   3. `replacePredictedSwap` REFUSED — it rebuilt the line and could not find the delta's own chip
- *      in the rendered HTML (`chipIndex === -1`), or the line was blank. This one is invisible from
- *      the call site, and it is the reason this sink exists.
- *
- * It decides nothing about WHAT to show: `text` and `fullText` arrive already decided.
- */
-function landPrediction(
-  el: HTMLElement,
-  predictable:
-    | {
-        readonly contentEl: HTMLElement;
-        readonly tagsRendition: Rendition;
-        readonly stampRendition: Rendition;
-        readonly render: (markdown: string) => string;
-      }
-    | undefined,
-  prediction: RowPrediction,
-  animate: boolean,
-): void {
-  const replaced =
-    predictable !== undefined && prediction.fullText !== undefined
-      ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending")
-      : false;
-  if (!replaced) {
-    appendPrediction(el, prediction.text, "pending", animate);
-  }
-}
 
 /**
  * Paint a view's markdown into `body`.

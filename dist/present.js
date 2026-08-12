@@ -4723,6 +4723,18 @@ function placeCaret(element, at) {
   element.setSelectionRange?.(at, at);
 }
 
+// app/present/landing.ts
+function landPrediction(el, predictable, prediction, animate) {
+  const because = prediction.fullText === void 0 ? "no-full-text" : predictable === void 0 ? "row-not-predictable" : void 0;
+  const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
+  if (!replaced) {
+    appendPrediction(el, prediction.text, "pending", animate);
+  }
+  const landing = replaced ? { kind: "swapped" } : { kind: "appended", because: because ?? "swap-refused" };
+  el.dataset["predictionLanding"] = landing.kind === "swapped" ? "swapped" : `appended:${landing.because}`;
+  return landing;
+}
+
 // app/present/paint.ts
 function existingLineCommit(source, lineIndex, markdown) {
   const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
@@ -4990,12 +5002,6 @@ function replacePredictedSwap(entry, fullText, delta, kind) {
   const newChip = `<span class="${classes.join(" ")}" title="${titleAttr}">${delta}</span>`;
   entry.contentEl.innerHTML = html.slice(0, chipIndex) + newChip + html.slice(chipIndex + oldChip.length);
   return true;
-}
-function landPrediction(el, predictable, prediction, animate) {
-  const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
-  if (!replaced) {
-    appendPrediction(el, prediction.text, "pending", animate);
-  }
 }
 function paint(body, source, context, deps) {
   paintGeneration += 1;

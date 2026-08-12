@@ -214,6 +214,7 @@ classes:
     governs_sinks:
       - view-painted
       - selection-moved
+      - rule-effect-shown
     status: working
 
   - id: source-write-back

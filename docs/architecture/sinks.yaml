@@ -107,7 +107,7 @@ sinks:
       never opens `app/index.html`, so it is blind in the same page the two dark routes live in.
 
   - id: rule-effect-shown
-    sink: app/present/paint:landPrediction
+    sink: app/present/landing:landPrediction
     description: >
       A RULE'S DECISION REACHING THE SCREEN — the terminal effect of a rule application. Declared
       2026-08-12, and it is the first sink in this repo that is not purely presentational: the other
