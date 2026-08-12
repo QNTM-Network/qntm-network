@@ -106,6 +106,39 @@ sinks:
       it covers the caret paths no scenario drives — but its glob is `{.ts,.tsx,.js,.mjs}` and it
       never opens `app/index.html`, so it is blind in the same page the two dark routes live in.
 
+  - id: rule-effect-shown
+    sink: app/present/paint:landPrediction
+    description: >
+      A RULE'S DECISION REACHING THE SCREEN — the terminal effect of a rule application. Declared
+      2026-08-12, and it is the first sink in this repo that is not purely presentational: the other
+      three answer "did the view draw", this one answers "did the operator's own published rule
+      become something he can see".
+
+      IT IS NOT `renderRuleEffects`, AND THAT WAS THE FIRST THING TESTED RATHER THAN ASSUMED.
+      `renderRuleEffects` (rules.ts) computes characters and RETURNS them; nothing visible has
+      happened when it returns, and a caller is free to discard the result — `promotion.ts` does
+      exactly that on an abstention (`arm` returns `ARMS_NOTHING`). Anchoring there would repeat
+      `selection-moved`'s original error: a function that DECIDES, declared at the altitude of one
+      where work LANDS.
+
+      THE ROUTES, ALL TWO, COUNTED RATHER THAN ASSUMED (grep `surface: "predict"` across app/):
+        app/present/resolvers/rules.ts:209      the RULES axis, for the line just committed.
+                                                Arms `text` only, NO `fullText` — so this route can
+                                                only ever reach the APPEND branch, never the swap.
+        app/present/resolvers/promotion.ts:493  the PARENT-PROMOTION axis, for the row above. The
+                                                only caller that supplies `fullText`, and therefore
+                                                the only one that can reach the in-place swap.
+      There is no third armer and no non-rule prediction in this app, so every chain that reaches
+      this sink is a rule application. Both routes are observable — neither lives in app/index.html.
+
+      WHAT IT MAKES MEASURABLE, WHICH IS WHY IT EXISTS. An append can happen three ways and only one
+      of them is visible from the call site: no `fullText`; the row absent from
+      `predictableByLineIndex`; or `replacePredictedSwap` refusing because it could not find the
+      delta's own chip in the rebuilt HTML (`chipIndex === -1`). The operator has reported an
+      appended `#outcome` where he expected a swap, and that question has been answered by reading
+      several times and by measurement never. Until this declaration the branch was an inline
+      if/else inside `paint`, reachable by no observer.
+
   - id: document-mounted
     sink: app/main:mount
     description: >

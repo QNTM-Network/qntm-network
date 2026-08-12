@@ -4529,3 +4529,77 @@ backlog:
     NO COMPENSATION MECHANISM WAS BUILT. Remembering a pre-draft column and restoring it is exactly
     the detect-and-adjust the operator ruled out, so it was not written.'
   captured: '2026-08-12'
+- id: no-scenario-drives-a-rule-effect-to-the-screen
+  title: '[blindness] The `rule-effect-shown` sink is declared and UNGOVERNED, because
+    no scenario reaches it. `canonical-routing --class capture-rule-application` reports
+    `chains_observed: 0` — any routing verdict over it today would be computed from an
+    empty set.'
+  driving_capability: a-rule-effect-has-one-landing
+  lead: true
+  record: '2026-08-12 — MEASURED, not assumed. `capture-rule-application` (canonical home
+    `app/present/resolvers/rules:read`) was wired to govern the new sink and RUN. It reports
+    chains_observed 0 / routed 0 / bypass 0. That is not a pass; it is an absent verdict, and a
+    class declared over it would be a green from nothing — the exact false green the differential
+    exists to stop. So the sink ships UNGOVERNED and says so, and the capability carries
+    `rooting: isolated` with this measurement as its reason rather than a preference.
+    WHAT WOULD CLOSE IT: a scenario that drives a rule application all the way to the DOM —
+    resolver read, arm, paint, landPrediction — for both routes (`rules.ts:209`, which can only
+    append, and `promotion.ts:493`, which is the only route that can swap). The fixtures exist
+    (tests/fixtures/promotion-scenarios.mjs) and the node suite already drives the paint half
+    (app-predict-wiring.test.mjs), but node --test is invisible to flow-trace, so none of it
+    counts as an observed chain.
+    A SECOND, SEPARATE QUESTION THIS RAISES, worth not losing: whether
+    `capture-rule-application` is even the right doorway. Its canonical home is a RESOLVER''s
+    `read`, which DECIDES and returns; the painter consumes the stored arming later, so the
+    resolver is not a frame on the chain that reaches the sink. That is the same shape
+    `cursor-position` turned out to have — a data dependency read as a call dependency — and if it
+    holds here the class is at the wrong altitude and something else stands between callers and the
+    effect. It cannot be established while chains_observed is 0.'
+  captured: '2026-08-12'
+- id: the-published-cascade-mixes-complete-maps-and-sparse-overrides
+  title: '[architecture] Which published tables are complete maps and which are sparse
+    overrides over a default is undocumented, and reading one as the other has already
+    caused a wrong diagnosis.'
+  driving_capability: a-rule-effect-has-one-landing
+  record: '2026-08-12 — MEASURED from the served presentation.json. THE DISTINCTION IS REAL AND
+    NOTHING STATES IT:
+      resolution.chromeShapes        14 entries  SPARSE OVERRIDE over `defaultNodeType: task`.
+                                                 `outcome` is ABSENT and falls through the cascade
+                                                 — it does not lack a shape. Read as a complete map
+                                                 this says "outcome has no checkbox", which is what
+                                                 produced a wrong diagnosis of the append.
+      qualification.tokens.node_type 32 entries  COMPLETE MAP. Every node type has a token,
+                                                 including #task and #outcome — so a same-family
+                                                 swap has something to find.
+      resolution.composition          5 keys     COMPLETE: heads {checkbox, plain_line}, tail
+                                                 [stamp, date, tags, markers, chrome], separator,
+                                                 bullet, titleStyles. A checkbox HEAD and a #task
+                                                 tag are different cells and coexist.
+      resolution.sectionRegistration 83 entries  per-section, completeness unestablished.
+      resolution.dropped            103 entries  what the compiler REFUSED to publish. Nobody has
+                                                 read it against his config.
+    WHY IT MATTERS BEYOND THE ONE BUG: a sparse override is only correct if every reader walks the
+    cascade to the default. A reader that treats it as a map silently answers "absent" where the
+    truth is "inherited", and absent and inherited are not the same answer.'
+  captured: '2026-08-12'
+- id: the-transformation-consults-two-of-fifteen-resolutions
+  title: '[architecture] `renderRuleEffects` is handed 2 of the 15 published resolution
+    tables and searches one cell, while `composition` describes every cell of a line.'
+  driving_capability: a-rule-effect-has-one-landing
+  record: '2026-08-12 — COUNTED from the signature and the one live call site.
+    `renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMarkers, tagOrder)`.
+    At `promotion.ts:417` it is called as:
+      renderRuleEffects(parentLine, retypes, qualification.tokens.node_type ?? {}, {}, {}, resolution.tagOrder)
+    So of the six parameters, TWO carry data (`tokens.node_type`, `resolution.tagOrder`) and TWO are
+    passed EMPTY (`fieldTokens: {}`, `fieldMarkers: {}`) — the transformation is structurally unable
+    to spell a `set`/`unset` effect on this path, which is why promotion.ts must filter to `retype`
+    effects before calling it at all.
+    AGAINST 15 PUBLISHED `resolution.*` TABLES plus 17 `qualification.tokens` families. It never
+    consults `composition` (which cell a token belongs in), `chromeShapes` (what the line''s shape
+    is), `lineGrammars`, or `registration`. It re-derives cell boundaries itself from
+    `markerSpans`/`tagSpans` regexes instead — see the `tags` cell boundary comment in rules.ts.
+    THE SHAPE OF THE GAP, stated without proposing a fix: the transformation operates on ONE cell
+    of a line it cannot see the composition of, while a complete description of that composition is
+    published and sitting unread beside it. That is the "range of config resolutions" dimension —
+    not a defect on its own, and the reason a node-model move has somewhere to go.'
+  captured: '2026-08-12'

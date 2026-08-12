@@ -4991,6 +4991,12 @@ function replacePredictedSwap(entry, fullText, delta, kind) {
   entry.contentEl.innerHTML = html.slice(0, chipIndex) + newChip + html.slice(chipIndex + oldChip.length);
   return true;
 }
+function landPrediction(el, predictable, prediction, animate) {
+  const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
+  if (!replaced) {
+    appendPrediction(el, prediction.text, "pending", animate);
+  }
+}
 function paint(body, source, context, deps) {
   paintGeneration += 1;
   const mine = paintGeneration;
@@ -5226,11 +5232,12 @@ function paint(body, source, context, deps) {
       for (const prediction of instruction.predictions) {
         const el = rowsByLineIndex.get(prediction.lineIndex);
         if (el === void 0) continue;
-        const predictable = prediction.fullText === void 0 ? void 0 : predictableByLineIndex.get(prediction.lineIndex);
-        const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
-        if (!replaced) {
-          appendPrediction(el, prediction.text, "pending", instruction.animate);
-        }
+        landPrediction(
+          el,
+          prediction.fullText === void 0 ? void 0 : predictableByLineIndex.get(prediction.lineIndex),
+          prediction,
+          instruction.animate
+        );
       }
       for (const withdrawn of instruction.withdrawn) {
         const el = rowsByLineIndex.get(withdrawn.lineIndex);
