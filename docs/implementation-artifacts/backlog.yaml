@@ -4399,5 +4399,28 @@ backlog:
     reported as DID NOT COMPLETE and its observations are discarded, so while this sits red the
     chains it would have contributed are absent from every other check in the run. It reaches no
     declared sink today (it never paints), so the present cost is nil — but it is not zero by
-    construction, and it grows if a sink later sits on this path.'
+    construction, and it grows if a sink later sits on this path.
+    ── 2026-08-12, MEASURED AND REFUTED: REMOVING THE `column` DEFAULT IS A NO-OP. ──
+    An earlier reading of this defect (and this row''s own text above) said the DEFAULT PARAMETER
+    is what hides the missing wiring — that `focus(lineIndex, source?, column = 0, view = "")`
+    makes a caller with nothing to say indistinguishable from one that means zero, and that
+    deleting `= 0` would surface the broken sites as compile errors. That was tried and it is
+    WRONG on both halves. Deleting the default produces ZERO TypeScript errors, because every
+    caller in app/ already passes the column EXPLICITLY, and zero runtime change, because
+    `clampColumn` (motions.ts:208-211) already normalises a non-finite column to 0 — so an omitted
+    argument and a literal `0` were always the same value.
+    THE FULL CALLER CENSUS, which is what makes the correspondence legible:
+      paint.ts:791    literal 0    the post-edit settle      wrong
+      paint.ts:1379   literal 0    a click                   wrong, and destructive
+      keys.ts:185     literal 0    `j`/`k`                   wrong (vim preserves the column)
+      keys.ts:191     literal 0    `{`/`}`                   wrong
+      index.html:2231 literal 0    view entry, `paintView`   wrong
+      focus.ts:267    this.#column reanchor                  CORRECT
+      index.html:2316 focus.column repaint re-seeding        CORRECT
+    Five literal zeros, two real columns, and the split matches the measured defect exactly.
+    SO THE THING THAT HIDES THIS IS NOT A DEFAULT, IT IS A TYPED LITERAL, and no change to the
+    signature can surface a site that already types the value. A type-level fix would have to make
+    "I have nothing to say" UNSPELLABLE as a number rather than merely unspoken — which is what
+    removing the column parameter from `focus()` altogether does, and is why the sole-writer
+    resolver is the actual first move rather than a later one.'
   captured: '2026-08-12'
