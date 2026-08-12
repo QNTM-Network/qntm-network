@@ -1217,6 +1217,47 @@ capabilities:
     measurement showing `FocusSurface` is read by the painter rather than called by it, and is
     therefore never a frame on the chain that places a caret.
   status: undeclared
+- id: the-cursor-surface-knows-where-the-caret-is
+  intent: >-
+    `FocusSurface.column` REPORTS WHERE THE CARET ACTUALLY IS, for every gesture that moves it.
+    NOT HELD TODAY, AND THE ENFORCER IS RED ON PURPOSE. This row is a PIN: the divergence below is
+    measured, the fix is a design decision the operator has not made, and nothing is to be
+    "fixed" into green until he makes it.
+    THE MEASUREMENT, taken 2026-08-12 through app/index.html's own wiring
+    (tests/fixtures/app-html-page.mjs), reading `__focusColumn()` against the painted input's real
+    `selectionStart`:
+      `a` at column 0                  focus.column 0   caret 1    diverge
+      `w` (col 6) then `a`             focus.column 6   caret 7    diverge
+      `$` (col 32) then `a`            focus.column 32  caret 33   diverge
+      `i` at column 0                  focus.column 0   caret 0    agree
+      `a`, type "HELLO", Escape        focus.column 0   caret 6    diverge
+      `w` (col 6) then CLICK the row   focus.column 0              reset, real column never learned
+      `w` (col 6) then `j`             focus.column 0              reset (vim preserves this)
+      `w` (col 6) then `}`             focus.column 0              reset
+    THE ESCAPE ROW IS THE ONE THAT DECIDES IT. An off-by-one lasting only while INSERT is open
+    would be arguable, because vim's own `a` does put the caret one past the cursor. But after
+    typing five characters and pressing Escape the operator is back in NORMAL with the cursor five
+    characters from where he left off, and the surface reports the column he had BEFORE the
+    append. The column is not offset during insert; it is frozen through the whole episode and
+    never reconciled.
+    ONE CAUSE, NOT SEVEN. `focus.column` has exactly two writers, both in `app/shell/keys.ts`:
+    `moveColumn` for `w`/`b`/`e` (:279) and for `0`/`$` (:288). Every other gesture reaches the
+    surface through `focus.focus(lineIndex, source, column = 0, view = "")` and passes the literal
+    `0` at every call site (keys.ts:185 for `j`/`k`, :191 for `{`/`}`, paint.ts:790 for the settle,
+    paint.ts:1379 for a click), or — on the insert path — never reaches it at all, because the
+    `enter-insert` branch only repaints (keys.ts:293-298). The DEFAULT PARAMETER is what makes
+    this invisible: a caller passing `0` because it has nothing to say is indistinguishable from a
+    caller that means column zero.
+    THE CLICK PATH IS A SECOND, INDEPENDENT DEFECT and arguably the worse one, because it is
+    destructive rather than merely stale: a click RESETS an established column to 0 and never
+    learns the column the person actually clicked at.
+  tier: functional
+  rooting: >-
+    class-rooted to `cursor-position`. This is that class's own declared failure, in its own
+    words — its concern text names "positioning the caret without telling this surface" as the
+    thing it exists to catch, and the insert path is doing exactly that. The pin belongs under the
+    class that already claims the concern rather than under a new one minted for the defect.
+  status: undeclared
 - id: a-write-refuses-a-stale-base
   intent: >-
     A SAVE NAMES THE COPY OF THE FILE IT WAS COMPUTED FROM, AND SAYS SO WHEN THAT COPY IS NOT THE

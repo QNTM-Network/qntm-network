@@ -4335,7 +4335,6 @@ backlog:
     that placement into one home, and pair the routing check with an absence check so
     the sink cannot be sidestepped.'
   driving_capability: the-caret-has-one-home
-  lead: true
   record: '2026-08-12 — OPERATOR-PRIORITISED. Landed: app/present/caret.ts:placeCaret
     extracted from paint.ts (three call sites, :1478/:1522/:1534), sinks.yaml repointed,
     presentation-painting governs it, assert_caret_placement_has_one_home added.
@@ -4374,4 +4373,31 @@ backlog:
     own inline module script, which node cannot import. Unchanged by this work, and the
     absence check is blind there too (its glob is {.ts,.tsx,.js,.mjs}); both are declared in
     caret.ts and state.yaml rather than left for a reader to assume coverage.'
+  captured: '2026-08-12'
+- id: focus-column-does-not-follow-the-caret
+  title: '[defect] [pinned-red] `FocusSurface.column` does not equal where the caret
+    actually is. Measured across `a`, Escape, click, `j` and `}`. Pinned RED deliberately
+    — the fix is a design decision the operator has not made.'
+  driving_capability: the-cursor-surface-knows-where-the-caret-is
+  record: '2026-08-12 — DIAGNOSE ONLY, nothing fixed, motions.ts and paint.ts untouched.
+    ENFORCER: tests/flow_scenarios/insert_column_writeback.ts, RED on main. It drives the
+    REAL app/shell/keys.ts `globalKey` handler (exported for exactly this, see its :302
+    comment) rather than reproducing the handler''s steps — a first draft did reproduce them
+    and would have gone on failing after a correct fix, because the fix would live in code the
+    scenario never called. A red that cannot go green is not an enforcer.
+    MUTATION-PROVEN BOTH WAYS: adding a write-back to the `enter-insert` branch of keys.ts
+    flips the run from 15 probed/1 failed to 16 probed/0 failed. Reverted; git diff clean.
+    That proves falsifiability only — it is NOT a proposed fix, and note `moveColumn` clamps
+    into the line, which would pull `a` on the last character back one.
+    THE NUMBERS: `a` at col 0 -> column 0, caret 1. After `w` -> 6 vs 7. After `$` -> 32 vs 33.
+    `i` agrees (0 vs 0). `a` + type "HELLO" + Escape -> column 0, caret 6. Click after `w` ->
+    column reset 6 to 0. `j` after `w` -> 0. `}` after `w` -> 0.
+    ONE CAUSE: `focus.column` has two writers (keys.ts:279, :288) and every other route passes
+    the literal `0` into `focus.focus`''s `column = 0` default, or never reaches the surface at
+    all. The default parameter is what hides it.
+    KNOWN COST OF THIS PIN, stated rather than discovered later: a scenario that throws is
+    reported as DID NOT COMPLETE and its observations are discarded, so while this sits red the
+    chains it would have contributed are absent from every other check in the run. It reaches no
+    declared sink today (it never paints), so the present cost is nil — but it is not zero by
+    construction, and it grows if a sink later sits on this path.'
   captured: '2026-08-12'
