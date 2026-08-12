@@ -611,6 +611,11 @@ function rawInput(
       return;
     }
     settlement = "discarded";
+    // MOMENT 2 — LEAVING INSERT IS A CURSOR MOVE AND IT NOW SAYS SO. This function repainted and
+    // touched the focus surface not at all, so the cursor stayed wherever the INSERT caret had been
+    // — between characters, which is not a place a NORMAL cursor can be. `leave-insert` is the
+    // instruction; app/present/column.ts owns which way it points.
+    focus.moveTo({ kind: "leave-insert" }, lineSource);
     leaveInsert();
     // THE SOURCE THIS PAINT WAS HANDED, VERBATIM — not `input.value`, which is the one string in
     // scope that the operator's typing can have changed. The line returns to whatever the cascade
@@ -685,6 +690,14 @@ function rawInput(
     }
   };
 
+  // MOMENT 1 — THE COLUMN FOLLOWS THE CARET WHILE THE ROW IS OPEN. Until 2026-08-12 the column was
+  // resolved once, when this row was painted, and never again: the operator could type ten
+  // characters and the surface still reported the position the row opened at. `at` carries the one
+  // fact only the element knows — where the browser put the caret — and the resolver clamps it like
+  // every other instruction.
+  input.addEventListener("input", () => {
+    focus.moveTo({ kind: "at", column: (input as HTMLInputElement).selectionStart ?? 0 }, input.value);
+  });
   input.addEventListener("blur", () => settle());
   input.addEventListener("keydown", (event) => {
     const key = (event as KeyboardEvent | undefined)?.key;
@@ -828,7 +841,14 @@ function draftInput(
   // THE CHARACTERS, RECORDED AS THEY ARE TYPED — the only way a repaint can put them back, and the
   // same read `settle` above already makes at the end (`input.value`), made earlier. It builds no
   // edit and posts nothing; see draft.ts's `typed` for why the field is not a second write path.
-  input.addEventListener("input", () => draft.type(input.value));
+  input.addEventListener("input", () => {
+    draft.type(input.value);
+    // MOMENT 3 — A DRAFT'S CARET AND THE COLUMN ARE THE SAME FACT. `o`/`O` used to place their
+    // caret here and never tell the focus surface, so the caret sat past the `- [ ] ` seed while
+    // the column reported 0 — from any starting column, measured 2026-08-12. A draft is NOT a
+    // special case: it is the resolver answering the question it answers everywhere else.
+    deps.focus?.moveTo({ kind: "at", column: (input as HTMLInputElement).selectionStart ?? 0 }, input.value);
+  });
   input.addEventListener("blur", settle);
   input.addEventListener("keydown", (event) => {
     const key = (event as KeyboardEvent | undefined)?.key;
@@ -1542,6 +1562,7 @@ export function paint(
     // projection.
     if (open.typed !== open.seed) {
       placeCaret(input, open.typed.length);
+      deps.focus?.moveTo({ kind: "at", column: open.typed.length }, open.typed);
       return;
     }
     // A FRESH ROW — still holding its seed, nothing typed yet. `open.cursorOffset` is `seedFor`'s
@@ -1554,6 +1575,7 @@ export function paint(
     // and fixes the one where tokens follow the title.
     if (open.cursorOffset !== undefined) {
       placeCaret(input, open.cursorOffset);
+      deps.focus?.moveTo({ kind: "at", column: open.cursorOffset }, open.seed);
     }
   };
 

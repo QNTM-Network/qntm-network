@@ -4501,3 +4501,31 @@ backlog:
     rule and this is the operator''s editor. The matrix reports what happens; the choice is his,
     and a scenario going red about it would be deciding a design question by assertion.'
   captured: '2026-08-12'
+- id: abandoning-a-draft-carries-the-drafts-column-back
+  title: '[question] [needs-decision] Abandoning a draft (`o`/`O` then Escape) now
+    returns the cursor to the previous line at the DRAFT''s column, not the column
+    he had before he pressed `o`. Surfaced by the moment-3 fix; not fixed, because
+    the answer is a design decision.'
+  driving_capability: the-cursor-surface-knows-where-the-caret-is
+  record: '2026-08-12 — OBSERVED, NOT FIXED, and it is a change this branch INTRODUCED rather
+    than one it found lying there. Reported rather than papered over.
+    THE NUMBERS. `o` from column 0, type 10 characters, Escape: the column was 0 on main this
+    morning and is 16 on this branch. No test encodes either value — the full suite reports zero
+    new failures in both directions — so nothing would have caught it.
+    WHY IT CHANGED. `returnToVim` (paint.ts) resolves the exit with `keep`, which #165 gave it in
+    place of a literal `0`. Until moment 3 landed, NOTHING ever wrote the draft''s caret into the
+    focus surface, so `keep` preserved the pre-draft column BY ACCIDENT — it was keeping a value
+    the draft had been unable to disturb. Now the draft writes its caret there, and `keep`
+    faithfully carries that caret back to a line the operator never typed into.
+    THE REAL QUESTION UNDERNEATH, and it is the one caret.ts already named when the sink was
+    declared: THE READING CURSOR AND THE DRAFT''S CURSOR ARE TWO CONCERNS. A draft line is in no
+    file and has no line index to be anchored against. Moment 3 as specified — "the draft''s caret
+    and the column are the same fact" — puts both cursors in one store, which is what makes the
+    exit ambiguous: `keep` cannot mean both "the column I was at" and "the column I typed to".
+    THREE ANSWERS, NONE TAKEN. (a) The draft''s caret does not belong in `FocusSurface` at all and
+    `DraftSurface` should hold it — the two-concerns reading, and the largest change. (b) The
+    draft''s exit carries its own instruction rather than `keep`. (c) Today''s behaviour is right
+    and returning to the typed column is what the operator wants.
+    NO COMPENSATION MECHANISM WAS BUILT. Remembering a pre-draft column and restoring it is exactly
+    the detect-and-adjust the operator ruled out, so it was not written.'
+  captured: '2026-08-12'

@@ -3466,7 +3466,7 @@ function wordCaret(line, motion, count, from) {
 
 // app/present/column.ts
 function isInsertSpace(instruction) {
-  return instruction.kind === "insert" || instruction.kind === "append";
+  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "at";
 }
 function columnFor(instruction, lineText, from) {
   const raw = rawColumnFor(instruction, lineText, from);
@@ -3495,6 +3495,10 @@ function rawColumnFor(instruction, lineText, from) {
       return from + 1;
     case "word":
       return lineText === null ? from : wordCaret(lineText, instruction.motion, instruction.count, from);
+    case "at":
+      return instruction.column;
+    case "leave-insert":
+      return from - 1;
   }
 }
 
@@ -4764,6 +4768,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
       return;
     }
     settlement = "discarded";
+    focus.moveTo({ kind: "leave-insert" }, lineSource);
     leaveInsert();
     repaint(fileSource);
   };
@@ -4792,6 +4797,9 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
       repaint(next);
     }
   };
+  input.addEventListener("input", () => {
+    focus.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
+  });
   input.addEventListener("blur", () => settle());
   input.addEventListener("keydown", (event) => {
     const key = event?.key;
@@ -4844,7 +4852,10 @@ function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
     returnToVim(markdown ?? fileSource);
     repaint(markdown ?? fileSource);
   };
-  input.addEventListener("input", () => draft.type(input.value));
+  input.addEventListener("input", () => {
+    draft.type(input.value);
+    deps.focus?.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
+  });
   input.addEventListener("blur", settle);
   input.addEventListener("keydown", (event) => {
     const key = event?.key;
@@ -5082,10 +5093,12 @@ function paint(body, source, context, deps) {
     }
     if (open.typed !== open.seed) {
       placeCaret(input, open.typed.length);
+      deps.focus?.moveTo({ kind: "at", column: open.typed.length }, open.typed);
       return;
     }
     if (open.cursorOffset !== void 0) {
       placeCaret(input, open.cursorOffset);
+      deps.focus?.moveTo({ kind: "at", column: open.cursorOffset }, open.seed);
     }
   };
   let lastPaintedIndex = -1;

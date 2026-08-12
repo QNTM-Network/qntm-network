@@ -73,11 +73,42 @@ export type CursorInstruction =
   /** `a` — an INSERT caret one past the character under the cursor. */
   | { readonly kind: "append" }
   /** `w`/`b`/`e` — the count-th title word from here. */
-  | { readonly kind: "word"; readonly motion: WordMotion; readonly count: number };
+  | { readonly kind: "word"; readonly motion: WordMotion; readonly count: number }
+  /**
+   * THE CARET IS HERE — a live `<input>` reporting where the browser put it, as the operator types
+   * or clicks inside an open row.
+   *
+   * THIS IS NOT THE "HANDED A NUMBER" HOLE THE COLUMN PARAMETER WAS, and the difference is worth
+   * being precise about. That hole was a CALLER DECIDING a position and the surface taking its word
+   * for it — five sites typing `0` because they had nothing to say. This carries a fact the caller
+   * DOES own and nothing else can know: the browser moved the caret and only the element can report
+   * where. The resolver still owns what it MEANS, which is why it is clamped here like every other
+   * instruction rather than assigned straight through.
+   */
+  | { readonly kind: "at"; readonly column: number }
+  /**
+   * LEAVING INSERT — Escape, or any other way out of an open row.
+   *
+   * ── THIS ONE LINE IS A DECISION THE OPERATOR OWNS, NOT AN IMPLEMENTATION DETAIL ──
+   *
+   * An INSERT caret sits BETWEEN characters; a NORMAL cursor sits ON one. So leaving INSERT has to
+   * say which character the cursor lands on, and vim's answer is the one to the LEFT of the caret.
+   * This app defaults to vim because everything else in it already does — `motions.ts`, the
+   * NORMAL/INSERT split, `j`/`k`/`gg`/`G`/`w`/`b`/`e`/`{`/`}` — so vim is the consistent default
+   * rather than anybody's preference.
+   *
+   * TO CHANGE IT, EDIT `rawColumnFor`'s `case "leave-insert"` AND NOTHING ELSE. It is resolved in
+   * one place and the enforcers compare against `columnFor` itself rather than against a number, so
+   * flipping it here flips them too and nothing else has to be touched or even known about.
+   */
+  | { readonly kind: "leave-insert" };
 
 /** The instructions that place an INSERT caret, which may sit one past the last character. */
 function isInsertSpace(instruction: CursorInstruction): boolean {
-  return instruction.kind === "insert" || instruction.kind === "append";
+  // `at` is INSERT space because the only thing that reports one is a live `<input>`, whose caret
+  // legitimately sits one past the last character. `leave-insert` is NOT: its whole job is to land
+  // the cursor back ON a character.
+  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "at";
 }
 
 /**
@@ -138,5 +169,12 @@ function rawColumnFor(
       return from + 1;
     case "word":
       return lineText === null ? from : wordCaret(lineText, instruction.motion, instruction.count, from);
+    case "at":
+      return instruction.column;
+    case "leave-insert":
+      // THE DECISION. One column left — vim's rule. See `CursorInstruction`'s `leave-insert` note
+      // for why this app defaults to it and what changing it costs (this line, and nothing else).
+      // `clampColumn` floors it at 0, so leaving INSERT at the head of a line stays at the head.
+      return from - 1;
   }
 }
