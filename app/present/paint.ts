@@ -1233,6 +1233,45 @@ export function appendPrediction(row: HTMLElement, text: string, kind: "pending"
 }
 
 /**
+ * Wrap `delta` inside one of a block-cursor row's three raw spans, so the predicted change is
+ * MARKED there exactly as it is on every other row.
+ *
+ * ── WHY THIS EXISTS: A ROW SPECIAL IN TWO WAYS BECOMES SPECIAL IN THREE ──
+ *
+ * The row under the cursor now rebuilds from the predicted text like every other row. Without this
+ * it would still differ in a SECOND way: every other row shows its pending claim in a
+ * `.row-prediction` marker — appended, or spliced in place — and this one would show the new
+ * characters with nothing saying they are a claim rather than the file's own content. That is a
+ * real difference to the reader, not a cosmetic one: a prediction the engine has not confirmed
+ * would be indistinguishable from settled text.
+ *
+ * `normalLine` writes raw characters into head / cursor cell / tail, so there is no chip to find and
+ * splice — the delta is wrapped where it falls instead. Untouched when the delta is not in this
+ * span, which is the ordinary case for two of the three.
+ */
+function markDeltaIn(span: HTMLElement, delta: string, kind: "pending" | "withdrawn"): HTMLElement {
+  const text = span.textContent ?? "";
+  const at = delta === "" ? -1 : text.indexOf(delta);
+  if (at === -1) {
+    return span;
+  }
+  const before = text.slice(0, at);
+  const after = text.slice(at + delta.length);
+  span.textContent = "";
+  if (before !== "") {
+    span.appendChild(document.createTextNode(before));
+  }
+  const mark = document.createElement("span");
+  mark.className = kind === "withdrawn" ? PREDICT_WITHDRAWN_CLASS : PREDICT_CLASS;
+  mark.textContent = delta;
+  span.appendChild(mark);
+  if (after !== "") {
+    span.appendChild(document.createTextNode(after));
+  }
+  return span;
+}
+
+/**
  * Rebuild ONE row's content-bearing element from `fullText` — the byte-exact predicted line
  * (`RowPrediction.fullText`, `predict.ts`) — with the changed token (`delta`) marked as a pending
  * claim IN PLACE, rather than the row keeping its own stale content with `delta` appended after it.
@@ -1259,11 +1298,30 @@ export function replacePredictedSwap(
     readonly tagsRendition: Rendition;
     readonly stampRendition: Rendition;
     readonly render: (markdown: string) => string;
+    /** Set only for the row under the vim cursor — see `predictableByLineIndex`'s own note. */
+    readonly cursorColumn?: number;
   },
   fullText: string,
   delta: string,
   kind: "pending" | "withdrawn",
 ): boolean {
+  // THE ROW UNDER THE CURSOR REBUILDS IN ITS OWN RENDITION, AND THIS IS THE WHOLE OF THAT (2026-08-13).
+  //
+  // A block-cursor row is raw characters in three spans — `normalLine`'s head / cursor cell / tail —
+  // with no chip markup anywhere, so the token rebuild below cannot produce it and the chip search
+  // after it has nothing to find. Rebuilding it means the same act every other row already gets:
+  // draw this row's content from the PREDICTED text instead of the settled text. The cursor stays
+  // exactly where it was, on the same column, which is the one thing this row does differently from
+  // every other row and the only thing it should.
+  if (entry.cursorColumn !== undefined) {
+    const rebuilt = normalLine(fullText, entry.cursorColumn);
+    entry.contentEl.innerHTML = "";
+    for (const child of Array.from(rebuilt.children) as HTMLElement[]) {
+      entry.contentEl.appendChild(markDeltaIn(child, delta, kind));
+    }
+    return true;
+  }
+
   const shape = classifyLine(fullText);
   const rebuiltSource =
     shape.kind === "checkbox"
@@ -1473,6 +1531,23 @@ export function paint(
       markLineIndex(line, lineIndex);
       body.append(line);
       rowsByLineIndex.set(lineIndex, line);
+      // THE SELECTED ROW IS PREDICTABLE LIKE EVERY OTHER ROW (2026-08-13). Until now this branch
+      // returned here, registering the row for lookup and never for REBUILDING, so a rule effect
+      // aimed at it could not be shown in place: `landPrediction` got `predictable === undefined`
+      // and appended the delta beside content that still said the old thing. The operator read
+      // that as the row REVERTING when he moved onto it — see `a-prediction-on-the-selected-row-
+      // can-never-swap`. Registering it here is the whole fix; `replacePredictedSwap` does the
+      // rest, using `cursorColumn` to rebuild in this row's own rendition rather than the chip one.
+      predictableByLineIndex.set(lineIndex, {
+        contentEl: line,
+        // A BLOCK-CURSOR ROW RENDERS NO TOKENS AT ALL — `normalLine` writes raw characters into
+        // three spans — so these two carry `raw` rather than a resolved value, and the rebuild
+        // below never consults them. Stated rather than left as a plausible-looking lookup.
+        tagsRendition: "raw" as Rendition,
+        stampRendition: "raw" as Rendition,
+        render: (markdown: string) => deps.markdown.render(markdown),
+        cursorColumn: focus.column,
+      });
       return;
     }
     // THE LINE AND THE FILE ARE TWO ARGUMENTS AND THEY ARE NAMED APART. The input shows ONE
@@ -1603,7 +1678,21 @@ export function paint(
   // callback a rebuild needs are only in scope inside this very loop.
   const predictableByLineIndex = new Map<
     number,
-    { readonly contentEl: HTMLElement; readonly tagsRendition: Rendition; readonly stampRendition: Rendition; readonly render: (markdown: string) => string }
+    {
+      readonly contentEl: HTMLElement;
+      readonly tagsRendition: Rendition;
+      readonly stampRendition: Rendition;
+      readonly render: (markdown: string) => string;
+      /**
+       * SET ONLY FOR THE ROW UNDER THE VIM CURSOR, and it is what lets that row rebuild itself the
+       * way every other row already could. A block-cursor row is `normalLine`'s three spans of raw
+       * characters — no chips, no rendition markup — so `renderTokens` cannot rebuild it and the
+       * chip search that follows has nothing to find. The column is the only extra fact its own
+       * rebuild needs. `undefined` for every other row, which reads as "rebuild through the
+       * ordinary rendition path".
+       */
+      readonly cursorColumn?: number;
+    }
   >();
 
   source.split("\n").forEach((line, index) => {

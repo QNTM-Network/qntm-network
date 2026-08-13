@@ -4988,7 +4988,36 @@ function appendPrediction(row, text, kind, animate) {
     }
   }
 }
+function markDeltaIn(span, delta, kind) {
+  const text = span.textContent ?? "";
+  const at = delta === "" ? -1 : text.indexOf(delta);
+  if (at === -1) {
+    return span;
+  }
+  const before = text.slice(0, at);
+  const after = text.slice(at + delta.length);
+  span.textContent = "";
+  if (before !== "") {
+    span.appendChild(document.createTextNode(before));
+  }
+  const mark = document.createElement("span");
+  mark.className = kind === "withdrawn" ? PREDICT_WITHDRAWN_CLASS : PREDICT_CLASS;
+  mark.textContent = delta;
+  span.appendChild(mark);
+  if (after !== "") {
+    span.appendChild(document.createTextNode(after));
+  }
+  return span;
+}
 function replacePredictedSwap(entry, fullText, delta, kind) {
+  if (entry.cursorColumn !== void 0) {
+    const rebuilt = normalLine(fullText, entry.cursorColumn);
+    entry.contentEl.innerHTML = "";
+    for (const child of Array.from(rebuilt.children)) {
+      entry.contentEl.appendChild(markDeltaIn(child, delta, kind));
+    }
+    return true;
+  }
   const shape = classifyLine(fullText);
   const rebuiltSource = shape.kind === "checkbox" ? shape.tail : shape.kind === "heading" ? shape.text : shape.kind === "prose" ? shape.source : null;
   if (rebuiltSource === null) return false;
@@ -5059,6 +5088,16 @@ function paint(body, source, context, deps) {
       markLineIndex(line, lineIndex);
       body.append(line);
       rowsByLineIndex.set(lineIndex, line);
+      predictableByLineIndex.set(lineIndex, {
+        contentEl: line,
+        // A BLOCK-CURSOR ROW RENDERS NO TOKENS AT ALL — `normalLine` writes raw characters into
+        // three spans — so these two carry `raw` rather than a resolved value, and the rebuild
+        // below never consults them. Stated rather than left as a plausible-looking lookup.
+        tagsRendition: "raw",
+        stampRendition: "raw",
+        render: (markdown) => deps.markdown.render(markdown),
+        cursorColumn: focus.column
+      });
       return;
     }
     const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);

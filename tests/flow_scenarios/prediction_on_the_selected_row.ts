@@ -80,23 +80,28 @@ function assertAPredictionOnTheSelectedRowCanSwap(): void {
     }),
   } as never);
 
-  const embedded = collectHtml(body).join("");
-  const separate = countPredictionElements(body);
-
-  // A SWAP writes the chip INTO the row's own rendered markup. An append hangs a separate element
-  // off the row. That difference is the two branches' own signature and needs no access to either.
-  const swapped = embedded.includes("row-prediction") && embedded.includes("#outcome");
-  if (!swapped) {
+  // ── THE ASSERTION MOVED FROM APPEARANCE TO REASON, 2026-08-13, AND SAID SO ──
+  //
+  // This scenario originally proved the swap by looking for `.row-prediction` chip markup in the
+  // row's rebuilt HTML. That was a PROXY, and it was the best available when it was written: the
+  // sink returned `void`, so appearance was the only thing a reader could check. It is also a proxy
+  // that BREAKS ON A CORRECT FIX — the row under the cursor rebuilds through `normalLine`, which
+  // writes raw characters and no chips at all, so a swap there is real and leaves no chip to find.
+  //
+  // `data-prediction-landing` (#170) made the branch a READING. Asserting it is strictly stronger
+  // than asserting the markup: three different appends are byte-identical on screen and this names
+  // which one happened. The claim is unchanged — "a prediction for the row the cursor is on must
+  // reach the swap" — and it is now stated against the fact rather than against a symptom of it.
+  const landing = stampedReason(body);
+  if (landing !== "swapped") {
     throw new Error(
-      "A PREDICTION FOR THE ROW THE CURSOR IS ON CAN NEVER SWAP. " +
+      "A PREDICTION FOR THE ROW THE CURSOR IS ON DID NOT REACH THE SWAP. " +
         `The prediction carried fullText ${JSON.stringify(SWAPPED)} and the row was painted, but ` +
-        `the claim landed as ${separate} separate appended element(s) rather than in the row's own ` +
-        "rendered markup. `paint.ts`'s row builder returns EARLY for the selected row in NORMAL — " +
-        "it is added to `rowsByLineIndex` and never to `predictableByLineIndex` — so " +
-        "`landPrediction` gets `predictable === undefined`, cannot reach `replacePredictedSwap`, " +
-        "and appends. The stale `#task` stays on the line beside the new `#outcome`, which is the " +
-        "operator's own report. THIS IS A DELIBERATE PIN — the fix is a design decision he has " +
-        "not made; do not loosen this assertion to make it pass.",
+        `the sink reported its landing as ${JSON.stringify(landing)} rather than "swapped". ` +
+        "`paint.ts`'s row builder must register the selected row in `predictableByLineIndex` like " +
+        "every other row, and `replacePredictedSwap` must rebuild it in its own block-cursor " +
+        "rendition — otherwise the delta is appended beside settled content that still says the " +
+        "old thing, which the operator reads as the row REVERTING when he moves onto it.",
     );
   }
 }
@@ -117,18 +122,16 @@ function markdownStub(): unknown {
   return { render: (m: string) => m, renderInline: (m: string) => m };
 }
 
-function collectHtml(node: unknown, out: string[] = []): string[] {
-  const el = node as { innerHTML?: unknown; children?: unknown[] };
-  if (typeof el.innerHTML === "string") out.push(el.innerHTML);
-  for (const kid of el.children ?? []) collectHtml(kid, out);
-  return out;
-}
-
-function countPredictionElements(node: unknown, seen = { n: 0 }): number {
-  const el = node as { className?: unknown; children?: unknown[] };
-  if (String(el.className ?? "").split(/\s+/).includes("row-prediction")) seen.n += 1;
-  for (const kid of el.children ?? []) countPredictionElements(kid, seen);
-  return seen.n;
+/** The `data-prediction-landing` the sink stamped, wherever in the tree the row ended up. */
+function stampedReason(node: unknown): string | undefined {
+  const el = node as { dataset?: Record<string, string>; children?: unknown[] };
+  const own = el.dataset?.["predictionLanding"];
+  if (own !== undefined) return own;
+  for (const kid of el.children ?? []) {
+    const found = stampedReason(kid);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /** The minimum `paint` writes into, over a stub document. */
