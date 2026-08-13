@@ -384,3 +384,16 @@ export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";
 // wire is the page, which is where every other read already lives.
 //
 // docs/implementation-artifacts/design-config-is-content.md step 2.
+
+// ── WHAT IS IN A VIEW ────────────────────────────────────────────────────────────────────────
+// `viewmembers.ts` computes a view's sections and their members from the compiled language and a
+// graph — the half `app/index.html`'s view-by-path lookup does not do. Re-exported here for the
+// same reason every other entry above is: this file is the app's ONE surface onto `present/`.
+export { computeViewMembers } from "./select/viewmembers.js";
+export type {
+  OrderingLanguage,
+  SectionAbstention,
+  UncomputedSection,
+  ViewComputation,
+  ViewSection,
+} from "./select/viewmembers.js";
