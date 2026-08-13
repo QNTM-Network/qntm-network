@@ -62,13 +62,44 @@ export function run(): void {
   }
 
   // The cursor is ON the row the rule fired for — the operator's own report.
+  assertTheClaimIsMarked();
+
   const on = landingFor({ cursorOnTheRow: true });
-  if (on !== "appended:row-not-predictable") {
+  // UPDATED 2026-08-13, WHEN THE DEFECT IT OBSERVED WAS CLOSED. This scenario was written to
+  // OBSERVE `appended:row-not-predictable` — it existed to give the sink its first chains and to
+  // confirm the operator's report by reading. The fix registers the selected row in
+  // `predictableByLineIndex` like every other row, so both positions now swap, and the scenario
+  // becomes what it should be: the guard that THE SELECTED ROW IS NOT SPECIAL. Its whole value is
+  // that the two cases are asserted as a PAIR — a fix that made the cursor-on case swap by making
+  // the cursor-off case stop would pass either assertion alone and fails this one.
+  if (on !== "swapped") {
     throw new Error(
-      "with the cursor ON the row, the rule effect must be observed landing as an append for the " +
-        `REASON \`row-not-predictable\` — got ${JSON.stringify(on)}. This scenario OBSERVES that ` +
-        "defect (pinned separately as `a-prediction-on-the-selected-row-can-never-swap`); a " +
-        "different reason here means the cause moved and the pin is measuring the wrong thing.",
+      "with the cursor ON the row, the rule effect must land as a SWAP, exactly as it does with " +
+        `the cursor off it — got ${JSON.stringify(on)}. The row under the cursor is registered as ` +
+        "predictable like every other row and rebuilds through `normalLine` in its own " +
+        "block-cursor rendition; a reason other than `swapped` means that registration or that " +
+        "rebuild is gone.",
+    );
+  }
+}
+
+/**
+ * AND THE SECOND WAY THE SELECTED ROW COULD STILL BE SPECIAL, CHECKED RATHER THAN ASSERTED IN PROSE.
+ *
+ * Every row shows a pending claim inside a `.row-prediction` marker. The row under the cursor
+ * rebuilds through `normalLine`, which writes RAW characters and has no chip vocabulary — so a swap
+ * there could easily land the new text with nothing saying it is a claim the engine has not
+ * confirmed yet, which would be indistinguishable from settled content. A row that is special in
+ * two ways becomes special in three.
+ */
+function assertTheClaimIsMarked(): void {
+  const marked = markedDeltaWithCursorOnTheRow();
+  if (marked !== "#outcome") {
+    throw new Error(
+      "the selected row's predicted change is not MARKED as a claim — expected a " +
+        `\`.row-prediction\` marker carrying "#outcome", found ${JSON.stringify(marked)}. Every ` +
+        "other row shows its pending claim in one; a swap that writes the new characters bare " +
+        "makes an unconfirmed prediction look like settled text.",
     );
   }
 }
@@ -99,6 +130,38 @@ function landingFor(opts: { cursorOnTheRow: boolean }): string | undefined {
   } as never);
 
   return stampedReason(body);
+}
+
+/** Paint with the cursor ON the row and return the text inside its `.row-prediction` marker. */
+function markedDeltaWithCursorOnTheRow(): string | undefined {
+  const focus = new FocusSurface();
+  const mode = new ModeSurface();
+  const body = stubBody();
+  focus.focus(ROW, SOURCE, "");
+  paint(body, SOURCE, new PresentationContext({ GLOBAL: { tags: "wired" } as never }), {
+    markdown: markdownStub(),
+    focus,
+    mode,
+    predict: takeOnce({
+      predictions: [{ lineIndex: ROW, text: "#outcome", fullText: SWAPPED }],
+      withdrawn: [],
+      animate: false,
+    }),
+  } as never);
+  return markerText(body);
+}
+
+/** The text inside the first `.row-prediction` element anywhere under `node`. */
+function markerText(node: unknown): string | undefined {
+  const el = node as { className?: unknown; textContent?: unknown; children?: unknown[] };
+  if (String(el.className ?? "").split(/\s+/).includes("row-prediction")) {
+    return String(el.textContent ?? "");
+  }
+  for (const kid of el.children ?? []) {
+    const found = markerText(kid);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /** The `data-prediction-landing` the sink wrote, wherever in the tree the row ended up. */

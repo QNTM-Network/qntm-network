@@ -4694,3 +4694,39 @@ backlog:
     this pass was scoped to seeing. The absence check EXCLUDES this one call site explicitly and
     names this row; closing the row means deleting that exclusion in the same commit.'
   captured: '2026-08-12'
+- id: the-selected-row-is-not-special
+  title: '[fix] The row under the vim cursor receives a prediction like every other
+    row — registered as predictable, rebuilt in its own block-cursor rendition, and
+    its claim marked. Closes the RED pinned in #169.'
+  driving_capability: a-rule-effect-has-one-landing
+  record: '2026-08-13 — CLOSES `a-prediction-on-the-selected-row-can-never-swap`. The pin went
+    green because the wiring landed; its assertion was re-stated against
+    `data-prediction-landing` rather than against chip markup, which is STRONGER and is disclosed
+    below rather than done quietly.
+    THE SURVEY DECIDED IT, AND ONE OF THE THREE PRODUCTS WAS CLEARLY RIGHT. (a) SUPPRESS a
+    prediction on the selected row — rejected outright: it makes the row MORE special, and the
+    operator''s complaint is precisely that the row behaves differently. (b) TEACH THE SWAP to
+    rebuild a block-cursor row. (c) MAKE THE ROW PREDICTABLE. (b) and (c) are not alternatives —
+    they are two halves of one thing, and measurement proved it: registering the row alone moves
+    the landing from `appended:row-not-predictable` to `appended:swap-refused`, because a
+    block-cursor row is raw characters in three spans with no chip for the swap to find. Both are
+    needed and neither is a separate decision.
+    WHY THE ROW BUILDER COULD NOT SIMPLY DRAW THE PREDICTED TEXT, which would have been the
+    smallest change: `predict.take()` runs at paint.ts:1877, AFTER the row loop. The prediction is
+    not in hand when the row is built. Checked before designing rather than assumed.
+    THE SECOND SPECIALNESS, FOUND BY APPLYING THE TEST RATHER THAN BY BEING TOLD. After the rebuild
+    the row still differed in a way nothing had named: every other row shows a pending claim inside
+    a `.row-prediction` marker, and `normalLine` writes RAW characters with no chip vocabulary, so
+    the new text would have landed bare — indistinguishable from settled content the engine had
+    confirmed. `markDeltaIn` wraps the delta where it falls. The row now does exactly ONE thing
+    differently from every other row: it draws a block cursor.
+    MUTATION-PROVEN THREE TIMES, SEPARATELY, and the diagnostic makes each self-identifying:
+      drop the registration        -> `appended:row-not-predictable`
+      drop the cursor-row rebuild  -> `appended:swap-refused`
+      drop the delta marking       -> the marking assertion alone, landing still `swapped`
+    NOT CLOSED, AND NOT CLAIMED: the withdrawn path still calls `appendPrediction` directly and is
+    still excluded by name in the absence check. This fix does not touch it.
+    SHIPPED BYTES: dist/present.js gains `markDeltaIn` and the cursor-row rebuild branch;
+    app/index.html''s cache-bust hash follows. demo/ UNCHANGED. 2630 tests, 14 failures — the same
+    pre-existing 14. Sinks 4/4 governed, scenarios 19/19, routed 3.'
+  captured: '2026-08-13'
