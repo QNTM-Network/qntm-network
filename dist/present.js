@@ -6798,6 +6798,122 @@ function globalKey(deps, e) {
 function installGlobalKeys(deps, on = document) {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
 }
+
+// app/present/select/viewmembers.ts
+function fieldsOf(node) {
+  return candidateFieldsOf(node);
+}
+function defaultKeyForField(fields, field, ordering) {
+  const raw = fields[field];
+  if (field === "title") {
+    return typeof raw === "string" && raw.length > 0 ? { tier: 0, value: raw } : { tier: 1, value: "" };
+  }
+  const marker = ordering.orderingFields[field];
+  if (marker === void 0) return { tier: 1, value: "" };
+  if (marker.kind === "enum") {
+    if (typeof raw !== "string") return { tier: 1, value: 0 };
+    const rank = ordering.priorityRank[raw];
+    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
+  }
+  if (raw === void 0 || raw === null || raw === "") {
+    return { tier: 1, value: marker.kind === "date" ? "" : 0 };
+  }
+  return marker.kind === "date" ? { tier: 0, value: String(raw) } : { tier: 0, value: Number(raw) };
+}
+function declaredTupleFor(fields, keys, ordering) {
+  const values = [];
+  for (const key of keys) {
+    const marker = ordering.orderingFields[key.field];
+    if (marker === void 0) return void 0;
+    if (marker.kind === "enum") return void 0;
+    const raw = fields[key.field];
+    if (raw === void 0 || raw === null || raw === "") return void 0;
+    values.push(String(raw));
+  }
+  return values;
+}
+function qualifies(node, qualifier, graph, edgeSourceOf, today) {
+  const fields = fieldsOf(node);
+  if (!qualifierNeedsGraph(qualifier)) return matchesQualifier(fields, qualifier, today);
+  if (graph === void 0 || edgeSourceOf === void 0) return void 0;
+  return matchesQualifierGraphAware(fields, node.id, qualifier, graph, edgeSourceOf, void 0, today);
+}
+function computeViewMembers(viewId, nodes, language, ordering, options) {
+  const sectionIds = language.sectionOrder[viewId];
+  const declared = language.sections[viewId];
+  if (sectionIds === void 0 || declared === void 0) return void 0;
+  const graph = options?.graph;
+  const edgeSourceOf = options?.edgeSourceOf;
+  const today = options?.today;
+  const sections = [];
+  const uncomputed = [];
+  for (const sectionId of sectionIds) {
+    const section = declared[sectionId];
+    if (section === void 0) continue;
+    const name = section.name ?? sectionId;
+    const qualifier = language.predicates[section.qualification];
+    if (qualifier === void 0) {
+      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "no-predicate" });
+      continue;
+    }
+    if (qualifierNeedsClock(qualifier) && today === void 0) {
+      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "needs-clock" });
+      continue;
+    }
+    if (qualifierNeedsGraph(qualifier) && (graph === void 0 || edgeSourceOf === void 0)) {
+      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "needs-graph" });
+      continue;
+    }
+    const members = [];
+    const undecided = [];
+    for (const node of nodes) {
+      const answer = qualifies(node, qualifier, graph, edgeSourceOf, today);
+      if (answer === true) members.push(node);
+      else if (answer === void 0) undecided.push(node);
+    }
+    const declaredOrdering = ordering.ordering[viewId]?.[sectionId];
+    const placed = orderMembers(members, declaredOrdering, ordering);
+    sections.push({
+      sectionId,
+      name,
+      qualification: section.qualification,
+      members: placed.members,
+      ordered: placed.ordered,
+      ...placed.because === void 0 ? {} : { orderAbstention: placed.because },
+      undecided
+    });
+  }
+  return { viewId, sections, uncomputed };
+}
+function orderMembers(members, declaredOrdering, ordering) {
+  if (declaredOrdering !== void 0) {
+    const keys2 = declaredOrdering.ordering;
+    if (keys2 === void 0 || keys2.length === 0) return { members, ordered: false };
+    const tuples2 = /* @__PURE__ */ new Map();
+    for (const node of members) {
+      const tuple = declaredTupleFor(fieldsOf(node), keys2, ordering);
+      if (tuple === void 0) {
+        return { members, ordered: false, because: "ordering-field-not-published" };
+      }
+      tuples2.set(node.id, tuple);
+    }
+    const sorted2 = [...members].sort(
+      (a, b) => compareTuples(tuples2.get(a.id) ?? [], tuples2.get(b.id) ?? [], keys2, ordering.orderingFields)
+    );
+    return { members: sorted2, ordered: true };
+  }
+  const keys = ordering.defaultOrdering;
+  if (keys.length === 0) return { members, ordered: false };
+  const tuples = /* @__PURE__ */ new Map();
+  for (const node of members) {
+    const fields = fieldsOf(node);
+    tuples.set(node.id, keys.map((key) => defaultKeyForField(fields, key.field, ordering)));
+  }
+  const sorted = [...members].sort(
+    (a, b) => compareDefaultTuples(tuples.get(a.id) ?? [], tuples.get(b.id) ?? [], keys)
+  );
+  return { members: sorted, ordered: true };
+}
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -6853,6 +6969,7 @@ export {
   columnFor,
   composeLine,
   composeSeed,
+  computeViewMembers,
   coverageOf,
   createCommitLine,
   declarationFrom,

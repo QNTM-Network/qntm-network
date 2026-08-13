@@ -173,7 +173,7 @@ export type EdgeSourceOf = (edgeType: string) => "self" | "position" | undefined
 /** `{node_type: node.type, ...node.fields}` — the ONE reshaping this module does, so
  * `matchesFindClause` (membership.ts) can be reused unchanged rather than re-implemented against a
  * `{type, fields}` split it was never written to read. */
-function candidateFieldsOf(node: GraphNode): ResolvedFields {
+export function candidateFieldsOf(node: GraphNode): ResolvedFields {
   return { node_type: node.type, ...node.fields };
 }
 

@@ -398,7 +398,7 @@ function compareValue(kind: OrderingFieldMarker["kind"], a: string, b: string): 
 }
 
 /** -1 if `a` sorts before `b` under `keys`' declared directions, +1 after, 0 tied on every key. */
-function compareTuples(
+export function compareTuples(
   a: readonly string[],
   b: readonly string[],
   keys: readonly OrderingKey[],
@@ -733,7 +733,7 @@ export function orderingPlacementFor(
 /** One field's comparison key for the DEFAULT ordering's tiered rule — `tier: 0` (present) always
  * sorts before `tier: 1` (absent), REGARDLESS of `direction`; `value` is compared only within one
  * tier. Mirrors `section_builder.py:400-423`'s own `(tier, value)` tuple exactly. */
-interface DefaultFieldKey {
+export interface DefaultFieldKey {
   readonly tier: 0 | 1;
   readonly value: string | number;
 }
@@ -826,7 +826,7 @@ function defaultTupleFor(
 
 /** -1 if `a` sorts before `b` under `defaultOrdering`'s own tiered rule, +1 after, 0 tied on every
  * key — the DEFAULT-path twin of `compareTuples`, tier-aware rather than abstain-on-missing. */
-function compareDefaultTuples(
+export function compareDefaultTuples(
   a: readonly DefaultFieldKey[],
   b: readonly DefaultFieldKey[],
   defaultOrdering: readonly OrderingKey[],
