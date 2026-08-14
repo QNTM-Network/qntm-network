@@ -117,6 +117,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { readLedger, writeLedger, withoutLedger, ledgerIsPresent } from "./dropped-ledger.mjs";
 import { join, resolve } from "node:path";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT, notCheckedReport } from "./monorepo-config.mjs";
 import { Ledger, reportDropped } from "./ledger.mjs";
@@ -250,12 +251,25 @@ async function main() {
   const current = JSON.parse(readFileSync(presentationPath, "utf8"));
 
   if (args.check) {
-    if (JSON.stringify(current.resolution) === JSON.stringify(resolution)) {
+    if (JSON.stringify(current.resolution) === JSON.stringify(withoutLedger(resolution))) {
       console.log("presentation.json's 'resolution' key matches the monorepo config.");
       return;
     }
     console.error("presentation.json's 'resolution' key is STALE relative to the monorepo config.");
-    const before = current.resolution?.dropped ?? {};
+    // THE BASELINE IS THE SIBLING LEDGER, NOT THE SERVED PAYLOAD. It used to be
+    // `current.resolution?.dropped ?? {}` — the drops read back out of presentation.json, which is
+    // why 38 KB of ledger was shipping to the browser. See scripts/dropped-ledger.mjs.
+    //
+    // AND THE ABSENT CASE IS SAID OUT LOUD. `?? {}` on a missing baseline reports EVERY drop as
+    // newly dropped, on every run, without failing — the uniformly-wrong answer this whole move
+    // exists to avoid re-creating one layer along.
+    if (!ledgerIsPresent(presentationPath)) {
+      console.error(
+        "  NO DROP BASELINE — presentation-dropped.json is absent, so every drop below would " +
+          "read as NEW. Regenerate to create it; the list is the full set, not a delta.",
+      );
+    }
+    const before = readLedger(presentationPath, 'resolution');
     for (const [key, why] of Object.entries(resolution.dropped)) {
       if (!(key in before)) console.error(`  NEWLY DROPPED  ${key}: ${why}`);
     }
@@ -265,7 +279,13 @@ async function main() {
     process.exit(1);
   }
 
-  writeFileSync(presentationPath, JSON.stringify({ ...current, resolution }, null, 2) + "\n");
+  writeFileSync(
+    presentationPath,
+    JSON.stringify({ ...current, resolution: withoutLedger(resolution) }, null, 2) + "\n",
+  );
+  // THE LEDGER GOES BESIDE THE DECLARATION, committed but never served — it is the baseline the
+  // `--check` above diffs against, and it is the one thing in this file the browser never reads.
+  const ledgerPath = writeLedger(presentationPath, 'resolution', resolution.dropped);
   const orderingSections = Object.values(resolution.ordering).reduce(
     (n, s) => n + Object.keys(s).length,
     0,

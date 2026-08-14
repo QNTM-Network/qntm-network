@@ -87,6 +87,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
+import { readLedger, writeLedger, withoutLedger, ledgerIsPresent } from "./dropped-ledger.mjs";
 import { join, resolve } from "node:path";
 import { DEFAULT_CONFIG_DIR, REPO_ROOT, notCheckedReport } from "./monorepo-config.mjs";
 import { Ledger, reportDropped } from "./ledger.mjs";
@@ -200,7 +201,7 @@ async function main() {
   const current = JSON.parse(readFileSync(presentationPath, "utf8"));
 
   if (args.check) {
-    if (JSON.stringify(current.qualification) === JSON.stringify(qualification)) {
+    if (JSON.stringify(current.qualification) === JSON.stringify(withoutLedger(qualification))) {
       console.log("presentation.json's 'qualification' key matches the monorepo config.");
       return;
     }
@@ -208,7 +209,20 @@ async function main() {
     // WHICH declaration went stale, when the answer is a drop. A `dropped` map that gained or lost
     // an entry means a config change either stopped reaching the browser or started reaching it,
     // and that is the sentence the operator needs — not "something differs".
-    const before = current.qualification?.dropped ?? {};
+    // THE BASELINE IS THE SIBLING LEDGER, NOT THE SERVED PAYLOAD. It used to be
+    // `current.qualification?.dropped ?? {}` — the drops read back out of presentation.json, which is
+    // why 38 KB of ledger was shipping to the browser. See scripts/dropped-ledger.mjs.
+    //
+    // AND THE ABSENT CASE IS SAID OUT LOUD. `?? {}` on a missing baseline reports EVERY drop as
+    // newly dropped, on every run, without failing — the uniformly-wrong answer this whole move
+    // exists to avoid re-creating one layer along.
+    if (!ledgerIsPresent(presentationPath)) {
+      console.error(
+        "  NO DROP BASELINE — presentation-dropped.json is absent, so every drop below would " +
+          "read as NEW. Regenerate to create it; the list is the full set, not a delta.",
+      );
+    }
+    const before = readLedger(presentationPath, 'qualification');
     const after = qualification.dropped;
     for (const key of Object.keys(after)) {
       if (!(key in before)) console.error(`  NEWLY DROPPED  ${key}: ${after[key]}`);
@@ -219,7 +233,13 @@ async function main() {
     process.exit(1);
   }
 
-  writeFileSync(presentationPath, JSON.stringify({ ...current, qualification }, null, 2) + "\n");
+  writeFileSync(
+    presentationPath,
+    JSON.stringify({ ...current, qualification: withoutLedger(qualification) }, null, 2) + "\n",
+  );
+  // THE LEDGER GOES BESIDE THE DECLARATION, committed but never served — it is the baseline the
+  // `--check` above diffs against, and it is the one thing in this file the browser never reads.
+  const ledgerPath = writeLedger(presentationPath, 'qualification', qualification.dropped);
   const decidable = Object.keys(qualification.predicates).length;
   const refusedCount = Object.keys(qualification.refused).length;
   const sectionCount = Object.values(qualification.sections).reduce(
