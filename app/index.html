@@ -1059,7 +1059,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=eca497c06f";
+} from "/dist/present.js?v=0ffde2f5c0";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2339,7 +2339,13 @@ function repaintCurrentView() {
     // `edited` and nothing else — and told only by the painter's own `repaint` closure, which is
     // the one place that file puts a string on screen that this page has not already seen.
     rows,
-    onCheckboxToggle: (toggle) => toggleTask(v, toggle),
+    // THE SAME CALLBACK AS `onLineCommit` BELOW, AND NOW THE SAME DESTINATION. A tick builds a
+    // `LineCommit` (see `toggleTaskCommit`) and hands it to the one write path; `null` is the
+    // refused edit, which posts nothing exactly as it always did.
+    onCheckboxToggle: (toggle) => {
+      const commit = toggleTaskCommit(v, toggle);
+      if (commit !== null) commitLine(v, commit);
+    },
     // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
     // created arrive here identically — `commit.markdown` is the whole view source either way, and
     // this page neither knows nor needs to know which it is holding. There is one endpoint, one
@@ -2666,86 +2672,64 @@ async function writeFile(view, markdown, source, token = null, ops = null) {
   }
 }
 
-// Tick/untick a task: POST the edited view, let the server cycle, then re-render from the fresh
-// projection. Optimistic — the box shows its new state immediately; reverts on failure.
+// TICKING A BOX IS A LINE COMMIT. There is no `toggleTask` any more, and that is the change.
 //
-// THE EDIT ITSELF IS NOT MADE HERE. `toggle.markdown` is the whole view source with exactly one
-// glyph changed, computed by app/present/source.js#applyEdit, and `null` means the edit did not
-// apply — the same refusal the old inline regex expressed by returning early, with the same
-// consequence: no optimistic UI change and no POST. The DOM is never read to produce it.
-async function toggleTask(view, toggle) {
+// ── WHAT WAS HERE, AND WHAT IT COST ──
+//
+// This page used to hold a second, complete write path for exactly one act — a checkbox flip by
+// mouse — beside `commitLine` (app/present/commit.ts), which the same flip by `x` has always used.
+// The two agreed on the edit and disagreed on everything after it: measured through this very page
+// on 2026-08-14, a 409 made ONE post by mouse and TWO by `x`, the second being a rebase this path
+// could not perform. So the commonest gesture in the app was the one with the least behind it, and
+// every write-path change had to be made twice or ship half-applied — which is what happened when
+// ops landed on `commitLine` in #174 and this path kept posting whole files for three weeks with
+// nothing red.
+//
+// ── THE RULE THAT DECIDES WHAT THE BOX DOES, AND IT IS NOT A RULE ABOUT BOXES ──
+//
+// The operator's own: THE GRAPH IS TRUTH, MINUS CHANGES STREAMED FROM THE VIEW THAT HAVE NOT
+// LANDED. A posted write is still streamed-from-the-view. So is a rebase retry that is still
+// running. A refusal with no retry left is not.
+//
+// That single rule produces both answers this app needs, which is why it replaces the special case
+// it looks like. Typed characters STAY on screen through a refusal, because the operator can still
+// resend them — the change is, in the only sense that matters, still his. A ticked box REVERTS,
+// because there is nothing left to resend and showing it ticked would be the lie. The split was
+// never tick-versus-text; it is whether the change is still in flight.
+//
+// So the revert below is passed to `existingLineCommit` as `onRefusalIsFinal` and fires ONLY at
+// `commitLine`'s two give-up exits. A 409 that a rebase then satisfies reverts nothing at all —
+// the box was right the whole time, and this page never has to know a retry happened.
+//
+// ── WHAT THE TICK GAINS BY ARRIVING HERE ──
+//
+// Everything `commitLine` already did for `x` and did not do for the mouse: the resolver walk and
+// its abstention report, `armSettle`/`armPredict`, the stale-projection drop, and the rebase. A
+// tick that loses a race against the cycle is now retried against the server's own copy instead of
+// being dropped.
+//
+// `existingLineCommit` (app/present/paint.ts) rather than an object literal, for the reason its own
+// header gives: a `LineCommit` hand-rolled on this page is how `kind`/`source` went missing once
+// already, in the one file TypeScript never checks.
+function toggleTaskCommit(view, toggle) {
   const { box, row, markdown: next } = toggle;
-  if (next === null) return;
+  if (next === null) return null;
   row.classList.toggle("done", box.checked);
   row.classList.add("syncing");
   box.disabled = true;
-  // ONE TOKEN PER WRITE, AND A TICK IS A WRITE. A tick is one glyph and the box is put back on a
-  // failure, so there are no characters to lose — but it is one of the two writes that can be in the
-  // air at once, and the register has to be able to tell its answer from a line commit's. That is
-  // the whole of the two-writes-to-one-path case.
-  const token = mintWriteToken();
-  // THE EDIT THIS TICK IS, NO LONGER DISCARDED — and this gesture is the one that was still
-  // discarding it. The line commit path (`commitLine`, app/present/commit.ts) has sent its ops
-  // since #174; a tick went through this function instead and posted the whole file, so the
-  // commonest gesture in the app was the only one the graph server still had to reconstruct with
-  // `difflib`. `toggle.lineIndex` is the index `applyEdit` was given, and `next` is the file it
-  // returned, so the op's text is read OUT OF the fold rather than rebuilt beside it — the same
-  // by-construction agreement between the two halves of the request that `lineOps`' own header
-  // describes, and the reason both bodies can ride together at any server.
-  //
-  // `set-checkbox` IS PASSED AS ITSELF, not translated to `set-line` here. The two mint the same
-  // range, so nothing on the wire differs — but this page is outside `tsconfig.json`'s `include`
-  // and a translation written here is checked by nothing. Handing the module the kind the edit
-  // actually has leaves the mapping in `lineOps`, where the type checker reads it.
-  //
-  // `null` when the index is out of range, which sends no `ops` field and is byte-for-byte the
-  // request this line posted before this change. A misplaced op is silent corruption; a missing
-  // one is just today's whole-file write.
-  const ops = lineOps("set-checkbox", toggle.lineIndex, next);
-  try {
-    const data = await writeFile(view, next, toggle.source, token, ops);
-    // THE MARKDOWN THAT WENT ON THE WIRE, HANDED TO `arrive` SO AN ACK MEANS SOMETHING. Without it
-    // an accepted write is indistinguishable from an answer that lost its projection: the server's
-    // claim is "this file now says what you sent", and the only copy of "what you sent" is here.
-    // See `accept` for what is done with it and for the two situations in which nothing is.
-    // OFFERED, NOT INSTALLED. If he opened a line while this tick was in the air, its answer waits
-    // — see `arrive` — and the app used to say so (ARRIVAL_HELD/ARRIVAL_EMPTY/ARRIVAL_ACCEPTED, one
-    // per `arrive` outcome, chore/retire-the-status-line). THE ROW IS LEFT MARKED `syncing` in that
-    // case, deliberately and without a statement here to do it: the class is dropped by the repaint
-    // on the ordinary path and by the `catch` on a failure, so "still marked" is exactly "this row's
-    // answer is not on screen yet", which is the truth. Clearing it here would have been this page
-    // inventing a third meaning for a class that already has two.
-    // AND THE STRING THE EDIT WAS COMPUTED AGAINST, so `accept` can tell which lines this write
-    // INTRODUCED from the ones that were already there. A tick introduces none — it changes one
-    // glyph on a line that already has its id — so this carries the tick's owed set to empty, which
-    // is what keeps the commonest gesture on exactly the stopping condition it had before.
-    arrive(view.path, data, { markdown: next, token, source: toggle.source });
-  } catch (e) {
+  return existingLineCommit(toggle.source, toggle.lineIndex, next, (current) => {
+    // NO LONGER IN FLIGHT — put the box back. The class and the `disabled` flag go with it, because
+    // a row left marked `syncing` means "this row's answer is not on screen yet" and the answer is
+    // now on screen: it is the box the server still holds.
     box.checked = !box.checked;
     row.classList.toggle("done", box.checked);
     row.classList.remove("syncing");
     box.disabled = false;
-    // A REFUSAL IS NOT A FAILURE, and the box has already been put back above — which for this
-    // gesture is the whole of "nothing is lost": a tick is one glyph the server does not have, and
-    // showing it ticked would be the lie.
-    //
-    // A 409 IS THE ONE ANSWER THAT CLOSES A TOKEN, because it is the one answer that says NOTHING
-    // WAS WRITTEN — so no echo for it can ever arrive and waiting for one is waiting for nothing.
-    // Every other failure leaves the token outstanding on purpose: a request that died on the
-    // network may still have been processed, and a later projection naming it is exactly the
-    // evidence this whole mechanism exists to catch. Closing it releases nothing either way.
-    if (e?.status === 409 && token !== null) {
-      writes.giveUp(token);
-    }
-    if (e?.status !== 409) {
-      return;
-    }
-    // THE VIEW HEALS ITSELF FROM THE ANSWER THAT REFUSED IT — see `healFromRefusal`. A tick has no
-    // characters at stake, so it is always attempted; `healFromRefusal` itself is what refuses (an
-    // open line elsewhere, a queued projection, an unscreened path) and it does so silently — the
-    // box the branch above put back by hand simply stays as it is until the operator's next read.
-    healFromRefusal(view.path, e.current);
-  }
+    // AND THE VIEW HEALS FROM THE ANSWER THAT REFUSED IT, exactly as this gesture always did.
+    // `healFromRefusal` is what refuses — an open line elsewhere, a queued projection, an
+    // unscreened path — and it does so silently, leaving the box the lines above put back.
+    healFromRefusal(view.path, current);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════

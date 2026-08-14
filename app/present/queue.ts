@@ -101,6 +101,41 @@ function isNewer(arriving: string | null, held: string | null): boolean {
 
 export class ProjectionQueue<T = unknown> {
   #pending = new Map<string, PendingProjection<T>>();
+  /**
+   * THE NEWEST `generated_at` THIS QUEUE HAS EVER ACCEPTED FOR A PATH, whether or not it is still
+   * holding it. One entry per file, never removed except by `clear`.
+   *
+   * ── WHY IT HAS TO OUTLIVE `#pending` ──
+   *
+   * TWO DIFFERENT ORDERINGS RUN THROUGH THIS CLASS AND ONLY ONE OF THEM WAS SURVIVING.
+   *
+   *   EDIT ordering — a projection computed before the operator's newest edit no longer describes
+   *     the screen. That is what `drop` is for, and it is right.
+   *   ARRIVAL ordering — a slower answer must not overwrite a faster, newer one. That is what
+   *     `isNewer` is for, and it is right too.
+   *
+   * `drop` answered its own question by DELETING the entry — and the entry was also the only
+   * evidence the second question had. So on the second of two rapid commits, `offer` found an empty
+   * map, took the `held === undefined` path, and queued unconditionally: `isNewer` was not
+   * consulted because there was nothing left to compare against. An answer that left the server
+   * FIRST could then land on screen after one that left it later.
+   *
+   * The watermark separates the two. `drop` still clears what is HELD; it no longer takes the
+   * arrival-ordering evidence with it.
+   *
+   * ── AND IT CLOSES THE SAME HOLE IN `take`, WHICH IS NOT THE ONE ANYONE WAS LOOKING FOR ──
+   *
+   * `take` removes the entry too, because the caller is about to install it. Between that removal
+   * and the next arrival the map is equally empty, so an answer that overtook the one just applied
+   * was accepted for exactly the same reason. Proven by its own test rather than reasoned about.
+   *
+   * ── EVERY VALUE COMPARED IS THE SERVER'S OWN `generated_at` ──
+   *
+   * No browser clock enters this, so there is no cross-clock ordering to get wrong. A design that
+   * stamped the DROP with the moment of the edit would have had to compare the operator's clock
+   * against the server's, and this deliberately does not.
+   */
+  #highWater = new Map<string, string | null>();
 
   /**
    * A PROJECTION ARRIVED FOR `path`. Hold it, unless what is already held is at least as new.
@@ -110,17 +145,20 @@ export class ProjectionQueue<T = unknown> {
    */
   offer(path: string, generatedAt: string | null, data: T): OfferOutcome {
     const held = this.#pending.get(path);
-    if (held === undefined) {
-      this.#pending.set(path, { path, generatedAt, data });
-      return { outcome: "queued" };
-    }
-    if (!isNewer(generatedAt, held.generatedAt)) {
+    // THE BAR IS THE WATERMARK, NOT WHAT IS HELD, and the two differ exactly when something was
+    // dropped or taken since. The watermark is set on every accepted offer and what is HELD is
+    // only ever set by an accepted offer, so the watermark is never behind it — checking one is
+    // checking both. `has` rather than a null test, because a null watermark is a real recorded
+    // value (an envelope with no readable `generated_at`) and must keep behaving as `isNewer`
+    // says it does, not as "nothing recorded".
+    if (this.#highWater.has(path) && !isNewer(generatedAt, this.#highWater.get(path) ?? null)) {
       return { outcome: "stale" };
     }
-    // REPLACED, NOT APPENDED. The older one is dropped here and is never seen again — this single
+    this.#highWater.set(path, generatedAt);
+    // REPLACED, NOT APPENDED. An older one held here is dropped and never seen again — this single
     // statement is the whole of "the older is dropped rather than applied then overwritten".
     this.#pending.set(path, { path, generatedAt, data });
-    return { outcome: "superseded" };
+    return { outcome: held === undefined ? "queued" : "superseded" };
   }
 
   /** What is waiting for `path`, without taking it. `null` when nothing is. */
@@ -155,5 +193,11 @@ export class ProjectionQueue<T = unknown> {
    */
   clear(): void {
     this.#pending.clear();
+    // THE WATERMARKS GO WITH IT, and this is the one place they may. A watermark that outlived a
+    // sign-out would refuse the FIRST projection of the next session for any path the previous one
+    // had seen — the next operator's screen stuck on nothing, silently, for a reason nothing on it
+    // could explain. `clear` exists precisely because the graph went away; everything keyed on the
+    // old graph's timeline goes away with it.
+    this.#highWater.clear();
   }
 }

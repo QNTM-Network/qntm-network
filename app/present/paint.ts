@@ -180,6 +180,34 @@ export interface LineCommit {
    * the only thing posted; `SourceEdit` is still the closed union of three.
    */
   readonly source: string;
+  /**
+   * THE ONE FACT `commitLine` KNOWS AND ITS CALLER CANNOT: THIS CHANGE IS NO LONGER IN FLIGHT.
+   *
+   * The operator's own rule for the whole app: *the graph is truth, minus changes streamed from
+   * the view that have not landed.* Everything follows from which side of that line a write is on,
+   * and only the write path can say — a posted write, and a rebase retry still running, are both
+   * still streamed-from-the-view; a refusal with no retry left is not.
+   *
+   * SO THIS FIRES EXACTLY WHERE `commitLine` GIVES UP AND DELIBERATELY DOES NOT REPAINT: the two
+   * exits that keep the operator's characters on screen (no rebase was possible; the retry was
+   * itself refused). It does NOT fire for a refusal that a retry then satisfies — the change was
+   * in flight the whole time and landed. It does NOT fire on an ordinary failure either, because
+   * those exits already call `repaintArrived`, which redraws from the last server state and IS the
+   * revert.
+   *
+   * WHY IT IS A CALLBACK RATHER THAN A BRANCH IN `commitLine`. What "no longer in flight" should
+   * LOOK like differs per affordance, and the difference is not a special case — it falls out of
+   * the same rule. Typed characters stay on screen because the operator can still resend them, so
+   * a line commit passes nothing here. A ticked box has nothing left to resend, so it reverts, and
+   * the checkbox call site passes the revert. One rule, two outcomes, decided by the caller that
+   * knows what it drew rather than by the write path that does not.
+   *
+   * `current` is the server's own copy as the refusal carried it, or `undefined` when the refusal
+   * carried none — handed on verbatim so a caller that wants to adopt it can, without `commitLine`
+   * deciding on its behalf whether adopting is safe (`healFromRefusal` makes that call and refuses
+   * on its own terms).
+   */
+  readonly onRefusalIsFinal?: ((current: unknown) => void) | undefined;
 }
 
 /**
@@ -243,9 +271,14 @@ export interface LineCommit {
  * (`markdown === null`): `commitLine` returns before reading `commit.text` when that happens, so
  * the value is unobserved, but a well-defined one costs nothing and needs no caller-side branch.
  */
-export function existingLineCommit(source: string, lineIndex: number, markdown: string | null): LineCommit {
+export function existingLineCommit(
+  source: string,
+  lineIndex: number,
+  markdown: string | null,
+  onRefusalIsFinal?: (current: unknown) => void,
+): LineCommit {
   const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
-  return { lineIndex, text, markdown, source, kind: "set-line" };
+  return { lineIndex, text, markdown, source, kind: "set-line", onRefusalIsFinal };
 }
 
 export interface PaintDeps {

@@ -71,6 +71,7 @@ before(async () => {
 const T1 = "2026-08-01T09:00:00Z";
 const T2 = "2026-08-01T09:00:10Z";
 const T3 = "2026-08-01T09:00:20Z";
+const T4 = "2026-08-01T09:00:30Z";
 
 describe("1. ONE PENDING PROJECTION PER PATH, ORDERED BY `generated_at`", () => {
   test("an offer into an empty queue is QUEUED and is what is pending", () => {
@@ -162,6 +163,47 @@ describe("1. ONE PENDING PROJECTION PER PATH, ORDERED BY `generated_at`", () => 
     assert.equal(q.take(PATH), null, "it was handed over twice");
     assert.equal(q.pending(PATH), null);
     assert.equal(q.size, 0);
+  });
+
+  // ── THE HIGH-WATER MARK — arrival ordering has to outlive whatever emptied the map ──────────
+  //
+  // `offer` only reached `isNewer` when something was already HELD. So the instant anything
+  // emptied the map, the next arrival was accepted unconditionally, however old it was. Two
+  // different orderings run through this class and only one of them was surviving: `drop` answers
+  // EDIT ordering correctly and was taking ARRIVAL ordering's only evidence with it.
+
+  test("AFTER A DROP, AN OLDER ARRIVAL IS STILL REFUSED — the drop forgets what is held, not when", () => {
+    const q = new ProjectionQueue();
+    q.offer(PATH, T3, "newest");
+    q.drop(PATH);
+    assert.deepEqual(q.offer(PATH, T2, "older"), { outcome: "stale" });
+    assert.equal(q.pending(PATH), null, "an answer that left the server first landed after one that left later");
+    // And the queue is not frozen — genuinely newer still gets in.
+    assert.deepEqual(q.offer(PATH, T4, "newer still"), { outcome: "queued" });
+  });
+
+  test("AFTER A TAKE, AN OLDER ARRIVAL IS STILL REFUSED — the same hole, and not the one being looked for", () => {
+    // `take` empties the map too, because the caller is about to install what it hands back.
+    // Between that and the next arrival the map is exactly as empty as after a `drop`, so an
+    // answer that overtook the one just applied was accepted for exactly the same reason. Found
+    // while fixing `drop`, and pinned separately because nothing had pointed at it.
+    const q = new ProjectionQueue();
+    q.offer(PATH, T3, "newest");
+    assert.equal(q.take(PATH).data, "newest", "the fixture did not apply the projection it is about");
+    assert.deepEqual(q.offer(PATH, T2, "older"), { outcome: "stale" });
+    assert.equal(q.pending(PATH), null, "a projection older than the one just installed was queued to replace it");
+  });
+
+  test("A WATERMARK NEVER SURVIVES A SIGN-OUT — `clear` forgets the timeline, not just the payload", () => {
+    // A watermark that outlived `clear` would refuse the FIRST projection of the next session for
+    // every path the previous one had seen: a screen stuck on nothing, silently, for a reason
+    // nothing on it could explain. `clear` exists because the graph went away, and everything
+    // keyed on the old graph's timeline goes with it.
+    const q = new ProjectionQueue();
+    q.offer(PATH, T3, "before the sign-out");
+    q.clear();
+    assert.deepEqual(q.offer(PATH, T1, "the next session's first answer"), { outcome: "queued" });
+    assert.equal(q.pending(PATH).data, "the next session's first answer");
   });
 
   test("`drop` and `clear` forget without applying", () => {
@@ -454,9 +496,32 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     assert.match(onScreen(), /🛫 2026-08-04/, "the newer projection never landed");
   });
 
-  test("AN OUT-OF-ORDER ARRIVAL IS DROPPED — ordering is `generated_at`, never the wire", async () => {
+  test("AN OUT-OF-ORDER ARRIVAL IS REFUSED — ordering is `generated_at`, never the wire", async () => {
     // Two answers whose timestamps run BACKWARDS, which is what two writes racing on a network
     // produce. The screen must not follow the network's order.
+    //
+    // ── THIS TEST'S EXPECTED OUTCOME CHANGED WITH THE WRITE-PATH MERGE, AND THE PROPERTY IT
+    //    PROTECTS GOT STRONGER RATHER THAN WEAKER — 2026-08-14 ──
+    //
+    // It used to assert the queue HELD T3 and applied it on blur. That outcome depended on a
+    // detail nobody had noticed it was depending on: a checkbox flip went through `toggleTask`,
+    // which never called `queued.drop`. A tick is a line commit now, and `commitLine` drops what
+    // is queued before every write — because an edit the operator has just made means a
+    // projection computed before it no longer describes his screen. So the second tick discards
+    // T3 on EDIT ordering, which is correct and always was for every typed edit.
+    //
+    // WHAT MADE THIS FAIL FOR REAL, before the watermark landed: with T3 discarded the map was
+    // EMPTY, and `offer` only ever consulted `isNewer` when something was already held. T2 — the
+    // OLDER answer, the one that left the server FIRST — was therefore accepted unconditionally
+    // and would have landed on screen after the answer that left later. That is the exact defect
+    // this test's own title has always been about, and it was unreachable while the only gesture
+    // able to drive two rapid writes was the one gesture that skipped `commitLine`.
+    //
+    // So the assertion is now the STRONGER form: the stale arrival is REFUSED OUTRIGHT rather
+    // than merely out-ranked by something held. Nothing older than the newest answer this queue
+    // has ever accepted for the path can land, whether or not anything is being held at the time.
+    // What the operator sees in the meantime is his own optimistic state — which is what every
+    // typed edit has always left on screen between a write and its cycle.
     land(V1);
     answers = [envelope(BOTH, T3), envelope(ABOVE, T2)];
 
@@ -468,12 +533,21 @@ describe("THE PAGE — a projection arriving mid-edit", () => {
     boxes()[1].dispatch("change");
     await settle();
 
-    assert.equal(page.__queued().size, 1);
-    assert.equal(page.__queued().pending(PATH).generatedAt, T3, "a later arrival moved time backwards");
+    assert.equal(
+      page.__queued().size,
+      0,
+      "T3 is stale by EDIT ordering (the second tick supersedes it) and T2 by ARRIVAL ordering " +
+        "(it is older than T3). Neither may be held, and a queue holding either is holding a lie.",
+    );
 
     input.dispatch("blur");
     await settle();
-    assert.match(onScreen(), /🛫 2026-08-04/, "the stale arrival won on the screen");
+    assert.doesNotMatch(
+      onScreen(),
+      /🛫 2026-08-04/,
+      "an answer that left the server BEFORE one already seen reached the screen — the wire's " +
+        "order decided what the operator is looking at, which is the whole defect this test names.",
+    );
   });
 
   // ════════════════════════════════════════════════════════════════════════════════════════════
@@ -799,9 +873,24 @@ describe("6. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
     };
   }
 
-  test("BREAK THE COALESCING — every arrival looks equally old, so the older one wins", async () => {
-    // One character of the ordering fact, replaced by a constant. `offer` then reads every arrival
-    // as "not newer than what is held" and drops it — first-wins instead of newest-wins.
+  test("BREAK THE ORDERING FACT — the page stops passing the server's own `generated_at`", async () => {
+    // One character of the ordering fact, replaced by a constant, so every arrival looks equally
+    // old to `offer`.
+    //
+    // ── WHAT THIS PROVES CHANGED WHEN THE WRITE PATHS MERGED, AND IT HAD TO ──
+    //
+    // It used to drive TWO ticks and assert that breaking the ordering left the FIRST answer on
+    // screen instead of the second. That worked only because a tick went through `toggleTask`,
+    // which never called `queued.drop`. A tick is a line commit now: the second tick discards what
+    // the first queued, so after two ticks NOTHING is pending — mutated or not. The old assertion
+    // would still have passed, while measuring nothing at all, which is the precise failure this
+    // whole suite exists to make loud. It is rewritten rather than retired.
+    //
+    // ONE TICK, AND THE CLAIM IS NARROWED TO WHAT THIS LEVEL CAN ACTUALLY SEE: the value the PAGE
+    // hands `offer` is the server's own `generated_at` and not something it invented. What the
+    // queue then DOES with that value — newest wins, equal is not newer, and (since the watermark)
+    // an older arrival is refused even when nothing is held — is proven against the shipped class
+    // in §1, where it can be driven directly instead of through two gestures that interfere.
     const driven = await driveMutated("app-projection-queue-mutation-order", (source) =>
       assertMutated(
         source,
@@ -814,25 +903,31 @@ describe("6. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
     driven.openForTyping();
     driven.boxes()[0].dispatch("change");
     await new Promise((r) => setImmediate(r));
-    driven.boxes()[1].dispatch("change");
-    await new Promise((r) => setImmediate(r));
 
     assert.equal(
       driven.page.__queued().pending(PATH).generatedAt,
       "1970-01-01T00:00:00Z",
       "the mutation did not reach the page's own offer",
     );
-    driven.inputs()[0].dispatch("blur");
+  });
+
+  test("THE CONTROL — unmutated, the SAME harness reports the timestamp the server sent", async () => {
+    // WITHOUT THIS THE MUTATION ABOVE IS HALF AN ARGUMENT. "The mutated page reports 1970" means
+    // something only beside "the unmutated page reports the real thing" — otherwise a page that
+    // reported a constant whatever you did to it would satisfy the mutation and prove nothing.
+    // Same `driveMutated`, same fixture, same gesture; the ONLY delta is that nothing is rewritten.
+    const driven = await driveMutated("app-projection-queue-order-control", (source) => source);
+
+    driven.rows()[1].dispatch("click", makeEvent());
+    driven.openForTyping();
+    driven.boxes()[0].dispatch("change");
     await new Promise((r) => setImmediate(r));
 
-    // §3's assertion, inverted: with the ordering broken the FIRST answer is the one on screen and
-    // the second — the one the server actually last produced — is the one that was dropped.
-    assert.doesNotMatch(
-      driven.screen(),
-      /🛫 2026-08-04/,
-      "the coalescing is not load-bearing — breaking the ordering changed nothing",
+    assert.equal(
+      driven.page.__queued().pending(PATH).generatedAt,
+      T2,
+      "the page invented a timestamp instead of carrying the server's own",
     );
-    assert.match(driven.screen(), /#blocked/, "the older answer did not win, so the mutation did nothing");
   });
 
   test("BREAK THE GATE — nothing is ever open, so an arrival paints over what he is typing", async () => {

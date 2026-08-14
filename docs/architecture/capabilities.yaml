@@ -2890,6 +2890,16 @@ capabilities:
     branch is UNREACHABLE IN PRODUCTION until the monorepo change lands, so what is proven is that
     it is correct when it is reached, never that it has been reached. The monorepo change itself is
     specified in backlog row `vault-file-accepts-a-precondition` and is NOT built here.
+    ── CORRECTION 2026-08-14: THE MONOREPO CHANGE HAS LANDED AND THE 409 IS REACHABLE. Read
+    read-only in the sibling repo at `ea1e22b`: `server/app.py` holds `_stale_base(target, base)`
+    and `POST /vault/file` returns `status_code=409` carrying the current content when the
+    precondition fails. The paragraph above, and `worker/src/app.js`'s own matching note, both said
+    the opposite and were true when written. WHAT THAT CHANGES IS PRIORITY, NOT CORRECTNESS: every
+    consequence of a refusal is now live code on the operator's own path rather than a tested
+    fixture, and `a-write-refuses-a-stale-base` measured that a stale base is an ORDINARY event
+    inside one ~14 s cycle. It is also why `one-write-path-per-act` (backlog) is worth an enforcer
+    now — the two write paths answer a refusal differently, and until this landed neither answer
+    ran.
   tier: functional
   rooting: >-
     TWO FILES, BOTH OUTSIDE flow-trace's reach, and the two reasons differ. `worker/src/app.js` is

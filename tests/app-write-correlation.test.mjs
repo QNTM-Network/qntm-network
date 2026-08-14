@@ -43,6 +43,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertOneWritePath } from "./fixtures/write-path-callers.mjs";
 
 import {
   importPage,
@@ -641,13 +642,11 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     }
   });
 
-  test("`writeFile` STILL has exactly two CALLERS — toggleTask and commitLine, now split across two files", () => {
-    // Declaration (1) + toggleTask (1) on the page, commitLine's own attempt (1) + commitLine's
-    // bounded rebase retry (1) in dist/present.js — `commitLine` relocated to app/present/
-    // commit.ts (2026-08-07, see that module's own header). Same two callers, still.
-    const BUNDLE_SOURCE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
-    assert.equal((APP_SOURCE.match(/\bwriteFile\(/g) ?? []).length, 2, "toggleTask's call and writeFile's own declaration should be all that is left on the page");
-    assert.equal((BUNDLE_SOURCE.match(/\bdeps\.writeFile\(/g) ?? []).length, 2, "a new write path appeared");
+  // ONE RULE, ONE EXPRESSION — see tests/fixtures/write-path-callers.mjs. This test used to
+  // restate the counts inline, in one of six identical copies, and it asserted TWO callers
+  // when the correct number was always ONE: a mouse tick and an `x` tick are one act.
+  test("there is exactly ONE write path, and the call sites still prove it", () => {
+    assertOneWritePath();
   });
 
   test("`applyEdit` is STILL reached from exactly five sites outside its own module", () => {
@@ -694,7 +693,20 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     assert.equal(CORRELATION_CODE.match(/\bapplyEdit\b|\bSourceEdit\b|\bmarkdown\b/g), null);
   });
 
-  test("THE REGISTER IS REACHED IN EXACTLY SIX PLACES, and none of them is a write of a file", () => {
+  test("THE REGISTER IS REACHED IN EXACTLY FIVE PLACES, and none of them is a write of a file", () => {
+    // ── SIX BECAME FIVE WHEN THE TWO WRITE PATHS BECAME ONE, AND `giveUp` NOW HAS NO CALLER AT
+    //    ALL — 2026-08-14 ──
+    //
+    // `writes.giveUp` was reached from exactly one place: `toggleTask`'s own 409 branch on the
+    // page. A checkbox flip is a line commit now, so that branch is gone, and with it the last
+    // caller of the bare `giveUp` — every give-up in the app goes through `concludeGiveUp`, which
+    // names the act. Measured, not assumed: `grep -rn "\.giveUp(" app/ dist/` returns nothing.
+    //
+    // `giveUp` ITSELF IS LEFT IN `correlation.ts`, DELIBERATELY AND NOT SILENTLY. Retiring it
+    // means editing that module and its own tests, which is a different change from merging two
+    // write paths; it is recorded on backlog `one-write-path-per-act` rather than swept into this
+    // PR. What is NOT acceptable is for the count below to absorb the orphaning without saying so,
+    // which is precisely what the SIX it replaces did for the two-path state it certified.
     // FIVE RATHER THAN SEVEN (chore/retire-the-status-line dropped `writes.outstanding`) — SIX,
     // NOW, WITH `writes.concludeGiveUp` (design-the-two-rules.md §2.2, AN OPERATION COMPLETES).
     // `concludeGiveUp` is the same shape as `giveUp`, one token in, one answer out — a `GiveUpAct`
@@ -713,7 +725,7 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     const reads = codeOf(APP_SOURCE).match(/\bwrites\.[A-Za-z]\w*/g) ?? [];
     assert.deepEqual(
       [...new Set(reads)].sort(),
-      ["writes.arrive", "writes.clear", "writes.concludeGiveUp", "writes.giveUp", "writes.open", "writes.waiting"],
+      ["writes.arrive", "writes.clear", "writes.concludeGiveUp", "writes.open", "writes.waiting"],
       "a new way to reach the write register appeared — check it cannot reach a POST",
     );
   });

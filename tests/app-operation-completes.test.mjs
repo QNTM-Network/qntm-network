@@ -229,12 +229,14 @@ describe("2. ITEM 11 — a 409 with real text at stake reaches 'return-to-row'",
       "        if (token !== null) {\n" +
         "          deps.writes.concludeGiveUp(token);\n" +
         "        }\n" +
+        "        commit.onRefusalIsFinal?.(e.current);\n" +
         "        return;\n" +
         "      }\n" +
         "      deps.repaintArrived();",
       "        if (token !== null) {\n" +
         "          /* MUTATED FOR THE TEST: not called */ void 0;\n" +
         "        }\n" +
+        "        commit.onRefusalIsFinal?.(e.current);\n" +
         "        return;\n" +
         "      }\n" +
         "      deps.repaintArrived();",
