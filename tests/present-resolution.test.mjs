@@ -620,3 +620,152 @@ describe("5. the size assertion — a future widening is visible, not silent", (
       "ceiling deliberately rather than let it float");
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 8. THE OUTPUT HALF — the three facts a composer needs, generator through reader
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ── WHY THIS SECTION COMPILES THE FIXTURE AND NOT THE OPERATOR'S CONFIG ──
+//
+// Every other section above reads `SERVED` — the committed `presentation.json`. These keys are NOT
+// in it, deliberately: regenerating that file against today's monorepo config also carries ~20
+// unrelated drops and turns 19 seeding tests red (measured; see this branch's own PR). So the
+// generator ships first and the regeneration is its own decision.
+//
+// That makes `SERVED` the wrong subject here and the FIXTURE the right one. It is committed, so
+// this runs on every pull request with no monorepo — the same reason `declaration-drop.test.mjs`
+// uses it — and it exercises the real generator through the real reader, which is the join that
+// would otherwise be proven by nothing until someone regenerates.
+
+describe("8. the output half — chromeShapes, the form's own source, and the spelling table", () => {
+  const FIXTURE = resolve(HERE, "fixtures", "config");
+  const compiled = generateResolution(FIXTURE);
+  // THROUGH THE REAL READER, not asserted on the generator's raw output. A key the generator
+  // publishes and the reader rejects is worse than one it never published: the app would report a
+  // problem on the operator's console for a table that is perfectly well formed.
+  const { resolution, problems } = readConfigResolutionDeclaration({ resolution: compiled });
+
+  test("the reader accepts every key the generator now publishes, with no problem reported", () => {
+    assert.deepEqual(problems, [], "the reader objected to the generator's own output");
+  });
+
+  test("chromeShapes covers a type NO view mints — the whole point of the widening", () => {
+    // `person` is minted by a view; the widening is not visible through it. The fixture's `header`
+    // is declared and minted by nothing, and it is `heading`-shaped, so it must be DROPPED with a
+    // reason rather than silently absent — absence is what this change exists to remove.
+    assert.equal(resolution.chromeShapes.task, "checkbox");
+    assert.equal(resolution.chromeShapes.person, "plain_line");
+    assert.equal(resolution.chromeShapes.header, undefined, "a heading-shaped type must not be published");
+    assert.match(
+      compiled.dropped["node type 'header'"] ?? "",
+      /knows how to draw/,
+      "an undrawable declared type must be named in the ledger, not merely missing",
+    );
+  });
+
+  test("the form carries its OWN source, because one flag cannot speak for both halves", () => {
+    // The fixture declares no `global_defaults.yaml` at all, so both read `engine-fallback` and
+    // they agree. The value of the second flag is in the state below, which no config has reached.
+    assert.equal(resolution.compositionSource, "engine-fallback");
+    assert.equal(resolution.compositionFormSource, "engine-fallback");
+  });
+
+  test("A DECLARED `composition:` WITH NO `form:` — the case one flag would get wrong", () => {
+    // THE FALSIFIER FOR THE KEY ABOVE. Declare `heads`/`tail` and no `form:`, and `compositionSource`
+    // becomes "config" over a bullet and a title wrap the config never mentioned. Without the second
+    // flag a reader is told the operator declared them; he did not.
+    const scratch = mkdtempSync(join(tmpdir(), "composition-form-source-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE, configDir, { recursive: true });
+      writeFileSync(
+        join(configDir, "global_defaults.yaml"),
+        "composition:\n  heads:\n    checkbox: [checkbox, title]\n    plain_line: [title]\n  tail: [stamp, date, tags, markers, chrome]\n",
+      );
+      const withComposition = generateResolution(configDir);
+      assert.equal(withComposition.compositionSource, "config", "the heads/tail ARE the config's");
+      assert.equal(
+        withComposition.compositionFormSource,
+        "engine-fallback",
+        "the bullet and titleStyles are the ENGINE's — a config that ordered cells said nothing about them",
+      );
+      // AND THE VALUES ARE THE ENGINE'S OWN, unchanged — `renderer.py`'s `_COMPOSITION_BULLET` and
+      // `_COMPOSITION_TITLE_STYLES: tuple[str, ...] = ()`. `titleStyles: []` is not an absence and
+      // not a drop; it is the engine wrapping a title in nothing, mirrored exactly.
+      assert.equal(withComposition.composition.bullet, "-");
+      assert.deepEqual(withComposition.composition.titleStyles, []);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("the spelling table answers in the direction that PRINTS, for types and for fields", () => {
+    assert.equal(resolution.spelling.typeTokens.task, "#task");
+    assert.equal(resolution.spelling.typeTokens.person, "#person");
+    // A FIXED-value field: the whole tag IS the value.
+    assert.equal(resolution.spelling.fieldTokens.domain.work, "#work");
+    // A TRAILING marker: the glyph introduces a value that varies line to line, so the kind is
+    // part of the spelling.
+    assert.deepEqual(resolution.spelling.fieldMarkers.due_date, { token: "📅", kind: "date" });
+  });
+
+  test("where the spelling table and `orderingFields` both answer, they AGREE", () => {
+    // Two tables built by two readers from one file. They overlap on every field an ordering names,
+    // and a composer holding one must not have to wonder which is authoritative.
+    for (const [field, marker] of Object.entries(resolution.orderingFields)) {
+      if (marker.kind === "enum") {
+        // The enum arm's twin is `fieldTokens`, keyed value -> token rather than token -> value.
+        const printed = resolution.spelling.fieldTokens[field];
+        assert.ok(printed, `'${field}' is an enum for ordering but has no printed spelling`);
+        for (const [token, value] of Object.entries(marker.values)) {
+          assert.equal(printed[value], token, `'${field}' spells ${value} differently in the two tables`);
+        }
+        continue;
+      }
+      const rendered = resolution.spelling.fieldMarkers[field];
+      assert.ok(rendered, `'${field}' has an ordering marker but no printed spelling`);
+      assert.equal(rendered.token, marker.token, `'${field}' has two different glyphs`);
+      assert.equal(rendered.kind, marker.kind, `'${field}' has two different kinds`);
+    }
+  });
+
+  test("A `render_only` GLYPH IS REFUSED BY THE SEED TABLE AND KEPT BY THE PRINTED ONE", () => {
+    // THE POINT OF THE WHOLE THIRD CHANGE, and the only test that proves the two tables disagree on
+    // purpose. `render_only: true` means the engine PRINTS the glyph and never reads it back. That
+    // one fact excludes it from seeding — writing it into a line the operator types would freeze a
+    // value the engine goes on deciding — and QUALIFIES it for printing, which is what it is for.
+    const scratch = mkdtempSync(join(tmpdir(), "render-only-spelling-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE, configDir, { recursive: true });
+      const markers = join(configDir, "vocabulary", "markers.yaml");
+      writeFileSync(
+        markers,
+        readFileSync(markers, "utf8") +
+          '  - token: "☑️"\n    field: done_task_count\n    extraction_hint: trailing_int\n    render_only: true\n',
+      );
+      const r = generateResolution(configDir);
+
+      assert.deepEqual(
+        r.spelling.fieldMarkers.done_task_count,
+        { token: "☑️", kind: "int", renderOnly: true },
+        "the printed table dropped a glyph the engine prints",
+      );
+      // AND THE INGEST DROP IS UNWEAKENED — same key, same reason, still recorded.
+      assert.match(
+        r.dropped["vocabulary token '☑️'"] ?? "",
+        /render_only: true.*would not round-trip/s,
+        "the seed refusal stopped being recorded",
+      );
+      // The seed table never learned the field at all, which is the refusal itself.
+      assert.equal(r.spelling.fieldTokens.done_task_count, undefined);
+      for (const sections of Object.values(r.sectionRegistration)) {
+        for (const entry of Object.values(sections)) {
+          assert.ok(!entry.tokens.includes("☑️"), "a render_only glyph was seeded into a new line");
+        }
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+});

@@ -452,6 +452,22 @@ function orderingFieldNames(ordering) {
   return names;
 }
 
+/**
+ * Every mapping in the published spelling table, key-sorted, so the committed artifact is a
+ * function of the config's CONTENT and not of the order its files were read in. See `readSpelling`'s
+ * return for why this matters to `generate:resolution:check` specifically.
+ */
+function sortSpelling(rendered) {
+  const sortMap = (m) => Object.fromEntries(Object.entries(m).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  return {
+    typeTokens: sortMap(rendered.typeTokens),
+    fieldTokens: sortMap(
+      Object.fromEntries(Object.entries(rendered.fieldTokens).map(([field, table]) => [field, sortMap(table)])),
+    ),
+    fieldMarkers: sortMap(rendered.fieldMarkers),
+  };
+}
+
 function collectDefaultNodeTypeCandidates(registration, viewFiles) {
   const types = new Set([registration.defaultNodeType]);
   for (const [, view] of viewFiles) {
@@ -706,7 +722,11 @@ export function compile(files, ledger = new Ledger()) {
     const hasOwn = declared && typeof declared === "object" && !Array.isArray(declared)
       && Object.prototype.hasOwnProperty.call(declared, "composition");
     if (!hasOwn) {
-      return { composition: ENGINE_LITERAL_COMPOSITION, source: "engine-fallback" };
+      return {
+        composition: ENGINE_LITERAL_COMPOSITION,
+        source: "engine-fallback",
+        formSource: "engine-fallback",
+      };
     }
     const raw = declared.composition;
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -766,6 +786,9 @@ export function compile(files, ledger = new Ledger()) {
     return {
       composition: { heads, tail: [...rawTail], separator: " ", bullet, titleStyles },
       source: "config",
+      // The form is optional INSIDE an optional block, so it carries its own answer — see
+      // `compositionFormSource`'s own paragraph at the assembly below.
+      formSource: raw.form === undefined ? "engine-fallback" : "config",
     };
   }
 
@@ -822,17 +845,57 @@ export function compile(files, ledger = new Ledger()) {
     return { bullet, titleStyles };
   }
 
-  // ── 5. schema.yaml -> node type -> chrome shape, for every default_node_type candidate ─────────
+  // ── 5. schema.yaml -> node type -> chrome shape, for every node type a node CAN BE ─────────────
+  //
+  // ── THE CANDIDATE SET ANSWERS "WHAT CAN A NODE BE", NOT "WHAT CAN YOU MINT" (widened 2026-08-14)
+  //
+  // This table used to be keyed by `collectDefaultNodeTypeCandidates` — the types some view names
+  // as a `default_node_type`. That is the set of types you can type INTO EXISTENCE, and it is the
+  // right answer to the question `newline.ts` asks (what chrome does a line I am about to mint get
+  // — see its GLOBAL rung, which looks the shape up by a section's own minting default).
+  //
+  // It is the WRONG answer for the question a composer asks, which is: this node exists, in this
+  // section, with this type — how does the engine print it? A node's type is not fixed at the
+  // moment it is minted. A RULE can change it afterwards, and the operator's config declares
+  // exactly that: `rules/auto_outcome_classification.yaml`'s
+  // `task-with-open-part-of-child-becomes-outcome` fires `verb: set_node_type` and turns a `task`
+  // into an `outcome`. Neither `outcome` nor `habit` is any view's `default_node_type`, so neither
+  // was published — and both are declared in schema.yaml with `render: {shape: checkbox}`. The
+  // browser could not print the result of the operator's own rule.
+  //
+  // ── WHY schema.yaml's OWN KEYS, AND NOT A WIDER OR NARROWER SET ──
+  //
+  // `schema.yaml`'s `node_types:` IS the closed set of what a node can be — this function already
+  // treated it as the authority (its refusal below says so in as many words: "refusing to publish
+  // a shape for a type that does not exist"). Only the QUESTION changed; the authority did not.
+  // Nothing wider exists to draw from. Nothing narrower is correct, because any narrower set is a
+  // claim that some declared type can never reach a rendered line, and no such claim is available
+  // from the config: a rule may retype into any declared type, and this generator does not read
+  // the graph the rules traverse (see DROP PATH 17's own reason).
+  //
+  // IT CANNOT CHANGE WHAT ANY EXISTING READER DOES, and that is checkable rather than hoped: every
+  // lookup into this table today is keyed by a MINTING default (`newline.ts:420` reads
+  // `sections[...].nodeType ?? sectionRegistration[...].nodeType`, both of which are the same
+  // `default_node_type` set this table used to be built from). The widening adds entries those
+  // lookups never reach. `tests/present-resolution.test.mjs` pins that separately.
+  //
+  // THE REFUSAL IS KEPT AND IS NOW ITS OWN STATEMENT. It used to fire as a side effect of
+  // iterating the minting set: a `default_node_type` naming a type schema.yaml does not declare
+  // was reached, found missing, and thrown on. Iterating schema.yaml's own keys would make that
+  // unreachable — every candidate would come from the authority being checked against — so the
+  // check moves ABOVE the loop, where it says what it means and cannot be lost to a later change
+  // of candidate set.
 
-  function readChromeShapes(candidates, ledger) {
+  function readChromeShapes(mintable, ledger) {
     if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
     const schema = readYaml(SCHEMA_KEY);
     const nodeTypes = schema?.node_types;
-    if (!nodeTypes || typeof nodeTypes !== "object") {
+    if (!nodeTypes || typeof nodeTypes !== "object" || Array.isArray(nodeTypes)) {
       throw new GenerationError(`${SCHEMA_KEY}: no 'node_types:' mapping`);
     }
-    const out = {};
-    for (const name of candidates) {
+    // THE PRESERVED REFUSAL — a view mints a type that does not exist. Unchanged in meaning and in
+    // message; moved here so it is asserted rather than incidental.
+    for (const name of mintable) {
       const definition = nodeTypes[name];
       if (!definition || typeof definition !== "object") {
         throw new GenerationError(
@@ -841,9 +904,16 @@ export function compile(files, ledger = new Ledger()) {
             "not exist.",
         );
       }
+    }
+    const out = {};
+    for (const name of Object.keys(nodeTypes).sort()) {
+      const definition = nodeTypes[name];
+      // NOT A DROP: a `node_types:` entry that is not a mapping declares no render block, so it
+      // takes the same documented default a mapping with no `render:` takes. It is only a hard
+      // refusal when a VIEW claims to mint it, which the loop above already answered.
       // No 'render:' block renders as checkbox — schema.yaml's own documented default, and the same
       // rule qntm_md.grammar.node_type_form.node_type_forms encodes on the engine side.
-      const render = definition.render;
+      const render = definition && typeof definition === "object" ? definition.render : undefined;
       const shape = render && typeof render === "object" && typeof render.shape === "string"
         ? render.shape
         : "checkbox";
@@ -853,12 +923,15 @@ export function compile(files, ledger = new Ledger()) {
         continue;
       }
       // DROP PATH 8. A shape this generator does not recognise (stat_line, heading, or a future
-      // addition) is left unpublished ON PURPOSE — see the domain header.
+      // addition) is left unpublished ON PURPOSE — see the domain header. The reason now names
+      // BOTH consequences, because the table now serves both readers: a line minted under a view
+      // defaulting to this type gets no chrome, AND a composer handed a node of this type cannot
+      // open its line.
       ledger.drop(
         `node type '${name}'`,
-        `it is a default_node_type somewhere in views/, but its render shape '${shape}' is not one ` +
-          `this app knows how to seed (${[...SEEDABLE_SHAPES].sort().join(", ")}), so a new line ` +
-          "under a view defaulting to it gets no chrome and the GLOBAL rung stays silent",
+        `schema.yaml declares its render shape as '${shape}', which is not one this app knows how ` +
+          `to draw (${[...SEEDABLE_SHAPES].sort().join(", ")}), so a new line under a view ` +
+          "defaulting to it gets no chrome and a node of this type cannot have its line composed",
       );
     }
     return out;
@@ -1029,11 +1102,45 @@ export function compile(files, ledger = new Ledger()) {
   }
 
   // ── 8. vocabulary/*.yaml -> the vocabulary, read in the RENDER direction ───────────────────────
+  //
+  // ── AND, SINCE 2026-08-14, PUBLISHED RATHER THAN ONLY CONSUMED ──
+  //
+  // This reader has always read the vocabulary in the render direction. Its answers were spent
+  // entirely inside `seedTokens` — which tags a NEW line gets — and then discarded. The only trace
+  // that reached the browser was `sectionRegistration[view][section].tokens`, a per-section array
+  // baked for that section's own MINTING default. Nothing published the mapping itself.
+  //
+  // That is the whole of "the output side has no home", and it is larger than the two `render_only`
+  // glyphs that made it visible. Measured against the operator's config: 33 node types have a type
+  // tag, 17 fields have a fixed-value tag table, and 7 fields have a trailing-value marker. Of
+  // those 24 field tables, FOUR reach the browser — via `orderingFields`, which exists to preview
+  // an ordering and is restricted to the fields an ordering names. A composer asked to print
+  // `✅ 2026-08-14` or `⛔` had nowhere to look it up.
+  //
+  // ── THE INGEST DROP IS NOT WEAKENED, AND THE TWO TABLES ARE BUILT SIDE BY SIDE ──
+  //
+  // DROP PATH 16 stays exactly where it is, with its reason unchanged, and `fieldTokens` — the SEED
+  // table — still refuses a `render_only` glyph. Seeding one into a line the operator types would
+  // write a value the engine never reads back, and that refusal is correct.
+  //
+  // `rendered` is a SECOND, separate structure, filled from the same pass, which the seed path
+  // never reads. A `render_only` token belongs in it precisely BECAUSE it is output-only: printing
+  // one is what the engine does. So the same fact — "the engine emits this glyph and never ingests
+  // it" — excludes the token from one table and qualifies it for the other, and both statements are
+  // now written down instead of one being inferred from the other's absence.
+  //
+  // `renderOnly` IS CARRIED ON THE PUBLISHED ENTRY rather than filtered out of it, because a
+  // composer and a round-trip checker need opposite things from the same row: one prints the glyph,
+  // the other must know the engine will not read it back. Dropping the flag would force the second
+  // caller to re-derive it from `orderingFields`' absence, which is exactly the inference this
+  // change exists to remove.
 
   function readSpelling(ledger) {
     const typeTokens = {};
     const fieldOrder = [];
     const fieldTokens = {};
+    // The output-side twin of `fieldTokens`/`typeTokens`. Never consulted by `seedTokens`.
+    const rendered = { typeTokens: {}, fieldTokens: {}, fieldMarkers: {} };
     const vocabularyKeys = allKeys().filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml")).sort();
     for (const key of vocabularyKeys) {
       const file = key.slice(VOCABULARY_PREFIX.length);
@@ -1061,13 +1168,47 @@ export function compile(files, ledger = new Ledger()) {
           if (!entry || typeof entry !== "object" || !isNonEmptyString(entry.token)) continue;
           if (isNonEmptyString(entry.node_type)) {
             if (typeTokens[entry.node_type] === undefined) typeTokens[entry.node_type] = entry.token;
+            // FIRST DECLARATION WINS, the same rule as the seed table above and for the same
+            // reason — a second glyph for one type is a config the engine reads first-wins too.
+            if (rendered.typeTokens[entry.node_type] === undefined) {
+              rendered.typeTokens[entry.node_type] = entry.token;
+            }
+            // NOT A DROP: a `node_type:` entry is KEPT, by both tables, on the two statements
+            // directly above. A later entry for a type already spelled is not discarded either —
+            // first-declaration-wins is the engine's own rule, so the second glyph was never an
+            // answer this generator could publish instead.
             continue;
           }
           // NOT A DROP: an entry declaring neither `node_type:` nor `field:` spells no field, so
           // nothing was discarded.
           if (!isNonEmptyString(entry.field)) continue;
+
+          // ── THE OUTPUT SIDE, FILLED FIRST AND UNCONDITIONALLY ON `render_only` ──
+          //
+          // Placed ABOVE DROP PATH 16 rather than below it, so the drop's `continue` cannot skip
+          // it. That ordering is the whole mechanism: the ingest table refuses the glyph on the
+          // next statement, and the output table has already kept it.
+          const renderOnly = entry.render_only === true;
+          if (isScalar(entry.value) && entry.value !== null) {
+            const table = rendered.fieldTokens[entry.field] ?? (rendered.fieldTokens[entry.field] = {});
+            const spelled = String(entry.value);
+            if (table[spelled] === undefined) table[spelled] = entry.token;
+          } else if (isNonEmptyString(entry.extraction_hint)) {
+            // A TRAILING marker prints as `<token> <value>`, so the value's KIND is part of the
+            // spelling — the same `{token, kind}` shape `orderingFields` already publishes for the
+            // four fields an ordering happens to name, extended to every field the engine prints.
+            // An unknown hint is skipped rather than guessed: `EXTRACTION_KINDS` is this app's own
+            // closed set, and inventing a kind would make a composer print a value it cannot spell.
+            const kind = EXTRACTION_KINDS[entry.extraction_hint];
+            if (kind !== undefined && rendered.fieldMarkers[entry.field] === undefined) {
+              const marker = { token: entry.token, kind };
+              if (renderOnly) marker.renderOnly = true;
+              rendered.fieldMarkers[entry.field] = marker;
+            }
+          }
+
           // DROP PATH 16. A tag the engine itself never ingests back from its own glyph.
-          if (entry.render_only === true) {
+          if (renderOnly) {
             ledger.drop(
               `vocabulary token '${entry.token}'`,
               `spells '${entry.field}' but is 'render_only: true', so the engine never reads that ` +
@@ -1091,7 +1232,11 @@ export function compile(files, ledger = new Ledger()) {
           "prints on every line it renders, so an empty map would make every seed a silent guess",
       );
     }
-    return { typeTokens, fieldOrder, fieldTokens };
+    // SORTED ON THE WAY OUT. `presentation.json` is a committed artifact and
+    // `generate:resolution:check` compares it by `JSON.stringify`, so key ORDER is part of what CI
+    // asserts. Insertion order here is filesystem order over `vocabulary/*.yaml`, which would make
+    // renaming a vocabulary file a spurious diff in a table whose content had not changed.
+    return { typeTokens, fieldOrder, fieldTokens, rendered: sortSpelling(rendered) };
   }
 
   // ── 9. patterns/*.yaml + rules/*.yaml -> every rule that retypes, reduced to (find, when) ──────
@@ -1229,7 +1374,12 @@ export function compile(files, ledger = new Ledger()) {
       }
       if (Object.keys(sections).length > 0) out[view.viewId] = sections;
     }
-    return out;
+    // THE SPELLING RIDES OUT WITH THE REGISTRATION rather than being read a second time at the
+    // assembly. `readSpelling` writes to the ledger, and the ledger's key order IS part of the
+    // committed artifact (`generate:resolution:check` compares `presentation.json` by
+    // `JSON.stringify`) — so calling it again, or hoisting the call above this one, would reorder
+    // `dropped` without changing a single fact in it.
+    return { sectionRegistration: out, spelling: spelling.rendered };
   }
 
   // ── assemble ────────────────────────────────────────────────────────────────────────────────
@@ -1251,7 +1401,8 @@ export function compile(files, ledger = new Ledger()) {
     ledger,
   );
   const chromeShapes = readChromeShapes(candidates, ledger);
-  const sectionRegistration = readSectionRegistration(viewFiles, registration, ledger);
+  const registrationResult = readSectionRegistration(viewFiles, registration, ledger);
+  const sectionRegistration = registrationResult.sectionRegistration;
   const compositionResult = readGlobalComposition();
 
   const declaration = {
@@ -1275,12 +1426,54 @@ export function compile(files, ledger = new Ledger()) {
     // (`"config"` or `"engine-fallback"`), the same visible-fallback discipline.
     composition: compositionResult.composition,
     compositionSource: compositionResult.source,
+    // ── AND THE FORM'S OWN SOURCE, BECAUSE `compositionSource` CANNOT SPEAK FOR IT ──
+    //
+    // `composition.form:` is an INDEPENDENTLY optional key inside an optional block:
+    // `readCompositionForm(undefined)` answers the engine's own `bullet`/`titleStyles` literals
+    // whether or not the enclosing `composition:` was declared. So a config declaring
+    // `composition:` with `heads:`/`tail:` and no `form:` publishes `compositionSource: "config"`
+    // over a bullet and a title wrap the config never mentioned — one flag asserting provenance
+    // for two facts, one of which it does not know.
+    //
+    // NOT REACHABLE TODAY, WHICH IS THE REASON TO SAY IT NOW. `global_defaults.yaml` declares no
+    // `composition:` key at all, so both sources read `"engine-fallback"` and the disagreement has
+    // nothing to show. A flag that is only ever wrong in a state no config has reached yet is the
+    // green-because-nothing-drives-it shape; it becomes a silent lie on the first day someone
+    // orders cells without wrapping a title.
+    //
+    // `titleStyles: []` IS NOT AN ABSENCE AND NOT A DROP — checked, not assumed. `renderer.py:155`
+    // declares `_COMPOSITION_TITLE_STYLES: tuple[str, ...] = ()`, so the engine's own answer is
+    // "wrap a title in nothing", and this generator mirrors it exactly. A composer applying no
+    // wrap agrees with the engine byte for byte. There is no default to invent here; there was
+    // only a provenance flag that could not tell you so.
+    compositionFormSource: compositionResult.formSource,
     // WITHIN "tags" — see `ENGINE_LITERAL_TAG_ORDER`'s own header. Always the engine literal (no
     // config override surface exists for this file), always published (never optional the way
     // `priorityRank` below is) — a caller with no notion of tag order at all is exactly the caller
     // this axis was silently missing for until today.
     tagOrder: ENGINE_LITERAL_TAG_ORDER,
     tagOrderSource: "engine-literal",
+    // ── THE VOCABULARY, IN THE DIRECTION THAT PRINTS (2026-08-14) ──
+    //
+    // `sectionRegistration[view][section].tokens` above is the SEED answer: the tags a new line
+    // gets, baked per section for that section's own minting default. It answers "what do I type",
+    // and it is the only trace of the vocabulary that reached the browser until now.
+    //
+    // This answers "how does the engine SPELL this" for a node that already exists, whatever its
+    // type turned out to be — the same widening `chromeShapes` takes above, and for the same
+    // reason: a rule can retype a node after it is minted, so the section that minted it does not
+    // determine how it prints.
+    //
+    //   typeTokens    node type -> its type tag          (`task` -> `#task`)
+    //   fieldTokens   field -> value -> its tag          (`domain` -> `work` -> `#work`)
+    //   fieldMarkers  field -> `{token, kind}` for a TRAILING value, `renderOnly: true` when the
+    //                 engine prints the glyph and never reads it back (`☑️`, `🎯`)
+    //
+    // `fieldMarkers` OVERLAPS `orderingFields` AND DOES NOT REPLACE IT. That table is restricted to
+    // the fields an ordering names, carries the enum shape ordering needs, and has readers today;
+    // this one covers every field the engine prints. Where both answer, they agree — asserted, not
+    // assumed, by `tests/present-resolution.test.mjs`.
+    spelling: registrationResult.spelling,
   };
   // `priorityRank` follows the same "absent means nothing to say" convention every other optional
   // key in this declaration already uses (see resolutiontable.ts's own header) — omitted, not

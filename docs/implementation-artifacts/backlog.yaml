@@ -4782,3 +4782,28 @@ backlog:
     posting whole files for three weeks with nothing red. Every future write-path change
     has to be made twice or it ships half-applied again.'
   captured: '2026-08-14'
+- id: flag-presentation-json-is-stale-against-the
+  title: '[asserted] presentation.json is STALE against the operator''s own config,
+    and regenerating it is a live seeding regression rather than a refresh. Measured
+    on 2dbe931 with ZERO code change: regenerating fixes 2 tests and breaks 19. rules/auto_outcome_classification.yaml''s
+    routine-without-cadence-becomes-task now retypes the capture in ~20 more sections,
+    so compile-resolution.mjs''s DROP PATH 19 withholds their type tags and the browser
+    stops seeding: personal/all goes from ''- [ ] #task #personal '' to ''- [ ] ''.
+    CI cannot see this — build.yml''s freshness step exits 3 NOT CHECKED because the
+    monorepo is absent on the runner — so the staleness is invisible to every gate and
+    grows. tests/present-seed.test.mjs section 2c already carries a filed TODO for a
+    sibling defect exposed the same way. Nothing published to the browser can be refreshed
+    until this is settled, which blocks the members-to-markdown composer.'
+  driving_capability: presentation-is-resolved-not-chosen
+  asserted: 'presentation.json is STALE against the operator''s own config, and regenerating
+    it is a live seeding regression rather than a refresh. Measured on 2dbe931 with
+    ZERO code change: regenerating fixes 2 tests and breaks 19. rules/auto_outcome_classification.yaml''s
+    routine-without-cadence-becomes-task now retypes the capture in ~20 more sections,
+    so compile-resolution.mjs''s DROP PATH 19 withholds their type tags and the browser
+    stops seeding: personal/all goes from ''- [ ] #task #personal '' to ''- [ ] ''.
+    CI cannot see this — build.yml''s freshness step exits 3 NOT CHECKED because the
+    monorepo is absent on the runner — so the staleness is invisible to every gate and
+    grows. tests/present-seed.test.mjs section 2c already carries a filed TODO for a
+    sibling defect exposed the same way. Nothing published to the browser can be refreshed
+    until this is settled, which blocks the members-to-markdown composer.'
+  captured: '2026-08-14'
