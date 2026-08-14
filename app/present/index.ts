@@ -102,6 +102,9 @@ export type {
   TagOrder,
 } from "./resolutiontable.js";
 
+export { composeNodeLine } from "./express/nodeline.js";
+export type { ComposableNode, ComposeContext, ComposeResult, ComposeRefusal, ComposedNodeLine, OutgoingEdge } from "./express/nodeline.js";
+
 export { titleStyleFor, titleStylePredicateHolds, nodeLocalContext } from "./express/titlestyle.js";
 export type { TitleStyleNode } from "./express/titlestyle.js";
 

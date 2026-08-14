@@ -402,11 +402,11 @@ function readStructuralDeclaration(document2) {
       );
     }
   }
-  const indent = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
+  const indent2 = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
   const edgeCardinality = "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
   const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
   const dropped = "dropped" in raw ? readDropped(raw.dropped, problems) : {};
-  return { structural: { indent, edgeCardinality, sections, dropped }, problems };
+  return { structural: { indent: indent2, edgeCardinality, sections, dropped }, problems };
 }
 
 // app/present/select/qualification.ts
@@ -1938,62 +1938,6 @@ function sectionOrderFor(view, declared) {
   return { ...declared, [view.id]: view.sections };
 }
 
-// app/present/express/titlestyle.ts
-function nodeLocalContext(node, outgoingEdgeTypes = [], incomingEdgeTypes = []) {
-  const count = (types) => {
-    const out = {};
-    for (const type of types) out[type] = (out[type] ?? 0) + 1;
-    return out;
-  };
-  return {
-    node: {
-      type: node.type,
-      fields: { ...node.fields },
-      edge_type_counts: count(outgoingEdgeTypes),
-      incoming_edge_type_counts: count(incomingEdgeTypes)
-    }
-  };
-}
-function resolvePath(context, path) {
-  const segments = path.split(".");
-  let cursor = context;
-  for (const [index, segment] of segments.entries()) {
-    if (cursor === null || typeof cursor !== "object") return void 0;
-    const parent = cursor;
-    if (!(segment in parent)) {
-      const container = segments.slice(0, index).join(".");
-      if (container === "node.edge_type_counts" || container === "node.incoming_edge_type_counts") return 0;
-      if (container === "node.fields") return null;
-      return void 0;
-    }
-    cursor = parent[segment];
-  }
-  return cursor;
-}
-function compare(op, left, right) {
-  if (op === "eq") return left === right;
-  if (op === "ne") return left !== right;
-  if (typeof left !== "number" || typeof right !== "number") return false;
-  if (op === "gt") return left > right;
-  if (op === "gte") return left >= right;
-  if (op === "lt") return left < right;
-  if (op === "lte") return left <= right;
-  return false;
-}
-function titleStylePredicateHolds(predicate, context) {
-  if ("terms" in predicate) {
-    return predicate.op === "and" ? predicate.terms.every((term) => titleStylePredicateHolds(term, context)) : predicate.terms.some((term) => titleStylePredicateHolds(term, context));
-  }
-  if ("term" in predicate) return !titleStylePredicateHolds(predicate.term, context);
-  return compare(predicate.op, resolvePath(context, predicate.path), predicate.value);
-}
-function titleStyleFor(table, context) {
-  for (const row of table.rows) {
-    if (titleStylePredicateHolds(row.when, context)) return row.then;
-  }
-  return table.fallback;
-}
-
 // app/present/express/composition.ts
 function readCell(cellClass, cells) {
   const value = cells[cellClass];
@@ -2050,396 +1994,9 @@ function composeSeed(shape, known, composition, depth = 0) {
   return { text: `${prefix}${bare}`, cursorOffset: prefix.length + slotIndex };
 }
 
-// app/present/arrange/ordering.ts
-var abstains = (because) => ({ kind: "abstains", because });
-function sectionBounds(lines, lineIndex) {
-  let start = 0;
-  let headingIndex = null;
-  for (let at = lineIndex; at >= 0; at -= 1) {
-    if (classifyLine(lines[at] ?? "").kind === "heading") {
-      start = at + 1;
-      headingIndex = at;
-      break;
-    }
-  }
-  let end = lines.length;
-  for (let at = lineIndex + 1; at < lines.length; at += 1) {
-    if (classifyLine(lines[at] ?? "").kind === "heading") {
-      end = at;
-      break;
-    }
-  }
-  return { start, end, headingIndex };
-}
-var INDENTED_CONTENT = /^\s+\S/;
-function anyLineIndented(lines, start, end) {
-  for (let at = start; at < end; at += 1) {
-    if (INDENTED_CONTENT.test(lines[at] ?? "")) return true;
-  }
-  return false;
-}
-function parentLineOf(lines, start, end) {
-  const parentOf2 = /* @__PURE__ */ new Map();
-  const stack = [];
-  for (let at = start; at < end; at += 1) {
-    const match = /^(\s*)\S/.exec(lines[at] ?? "");
-    if (match === null) continue;
-    const indent = match[1]?.length ?? 0;
-    while (stack.length > 0 && (stack[stack.length - 1]?.indent ?? -1) >= indent) stack.pop();
-    const parent = stack[stack.length - 1];
-    parentOf2.set(at, parent === void 0 ? null : parent.lineIndex);
-    stack.push({ lineIndex: at, indent });
-  }
-  return parentOf2;
-}
-var DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
-var INT_SHAPE = /^-?\d+$/;
-var FLOAT_SHAPE = /^-?\d+(?:\.\d+)?$/;
-function shapeMatches(marker, token) {
-  if (marker.kind === "date") return DATE_SHAPE.test(token);
-  if (marker.kind === "int") return INT_SHAPE.test(token);
-  return FLOAT_SHAPE.test(token);
-}
-function markerValue(line, marker) {
-  const at = line.indexOf(marker.token);
-  if (at === -1) return void 0;
-  const after = line.slice(at + marker.token.length);
-  const match = /^\s+(\S+)/.exec(after);
-  if (match === null) return void 0;
-  const token = match[1] ?? "";
-  return shapeMatches(marker, token) ? token : void 0;
-}
-function tupleFor(line, keys, markers) {
-  const values = [];
-  for (const key of keys) {
-    const marker = markers[key.field];
-    if (marker === void 0) return void 0;
-    if (marker.kind === "enum") return void 0;
-    const value = markerValue(line, marker);
-    if (value === void 0) return void 0;
-    values.push(value);
-  }
-  return values;
-}
-function compareValue(kind, a, b) {
-  if (kind === "date") return a < b ? -1 : a > b ? 1 : 0;
-  return Number(a) - Number(b);
-}
-function compareTuples(a, b, keys, markers) {
-  for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-    if (key === void 0) continue;
-    const marker = markers[key.field];
-    if (marker === void 0) continue;
-    const diff = compareValue(marker.kind, a[i] ?? "", b[i] ?? "");
-    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
-  }
-  return 0;
-}
-function rankOf(target, siblings, keys, markers) {
-  let rank = 1;
-  for (const sibling of siblings) {
-    if (compareTuples(sibling, target, keys, markers) < 0) rank += 1;
-  }
-  return rank;
-}
-function evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
-  const declared = ordering[viewId]?.[sectionId];
-  if (declared === void 0) return { kind: "abstains", because: "no-section-declaration" };
-  const keys = declared.ordering;
-  if (keys === void 0 || keys.length === 0) return { kind: "abstains", because: "insertion-order" };
-  for (const key of keys) {
-    const marker = orderingFields[key.field];
-    if (marker === void 0 || marker.kind === "enum") {
-      return { kind: "abstains", because: "field-not-published" };
-    }
-  }
-  const lines = source.split("\n");
-  const { start, end } = sectionBounds(lines, lineIndex);
-  const beforeText = lines[lineIndex] ?? "";
-  const beforeTuple = tupleFor(beforeText, keys, orderingFields);
-  const afterTuple = tupleFor(afterText, keys, orderingFields);
-  if (beforeTuple === void 0 || afterTuple === void 0) return { kind: "abstains", because: "no-value" };
-  const parentOf2 = parentLineOf(lines, start, end);
-  const group = parentOf2.get(lineIndex) ?? null;
-  const siblings = [];
-  for (let at = start; at < end; at += 1) {
-    if (at === lineIndex) continue;
-    if (!parentOf2.has(at)) continue;
-    if (parentOf2.get(at) !== group) continue;
-    const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
-    if (tuple !== void 0) siblings.push({ lineIndex: at, tuple });
-  }
-  return { kind: "answer", keys, beforeTuple, afterTuple, siblings };
-}
-function orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
-  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
-  if (evaluation.kind === "abstains") return abstains(evaluation.because);
-  const tuples = evaluation.siblings.map((s) => s.tuple);
-  const beforeRank = rankOf(evaluation.beforeTuple, tuples, evaluation.keys, orderingFields);
-  const afterRank = rankOf(evaluation.afterTuple, tuples, evaluation.keys, orderingFields);
-  return {
-    kind: "answer",
-    answer: {
-      moved: beforeRank !== afterRank,
-      beforeRank,
-      afterRank,
-      siblingCount: tuples.length
-    }
-  };
-}
-function orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
-  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
-  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
-  const { keys, beforeTuple, afterTuple, siblings } = evaluation;
-  const tuples = siblings.map((s) => s.tuple);
-  const beforeRank = rankOf(beforeTuple, tuples, keys, orderingFields);
-  const afterRank = rankOf(afterTuple, tuples, keys, orderingFields);
-  const moved = beforeRank !== afterRank;
-  const entries = [...siblings];
-  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
-  const currentBeforeLineIndex = insertAt === -1 ? null : entries[insertAt]?.lineIndex ?? null;
-  const selfEntry = { lineIndex, tuple: afterTuple };
-  if (insertAt === -1) {
-    entries.push(selfEntry);
-  } else {
-    entries.splice(insertAt, 0, selfEntry);
-  }
-  const sorted = entries.slice().sort((a, b) => compareTuples(a.tuple, b.tuple, keys, orderingFields));
-  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
-  const next = at === -1 ? void 0 : sorted[at + 1];
-  const beforeLineIndex = next === void 0 ? null : next.lineIndex;
-  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
-}
-function compareCodepoints(a, b) {
-  const ac = Array.from(a);
-  const bc = Array.from(b);
-  const len = Math.min(ac.length, bc.length);
-  for (let i = 0; i < len; i += 1) {
-    const ca = ac[i]?.codePointAt(0) ?? 0;
-    const cb = bc[i]?.codePointAt(0) ?? 0;
-    if (ca !== cb) return ca - cb;
-  }
-  return ac.length - bc.length;
-}
-function defaultFieldKeyFor(line, field, orderingFields, priorityRank, title) {
-  if (field === "title") {
-    if (title.kind === "abstains") {
-      return title.because === "style-ambiguous" ? "style-ambiguous" : { tier: 1, value: "" };
-    }
-    return { tier: 0, value: title.text };
-  }
-  const marker = orderingFields[field];
-  if (marker === void 0) return { tier: 1, value: "" };
-  if (marker.kind === "enum") {
-    let found;
-    for (const [token, spelled] of Object.entries(marker.values)) {
-      if (!line.includes(token)) continue;
-      if (found !== void 0 && found !== spelled) return { tier: 1, value: 0 };
-      found = spelled;
-    }
-    if (found === void 0) return { tier: 1, value: 0 };
-    const rank = priorityRank[found];
-    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
-  }
-  const raw = markerValue(line, marker);
-  if (raw === void 0) return { tier: 1, value: marker.kind === "date" ? "" : 0 };
-  return marker.kind === "date" ? { tier: 0, value: raw } : { tier: 0, value: Number(raw) };
-}
-function defaultTupleFor(line, defaultOrdering, orderingFields, priorityRank) {
-  const title = cleanTitleFor(line);
-  const tuple = [];
-  for (const key of defaultOrdering) {
-    const fieldKey = defaultFieldKeyFor(line, key.field, orderingFields, priorityRank, title);
-    if (fieldKey === "style-ambiguous") return "style-ambiguous";
-    tuple.push(fieldKey);
-  }
-  return tuple;
-}
-function compareDefaultTuples(a, b, defaultOrdering) {
-  for (let i = 0; i < defaultOrdering.length; i += 1) {
-    const key = defaultOrdering[i];
-    const av = a[i];
-    const bv = b[i];
-    if (key === void 0 || av === void 0 || bv === void 0) continue;
-    if (av.tier !== bv.tier) return av.tier - bv.tier;
-    if (av.tier === 1) continue;
-    let diff;
-    if (key.field === "title") diff = compareCodepoints(String(av.value), String(bv.value));
-    else if (typeof av.value === "number" && typeof bv.value === "number") diff = av.value - bv.value;
-    else diff = String(av.value) < String(bv.value) ? -1 : String(av.value) > String(bv.value) ? 1 : 0;
-    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
-  }
-  return 0;
-}
-function defaultRankOf(target, siblings, defaultOrdering) {
-  let rank = 1;
-  for (const sibling of siblings) {
-    if (compareDefaultTuples(sibling, target, defaultOrdering) < 0) rank += 1;
-  }
-  return rank;
-}
-var CONTAINER_ORDER_DIRECTIVE = "#order:";
-function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
-  if (ordering[viewId]?.[sectionId] !== void 0) {
-    return { kind: "abstains", because: "has-declared-ordering" };
-  }
-  if (defaultOrdering.length === 0) {
-    return { kind: "abstains", because: "field-not-published" };
-  }
-  for (const key of defaultOrdering) {
-    if (key.field === "title") continue;
-    if (orderingFields[key.field] === void 0) return { kind: "abstains", because: "field-not-published" };
-  }
-  const lines = source.split("\n");
-  const { start, end, headingIndex } = sectionBounds(lines, lineIndex);
-  if (headingIndex !== null && (lines[headingIndex] ?? "").includes(CONTAINER_ORDER_DIRECTIVE)) {
-    return { kind: "abstains", because: "container-ordering-directive" };
-  }
-  const beforeText = lines[lineIndex] ?? "";
-  const beforeTuple = defaultTupleFor(beforeText, defaultOrdering, orderingFields, priorityRank);
-  const afterTuple = defaultTupleFor(afterText, defaultOrdering, orderingFields, priorityRank);
-  const siblingsRaw = [];
-  if (classifyQualifying === void 0) {
-    if (anyLineIndented(lines, start, end)) {
-      return { kind: "abstains", because: "nested-section" };
-    }
-    for (let at = start; at < end; at += 1) {
-      if (at === lineIndex) continue;
-      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
-    }
-  } else {
-    if (classifyQualifying(lineIndex) === false) {
-      return { kind: "abstains", because: "not-qualifying" };
-    }
-    const parentOf2 = parentLineOf(lines, start, end);
-    const group = parentOf2.get(lineIndex) ?? null;
-    let anyCandidateUnknown = false;
-    for (let at = start; at < end; at += 1) {
-      if (at === lineIndex) continue;
-      if (!parentOf2.has(at)) continue;
-      if (parentOf2.get(at) !== group) continue;
-      const verdict = classifyQualifying(at);
-      if (verdict === void 0) {
-        anyCandidateUnknown = true;
-        continue;
-      }
-      if (verdict !== true) continue;
-      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
-    }
-    if (siblingsRaw.length === 0 && anyCandidateUnknown) {
-      return { kind: "abstains", because: "unclassifiable-siblings" };
-    }
-  }
-  if (beforeTuple === "style-ambiguous" || afterTuple === "style-ambiguous" || siblingsRaw.some((sibling) => sibling.tuple === "style-ambiguous")) {
-    return { kind: "abstains", because: "style-ambiguous-title" };
-  }
-  return {
-    kind: "answer",
-    beforeTuple,
-    afterTuple,
-    siblings: siblingsRaw
-  };
-}
-function defaultOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
-  const evaluation = evaluateDefaultSection(
-    viewId,
-    sectionId,
-    source,
-    lineIndex,
-    afterText,
-    ordering,
-    defaultOrdering,
-    orderingFields,
-    priorityRank,
-    classifyQualifying
-  );
-  if (evaluation.kind === "abstains") return abstains(evaluation.because);
-  const tuples = evaluation.siblings.map((sibling) => sibling.tuple);
-  const beforeRank = defaultRankOf(evaluation.beforeTuple, tuples, defaultOrdering);
-  const afterRank = defaultRankOf(evaluation.afterTuple, tuples, defaultOrdering);
-  return {
-    kind: "answer",
-    answer: {
-      moved: beforeRank !== afterRank,
-      beforeRank,
-      afterRank,
-      siblingCount: tuples.length
-    }
-  };
-}
-function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
-  const evaluation = evaluateDefaultSection(
-    viewId,
-    sectionId,
-    source,
-    lineIndex,
-    afterText,
-    ordering,
-    defaultOrdering,
-    orderingFields,
-    priorityRank,
-    classifyQualifying
-  );
-  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
-  const { beforeTuple, afterTuple, siblings } = evaluation;
-  const tuples = siblings.map((sibling) => sibling.tuple);
-  const beforeRank = defaultRankOf(beforeTuple, tuples, defaultOrdering);
-  const afterRank = defaultRankOf(afterTuple, tuples, defaultOrdering);
-  const moved = beforeRank !== afterRank;
-  const entries = [...siblings];
-  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
-  const currentBeforeLineIndex = insertAt === -1 ? null : entries[insertAt]?.lineIndex ?? null;
-  const selfEntry = { lineIndex, tuple: afterTuple };
-  if (insertAt === -1) {
-    entries.push(selfEntry);
-  } else {
-    entries.splice(insertAt, 0, selfEntry);
-  }
-  const sorted = entries.slice().sort((a, b) => compareDefaultTuples(a.tuple, b.tuple, defaultOrdering));
-  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
-  const next = at === -1 ? void 0 : sorted[at + 1];
-  const beforeLineIndex = next === void 0 ? null : next.lineIndex;
-  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
-}
-function resolveOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank, classifyQualifying) {
-  if (ordering[viewId]?.[sectionId] !== void 0) {
-    return orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
-  }
-  return defaultOrderingFor(
-    viewId,
-    sectionId,
-    source,
-    lineIndex,
-    afterText,
-    ordering,
-    defaultOrdering,
-    orderingFields,
-    priorityRank,
-    classifyQualifying
-  );
-}
-function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank, classifyQualifying) {
-  if (ordering[viewId]?.[sectionId] !== void 0) {
-    return orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
-  }
-  return defaultOrderingPlacementFor(
-    viewId,
-    sectionId,
-    source,
-    lineIndex,
-    afterText,
-    ordering,
-    defaultOrdering,
-    orderingFields,
-    priorityRank,
-    classifyQualifying
-  );
-}
-
 // app/present/select/membership.ts
 var RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"];
-var abstains2 = (because) => ({ kind: "abstains", because });
+var abstains = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
@@ -2566,13 +2123,13 @@ function resolveLineFields(line, section, language) {
 }
 function membershipFor(viewId, sectionId, line, language, today) {
   const section = language.sections[viewId]?.[sectionId];
-  if (section === void 0) return abstains2("no-section-declaration");
+  if (section === void 0) return abstains("no-section-declaration");
   const qualifier = language.predicates[section.qualification];
-  if (qualifier === void 0) return abstains2("no-section-declaration");
-  if (qualifierNeedsGraph(qualifier)) return abstains2("needs-graph-traversal");
-  if (qualifierNeedsClock(qualifier) && today === void 0) return abstains2("needs-clock");
+  if (qualifier === void 0) return abstains("no-section-declaration");
+  if (qualifierNeedsGraph(qualifier)) return abstains("needs-graph-traversal");
+  if (qualifierNeedsClock(qualifier) && today === void 0) return abstains("needs-clock");
   const fields = resolveLineFields(line, section, language);
-  if (typeof fields === "string") return abstains2(fields);
+  if (typeof fields === "string") return abstains(fields);
   return {
     kind: "answer",
     answer: {
@@ -3067,6 +2624,568 @@ function renderRuleEffects(line, effects, nodeTypeTokens, fieldTokens, fieldMark
     }
   }
   return deltaParts.length === 0 ? { kind: "unchanged" } : { kind: "rendered", text, delta: deltaParts.join(" ") };
+}
+
+// app/present/express/titlestyle.ts
+function nodeLocalContext(node, outgoingEdgeTypes = [], incomingEdgeTypes = []) {
+  const count = (types) => {
+    const out = {};
+    for (const type of types) out[type] = (out[type] ?? 0) + 1;
+    return out;
+  };
+  return {
+    node: {
+      type: node.type,
+      fields: { ...node.fields },
+      edge_type_counts: count(outgoingEdgeTypes),
+      incoming_edge_type_counts: count(incomingEdgeTypes)
+    }
+  };
+}
+function resolvePath(context, path) {
+  const segments = path.split(".");
+  let cursor = context;
+  for (const [index, segment] of segments.entries()) {
+    if (cursor === null || typeof cursor !== "object") return void 0;
+    const parent = cursor;
+    if (!(segment in parent)) {
+      const container = segments.slice(0, index).join(".");
+      if (container === "node.edge_type_counts" || container === "node.incoming_edge_type_counts") return 0;
+      if (container === "node.fields") return null;
+      return void 0;
+    }
+    cursor = parent[segment];
+  }
+  return cursor;
+}
+function compare(op, left, right) {
+  if (op === "eq") return left === right;
+  if (op === "ne") return left !== right;
+  if (typeof left !== "number" || typeof right !== "number") return false;
+  if (op === "gt") return left > right;
+  if (op === "gte") return left >= right;
+  if (op === "lt") return left < right;
+  if (op === "lte") return left <= right;
+  return false;
+}
+function titleStylePredicateHolds(predicate, context) {
+  if ("terms" in predicate) {
+    return predicate.op === "and" ? predicate.terms.every((term) => titleStylePredicateHolds(term, context)) : predicate.terms.some((term) => titleStylePredicateHolds(term, context));
+  }
+  if ("term" in predicate) return !titleStylePredicateHolds(predicate.term, context);
+  return compare(predicate.op, resolvePath(context, predicate.path), predicate.value);
+}
+function titleStyleFor(table, context) {
+  for (const row of table.rows) {
+    if (titleStylePredicateHolds(row.when, context)) return row.then;
+  }
+  return table.fallback;
+}
+
+// app/present/express/nodeline.ts
+var QNTM_ID_LINK = /\s*\[\[qntm:[^\]]+\]\]\s*/g;
+function cleanTitle(value) {
+  return String(value ?? "").replace(QNTM_ID_LINK, " ").trim();
+}
+function checkboxGlyph(table, fields) {
+  for (const row of table.rows) {
+    if (fields[row.when.field] === row.when.equals) return row.then;
+  }
+  return table.fallback;
+}
+function tagCells(node, resolution, order) {
+  const spelling = resolution.spelling;
+  if (spelling === void 0) return [];
+  const tags = [];
+  const typeToken = spelling.typeTokens[node.type];
+  if (typeToken !== void 0) tags.push(typeToken);
+  for (const [field, table] of Object.entries(spelling.fieldTags)) {
+    const value = node.fields[field];
+    if (value === void 0 || value === null) continue;
+    const token = table[String(value)];
+    if (token !== void 0) tags.push(token);
+  }
+  return order === void 0 ? tags : orderTags(tags, order);
+}
+function markerCells(node, resolution, order) {
+  const spelling = resolution.spelling;
+  if (spelling === void 0) return [];
+  const byGlyph = /* @__PURE__ */ new Map();
+  for (const [field, table] of Object.entries(spelling.fieldMarkerValues)) {
+    const value = node.fields[field];
+    if (value === void 0 || value === null) continue;
+    const glyph = table[String(value)];
+    if (glyph !== void 0) byGlyph.set(glyph, glyph);
+  }
+  for (const [field, marker] of Object.entries(spelling.fieldMarkers)) {
+    const value = node.fields[field];
+    if (value === void 0 || value === null || value === "") continue;
+    byGlyph.set(marker.token, `${marker.token} ${String(value)}`);
+  }
+  const glyphs = [...byGlyph.keys()];
+  const ordered = order === void 0 ? glyphs : orderTags(glyphs, order);
+  return ordered.map((glyph) => byGlyph.get(glyph));
+}
+function chromeCells(edges, edgeTags, order) {
+  const cellsByTag = /* @__PURE__ */ new Map();
+  for (const edge of edges) {
+    const tag = edgeTags[edge.type];
+    if (tag === void 0) continue;
+    const title = edge.targetTitle.trim();
+    if (title === "") continue;
+    const existing = cellsByTag.get(tag.token);
+    if (existing === void 0) {
+      cellsByTag.set(tag.token, [`${tag.token} [[${title}]]`]);
+    } else if (tag.cardinality === "many") {
+      existing.push(`${tag.token} [[${title}]]`);
+    }
+  }
+  const tokens = [...cellsByTag.keys()];
+  const ordered = order === void 0 ? tokens : orderTags(tokens, order);
+  return ordered.flatMap((token) => cellsByTag.get(token));
+}
+function indent(depth) {
+  return "    ".repeat(Math.max(0, depth));
+}
+function composeNodeLine(node, context) {
+  const { resolution } = context;
+  const composition = resolution.composition;
+  if (composition === void 0) return { ok: false, because: "no-composition" };
+  if (resolution.spelling === void 0) return { ok: false, because: "no-spelling" };
+  const shape = resolution.chromeShapes[node.type];
+  if (shape === void 0) return { ok: false, because: "unknown-node-type" };
+  const identity = resolution.identityModes?.[node.type];
+  if (identity === void 0) return { ok: false, because: "no-identity-mode" };
+  let checkbox;
+  if (shape === "checkbox") {
+    if (resolution.renderCheckbox === void 0) return { ok: false, because: "no-checkbox-table" };
+    checkbox = checkboxGlyph(resolution.renderCheckbox, node.fields);
+  }
+  const declared = node.fields.qntm_id;
+  const resolvedId = declared === void 0 || declared === null ? node.id : String(declared);
+  const stamp = identity.unique || context.writePolicy === "read_only" || resolvedId === "" ? "" : `[[qntm:${resolvedId}]]`;
+  const perNode = resolution.renderTitleStyle === void 0 ? [] : titleStyleFor(
+    resolution.renderTitleStyle,
+    nodeLocalContext(
+      { type: node.type, fields: node.fields },
+      (context.outgoingEdges ?? []).map((e) => e.type),
+      context.incomingEdgeTypes ?? []
+    )
+  );
+  const merged = {
+    ...composition,
+    titleStyles: [...perNode, ...composition.titleStyles]
+  };
+  const text = composeLine(
+    shape,
+    {
+      ...checkbox === void 0 ? {} : { checkbox },
+      title: cleanTitle(node.fields.title),
+      stamp,
+      date: "",
+      // always "" — the engine's own dissolved cell, kept in the order for faithfulness
+      tags: tagCells(node, resolution, resolution.tagOrder),
+      markers: markerCells(node, resolution, resolution.markerOrder),
+      chrome: chromeCells(context.outgoingEdges ?? [], resolution.spelling.edgeTags, resolution.edgeTagOrder)
+    },
+    merged,
+    context.depth ?? 0
+  );
+  const continuationLines = [];
+  for (const declared2 of resolution.continuationFields?.[node.type] ?? []) {
+    const value = node.fields[declared2.field];
+    if (typeof value !== "string" || value.trim() === "") continue;
+    const tag = declared2.token === null ? "" : ` ${declared2.token}`;
+    continuationLines.push(`${indent((context.depth ?? 0) + 1)}${composition.bullet} ${value}${tag}`);
+  }
+  return { ok: true, line: { text, continuationLines } };
+}
+
+// app/present/arrange/ordering.ts
+var abstains2 = (because) => ({ kind: "abstains", because });
+function sectionBounds(lines, lineIndex) {
+  let start = 0;
+  let headingIndex = null;
+  for (let at = lineIndex; at >= 0; at -= 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      start = at + 1;
+      headingIndex = at;
+      break;
+    }
+  }
+  let end = lines.length;
+  for (let at = lineIndex + 1; at < lines.length; at += 1) {
+    if (classifyLine(lines[at] ?? "").kind === "heading") {
+      end = at;
+      break;
+    }
+  }
+  return { start, end, headingIndex };
+}
+var INDENTED_CONTENT = /^\s+\S/;
+function anyLineIndented(lines, start, end) {
+  for (let at = start; at < end; at += 1) {
+    if (INDENTED_CONTENT.test(lines[at] ?? "")) return true;
+  }
+  return false;
+}
+function parentLineOf(lines, start, end) {
+  const parentOf2 = /* @__PURE__ */ new Map();
+  const stack = [];
+  for (let at = start; at < end; at += 1) {
+    const match = /^(\s*)\S/.exec(lines[at] ?? "");
+    if (match === null) continue;
+    const indent2 = match[1]?.length ?? 0;
+    while (stack.length > 0 && (stack[stack.length - 1]?.indent ?? -1) >= indent2) stack.pop();
+    const parent = stack[stack.length - 1];
+    parentOf2.set(at, parent === void 0 ? null : parent.lineIndex);
+    stack.push({ lineIndex: at, indent: indent2 });
+  }
+  return parentOf2;
+}
+var DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
+var INT_SHAPE = /^-?\d+$/;
+var FLOAT_SHAPE = /^-?\d+(?:\.\d+)?$/;
+function shapeMatches(marker, token) {
+  if (marker.kind === "date") return DATE_SHAPE.test(token);
+  if (marker.kind === "int") return INT_SHAPE.test(token);
+  return FLOAT_SHAPE.test(token);
+}
+function markerValue(line, marker) {
+  const at = line.indexOf(marker.token);
+  if (at === -1) return void 0;
+  const after = line.slice(at + marker.token.length);
+  const match = /^\s+(\S+)/.exec(after);
+  if (match === null) return void 0;
+  const token = match[1] ?? "";
+  return shapeMatches(marker, token) ? token : void 0;
+}
+function tupleFor(line, keys, markers) {
+  const values = [];
+  for (const key of keys) {
+    const marker = markers[key.field];
+    if (marker === void 0) return void 0;
+    if (marker.kind === "enum") return void 0;
+    const value = markerValue(line, marker);
+    if (value === void 0) return void 0;
+    values.push(value);
+  }
+  return values;
+}
+function compareValue(kind, a, b) {
+  if (kind === "date") return a < b ? -1 : a > b ? 1 : 0;
+  return Number(a) - Number(b);
+}
+function compareTuples(a, b, keys, markers) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (key === void 0) continue;
+    const marker = markers[key.field];
+    if (marker === void 0) continue;
+    const diff = compareValue(marker.kind, a[i] ?? "", b[i] ?? "");
+    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
+  }
+  return 0;
+}
+function rankOf(target, siblings, keys, markers) {
+  let rank = 1;
+  for (const sibling of siblings) {
+    if (compareTuples(sibling, target, keys, markers) < 0) rank += 1;
+  }
+  return rank;
+}
+function evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+  const declared = ordering[viewId]?.[sectionId];
+  if (declared === void 0) return { kind: "abstains", because: "no-section-declaration" };
+  const keys = declared.ordering;
+  if (keys === void 0 || keys.length === 0) return { kind: "abstains", because: "insertion-order" };
+  for (const key of keys) {
+    const marker = orderingFields[key.field];
+    if (marker === void 0 || marker.kind === "enum") {
+      return { kind: "abstains", because: "field-not-published" };
+    }
+  }
+  const lines = source.split("\n");
+  const { start, end } = sectionBounds(lines, lineIndex);
+  const beforeText = lines[lineIndex] ?? "";
+  const beforeTuple = tupleFor(beforeText, keys, orderingFields);
+  const afterTuple = tupleFor(afterText, keys, orderingFields);
+  if (beforeTuple === void 0 || afterTuple === void 0) return { kind: "abstains", because: "no-value" };
+  const parentOf2 = parentLineOf(lines, start, end);
+  const group = parentOf2.get(lineIndex) ?? null;
+  const siblings = [];
+  for (let at = start; at < end; at += 1) {
+    if (at === lineIndex) continue;
+    if (!parentOf2.has(at)) continue;
+    if (parentOf2.get(at) !== group) continue;
+    const tuple = tupleFor(lines[at] ?? "", keys, orderingFields);
+    if (tuple !== void 0) siblings.push({ lineIndex: at, tuple });
+  }
+  return { kind: "answer", keys, beforeTuple, afterTuple, siblings };
+}
+function orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  if (evaluation.kind === "abstains") return abstains2(evaluation.because);
+  const tuples = evaluation.siblings.map((s) => s.tuple);
+  const beforeRank = rankOf(evaluation.beforeTuple, tuples, evaluation.keys, orderingFields);
+  const afterRank = rankOf(evaluation.afterTuple, tuples, evaluation.keys, orderingFields);
+  return {
+    kind: "answer",
+    answer: {
+      moved: beforeRank !== afterRank,
+      beforeRank,
+      afterRank,
+      siblingCount: tuples.length
+    }
+  };
+}
+function orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
+  const evaluation = evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
+  const { keys, beforeTuple, afterTuple, siblings } = evaluation;
+  const tuples = siblings.map((s) => s.tuple);
+  const beforeRank = rankOf(beforeTuple, tuples, keys, orderingFields);
+  const afterRank = rankOf(afterTuple, tuples, keys, orderingFields);
+  const moved = beforeRank !== afterRank;
+  const entries = [...siblings];
+  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const currentBeforeLineIndex = insertAt === -1 ? null : entries[insertAt]?.lineIndex ?? null;
+  const selfEntry = { lineIndex, tuple: afterTuple };
+  if (insertAt === -1) {
+    entries.push(selfEntry);
+  } else {
+    entries.splice(insertAt, 0, selfEntry);
+  }
+  const sorted = entries.slice().sort((a, b) => compareTuples(a.tuple, b.tuple, keys, orderingFields));
+  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
+  const next = at === -1 ? void 0 : sorted[at + 1];
+  const beforeLineIndex = next === void 0 ? null : next.lineIndex;
+  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
+}
+function compareCodepoints(a, b) {
+  const ac = Array.from(a);
+  const bc = Array.from(b);
+  const len = Math.min(ac.length, bc.length);
+  for (let i = 0; i < len; i += 1) {
+    const ca = ac[i]?.codePointAt(0) ?? 0;
+    const cb = bc[i]?.codePointAt(0) ?? 0;
+    if (ca !== cb) return ca - cb;
+  }
+  return ac.length - bc.length;
+}
+function defaultFieldKeyFor(line, field, orderingFields, priorityRank, title) {
+  if (field === "title") {
+    if (title.kind === "abstains") {
+      return title.because === "style-ambiguous" ? "style-ambiguous" : { tier: 1, value: "" };
+    }
+    return { tier: 0, value: title.text };
+  }
+  const marker = orderingFields[field];
+  if (marker === void 0) return { tier: 1, value: "" };
+  if (marker.kind === "enum") {
+    let found;
+    for (const [token, spelled] of Object.entries(marker.values)) {
+      if (!line.includes(token)) continue;
+      if (found !== void 0 && found !== spelled) return { tier: 1, value: 0 };
+      found = spelled;
+    }
+    if (found === void 0) return { tier: 1, value: 0 };
+    const rank = priorityRank[found];
+    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
+  }
+  const raw = markerValue(line, marker);
+  if (raw === void 0) return { tier: 1, value: marker.kind === "date" ? "" : 0 };
+  return marker.kind === "date" ? { tier: 0, value: raw } : { tier: 0, value: Number(raw) };
+}
+function defaultTupleFor(line, defaultOrdering, orderingFields, priorityRank) {
+  const title = cleanTitleFor(line);
+  const tuple = [];
+  for (const key of defaultOrdering) {
+    const fieldKey = defaultFieldKeyFor(line, key.field, orderingFields, priorityRank, title);
+    if (fieldKey === "style-ambiguous") return "style-ambiguous";
+    tuple.push(fieldKey);
+  }
+  return tuple;
+}
+function compareDefaultTuples(a, b, defaultOrdering) {
+  for (let i = 0; i < defaultOrdering.length; i += 1) {
+    const key = defaultOrdering[i];
+    const av = a[i];
+    const bv = b[i];
+    if (key === void 0 || av === void 0 || bv === void 0) continue;
+    if (av.tier !== bv.tier) return av.tier - bv.tier;
+    if (av.tier === 1) continue;
+    let diff;
+    if (key.field === "title") diff = compareCodepoints(String(av.value), String(bv.value));
+    else if (typeof av.value === "number" && typeof bv.value === "number") diff = av.value - bv.value;
+    else diff = String(av.value) < String(bv.value) ? -1 : String(av.value) > String(bv.value) ? 1 : 0;
+    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
+  }
+  return 0;
+}
+function defaultRankOf(target, siblings, defaultOrdering) {
+  let rank = 1;
+  for (const sibling of siblings) {
+    if (compareDefaultTuples(sibling, target, defaultOrdering) < 0) rank += 1;
+  }
+  return rank;
+}
+var CONTAINER_ORDER_DIRECTIVE = "#order:";
+function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
+  if (ordering[viewId]?.[sectionId] !== void 0) {
+    return { kind: "abstains", because: "has-declared-ordering" };
+  }
+  if (defaultOrdering.length === 0) {
+    return { kind: "abstains", because: "field-not-published" };
+  }
+  for (const key of defaultOrdering) {
+    if (key.field === "title") continue;
+    if (orderingFields[key.field] === void 0) return { kind: "abstains", because: "field-not-published" };
+  }
+  const lines = source.split("\n");
+  const { start, end, headingIndex } = sectionBounds(lines, lineIndex);
+  if (headingIndex !== null && (lines[headingIndex] ?? "").includes(CONTAINER_ORDER_DIRECTIVE)) {
+    return { kind: "abstains", because: "container-ordering-directive" };
+  }
+  const beforeText = lines[lineIndex] ?? "";
+  const beforeTuple = defaultTupleFor(beforeText, defaultOrdering, orderingFields, priorityRank);
+  const afterTuple = defaultTupleFor(afterText, defaultOrdering, orderingFields, priorityRank);
+  const siblingsRaw = [];
+  if (classifyQualifying === void 0) {
+    if (anyLineIndented(lines, start, end)) {
+      return { kind: "abstains", because: "nested-section" };
+    }
+    for (let at = start; at < end; at += 1) {
+      if (at === lineIndex) continue;
+      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
+  } else {
+    if (classifyQualifying(lineIndex) === false) {
+      return { kind: "abstains", because: "not-qualifying" };
+    }
+    const parentOf2 = parentLineOf(lines, start, end);
+    const group = parentOf2.get(lineIndex) ?? null;
+    let anyCandidateUnknown = false;
+    for (let at = start; at < end; at += 1) {
+      if (at === lineIndex) continue;
+      if (!parentOf2.has(at)) continue;
+      if (parentOf2.get(at) !== group) continue;
+      const verdict = classifyQualifying(at);
+      if (verdict === void 0) {
+        anyCandidateUnknown = true;
+        continue;
+      }
+      if (verdict !== true) continue;
+      siblingsRaw.push({ lineIndex: at, tuple: defaultTupleFor(lines[at] ?? "", defaultOrdering, orderingFields, priorityRank) });
+    }
+    if (siblingsRaw.length === 0 && anyCandidateUnknown) {
+      return { kind: "abstains", because: "unclassifiable-siblings" };
+    }
+  }
+  if (beforeTuple === "style-ambiguous" || afterTuple === "style-ambiguous" || siblingsRaw.some((sibling) => sibling.tuple === "style-ambiguous")) {
+    return { kind: "abstains", because: "style-ambiguous-title" };
+  }
+  return {
+    kind: "answer",
+    beforeTuple,
+    afterTuple,
+    siblings: siblingsRaw
+  };
+}
+function defaultOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
+  const evaluation = evaluateDefaultSection(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+    classifyQualifying
+  );
+  if (evaluation.kind === "abstains") return abstains2(evaluation.because);
+  const tuples = evaluation.siblings.map((sibling) => sibling.tuple);
+  const beforeRank = defaultRankOf(evaluation.beforeTuple, tuples, defaultOrdering);
+  const afterRank = defaultRankOf(evaluation.afterTuple, tuples, defaultOrdering);
+  return {
+    kind: "answer",
+    answer: {
+      moved: beforeRank !== afterRank,
+      beforeRank,
+      afterRank,
+      siblingCount: tuples.length
+    }
+  };
+}
+function defaultOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
+  const evaluation = evaluateDefaultSection(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+    classifyQualifying
+  );
+  if (evaluation.kind === "abstains") return { kind: "abstains", because: evaluation.because };
+  const { beforeTuple, afterTuple, siblings } = evaluation;
+  const tuples = siblings.map((sibling) => sibling.tuple);
+  const beforeRank = defaultRankOf(beforeTuple, tuples, defaultOrdering);
+  const afterRank = defaultRankOf(afterTuple, tuples, defaultOrdering);
+  const moved = beforeRank !== afterRank;
+  const entries = [...siblings];
+  const insertAt = entries.findIndex((entry) => entry.lineIndex > lineIndex);
+  const currentBeforeLineIndex = insertAt === -1 ? null : entries[insertAt]?.lineIndex ?? null;
+  const selfEntry = { lineIndex, tuple: afterTuple };
+  if (insertAt === -1) {
+    entries.push(selfEntry);
+  } else {
+    entries.splice(insertAt, 0, selfEntry);
+  }
+  const sorted = entries.slice().sort((a, b) => compareDefaultTuples(a.tuple, b.tuple, defaultOrdering));
+  const at = sorted.findIndex((entry) => entry.lineIndex === lineIndex);
+  const next = at === -1 ? void 0 : sorted[at + 1];
+  const beforeLineIndex = next === void 0 ? null : next.lineIndex;
+  return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
+}
+function resolveOrderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank, classifyQualifying) {
+  if (ordering[viewId]?.[sectionId] !== void 0) {
+    return orderingFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  }
+  return defaultOrderingFor(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+    classifyQualifying
+  );
+}
+function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields, defaultOrdering, priorityRank, classifyQualifying) {
+  if (ordering[viewId]?.[sectionId] !== void 0) {
+    return orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields);
+  }
+  return defaultOrderingPlacementFor(
+    viewId,
+    sectionId,
+    source,
+    lineIndex,
+    afterText,
+    ordering,
+    defaultOrdering,
+    orderingFields,
+    priorityRank,
+    classifyQualifying
+  );
 }
 
 // app/present/graphmatch.ts
@@ -4980,14 +5099,14 @@ function seedFor(source, lineIndex, declared) {
   const tokens = sectionId === null || declared === void 0 ? [] : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
   if (declared?.composition !== void 0) {
     const indentMatch = /^\s*/.exec(chrome.text);
-    const indent = indentMatch === null ? "" : indentMatch[0];
+    const indent2 = indentMatch === null ? "" : indentMatch[0];
     const known = chrome.shape === "checkbox" ? { checkbox: "[ ]", tags: tokens } : { tags: tokens };
     const seed = composeSeed(chrome.shape, known, declared.composition, 0);
     return {
-      text: `${indent}${seed.text}`,
+      text: `${indent2}${seed.text}`,
       level: chrome.level,
       tokens,
-      cursorOffset: indent.length + seed.cursorOffset
+      cursorOffset: indent2.length + seed.cursorOffset
     };
   }
   const text = tokens.length === 0 ? chrome.text : `${chrome.text}${tokens.join(" ")} `;
@@ -6444,9 +6563,9 @@ var WAITING_FOR_TAG_BINDING = {
 };
 function edgeSourceOfFor(structural) {
   return (edgeType) => {
-    const indent = structural?.indent;
-    if (indent !== void 0 && indent.edgeType === edgeType) {
-      return indent.edgeSource;
+    const indent2 = structural?.indent;
+    if (indent2 !== void 0 && indent2.edgeType === edgeType) {
+      return indent2.edgeSource;
     }
     if (WAITING_FOR_TAG_BINDING.edgeType === edgeType) {
       return WAITING_FOR_TAG_BINDING.edgeSource;
@@ -6458,11 +6577,11 @@ function prospectiveEdgeBinding(line, structural) {
   if (tagSpans(line).some((span) => span.text === WAITING_FOR_TAG_BINDING.tag)) {
     return { edgeType: WAITING_FOR_TAG_BINDING.edgeType };
   }
-  const indent = structural?.indent;
-  if (indent === void 0) {
+  const indent2 = structural?.indent;
+  if (indent2 === void 0) {
     return void 0;
   }
-  return { edgeType: indent.edgeType };
+  return { edgeType: indent2.edgeType };
 }
 function structuralParentLineIndex(lines, lineIndex) {
   const leadingWhitespace = (line) => (/^\s*/.exec(line) ?? [""])[0].length;
@@ -7409,6 +7528,7 @@ export {
   closeDrawer,
   columnFor,
   composeLine,
+  composeNodeLine,
   composeSeed,
   compositionFor,
   computeViewMembers,
