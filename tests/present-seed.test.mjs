@@ -436,7 +436,7 @@ describe("4. THE ACCEPTANCE TEST — any new config, with no code change", { ski
             "  path: scratch/mood.md",
             "  sections:",
             "    - id: calm",
-            "      qualification: all-personal-nodes",
+            "      qualification: personal-tasks",
             '      name: "Calm"',
             "      defaults:",
             "        mood: serene",
@@ -468,7 +468,7 @@ describe("4. THE ACCEPTANCE TEST — any new config, with no code change", { ski
     // declared value and the seed changes with it — nothing in the app knows the word `personal`.
     const generated = withConfig(
       (configDir) => {
-        const path = join(configDir, "views", "all-personal.yaml");
+        const path = join(configDir, "views", "tasks-personal.yaml");
         const before = readFileSync(path, "utf8");
         // The SECTION's default, not the sheet's `domain:` key — the file carries both, and
         // replacing the first occurrence would change the sheet and leave the seed alone, which is
@@ -480,7 +480,7 @@ describe("4. THE ACCEPTANCE TEST — any new config, with no code change", { ski
       (resolution) => resolution,
     );
     assert.deepEqual(
-      generated.sectionRegistration["all-personal"].tasks.tokens,
+      generated.sectionRegistration["tasks-personal"].tasks.tokens,
       ["#task", "#spirit"],
       "the seed is wired to the value rather than reading it",
     );
@@ -500,7 +500,7 @@ describe("4. THE ACCEPTANCE TEST — any new config, with no code change", { ski
             "  path: scratch/unspellable.md",
             "  sections:",
             "    - id: nowhere",
-            "      qualification: all-personal-nodes",
+            "      qualification: personal-tasks",
             '      name: "Nowhere"',
             "      defaults:",
             "        invented_field: invented_value",
@@ -552,7 +552,7 @@ describe("4. THE ACCEPTANCE TEST — any new config, with no code change", { ski
             "  default_node_type: outcome",
             "  sections:",
             "    - id: all",
-            "      qualification: all-personal-nodes",
+            "      qualification: personal-tasks",
             '      name: "All"',
             "      defaults:",
             "        domain: personal",
@@ -785,7 +785,7 @@ describe("6. THE MUTATION PROOF — break the seeding and this file goes red", {
         const broken = mutant.generateResolution(DEFAULT_CONFIG_DIR, new Ledger());
         const engine = TRUTH.seeds.find((s) => s.view === "all-personal" && s.section === "tasks");
         assert.notDeepEqual(
-          broken.sectionRegistration["all-personal"].tasks.tokens,
+          broken.sectionRegistration["tasks-personal"].tasks.tokens,
           engine.tokens,
           "the field tags were removed and the agreement STILL held — it is not measuring them",
         );
