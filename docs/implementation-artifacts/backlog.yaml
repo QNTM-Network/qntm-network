@@ -4019,6 +4019,38 @@ backlog:
     discards by name - a scenario driving production would catch a wiring regression,
     this one cannot.
   captured: '2026-08-10'
+- id: the-write-completeness-gate-now-covers-no-writes
+  title: '[fix] `scripts/check-operation-completeness.mjs` and its CI gate
+    (tests/app-operation-paths-terminate.test.mjs) parse ONLY app/index.html''s inline
+    `<script type="module">`. Every write in the app now lives in app/present/commit.ts,
+    which that AST walk does not read. So `sitesChecked` is 1 — the collect()-exhausted
+    site — and its coverage OF WRITES is ZERO. The gate still passes, still gates CI,
+    and still claims "every write operation reaches a terminal state on every path this
+    checker can see", which is now vacuously true of no writes at all. Extend the walk
+    to the `.ts` modules under app/present/, or the claim has to be narrowed to say what
+    it actually covers.'
+  summary: The check that says every save finishes safely no longer looks at any save.
+  driving_capability: every-affordance-writes-back-through-the-source
+  record: >-
+    Captured 2026-08-14 while merging the two write paths (`one-write-path-per-act`), and
+    captured rather than fixed because extending an AST walk from one HTML file to a set of
+    TypeScript modules is a different change from removing a duplicate write path.
+
+    THE NUMBER MOVED FOR A GOOD REASON AND THAT IS EXACTLY WHY IT IS DANGEROUS. `sitesChecked`
+    went 2 -> 1 because `toggleTask`'s `writeFile(...)` call — the one write this checker could
+    see — is gone, correctly. Nothing is broken. The gate is green, and green now means it
+    inspected one non-write site and found it terminal.
+
+    THE SECOND HALF, WHICH IS THE SAME SHAPE ONE RUNG DOWN. The gate's own MUTATION PROOF — the
+    test that shows the CI script can still fail — was anchored on the literal string
+    `async function toggleTask(view, toggle) {`. The guard proving the gate works was pinned to
+    the existence of the function that should never have existed. Re-anchored on
+    `toggleTaskCommit` in the same change, which keeps the proof running but does not restore
+    what it is proving ABOUT.
+
+    Sibling of `flag-the-same-applyedit-call-site-count` and of the finding on branch
+    `refactor/relocate-write-file`: a correct, well-maintained enforcer that encodes the shape of
+    the code it sat on top of, and reads as reassurance after that shape is gone.
 - id: flag-no-typed-position-guards-the-edit-argument
   title: '[asserted] NO typed position in this repository makes forgetting to send the edit
     a compile error. `writeFile`''s `ops` parameter is declared OPTIONAL (`ops?:` on
