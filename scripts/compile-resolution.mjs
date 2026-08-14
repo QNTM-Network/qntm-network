@@ -421,6 +421,32 @@ export const ENGINE_LITERAL_RENDER_CHECKBOX = Object.freeze({
 // `_COMPOSITION_TAIL_CELL_CLASSES` (monorepo, read-only) field for field. Kept as data here, the
 // same posture `EXTRACTION_HINT_KINDS`-style tables in this file already take, so a shape check is
 // "is this string in the set", never a decision this compiler makes about what a cell class MEANS.
+// ── BEFORE YOU ADD A KEY TO THE PUBLISHED DECLARATION: CAN ITS VALUE EVER DIFFER? ─────────────
+//
+// If no, do not publish it. A field that cannot vary is not a fact about the operator's config;
+// it is a shape that reads like one. It agrees with every consumer, survives every test anyone
+// would write about it, and adds one more thing that must be kept true — while telling the
+// reader nothing they did not already have.
+//
+// This is stated HERE, beside the vocabularies, rather than only at the call sites that already
+// made the decision, because the next person to add a key meets this file before they meet
+// those. The full argument, its boundary and what to do instead live in flow-trace
+// `docs/architecture/architecture.yaml#a-published-fact-that-cannot-vary-is-a-shape`.
+//
+// THREE REFUSALS ON ONE DAY (2026-08-14), by two agents who did not consult each other — which
+// is the evidence that this is a rule and not a preference:
+//   `write_policy`                 every view answers `writable`; a one-valued table is a
+//                                  caller's assumption dressed as data.
+//   `field_value_chrome_emission`  no rows declared; an empty table reads as coverage.
+//   `viewCompositionSource`        PRESENCE in `viewComposition` is the source, so a parallel
+//                                  map would hold the word "view" in every slot. Derived at the
+//                                  read instead, by `resolutiontable.ts`'s `compositionFor`.
+//
+// AND THE BOUNDARY, because this is not an argument against publishing anything constant:
+// `compositionSource` reads `engine-fallback` for every config the operator has today and is
+// RIGHT to publish, because a declared `composition:` would move it. The question is whether the
+// field CAN vary, never whether it currently does.
+
 const COMPOSITION_REQUIRED_HEAD_SHAPES = ["checkbox", "plain_line"];
 const COMPOSITION_HEAD_CELL_CLASSES = new Set(["checkbox", "title"]);
 const COMPOSITION_TAIL_CELL_CLASSES = new Set(["stamp", "date", "tags", "markers", "chrome"]);
