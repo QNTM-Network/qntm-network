@@ -240,7 +240,8 @@ export type { RebaseOutcome } from "./rebase.js";
 export { PresentationCascade } from "./express/cascade.js";
 export type { Resolved } from "./express/cascade.js";
 
-export { applyEdit } from "./source.js";
+export { applyEdit, lineOps } from "./source.js";
+export type { LineOp } from "./source.js";
 export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
 export { paint, existingLineCommit, visualLineOrder } from "./paint.js";

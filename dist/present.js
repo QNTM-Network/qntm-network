@@ -4663,6 +4663,13 @@ function applyEdit(source, edit) {
   lines[edit.lineIndex] = (match[1] ?? "") + (edit.checked ? "x" : " ") + (match[2] ?? "");
   return lines.join("\n");
 }
+function lineOps(kind, lineIndex, markdown) {
+  if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
+  const lines = markdown.split("\n");
+  if (lineIndex >= lines.length) return null;
+  const replacement = [lines[lineIndex]];
+  return kind === "insert-line" ? [[lineIndex, lineIndex, replacement]] : [[lineIndex, lineIndex + 1, replacement]];
+}
 
 // app/present/rebase.ts
 function rebaseLineEdit(view, base, lineIndex, edited, current) {
@@ -6468,7 +6475,8 @@ function createCommitLine(deps) {
     armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
     const token = mintWriteToken();
     try {
-      const data = await deps.writeFile(view, commit.markdown, commit.source, token);
+      const ops = lineOps(commit.kind, commit.lineIndex, commit.markdown);
+      const data = await deps.writeFile(view, commit.markdown, commit.source, token, ops);
       deps.arrive(view.path, data, { markdown: commit.markdown, token, source: commit.source });
     } catch (error) {
       const e = error;
@@ -6995,6 +7003,7 @@ export {
   instancesOf,
   isSilent,
   lineBody,
+  lineOps,
   markWhereWeAre,
   markerSpans,
   markerValue,

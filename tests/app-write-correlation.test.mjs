@@ -573,7 +573,14 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
       // byte the answer this page has always handled. Unlike those two it is UNCONDITIONAL, and it
       // can be: `base` and `token` are absent when the browser has nothing to say, and this one is
       // never that — "do not make me wait for the cycle" is true of every write this app makes.
-      ["ack", "base", "markdown", "path", "token"],
+      // `ops` IS THE SIXTH FIELD. It is the edit this write IS — `[[start, end, [line]]]`, derived
+      // by `lineOps` from the same fold that produced `markdown` — and it exists because without
+      // it the graph server RECONSTRUCTS this edit by running `difflib` over two whole files.
+      // Like `base`, `token` and `ack` it is a field a server may ignore, and it rides ALONGSIDE
+      // `markdown` rather than replacing it precisely so that an old Worker still has the whole
+      // file to write. Conditional like `base`/`token`, not unconditional like `ack`: an edit that
+      // is not expressible as one line op sends no field at all.
+      ["ack", "base", "markdown", "ops", "path", "token"],
       "the write path gained or lost a field",
     );
   });
@@ -599,7 +606,9 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     // `ack` SURVIVES THE MISSING CSPRNG AND `token` DOES NOT, which is the whole shape of the two
     // fields stated side by side: one is a claim about THIS BROWSER'S randomness and is dropped when
     // there is none, the other is a request about the SERVER'S sequencing and is true either way.
-    assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "markdown", "path"]);
+    // `ops` survives the missing CSPRNG for the same reason `ack` does: it is a statement about
+    // THIS EDIT, not a claim about this browser's randomness. Only `token` is dropped.
+    assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "markdown", "ops", "path"]);
     assert.equal("token" in posted, false, "an empty token reached the wire");
   });
 });

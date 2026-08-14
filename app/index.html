@@ -1058,7 +1058,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=a96a47ccf1";
+} from "/dist/present.js?v=19c60a31de";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2602,7 +2602,7 @@ function resolverContextFor(view, commit) {
  * here as a fourth parameter and joined into that same "syncing…" line; that consumption is gone
  * too (see `commitLine`'s own comment) and this function no longer takes a `note` argument.
  */
-async function writeFile(view, markdown, source, token = null) {
+async function writeFile(view, markdown, source, token = null, ops = null) {
   // SYNCHRONOUS, AND app/present/base.ts's OWN HEADER SAYS WHY IT HAD TO BE: an `await` here would
   // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
   // implementation detail.
@@ -2619,6 +2619,24 @@ async function writeFile(view, markdown, source, token = null) {
   // that DID read it but was handed no `ctx` also answers synchronously. There is no combination in
   // which this field makes a write fail, and none in which it makes one silently do less.
   const body = { path: view.path, markdown, base: baseOf(source), ack: true };
+  // ── THE SEVENTH THING: THE WRITE SAYS WHAT IT DID, NOT ONLY WHAT IT WANTS ──
+  //
+  // `ops` is the edit this write IS — `[start, end, [line]]`, derived from the commit by `lineOps`
+  // (app/present/source.ts). Without it the graph server RECONSTRUCTS this edit by running
+  // `difflib` over two whole files, guessing at information this browser had and dropped.
+  //
+  // IT RIDES ALONGSIDE `markdown`, NEVER INSTEAD OF IT, and that is the whole of the shipping
+  // condition on this line. The Worker 422s any body with no `markdown` (its own
+  // `body?.markdown == null` check), so an ops-only body could not reach the server at all until
+  // that Worker ships — and sending both means neither has to ship first. An old Worker writes the
+  // markdown exactly as today; a new one prefers the ops and forwards only those. The two can
+  // never describe different edits, because the op's text is read OUT OF the fold rather than
+  // rebuilt beside it.
+  //
+  // ABSENT, NEVER EMPTY AND NEVER NULL — the same terms `base` and `token` are already carried on.
+  // An edit not expressible as one line op sends no field, which is byte-for-byte the request this
+  // browser sent before this change.
+  if (Array.isArray(ops) && ops.length > 0) body.ops = ops;
   // ── THE FIFTH THING: THE WRITE SAYS WHICH WRITE IT IS ──
   //
   // `token` IS CARRIED ONLY WHEN THERE IS ONE — absent, never empty and never null — which is

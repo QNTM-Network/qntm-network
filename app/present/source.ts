@@ -202,3 +202,53 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
   lines[edit.lineIndex] = (match[1] ?? "") + (edit.checked ? "x" : " ") + (match[2] ?? "");
   return lines.join("\n");
 }
+
+/**
+ * One edit-op on the wire: `[start, end, replacementLines]` — 0-indexed, half-open, over the
+ * file's line list. `start === end` is a pure insertion; an empty replacement is a pure deletion.
+ *
+ * NOT A NEW FORMAT. It is exactly what `server/vault_text.py`'s `apply_ops` applies, and exactly
+ * what the graph server's own `_edits` already produced for its tar path. The vocabulary existed
+ * on the server before anything here could speak it.
+ */
+export type LineOp = readonly [number, number, readonly string[]];
+
+/**
+ * The ops a committed line edit IS — the value this app has always computed and then thrown away.
+ *
+ * WHAT THIS EXISTS TO STOP. Every commit site builds a `SourceEdit`, folds it into whole markdown
+ * with `applyEdit`, posts the markdown, and DISCARDS the edit. The graph server then reconstructs
+ * that same edit by running `difflib` over two whole files — guessing at information this browser
+ * had and dropped. Nothing new is minted here: `kind` and `lineIndex` are already on the commit
+ * (paint.ts records `kind` precisely as provenance for "which applyEdit case produced this").
+ *
+ * DERIVED FROM THE FOLD, NOT REBUILT BESIDE IT, and that is what makes it safe to send the ops and
+ * the whole-file body together: the replacement text is read back out of the markdown `applyEdit`
+ * already produced, so the two halves of a request cannot describe different edits. They agree by
+ * construction rather than by two code paths happening to match.
+ *
+ * LINE-GRANULAR ON PURPOSE. The engine's `line_cache` is keyed `(file_path, line_number)` and
+ * fingerprinted per line, so a line op lands on an anchor the model already holds. Nothing in the
+ * model is keyed below a line, so a character-granular op would have to be reassembled into lines
+ * before anything could resolve it — which is the reconstruction being removed.
+ *
+ * `null` rather than a guess when the index is out of range: `writeFile` then sends no `ops` field
+ * at all, which is byte-for-byte the request this browser sent before ops existed. A misplaced op
+ * is silent corruption; a missing one is just today's whole-file write.
+ */
+export function lineOps(
+  kind: "set-line" | "insert-line",
+  lineIndex: number,
+  markdown: string,
+): readonly LineOp[] | null {
+  if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
+  const lines = markdown.split("\n");
+  if (lineIndex >= lines.length) return null;
+  const replacement = [lines[lineIndex] as string];
+  // set-line REPLACES the row at lineIndex; insert-line OPENS a new row there and pushes the rest
+  // down. The half-open range is the only difference, and it is the same distinction `SourceEdit`
+  // already draws between its two line kinds.
+  return kind === "insert-line"
+    ? [[lineIndex, lineIndex, replacement] as const]
+    : [[lineIndex, lineIndex + 1, replacement] as const];
+}

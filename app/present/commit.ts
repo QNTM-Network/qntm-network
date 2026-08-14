@@ -51,6 +51,7 @@
  * falsifiable claim; do not take the paragraph above as the proof.
  */
 
+import { lineOps, type LineOp } from "./source.js";
 import { RESOLVERS } from "./resolvers/registry.js";
 import { runResolvers, armSettle, armPredict } from "./resolve.js";
 import type { CommitContext, Diagnostic, PredictArm } from "./resolve.js";
@@ -111,6 +112,13 @@ export interface CommitLineDeps {
     markdown: string,
     source: string,
     token: string | null,
+    /**
+     * The edit this write IS, as line-ops — carried ALONGSIDE `markdown`, never instead of it.
+     * Both go on the wire so the change is deployable in ANY ORDER: a Worker that has never heard
+     * of `ops` reads the markdown and behaves byte-identically to today, one that has prefers the
+     * ops. Absent on the rebase retry below, deliberately — that is a whole-file fold.
+     */
+    ops?: readonly LineOp[] | null,
   ): Promise<unknown>;
   /** `arrive`, unmoved — installs or holds whatever the write answered with. */
   arrive(
@@ -177,7 +185,12 @@ export function createCommitLine(
     armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
     const token = mintWriteToken();
     try {
-      const data = await deps.writeFile(view, commit.markdown, commit.source, token);
+      // THE EDIT, NO LONGER DISCARDED. Derived from the commit's own `kind` and `lineIndex`, with
+      // the replacement text read back out of the markdown the fold already produced — so the ops
+      // and the whole-file body below cannot describe different edits. `null` when the commit is
+      // not expressible as one line op, in which case this is exactly today's write.
+      const ops = lineOps(commit.kind, commit.lineIndex, commit.markdown);
+      const data = await deps.writeFile(view, commit.markdown, commit.source, token, ops);
       // OFFERED, NOT INSTALLED — see the original's own comment.
       deps.arrive(view.path, data, { markdown: commit.markdown, token, source: commit.source });
     } catch (error) {
