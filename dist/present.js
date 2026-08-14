@@ -4223,6 +4223,41 @@ function isNewer(arriving, held) {
 var ProjectionQueue = class {
   #pending = /* @__PURE__ */ new Map();
   /**
+   * THE NEWEST `generated_at` THIS QUEUE HAS EVER ACCEPTED FOR A PATH, whether or not it is still
+   * holding it. One entry per file, never removed except by `clear`.
+   *
+   * ── WHY IT HAS TO OUTLIVE `#pending` ──
+   *
+   * TWO DIFFERENT ORDERINGS RUN THROUGH THIS CLASS AND ONLY ONE OF THEM WAS SURVIVING.
+   *
+   *   EDIT ordering — a projection computed before the operator's newest edit no longer describes
+   *     the screen. That is what `drop` is for, and it is right.
+   *   ARRIVAL ordering — a slower answer must not overwrite a faster, newer one. That is what
+   *     `isNewer` is for, and it is right too.
+   *
+   * `drop` answered its own question by DELETING the entry — and the entry was also the only
+   * evidence the second question had. So on the second of two rapid commits, `offer` found an empty
+   * map, took the `held === undefined` path, and queued unconditionally: `isNewer` was not
+   * consulted because there was nothing left to compare against. An answer that left the server
+   * FIRST could then land on screen after one that left it later.
+   *
+   * The watermark separates the two. `drop` still clears what is HELD; it no longer takes the
+   * arrival-ordering evidence with it.
+   *
+   * ── AND IT CLOSES THE SAME HOLE IN `take`, WHICH IS NOT THE ONE ANYONE WAS LOOKING FOR ──
+   *
+   * `take` removes the entry too, because the caller is about to install it. Between that removal
+   * and the next arrival the map is equally empty, so an answer that overtook the one just applied
+   * was accepted for exactly the same reason. Proven by its own test rather than reasoned about.
+   *
+   * ── EVERY VALUE COMPARED IS THE SERVER'S OWN `generated_at` ──
+   *
+   * No browser clock enters this, so there is no cross-clock ordering to get wrong. A design that
+   * stamped the DROP with the moment of the edit would have had to compare the operator's clock
+   * against the server's, and this deliberately does not.
+   */
+  #highWater = /* @__PURE__ */ new Map();
+  /**
    * A PROJECTION ARRIVED FOR `path`. Hold it, unless what is already held is at least as new.
    *
    * It does not install anything and it cannot: installing is a repaint, a repaint needs a DOM, and
@@ -4230,15 +4265,12 @@ var ProjectionQueue = class {
    */
   offer(path, generatedAt, data) {
     const held = this.#pending.get(path);
-    if (held === void 0) {
-      this.#pending.set(path, { path, generatedAt, data });
-      return { outcome: "queued" };
-    }
-    if (!isNewer(generatedAt, held.generatedAt)) {
+    if (this.#highWater.has(path) && !isNewer(generatedAt, this.#highWater.get(path) ?? null)) {
       return { outcome: "stale" };
     }
+    this.#highWater.set(path, generatedAt);
     this.#pending.set(path, { path, generatedAt, data });
-    return { outcome: "superseded" };
+    return { outcome: held === void 0 ? "queued" : "superseded" };
   }
   /** What is waiting for `path`, without taking it. `null` when nothing is. */
   pending(path) {
@@ -4268,6 +4300,7 @@ var ProjectionQueue = class {
    */
   clear() {
     this.#pending.clear();
+    this.#highWater.clear();
   }
 };
 
