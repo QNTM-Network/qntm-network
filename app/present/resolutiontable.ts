@@ -288,6 +288,41 @@ export interface IdentityMode {
   readonly field: string | null;
 }
 
+/**
+ * ONE PREDICATE TERM of a title-style row — a comparison, or a nested logical form.
+ *
+ * `op` is drawn from the RULE ENGINE'S OWN closed set, not the subset these rows happen to use:
+ * `eq`/`ne`/`gt`/`gte`/`lt`/`lte` compare a `path` against a `value`; `and`/`or` combine `terms`;
+ * `not` negates a single `term`. `render_title_style` uses three of the nine today, and the other
+ * six are already reachable by a config edit, so a shape carrying only three would be wrong on
+ * arrival rather than later.
+ *
+ * `path` IS AN OPAQUE STRING resolved against the context the caller builds. That is what lets the
+ * WAITING_FOR row become `node.incoming_edge_type_counts.WAITING_FOR` — which the contract's own
+ * comment says it will — with no change to this type at all.
+ */
+export type TitleStylePredicate =
+  | { readonly op: "eq" | "ne" | "gt" | "gte" | "lt" | "lte"; readonly path: string; readonly value: string | number }
+  | { readonly op: "and" | "or"; readonly terms: readonly TitleStylePredicate[] }
+  | { readonly op: "not"; readonly term: TitleStylePredicate };
+
+export interface TitleStyleRow {
+  readonly when: TitleStylePredicate;
+  readonly then: readonly string[];
+}
+
+/**
+ * THE PER-NODE TITLE WRAP — `render_title_style`, first-match-wins with a `fallback`.
+ *
+ * Merged by the engine with `composition.form.titleStyles` (the GLOBAL, unconditional answer)
+ * before a title is wrapped ONCE. Two rows are ordinary in the operator's vault: an in-progress
+ * task renders bold, an explainer renders italic.
+ */
+export interface RenderTitleStyle {
+  readonly rows: readonly TitleStyleRow[];
+  readonly fallback: readonly string[];
+}
+
 export interface RenderCheckbox {
   readonly rows: readonly RenderCheckboxRow[];
   readonly fallback: string;
@@ -504,6 +539,13 @@ export interface ConfigResolutionTable {
    * no config/engine-fallback split to report. Published so the kind of fact is stated. */
   readonly renderCheckboxSource: "engine-literal" | undefined;
   /**
+   * The per-node title wrap. See `RenderTitleStyle`. `undefined` when the served declaration
+   * predates the key or declares it malformed — and a caller must then apply NO per-node wrap
+   * rather than inventing one, exactly as it must draw no checkbox without `renderCheckbox`.
+   */
+  readonly renderTitleStyle: RenderTitleStyle | undefined;
+  readonly renderTitleStyleSource: "engine-literal" | undefined;
+  /**
    * node type -> how it is identified. See `IdentityMode`. Keyed over EVERY type `schema.yaml`
    * declares, which is what makes a MISSING key meaningful: it is a type this config does not
    * declare, and a caller must refuse to compose its line rather than assume the ordinary
@@ -670,6 +712,10 @@ const TOP_KEYS = [
   // never a map, because first-match-wins and "no status at all" are both real answers.
   "renderCheckbox",
   "renderCheckboxSource",
+  // The per-node title wrap. Nested predicates over an opaque path, unlike renderCheckbox's
+  // one-field comparison — see `TitleStylePredicate`.
+  "renderTitleStyle",
+  "renderTitleStyleSource",
   // Whether a type's line carries a stamp, and what identifies it when it does not. Keyed over
   // every declared type, so absence means "unknown type", never "ordinary type".
   "identityModes",
@@ -1366,11 +1412,101 @@ function readContinuationFields(
   return out;
 }
 
+/** The rule engine's own closed operator set. A published table using anything outside it is one
+ * this reader cannot evaluate, and the honest answer is to refuse the table rather than skip a row
+ * — see `readRenderTitleStyle`. */
+const TITLE_STYLE_COMPARISONS = new Set(["eq", "ne", "gt", "gte", "lt", "lte"]);
+
+function readTitleStylePredicate(value: unknown, path: string, problems: string[]): TitleStylePredicate | undefined {
+  if (!isPlainObject(value) || typeof value.op !== "string") {
+    problems.push(`'${path}' is ${shapeOf(value)}, not a predicate with an 'op'`);
+    return undefined;
+  }
+  const op = value.op;
+  if (TITLE_STYLE_COMPARISONS.has(op)) {
+    if (typeof value.path !== "string" || value.path === "") {
+      problems.push(`'${path}.path' is ${JSON.stringify(value.path)}, not a non-empty string`);
+      return undefined;
+    }
+    if (typeof value.value !== "string" && typeof value.value !== "number") {
+      problems.push(`'${path}.value' is ${JSON.stringify(value.value)}, not a string or number`);
+      return undefined;
+    }
+    return { op: op as "eq", path: value.path, value: value.value };
+  }
+  if (op === "and" || op === "or") {
+    if (!Array.isArray(value.terms) || value.terms.length === 0) {
+      problems.push(`'${path}.terms' is ${shapeOf(value.terms)}, not a non-empty array`);
+      return undefined;
+    }
+    const terms: TitleStylePredicate[] = [];
+    for (const [index, term] of value.terms.entries()) {
+      const read = readTitleStylePredicate(term, `${path}.terms[${index}]`, problems);
+      if (read === undefined) return undefined;
+      terms.push(read);
+    }
+    return { op, terms };
+  }
+  if (op === "not") {
+    const term = readTitleStylePredicate(value.term, `${path}.term`, problems);
+    return term === undefined ? undefined : { op: "not", term };
+  }
+  problems.push(
+    `'${path}.op' is ${JSON.stringify(op)}, which this reader cannot evaluate — the whole title ` +
+      "style table stays unknown rather than skipping the row, because first-match-wins means a " +
+      "skipped row silently promotes every row after it",
+  );
+  return undefined;
+}
+
+/**
+ * `resolution.renderTitleStyle` — see `RenderTitleStyle`. Whole-fact `undefined` on any malformed
+ * row or unknown operator, never a partial table, for the reason `readRenderCheckbox` gives: order
+ * is meaning, and dropping row 2 of a first-match-wins table changes what every later row answers.
+ */
+function readRenderTitleStyle(value: unknown, problems: string[]): RenderTitleStyle | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.renderTitleStyle`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — the title wrap stays unknown`);
+    return undefined;
+  }
+  const readStyles = (raw: unknown, where: string): readonly string[] | undefined => {
+    if (!Array.isArray(raw) || !raw.every((x) => typeof x === "string" && x !== "")) {
+      problems.push(`'${where}' is ${shapeOf(raw)}, not an array of non-empty strings`);
+      return undefined;
+    }
+    return raw as string[];
+  };
+  const fallback = readStyles(value.fallback, `${path}.fallback`);
+  if (fallback === undefined) return undefined;
+  if (!Array.isArray(value.rows)) {
+    problems.push(`'${path}.rows' is ${shapeOf(value.rows)}, not an array`);
+    return undefined;
+  }
+  const rows: TitleStyleRow[] = [];
+  for (const [index, row] of value.rows.entries()) {
+    if (!isPlainObject(row)) {
+      problems.push(`'${path}.rows[${index}]' is ${shapeOf(row)}, not an object`);
+      return undefined;
+    }
+    const when = readTitleStylePredicate(row.when, `${path}.rows[${index}].when`, problems);
+    if (when === undefined) return undefined;
+    const then = readStyles(row.then, `${path}.rows[${index}].then`);
+    if (then === undefined) return undefined;
+    rows.push({ when, then });
+  }
+  return { rows, fallback };
+}
+
 /** `resolution.renderCheckboxSource` — one legal value, checked rather than assumed. */
-function readRenderCheckboxSource(value: unknown, problems: string[]): "engine-literal" | undefined {
+function readRenderCheckboxSource(
+  value: unknown,
+  problems: string[],
+  key: "renderCheckboxSource" | "renderTitleStyleSource" = "renderCheckboxSource",
+): "engine-literal" | undefined {
   if (value !== "engine-literal") {
     problems.push(
-      `'${RESOLUTION_TABLE_KEY}.renderCheckboxSource' is ${JSON.stringify(value)}, not ` +
+      `'${RESOLUTION_TABLE_KEY}.${key}' is ${JSON.stringify(value)}, not ` +
         '"engine-literal" — the checkbox contract is engine source with no operator override ' +
         "surface, so any other answer means this declaration was produced by something else",
     );
@@ -1840,6 +1976,12 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       // anyway, and validated, so the KIND of fact is stated rather than assumed.
       renderCheckboxSource:
         "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : undefined,
+      renderTitleStyle:
+        "renderTitleStyle" in raw ? readRenderTitleStyle(raw.renderTitleStyle, problems) : undefined,
+      renderTitleStyleSource:
+        "renderTitleStyleSource" in raw
+          ? readRenderCheckboxSource(raw.renderTitleStyleSource, problems, "renderTitleStyleSource")
+          : undefined,
       identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : undefined,
       continuationFields:
         "continuationFields" in raw ? readContinuationFields(raw.continuationFields, problems) : undefined,

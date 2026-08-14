@@ -108,6 +108,307 @@
       "unrankedPolicy": "append_stable"
     }
   },
+  "titleStyle": {
+    "operators": [
+      "and",
+      "eq",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+      "ne",
+      "not",
+      "or"
+    ],
+    "grid": [
+      {
+        "nodeType": "task",
+        "status": "open",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "open",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "done",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "done",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "in_progress",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "bold"
+        ]
+      },
+      {
+        "nodeType": "task",
+        "status": "in_progress",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "bold"
+        ]
+      },
+      {
+        "nodeType": "task",
+        "status": "cancelled",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "cancelled",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "waiting",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "waiting",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "task",
+        "status": "scheduled",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": "scheduled",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": null,
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "task",
+        "status": null,
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "explainer",
+        "status": "open",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "open",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "done",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "done",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "in_progress",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "in_progress",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "cancelled",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "cancelled",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "waiting",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "waiting",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "scheduled",
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": "scheduled",
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": null,
+        "waitingForOutgoing": 0,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "explainer",
+        "status": null,
+        "waitingForOutgoing": 1,
+        "styles": [
+          "italic"
+        ]
+      },
+      {
+        "nodeType": "outcome",
+        "status": "open",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "open",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "done",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "done",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "in_progress",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "in_progress",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "cancelled",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "cancelled",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "waiting",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "waiting",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "scheduled",
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": "scheduled",
+        "waitingForOutgoing": 1,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": null,
+        "waitingForOutgoing": 0,
+        "styles": []
+      },
+      {
+        "nodeType": "outcome",
+        "status": null,
+        "waitingForOutgoing": 1,
+        "styles": []
+      }
+    ]
+  },
   "fixtures": [
     {
       "id": "bare_title_no_stamp",

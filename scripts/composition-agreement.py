@@ -104,6 +104,7 @@ from qntm_md.render.renderer import (  # noqa: E402
     _order_tags_dispatcher,
     _order_markers_dispatcher,
     _order_edge_tags_dispatcher,
+    _title_style_dispatcher,
     _assemble_marker_cells,
     _outgoing_edge_chrome_cells,
     _apply_title_style,
@@ -674,6 +675,134 @@ def canonical_order_pins() -> dict[str, dict[str, Any]]:
     return out
 
 
+def title_style_pin() -> dict[str, Any]:
+    """`render_title_style`, DRIVEN over a grid of real node contexts.
+
+    ── WHY A GRID AND NOT A TRANSCRIPTION ──
+
+    `CompiledRow.when_ast` is an OPAQUE compiled AST — reading it back into a predicate would be
+    guessing at a structure the engine never promised. So this asks the dispatcher what it ANSWERS
+    for a context, over every combination that could distinguish one row from another, and emits
+    those answers as a differential. `tests/present-resolution.test.mjs` then evaluates the
+    PUBLISHED table over the same grid and must agree on every cell.
+
+    That is stronger than a transcription check: it catches a published predicate that is merely
+    WORDED differently as readily as one that is wrong, because neither is asserted — only the
+    answers are.
+
+    ── THE OPERATOR SET IS PART OF WHAT THIS ASSERTS ──
+
+    The published shape carries the rule engine's OWN closed operator set rather than the three
+    these rows use, so that a row using `or` or `ne` — both already reachable by a config edit —
+    does not need a shape change. If that set GROWS, the browser's reader has an operator it
+    cannot evaluate and would have to refuse the table. Better to learn it here, as a refusal
+    naming the new operator, than to discover it as a title that stopped being bold.
+    """
+    from qntm_rule_engine.evaluator.core import _COMPARISON_OPERATORS
+
+    known = set(_COMPARISON_OPERATORS) | {"and", "or", "not"}
+    expected = {"eq", "ne", "gt", "gte", "lt", "lte", "and", "or", "not"}
+    if known != expected:
+        print(
+            f"REFUSING: the rule engine's operator set is now {sorted(known)}, not "
+            f"{sorted(expected)} — `app/present/resolutiontable.ts` can only evaluate the set it "
+            "knows, so a published table using a new operator would be refused at the reader. "
+            "Extend the reader and this pin together.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    dispatcher = _title_style_dispatcher()
+    signature = inspect.signature(_title_style_dispatcher)
+    if signature.parameters:
+        print(
+            f"REFUSING: _title_style_dispatcher{signature} now takes argument(s) "
+            f"{list(signature.parameters)} — the title wrap is no longer one global answer, so "
+            "publishing it as one would be a claim the engine has stopped making.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    # THE GRID. Every combination that can distinguish one published row from another: the two node
+    # types the rows name plus one they do not, every status the rows test plus one they do not and
+    # the absent case, and the WAITING_FOR outgoing count on both sides of the `gte 1` boundary.
+    node_types = ["task", "explainer", "outcome"]
+    statuses = ["open", "done", "in_progress", "cancelled", "waiting", "scheduled", None]
+    waiting_counts = [0, 1]
+
+    # ITS OWN SCHEMA, NOT THE SHARED `_SCHEMA`. That one is the composition fixtures' universe —
+    # two node types and two edge types — and it feeds nine committed fixtures. This pin needs the
+    # types its predicates NAME (`task`, `explainer`, plus one the rows do not name) and a
+    # `WAITING_FOR` edge to put on both sides of the `gte 1` boundary. Widening the shared schema to
+    # get them would change the universe those nine fixtures were proven in, for a reason that has
+    # nothing to do with them.
+    pin_schema: dict[str, Any] = {
+        "version": 1,
+        "field_types": {
+            "title": {"type": "string"},
+            "status": {"type": "string", "nullable": True, "required": False},
+        },
+        "node_types": {
+            "task": {"fields": ["title", "status"], "render": {"shape": "checkbox"}},
+            "explainer": {"fields": ["title", "status"], "render": {"shape": "plain_line"}},
+            "outcome": {"fields": ["title", "status"], "render": {"shape": "checkbox"}},
+        },
+        "edge_types": {
+            "WAITING_FOR": {"direction": "directed", "cardinality": "many_to_many"},
+        },
+    }
+
+    def pin_graph() -> qntm_graph.Graph:
+        return qntm_graph.Graph(qntm_graph.load_schema(pin_schema), raw_schema=pin_schema)
+
+    grid: list[dict[str, Any]] = []
+    for node_type in node_types:
+        for status in statuses:
+            for waiting in waiting_counts:
+                graph = pin_graph()
+                fields: dict[str, Any] = {"title": "probe"}
+                if status is not None:
+                    fields["status"] = status
+                node = graph.create_node(node_type, dict(fields))
+                for _ in range(waiting):
+                    target = graph.create_node("task", {"title": "awaited"})
+                    graph.create_edge("WAITING_FOR", node.id, target.id)
+                result = dispatcher.dispatch(
+                    "render_title_style", build_node_local_context(graph, node)
+                ).result
+                styles = list(result) if isinstance(result, (list, tuple)) else ([result] if isinstance(result, str) else [])
+                grid.append(
+                    {
+                        "nodeType": node_type,
+                        "status": status,
+                        "waitingForOutgoing": waiting,
+                        "styles": styles,
+                    }
+                )
+
+    # POSITIVE CONTROLS. A grid whose every cell answered the same thing would make the JS side
+    # agree with anything.
+    answers = {tuple(cell["styles"]) for cell in grid}
+    if len(answers) < 3:
+        print(
+            f"REFUSING: the grid produced only {len(answers)} distinct answer(s) {sorted(answers)} "
+            "— it does not separate the rows, so agreeing with it proves nothing",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    if not any(cell["styles"] == ["bold"] for cell in grid):
+        print("REFUSING: no grid cell renders bold — the in_progress row was never exercised", file=sys.stderr)
+        raise SystemExit(2)
+    if not any(cell["styles"] == ["italic"] for cell in grid):
+        print("REFUSING: no grid cell renders italic — neither italic row was exercised", file=sys.stderr)
+        raise SystemExit(2)
+    if not any(cell["styles"] == [] for cell in grid):
+        print("REFUSING: no grid cell reaches the fallback or an empty row", file=sys.stderr)
+        raise SystemExit(2)
+
+    return {"operators": sorted(known), "grid": grid}
+
+
 def render_checkbox_pin() -> dict[str, Any]:
     """The `render_checkbox` contract, READ THROUGH THE REAL DISPATCHER, as publishable rows.
 
@@ -803,6 +932,9 @@ def main() -> int:
         # agreement.test.mjs` asserts the published literals equal these, so a contract edit that
         # does not reach `compile-resolution.mjs` is a red test rather than a silent divergence.
         "canonicalOrders": canonical_order_pins(),
+        # The per-node title wrap, driven over a grid — see `title_style_pin`. The JS side
+        # evaluates the PUBLISHED table over the same grid and must agree on every cell.
+        "titleStyle": title_style_pin(),
         "fixtures": fixtures,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

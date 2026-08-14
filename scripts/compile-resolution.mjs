@@ -341,6 +341,97 @@ const VIEW_SECTION_KEYS_KNOWN = new Set([
 // config. `renderer.py`'s `_engine_render_dispatcher(table_id)` takes a table id and returns a
 // dispatcher; the path is inside it. So a pin that asks the FACTORY survives the move, and a pin
 // that named `src/qntm_md/render/contracts/order_markers.yaml` would break on the day it lands.
+// ── THE TITLE WRAP — the LAST render decision, and the one with a real predicate language ────
+//
+// `_render_node_line` merges two answers before wrapping a title once: the GLOBAL, unconditional
+// `composition.form.title_styles` (already published, empty in his config) and this PER-NODE one,
+// `render_title_style`, dispatched over the node-local context. Two of its five rows are ordinary
+// in his vault — an in-progress task renders **bold**, an explainer renders *italic* — so a
+// composer without this table differs from the engine on lines he reads every day.
+//
+// ── WHY THIS IS NOT `renderCheckbox` WITH MORE ROWS ──
+//
+// `renderCheckbox` compares ONE field to ONE value, so `{field, equals}` says everything it can
+// say. These predicates nest: `and` over `eq` over `node.type` AND `node.fields.status`, plus
+// `gte` against `node.edge_type_counts.WAITING_FOR` — a path that is not a field at all but a
+// derived count of the node's outgoing edges. Extending the checkbox row shape to reach that would
+// have made one shape mean two things.
+//
+// ── PUBLISHED FOR THE ROW IT BECOMES, NOT ONLY THE ROW IT IS ──
+//
+// The contract's own comment (`render_title_style.yaml:64`) says the WAITING_FOR row becomes
+// `{gte: ["node.incoming_edge_type_counts.WAITING_FOR", 1]}` once that mirror lands. A shape
+// frozen to today's three operators would drift the moment the engine moved — the `render_checkbox`
+// lesson in a different key. So:
+//
+//   * OPERATORS are the rule engine's OWN closed set, not the subset these rows happen to use.
+//     `qntm_rule_engine`'s `_COMPARISON_OPERATORS` is eq/ne/gt/gte/lt/lte and its logical forms are
+//     and/or/not — nine. These rows use three. The other six are already reachable today by a
+//     config edit, so a shape that could not carry them would be wrong on arrival, not later.
+//   * PATHS ARE OPAQUE STRINGS, resolved by the reader against the context it builds. That is what
+//     makes `node.incoming_edge_type_counts.WAITING_FOR` need no change here at all: it is another
+//     path, and the shape already carries paths.
+//
+// PINNED BY DRIVING `_title_style_dispatcher()` over a grid of real node contexts — see
+// `title_style_pin` in `scripts/composition-agreement.py`. The compiled row holds an opaque
+// `when_ast`, so transcribing it would be guessing; asking the dispatcher what it ANSWERS for a
+// context is the same "agree with the decision, not with a file" posture the checkbox pin takes.
+export const ENGINE_LITERAL_RENDER_TITLE_STYLE = Object.freeze({
+  // ORDER IS MEANING: first row whose `when` holds decides, later rows never run.
+  rows: Object.freeze([
+    Object.freeze({
+      when: Object.freeze({
+        op: "and",
+        terms: Object.freeze([
+          Object.freeze({ op: "eq", path: "node.type", value: "task" }),
+          Object.freeze({ op: "eq", path: "node.fields.status", value: "done" }),
+        ]),
+      }),
+      then: Object.freeze([]),
+    }),
+    Object.freeze({
+      when: Object.freeze({
+        op: "and",
+        terms: Object.freeze([
+          Object.freeze({ op: "eq", path: "node.type", value: "task" }),
+          Object.freeze({ op: "eq", path: "node.fields.status", value: "cancelled" }),
+        ]),
+      }),
+      then: Object.freeze([]),
+    }),
+    Object.freeze({
+      when: Object.freeze({
+        op: "and",
+        terms: Object.freeze([
+          Object.freeze({ op: "eq", path: "node.type", value: "task" }),
+          Object.freeze({ op: "eq", path: "node.fields.status", value: "in_progress" }),
+        ]),
+      }),
+      then: Object.freeze(["bold"]),
+    }),
+    Object.freeze({
+      when: Object.freeze({
+        op: "and",
+        terms: Object.freeze([
+          Object.freeze({ op: "eq", path: "node.type", value: "task" }),
+          Object.freeze({ op: "eq", path: "node.fields.status", value: "waiting" }),
+          // THE ROW THE CONTRACT SAYS WILL MOVE. When the incoming mirror lands this becomes
+          // `node.incoming_edge_type_counts.WAITING_FOR` and NOTHING ABOUT THIS SHAPE CHANGES —
+          // which is the whole reason paths are opaque here.
+          Object.freeze({ op: "gte", path: "node.edge_type_counts.WAITING_FOR", value: 1 }),
+        ]),
+      }),
+      then: Object.freeze(["italic"]),
+    }),
+    Object.freeze({
+      when: Object.freeze({ op: "eq", path: "node.type", value: "explainer" }),
+      then: Object.freeze(["italic"]),
+    }),
+  ]),
+  // A node matching NO row takes this. The contract's own `fallback:`, not a default chosen here.
+  fallback: Object.freeze([]),
+});
+
 export const ENGINE_LITERAL_MARKER_ORDER = Object.freeze({
   canonicalOrder: Object.freeze(["📅", "🛫", "⏫", "🔽", "✅"]),
   unrankedPolicy: "append_stable",
@@ -2040,6 +2131,11 @@ export function compile(files, ledger = new Ledger()) {
     // still tell WHICH KIND of fact this is rather than having to assume.
     renderCheckbox: ENGINE_LITERAL_RENDER_CHECKBOX,
     renderCheckboxSource: "engine-literal",
+    // THE PER-NODE TITLE WRAP — see `ENGINE_LITERAL_RENDER_TITLE_STYLE`'s own header for why its
+    // predicates nest where `renderCheckbox`'s do not, and why the operator set published is the
+    // rule engine's own rather than the three these rows use.
+    renderTitleStyle: ENGINE_LITERAL_RENDER_TITLE_STYLE,
+    renderTitleStyleSource: "engine-literal",
     // WHETHER A NODE GETS A `[[qntm:N]]` STAMP, AND WHAT IDENTIFIES IT WHEN IT DOES NOT — see
     // `readIdentityModes`' own header. Keyed over EVERY type `schema.yaml` declares, so a type
     // missing from this map is an unknown type (refuse to compose) and never an ordinary one.
