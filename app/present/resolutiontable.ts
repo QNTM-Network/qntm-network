@@ -337,6 +337,11 @@ export interface Composition {
   readonly titleStyles: readonly string[];
 }
 
+/** One sheet's own composition, plus whether its `form:` half came from that sheet too. */
+export interface ViewComposition extends Composition {
+  readonly formSource: "config" | "engine-fallback";
+}
+
 /**
  * WITHIN the "tags" cell `Composition.tail` names — which tag comes first, when several coexist on
  * one line (a node's own type tag, a domain tag, an edge-shorthand tag). See
@@ -538,6 +543,24 @@ export interface ConfigResolutionTable {
    */
   readonly composition: Composition | undefined;
   /**
+   * THE VIEW RUNG OF `composition:` — which SHEETS spell their own lines, and how.
+   *
+   * A view is PRESENT here only when its own sheet declared `composition:`. Absence is the whole
+   * mechanism, not an omission: a view not in this record falls through to `composition` above,
+   * which is byte-identical to the behaviour before this key existed. `{}` for a config where no
+   * sheet declares one, which is every config today.
+   *
+   * `formSource` rides per entry because it genuinely varies — a sheet may reorder cells without
+   * declaring `form:`, and then its bullet is the engine literal while its tail is its own. The
+   * same asymmetry `compositionFormSource` records at the global rung.
+   *
+   * THERE IS NO `viewCompositionSource` MAP, deliberately. Presence here IS the source, so a
+   * parallel map would hold the string "view" in every slot — a field that cannot vary cannot be
+   * wrong, and cannot be checked. Read through `compositionFor`, which returns the resolved
+   * answer AND the rung that produced it.
+   */
+  readonly viewComposition: Readonly<Record<string, ViewComposition>>;
+  /**
    * WHICH ANSWER `composition` IS — `"config"` when `global_defaults.yaml` declared `composition:`
    * itself, `"engine-fallback"` when it did not and `ENGINE_LITERAL_COMPOSITION` answered instead.
    * `undefined` when the served document predates this key or the key is malformed. The same
@@ -631,6 +654,7 @@ const TOP_KEYS = [
   "priorityRank",
   "composition",
   "compositionSource",
+  "viewComposition",
   // The FORM's own provenance, separate from the block's — `composition.form:` is optional inside
   // an optional `composition:`, so one flag cannot speak for both. See the generator's own
   // paragraph beside where it is published.
@@ -1541,6 +1565,89 @@ function readComposition(value: unknown, problems: string[]): Composition | unde
  * shared: a problem naming `compositionSource` when `compositionFormSource` was the malformed one
  * sends the operator to a key that is perfectly fine.
  */
+/**
+ * The VIEW rung's map — `{ [viewId]: ViewComposition }`.
+ *
+ * ONE MALFORMED ENTRY DROPS THAT VIEW, NOT THE MAP. A sheet whose block cannot be read falls
+ * back to the global answer, which is exactly what a sheet that never declared one does — the
+ * degradation is toward the rung below rather than toward nothing, and the other views keep the
+ * declarations they made. That is the same posture `readSectionRegistration` takes for a
+ * half-read section, one rung out.
+ */
+function readViewComposition(
+  value: unknown,
+  problems: string[],
+): Readonly<Record<string, ViewComposition>> {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'viewComposition' is ${shapeOf(value)}, not an object — no view can spell its own lines`,
+    );
+    return {};
+  }
+  const out: Record<string, ViewComposition> = {};
+  for (const [viewId, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry)) {
+      problems.push(
+        `'viewComposition.${viewId}' is ${shapeOf(entry)}, not an object — this view falls back ` +
+          "to the global composition",
+      );
+      continue;
+    }
+    const { formSource, ...rest } = entry as Record<string, unknown>;
+    const composition = readComposition(rest, problems);
+    if (composition === undefined) {
+      problems.push(`'viewComposition.${viewId}' did not read as a composition — falling back`);
+      continue;
+    }
+    // The form's own provenance, per view. A sheet may order cells and declare no `form:`, in
+    // which case its bullet is the engine literal even though its tail is the sheet's own.
+    if (formSource !== "config" && formSource !== "engine-fallback") {
+      problems.push(
+        `'viewComposition.${viewId}.formSource' is ${JSON.stringify(formSource)}, not ` +
+          '"config" or "engine-fallback" — this view falls back to the global composition',
+      );
+      continue;
+    }
+    out[viewId] = { ...composition, formSource };
+  }
+  return out;
+}
+
+/**
+ * THE RESOLVED composition for one view, and WHICH RUNG ANSWERED.
+ *
+ * The one place the cascade is walked, so no caller re-expresses it. Mirrors the engine's own
+ * `renderer._resolve_composition` (monorepo #111) including its three-value source, so the two
+ * halves of the same cascade report the same word for the same fact:
+ *
+ *   "view"            this sheet declared `composition:` and it won
+ *   "config"          no sheet declaration; `global_defaults.yaml` answered
+ *   "engine-fallback" neither; the engine's own literal answered
+ *
+ * `undefined` when the table itself carries no composition at all — a served document that
+ * predates the key, or one whose global block was malformed. A caller with no composition must
+ * abstain from composing rather than guess one, which is what `composition: undefined` already
+ * required of it.
+ */
+export function compositionFor(
+  resolution: ConfigResolutionTable | undefined,
+  viewId: string,
+): { composition: Composition; source: "view" | "config" | "engine-fallback" } | undefined {
+  if (resolution === undefined) return undefined;
+  const own = resolution.viewComposition[viewId];
+  if (own !== undefined) {
+    const { formSource: _formSource, ...composition } = own;
+    return { composition, source: "view" };
+  }
+  if (resolution.composition === undefined) return undefined;
+  // The global rung already carries its own two-value source; pass it through rather than
+  // recomputing it, so this function cannot disagree with `compositionSource`.
+  return {
+    composition: resolution.composition,
+    source: resolution.compositionSource ?? "engine-fallback",
+  };
+}
+
 function readCompositionSource(
   value: unknown,
   problems: string[],
@@ -1712,6 +1819,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
         "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : undefined,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : undefined,
+      viewComposition:
+        "viewComposition" in raw ? readViewComposition(raw.viewComposition, problems) : {},
       compositionSource:
         "compositionSource" in raw
           ? readCompositionSource(raw.compositionSource, problems, "compositionSource")

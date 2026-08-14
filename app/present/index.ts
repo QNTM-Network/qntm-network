@@ -76,7 +76,7 @@ export type {
   SectionQualification,
 } from "./select/qualification.js";
 
-export { RESOLUTION_TABLE_KEY, readConfigResolutionDeclaration } from "./resolutiontable.js";
+export { RESOLUTION_TABLE_KEY, readConfigResolutionDeclaration, compositionFor } from "./resolutiontable.js";
 export type {
   ChromeShape,
   Composition,

@@ -152,9 +152,14 @@ describe("3. the four global-only kinds have no view or section slot, because no
   // The spellings an operator would reach for. `composition:` and `tag_order:` are the keys
   // `global_defaults.yaml` uses (or would use); `day_boundary:` is `day_boundary.yaml`'s own root
   // key; `render:` is where `schema.yaml` puts the chrome shape, on the node TYPE.
-  const FOUR = ["composition", "tag_order", "day_boundary", "render"];
+  // WAS FOUR, IS NOW THREE. `composition` left this list on 2026-08-14: the engine gained a
+  // sheet-level `composition:` (monorepo #111) and this file's own gate is what said so — it
+  // went red here, and the fix was to publish the slot rather than to relax the assertion. The
+  // three below have not moved, and each is still global for its own reason; see
+  // docs/architecture/capabilities.yaml#a-view-may-not-override-what-the-engine-reads-once.
+  const THREE = ["tag_order", "day_boundary", "render"];
 
-  for (const key of FOUR) {
+  for (const key of THREE) {
     test(`the engine admits no '${key}:' on a view sheet or a section`, () => {
       assert.ok(
         !FIXTURE.sheetKeys.includes(key) && !FIXTURE.sectionKeys.includes(key),
@@ -168,6 +173,20 @@ describe("3. the four global-only kinds have no view or section slot, because no
       );
     });
   }
+
+  test("composition HAS left this list — the engine admits it and the browser publishes it", () => {
+    // THE POSITIVE HALF, so section 3 cannot quietly become a list of things nobody checks.
+    // If `composition` were dropped from the engine's allow-list again, this fails and asks
+    // why — the same alarm in the opposite direction.
+    assert.ok(
+      FIXTURE.sheetKeys.includes("composition"),
+      `the engine no longer admits 'composition:' on a sheet. [${CAPTURED_FROM}]`,
+    );
+    assert.ok(
+      VIEW_SHEET_KEYS_PUBLISHED.includes("composition"),
+      "the engine admits 'composition:' and compile-resolution.mjs no longer publishes it",
+    );
+  });
 
   test("chromeShapes reaches a section through default_node_type, which DOES cascade", () => {
     // Not a gap: the section declares what a line BECOMES, and the type carries how that renders.
@@ -194,20 +213,42 @@ describe("4. an unknown key on a sheet or a section is recorded, not silently ig
     }
   };
 
-  test("a sheet-level 'composition:' is named in the dropped map", () => {
+  // `composition:` USED TO BE THIS TEST'S SUBJECT and no longer can be — it is published now,
+  // so it is not dropped. The probe key below is one NEITHER side knows, which is the case this
+  // drop path actually exists for: the day the engine admits some future key, the browser must
+  // RECORD it rather than ignore it, and that is what keeps this file's own section-1 assertion
+  // from being the only thing standing between a new key and silence.
+  test("an unknown sheet key is named in the dropped map", () => {
     const dropped = withProbeSheet(
-      "probe:\n  path: probe.md\n  composition:\n    tail: [tags]\n  sections:\n" +
+      "probe:\n  path: probe.md\n  some_future_key:\n    tail: [tags]\n  sections:\n" +
         "    - id: open\n      qualification: local-tasks\n",
     );
     const reason = dropped["views/probe.yaml"] ?? "";
     assert.match(
       reason,
-      /composition:/,
-      `the sheet declared 'composition:' and the dropped map does not name it — got ${JSON.stringify(reason)}`,
+      /some_future_key:/,
+      `the sheet declared 'some_future_key:' and the dropped map does not name it — got ${JSON.stringify(reason)}`,
+    );
+  });
+
+  test("a sheet-level 'composition:' is PUBLISHED, not dropped", () => {
+    const dropped = withProbeSheet(
+      "probe:\n  path: probe.md\n  composition:\n    heads:\n      checkbox: [checkbox, title]\n" +
+        "      plain_line: [title]\n    tail: [tags, markers, chrome]\n  sections:\n" +
+        "    - id: open\n      qualification: local-tasks\n",
+    );
+    const reason = dropped["views/probe.yaml"] ?? "";
+    assert.doesNotMatch(
+      reason,
+      /composition/,
+      `'composition:' is a published sheet key now and must not be dropped — got ${JSON.stringify(reason)}`,
     );
   });
 
   test("a section-level 'composition:' is named, with the section it was on", () => {
+    // STILL DROPPED AT THE SECTION RUNG, and that is not an oversight: the engine admits
+    // `composition:` on a SHEET and not on a SECTION, so a section declaring one is a config
+    // that does not load. The browser records it rather than ignoring it.
     const dropped = withProbeSheet(
       "probe:\n  path: probe.md\n  sections:\n    - id: open\n      qualification: local-tasks\n" +
         "      composition:\n        tail: [tags]\n",

@@ -868,6 +868,7 @@ var TOP_KEYS2 = [
   "priorityRank",
   "composition",
   "compositionSource",
+  "viewComposition",
   // The FORM's own provenance, separate from the block's — `composition.form:` is optional inside
   // an optional `composition:`, so one flag cannot speak for both. See the generator's own
   // paragraph beside where it is published.
@@ -1564,6 +1565,50 @@ function readComposition(value, problems) {
     titleStyles
   };
 }
+function readViewComposition(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'viewComposition' is ${shapeOf2(value)}, not an object \u2014 no view can spell its own lines`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [viewId, entry] of Object.entries(value)) {
+    if (!isPlainObject3(entry)) {
+      problems.push(
+        `'viewComposition.${viewId}' is ${shapeOf2(entry)}, not an object \u2014 this view falls back to the global composition`
+      );
+      continue;
+    }
+    const { formSource, ...rest } = entry;
+    const composition = readComposition(rest, problems);
+    if (composition === void 0) {
+      problems.push(`'viewComposition.${viewId}' did not read as a composition \u2014 falling back`);
+      continue;
+    }
+    if (formSource !== "config" && formSource !== "engine-fallback") {
+      problems.push(
+        `'viewComposition.${viewId}.formSource' is ${JSON.stringify(formSource)}, not "config" or "engine-fallback" \u2014 this view falls back to the global composition`
+      );
+      continue;
+    }
+    out[viewId] = { ...composition, formSource };
+  }
+  return out;
+}
+function compositionFor(resolution, viewId) {
+  if (resolution === void 0) return void 0;
+  const own = resolution.viewComposition[viewId];
+  if (own !== void 0) {
+    const { formSource: _formSource, ...composition } = own;
+    return { composition, source: "view" };
+  }
+  if (resolution.composition === void 0) return void 0;
+  return {
+    composition: resolution.composition,
+    source: resolution.compositionSource ?? "engine-fallback"
+  };
+}
 function readCompositionSource(value, problems, key) {
   if (!COMPOSITION_SOURCES.includes(value)) {
     problems.push(
@@ -1653,6 +1698,7 @@ function readConfigResolutionDeclaration(document2) {
       defaultOrderingSource: "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : void 0,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : void 0,
+      viewComposition: "viewComposition" in raw ? readViewComposition(raw.viewComposition, problems) : {},
       compositionSource: "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems, "compositionSource") : void 0,
       // REUSES `readCompositionSource` — the two flags have the same two legal values and the same
       // meaning, over different halves of one block. A second reader would be the same rule
@@ -7229,6 +7275,7 @@ export {
   columnFor,
   composeLine,
   composeSeed,
+  compositionFor,
   computeViewMembers,
   coverageOf,
   createCommitLine,
