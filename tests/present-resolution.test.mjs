@@ -1041,3 +1041,100 @@ describe("10. continuation lines — both halves, from config", () => {
     assert.ok(problems.some((p) => p.includes("continuationFields.ticket[0].token")), problems.join("; "));
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 11. EDGE TAGS — what fills the chrome cell `edgeTagOrder` was already ordering
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// `_outgoing_edge_chrome_cells` emits `#<token> [[<target title>]]` for every outgoing edge whose
+// type is chrome-eligible. `edgeTagOrder` (#182) published the ORDER of that cell while nothing
+// could populate it: `readSpelling` handled `node_type:` and `field:` entries and had no case for
+// `edge_type:`, so four of the operator's seven tags occurred zero times in the served file.
+//
+// AN ORDERING IS A CLAIM ABOUT A CELL. These tests are the other half of that claim.
+
+describe("11. edge tags — the chrome cell's contents", () => {
+  const FIXTURE_DIR = resolve(HERE, "fixtures", "config");
+
+  const withEdgeTags = (yaml) => {
+    const scratch = mkdtempSync(join(tmpdir(), "edge-tags-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      writeFileSync(join(configDir, "vocabulary", "edge_tags.yaml"), yaml);
+      return generateResolution(configDir);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  };
+
+  test("an edge tag is published with its token AND its cardinality", () => {
+    const compiled = withEdgeTags(
+      'edge_tags:\n' +
+        '  - { token: "#next", edge_type: NEXT, cardinality: one }\n' +
+        '  - { token: "#unlocks", edge_type: UNLOCKS, cardinality: many }\n',
+    );
+    const { resolution, problems } = readConfigResolutionDeclaration({ resolution: compiled });
+    assert.deepEqual(problems, []);
+    assert.deepEqual(resolution.spelling.edgeTags, {
+      NEXT: { token: "#next", cardinality: "one" },
+      UNLOCKS: { token: "#unlocks", cardinality: "many" },
+    });
+  });
+
+  test("CARDINALITY IS CARRIED, and `one` is a real case — NEXT is it in his own config", () => {
+    // Not decoration: `one` versus `many` decides whether a second edge of that type REPLACES or
+    // APPENDS. A composer that ignored it would emit two `#next` cells for a relation the config
+    // says holds one. Asserted as a property rather than a spot value, so it survives a rename.
+    const compiled = withEdgeTags(
+      'edge_tags:\n  - { token: "#next", edge_type: NEXT, cardinality: one }\n' +
+        '  - { token: "#parallel", edge_type: PARALLEL, cardinality: many }\n',
+    );
+    const kinds = new Set(Object.values(compiled.spelling.edgeTags).map((t) => t.cardinality));
+    assert.deepEqual([...kinds].sort(), ["many", "one"], "the fixture must exercise BOTH cardinalities");
+  });
+
+  test("AN UNKNOWN CARDINALITY DROPS THE TAG, with a reason — it does not default to `many`", () => {
+    // Defaulting would append where the engine replaces, printing a cell the engine never emits.
+    // Dropping makes a composer omit the chrome instead: visibly LESS than the engine rather than
+    // differently from it, which is the failure that can be seen rather than mistaken for a sync bug.
+    const compiled = withEdgeTags('edge_tags:\n  - { token: "#next", edge_type: NEXT, cardinality: several }\n');
+    assert.equal(compiled.spelling.edgeTags.NEXT, undefined);
+    assert.match(compiled.dropped["edge tag '#next'"] ?? "", /neither 'one' nor 'many'/);
+  });
+
+  test("THE READER REFUSES A CARDINALITY-LESS TAG TOO, and names it", () => {
+    const compiled = generateResolution(FIXTURE_DIR);
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: {
+        ...compiled,
+        spelling: { ...compiled.spelling, edgeTags: { NEXT: { token: "#next" } } },
+      },
+    });
+    assert.equal(resolution.spelling.edgeTags.NEXT, undefined);
+    assert.ok(problems.some((p) => p.includes("edgeTags.NEXT.cardinality")), problems.join("; "));
+  });
+
+  test("EVERY TAG `edgeTagOrder` RANKS CAN NOW BE PRODUCED — the gap #182 opened, closed", () => {
+    // THE POINT OF THIS PR, asserted as the join it is. Every token the published chrome ORDER
+    // ranks must be a token some published edge tag can emit; otherwise the ordering is ordering
+    // something nothing fills, which is exactly the state this closes.
+    const compiled = withEdgeTags(
+      'edge_tags:\n' +
+        '  - { token: "#requires", edge_type: REQUIRES, cardinality: many }\n' +
+        '  - { token: "#blocks", edge_type: BLOCKS, cardinality: many }\n' +
+        '  - { token: "#next", edge_type: NEXT, cardinality: one }\n' +
+        '  - { token: "#parallel", edge_type: PARALLEL, cardinality: many }\n' +
+        '  - { token: "#waiting-for", edge_type: WAITING_FOR, cardinality: many }\n',
+    );
+    const emittable = new Set(Object.values(compiled.spelling.edgeTags).map((t) => t.token));
+    assert.ok(emittable.size > 0, "no edge tag is emittable — the chrome cell cannot be filled");
+    for (const ranked of compiled.edgeTagOrder.canonicalOrder) {
+      assert.ok(
+        emittable.has(ranked),
+        `edgeTagOrder ranks '${ranked}' but no published edge tag emits it — the order is ` +
+          "ordering a cell nothing can fill",
+      );
+    }
+  });
+});

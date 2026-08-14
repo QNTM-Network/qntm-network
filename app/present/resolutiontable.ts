@@ -205,8 +205,25 @@ export interface RenderedFieldMarker {
  * silently re-open them (qntm:66/837/903, every four to five days). The table is split so the wrong
  * lookup cannot be written, rather than documented so it can be written knowingly.
  */
+/**
+ * THE TAG AN OUTGOING EDGE PRINTS, and how many of them a node may carry.
+ *
+ * `_outgoing_edge_chrome_cells` emits `#<token> [[<target title>]]` into the CHROME cell for every
+ * outgoing edge whose type is chrome-eligible. All seven of the operator's edge types are.
+ *
+ * `cardinality` IS PART OF THE SPELLING, not metadata beside it. `one` versus `many` decides
+ * whether a second edge of that type REPLACES or APPENDS, so a composer that ignores it emits two
+ * `#next` cells for a relation the config says holds one. `NEXT` is the `one` case today.
+ */
+export interface EdgeTag {
+  readonly token: string;
+  readonly cardinality: "one" | "many";
+}
+
 export interface RenderedSpelling {
   readonly typeTokens: Readonly<Record<string, string>>;
+  /** edge type -> the tag its outgoing edges print. See `EdgeTag`. */
+  readonly edgeTags: Readonly<Record<string, EdgeTag>>;
   readonly fieldTags: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly fieldMarkerValues: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly fieldMarkers: Readonly<Record<string, RenderedFieldMarker>>;
@@ -588,6 +605,19 @@ export const RESOLUTION_TABLE_KEY = "resolution";
 //
 // The generator side is where that day arrives: adding a key to `compile-resolution.mjs` means
 // adding a reader here, and the cheapest reader is a copy of the nearest one.
+//
+// ── AND A SECOND RULE, LEARNED THE EXPENSIVE WAY ──
+//
+// AN ORDERING IS A CLAIM ABOUT A CELL, SO PUBLISHING ONE ASSERTS THE CELL CAN BE POPULATED.
+//
+// `edgeTagOrder` shipped before anything could fill the cell it orders. The chrome cell needs an
+// edge type -> tag map, `readSpelling` had no case for `edge_type:` entries, and four of the seven
+// tags occurred zero times in the served declaration. The ordering was correct, pinned against the
+// real dispatcher, and useless.
+//
+// The check that passed asked whether the three published orders were DISTINCT. That is a real
+// question and it is not this one. Before publishing an order, ask what fills the cell — and if the
+// answer is "nothing yet", the order is not ready either.
 const TOP_KEYS = [
   "registration",
   "lineGrammars",
@@ -1103,6 +1133,31 @@ function readSpelling(value: unknown, problems: string[]): RenderedSpelling | un
   const typeTokens = readStringMap(value.typeTokens, `${path}.typeTokens`);
   if (typeTokens === undefined) return undefined;
 
+  if (!isPlainObject(value.edgeTags)) {
+    problems.push(`'${path}.edgeTags' is ${shapeOf(value.edgeTags)}, not an object — every edge tag stays unknown`);
+    return undefined;
+  }
+  const edgeTags: Record<string, EdgeTag> = {};
+  for (const [edgeType, tag] of Object.entries(value.edgeTags)) {
+    if (!isPlainObject(tag) || typeof tag.token !== "string" || tag.token === "") {
+      problems.push(`'${path}.edgeTags.${edgeType}.token' is not a non-empty string — this edge tag stays unknown`);
+      continue;
+    }
+    // A MISSING OR UNKNOWN CARDINALITY DROPS THE WHOLE ENTRY rather than defaulting. Reading an
+    // absent one as "many" would append where the engine replaces, which prints a cell the engine
+    // never emits; dropping it makes the composer omit the chrome instead, which is visibly less
+    // than the engine rather than differently from it.
+    if (tag.cardinality !== "one" && tag.cardinality !== "many") {
+      problems.push(
+        `'${path}.edgeTags.${edgeType}.cardinality' is ${JSON.stringify(tag.cardinality)}, not ` +
+          '"one" or "many" — whether a second edge of this type replaces or appends is unknown, ' +
+          "so the tag is not published",
+      );
+      continue;
+    }
+    edgeTags[edgeType] = { token: tag.token, cardinality: tag.cardinality };
+  }
+
   const readNested = (
     raw: unknown,
     where: string,
@@ -1153,7 +1208,7 @@ function readSpelling(value: unknown, problems: string[]): RenderedSpelling | un
     fieldMarkers[field] = renderOnly === true ? { kind, token, renderOnly: true } : { kind, token };
   }
 
-  return { typeTokens, fieldTags, fieldMarkerValues, fieldMarkers };
+  return { typeTokens, edgeTags, fieldTags, fieldMarkerValues, fieldMarkers };
 }
 
 /**
