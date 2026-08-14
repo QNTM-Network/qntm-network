@@ -503,7 +503,7 @@ describe("5. THE ACCEPTANCE TEST — a config change flows through with no code 
             "  default_node_type: person",
             "  sections:",
             "    - id: everyone",
-            "      qualification: all-personal-nodes",
+            "      qualification: personal-tasks",
             '      name: "Everyone"',
             "      defaults:",
             "        domain: personal",
@@ -528,24 +528,24 @@ describe("5. THE ACCEPTANCE TEST — a config change flows through with no code 
 
   test("THE POSITIVE HALF, HIS OWN VIEW: ADD a `default_node_type` and the seed follows", { skip }, () => {
     // THE BRIEF'S OWN ACCEPTANCE TEST, WORD FOR WORD: add a `default_node_type` to a scratch copy
-    // of his real config, regenerate, and the seed follows with no code change. `all-personal.yaml`
+    // of his real config, regenerate, and the seed follows with no code change. `tasks-personal.yaml`
     // declares NONE today — it takes the root default, `task` — so this ADDS the key rather than
     // editing one, which is the harder half and the one the operator would actually do.
     withMutatedConfig(
       (configDir) => {
-        const path = join(configDir, "views", "all-personal.yaml");
+        const path = join(configDir, "views", "tasks-personal.yaml");
         const text = readFileSync(path, "utf8");
-        assert.ok(!/default_node_type:/.test(text), "all-personal.yaml already declares one — rewrite this test");
-        assert.match(text, /^\s*path:\s*personal\/all\.md\s*$/m, "all-personal.yaml no longer points at his file");
-        writeFileSync(path, text.replace(/^(\s*path:\s*personal\/all\.md\s*)$/m, "$1\n  default_node_type: person"));
+        assert.ok(!/default_node_type:/.test(text), "tasks-personal.yaml already declares one — rewrite this test");
+        assert.match(text, /^\s*path:\s*personal\/tasks\.md\s*$/m, "tasks-personal.yaml no longer points at his file");
+        writeFileSync(path, text.replace(/^(\s*path:\s*personal\/tasks\.md\s*)$/m, "$1\n  default_node_type: person"));
       },
       ({ declared, resolution }) => {
         assert.equal(
-          resolution.sectionRegistration["all-personal"].tasks.nodeType,
+          resolution.sectionRegistration["tasks-personal"].tasks.nodeType,
           "person",
           "the generator did not read the key that was added",
         );
-        const seed = seedFor(PERSONAL_ALL, PERSONAL_ALL.split("\n").length, declared("all-personal"));
+        const seed = seedFor(PERSONAL_ALL, PERSONAL_ALL.split("\n").length, declared("tasks-personal"));
         assert.ok(seed.tokens.includes("#personal"), "the section's own default stopped being seeded");
         assert.ok(seed.tokens.includes("#person"), "the type tag did not follow the config to `person`");
         assert.ok(!seed.tokens.includes("#task"), "the seed still says `task` after the config stopped saying it");
@@ -565,7 +565,7 @@ describe("5. THE ACCEPTANCE TEST — a config change flows through with no code 
             "  default_node_type: task",
             "  sections:",
             "    - id: nowhere",
-            "      qualification: all-personal-nodes",
+            "      qualification: personal-tasks",
             '      name: "Nowhere"',
             "      defaults:",
             "        project: a-project-no-vocabulary-spells",
