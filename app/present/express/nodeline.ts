@@ -50,6 +50,7 @@
  *   `no-identity-mode`       whether to stamp is unknown, and both answers are visibly wrong
  *   `no-spelling`            the tags and markers cells cannot be built
  *   `no-composition`         no cell order at all
+ *   `title-not-canonical`    the engine would rewrite this title and this module would not
  *
  * `render_title_style` ABSENT IS NOT A REFUSAL, deliberately, and it is the one asymmetry here: its
  * `fallback` is `[]`, so "no per-node wrap" is the answer for most nodes anyway, and a missing
@@ -114,7 +115,8 @@ export type ComposeRefusal =
   | "no-checkbox-table"
   | "no-identity-mode"
   | "no-spelling"
-  | "no-composition";
+  | "no-composition"
+  | "title-not-canonical";
 
 export interface ComposedNodeLine {
   readonly text: string;
@@ -130,13 +132,66 @@ const QNTM_ID_LINK = /\s*\[\[qntm:[^\]]+\]\]\s*/g;
 
 /**
  * `_clean_title` (renderer.py:1611), transcribed: strip any `[[qntm:N]]` link to a space, then
- * trim. NOT `canonicalise_title_segment`, which the engine also runs — see this module's own
- * agreement test, which asserts that function is the IDENTITY on every real graph title in the
- * fixture rather than assuming it. If that assertion ever fails, this line is where the missing
- * step goes, and the test says exactly which title needed it.
+ * trim. NOT `canonicalise_title_segment`, which the engine ALSO runs on every title — see
+ * `titleIsCanonical` immediately below for why that is safe, what it is not safe against, and why
+ * the answer here is a refusal rather than a second implementation.
  */
 function cleanTitle(value: unknown): string {
   return String(value ?? "").replace(QNTM_ID_LINK, " ").trim();
+}
+
+/**
+ * Would `canonicalise_title_segment` change this title? If so, the composer cannot render it.
+ *
+ * ── WHAT THIS GUARDS, AND WHY IT IS NOT A FIX ──
+ *
+ * `_apply_title_style` runs `canonicalise_title_segment(title)` before wrapping. That function
+ * strips three things, repeatedly, to a fixed point: a whole-title styling wrapper (`**…**`,
+ * `*…*`, `~~…~~`), a TRAILING `[[wiki link]]`, and a TRAILING marker glyph with its optional date.
+ * `cleanTitle` above implements none of it.
+ *
+ * MEASURED, NOT ASSUMED, AND THE MEASUREMENT SAYS THIS IS UNREACHABLE ON THE LIVE PATH. Authoring
+ * all six shapes into a hermetic vault (`qntm-md init` + a cycle) and reading the titles back out
+ * of `graph_state` shows the PARSER stores them already canonical — `**Bold wrapped**` is stored
+ * as `Bold wrapped`, `Ends with a link [[Some node]]` as `Ends with a link`, `Read the paper
+ * 📅 2026-09-01` as `Read the paper`. The function's own docstring says the same thing about the
+ * authored path: those clauses "are no-ops" once `parse_marker` / `parse_wiki_link` have run. And
+ * nothing else writes a title — no rule in the operator's config uses `set_field` on it, and there
+ * are no templates.
+ *
+ * So a node whose title has one of these shapes cannot come from the parser. It CAN come from an
+ * API caller (`graph.create_node` takes what it is given), which is exactly how this module's own
+ * differential builds its probes — so the state is constructible even though the cycle never
+ * produces it.
+ *
+ * ── WHY REFUSING RATHER THAN IMPLEMENTING ──
+ *
+ * Implementing `canonicalise_title_segment` here means a second implementation of a transform with
+ * a `_would_become_parser_syntax` guard, an ordering between three clauses and a strip-to-fixed-
+ * point loop. A second implementation that is 95% right is precisely what this composer exists to
+ * avoid. Refusing costs three cheap tests, turns a silent wrong into a visible gap, and leaves the
+ * real implementation as its own piece with its own agreement test.
+ *
+ * THE MARKER GLYPHS COME FROM THE PUBLISHED SPELLING, never a literal list — a config that declares
+ * a new marker is covered without an edit here, which is the same reason `readSpelling` reads
+ * families rather than sniffing characters.
+ */
+function titleIsCanonical(title: string, markerGlyphs: readonly string[]): boolean {
+  const trimmed = title.trim();
+  if (trimmed === "") return true;
+  for (const wrapper of ["~~", "**", "*"]) {
+    if (trimmed.length > wrapper.length * 2 && trimmed.startsWith(wrapper) && trimmed.endsWith(wrapper)) {
+      return false;
+    }
+  }
+  if (/\[\[[^\]]*\]\]\s*$/.test(trimmed)) return false;
+  for (const glyph of markerGlyphs) {
+    // `<glyph>` or `<glyph> YYYY-MM-DD` at the end — the two forms the canonicaliser strips.
+    if (new RegExp(`${glyph.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s+\\d{4}-\\d{2}-\\d{2})?\\s*$`, "u").test(trimmed)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** `render_checkbox`, first-match-wins over the node's own fields, `fallback` when none holds. */
@@ -246,6 +301,16 @@ export function composeNodeLine(node: ComposableNode, context: ComposeContext): 
 
   const identity = resolution.identityModes?.[node.type];
   if (identity === undefined) return { ok: false, because: "no-identity-mode" };
+
+  // THE TITLE MUST ALREADY BE CANONICAL — see `titleIsCanonical`. Checked BEFORE any cell is built,
+  // because a title the engine would rewrite makes every downstream comparison meaningless.
+  const markerGlyphs = [
+    ...Object.values(resolution.spelling.fieldMarkers).map((m) => m.token),
+    ...Object.values(resolution.spelling.fieldMarkerValues).flatMap((t) => Object.values(t)),
+  ];
+  if (!titleIsCanonical(cleanTitle(node.fields.title), markerGlyphs)) {
+    return { ok: false, because: "title-not-canonical" };
+  }
 
   let checkbox: string | undefined;
   if (shape === "checkbox") {

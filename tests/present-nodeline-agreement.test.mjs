@@ -86,7 +86,7 @@ describe("composeNodeLine reproduces the engine's line, byte for byte", () => {
     assert.ok(resolution.composition, "no composition to compose with");
   });
 
-  for (const fixture of FIXTURE?.fixtures ?? []) {
+  for (const fixture of (FIXTURE?.fixtures ?? []).filter((f) => !f.expectRefusal)) {
     test(`${fixture.id}: ${fixture.expectedLine}`, { skip }, () => {
       const { resolution } = readConfigResolutionDeclaration({
         resolution: generateResolution(DEFAULT_CONFIG_DIR),
@@ -104,6 +104,53 @@ describe("composeNodeLine reproduces the engine's line, byte for byte", () => {
       );
       assert.equal(result.line.text, fixture.expectedLine);
       assert.deepEqual([...result.line.continuationLines], fixture.expectedContinuationLines);
+    });
+  }
+});
+
+describe("a title the engine would rewrite is refused, not rendered differently", () => {
+  // ── BOTH HALVES OF THE CLAIM, FROM THE SAME FIXTURE ──
+  //
+  // `_apply_title_style` runs `canonicalise_title_segment` and `nodeline.ts` does not implement it.
+  // These fixtures record what the ENGINE renders for a non-canonical title — `**Bold wrapped**`
+  // becomes `Bold wrapped` — so the refusal is grounded in the engine's measured behaviour rather
+  // than in a reading of it. And the composer must REFUSE rather than emit its own answer, because
+  // a wrong line here is not cosmetic: `index.html` takes the write `base` from the same string the
+  // painter walked, so a divergent line means an edit computed against one file and posted with a
+  // base describing another.
+  //
+  // THE PARSER CANNOT PRODUCE THESE TITLES — measured by authoring all six into a hermetic vault
+  // and reading `graph_state` back, where they are already canonical. They are reachable only
+  // through the graph API. That makes this guard cheap insurance rather than a live fix, and the
+  // distinction is worth keeping: it is why the real `canonicalise_title_segment` is its own piece
+  // of work rather than a prerequisite to wiring.
+  const refusals = (FIXTURE?.fixtures ?? []).filter((f) => f.expectRefusal);
+
+  test("there ARE such fixtures — otherwise everything below passes over an empty list", () => {
+    assert.ok(refusals.length >= 3, `only ${refusals.length} refusal fixtures`);
+  });
+
+  for (const fixture of refusals) {
+    test(`${fixture.id}: ${JSON.stringify(fixture.node.fields.title)} is refused`, { skip }, () => {
+      const { resolution } = readConfigResolutionDeclaration({
+        resolution: generateResolution(DEFAULT_CONFIG_DIR),
+      });
+      const result = composeNodeLine(fixture.node, {
+        resolution,
+        writePolicy: fixture.writePolicy,
+        outgoingEdges: fixture.outgoingEdges,
+        depth: fixture.depth,
+      });
+      assert.equal(result.ok, false, `composed a line the engine would have written differently`);
+      assert.equal(result.because, "title-not-canonical");
+
+      // AND THE ENGINE REALLY DOES DIFFER — the half that makes the refusal justified rather than
+      // superstitious. If these two ever agree, the refusal is over-broad and should be narrowed.
+      assert.ok(
+        !fixture.expectedLine.includes(String(fixture.node.fields.title)),
+        `the engine rendered the title unchanged (${fixture.expectedLine}) — this probe no longer ` +
+          "shows a divergence, so refusing it is refusing something harmless",
+      );
     });
   }
 });
