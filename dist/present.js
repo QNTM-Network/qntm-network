@@ -4725,6 +4725,23 @@ var PresentationCascade = class {
   }
 };
 
+// app/present/write.ts
+async function postEdit(view, markdown, source, token = null, ops = null, deps) {
+  const { api, served, writes } = deps;
+  const body = { path: view.path, markdown, base: baseOf(source), ack: true };
+  if (Array.isArray(ops) && ops.length > 0) body.ops = ops;
+  if (token !== null) {
+    body.token = token;
+    writes.open(token, view.path);
+  }
+  served.open(view.path);
+  try {
+    return await api("/app/edit-file", { body, auth: true });
+  } finally {
+    served.close(view.path);
+  }
+}
+
 // app/present/caret.ts
 function placeCaret(element, at) {
   element.setSelectionRange?.(at, at);
@@ -7022,6 +7039,7 @@ export {
   parentCandidateFor,
   placeDraft,
   placeFor,
+  postEdit,
   presentationFromDeclaration,
   promotionSpec,
   prospectiveEdgeBinding,

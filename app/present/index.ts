@@ -241,6 +241,8 @@ export { PresentationCascade } from "./express/cascade.js";
 export type { Resolved } from "./express/cascade.js";
 
 export { applyEdit, lineOps } from "./source.js";
+export { postEdit } from "./write.js";
+export type { PostEditDeps, PostEditView } from "./write.js";
 export type { LineOp } from "./source.js";
 export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 

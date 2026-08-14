@@ -1018,6 +1018,7 @@ import {
   PredictSurface,
   RowStore,
   existingLineCommit,
+  postEdit,
   rebaseLineEdit,
   // ── THE RESOLVERS ──
   // `RESOLVERS` is the ordered registry (app/present/resolvers/registry.ts) and it is the ONLY
@@ -1058,7 +1059,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=19c60a31de";
+} from "/dist/present.js?v=b1bd4b24f9";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2602,67 +2603,14 @@ function resolverContextFor(view, commit) {
  * here as a fourth parameter and joined into that same "syncing…" line; that consumption is gone
  * too (see `commitLine`'s own comment) and this function no longer takes a `note` argument.
  */
+// RELOCATED to app/present/write.ts as `postEdit` — see that module's header for why (it had to
+// leave this file to become observable at all: index.html is outside flow-trace's `include: [app]`
+// by construction). This is the page-state binding and nothing else: every statement of the write
+// itself now lives in the module, unchanged.
+//
+// `sinks.yaml#file-posted` anchors on `postEdit`; `classes.yaml#ops-write-routing` governs it.
 async function writeFile(view, markdown, source, token = null, ops = null) {
-  // SYNCHRONOUS, AND app/present/base.ts's OWN HEADER SAYS WHY IT HAD TO BE: an `await` here would
-  // put the POST one turn later than it has ever been, which is a behaviour change disguised as an
-  // implementation detail.
-  // ── THE SIXTH THING: THE WRITE ASKS NOT TO WAIT FOR THE CYCLE ──
-  //
-  // `ack: true` tells `worker/src/app.js` to answer on the vault write and run the ~10 s engine
-  // cycle behind the response — ~10 s down to ~250 ms on every checkbox and every line commit. The
-  // projection is then collected separately, by `startPickup` above.
-  //
-  // IT IS SAFE TO SEND AT ANY SERVER, WHICH IS THE WHOLE OF THE SHIPPING CONDITION. A Worker that
-  // has never heard of the field ignores it and returns the synchronous answer with its projection
-  // in it, and `arrive` takes that path exactly as it always has — the ack branch is reached only by
-  // an answer that says `accepted: true`, which only a Worker that read this field can say. A Worker
-  // that DID read it but was handed no `ctx` also answers synchronously. There is no combination in
-  // which this field makes a write fail, and none in which it makes one silently do less.
-  const body = { path: view.path, markdown, base: baseOf(source), ack: true };
-  // ── THE SEVENTH THING: THE WRITE SAYS WHAT IT DID, NOT ONLY WHAT IT WANTS ──
-  //
-  // `ops` is the edit this write IS — `[start, end, [line]]`, derived from the commit by `lineOps`
-  // (app/present/source.ts). Without it the graph server RECONSTRUCTS this edit by running
-  // `difflib` over two whole files, guessing at information this browser had and dropped.
-  //
-  // IT RIDES ALONGSIDE `markdown`, NEVER INSTEAD OF IT, and that is the whole of the shipping
-  // condition on this line. The Worker 422s any body with no `markdown` (its own
-  // `body?.markdown == null` check), so an ops-only body could not reach the server at all until
-  // that Worker ships — and sending both means neither has to ship first. An old Worker writes the
-  // markdown exactly as today; a new one prefers the ops and forwards only those. The two can
-  // never describe different edits, because the op's text is read OUT OF the fold rather than
-  // rebuilt beside it.
-  //
-  // ABSENT, NEVER EMPTY AND NEVER NULL — the same terms `base` and `token` are already carried on.
-  // An edit not expressible as one line op sends no field, which is byte-for-byte the request this
-  // browser sent before this change.
-  if (Array.isArray(ops) && ops.length > 0) body.ops = ops;
-  // ── THE FIFTH THING: THE WRITE SAYS WHICH WRITE IT IS ──
-  //
-  // `token` IS CARRIED ONLY WHEN THERE IS ONE — absent, never empty and never null — which is
-  // exactly the pattern `worker/src/app.js` already uses for `base`, and it is the whole of the
-  // shipping condition on this line. A browser with no CSPRNG (`mintWriteToken` returns `null`)
-  // posts a body byte-for-byte identical to the one it posted before this change; a server that
-  // ignores the field behaves exactly as it does today; and `writes.waiting(token)` (below, in
-  // `collect`) is never asked about this write, because there is no token to be echoed back.
-  //
-  // THE REGISTER IS OPENED IN THE SAME STATEMENT THE TOKEN GOES ON THE WIRE, so a token this
-  // browser is waiting for and a token this browser sent cannot come apart. It is opened BEFORE the
-  // POST for the reason `served.open` is: the answer can arrive before the `await` returns.
-  if (token !== null) {
-    body.token = token;
-    writes.open(token, view.path);
-  }
-  // COUNTED ACROSS THE AWAIT, so a second save made while this one is in the air is measurable as
-  // one — which is the checkbox's own failure mode and is invisible to the string comparison above
-  // (a tick does not repaint the painter's source, so the second edit's base looks perfectly
-  // current while the server has already moved past it).
-  served.open(view.path);
-  try {
-    return await api("/app/edit-file", { body, auth: true });
-  } finally {
-    served.close(view.path);
-  }
+  return await postEdit(view, markdown, source, token, ops, { api, served, writes });
 }
 
 // Tick/untick a task: POST the edited view, let the server cycle, then re-render from the fresh
