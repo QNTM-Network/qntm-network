@@ -2687,6 +2687,22 @@ var QNTM_ID_LINK = /\s*\[\[qntm:[^\]]+\]\]\s*/g;
 function cleanTitle(value) {
   return String(value ?? "").replace(QNTM_ID_LINK, " ").trim();
 }
+function titleIsCanonical(title, markerGlyphs) {
+  const trimmed = title.trim();
+  if (trimmed === "") return true;
+  for (const wrapper of ["~~", "**", "*"]) {
+    if (trimmed.length > wrapper.length * 2 && trimmed.startsWith(wrapper) && trimmed.endsWith(wrapper)) {
+      return false;
+    }
+  }
+  if (/\[\[[^\]]*\]\]\s*$/.test(trimmed)) return false;
+  for (const glyph of markerGlyphs) {
+    if (new RegExp(`${glyph.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s+\\d{4}-\\d{2}-\\d{2})?\\s*$`, "u").test(trimmed)) {
+      return false;
+    }
+  }
+  return true;
+}
 function checkboxGlyph(table, fields) {
   for (const row of table.rows) {
     if (fields[row.when.field] === row.when.equals) return row.then;
@@ -2756,6 +2772,13 @@ function composeNodeLine(node, context) {
   if (shape === void 0) return { ok: false, because: "unknown-node-type" };
   const identity = resolution.identityModes?.[node.type];
   if (identity === void 0) return { ok: false, because: "no-identity-mode" };
+  const markerGlyphs = [
+    ...Object.values(resolution.spelling.fieldMarkers).map((m) => m.token),
+    ...Object.values(resolution.spelling.fieldMarkerValues).flatMap((t) => Object.values(t))
+  ];
+  if (!titleIsCanonical(cleanTitle(node.fields.title), markerGlyphs)) {
+    return { ok: false, because: "title-not-canonical" };
+  }
   let checkbox;
   if (shape === "checkbox") {
     if (resolution.renderCheckbox === void 0) return { ok: false, because: "no-checkbox-table" };

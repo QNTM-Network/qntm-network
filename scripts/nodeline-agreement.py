@@ -188,6 +188,22 @@ def main() -> int:
         #    carried a populated `continuation_fields` value. `capability` declares
         #    `continuation_fields: [summary]` and `#summary` binds that field.
         {"id": "continuation", "type": "capability", "fields": {"title": "A capability", "summary": "What it does"}},
+        # ── TITLES THE COMPOSER MUST REFUSE, RECORDED WITH WHAT THE ENGINE DOES INSTEAD ──
+        #
+        # `_apply_title_style` runs `canonicalise_title_segment`; `nodeline.ts` does not implement
+        # it and refuses instead. These probes prove BOTH halves: that the engine really does
+        # rewrite the title (so the refusal is not superstition), and that the composer really does
+        # refuse (so the divergence cannot ship silently).
+        #
+        # THE PARSER CANNOT PRODUCE THESE. Authoring all six into a hermetic vault and reading
+        # `graph_state` back shows the titles stored already canonical, and no rule or template in
+        # the operator's config writes a title. They are constructible only through the graph API —
+        # which is how these probes are built, and why the state is worth guarding anyway.
+        {"id": "refuse_bold", "type": "task", "fields": {"title": "**Bold wrapped**", "status": "open"}, "expectRefusal": True},
+        {"id": "refuse_italic", "type": "task", "fields": {"title": "*Italic wrapped*", "status": "open"}, "expectRefusal": True},
+        {"id": "refuse_strike", "type": "task", "fields": {"title": "~~Struck wrapped~~", "status": "open"}, "expectRefusal": True},
+        {"id": "refuse_link", "type": "task", "fields": {"title": "Ends with a link [[Some node]]", "status": "open"}, "expectRefusal": True},
+        {"id": "refuse_marker", "type": "task", "fields": {"title": "Read the paper \U0001F4C5 2026-09-01", "status": "open"}, "expectRefusal": True},
     ]
 
     fixtures: list[dict[str, Any]] = []
@@ -220,8 +236,19 @@ def main() -> int:
         # THE CANONICALISATION ASSUMPTION, TESTED RATHER THAN RESTED ON. `_apply_title_style` runs
         # `canonicalise_title_segment` on every title; the browser's `cleanTitle` does not implement
         # it. That is safe only while the function is the identity on real graph titles.
+        # A PROBE MARKED `expectRefusal` IS ALLOWED to be non-canonical — that is what it exists to
+        # exercise. The guard below still fires for every OTHER probe, so a title that quietly
+        # stopped being canonical still stops the script.
         title = str(probe["fields"].get("title", ""))
-        if canonicalise_title_segment(title) != title:
+        if probe.get("expectRefusal"):
+            if canonicalise_title_segment(title) == title:
+                print(
+                    f"REFUSING: probe {probe['id']!r} is marked expectRefusal but its title "
+                    f"{title!r} IS canonical — it proves nothing, and the composer would compose it",
+                    file=sys.stderr,
+                )
+                return 2
+        elif canonicalise_title_segment(title) != title:
             print(
                 f"REFUSING: canonicalise_title_segment is not the identity on {title!r} — it "
                 f"returns {canonicalise_title_segment(title)!r}. The browser's `cleanTitle` stops "
@@ -238,6 +265,7 @@ def main() -> int:
                 "outgoingEdges": outgoing,
                 "writePolicy": probe.get("writePolicy", "writable"),
                 "depth": probe.get("depth", 0),
+                "expectRefusal": bool(probe.get("expectRefusal")),
                 "expectedLine": rendered.text,
                 "expectedContinuationLines": [text for _field, text in rendered.continuation_lines],
             }
@@ -285,6 +313,9 @@ def main() -> int:
         return 2
     if not any(f["expectedContinuationLines"] for f in fixtures):
         print("REFUSING: no fixture emits a continuation line — its re-ingest tag is unexercised", file=sys.stderr)
+        return 2
+    if not any(f["expectRefusal"] for f in fixtures):
+        print("REFUSING: no fixture exercises a title the composer must refuse", file=sys.stderr)
         return 2
     if not any_line(lambda line: "**" in line or "*" in line):
         print("REFUSING: no fixture renders a title wrap — render_title_style is unexercised", file=sys.stderr)
