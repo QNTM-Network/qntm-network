@@ -4896,9 +4896,9 @@ function landPrediction(el, predictable, prediction, animate) {
 }
 
 // app/present/paint.ts
-function existingLineCommit(source, lineIndex, markdown) {
+function existingLineCommit(source, lineIndex, markdown, onRefusalIsFinal) {
   const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
-  return { lineIndex, text, markdown, source, kind: "set-line" };
+  return { lineIndex, text, markdown, source, kind: "set-line", onRefusalIsFinal };
 }
 function rawText(source) {
   const div = document.createElement("div");
@@ -6663,6 +6663,8 @@ function createCommitLine(deps) {
             }
             if (retryError?.status !== 409) {
               deps.repaintArrived();
+            } else {
+              commit.onRefusalIsFinal?.(retryError.current);
             }
           }
           return;
@@ -6670,6 +6672,7 @@ function createCommitLine(deps) {
         if (token !== null) {
           deps.writes.concludeGiveUp(token);
         }
+        commit.onRefusalIsFinal?.(e.current);
         return;
       }
       deps.repaintArrived();

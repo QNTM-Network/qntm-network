@@ -40,16 +40,33 @@
  * the operator's own path, and `a-write-refuses-a-stale-base` measured that a stale base is an
  * ORDINARY event inside one ~14 s cycle rather than a rare one.
  *
- * ── WHAT EACH TEST BELOW PINS, AND WHICH ARE EXPECTED TO BE RED ──
+ * ── THE RULE THAT DECIDES ALL OF THIS, AND IT IS NOT A RULE ABOUT CHECKBOXES ──
  *
- *   1. THE HEADLINE. One act, two gestures, one 409 — the same number of POSTs. RED on main.
- *   2. THE RETRY CARRIES ITS OPS, like every other write in this app since #174/#176. RED on main.
- *   3. A REFUSED `insert-line` IS NOT SILENTLY DROPPED. RED on main, and see its own note: the fix
- *      is NOT a widened guard, because `rebaseLineEdit` anchors on a line the server ALREADY HAS.
+ * The operator's own: THE GRAPH IS TRUTH, MINUS CHANGES STREAMED FROM THE VIEW THAT HAVE NOT
+ * LANDED. A posted write is still streamed-from-the-view; so is a rebase retry still running; a
+ * refusal with no retry left is not. Every assertion below is that one sentence applied.
  *
- * Tests 1 and 3 are driven through the REAL PAGE — `app/index.html`'s own lifted `<script
- * type="module">` — because that is where `toggleTask` lives and that file is outside
- * `tsconfig.json`'s `include`, so nothing else in this repository can see it at all.
+ * IT REPLACES THE SPECIAL CASE IT LOOKS LIKE. `the-write-carries-a-precondition-the-server-can-refuse`
+ * reasons about two answers — a refused line commit keeps the operator's characters on screen, a
+ * refused tick puts the box back — and reads as tick-versus-text. It is not. Typed characters stay
+ * because the operator can still resend them; a box reverts because nothing is left to resend. One
+ * rule, two outcomes. That is why merging the two write paths did not have to choose between them.
+ *
+ * ── WHAT EACH TEST BELOW PINS ──
+ *
+ *   1.  THE HEADLINE. One act, two gestures, one 409 — the same number of POSTs. Was RED on
+ *       2dbe931 (1 versus 2); GREEN since the mouse tick became a line commit.
+ *   1b. THE BOX MOVES ONLY WHEN THE ANSWER IS FINAL — both halves of the rule above, and the
+ *       first of the two is the one a "revert on 409" implementation gets wrong while passing
+ *       every count-the-POSTs assertion in §1.
+ *   2.  THE RETRY CARRIES ITS OPS, like every other write in this app since #174/#176.
+ *   3.  A REFUSED `insert-line` IS NOT SILENTLY DROPPED. **RED, DELIBERATELY, AND IT LIVES ON ITS
+ *       OWN BRANCH** (`diagnose/insert-line-has-no-rebase`) rather than here, so a recorded gap
+ *       does not block a deploy. See that branch for why the fix is NOT a widened guard.
+ *
+ * Every test is driven through the REAL PAGE — `app/index.html`'s own lifted `<script
+ * type="module">` — because that page is outside `tsconfig.json`'s `include`, so nothing else in
+ * this repository can see what it does. That is also where the second write path used to live.
  *
  * ── AND THE TYPE CHECKER DOES NOT GUARD THE OPS ARGUMENT ANYWHERE, NOT ONLY ON THAT PAGE ──
  *
@@ -183,6 +200,26 @@ async function tickByMouse(page, elements) {
   await quiesce();
 }
 
+/**
+ * The checkbox belonging to the row that RENDERS `needle`, not the first checkbox on the page.
+ *
+ * NOT A CONVENIENCE, AND IT CAUGHT A FALSE FAILURE WHILE THIS FILE WAS BEING WRITTEN. After a
+ * successful rebase the retry's answer repaints the view from THE SERVER'S file, which in these
+ * fixtures has an extra row ABOVE the one being ticked. So `find((el) => el.type === "checkbox")`
+ * stops meaning "the row I ticked" the moment the thing under test works — it returns the new row,
+ * unticked, and the assertion reads as "the box was reverted" when nothing was reverted at all.
+ * A test that can only see the first box cannot tell a reverted tick from a re-ordered view.
+ */
+function boxForRow(elements, needle) {
+  const nodes = walk(elements.get("viewBody"));
+  const boxes = nodes.filter((el) => el.type === "checkbox");
+  const labels = nodes.filter((el) => el.tagName === "span" && el.innerHTML !== "");
+  const index = labels.findIndex((el) => String(el.innerHTML).includes(needle));
+  assert.ok(index !== -1, `no rendered row contains ${needle} — the fixture is not exercising its subject`);
+  assert.ok(boxes[index], `the row rendering ${needle} has no checkbox`);
+  return boxes[index];
+}
+
 /** Tick the SAME line with `x` — `gg` for a deterministic start, `j` onto line 1. */
 async function tickByKey(press) {
   press("g");
@@ -217,6 +254,70 @@ describe("1. THE HEADLINE — one act, two gestures, one refusal, one answer", (
   });
 });
 
+describe("1b. THE BOX MOVES ONLY WHEN THE ANSWER IS FINAL", () => {
+  /**
+   * THE OPERATOR'S OWN RULE, AND IT IS NOT A RULE ABOUT BOXES: *the graph is truth, minus changes
+   * streamed from the view that have not landed.*
+   *
+   * So the question a refused tick asks is never "was there a 409" — it is "is this change still
+   * in flight". A 409 that a rebase then satisfies never left flight, and reverting the box on it
+   * would show the operator a state the server does not have and is about to stop having. The two
+   * tests below are the two sides of that one rule, and the FIRST is the one a "revert on 409"
+   * implementation gets wrong while passing every count-the-POSTs assertion above.
+   */
+  test("a refused tick whose rebase succeeds keeps the box ticked — it never left flight", async () => {
+    const { page, elements, posts } = await freshPage("one-path-inflight", { refuseFirst: true });
+    await tickByMouse(page, elements);
+
+    assert.equal(posts.length, 2, "the rebase retry did not happen — this test cannot say anything");
+    const box = boxForRow(elements, "[[qntm:1]]");
+    assert.equal(
+      box.checked,
+      true,
+      "the box was put back on a refusal that a retry then satisfied. The change was in flight the " +
+        "whole time and it landed; reverting shows a state the server does not hold.",
+    );
+  });
+
+  test("a refused tick with no retry left puts the box back — the graph is truth again", async () => {
+    // THE SERVER REWROTE THE VERY LINE BEING TICKED, so `rebaseLineEdit` refuses `line-changed`
+    // rather than reapplying the edit over someone else's words. Nothing is left to retry, so the
+    // change stops being streamed-from-the-view and the box has to tell the truth.
+    const work = makeWorkDir("one-path-final-refusal");
+    const { elements, document: doc } = installBrowser();
+    const posts = [];
+    globalThis.fetch = async (url, init) => {
+      posts.push({ url, body: JSON.parse(init.body) });
+      return {
+        ok: false,
+        status: 409,
+        json: async () => ({
+          ok: false,
+          refused: "stale-base",
+          path: "demo.md",
+          error: "stale base",
+          current: ["## Queue", "- [ ] a REWRITTEN [[qntm:1]] 🔢 1", "- [ ] b [[qntm:2]] 🔢 2"].join("\n"),
+        }),
+      };
+    };
+    const page = await importPage(work);
+    page.__applyPresentation(DECLARATION);
+    page.__setGraphData({ snapshot: { generated_at: "2026-08-05T00:00:00Z", views: [VIEW] } });
+    page.paintView("demo");
+    await tickByMouse(page, elements);
+
+    assert.equal(posts.length, 1, "a rebase was attempted after all — the fixture is not producing a final refusal");
+    const box = boxForRow(elements, "[[qntm:1]]");
+    assert.equal(
+      box.checked,
+      false,
+      "the box stayed ticked after a refusal nothing can retry. Nothing is in flight, so the graph " +
+        "is truth, and a ticked box is the lie this rule exists to stop.",
+    );
+    assert.equal(box.disabled, false, "the box was left disabled, so the operator cannot try again");
+  });
+});
+
 describe("2. THE RETRY CARRIES ITS OPS", () => {
   test("the write sent after a rebase names the edit it is, like every other write in this app", async () => {
     const { press, posts } = await freshPage("one-path-retry-ops", { refuseFirst: true });
@@ -248,45 +349,6 @@ describe("2. THE RETRY CARRIES ITS OPS", () => {
       retry.body.markdown.split("\n")[start],
       replacement[0],
       "the op and the whole-file body describe different edits",
-    );
-  });
-});
-
-describe("3. A REFUSED NEW ROW IS NOT SILENTLY DROPPED", () => {
-  /**
-   * THE FIX HERE IS NOT A WIDENED GUARD, and this note exists so LAND does not reach for one.
-   *
-   * `commit.ts:217` reads `commit.kind === "set-line" && refusedCurrent !== null`. It is tempting
-   * to read the narrow kind as an accident and widen it to `insert-line`. IT IS NOT AN ACCIDENT,
-   * or at least widening it changes nothing: `rebaseLineEdit` (app/present/rebase.ts) takes the
-   * anchor of the edited line IN THE BASE, resolves it in the server's copy, and then REFUSES
-   * unless the server's line at that index is byte-identical to the original. A row that did not
-   * exist a moment ago has no line in the server's copy to resolve to and none to compare against,
-   * so the widened guard would call `rebaseLineEdit` and get `refused: not-found` every time.
-   *
-   * Rebasing an insertion is a DIFFERENT operation — "put this new row back where it belongs in a
-   * file that has moved" is a placement question, not a text comparison — and it is not designed
-   * here. What this test pins is only that the row is lost today, so the gap stays visible.
-   */
-  test("a refused `insert-line` does not vanish with one POST and no second attempt", async () => {
-    const { press, elements, posts } = await freshPage("one-path-insert-409", { refuseFirst: true });
-    press("g");
-    press("g");
-    press("j");
-    press("o");
-    await quiesce();
-    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "input" && el.type !== "checkbox");
-    assert.ok(input, "`o` opened no draft row — the fixture is not exercising its subject");
-    input.value = "- [ ] c [[qntm:3]] 🔢 3";
-    input.dispatch("blur");
-    await quiesce();
-
-    assert.equal(posts.length, 1, "the fixture no longer reproduces the state this test is about");
-    assert.ok(
-      posts.length > 1,
-      "a row the operator typed was refused and never sent again: `insert-line` reaches " +
-        "commit.ts:217's `commit.kind === \"set-line\"` guard and takes the no-rebase exit, so the " +
-        "characters are gone. See this describe's own note — the fix is not widening that guard.",
     );
   });
 });

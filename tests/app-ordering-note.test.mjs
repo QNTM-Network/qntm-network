@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 
 import { importPage, installBrowser, makeWorkDir, RESOLVER_SOURCES, resolverSource } from "./fixtures/app-html-page.mjs";
 import { orderingPlacementFor, resolveOrderingPlacementFor } from "../dist/present.js";
+import { assertOneWritePath } from "./fixtures/write-path-callers.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WORK = makeWorkDir("app-ordering-note");
@@ -272,19 +273,11 @@ describe("4. NOTHING LOCAL REACHES A WRITE — re-verified, and orderingNoteFor'
     assert.equal(sites.length, 4, "orderingNoteFor must not add a client-computed graphData write");
   });
 
-  test("`writeFile` still has exactly two CALLERS — toggleTask and commitLine, now split across two files", () => {
-    // Declaration (1) + toggleTask (1) on the page, commitLine's own attempt (1) + commitLine's
-    // bounded rebase retry (1) in dist/present.js — `commitLine` relocated to app/present/
-    // commit.ts (2026-08-07, see that module's own header), and its two `writeFile` calls moved
-    // with it. The retry still reuses `writeFile`, the one write path, rather than inventing a
-    // second; the CALLER count (two functions) is what this assertion is really protecting, and
-    // it is unchanged — only where two of its four occurrences are written moved.
-    const BUNDLE_SOURCE = readFileSync(resolve(HERE, "..", "dist", "present.js"), "utf8");
-    const pageOccurrences = APP_SOURCE.match(/\bwriteFile\(/g) ?? [];
-    const bundleOccurrences = BUNDLE_SOURCE.match(/\bdeps\.writeFile\(/g) ?? [];
-    assert.equal(pageOccurrences.length, 2, "toggleTask's call and writeFile's own declaration should be all that is left on the page");
-    assert.equal(bundleOccurrences.length, 2, "commitLine's own attempt and its bounded rebase retry should both be in the bundle");
-    assert.equal(pageOccurrences.length + bundleOccurrences.length, 4, "a new call site outside toggleTask/commitLine would mean a third write path exists");
+  // ONE RULE, ONE EXPRESSION — see tests/fixtures/write-path-callers.mjs. This test used to
+  // restate the counts inline, in one of six identical copies, and it asserted TWO callers
+  // when the correct number was always ONE: a mouse tick and an `x` tick are one act.
+  test("there is exactly ONE write path, and the call sites still prove it", () => {
+    assertOneWritePath();
   });
 
   test("`applyEdit` is still reached from exactly five sites outside its own module", () => {

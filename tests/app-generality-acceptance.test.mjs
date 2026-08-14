@@ -119,6 +119,7 @@ import { generateRules } from "../scripts/generate-rules-declaration.mjs";
 import { DEFAULT_CONFIG_DIR } from "../scripts/monorepo-config.mjs";
 import { Ledger } from "../scripts/ledger.mjs";
 import { orderingFor, resolveOrderingFor, resolveOrderingPlacementFor, sectionAt, sectionForInsertAt } from "../dist/present.js";
+import { assertOneWritePath } from "./fixtures/write-path-callers.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -726,14 +727,11 @@ describe("6. NOTHING LOCAL IS WRITTEN beyond the seed characters and the stubbed
     assert.equal((APP.match(/\bgraphData\s*=(?!=)/g) ?? []).length, 4);
   });
 
-  test("`writeFile(` is called in exactly four places, split across the page and the bundle — this file adds no new write path", () => {
-    // Declaration + toggleTask on the page, commitLine's own attempt + commitLine's bounded
-    // rebase retry (`app/present/rebase.ts`, `feat/a-refusal-rebases`) in dist/present.js —
-    // `commitLine` relocated to app/present/commit.ts (2026-08-07). Two OCCURRENCES each, the
-    // same two CALLERS. The retry reuses `writeFile` rather than opening a second write path.
-    const BUNDLE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
-    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 2);
-    assert.equal((BUNDLE.match(/\bdeps\.writeFile\(/g) ?? []).length, 2);
+  // ONE RULE, ONE EXPRESSION — see tests/fixtures/write-path-callers.mjs. This restated the
+  // counts inline and said FOUR places and TWO callers; a checkbox flip is a line commit now, so
+  // the page holds `writeFile`'s declaration and no call, and there is exactly ONE caller.
+  test("there is exactly ONE write path — this file adds no new one", () => {
+    assertOneWritePath();
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {

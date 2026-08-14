@@ -140,7 +140,11 @@ export function extractPageScript(workDir, mutate = (source) => source, mutateBu
   // The page keeps its state in module-scoped `let`s and exports nothing. These lines are
   // additive — they read and write what is already there and change no behaviour.
   source += `
-export { paintView, toggleTask, commitLine, loadPresentation };
+// \`toggleTask\` IS GONE, AND ITS ABSENCE IS THE POINT. A checkbox flip is a line commit now, so
+// there is one write path and one name for it. \`toggleTaskCommit\` is exported in its place — it
+// BUILDS the commit (and the optimistic paint, and the revert that fires when the refusal is
+// final) but sends nothing, so a suite can inspect what a tick becomes without standing up a POST.
+export { paintView, toggleTaskCommit, commitLine, loadPresentation };
 // THE DECLARATION, DRIVEN DIRECTLY. \`loadPresentation\` IS A FETCH AGAIN — it reads
 // \`/presentation.json\` off the wire, so it is ASYNC and a suite that calls it must await it and
 // must answer that request (see \`withDeclaration\` in this file). This export is the other half: a

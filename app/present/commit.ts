@@ -256,6 +256,11 @@ export function createCommitLine(
             }
             if (retryError?.status !== 409) {
               deps.repaintArrived();
+            } else {
+              // THE RETRY WAS ITSELF REFUSED — the last thing in flight is gone. Only on the 409
+              // arm: the other arm repainted from the last server state one line up, and that
+              // repaint IS the revert.
+              commit.onRefusalIsFinal?.(retryError.current);
             }
           }
           return;
@@ -264,6 +269,11 @@ export function createCommitLine(
         if (token !== null) {
           deps.writes.concludeGiveUp(token);
         }
+        // AND NOTHING IS IN FLIGHT ANY MORE, which is a different statement from "the write
+        // failed" and the reason this call is here rather than in the caller's own `catch`: this
+        // exit is reached only after `rebaseLineEdit` has REFUSED to guess, so it is the moment
+        // the change stops being streamed-from-the-view. See `LineCommit.onRefusalIsFinal`.
+        commit.onRefusalIsFinal?.(e.current);
         return;
       }
       // The write itself failed (not a refusal) — repaint from the last known server state.
