@@ -4846,7 +4846,7 @@ function rebaseLineEdit(view, base, lineIndex, edited, current) {
   if (markdown === null) {
     return { outcome: "refused", reason: "no-edit" };
   }
-  return { outcome: "rebased", markdown };
+  return { outcome: "rebased", markdown, lineIndex: reading.lineIndex };
 }
 
 // app/present/express/cascade.ts
@@ -6649,7 +6649,8 @@ function createCommitLine(deps) {
           }
           const retryToken = mintWriteToken();
           try {
-            const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken);
+            const retryOps = lineOps("set-line", rebase.lineIndex, rebase.markdown);
+            const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken, retryOps);
             deps.arrive(view.path, data, {
               markdown: rebase.markdown,
               token: retryToken,

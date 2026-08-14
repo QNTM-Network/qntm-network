@@ -116,7 +116,22 @@ export interface CommitLineDeps {
      * The edit this write IS, as line-ops — carried ALONGSIDE `markdown`, never instead of it.
      * Both go on the wire so the change is deployable in ANY ORDER: a Worker that has never heard
      * of `ops` reads the markdown and behaves byte-identically to today, one that has prefers the
-     * ops. Absent on the rebase retry below, deliberately — that is a whole-file fold.
+     * ops.
+     *
+     * ── THE REBASE RETRY SENDS ITS OPS TOO, AND THIS LINE USED TO SAY IT DELIBERATELY DID NOT ──
+     *
+     * The retired sentence was "Absent on the rebase retry below, deliberately — that is a
+     * whole-file fold." It is not a fold. `rebaseLineEdit` returns `applyEdit(current, {kind:
+     * "set-line", lineIndex: reading.lineIndex, text: edited})` — ONE line of the SERVER'S OWN file
+     * replaced — and it hands back the index it resolved to for exactly this purpose. Every write
+     * on this path posts the whole file; that is true of the first attempt as well, and it was
+     * never what made the first attempt's ops meaningful.
+     *
+     * AND IT IS THE WRITE THAT MOST NEEDS THEM. A retry only happens because the file moved, so it
+     * is the one moment the server's `difflib` reconstruction is guessing against a copy two edits
+     * from the one the browser was holding — precisely when being told the edit is worth most.
+     * `tests/app-one-write-path-per-act.test.mjs` §2 asserts the op is indexed against `current`
+     * (the base this retry declares) rather than against the browser's stale copy.
      */
     ops?: readonly LineOp[] | null,
   ): Promise<unknown>;
@@ -222,7 +237,13 @@ export function createCommitLine(
           }
           const retryToken = mintWriteToken();
           try {
-            const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken);
+            // THE RETRY NAMES ITS EDIT, against the server's own file — `rebase.lineIndex` is the
+            // index the anchor walk resolved to in `refusedCurrent`, which is also the `source`
+            // this write declares as its base one argument along. `set-line` because that is the
+            // edit `rebaseLineEdit` made; `null` when the index is out of range, which sends no
+            // `ops` field and is byte-for-byte the retry this path posted before.
+            const retryOps = lineOps("set-line", rebase.lineIndex, rebase.markdown);
+            const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken, retryOps);
             deps.arrive(view.path, data, {
               markdown: rebase.markdown,
               token: retryToken,

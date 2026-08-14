@@ -237,10 +237,19 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     }
     deps.repaintCurrentView();
   } else if (effect.kind === "toggle-done") {
-    // `x` — reuses `applyEdit`'s existing `set-checkbox` case (source.ts) and posts through the
-    // SAME write path a mouse click on the box already uses (`commitLine`). If the selected line
+    // `x` — reuses `applyEdit`'s existing `set-checkbox` case (source.ts). If the selected line
     // has no checkbox, `classifyLine` says so and nothing happens — no repaint, no POST, exactly
     // the brief's own rule for this key.
+    //
+    // THIS COMMENT USED TO SAY `x` POSTS "through the SAME write path a mouse click on the box
+    // already uses (`commitLine`)", AND THAT IS FALSE — corrected 2026-08-14. A mouse click
+    // reaches `paint.ts`'s `onCheckboxToggle`, which the page wires to `toggleTask`
+    // (app/index.html), NOT to `commitLine`. The two are different functions with different
+    // answers to a refused write: measured through the real page, a 409 makes ONE POST by mouse
+    // and TWO by `x`, the second being the rebase this branch reaches and that one does not. See
+    // `tests/app-one-write-path-per-act.test.mjs` and backlog `one-write-path-per-act`. The claim
+    // was in the right place — beside the divergence — and simply wrong, which is worse than
+    // absent: it reads as an assurance the paths are already one.
     const line = source.split("\n")[current] ?? "";
     const shape = classifyLine(line);
     if (shape.kind === "checkbox") {

@@ -4781,6 +4781,78 @@ backlog:
     IS why PR #176 existed — ops landed on commitLine in #174 and the mouse path kept
     posting whole files for three weeks with nothing red. Every future write-path change
     has to be made twice or it ships half-applied again.'
+  record: >-
+    PROVEN 2026-08-14, not dismissed and not still asserted — converted into a RED enforcer,
+    `tests/app-one-write-path-per-act.test.mjs` §1. The work it drives is
+    `one-write-path-per-act` below.
+
+    WHAT THE RUN CONFIRMED, AND WHAT IT REFUTED. Driven through the real page against unmodified
+    origin/main @ 2dbe931: a checkbox refused with a 409 makes ONE POST by mouse and TWO by `x`
+    (the second being the rebase retry). That is the divergence, reproduced. But the same run
+    KILLED two other differences this flag implies and a reader would assume: the two paths post
+    BYTE-IDENTICAL bodies including identical `ops`, and BOTH drop a stale queued projection for
+    the path. The mouse tick is not missing everything `commitLine` does; it is missing the answer
+    to a refusal. Pinning either of the refuted differences would have pinned a difference that
+    does not exist, and only running it said so.
+  captured: '2026-08-14'
+- id: one-write-path-per-act
+  title: '[fix] A checkbox flip must be answered the same way whichever gesture made it.
+    `app/index.html:2676 toggleTask` (mouse) and `app/present/commit.ts:164 commitLine` (`x`)
+    are two write paths for one act, and on a 409 the mouse tick is dropped while the `x` tick
+    is rebased against the server''s copy and sent again. Pinned RED by
+    tests/app-one-write-path-per-act.test.mjs §1. Landed in the same enforcer: §2, the rebase
+    retry now carries its ops. Still RED and deliberately so: §1 (the merge) and §3 (a refused
+    `insert-line` is dropped).'
+  summary: Ticking a box with the mouse and with the keyboard take different routes, and only one survives a clash.
+  driving_capability: every-affordance-writes-back-through-the-source
+  record: >-
+    2026-08-14 — DIAGNOSED IN A RUN, ONE OF THREE PARTS LANDED, TWO LEFT RED ON PURPOSE.
+
+    THE MEASUREMENT, before any cause was spoken (real page, real keydown wiring, real checkbox
+    `change`, unmodified origin/main @ 2dbe931):
+
+        act                     POSTs under a 409     the retry's ops
+        tick line 1 by mouse            1             (there is no retry)
+        tick line 1 by `x`              2             null
+        open a line with `o`            1             (there is no retry)
+
+    LANDED — §2, THE RETRY CARRIES ITS OPS. `commit.ts`'s `writeFile` docstring said the retry
+    omitted them "deliberately — that is a whole-file fold". IT IS NOT A FOLD. `rebaseLineEdit`
+    returns `applyEdit(current, {kind: "set-line", lineIndex: reading.lineIndex, text: edited})`
+    — one line of the SERVER'S file replaced — and it now hands back the index it resolved to.
+    Every write on this path posts the whole file, the first attempt included, so "we post the
+    whole file" was never what made the first attempt's ops meaningful. A retry only happens
+    BECAUSE the file moved, which makes it the one write whose edit the server's `difflib` is
+    reconstructing against a copy two edits away — the write that most needs to be told.
+    Mutation-proven: sending ops indexed against the browser's stale copy instead of the server's
+    file turns §2 red on its own named assertion.
+
+    STILL RED — §1, THE MERGE, AND IT IS ITS OWN CHANGE. Not because it is long. Because routing
+    `onCheckboxToggle` into `commitLine` CHANGES A BEHAVIOUR THE CAPABILITY REASONS ABOUT BY NAME:
+    `the-write-carries-a-precondition-the-server-can-refuse` says a refused LINE COMMIT keeps the
+    operator's characters on screen and a refused TICK reverts the box, and calls that second
+    answer "the truth" because a tick has no characters at stake. `commitLine` holds the first
+    answer and `LineCommit` carries no `box`/`row` to perform the second. So the merge needs a
+    decision about where the tick's optimistic revert lives, not a redirect — a design fork, left
+    for the operator rather than settled here. It also has to rewrite one invariant that is
+    copy-pasted across SIX test files (app-ordering-note, app-write-correlation, app-today-note,
+    app-membership-diagnostic, app-membership-note, app-seed-from-cascade) asserting `writeFile`
+    has "exactly two CALLERS — toggleTask and commitLine". Six enforcers currently certify the
+    two-path state as correct; see `flag-the-same-applyedit-call-site-count`, which asked for the
+    shared helper that would make this a one-line change.
+
+    STILL RED — §3, A REFUSED `insert-line` IS DROPPED, AND THE OBVIOUS FIX IS WRONG. Widening
+    `commit.ts:217`'s `commit.kind === "set-line"` guard changes nothing: `rebaseLineEdit` takes
+    the anchor of the edited line IN THE BASE, resolves it in the server's copy, and refuses
+    unless the server's line there is byte-identical to the original. A row that did not exist a
+    moment ago has no line to resolve to and none to compare against, so a widened guard returns
+    `refused: not-found` every time. Rebasing an insertion is a PLACEMENT question, not a text
+    comparison, and it is not designed here.
+
+    WHY THIS IS WORTH DOING NOW AND WAS NOT BEFORE. `the-write-carries-a-precondition-the-server-can-refuse`
+    said the 409 branch was unreachable in production. It is not any more — `server/app.py` holds
+    `_stale_base` and answers 409. Both that capability's text and `worker/src/app.js`'s matching
+    note are corrected in this change.
   captured: '2026-08-14'
 - id: flag-presentation-json-is-stale-against-the
   title: '[asserted] presentation.json is STALE against the operator''s own config,

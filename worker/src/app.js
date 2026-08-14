@@ -573,9 +573,15 @@ async function editFile(request, env, origin, session, ctx) {
   // says instead, passed through verbatim when the server sends it and `null` when it does not;
   // nothing here reconstructs it. Distinguishable from the 502 immediately after it on purpose:
   // "your edit is stale" and "the write failed" are different events and the page answers them
-  // differently. NOTE: no deployed graph server answers 409 today, so this branch is unreachable
-  // in production until the monorepo change on the row lands — it is complete, tested against a
-  // fixture, and inert.
+  // differently.
+  //
+  // THIS BRANCH IS NO LONGER INERT — CORRECTED 2026-08-14. It used to read "no deployed graph
+  // server answers 409 today, so this branch is unreachable in production until the monorepo
+  // change on the row lands". That change HAS landed: `server/app.py` holds `_stale_base` and
+  // `POST /vault/file` answers `status_code=409` with the current content when the precondition
+  // fails. So every consequence downstream of this line is live code on the operator's own path,
+  // and `a-write-refuses-a-stale-base` already measured that a stale base is an ORDINARY event
+  // inside one ~14 s cycle rather than a rare one.
   if (w.status === 409) {
     const refusal = await w.json().catch(() => ({}));
     return json(

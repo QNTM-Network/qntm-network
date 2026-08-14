@@ -55,7 +55,21 @@ import { applyEdit } from "./source.js";
  * nothing here is a sentence.
  */
 export type RebaseOutcome =
-  | { readonly outcome: "rebased"; readonly markdown: string }
+  | {
+      readonly outcome: "rebased";
+      readonly markdown: string;
+      /**
+       * WHERE THE EDIT LANDED IN `current` — the index the anchor walk resolved to, not the index
+       * the operator's edit was computed against. Carried so the retry can name the edit it is
+       * (`lineOps`, app/present/source.ts) instead of posting a whole file and leaving the server
+       * to reconstruct it with `difflib` against a copy that has now moved twice.
+       *
+       * IT IS ONLY MEANINGFUL AGAINST `current`, which is also the `base` the retry declares. That
+       * pairing is the whole safety argument: the op, the whole-file body and the declared base all
+       * describe the same file, so a server that reads either half cannot be surprised.
+       */
+      readonly lineIndex: number;
+    }
   | {
       readonly outcome: "refused";
       readonly reason: "no-anchor" | "not-found" | "ambiguous" | "line-changed" | "no-edit";
@@ -114,5 +128,5 @@ export function rebaseLineEdit(
   if (markdown === null) {
     return { outcome: "refused", reason: "no-edit" };
   }
-  return { outcome: "rebased", markdown };
+  return { outcome: "rebased", markdown, lineIndex: reading.lineIndex };
 }
