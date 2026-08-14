@@ -306,6 +306,58 @@ test("scripts/monorepo_config.py agrees with this module, from every shape", { s
   }
 });
 
+// ── 7. WHICH engine a capture read, not only what it found ───────────────────────────────────
+//
+// `capture_refusal` is the decision an agreement script makes BEFORE it captures anything:
+// is this checkout one I meant to read? It exists because on 2026-08-14 the shared trunk
+// clone sat on a feature branch for three hours and every agreement script on the machine
+// read a stale engine, printed its counts and exited 0 — "the engine has not changed" and "I
+// read an engine from three days ago" spell the same output.
+//
+// EXERCISED AS A PURE FUNCTION OVER A REVISION DICT, deliberately. The case that started
+// this — the auto-located trunk sitting on someone else's branch — cannot be staged by
+// moving the real trunk without breaking every other session on the machine, so the decision
+// was extracted from the wiring in order to be testable at all.
+test("capture_refusal admits a clean main and refuses what it should", { skip: pythonSkip() }, () => {
+  const cases = [
+    // [label, revision, expected fragment or null for "allowed"]
+    ["clean main, auto-located", { sha: "abc", branch: "main", dirty: false, overridden: false }, null],
+    ["feature branch, auto-located", { sha: "abc", branch: "fix/x", dirty: false, overridden: false }, "not `main`"],
+    // A NAMED checkout is a CHOICE — a caller capturing from a PR head or a merge base means
+    // it, and refusing there would make the override useless for the job it exists for.
+    ["feature branch, overridden", { sha: "abc", branch: "fix/x", dirty: false, overridden: true }, null],
+    ["detached HEAD, overridden", { sha: "abc", branch: "HEAD", dirty: false, overridden: true }, null],
+    // A DIRTY tree is refused either way: the recorded sha would name something other than
+    // what was read, which is a FALSE provenance rather than a narrow one.
+    ["dirty, auto-located", { sha: "abc", branch: "main", dirty: true, overridden: false }, "uncommitted"],
+    ["dirty, overridden", { sha: "abc", branch: "main", dirty: true, overridden: true }, "uncommitted"],
+    ["git cannot answer", { sha: null, branch: null, dirty: null, overridden: false }, "cannot determine"],
+  ];
+  for (const [label, revision, expected] of cases) {
+    const out = execFileSync(
+      pythonBin(),
+      [
+        "-c",
+        [
+          "import sys, json, pathlib",
+          `sys.path.insert(0, ${JSON.stringify(join(REPO_ROOT, "scripts"))})`,
+          "import monorepo_config as m",
+          `r = m.capture_refusal(json.loads(${JSON.stringify(JSON.stringify(revision))}), pathlib.Path("/fake/engine/src"))`,
+          "print(json.dumps(r))",
+        ].join("\n"),
+      ],
+      { encoding: "utf8" },
+    );
+    const refusal = JSON.parse(out.trim());
+    if (expected === null) {
+      assert.equal(refusal, null, `${label}: expected the capture to be allowed, got ${refusal}`);
+    } else {
+      assert.ok(refusal, `${label}: expected a refusal and got none`);
+      assert.match(refusal, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), label);
+    }
+  }
+});
+
 function pythonBin() {
   return process.env.PYTHON || "python3";
 }

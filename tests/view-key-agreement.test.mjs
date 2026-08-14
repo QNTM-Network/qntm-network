@@ -63,6 +63,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_CONFIG = join(HERE, "fixtures", "config");
 const FIXTURE = JSON.parse(readFileSync(resolve(HERE, "./fixtures/view-key-agreement.json"), "utf8"));
 
+/**
+ * WHICH engine the fixture captured, for the failure text.
+ *
+ * Every assertion here compares the browser's lists against a COMMITTED capture, so a failure
+ * has two possible causes and they need different fixes: the browser really is behind the
+ * engine, or the capture is stale and the engine moved without anyone re-running it. Measured
+ * 2026-08-14: the second happened, silently, for three hours — `scripts/view-key-agreement.py`
+ * read a shared trunk clone sitting on a feature branch, captured a pre-change engine, and
+ * exited 0. Naming the captured revision in the message is what lets a reader tell the two
+ * apart in the moment rather than after re-deriving it.
+ *
+ * `engineRevision` is absent from fixtures captured before that provenance existed; say so
+ * plainly rather than printing "undefined", which reads like a bug in the test.
+ */
+const CAPTURED_FROM = (() => {
+  const rev = FIXTURE.engineRevision;
+  if (!rev) return "engine revision UNRECORDED — this fixture predates provenance capture, so it cannot say which engine it read; re-run scripts/view-key-agreement.py";
+  const where = rev.overridden ? " (QNTM_MONOREPO_ENGINE_SRC)" : "";
+  return `captured from engine ${rev.branch} @ ${String(rev.sha).slice(0, 12)}${where}`;
+})();
+
 const sorted = (keys) => [...keys].sort();
 
 describe("1. the engine's sheet keys and this generator's three lists are the same set", () => {
@@ -79,7 +100,8 @@ describe("1. the engine's sheet keys and this generator's three lists are the sa
       [],
       `the engine admits ${JSON.stringify(undecided)} on a view sheet and compile-resolution.mjs ` +
         "lists it in none of PUBLISHED / REFUSED / NOT_PUBLISHED. An operator can declare it and " +
-        "this generator would neither publish nor refuse it. Decide which of the three it is.",
+        "this generator would neither publish nor refuse it. Decide which of the three it is. " +
+        `[${CAPTURED_FROM}]`,
     );
   });
 
@@ -141,7 +163,8 @@ describe("3. the four global-only kinds have no view or section slot, because no
           "global answer for a view that overrides it is the asymmetry monorepo PR #72 opened " +
           "for composition at the GLOBAL rung. See docs/architecture/capabilities.yaml" +
           "#a-view-may-not-override-what-the-engine-reads-once for which of the four should get " +
-          "a slot and what has to land first.",
+          "a slot and what has to land first. " +
+          `[${CAPTURED_FROM}]`,
       );
     });
   }
