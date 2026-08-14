@@ -883,6 +883,9 @@ var TOP_KEYS2 = [
   // never a map, because first-match-wins and "no status at all" are both real answers.
   "renderCheckbox",
   "renderCheckboxSource",
+  // Whether a type's line carries a stamp, and what identifies it when it does not. Keyed over
+  // every declared type, so absence means "unknown type", never "ordinary type".
+  "identityModes",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
@@ -1337,6 +1340,28 @@ function readRenderCheckbox(value, problems) {
   }
   return { rows, fallback: value.fallback };
 }
+function readIdentityModes(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.identityModes`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 how any node is identified stays unknown`);
+    return void 0;
+  }
+  const out = {};
+  for (const [nodeType, mode] of Object.entries(value)) {
+    if (!isPlainObject3(mode) || typeof mode.unique !== "boolean") {
+      problems.push(
+        `'${path}.${nodeType}' is not {unique: boolean, field: string|null} \u2014 the whole identity map stays unknown, because a missing entry reads as 'ordinary type' and would stamp a node the engine renders stampless`
+      );
+      return void 0;
+    }
+    if (mode.field !== null && (typeof mode.field !== "string" || mode.field === "")) {
+      problems.push(`'${path}.${nodeType}.field' is ${JSON.stringify(mode.field)}, not a non-empty string or null`);
+      return void 0;
+    }
+    out[nodeType] = { unique: mode.unique, field: mode.field };
+  }
+  return out;
+}
 function readRenderCheckboxSource(value, problems) {
   if (value !== "engine-literal") {
     problems.push(
@@ -1585,6 +1610,7 @@ function readConfigResolutionDeclaration(document2) {
       // override surface, so there is no second answer for a reader to distinguish. Published
       // anyway, and validated, so the KIND of fact is stated rather than assumed.
       renderCheckboxSource: "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : void 0,
+      identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : void 0,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : void 0,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}

@@ -1053,6 +1053,61 @@ export function compile(files, ledger = new Ledger()) {
   // check moves ABOVE the loop, where it says what it means and cannot be lost to a later change
   // of candidate set.
 
+  // ── 5b. schema.yaml -> node type -> HOW IT IS IDENTIFIED, which decides the stamp cell ────────
+  //
+  // `composition.tail` names `stamp` — the `[[qntm:N]]` cell. Whether a node gets one is not a
+  // property of the line, it is a property of the TYPE: `decide_stamp` (renderer.py:1224-1237) asks
+  // `identity_spec(graph, node.type)` and returns `""` when that type declares
+  // `identity: {unique: true}`. Seven of the operator's 36 types do — header, explainer, capability,
+  // principle, package, class, sink — and until now nothing told the browser which.
+  //
+  // ── NO PIN IS NEEDED HERE, AND THE DIFFERENCE FROM `renderCheckbox` IS THE WHOLE REASON ──
+  //
+  // `renderCheckbox` is a hand-written literal mirroring a contract in the ENGINE'S OWN SOURCE, so
+  // it is a copy, and a copy needs something checking it — hence `render_checkbox_pin()`.
+  // `identity_spec` reads `graph.raw_schema`, which IS `schema.yaml`: the same file, the same
+  // `node_types:` mapping, the same bytes this function is already reading two rungs up for
+  // `chromeShapes`. There is no second home to drift from. `resolution-agreement.py` still compares
+  // the two readings, because "the same file" is a claim worth checking rather than assuming.
+  //
+  // ── BOTH HALVES, BECAUSE HALF A DECISION IS THE FAILURE THIS FILE KEEPS PAYING FOR ──
+  //
+  // `identity_spec` returns `(field, unique)` and `decide_stamp` uses only `unique`. `field` is
+  // published anyway: it is what a stampless node is re-identified BY. `applier.py`'s
+  // `_unique_identity_node_survives_by_title` matches on that field's value, because "a structural
+  // node's real identity is its unique NAME, not its stamp". A reader given `unique` alone knows to
+  // omit the stamp and does not know what carries the identity instead — which is exactly the shape
+  // of publishing `renderCheckbox`'s rows without its `fallback`.
+  //
+  // ── EVERY DECLARED TYPE, SO ABSENCE MEANS "NOT A TYPE" AND NEVER "NOT UNIQUE" ──
+  //
+  // Keyed over `schema.yaml`'s own `node_types:` — the same total-function posture `chromeShapes`
+  // took on 2026-08-14 — rather than only the seven that declare an identity block. A sparse map
+  // makes "this type is ordinary" and "I have never heard of this type" the same lookup, and they
+  // are opposite instructions: the first says stamp it, the second says refuse to compose it.
+  function readIdentityModes() {
+    if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
+    const nodeTypes = readYaml(SCHEMA_KEY)?.node_types;
+    if (!nodeTypes || typeof nodeTypes !== "object" || Array.isArray(nodeTypes)) {
+      throw new GenerationError(`${SCHEMA_KEY}: no 'node_types:' mapping`);
+    }
+    const out = {};
+    for (const name of Object.keys(nodeTypes).sort()) {
+      const definition = nodeTypes[name];
+      const identity =
+        definition && typeof definition === "object" && definition.identity && typeof definition.identity === "object"
+          ? definition.identity
+          : {};
+      // `bool(identity.get("unique"))` and `identity.get("field")` — `identity_spec`'s own two
+      // lines, mirrored rather than reinterpreted. A type with no `identity:` block answers
+      // `(null, false)`, which is the engine's "mint fresh, stamp it" pathway.
+      const unique = identity.unique === true;
+      const field = isNonEmptyString(identity.field) ? identity.field : null;
+      out[name] = { unique, field };
+    }
+    return out;
+  }
+
   function readChromeShapes(mintable, ledger) {
     if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
     const schema = readYaml(SCHEMA_KEY);
@@ -1614,6 +1669,7 @@ export function compile(files, ledger = new Ledger()) {
     ledger,
   );
   const chromeShapes = readChromeShapes(candidates, ledger);
+  const identityModes = readIdentityModes();
   const registrationResult = readSectionRegistration(viewFiles, registration, ledger);
   const sectionRegistration = registrationResult.sectionRegistration;
   const compositionResult = readGlobalComposition();
@@ -1676,6 +1732,23 @@ export function compile(files, ledger = new Ledger()) {
     // still tell WHICH KIND of fact this is rather than having to assume.
     renderCheckbox: ENGINE_LITERAL_RENDER_CHECKBOX,
     renderCheckboxSource: "engine-literal",
+    // WHETHER A NODE GETS A `[[qntm:N]]` STAMP, AND WHAT IDENTIFIES IT WHEN IT DOES NOT — see
+    // `readIdentityModes`' own header. Keyed over EVERY type `schema.yaml` declares, so a type
+    // missing from this map is an unknown type (refuse to compose) and never an ordinary one.
+    //
+    // ⚠ A `unique: true` TYPE IS ON A ROUND TRIP THAT DOES NOT CLOSE TODAY, and this key is the
+    // one that tells a composer to take it. Driven in a hermetic starter vault (`qntm-md init`,
+    // one config edit making a `plain_line` type unique, no other change): the engine renders
+    // such a node's line correctly, and on the NEXT cycle — with no edit at all — emits it TWICE.
+    // Membership stays right (the section heading still counts 1), the node count stays right,
+    // the cycle reports `✓ no changes`, and it never heals. Excluded by driven tests: minting
+    // (`resolve_or_create` binds by title, one node throughout), `line_cache` (cleared, it
+    // re-doubles), and the applier guard `_unique_identity_node_survives_by_title` (the render
+    // duplicates with the line absent from the file entirely). It is render-side, in line
+    // EMISSION rather than membership. Reported for routing to the engine repo; NOT reachable
+    // from this repo, and NOT a reason to withhold the fact — the six `plain_line` unique types
+    // ARE stampless, and a composer that guessed otherwise would be wrong in a second way.
+    identityModes,
     // ── THE VOCABULARY, IN THE DIRECTION THAT PRINTS (2026-08-14) ──
     //
     // `sectionRegistration[view][section].tokens` above is the SEED answer: the tags a new line

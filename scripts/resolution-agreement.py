@@ -56,6 +56,7 @@ import sys
 from pathlib import Path
 
 import monorepo_config
+import qntm_graph
 import structlog
 import yaml
 
@@ -63,6 +64,7 @@ structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.
 
 from qntm_md.bundle import load as bundle_load  # noqa: E402
 from qntm_md.grammar.node_type_form import node_type_forms  # noqa: E402
+from qntm_md.substrate_wiring.verbs.resolve_or_create_node import identity_spec  # noqa: E402
 from qntm_md.resolution.cascade import ResolutionCascade  # noqa: E402
 from qntm_md.resolution.levels import ResolutionLevel  # noqa: E402
 from qntm_md.resolution.registration import (  # noqa: E402
@@ -226,6 +228,50 @@ def main() -> int:
                 file=sys.stderr,
             )
         return 2
+    # ── IDENTITY MODES: whether a type's line carries a stamp, against the engine's OWN reader ──
+    #
+    # `resolution["identityModes"]` was generated from a plain YAML parse of schema.yaml. This
+    # compares it against `identity_spec` — the function `decide_stamp` (renderer.py) itself calls
+    # to decide whether to emit `[[qntm:N]]`. Both read the same file, which is exactly why this is
+    # worth checking rather than assuming: "the same file" is a claim, and a generator that
+    # mis-reads `identity: {unique: true}` publishes a browser that stamps a node the engine
+    # renders stampless, with nothing red anywhere.
+    #
+    # DRIVEN, NOT PARSED. `identity_spec` takes a graph and reads `graph.raw_schema`, so it is
+    # called against a real Graph built over this config's own schema — the same posture
+    # `composition-agreement.py`'s `render_checkbox_pin` takes for the checkbox contract.
+    identity_graph = qntm_graph.Graph(qntm_graph.load_schema(raw_schema), raw_schema=raw_schema)
+    published_identity = resolution.get("identityModes", {})
+    engine_identity = {}
+    identity_mismatches = []
+    for node_type in (raw_schema.get("node_types") or {}):
+        field, unique = identity_spec(identity_graph, node_type)
+        engine_identity[node_type] = {"unique": bool(unique), "field": field}
+        published = published_identity.get(node_type)
+        if published != engine_identity[node_type]:
+            identity_mismatches.append((node_type, published, engine_identity[node_type]))
+    if identity_mismatches:
+        for node_type, published, engine in identity_mismatches:
+            print(
+                f"REFUSING: identityModes['{node_type}']={published!r} != engine "
+                f"identity_spec={engine!r}",
+                file=sys.stderr,
+            )
+        return 2
+    # POSITIVE CONTROL: a schema where NOTHING is unique-identity would make every comparison above
+    # hold by agreeing on `false` everywhere — the vacuity this house rule exists to refuse.
+    unique_count = sum(1 for m in engine_identity.values() if m["unique"])
+    if unique_count == 0:
+        print(
+            "REFUSING: no node type in this config declares identity: {unique: true}, so the "
+            "identityModes comparison proved nothing",
+            file=sys.stderr,
+        )
+        return 2
+    if unique_count == len(engine_identity):
+        print("REFUSING: EVERY node type is unique-identity — the comparison cannot fail", file=sys.stderr)
+        return 2
+
     # POSITIVE CONTROL: this comparison is worthless if it never actually checked a DECLARED
     # render block — mutate the engine's own answer for at least one type before trusting "0
     # mismatches" (the same house rule the 103-of-186 measurement was paid to learn).
@@ -349,6 +395,7 @@ def main() -> int:
             "qntm_md.render.section_builder._DEFAULT_ORDERING/_PRIORITY_RANK — the one comparison "
             "in this fixture that does not depend on --config-dir at all."
         ),
+        "identityModes": engine_identity,
         "chromeShapes": {
             node_type: (forms[node_type].shape if forms.get(node_type) and forms[node_type].shape else "checkbox")
             for node_type in published_chrome_shapes
