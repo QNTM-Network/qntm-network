@@ -92,6 +92,7 @@ export type {
   EdgeTag,
   IdentityMode,
   RenderCheckbox,
+  SectionPresentation,
   RenderTitleStyle,
   TitleStylePredicate,
   TitleStyleRow,

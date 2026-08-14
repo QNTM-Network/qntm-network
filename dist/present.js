@@ -894,6 +894,8 @@ var TOP_KEYS2 = [
   // The extra indented lines a node type re-emits beneath its own line, and the bare tag each
   // carries. Keyed only by the types that declare them — absence has one meaning here.
   "continuationFields",
+  // How each section's heading renders. `name` is the live one — 303 of 304 sections declare it.
+  "sectionPresentation",
   // The other two canonical cell orders. `tagOrder` shipped alone; a composer could order one of
   // the three cell families that carry more than one cell, and had to invent the rest.
   "markerOrder",
@@ -1495,6 +1497,49 @@ function readRenderTitleStyle(value, problems) {
   }
   return { rows, fallback };
 }
+function readSectionPresentation(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.sectionPresentation`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 how any heading renders stays unknown`);
+    return void 0;
+  }
+  const out = {};
+  for (const [viewId, sections] of Object.entries(value)) {
+    if (!isPlainObject3(sections)) {
+      problems.push(`'${path}.${viewId}' is ${shapeOf2(sections)}, not an object`);
+      return void 0;
+    }
+    const read = {};
+    for (const [sectionId, entry] of Object.entries(sections)) {
+      if (!isPlainObject3(entry)) {
+        problems.push(`'${path}.${viewId}.${sectionId}' is ${shapeOf2(entry)}, not an object`);
+        return void 0;
+      }
+      const at = `${path}.${viewId}.${sectionId}`;
+      for (const key of ["name", "headerValue", "containerNode", "declaredName"]) {
+        const v = entry[key];
+        if (v !== void 0 && (typeof v !== "string" || v === "")) {
+          problems.push(`'${at}.${key}' is ${JSON.stringify(v)}, not a non-empty string`);
+          return void 0;
+        }
+      }
+      if (entry.bodyPolicy !== void 0 && entry.bodyPolicy !== "full_body" && entry.bodyPolicy !== "header_only") {
+        problems.push(
+          `'${at}.bodyPolicy' is ${JSON.stringify(entry.bodyPolicy)}, not "full_body" or "header_only" \u2014 whether this section renders its members at all stays unknown`
+        );
+        return void 0;
+      }
+      const kept = {};
+      for (const key of ["name", "headerValue", "bodyPolicy", "containerNode", "declaredName"]) {
+        const v = entry[key];
+        if (v !== void 0) kept[key] = v;
+      }
+      read[sectionId] = kept;
+    }
+    out[viewId] = read;
+  }
+  return out;
+}
 function readRenderCheckboxSource(value, problems, key = "renderCheckboxSource") {
   if (value !== "engine-literal") {
     problems.push(
@@ -1792,6 +1837,7 @@ function readConfigResolutionDeclaration(document2) {
       renderTitleStyleSource: "renderTitleStyleSource" in raw ? readRenderCheckboxSource(raw.renderTitleStyleSource, problems, "renderTitleStyleSource") : void 0,
       identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : void 0,
       continuationFields: "continuationFields" in raw ? readContinuationFields(raw.continuationFields, problems) : void 0,
+      sectionPresentation: "sectionPresentation" in raw ? readSectionPresentation(raw.sectionPresentation, problems) : void 0,
       // REUSES `readTagOrder`/`readTagOrderSource` — three canonical orders, one shape, one reader.
       // Three copies of the same validation is how three orders drift into three dialects.
       markerOrder: "markerOrder" in raw ? readTagOrder(raw.markerOrder, problems, "markerOrder") : void 0,

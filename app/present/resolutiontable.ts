@@ -283,6 +283,35 @@ export interface ContinuationField {
   readonly token: string | null;
 }
 
+/**
+ * HOW ONE SECTION'S HEADING RENDERS. `compose_section_header` (section_builder.py:619) composes
+ * `## {name or id}` with a count suffix — NOT `## {id}`.
+ *
+ * `name` is the live fact: 303 of the operator's 304 sections declare one, so a composer using the
+ * section id would print `## to-do (5)` where the engine prints `## To Do`, on every section of
+ * every view. It was already published on `ordering[view][section].name`, which exists only for the
+ * 15 sections declaring an `ordering:` — coverage-shaped, and not coverage.
+ *
+ * `headerValue` replaces the count suffix with a field value resolved off the first member.
+ *
+ * `bodyPolicy` is an ANSWER, never an absence: `header_only` emits the heading and NO members, and
+ * "renders empty by policy" produces the same line as "has no members today" while being a
+ * different and more stable fact.
+ *
+ * `containerNode`/`declaredName` mean the section is BACKED BY A NODE — its heading is that node's
+ * own title and stamp, and if the node's render shape is not `heading` the section renders as a
+ * node LINE rather than a `##` heading at all. Resolving that needs the graph, so only the
+ * DECLARATION is published: enough for a composer to know it must refuse. Nobody declares one
+ * today, which is exactly why it is on the wire — the browser cannot notice one arriving otherwise.
+ */
+export interface SectionPresentation {
+  readonly name?: string;
+  readonly headerValue?: string;
+  readonly bodyPolicy?: "full_body" | "header_only";
+  readonly containerNode?: string;
+  readonly declaredName?: string;
+}
+
 export interface IdentityMode {
   readonly unique: boolean;
   readonly field: string | null;
@@ -561,6 +590,15 @@ export interface ConfigResolutionTable {
    * answer an empty list would give, so the total-function treatment would buy nothing.
    */
   readonly continuationFields: Readonly<Record<string, readonly ContinuationField[]>> | undefined;
+  /**
+   * `view -> section -> how its heading renders`. See `SectionPresentation`. `undefined` for the
+   * whole map when the served declaration predates the key — and a caller must then compose no
+   * headings at all rather than synthesising `## {id}`, because that is wrong for 303 of 304 of
+   * the operator's sections.
+   */
+  readonly sectionPresentation:
+    | Readonly<Record<string, Readonly<Record<string, SectionPresentation>>>>
+    | undefined;
   /** WITHIN "markers" — which marker glyph comes first. `tagOrder`'s sibling, same shape. */
   readonly markerOrder: TagOrder | undefined;
   readonly markerOrderSource: "engine-literal" | undefined;
@@ -722,6 +760,8 @@ const TOP_KEYS = [
   // The extra indented lines a node type re-emits beneath its own line, and the bare tag each
   // carries. Keyed only by the types that declare them — absence has one meaning here.
   "continuationFields",
+  // How each section's heading renders. `name` is the live one — 303 of 304 sections declare it.
+  "sectionPresentation",
   // The other two canonical cell orders. `tagOrder` shipped alone; a composer could order one of
   // the three cell families that carry more than one cell, and had to invent the rest.
   "markerOrder",
@@ -1498,6 +1538,60 @@ function readRenderTitleStyle(value: unknown, problems: string[]): RenderTitleSt
   return { rows, fallback };
 }
 
+/**
+ * `resolution.sectionPresentation` — see `SectionPresentation`. One malformed section refuses the
+ * WHOLE map: a partial one is indistinguishable from a config that declares fewer sections, and a
+ * composer would then synthesise `## {id}` for the missing ones, which is the exact wrong heading
+ * this key exists to prevent.
+ */
+function readSectionPresentation(
+  value: unknown,
+  problems: string[],
+): Readonly<Record<string, Readonly<Record<string, SectionPresentation>>>> | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.sectionPresentation`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — how any heading renders stays unknown`);
+    return undefined;
+  }
+  const out: Record<string, Record<string, SectionPresentation>> = {};
+  for (const [viewId, sections] of Object.entries(value)) {
+    if (!isPlainObject(sections)) {
+      problems.push(`'${path}.${viewId}' is ${shapeOf(sections)}, not an object`);
+      return undefined;
+    }
+    const read: Record<string, SectionPresentation> = {};
+    for (const [sectionId, entry] of Object.entries(sections)) {
+      if (!isPlainObject(entry)) {
+        problems.push(`'${path}.${viewId}.${sectionId}' is ${shapeOf(entry)}, not an object`);
+        return undefined;
+      }
+      const at = `${path}.${viewId}.${sectionId}`;
+      for (const key of ["name", "headerValue", "containerNode", "declaredName"]) {
+        const v = (entry as Record<string, unknown>)[key];
+        if (v !== undefined && (typeof v !== "string" || v === "")) {
+          problems.push(`'${at}.${key}' is ${JSON.stringify(v)}, not a non-empty string`);
+          return undefined;
+        }
+      }
+      if (entry.bodyPolicy !== undefined && entry.bodyPolicy !== "full_body" && entry.bodyPolicy !== "header_only") {
+        problems.push(
+          `'${at}.bodyPolicy' is ${JSON.stringify(entry.bodyPolicy)}, not "full_body" or ` +
+            '"header_only" — whether this section renders its members at all stays unknown',
+        );
+        return undefined;
+      }
+      const kept: Record<string, unknown> = {};
+      for (const key of ["name", "headerValue", "bodyPolicy", "containerNode", "declaredName"]) {
+        const v = (entry as Record<string, unknown>)[key];
+        if (v !== undefined) kept[key] = v;
+      }
+      read[sectionId] = kept as SectionPresentation;
+    }
+    out[viewId] = read;
+  }
+  return out;
+}
+
 /** `resolution.renderCheckboxSource` — one legal value, checked rather than assumed. */
 function readRenderCheckboxSource(
   value: unknown,
@@ -1985,6 +2079,8 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : undefined,
       continuationFields:
         "continuationFields" in raw ? readContinuationFields(raw.continuationFields, problems) : undefined,
+      sectionPresentation:
+        "sectionPresentation" in raw ? readSectionPresentation(raw.sectionPresentation, problems) : undefined,
       // REUSES `readTagOrder`/`readTagOrderSource` — three canonical orders, one shape, one reader.
       // Three copies of the same validation is how three orders drift into three dialects.
       markerOrder: "markerOrder" in raw ? readTagOrder(raw.markerOrder, problems, "markerOrder") : undefined,
