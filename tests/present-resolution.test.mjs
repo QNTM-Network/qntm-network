@@ -699,11 +699,63 @@ describe("8. the output half — chromeShapes, the form's own source, and the sp
     }
   });
 
+  test("A BRACKET GLYPH LANDS IN NEITHER TABLE, and is RECORDED — the trap, driven", () => {
+    // THE CASE THE OPERATOR'S CONFIG HAS AND THIS FIXTURE DOES NOT. His `vocabulary/checkbox.yaml`
+    // spells `status` with `[ ]`/`[x]` — neither `#`-prefixed nor a marker family — and until this
+    // change those six pairs were published as `spelling.fieldTokens.status`, which is exactly what
+    // a composer would reach for and exactly the copy that re-opened his completed outcomes.
+    //
+    // Added here by mutation so it runs in CI with no monorepo, and so the absence is proven to be
+    // a NAMED one: a silent drop would leave a reader unable to tell "not published" from
+    // "published empty".
+    const scratch = mkdtempSync(join(tmpdir(), "checkbox-glyph-spelling-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE, configDir, { recursive: true });
+      writeFileSync(
+        join(configDir, "vocabulary", "checkbox.yaml"),
+        'checkbox:\n  - { token: "[ ]", field: status, value: open }\n  - { token: "[x]", field: status, value: done }\n',
+      );
+      const r = generateResolution(configDir);
+      assert.equal(r.spelling.fieldTags.status?.["open"], "#open", "the real #-prefixed tag must survive");
+      assert.equal(r.spelling.fieldMarkerValues.status, undefined, "a bracket glyph is not a marker");
+      for (const table of [r.spelling.fieldTags, r.spelling.fieldMarkerValues]) {
+        for (const spellings of Object.values(table)) {
+          for (const token of Object.values(spellings)) {
+            assert.ok(!token.startsWith("["), `a checkbox glyph '${token}' reached a spelling table`);
+          }
+        }
+      }
+      // NAMED, NOT MERELY MISSING — and the reason points at where the answer actually lives.
+      assert.match(r.dropped["vocabulary token '[x]'"] ?? "", /renderCheckbox/);
+      assert.match(r.dropped["vocabulary token '[ ]'"] ?? "", /neither a '#'-prefixed tag nor a marker glyph/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("the checkbox decision is published as ORDERED rows plus a fallback, never a map", () => {
+    assert.equal(compiled.renderCheckboxSource, "engine-literal");
+    assert.equal(resolution.renderCheckbox.fallback, "[ ]");
+    assert.deepEqual(
+      resolution.renderCheckbox.rows.map((r) => [r.when.equals, r.then]),
+      [["open", "[ ]"], ["done", "[x]"], ["in_progress", "[/]"], ["cancelled", "[-]"], ["waiting", "[~]"], ["scheduled", "[>]"]],
+    );
+    // ORDER IS MEANING. A map would lose it, and `tests/composition-agreement.test.mjs` pins these
+    // exact rows against what the engine's own dispatcher answered.
+    assert.ok(Array.isArray(resolution.renderCheckbox.rows), "rows must stay an ordered array");
+  });
+
   test("the spelling table answers in the direction that PRINTS, for types and for fields", () => {
     assert.equal(resolution.spelling.typeTokens.task, "#task");
     assert.equal(resolution.spelling.typeTokens.person, "#person");
     // A FIXED-value field: the whole tag IS the value.
-    assert.equal(resolution.spelling.fieldTokens.domain.work, "#work");
+    // A FIXED-value TAG: `#`-prefixed, so the engine emits it into the TAGS cell.
+    assert.equal(resolution.spelling.fieldTags.domain.work, "#work");
+    // THE FIXTURE'S `status` IS GENUINELY A TAG (`#open`/`#done`, status_tags.yaml), so it belongs
+    // in `fieldTags` here and this config does NOT exercise the checkbox-glyph case at all. That is
+    // proven by its own mutation test below rather than asserted from a config that cannot show it.
+    assert.deepEqual(resolution.spelling.fieldTags.status, { open: "#open", done: "#done" });
     // A TRAILING marker: the glyph introduces a value that varies line to line, so the kind is
     // part of the spelling.
     assert.deepEqual(resolution.spelling.fieldMarkers.due_date, { token: "📅", kind: "date" });
@@ -714,8 +766,10 @@ describe("8. the output half — chromeShapes, the form's own source, and the sp
     // and a composer holding one must not have to wonder which is authoritative.
     for (const [field, marker] of Object.entries(resolution.orderingFields)) {
       if (marker.kind === "enum") {
-        // The enum arm's twin is `fieldTokens`, keyed value -> token rather than token -> value.
-        const printed = resolution.spelling.fieldTokens[field];
+        // The enum arm's twin is `fieldMarkerValues`, keyed value -> token rather than token ->
+        // value. It is the MARKER half of the split, which is where `priority`'s 🔽/⏫ live: an
+        // enum ordering field is spelled by a marker glyph, never by a `#`-prefixed tag.
+        const printed = resolution.spelling.fieldMarkerValues[field] ?? resolution.spelling.fieldTags[field];
         assert.ok(printed, `'${field}' is an enum for ordering but has no printed spelling`);
         for (const [token, value] of Object.entries(marker.values)) {
           assert.equal(printed[value], token, `'${field}' spells ${value} differently in the two tables`);
@@ -758,7 +812,8 @@ describe("8. the output half — chromeShapes, the form's own source, and the sp
         "the seed refusal stopped being recorded",
       );
       // The seed table never learned the field at all, which is the refusal itself.
-      assert.equal(r.spelling.fieldTokens.done_task_count, undefined);
+      assert.equal(r.spelling.fieldTags.done_task_count, undefined);
+      assert.equal(r.spelling.fieldMarkerValues.done_task_count, undefined);
       for (const sections of Object.values(r.sectionRegistration)) {
         for (const entry of Object.values(sections)) {
           assert.ok(!entry.tokens.includes("☑️"), "a render_only glyph was seeded into a new line");

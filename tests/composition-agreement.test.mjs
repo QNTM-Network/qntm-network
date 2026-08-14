@@ -137,3 +137,113 @@ describe("4. FORM — composition's own optional bullet + title-style wrap, the 
     assert.equal(composed, fixture.expectedLine);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE CHECKBOX DECISION — the published literal against the live contract's own answers
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ── WHY THIS COMPARISON AND NOT `presentation.json`'s ──
+//
+// `resolution.renderCheckbox` is a hand-written literal in `compile-resolution.mjs`, the same
+// posture `ENGINE_LITERAL_TAG_ORDER` takes. The contract's own header
+// (`render/contracts/render_checkbox.yaml`) says what a hand copy is worth alone:
+// `config/rendering/checkbox.yaml` was exactly such a copy, "kept in sync by nothing", and when the
+// 2026-06-24 fix dropped the `node.type == "task"` guard from every row it did not follow. A done
+// OUTCOME then matched no row, took the fallback, rendered `[ ]` while the model held status=done,
+// and the next re-ingest silently RE-OPENED it — qntm:66/837/903, every four to five days.
+//
+// So the literal is compared against the GENERATOR's own export rather than the served file. The
+// fixture side was produced by dispatching real nodes through the real `_checkbox_dispatcher()`
+// (see `render_checkbox_pin` in the Python script), so this asserts the browser's copy equals what
+// the engine ACTUALLY ANSWERED — and it runs on every PR, with no monorepo, because both artefacts
+// are committed. `presentation.json` is not the subject: it has not been regenerated (that is
+// blocked on the seed question), and waiting for it would leave the copy unchecked in the meantime.
+
+import { ENGINE_LITERAL_RENDER_CHECKBOX } from "../scripts/compile-resolution.mjs";
+
+describe("the checkbox glyph — a decision, pinned against the engine's own dispatcher", () => {
+  test("the fixture carries the pin at all — otherwise everything below is vacuous", () => {
+    assert.ok(FIXTURE.renderCheckbox, "the fixture has no renderCheckbox pin; regenerate it");
+    assert.ok(Array.isArray(FIXTURE.renderCheckbox.rows), "the pin carries no rows");
+    assert.ok(FIXTURE.renderCheckbox.rows.length >= 6, "the pin covers fewer statuses than the contract declares");
+  });
+
+  test("THE PIN: the published literal is exactly what the real dispatcher answered", () => {
+    // deepEqual, not a spot-check on one glyph: a row REMOVED, REORDERED or RETARGETED must all be
+    // caught, and order is meaning in a first-match-wins table.
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(ENGINE_LITERAL_RENDER_CHECKBOX)),
+      FIXTURE.renderCheckbox,
+      "compile-resolution.mjs's checkbox literal has drifted from the engine contract — re-run " +
+        "'apps/qntm-md/.venv/bin/python scripts/composition-agreement.py' and reconcile the literal " +
+        "TO the contract, never the other way round",
+    );
+  });
+
+  test("the fallback is a real answer, not an absent one", () => {
+    // The property a value map cannot hold. A status-less node renders this BY RULE.
+    assert.equal(FIXTURE.renderCheckbox.fallback, "[ ]");
+    assert.ok(
+      !FIXTURE.renderCheckbox.rows.some((r) => r.when.equals === undefined || r.when.equals === null),
+      "a row matching an absent value would make the fallback unreachable",
+    );
+  });
+
+  test("every row decides a DISTINCT glyph — six rows collapsing to one would prove nothing", () => {
+    const glyphs = FIXTURE.renderCheckbox.rows.map((r) => r.then);
+    assert.equal(new Set(glyphs).size, glyphs.length, `the pin has duplicate glyphs: ${glyphs.join(" ")}`);
+  });
+
+  test("EVALUATED IN ORDER, first match wins — the shape, driven rather than described", () => {
+    // A reader must walk `rows` and stop at the first match. This drives that walk over the real
+    // published table so the contract's shape is exercised, not merely asserted about.
+    const decide = (fields) => {
+      for (const row of ENGINE_LITERAL_RENDER_CHECKBOX.rows) {
+        if (fields[row.when.field] === row.when.equals) return row.then;
+      }
+      return ENGINE_LITERAL_RENDER_CHECKBOX.fallback;
+    };
+    assert.equal(decide({ status: "done" }), "[x]");
+    assert.equal(decide({ status: "open" }), "[ ]");
+    assert.equal(decide({ status: "cancelled" }), "[-]");
+    // THE CASE THAT COST THE OPERATOR DATA. A done node of ANY type takes the done row — the rows
+    // carry no `node.type` condition, and restoring one is what rendered `[ ]` over status=done.
+    assert.ok(
+      !ENGINE_LITERAL_RENDER_CHECKBOX.rows.some((r) => r.when.field !== "status"),
+      "a row now conditions on something other than status — a done node of some type may take " +
+        "the fallback and render an open box, which is the re-opening defect of 2026-06-24",
+    );
+    // AND THE FALLBACK IS REACHED, not merely declared.
+    assert.equal(decide({}), "[ ]");
+    assert.equal(decide({ status: "not-a-real-status" }), "[ ]");
+  });
+
+  test("the reader accepts the published table and refuses a half-readable one", () => {
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...SERVED.resolution, renderCheckbox: ENGINE_LITERAL_RENDER_CHECKBOX, renderCheckboxSource: "engine-literal" },
+    });
+    assert.deepEqual(problems, [], "the reader objected to the generator's own checkbox table");
+    assert.deepEqual(resolution.renderCheckbox.rows.map((r) => r.then), ["[ ]", "[x]", "[/]", "[-]", "[~]", "[>]"]);
+
+    // ONE BAD ROW REFUSES THE WHOLE TABLE. Dropping row 2 and keeping the rest would silently
+    // promote every later row, so a node that should have matched the dropped one takes the next
+    // row's glyph instead of the fallback — a wrong answer where refusing gives none.
+    const broken = { rows: [...ENGINE_LITERAL_RENDER_CHECKBOX.rows], fallback: "[ ]" };
+    broken.rows[1] = { when: { field: "status" }, then: "[x]" };
+    const bad = readConfigResolutionDeclaration({ resolution: { ...SERVED.resolution, renderCheckbox: broken } });
+    assert.equal(bad.resolution.renderCheckbox, undefined, "a malformed row left a partial table readable");
+    assert.ok(bad.problems.some((p) => p.includes("renderCheckbox.rows[1]")), bad.problems.join("; "));
+  });
+
+  test("`spelling` no longer offers the checkbox glyph as a field spelling", () => {
+    // THE TRAP, ASSERTED CLOSED. `spelling.fieldTokens.status` used to return the six glyphs and
+    // would have been the obvious thing to reach for. There is now no table it can come from: the
+    // split is on the engine's own `tag.startswith("#")` filter, and `status` is in neither half.
+    const { resolution } = readConfigResolutionDeclaration({
+      resolution: { ...SERVED.resolution, spelling: { typeTokens: { task: "#task" }, fieldTags: {}, fieldMarkerValues: {}, fieldMarkers: {} } },
+    });
+    assert.equal(resolution.spelling.fieldTokens, undefined, "the conflated table is back");
+    assert.equal(resolution.spelling.fieldTags.status, undefined);
+    assert.equal(resolution.spelling.fieldMarkerValues.status, undefined);
+  });
+});

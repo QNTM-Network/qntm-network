@@ -562,6 +562,66 @@ def build_fixtures() -> list[dict[str, Any]]:
     return fixtures
 
 
+def render_checkbox_pin() -> dict[str, Any]:
+    """The `render_checkbox` contract, READ THROUGH THE REAL DISPATCHER, as publishable rows.
+
+    ── WHY THIS EXISTS AT ALL ──
+
+    `compile-resolution.mjs` publishes `resolution.renderCheckbox` as a hand-written literal, the
+    same posture `ENGINE_LITERAL_TAG_ORDER` already takes. The contract's own header
+    (`render/contracts/render_checkbox.yaml`) is explicit about what a hand copy is worth on its
+    own: `config/rendering/checkbox.yaml` was exactly such a copy, "kept in sync by nothing", and
+    when the 2026-06-24 bugfix dropped the `node.type == "task"` guard from every row the copy did
+    not follow. A done OUTCOME then matched no row, took the fallback, rendered `[ ]` while the
+    model held status=done, and the next re-ingest silently RE-OPENED it — qntm:66/837/903, roughly
+    every four to five days.
+
+    So this function is not a convenience. It is the thing that makes the literal legitimate: the
+    published rows are checked against the LIVE contract on every run, and the fixture is not
+    written when they disagree.
+
+    ── IT DRIVES THE DISPATCHER RATHER THAN PARSING THE YAML ──
+
+    Reading the contract file directly would prove the browser agrees with a FILE. What matters is
+    that it agrees with the DECISION, so each row's `then` is confirmed by dispatching a real
+    node-local context through `_checkbox_dispatcher()` — the same object `_render_node_line` uses
+    — and the fallback by dispatching a node carrying no `status` at all.
+    """
+    dispatcher = _checkbox_dispatcher()
+
+    def glyph_for(fields: dict[str, Any]) -> str:
+        # THE SAME `_graph()` EVERY OTHER FIXTURE USES — a real registry over the real schema, not a
+        # bare Graph. `build_node_local_context` reads the node's edge neighbourhood out of it, so a
+        # stand-in graph would be a second, differently-shaped context and the pin would be proving
+        # agreement with something the renderer never sees.
+        graph = _graph()
+        node = graph.create_node("task", dict(fields))
+        result = dispatcher.dispatch("render_checkbox", build_node_local_context(graph, node)).result
+        return str(result) if result not in (None, "") else ""
+
+    statuses = ["open", "done", "in_progress", "cancelled", "waiting", "scheduled"]
+    rows = [{"when": {"field": "status", "equals": s}, "then": glyph_for({"title": "pin", "status": s})} for s in statuses]
+    # THE FALLBACK IS DRIVEN, NOT COPIED — a node with no `status` field at all, which is exactly
+    # the case a value map cannot express and the reason this is published as rows plus a fallback.
+    fallback = glyph_for({"title": "pin"})
+
+    # POSITIVE CONTROL. Six statuses collapsing to one glyph would mean the dispatcher answered
+    # nothing and every assertion below would hold vacuously.
+    distinct = {row["then"] for row in rows}
+    if len(distinct) != len(statuses):
+        print(
+            f"REFUSING: the render_checkbox dispatcher returned {len(distinct)} distinct glyph(s) "
+            f"for {len(statuses)} statuses — it is not deciding, so pinning it proves nothing",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    if any(not row["then"] for row in rows) or not fallback:
+        print("REFUSING: the render_checkbox dispatcher returned an empty glyph", file=sys.stderr)
+        raise SystemExit(2)
+
+    return {"rows": rows, "fallback": fallback}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=DEFAULT_OUT, type=Path)
@@ -621,6 +681,12 @@ def main() -> int:
         # without yet having this one's engine-side form additions.
         "compositionFormSource": _COMPOSITION_FORM_SOURCE,
         "composition": _COMPOSITION,
+        # THE CHECKBOX DECISION, driven through the real dispatcher — see `render_checkbox_pin`'s
+        # own docstring for why a hand copy of this table without a pin is the exact shape that
+        # re-opened the operator's completed outcomes. `tests/composition-agreement.test.mjs`
+        # asserts `presentation.json`'s `resolution.renderCheckbox` equals this, so the literal in
+        # `compile-resolution.mjs` cannot drift from the contract without a red test.
+        "renderCheckbox": render_checkbox_pin(),
         "fixtures": fixtures,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

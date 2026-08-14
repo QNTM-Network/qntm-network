@@ -879,6 +879,10 @@ var TOP_KEYS2 = [
   // other direction: how the engine spells a node that already exists, whatever its type turned
   // out to be after the rules ran.
   "spelling",
+  // The checkbox glyph, and whose answer it is. See `RenderCheckbox` — rows plus a fallback,
+  // never a map, because first-match-wins and "no status at all" are both real answers.
+  "renderCheckbox",
+  "renderCheckboxSource",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
@@ -1262,15 +1266,22 @@ function readSpelling(value, problems) {
   };
   const typeTokens = readStringMap(value.typeTokens, `${path}.typeTokens`);
   if (typeTokens === void 0) return void 0;
-  if (!isPlainObject3(value.fieldTokens)) {
-    problems.push(`'${path}.fieldTokens' is ${shapeOf2(value.fieldTokens)}, not an object \u2014 every field's tags stay unknown`);
-    return void 0;
-  }
-  const fieldTokens = {};
-  for (const [field, table] of Object.entries(value.fieldTokens)) {
-    const read = readStringMap(table, `${path}.fieldTokens.${field}`);
-    if (read !== void 0) fieldTokens[field] = read;
-  }
+  const readNested = (raw, where) => {
+    if (!isPlainObject3(raw)) {
+      problems.push(`'${where}' is ${shapeOf2(raw)}, not an object \u2014 every spelling in it stays unknown`);
+      return void 0;
+    }
+    const out = {};
+    for (const [field, table] of Object.entries(raw)) {
+      const read = readStringMap(table, `${where}.${field}`);
+      if (read !== void 0) out[field] = read;
+    }
+    return out;
+  };
+  const fieldTags = readNested(value.fieldTags, `${path}.fieldTags`);
+  if (fieldTags === void 0) return void 0;
+  const fieldMarkerValues = readNested(value.fieldMarkerValues, `${path}.fieldMarkerValues`);
+  if (fieldMarkerValues === void 0) return void 0;
   if (!isPlainObject3(value.fieldMarkers)) {
     problems.push(`'${path}.fieldMarkers' is ${shapeOf2(value.fieldMarkers)}, not an object \u2014 every trailing marker stays unknown`);
     return void 0;
@@ -1296,7 +1307,44 @@ function readSpelling(value, problems) {
     }
     fieldMarkers[field] = renderOnly === true ? { kind, token, renderOnly: true } : { kind, token };
   }
-  return { typeTokens, fieldTokens, fieldMarkers };
+  return { typeTokens, fieldTags, fieldMarkerValues, fieldMarkers };
+}
+function readRenderCheckbox(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.renderCheckbox`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 the checkbox glyph stays unknown`);
+    return void 0;
+  }
+  if (typeof value.fallback !== "string" || value.fallback === "") {
+    problems.push(
+      `'${path}.fallback' is ${JSON.stringify(value.fallback)}, not a non-empty string \u2014 a status-less node's glyph is decided by this and there is no default to assume`
+    );
+    return void 0;
+  }
+  if (!Array.isArray(value.rows)) {
+    problems.push(`'${path}.rows' is ${shapeOf2(value.rows)}, not an array \u2014 the checkbox glyph stays unknown`);
+    return void 0;
+  }
+  const rows = [];
+  for (const [index, row] of value.rows.entries()) {
+    if (!isPlainObject3(row) || !isPlainObject3(row.when) || typeof row.when.field !== "string" || typeof row.when.equals !== "string" || typeof row.then !== "string" || row.then === "") {
+      problems.push(
+        `'${path}.rows[${index}]' is not {when: {field, equals}, then} \u2014 the whole checkbox decision stays unknown, because dropping one row of an ordered table changes what every later row answers`
+      );
+      return void 0;
+    }
+    rows.push({ when: { field: row.when.field, equals: row.when.equals }, then: row.then });
+  }
+  return { rows, fallback: value.fallback };
+}
+function readRenderCheckboxSource(value, problems) {
+  if (value !== "engine-literal") {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.renderCheckboxSource' is ${JSON.stringify(value)}, not "engine-literal" \u2014 the checkbox contract is engine source with no operator override surface, so any other answer means this declaration was produced by something else`
+    );
+    return void 0;
+  }
+  return "engine-literal";
 }
 function readChromeShapes(value, problems) {
   if (!isPlainObject3(value)) {
@@ -1531,6 +1579,12 @@ function readConfigResolutionDeclaration(document2) {
       // written twice, which is the shape that lets them drift apart.
       compositionFormSource: "compositionFormSource" in raw ? readCompositionSource(raw.compositionFormSource, problems, "compositionFormSource") : void 0,
       spelling: "spelling" in raw ? readSpelling(raw.spelling, problems) : void 0,
+      renderCheckbox: "renderCheckbox" in raw ? readRenderCheckbox(raw.renderCheckbox, problems) : void 0,
+      // `"engine-literal"` is the ONLY legal value — unlike composition's two-state config /
+      // engine-fallback, this contract lives in the engine's own source and has no operator
+      // override surface, so there is no second answer for a reader to distinguish. Published
+      // anyway, and validated, so the KIND of fact is stated rather than assumed.
+      renderCheckboxSource: "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : void 0,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : void 0,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}

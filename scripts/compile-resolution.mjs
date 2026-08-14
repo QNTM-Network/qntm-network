@@ -94,6 +94,14 @@ const ORDERING_MODES = new Set(["pattern_default", "insertion_order"]);
 // read a value from — see the domain header for the two kinds left out on purpose.
 const EXTRACTION_KINDS = { trailing_date: "date", trailing_int: "int", trailing_float: "float" };
 
+/**
+ * The vocabulary family whose tokens the engine emits into a line's MARKERS cell — the family
+ * `TokenResolver.source_markers_for_node` walks (`token_resolver.py:566`). Named here so the
+ * tag/marker/neither split in `readSpelling` reads a DECLARATION rather than sniffing a glyph's
+ * characters. See that function's own paragraph on why.
+ */
+const MARKER_FAMILY = "markers";
+
 // ── THE DEFAULT ORDERING — a DECLARED value now, resolved like everything else ────────────────
 //
 // UNTIL THIS CHANGE, this file published `apps/qntm-md/src/qntm_md/render/section_builder.py:
@@ -249,6 +257,54 @@ export const ENGINE_LITERAL_TAG_ORDER = Object.freeze({
     "#waiting-for",
   ]),
   unrankedPolicy: "append_stable",
+});
+
+// ── THE CHECKBOX GLYPH — A DECISION, NOT A LOOKUP ────────────────────────────────────────────
+//
+// Read LIVE off `apps/qntm-md/src/qntm_md/render/contracts/render_checkbox.yaml`, whose own header
+// states it flatly: "THIS FILE IS THE SOURCE OF TRUTH FOR THE CHECKBOX GLYPH. Nothing else is."
+// `renderer._checkbox_dispatcher()` compiles that file and `_render_node_line` dispatches it over
+// the node-local context; the result IS `composition.heads.checkbox[0]`, the first cell of every
+// checkbox line the operator sees.
+//
+// ── WHY THIS IS NOT A MAP, AND WHY THAT DISTINCTION IS THE WHOLE POINT ──
+//
+// `config/vocabulary/checkbox.yaml` declares the same six (status, glyph) pairs, and this
+// generator publishes them — it did, until this change, as `spelling.fieldTokens.status`. They
+// agree today. That agreement is a coincidence of the current config, not a structure, and two
+// properties of the real contract are NOT EXPRESSIBLE as a value map:
+//
+//   * FIRST-MATCH-WINS over predicate rows. A map is unordered by construction. The day a row
+//     gains a second condition, or two rows can both match, a map has no way to say which wins.
+//   * `fallback: "[ ]"`. A status-LESS node renders an open box BY RULE. A value map has no entry
+//     for "absent" and would leave a composer to invent one.
+//
+// ── AND THE DIVERGENCE ALREADY HAPPENED, AND IT COST THE OPERATOR DATA ──
+//
+// Before the 2026-06-24 bugfix every row ALSO required `node.type == "task"`. A done OUTCOME
+// matched no row, fell to the fallback, and rendered `[ ]` while the model held status=done — so
+// the next re-ingest read the open box and silently RE-OPENED completed outcomes (qntm:66/837/903,
+// roughly every four to five days). The contract's header names the retired copy that tracked it
+// and says "kept in sync by nothing" and "never reconcile this table back toward that file".
+//
+// A hand-copied literal is exactly such a copy — UNLESS something checks it. That is what
+// `scripts/composition-agreement.py` does for this table: it loads the real contract through the
+// real dispatcher and REFUSES to write its fixture if these rows disagree, the same discipline
+// `ENGINE_LITERAL_TAG_ORDER` above already lives under. The literal is safe because of the pin, not
+// instead of it.
+export const ENGINE_LITERAL_RENDER_CHECKBOX = Object.freeze({
+  // ORDER IS MEANING HERE. First row whose `when` holds decides the glyph; later rows never run.
+  rows: Object.freeze([
+    Object.freeze({ when: Object.freeze({ field: "status", equals: "open" }), then: "[ ]" }),
+    Object.freeze({ when: Object.freeze({ field: "status", equals: "done" }), then: "[x]" }),
+    Object.freeze({ when: Object.freeze({ field: "status", equals: "in_progress" }), then: "[/]" }),
+    Object.freeze({ when: Object.freeze({ field: "status", equals: "cancelled" }), then: "[-]" }),
+    Object.freeze({ when: Object.freeze({ field: "status", equals: "waiting" }), then: "[~]" }),
+    Object.freeze({ when: Object.freeze({ field: "status", equals: "scheduled" }), then: "[>]" }),
+  ]),
+  // A node matching NO row — a status-less one — renders this. Not a default this compiler chose:
+  // the contract's own `fallback:` key.
+  fallback: "[ ]",
 });
 
 // The cell-class vocabulary a declared `composition:` may use — mirrors `bundle/loader.py`'s own
@@ -459,11 +515,12 @@ function orderingFieldNames(ordering) {
  */
 function sortSpelling(rendered) {
   const sortMap = (m) => Object.fromEntries(Object.entries(m).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const sortNested = (m) =>
+    sortMap(Object.fromEntries(Object.entries(m).map(([field, table]) => [field, sortMap(table)])));
   return {
     typeTokens: sortMap(rendered.typeTokens),
-    fieldTokens: sortMap(
-      Object.fromEntries(Object.entries(rendered.fieldTokens).map(([field, table]) => [field, sortMap(table)])),
-    ),
+    fieldTags: sortNested(rendered.fieldTags),
+    fieldMarkerValues: sortNested(rendered.fieldMarkerValues),
     fieldMarkers: sortMap(rendered.fieldMarkers),
   };
 }
@@ -1140,7 +1197,7 @@ export function compile(files, ledger = new Ledger()) {
     const fieldOrder = [];
     const fieldTokens = {};
     // The output-side twin of `fieldTokens`/`typeTokens`. Never consulted by `seedTokens`.
-    const rendered = { typeTokens: {}, fieldTokens: {}, fieldMarkers: {} };
+    const rendered = { typeTokens: {}, fieldTags: {}, fieldMarkerValues: {}, fieldMarkers: {} };
     const vocabularyKeys = allKeys().filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml")).sort();
     for (const key of vocabularyKeys) {
       const file = key.slice(VOCABULARY_PREFIX.length);
@@ -1190,7 +1247,53 @@ export function compile(files, ledger = new Ledger()) {
           // next statement, and the output table has already kept it.
           const renderOnly = entry.render_only === true;
           if (isScalar(entry.value) && entry.value !== null) {
-            const table = rendered.fieldTokens[entry.field] ?? (rendered.fieldTokens[entry.field] = {});
+            // ── WHICH CELL DOES THIS GLYPH GO IN? THE ENGINE ANSWERS BY ITS OWN FILTER ──
+            //
+            // `fieldTokens` used to be ONE table for every fixed-value glyph, and that conflated
+            // three different cells of a rendered line. The engine does not:
+            //
+            //   `source_tags_for_node` (token_resolver.py:518) ends `if tag and
+            //   tag.startswith("#"): out.append(tag)` — so ONLY a `#`-prefixed glyph reaches the
+            //   TAGS cell. Everything else is silently not a tag.
+            //
+            //   `source_markers_for_node` (token_resolver.py:566) walks the MARKER token forms and
+            //   emits `{emoji, value: None}` for a fixed-value match — the MARKERS cell.
+            //
+            //   The checkbox glyph reaches NEITHER. It is the line's HEAD cell
+            //   (`composition.heads.checkbox[0]`), and it is not a vocabulary lookup at all: see
+            //   `renderCheckbox` for what actually decides it.
+            //
+            // Measured on the operator's config: 12 fields are `#`-prefixed, 4 are emoji, and
+            // exactly one — `status` — is neither. Splitting on the engine's own filter is what
+            // makes that one field IMPOSSIBLE to reach for by mistake, rather than merely
+            // documented. See DROP PATH 22 below for where it goes instead.
+            // MARKER-NESS IS READ FROM THE DECLARATION, NOT SNIFFED FROM THE GLYPH. The obvious
+            // test — "does it look like an emoji" — is a guess about characters. The config already
+            // says which family a token belongs to, and `vocabulary/markers.yaml`'s own `markers:`
+            // family is the one `source_markers_for_node` walks. A future family of marker glyphs
+            // declares itself the same way; a regex would have to be widened to notice.
+            const table = entry.token.startsWith("#")
+              ? (rendered.fieldTags[entry.field] ?? (rendered.fieldTags[entry.field] = {}))
+              : familyName === MARKER_FAMILY
+                ? (rendered.fieldMarkerValues[entry.field] ?? (rendered.fieldMarkerValues[entry.field] = {}))
+                : null;
+            if (table === null) {
+              // DROP PATH 22. A fixed-value glyph that is neither a tag nor a marker — today, only
+              // the checkbox family. NOT a gap: it is published, in the right shape, as
+              // `renderCheckbox`. Recorded so the absence from this table is a named answer rather
+              // than a silence a reader has to interpret.
+              ledger.drop(
+                `vocabulary token '${entry.token}'`,
+                `spells '${entry.field}'='${String(entry.value)}' but is neither a '#'-prefixed tag ` +
+                  "nor a marker glyph, so the engine emits it in NEITHER the tags cell nor the " +
+                  "markers cell — it is a line's HEAD cell, decided by the render_checkbox " +
+                  "decision table (first-match-wins over predicate rows, with a fallback a value " +
+                  "map cannot express) and published as 'renderCheckbox'. Reading it from a " +
+                  "spelling table would agree today by coincidence and diverge on the first row " +
+                  "the contract adds",
+              );
+              continue;
+            }
             const spelled = String(entry.value);
             if (table[spelled] === undefined) table[spelled] = entry.token;
           } else if (isNonEmptyString(entry.extraction_hint)) {
@@ -1453,6 +1556,16 @@ export function compile(files, ledger = new Ledger()) {
     // this axis was silently missing for until today.
     tagOrder: ENGINE_LITERAL_TAG_ORDER,
     tagOrderSource: "engine-literal",
+    // THE FIRST CELL OF EVERY CHECKBOX LINE — see `ENGINE_LITERAL_RENDER_CHECKBOX`'s own header for
+    // why it is published as ordered rows plus a fallback and never as a map, and for what the map
+    // shape cost the operator the last time these two homes were allowed to drift.
+    //
+    // `"engine-literal"` LIKE `tagOrder`, NOT `"config"` OR `"engine-fallback"`: the contract lives
+    // in the engine's own source, not in the operator's vault config, so there is no override
+    // surface for him to declare and no fallback for this generator to choose between. A reader can
+    // still tell WHICH KIND of fact this is rather than having to assume.
+    renderCheckbox: ENGINE_LITERAL_RENDER_CHECKBOX,
+    renderCheckboxSource: "engine-literal",
     // ── THE VOCABULARY, IN THE DIRECTION THAT PRINTS (2026-08-14) ──
     //
     // `sectionRegistration[view][section].tokens` above is the SEED answer: the tags a new line
