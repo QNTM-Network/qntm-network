@@ -182,15 +182,58 @@ export interface RenderedFieldMarker {
  * answers "how is this spelled", for a node whose type is whatever the rules left it as — the same
  * widening `chromeShapes` takes, for the same reason.
  *
- * `fieldTokens` is the FIXED-value shape (`domain` -> `work` -> `#work`): the whole tag is the
- * value. `fieldMarkers` is the TRAILING shape (`due_date` -> `📅` + a date): the glyph introduces a
- * value that varies line to line. A field appears in one or the other, never both — the generator
- * refuses a config that declares it both ways.
+ * ── THREE TABLES, BECAUSE A LINE HAS THREE PLACES A GLYPH CAN GO ──
+ *
+ * `fieldTags` — fixed-value, `#`-prefixed: `domain` -> `work` -> `#work`. Goes in the TAGS cell.
+ * `fieldMarkerValues` — fixed-value, marker glyph: `priority` -> `high` -> `⏫`. MARKERS cell.
+ * `fieldMarkers` — TRAILING: `due_date` -> `📅` + a date that varies line to line. MARKERS cell.
+ *
+ * SPLIT ON THE ENGINE'S OWN FILTER, not on a guess about glyphs. `source_tags_for_node`
+ * (`token_resolver.py:518`) ends `if tag and tag.startswith("#")`, so only a `#`-prefixed glyph is
+ * ever a tag; `source_markers_for_node` walks the marker vocabulary for the rest.
+ *
+ * ── WHAT IS DELIBERATELY ABSENT, AND WHY LOOKING FOR IT HERE IS THE MISTAKE ──
+ *
+ * THE CHECKBOX GLYPH IS NOT IN ANY OF THESE, and `status` appears in none of them. `[x]` is neither
+ * `#`-prefixed nor a marker: it is the line's HEAD cell, and it is not a vocabulary lookup at all.
+ * It is decided by `renderCheckbox` — first-match-wins rows with a fallback.
+ *
+ * This used to be one `fieldTokens` table carrying all three kinds, so `fieldTokens.status` existed
+ * and returned exactly the six glyphs a composer wants. Reading it would have agreed with the
+ * engine today and diverged on the first row the contract adds — and that precise divergence, from
+ * a copy "kept in sync by nothing", rendered done outcomes as `[ ]` and let the next re-ingest
+ * silently re-open them (qntm:66/837/903, every four to five days). The table is split so the wrong
+ * lookup cannot be written, rather than documented so it can be written knowingly.
  */
 export interface RenderedSpelling {
   readonly typeTokens: Readonly<Record<string, string>>;
-  readonly fieldTokens: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  readonly fieldTags: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  readonly fieldMarkerValues: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly fieldMarkers: Readonly<Record<string, RenderedFieldMarker>>;
+}
+
+/**
+ * THE CHECKBOX GLYPH — the first cell of every checkbox line, and a DECISION rather than a lookup.
+ *
+ * Mirrors `render/contracts/render_checkbox.yaml`, whose header states it is the sole source of
+ * truth for this glyph. Two properties are why this is rows-plus-fallback and never a map:
+ *
+ *   * FIRST-MATCH-WINS. `rows` is ORDERED; the first whose `when` holds decides, later rows never
+ *     run. A map is unordered by construction and cannot express it.
+ *   * `fallback`. A node whose `status` is absent renders an open box BY RULE. A map has no entry
+ *     for "absent" and would leave the caller to invent one.
+ *
+ * A reader evaluates it exactly as the engine does: walk `rows` in order, take the first whose
+ * field equals the node's value, else `fallback`. Do not reorder, do not index by value.
+ */
+export interface RenderCheckboxRow {
+  readonly when: { readonly field: string; readonly equals: string };
+  readonly then: string;
+}
+
+export interface RenderCheckbox {
+  readonly rows: readonly RenderCheckboxRow[];
+  readonly fallback: string;
 }
 
 /**
@@ -389,6 +432,16 @@ export interface ConfigResolutionTable {
    */
   readonly spelling: RenderedSpelling | undefined;
   /**
+   * THE CHECKBOX GLYPH DECISION — see `RenderCheckbox`'s own header. `undefined` when the served
+   * declaration predates this key or declares it malformed, and a caller must then draw NO checkbox
+   * rather than fall back to a glyph of its own: an invented `[ ]` over a done node is exactly the
+   * re-opening bug this key exists to make impossible.
+   */
+  readonly renderCheckbox: RenderCheckbox | undefined;
+  /** Always `"engine-literal"` — this contract is engine source, not operator config, so there is
+   * no config/engine-fallback split to report. Published so the kind of fact is stated. */
+  readonly renderCheckboxSource: "engine-literal" | undefined;
+  /**
    * WHICH ANSWER `composition.bullet`/`composition.titleStyles` ARE, separately from the block's
    * own `compositionSource`. `composition.form:` is optional INSIDE an optional `composition:`, so
    * a config that orders cells without wrapping a title publishes `compositionSource: "config"`
@@ -480,6 +533,10 @@ const TOP_KEYS = [
   // other direction: how the engine spells a node that already exists, whatever its type turned
   // out to be after the rules ran.
   "spelling",
+  // The checkbox glyph, and whose answer it is. See `RenderCheckbox` — rows plus a fallback,
+  // never a map, because first-match-wins and "no status at all" are both real answers.
+  "renderCheckbox",
+  "renderCheckboxSource",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
@@ -955,15 +1012,26 @@ function readSpelling(value: unknown, problems: string[]): RenderedSpelling | un
   const typeTokens = readStringMap(value.typeTokens, `${path}.typeTokens`);
   if (typeTokens === undefined) return undefined;
 
-  if (!isPlainObject(value.fieldTokens)) {
-    problems.push(`'${path}.fieldTokens' is ${shapeOf(value.fieldTokens)}, not an object — every field's tags stay unknown`);
-    return undefined;
-  }
-  const fieldTokens: Record<string, Record<string, string>> = {};
-  for (const [field, table] of Object.entries(value.fieldTokens)) {
-    const read = readStringMap(table, `${path}.fieldTokens.${field}`);
-    if (read !== undefined) fieldTokens[field] = read;
-  }
+  const readNested = (
+    raw: unknown,
+    where: string,
+  ): Record<string, Record<string, string>> | undefined => {
+    if (!isPlainObject(raw)) {
+      problems.push(`'${where}' is ${shapeOf(raw)}, not an object — every spelling in it stays unknown`);
+      return undefined;
+    }
+    const out: Record<string, Record<string, string>> = {};
+    for (const [field, table] of Object.entries(raw)) {
+      const read = readStringMap(table, `${where}.${field}`);
+      if (read !== undefined) out[field] = read;
+    }
+    return out;
+  };
+
+  const fieldTags = readNested(value.fieldTags, `${path}.fieldTags`);
+  if (fieldTags === undefined) return undefined;
+  const fieldMarkerValues = readNested(value.fieldMarkerValues, `${path}.fieldMarkerValues`);
+  if (fieldMarkerValues === undefined) return undefined;
 
   if (!isPlainObject(value.fieldMarkers)) {
     problems.push(`'${path}.fieldMarkers' is ${shapeOf(value.fieldMarkers)}, not an object — every trailing marker stays unknown`);
@@ -994,7 +1062,70 @@ function readSpelling(value: unknown, problems: string[]): RenderedSpelling | un
     fieldMarkers[field] = renderOnly === true ? { kind, token, renderOnly: true } : { kind, token };
   }
 
-  return { typeTokens, fieldTokens, fieldMarkers };
+  return { typeTokens, fieldTags, fieldMarkerValues, fieldMarkers };
+}
+
+/**
+ * `resolution.renderCheckbox` — see `RenderCheckbox`'s own header. Malformed yields `undefined` for
+ * the WHOLE fact, never a partial row list: a composer holding half a decision table would draw the
+ * right glyph for some statuses and an invented one for the rest, which is the failure this key
+ * exists to end. A missing `fallback` is fatal for the same reason — it is the answer for a
+ * status-less node, not a default a reader may supply.
+ */
+function readRenderCheckbox(value: unknown, problems: string[]): RenderCheckbox | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.renderCheckbox`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — the checkbox glyph stays unknown`);
+    return undefined;
+  }
+  if (typeof value.fallback !== "string" || value.fallback === "") {
+    problems.push(
+      `'${path}.fallback' is ${JSON.stringify(value.fallback)}, not a non-empty string — a ` +
+        "status-less node's glyph is decided by this and there is no default to assume",
+    );
+    return undefined;
+  }
+  if (!Array.isArray(value.rows)) {
+    problems.push(`'${path}.rows' is ${shapeOf(value.rows)}, not an array — the checkbox glyph stays unknown`);
+    return undefined;
+  }
+  const rows: RenderCheckboxRow[] = [];
+  for (const [index, row] of value.rows.entries()) {
+    // ONE MALFORMED ROW POISONS THE WHOLE TABLE, unlike `chromeShapes`' per-entry tolerance. Order
+    // is meaning here: dropping row 2 and keeping rows 3-6 silently promotes every later row, so a
+    // node that should match the dropped one takes the next row's glyph instead of the fallback.
+    // Skipping is not a smaller failure than refusing; it is a wrong answer instead of no answer.
+    if (
+      !isPlainObject(row) ||
+      !isPlainObject(row.when) ||
+      typeof row.when.field !== "string" ||
+      typeof row.when.equals !== "string" ||
+      typeof row.then !== "string" ||
+      row.then === ""
+    ) {
+      problems.push(
+        `'${path}.rows[${index}]' is not {when: {field, equals}, then} — the whole checkbox ` +
+          "decision stays unknown, because dropping one row of an ordered table changes what " +
+          "every later row answers",
+      );
+      return undefined;
+    }
+    rows.push({ when: { field: row.when.field, equals: row.when.equals }, then: row.then });
+  }
+  return { rows, fallback: value.fallback };
+}
+
+/** `resolution.renderCheckboxSource` — one legal value, checked rather than assumed. */
+function readRenderCheckboxSource(value: unknown, problems: string[]): "engine-literal" | undefined {
+  if (value !== "engine-literal") {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.renderCheckboxSource' is ${JSON.stringify(value)}, not ` +
+        '"engine-literal" — the checkbox contract is engine source with no operator override ' +
+        "surface, so any other answer means this declaration was produced by something else",
+    );
+    return undefined;
+  }
+  return "engine-literal";
 }
 
 function readChromeShapes(value: unknown, problems: string[]): Record<string, ChromeShape> {
@@ -1354,6 +1485,13 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
           ? readCompositionSource(raw.compositionFormSource, problems, "compositionFormSource")
           : undefined,
       spelling: "spelling" in raw ? readSpelling(raw.spelling, problems) : undefined,
+      renderCheckbox: "renderCheckbox" in raw ? readRenderCheckbox(raw.renderCheckbox, problems) : undefined,
+      // `"engine-literal"` is the ONLY legal value — unlike composition's two-state config /
+      // engine-fallback, this contract lives in the engine's own source and has no operator
+      // override surface, so there is no second answer for a reader to distinguish. Published
+      // anyway, and validated, so the KIND of fact is stated rather than assumed.
+      renderCheckboxSource:
+        "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : undefined,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : undefined,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},

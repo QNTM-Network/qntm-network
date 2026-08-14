@@ -88,6 +88,8 @@ export type {
   OrderingFieldMarker,
   OrderingKey,
   RegistrationTable,
+  RenderCheckbox,
+  RenderCheckboxRow,
   RenderedFieldMarker,
   RenderedSpelling,
   SectionOrdering,

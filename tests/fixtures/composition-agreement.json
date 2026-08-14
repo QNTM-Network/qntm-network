@@ -23,6 +23,53 @@
     "bullet": "-",
     "titleStyles": []
   },
+  "renderCheckbox": {
+    "rows": [
+      {
+        "when": {
+          "field": "status",
+          "equals": "open"
+        },
+        "then": "[ ]"
+      },
+      {
+        "when": {
+          "field": "status",
+          "equals": "done"
+        },
+        "then": "[x]"
+      },
+      {
+        "when": {
+          "field": "status",
+          "equals": "in_progress"
+        },
+        "then": "[/]"
+      },
+      {
+        "when": {
+          "field": "status",
+          "equals": "cancelled"
+        },
+        "then": "[-]"
+      },
+      {
+        "when": {
+          "field": "status",
+          "equals": "waiting"
+        },
+        "then": "[~]"
+      },
+      {
+        "when": {
+          "field": "status",
+          "equals": "scheduled"
+        },
+        "then": "[>]"
+      }
+    ],
+    "fallback": "[ ]"
+  },
   "fixtures": [
     {
       "id": "bare_title_no_stamp",
