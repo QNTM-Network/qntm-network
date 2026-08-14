@@ -450,6 +450,46 @@ describe("the title wrap — the published table against the engine's own answer
     assert.deepEqual(PIN.operators, ["and", "eq", "gt", "gte", "lt", "lte", "ne", "not", "or"]);
   });
 
+  test("THE ROW ALREADY KNOWN TO BE WRONG IS EXPRESSIBLE, AND EVALUABLE, TODAY", () => {
+    // THE POINT OF PUBLISHING THE ENGINE'S OWN OPERATOR SET AND OPAQUE PATHS, proven rather than
+    // asserted. The contract's own header (`render_title_style.yaml`) records that its WAITING_FOR
+    // row is DEAD in its live form: it tests an OUTGOING edge as a proxy for an incoming one, and
+    // under `waiter_status_propagation` the awaited dependency holds the INCOMING edge — so the
+    // nodes the row exists to italicise all render unstyled. The fix is not available to the engine
+    // yet, because `incoming_edge_ids` is a plain dict with no default and reaching for it raises a
+    // ResolutionError out of `decide` — aborting a whole cycle rather than mis-styling a line.
+    //
+    // A vocabulary carrying only today's five rows could not SAY the corrected row: a slot no
+    // config can fill. This one can, with no shape change — the path is opaque and
+    // `nodeLocalContext` already resolves the incoming mirror with the same zero default.
+    const future = {
+      rows: [{
+        when: { op: "and", terms: [
+          { op: "eq", path: "node.type", value: "task" },
+          { op: "eq", path: "node.fields.status", value: "waiting" },
+          { op: "gte", path: "node.incoming_edge_type_counts.WAITING_FOR", value: 1 },
+        ] },
+        then: ["italic"],
+      }],
+      fallback: [],
+    };
+    const waiting = { type: "task", fields: { status: "waiting" } };
+    // The awaited dependency — what the live graph actually makes, and what the row is aiming at.
+    assert.deepEqual([...titleStyleFor(future, nodeLocalContext(waiting, [], ["WAITING_FOR"]))], ["italic"]);
+    // The waiter, holding the OUTGOING edge — what today's row lights instead.
+    assert.deepEqual([...titleStyleFor(future, nodeLocalContext(waiting, ["WAITING_FOR"], []))], []);
+    // And the zero default holds on the incoming side too, or the corrected row would misfire the
+    // same way the current one does.
+    assert.deepEqual([...titleStyleFor(future, nodeLocalContext(waiting))], []);
+
+    // AND THE READER ACCEPTS IT — the shape is publishable, not merely evaluable in a test.
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...SERVED.resolution, renderTitleStyle: future },
+    });
+    assert.deepEqual(problems, []);
+    assert.equal(resolution.renderTitleStyle.rows.length, 1);
+  });
+
   test("AN UNKNOWN OPERATOR REFUSES THE WHOLE TABLE, never one row", () => {
     // First-match-wins: skipping an unreadable row silently promotes every row after it, so a node
     // that should have matched the skipped one takes the next row's styles. Refusing gives no

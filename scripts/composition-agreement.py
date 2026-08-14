@@ -712,6 +712,41 @@ def title_style_pin() -> dict[str, Any]:
         )
         raise SystemExit(2)
 
+    # ── WHOSE CONTRACT DID THE DISPATCHER ACTUALLY READ? (guard added for qntm-9e's #115) ──
+    #
+    # `renderTitleStyleSource` is published as `"engine-literal"`, and that is true only while the
+    # engine's own `render/contracts/` copy is the one compiled. #115 makes a file in
+    # `config/rendering/` WIN over it, at which point the operator can override this table and
+    # `"engine-literal"` becomes a lie — the same provenance question `compositionSource` answers
+    # for composition and `defaultOrderingSource` for the ordering.
+    #
+    # The driven grid below already fails LOUDLY under an override, because the published literal
+    # would no longer match what the dispatcher answers. This guard catches the quieter half: an
+    # override the literal happens to agree with, where only the SOURCE is wrong.
+    #
+    # Written against an API that does not exist yet, on purpose, and inert until it does.
+    try:
+        from qntm_md.render import renderer as _renderer_module
+
+        sources_fn = getattr(_renderer_module, "render_contract_sources", None)
+    except Exception:
+        sources_fn = None
+    if sources_fn is not None:
+        try:
+            sources = sources_fn()
+            source = sources.get("render_title_style") if isinstance(sources, dict) else None
+        except Exception:
+            source = None
+        if source is not None and "render/contracts" not in str(source):
+            print(
+                f"REFUSING: render_title_style now compiles from {source!r}, not the engine's own "
+                "contracts directory — `renderTitleStyleSource: \"engine-literal\"` is no longer "
+                "true, and the key has to become a real provenance answer before this can be "
+                "published again.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+
     dispatcher = _title_style_dispatcher()
     signature = inspect.signature(_title_style_dispatcher)
     if signature.parameters:
