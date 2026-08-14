@@ -4019,6 +4019,32 @@ backlog:
     discards by name - a scenario driving production would catch a wiring regression,
     this one cannot.
   captured: '2026-08-10'
+- id: flag-no-typed-position-guards-the-edit-argument
+  title: '[asserted] NO typed position in this repository makes forgetting to send the edit
+    a compile error. `writeFile`''s `ops` parameter is declared OPTIONAL (`ops?:` on
+    `CommitLineDeps.writeFile`, app/present/commit.ts) and has to be — `lineOps` returns
+    `null` and every caller predating #174 omitted it. Falsified 2026-08-14: deleting the
+    fifth argument from the rebase retry in app/present/commit.ts — a module tsconfig DOES
+    read — left `npx tsc --noEmit` completely silent, and only
+    tests/app-one-write-path-per-act.test.mjs §2 noticed. The known hazard was that
+    app/index.html is outside tsconfig''s include; the real hazard is WIDER and does not
+    depend on that file at all. A third gesture added tomorrow can silently stop naming its
+    edit from inside a type-checked module.'
+  summary: Nothing in the type system notices when a write stops telling the server what the edit was.
+  driving_capability: app-is-a-typed-browser-application
+  asserted: 'NO typed position in this repository makes forgetting to send the edit a compile
+    error. `writeFile`''s `ops` parameter is declared OPTIONAL (`ops?:`) and has to be, since
+    `lineOps` returns `null` and every caller predating #174 omitted it. Deleting the fifth
+    argument from the rebase retry in app/present/commit.ts — a type-checked module — left
+    `npx tsc --noEmit` silent; only a test noticed. The known hazard was app/index.html being
+    outside tsconfig''s include. The real one does not depend on that file.'
+  record: >-
+    Captured 2026-08-14 while landing `one-write-path-per-act`, and captured rather than fixed
+    because the fix is a real design choice with a cost. Making `ops` REQUIRED and
+    `LineOp[] | null` would turn every omission into a compile error — and would also force
+    every future caller to think about it, which is the point — but it changes the signature
+    every caller predating #174 relies on, including the untyped page where the type checker
+    cannot help anyway. Whether that trade is worth taking is not settled here.
 - id: flag-the-same-applyedit-call-site-count
   driving_capability: every-affordance-writes-back-through-the-source
   record: >-
