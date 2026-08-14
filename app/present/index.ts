@@ -88,6 +88,8 @@ export type {
   OrderingFieldMarker,
   OrderingKey,
   RegistrationTable,
+  RenderedFieldMarker,
+  RenderedSpelling,
   SectionOrdering,
   TagOrder,
 } from "./resolutiontable.js";

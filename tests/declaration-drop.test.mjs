@@ -341,13 +341,47 @@ describe("1c. resolution — every path that discards a declaration records it",
     assertDropped(dropped, "views/main.yaml#0", /has no readable 'id:'.*ordering/s);
   });
 
-  test("DROP 22: a node type whose render shape this app cannot seed", () => {
-    // `person` is a `default_node_type` candidate with shape `plain_line` (seedable). Point a
-    // view's default at a `heading`-shaped type and the GLOBAL rung goes silent for it.
+  test("DROP 22: a node type whose render shape this app cannot draw", () => {
+    // RESTATED 2026-08-14. This used to point a view's `default_node_type` at `header` to provoke
+    // the drop, because the table was keyed by the MINTING candidates. It is now keyed by
+    // `schema.yaml`'s own `node_types:`, so the mutation is no longer what causes the drop — the
+    // declaration alone does. The setup is kept anyway, and the assertion below is what changed:
+    // the drop must be there for the UNMUTATED fixture too, which is the widening itself.
     const dropped = droppedFrom(generateResolution, (c) =>
       edit(c, "views/main.yaml", "main:\n  path: main.md\n", "main:\n  path: main.md\n  default_node_type: header\n"),
     );
-    assertDropped(dropped, "node type 'header'", /render shape 'heading' is not one this app knows how to seed/);
+    assertDropped(dropped, "node type 'header'", /render shape as 'heading', which is not one this app knows how to draw/);
+  });
+
+  test("DROP 22 IS DECLARED, NOT PROVOKED — an undrawable type drops with no view pointing at it", () => {
+    // THE WIDENING, ASSERTED AT ITS OWN GRAIN. `header` is declared `render: {shape: heading}` in
+    // the fixture and NO view defaults to it. Before this change the type was never examined, so
+    // the browser held no opinion about it and recorded no reason for having none — a node the
+    // engine can print, invisible to every check here. It is now named.
+    const dropped = generateResolution(FIXTURE_CONFIG).dropped;
+    assertDropped(dropped, "node type 'header'", /render shape as 'heading', which is not one this app knows how to draw/);
+  });
+
+  test("A TYPE NO VIEW MINTS STILL GETS A SHAPE, which is the whole point of the widening", () => {
+    // The positive half of the test above, and the one that would have caught the original defect:
+    // `person` (plain_line) is published because a view names it. Add a type NO view names, with a
+    // drawable shape, and it must be published too — that is a node a RULE can retype into, and
+    // the composer is handed the result.
+    // THROUGH `withMutatedConfig`, WHICH COPIES FIRST. The fixture is committed; a test that
+    // mutated it in place would leave the tree dirty for every test after it in the same run.
+    const chromeShapes = withMutatedConfig(
+      FIXTURE_CONFIG,
+      (c) => edit(c, "schema.yaml", "  person:\n", "  outcome:\n    fields: [title]\n    render:\n      shape: checkbox\n  person:\n"),
+      (configDir) => generateResolution(configDir).chromeShapes,
+    );
+    assert.equal(
+      chromeShapes.outcome,
+      "checkbox",
+      "a declared, drawable node type that no view mints was left unpublished — a rule can retype " +
+        "a node into it and the browser would not know how to draw the result",
+    );
+    assert.equal(chromeShapes.task, "checkbox", "the minting types must keep their shapes");
+    assert.equal(chromeShapes.person, "plain_line");
   });
 
   test("DROP 23: an ordering field whose marker is render_only", () => {
@@ -734,10 +768,22 @@ describe("4. NO WOLF — the ledger records what was dropped, and nothing else",
     // header), so DROP PATH 13 records it. This is NOT a new wolf: the fact was always true, and
     // was previously silenced by a hardcoded `field !== "title"` filter this change removed
     // precisely because it named a field by string in the compiler's own control flow.
+    // RESTATED, 2026-08-14 ("chromeShapes answers what a node CAN BE") — one real drop -> two.
+    // `readChromeShapes` used to iterate the `default_node_type` candidates, so a declared type no
+    // view happened to point at was never examined and never recorded. It now iterates
+    // `schema.yaml`'s own `node_types:`, because a RULE can retype a node after it is minted and a
+    // composer is handed the result. The fixture declares `header` with `render: {shape: heading}`
+    // and no view defaults to it — so this drop was ALWAYS TRUE of this fixture and was silent,
+    // exactly the shape the sibling restatement above describes for `title`. Not a new wolf: a
+    // node of type `header` could never have had its line drawn, before this change or after.
     assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {
       "ordering field 'title'":
         "named by a section's 'ordering:' and/or the engine's own default ordering, but " +
         "vocabulary/markers.yaml declares no marker for it at all, so nothing can read its value off a line",
+      "node type 'header'":
+        "schema.yaml declares its render shape as 'heading', which is not one this app knows how " +
+        "to draw (checkbox, plain_line), so a new line under a view defaulting to it gets no " +
+        "chrome and a node of this type cannot have its line composed",
     });
   });
 

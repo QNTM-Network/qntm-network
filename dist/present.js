@@ -868,8 +868,17 @@ var TOP_KEYS2 = [
   "priorityRank",
   "composition",
   "compositionSource",
+  // The FORM's own provenance, separate from the block's — `composition.form:` is optional inside
+  // an optional `composition:`, so one flag cannot speak for both. See the generator's own
+  // paragraph beside where it is published.
+  "compositionFormSource",
   "tagOrder",
   "tagOrderSource",
+  // The vocabulary in the direction that PRINTS. `sectionRegistration[].tokens` is the seed answer
+  // — what a NEW line gets, baked per section for that section's minting default. This is the
+  // other direction: how the engine spells a node that already exists, whatever its type turned
+  // out to be after the rules ran.
+  "spelling",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
@@ -1230,6 +1239,65 @@ function readDayBoundary(value, problems) {
     weekStartsOn
   };
 }
+function readSpelling(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.spelling`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 how a node is spelled stays unknown`);
+    return void 0;
+  }
+  const readStringMap = (raw, where) => {
+    if (!isPlainObject3(raw)) {
+      problems.push(`'${where}' is ${shapeOf2(raw)}, not an object \u2014 every spelling in it stays unknown`);
+      return void 0;
+    }
+    const out = {};
+    for (const [key, token] of Object.entries(raw)) {
+      if (typeof token !== "string" || token === "") {
+        problems.push(`'${where}.${key}' is ${JSON.stringify(token)}, not a non-empty string \u2014 that one spelling stays unknown`);
+        continue;
+      }
+      out[key] = token;
+    }
+    return out;
+  };
+  const typeTokens = readStringMap(value.typeTokens, `${path}.typeTokens`);
+  if (typeTokens === void 0) return void 0;
+  if (!isPlainObject3(value.fieldTokens)) {
+    problems.push(`'${path}.fieldTokens' is ${shapeOf2(value.fieldTokens)}, not an object \u2014 every field's tags stay unknown`);
+    return void 0;
+  }
+  const fieldTokens = {};
+  for (const [field, table] of Object.entries(value.fieldTokens)) {
+    const read = readStringMap(table, `${path}.fieldTokens.${field}`);
+    if (read !== void 0) fieldTokens[field] = read;
+  }
+  if (!isPlainObject3(value.fieldMarkers)) {
+    problems.push(`'${path}.fieldMarkers' is ${shapeOf2(value.fieldMarkers)}, not an object \u2014 every trailing marker stays unknown`);
+    return void 0;
+  }
+  const fieldMarkers = {};
+  for (const [field, marker] of Object.entries(value.fieldMarkers)) {
+    if (!isPlainObject3(marker)) {
+      problems.push(`'${path}.fieldMarkers.${field}' is ${shapeOf2(marker)}, not an object \u2014 this marker stays unknown`);
+      continue;
+    }
+    const { kind, token, renderOnly } = marker;
+    if (kind !== "date" && kind !== "int" && kind !== "float") {
+      problems.push(`'${path}.fieldMarkers.${field}.kind' is ${JSON.stringify(kind)}, not date, int or float \u2014 this marker stays unknown`);
+      continue;
+    }
+    if (typeof token !== "string" || token === "") {
+      problems.push(`'${path}.fieldMarkers.${field}.token' is ${JSON.stringify(token)}, not a non-empty string \u2014 this marker stays unknown`);
+      continue;
+    }
+    if (renderOnly !== void 0 && renderOnly !== true) {
+      problems.push(`'${path}.fieldMarkers.${field}.renderOnly' is ${JSON.stringify(renderOnly)}, not true or absent \u2014 this marker stays unknown`);
+      continue;
+    }
+    fieldMarkers[field] = renderOnly === true ? { kind, token, renderOnly: true } : { kind, token };
+  }
+  return { typeTokens, fieldTokens, fieldMarkers };
+}
 function readChromeShapes(value, problems) {
   if (!isPlainObject3(value)) {
     problems.push(
@@ -1368,10 +1436,10 @@ function readComposition(value, problems) {
     titleStyles
   };
 }
-function readCompositionSource(value, problems) {
+function readCompositionSource(value, problems, key) {
   if (!COMPOSITION_SOURCES.includes(value)) {
     problems.push(
-      `'${RESOLUTION_TABLE_KEY}.compositionSource' is ${JSON.stringify(value)}, not one of ${COMPOSITION_SOURCES.join(", ")} \u2014 which answer composition is stays unknown`
+      `'${RESOLUTION_TABLE_KEY}.${key}' is ${JSON.stringify(value)}, not one of ${COMPOSITION_SOURCES.join(", ")} \u2014 which answer composition is stays unknown`
     );
     return void 0;
   }
@@ -1457,7 +1525,12 @@ function readConfigResolutionDeclaration(document2) {
       defaultOrderingSource: "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : void 0,
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : void 0,
-      compositionSource: "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems) : void 0,
+      compositionSource: "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems, "compositionSource") : void 0,
+      // REUSES `readCompositionSource` — the two flags have the same two legal values and the same
+      // meaning, over different halves of one block. A second reader would be the same rule
+      // written twice, which is the shape that lets them drift apart.
+      compositionFormSource: "compositionFormSource" in raw ? readCompositionSource(raw.compositionFormSource, problems, "compositionFormSource") : void 0,
+      spelling: "spelling" in raw ? readSpelling(raw.spelling, problems) : void 0,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : void 0,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}

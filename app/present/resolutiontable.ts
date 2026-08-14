@@ -155,6 +155,45 @@ export interface DayBoundary {
 export type ChromeShape = "checkbox" | "plain_line";
 
 /**
+ * ONE TRAILING MARKER, in the direction that PRINTS — `<token> <value>`, where the value's kind is
+ * part of the spelling. The same shape `OrderingFieldMarker`'s non-enum arm carries, and
+ * deliberately so: where both tables name a field they agree, and a caller holding one does not
+ * have to learn a second vocabulary to read the other.
+ *
+ * `renderOnly` IS CARRIED RATHER THAN FILTERED OUT, and it is the whole reason this type exists
+ * separately. A `render_only: true` glyph (`☑️` for `done_task_count`, `🎯` for `par`) is one the
+ * engine PRINTS and never reads back. That fact excludes it from the seed table — writing one into
+ * a line the operator types would freeze a value the engine goes on deciding — and QUALIFIES it
+ * here, because printing it is exactly what the engine does. Two callers need opposite things from
+ * one row, so the row says which it is instead of one of them inferring it from the other's
+ * absence.
+ */
+export interface RenderedFieldMarker {
+  readonly kind: "date" | "int" | "float";
+  readonly token: string;
+  readonly renderOnly?: true;
+}
+
+/**
+ * THE VOCABULARY IN THE DIRECTION THAT PRINTS — how the engine spells a node that already exists.
+ *
+ * `sectionRegistration[view][section].tokens` is the other direction: the tags a NEW line gets,
+ * baked per section for that section's own minting default. It answers "what do I type". This
+ * answers "how is this spelled", for a node whose type is whatever the rules left it as — the same
+ * widening `chromeShapes` takes, for the same reason.
+ *
+ * `fieldTokens` is the FIXED-value shape (`domain` -> `work` -> `#work`): the whole tag is the
+ * value. `fieldMarkers` is the TRAILING shape (`due_date` -> `📅` + a date): the glyph introduces a
+ * value that varies line to line. A field appears in one or the other, never both — the generator
+ * refuses a config that declares it both ways.
+ */
+export interface RenderedSpelling {
+  readonly typeTokens: Readonly<Record<string, string>>;
+  readonly fieldTokens: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  readonly fieldMarkers: Readonly<Record<string, RenderedFieldMarker>>;
+}
+
+/**
  * ONE CELL CLASS — the vocabulary `resolution.composition` orders, and nothing more specific than
  * that. `"tags"`/`"markers"`/`"chrome"` name FAMILIES of cell (a line may carry several tag cells),
  * `"checkbox"`/`"title"`/`"stamp"`/`"date"` name a single cell. This IS the closed alphabet a
@@ -282,9 +321,20 @@ export interface ConfigResolutionTable {
    * guarantee without knowing it exists. See that function's header for what "refuses" costs.
    */
   readonly dayBoundary: DayBoundary;
-  /** node type -> its render-form family, for every `default_node_type` candidate this config
-   * declares and every shape `newline.ts` knows how to seed. A type absent here is a type whose
-   * chrome this app does not know how to produce — see this module's header. */
+  /**
+   * node type -> its render-form family, for every node type `schema.yaml` DECLARES and every
+   * shape this app knows how to draw. A type absent here is a type whose chrome this app does not
+   * know how to produce — see this module's header.
+   *
+   * WIDENED 2026-08-14, and the widening is the point. This used to carry only the types some view
+   * names as a `default_node_type` — "what can you mint". A node's type is not fixed when it is
+   * minted: a rule can retype it afterwards, and the operator's config declares one that turns a
+   * `task` into an `outcome`. Neither `outcome` nor `habit` was published, so the browser could
+   * not draw the result of his own rule. It now answers "what can a node BE".
+   *
+   * NO EXISTING READER SEES A DIFFERENT ANSWER. Every lookup here is keyed by a minting default
+   * (`newline.ts`'s GLOBAL rung), so the added entries are ones today's callers never reach.
+   */
   readonly chromeShapes: Readonly<Record<string, ChromeShape>>;
   /**
    * `view -> section -> what a new line under it becomes`, for EVERY section of every view sheet.
@@ -329,6 +379,22 @@ export interface ConfigResolutionTable {
    * say" convention every other optional key on this table already uses.
    */
   readonly priorityRank: Readonly<Record<string, number>>;
+  /**
+   * HOW THE ENGINE SPELLS A NODE THAT ALREADY EXISTS — see `RenderedSpelling`'s own header.
+   *
+   * `undefined` when the served declaration predates this key or declares it malformed, and the
+   * caller must treat that as "I do not know how to spell anything" rather than "nothing is
+   * spelled". Same posture as `composition`/`tagOrder`: a half-known spelling table would have a
+   * composer print some cells and silently omit others, which is worse than printing none.
+   */
+  readonly spelling: RenderedSpelling | undefined;
+  /**
+   * WHICH ANSWER `composition.bullet`/`composition.titleStyles` ARE, separately from the block's
+   * own `compositionSource`. `composition.form:` is optional INSIDE an optional `composition:`, so
+   * a config that orders cells without wrapping a title publishes `compositionSource: "config"`
+   * over two values the config never mentioned. One flag cannot speak for both facts.
+   */
+  readonly compositionFormSource: "config" | "engine-fallback" | undefined;
   /**
    * THE SECOND DIRECTION OF THE LINE GRAMMAR — where a cell goes, once a line's shape is known. See
    * the `Composition` type's own header. 2026-08-06 (closing the asymmetry monorepo PR #72 named):
@@ -403,8 +469,17 @@ const TOP_KEYS = [
   "priorityRank",
   "composition",
   "compositionSource",
+  // The FORM's own provenance, separate from the block's — `composition.form:` is optional inside
+  // an optional `composition:`, so one flag cannot speak for both. See the generator's own
+  // paragraph beside where it is published.
+  "compositionFormSource",
   "tagOrder",
   "tagOrderSource",
+  // The vocabulary in the direction that PRINTS. `sectionRegistration[].tokens` is the seed answer
+  // — what a NEW line gets, baked per section for that section's minting default. This is the
+  // other direction: how the engine spells a node that already exists, whatever its type turned
+  // out to be after the rules ran.
+  "spelling",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
@@ -848,6 +923,80 @@ function readDayBoundary(value: unknown, problems: string[]): DayBoundary | unde
   };
 }
 
+/**
+ * `resolution.spelling` — the render-direction vocabulary. Malformed at the TOP yields `undefined`
+ * for the whole fact (the `readComposition`/`readTagOrder` posture, and for the same reason: a
+ * composer holding half a spelling table prints a line that is wrong in a way nothing flags).
+ * Malformed at one ENTRY drops that entry and keeps the rest, the `readChromeShapes` posture — one
+ * unreadable glyph is not a reason to stop knowing every other one.
+ */
+function readSpelling(value: unknown, problems: string[]): RenderedSpelling | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.spelling`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — how a node is spelled stays unknown`);
+    return undefined;
+  }
+  const readStringMap = (raw: unknown, where: string): Record<string, string> | undefined => {
+    if (!isPlainObject(raw)) {
+      problems.push(`'${where}' is ${shapeOf(raw)}, not an object — every spelling in it stays unknown`);
+      return undefined;
+    }
+    const out: Record<string, string> = {};
+    for (const [key, token] of Object.entries(raw)) {
+      if (typeof token !== "string" || token === "") {
+        problems.push(`'${where}.${key}' is ${JSON.stringify(token)}, not a non-empty string — that one spelling stays unknown`);
+        continue;
+      }
+      out[key] = token;
+    }
+    return out;
+  };
+
+  const typeTokens = readStringMap(value.typeTokens, `${path}.typeTokens`);
+  if (typeTokens === undefined) return undefined;
+
+  if (!isPlainObject(value.fieldTokens)) {
+    problems.push(`'${path}.fieldTokens' is ${shapeOf(value.fieldTokens)}, not an object — every field's tags stay unknown`);
+    return undefined;
+  }
+  const fieldTokens: Record<string, Record<string, string>> = {};
+  for (const [field, table] of Object.entries(value.fieldTokens)) {
+    const read = readStringMap(table, `${path}.fieldTokens.${field}`);
+    if (read !== undefined) fieldTokens[field] = read;
+  }
+
+  if (!isPlainObject(value.fieldMarkers)) {
+    problems.push(`'${path}.fieldMarkers' is ${shapeOf(value.fieldMarkers)}, not an object — every trailing marker stays unknown`);
+    return undefined;
+  }
+  const fieldMarkers: Record<string, RenderedFieldMarker> = {};
+  for (const [field, marker] of Object.entries(value.fieldMarkers)) {
+    if (!isPlainObject(marker)) {
+      problems.push(`'${path}.fieldMarkers.${field}' is ${shapeOf(marker)}, not an object — this marker stays unknown`);
+      continue;
+    }
+    const { kind, token, renderOnly } = marker;
+    if (kind !== "date" && kind !== "int" && kind !== "float") {
+      problems.push(`'${path}.fieldMarkers.${field}.kind' is ${JSON.stringify(kind)}, not date, int or float — this marker stays unknown`);
+      continue;
+    }
+    if (typeof token !== "string" || token === "") {
+      problems.push(`'${path}.fieldMarkers.${field}.token' is ${JSON.stringify(token)}, not a non-empty string — this marker stays unknown`);
+      continue;
+    }
+    // ABSENT IS THE COMMON CASE and means "the engine reads this back". Only `true` is admitted, so
+    // a `false` on the wire is a declaration this reader does not recognise rather than a synonym
+    // for absence — the generator never writes one.
+    if (renderOnly !== undefined && renderOnly !== true) {
+      problems.push(`'${path}.fieldMarkers.${field}.renderOnly' is ${JSON.stringify(renderOnly)}, not true or absent — this marker stays unknown`);
+      continue;
+    }
+    fieldMarkers[field] = renderOnly === true ? { kind, token, renderOnly: true } : { kind, token };
+  }
+
+  return { typeTokens, fieldTokens, fieldMarkers };
+}
+
 function readChromeShapes(value: unknown, problems: string[]): Record<string, ChromeShape> {
   if (!isPlainObject(value)) {
     problems.push(
@@ -1028,10 +1177,20 @@ function readComposition(value: unknown, problems: string[]): Composition | unde
  * document declares neither (an older declaration, published before this key existed) or something
  * else entirely (reported, never guessed). Mirrors `readDefaultOrderingSource` exactly.
  */
-function readCompositionSource(value: unknown, problems: string[]): "config" | "engine-fallback" | undefined {
+/**
+ * Shared by `compositionSource` and `compositionFormSource` — same two legal values, same meaning,
+ * over different halves of one block. `key` is a parameter rather than a constant BECAUSE it is
+ * shared: a problem naming `compositionSource` when `compositionFormSource` was the malformed one
+ * sends the operator to a key that is perfectly fine.
+ */
+function readCompositionSource(
+  value: unknown,
+  problems: string[],
+  key: "compositionSource" | "compositionFormSource",
+): "config" | "engine-fallback" | undefined {
   if (!(COMPOSITION_SOURCES as readonly string[]).includes(value as string)) {
     problems.push(
-      `'${RESOLUTION_TABLE_KEY}.compositionSource' is ${JSON.stringify(value)}, not one of ` +
+      `'${RESOLUTION_TABLE_KEY}.${key}' is ${JSON.stringify(value)}, not one of ` +
         `${COMPOSITION_SOURCES.join(", ")} — which answer composition is stays unknown`,
     );
     return undefined;
@@ -1184,7 +1343,17 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       priorityRank: "priorityRank" in raw ? readPriorityRank(raw.priorityRank, problems) : {},
       composition: "composition" in raw ? readComposition(raw.composition, problems) : undefined,
       compositionSource:
-        "compositionSource" in raw ? readCompositionSource(raw.compositionSource, problems) : undefined,
+        "compositionSource" in raw
+          ? readCompositionSource(raw.compositionSource, problems, "compositionSource")
+          : undefined,
+      // REUSES `readCompositionSource` — the two flags have the same two legal values and the same
+      // meaning, over different halves of one block. A second reader would be the same rule
+      // written twice, which is the shape that lets them drift apart.
+      compositionFormSource:
+        "compositionFormSource" in raw
+          ? readCompositionSource(raw.compositionFormSource, problems, "compositionFormSource")
+          : undefined,
+      spelling: "spelling" in raw ? readSpelling(raw.spelling, problems) : undefined,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : undefined,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},
