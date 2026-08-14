@@ -1968,6 +1968,79 @@ export function compile(files, ledger = new Ledger()) {
 
   // ── 10. view -> section -> {nodeType, defaults?, tokens} for EVERY section of every view sheet ──
 
+  // ── 5d. views/*.yaml -> HOW A SECTION'S HEADING RENDERS ───────────────────────────────────────
+  //
+  // A view is sections in declared order; each is a `## ` line followed by its members. Publishing
+  // the members (`computeViewMembers`) and each member's line (`composeNodeLine`) leaves the
+  // HEADING, and the heading is not `## {section.id}`.
+  //
+  // ── WHAT THE READ TURNED UP, AND THE FIRST ONE IS LIVE ──
+  //
+  // `name`         303 OF HIS 304 SECTIONS DECLARE IT. `compose_section_header` renders the
+  //                declared name, so a browser using `section.id` would print `## to-do (5)` where
+  //                the engine prints `## To Do` — on every section of every view. It IS published
+  //                today, but only on `ordering[view][section].name`, which exists for the 15
+  //                sections that declare an `ordering:`. Fifteen of three hundred and three, in a
+  //                table keyed by a different concern: coverage-shaped, and not coverage.
+  // `headerValue`  none declared. When present the heading becomes `"{id}: {resolved field}"`.
+  // `bodyPolicy`   none declared. `header_only` emits the heading and NO members — which is a
+  //                POSITIVE ANSWER, not an absence: "renders empty by policy" and "has no members
+  //                today" produce the same line and are not the same fact, and only one is stable.
+  // `containerNode`/`declaredName`
+  //                none live (one retired mention in a comment). When present the section is BACKED
+  //                BY A NODE: its heading is that node's own title and stamp, and if the node's
+  //                render shape is not `heading` the section renders as a NODE LINE rather than a
+  //                `##` heading at all (renderer.py:511-556). Resolving it needs the graph, so this
+  //                publishes the DECLARATION only — enough for a composer to know it must refuse,
+  //                which is the whole point of publishing a fact nobody declares yet.
+  //
+  // ── WHY PUBLISH THE FOUR NOBODY DECLARES ──
+  //
+  // Because the browser cannot notice them arriving. `write_policy` was left unpublished and made a
+  // stated caller input, and that was right: a caller can see and override it. These it cannot —
+  // they are not on the wire, so the day one is declared the browser renders the wrong heading
+  // silently, in the one surface the operator looks at, with the write base taken from it.
+  function readSectionPresentation(viewFiles, ledger) {
+    const out = {};
+    for (const [file, view] of viewFiles) {
+      const sections = {};
+      for (const [index, section] of view.sections.entries()) {
+        // NOT A DROP: a section with no readable `id:` is already recorded by `readOrdering` and
+        // `readSectionRegistration`, under their own keys. A third record of one malformed section
+        // would treble it in the ledger without adding a fact.
+        if (!section || typeof section !== "object" || !isNonEmptyString(section.id)) continue;
+        const entry = {};
+        if (isNonEmptyString(section.name)) entry.name = section.name;
+        if (isNonEmptyString(section.header_value)) entry.headerValue = section.header_value;
+        // PUBLISHED AS AN ANSWER, NOT AN ABSENCE. `full_body` is the engine's default
+        // (`compose_section_body_policy`), and it is written down rather than left to a reader's
+        // assumption, so `header_only` is a value it can be told rather than one it must detect.
+        const policy = section.body_policy;
+        if (policy === "header_only" || policy === "full_body") {
+          entry.bodyPolicy = policy;
+        } else if (policy !== undefined) {
+          // DROP PATH 24. A body policy this app does not recognise. Defaulting it to `full_body`
+          // would render members the engine may be withholding, so the section is published without
+          // one and a composer refuses it.
+          ledger.drop(
+            `section '${view.viewId}.${section.id}'`,
+            `declares body_policy ${JSON.stringify(policy)}, which is neither 'full_body' nor ` +
+              "'header_only', so whether its members render at all is unknown",
+          );
+        } else {
+          entry.bodyPolicy = "full_body";
+        }
+        // THE NODE-BACKED DECLARATION, carried so a composer can REFUSE rather than synthesise a
+        // count-suffix heading over a section whose heading is a node's own line.
+        if (isNonEmptyString(section.container_node)) entry.containerNode = section.container_node;
+        if (isNonEmptyString(section.declared_name)) entry.declaredName = section.declared_name;
+        sections[section.id] = entry;
+      }
+      if (Object.keys(sections).length > 0) out[view.viewId] = sections;
+    }
+    return out;
+  }
+
   function readSectionRegistration(viewFiles, registration, ledger) {
     const fieldDefaults = readFieldDefaults();
     const spelling = readSpelling(ledger);
@@ -2040,6 +2113,7 @@ export function compile(files, ledger = new Ledger()) {
   const chromeShapes = readChromeShapes(candidates, ledger);
   const identityModes = readIdentityModes();
   const continuationFields = readContinuationFields(ledger);
+  const sectionPresentation = readSectionPresentation(viewFiles, ledger);
   const registrationResult = readSectionRegistration(viewFiles, registration, ledger);
   const sectionRegistration = registrationResult.sectionRegistration;
   const compositionResult = readGlobalComposition();
@@ -2159,6 +2233,10 @@ export function compile(files, ledger = new Ledger()) {
     // ambiguous. Here absence has one meaning — this type emits no continuation line — and it is
     // the same answer an empty list would give.
     continuationFields,
+    // HOW EACH SECTION'S HEADING RENDERS — see `readSectionPresentation`'s own header. `name` is
+    // the live one: 303 of 304 sections declare it, and it was published only on `ordering`, which
+    // covers 15.
+    sectionPresentation,
     // ── THE VOCABULARY, IN THE DIRECTION THAT PRINTS (2026-08-14) ──
     //
     // `sectionRegistration[view][section].tokens` above is the SEED answer: the tags a new line

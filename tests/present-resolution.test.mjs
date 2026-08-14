@@ -1138,3 +1138,132 @@ describe("11. edge tags — the chrome cell's contents", () => {
     }
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 12. SECTION PRESENTATION — how a heading renders, and the live fact nobody had published
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// A view is sections in declared order, each a `## ` line followed by its members. `computeViewMembers`
+// gives the members and `composeNodeLine` gives each line; this is the heading.
+//
+// AND THE HEADING IS NOT `## {section.id}`. 303 of the operator's 304 sections declare a `name:`,
+// which `compose_section_header` renders instead — so a composer using the id would print
+// `## to-do (5)` where the engine prints `## To Do`, on every section of every view. It WAS
+// published, on `ordering[view][section].name`, which exists for the 15 sections declaring an
+// `ordering:`. Fifteen of three hundred and three, in a table keyed by a different concern.
+
+describe("12. section presentation — the heading's own facts", () => {
+  const FIXTURE_DIR = resolve(HERE, "fixtures", "config");
+  const compiledSections = generateResolution(FIXTURE_DIR);
+  const sectionReading = readConfigResolutionDeclaration({ resolution: compiledSections });
+
+  test("the reader accepts the generator's own table, with no problem reported", () => {
+    assert.deepEqual(sectionReading.problems, []);
+  });
+
+  test("EVERY section is keyed, so a missing entry means the config does not declare it", () => {
+    // Not a partial: a composer that met a missing section would synthesise `## {id}`, which is the
+    // exact wrong heading this key exists to prevent.
+    const published = sectionReading.resolution.sectionPresentation;
+    for (const [viewId, sections] of Object.entries(compiledSections.sectionRegistration)) {
+      for (const sectionId of Object.keys(sections)) {
+        assert.ok(
+          published[viewId]?.[sectionId] !== undefined,
+          `${viewId}/${sectionId} registers a new line but has no heading facts`,
+        );
+      }
+    }
+  });
+
+  test("`bodyPolicy` is an ANSWER, defaulted explicitly, never left absent", () => {
+    // "renders empty by policy" and "has no members today" produce the same line and are different
+    // facts. The generator writes `full_body` rather than omitting it, so a reader is told rather
+    // than left to assume.
+    const all = Object.values(sectionReading.resolution.sectionPresentation).flatMap(Object.values);
+    assert.ok(all.length > 0);
+    for (const entry of all) {
+      assert.ok(entry.bodyPolicy === "full_body" || entry.bodyPolicy === "header_only", JSON.stringify(entry));
+    }
+  });
+
+  test("A DECLARED `name` IS CARRIED, and it follows the config", () => {
+    // THE FALSIFIER: this reads views/*.yaml rather than carrying a list.
+    const scratch = mkdtempSync(join(tmpdir(), "section-presentation-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const viewPath = join(configDir, "views", "main.yaml");
+      writeFileSync(
+        viewPath,
+        // The fixture ALREADY declares `name: "Open"` — which is itself the point, since it means
+        // every other assertion here runs against a named section. So this CHANGES the declared
+        // name rather than inserting one; inserting would have made a duplicate YAML key.
+        readFileSync(viewPath, "utf8").replace('name: "Open"', 'name: "The Open Bit"'),
+      );
+      const moved = generateResolution(configDir).sectionPresentation;
+      assert.equal(moved.main.open.name, "The Open Bit", "the published name did not follow the config");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("`header_only` and `container_node` ARE CARRIED — the facts nobody declares yet", () => {
+    // They are on the wire precisely BECAUSE nobody declares them. `write_policy` could be left off
+    // because a caller can see and override it; these a caller cannot notice arriving, so the day
+    // one is declared the browser must be able to tell rather than silently render the old shape.
+    const scratch = mkdtempSync(join(tmpdir(), "section-presentation-rare-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const viewPath = join(configDir, "views", "main.yaml");
+      writeFileSync(
+        viewPath,
+        readFileSync(viewPath, "utf8").replace(
+          'name: "Open"',
+          'name: "Open"\n      body_policy: header_only\n      container_node: "819"\n      header_value: domain',
+        ),
+      );
+      const { resolution, problems } = readConfigResolutionDeclaration({ resolution: generateResolution(configDir) });
+      assert.deepEqual(problems, []);
+      assert.deepEqual(resolution.sectionPresentation.main.open, {
+        name: "Open",
+        bodyPolicy: "header_only",
+        containerNode: "819",
+        headerValue: "domain",
+      });
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("AN UNRECOGNISED `body_policy` IS DROPPED WITH A REASON, never defaulted to full_body", () => {
+    // Defaulting would render members the engine may be withholding — visibly MORE than the engine
+    // rather than less, which is the harder failure to spot.
+    const scratch = mkdtempSync(join(tmpdir(), "section-presentation-bad-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const viewPath = join(configDir, "views", "main.yaml");
+      writeFileSync(
+        viewPath,
+        readFileSync(viewPath, "utf8").replace('name: "Open"', 'name: "Open"\n      body_policy: sometimes'),
+      );
+      const compiled = generateResolution(configDir);
+      assert.equal(compiled.sectionPresentation.main.open.bodyPolicy, undefined);
+      assert.match(compiled.dropped["section 'main.open'"] ?? "", /neither 'full_body' nor 'header_only'/);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("ONE BAD ENTRY REFUSES THE WHOLE MAP", () => {
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: {
+        ...compiledSections,
+        sectionPresentation: { main: { open: { name: "", bodyPolicy: "full_body" } } },
+      },
+    });
+    assert.equal(resolution.sectionPresentation, undefined);
+    assert.ok(problems.some((p) => p.includes("sectionPresentation.main.open.name")), problems.join("; "));
+  });
+});
