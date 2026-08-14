@@ -605,41 +605,94 @@ function seedTokens(what, nodeType, defaults, fieldDefaults, spelling, retypeRul
   const fields = { node_type: nodeType, ...fieldDefaults, ...defaults };
   const tokens = [];
 
-  let retypedBy = null;
-  for (const rule of retypeRules) {
-    // NOT A DROP: loop control. A rule that retypes TO the type this section already resolves
-    // changes nothing about this line, so it is not a retype here at all.
-    if (rule.becomes === nodeType) continue;
-    const binds = Object.entries(rule.find).every(([field, value]) =>
-      field === "node_type" ? value === nodeType : (fields[field] ?? null) === value,
-    );
-    // NOT A DROP: loop control. The rule's own pattern does not select this section's capture, so
-    // there is no declaration of the operator's being discarded — the rule simply does not apply.
-    if (!binds) continue;
-    let fires;
-    try {
-      fires = evaluateWhen(rule.when, fields);
-    } catch (error) {
-      if (!(error instanceof WhenRefusal)) throw error;
-      ledger.drop(rule.what, `${error.message}, so whether it retypes a new line was not evaluated`);
-      continue;
+  // ── THE RETYPE IS RESOLVED, NOT REFUSED ──────────────────────────────────────────────────────
+  //
+  // This loop used to record that SOME rule retypes the section's declared type and then drop the
+  // type tag entirely (the retired DROP PATH 19). That was a refusal to answer a question this
+  // function can answer, and it is the reason `personal/all` seeded a bare `- [ ]` while the line
+  // one row above it reads `- [ ]  #task #personal`.
+  //
+  // IT HELD THE RULE AND IT HELD THE INPUTS. `retypeRules` carries only rules this generator could
+  // read and bind (the unreadable ones are dropped in `readRetypeRules`, each with its own reason),
+  // and `fields` is a COMPLETE field set — this function's own contract is that a new line carries
+  // "its resolved node type, the schema's declared field defaults and its section's own `defaults:`
+  // block, and nothing else". So "a rule COULD retype this" was being reported where "the rule DOES
+  // retype this, to X" was available.
+  //
+  // IN THE ENGINE'S ORDER, AND CASCADING. A retype changes `node_type`, which is a field later
+  // rules bind and test against — so the answer is the FIXED POINT of the ordered pass, not the
+  // first rule that fires. `resolvedType` is what the engine would hold when the pass ends, and it
+  // is what gets spelled.
+  //
+  // A RULE FIRES AT MOST ONCE. Two rules that retype into each other would otherwise loop forever
+  // on a config edit the operator is entitled to make; `fired` makes the pass terminate and the
+  // BOUND below turns a cycle into a recorded refusal rather than a hang.
+  let resolvedType = nodeType;
+  const fired = new Set();
+  const chain = [];
+  let unevaluable = null;
+  for (let pass = 0; pass <= retypeRules.length; pass += 1) {
+    let changed = false;
+    for (const rule of retypeRules) {
+      // NOT A DROP: loop control. A rule that has already fired in this pass cannot fire again —
+      // that is what makes the cascade terminate — and re-firing it would state the same retype
+      // twice, never withhold a declaration.
+      if (fired.has(rule.id)) continue;
+      // NOT A DROP: loop control. A rule that retypes TO the type this line already resolves to
+      // changes nothing about it, so it is not a retype here at all.
+      if (rule.becomes === resolvedType) continue;
+      const binds = Object.entries(rule.find).every(([field, value]) =>
+        field === "node_type" ? value === resolvedType : (fields[field] ?? null) === value,
+      );
+      // NOT A DROP: loop control. The rule's own pattern does not select this section's capture, so
+      // nothing the operator declared is being discarded — the rule simply does not apply.
+      if (!binds) continue;
+      let fires;
+      try {
+        fires = evaluateWhen(rule.when, fields);
+      } catch (error) {
+        if (!(error instanceof WhenRefusal)) throw error;
+        // THE ONE CASE THAT STILL REFUSES, AND ITS REASON IS A DIFFERENT SENTENCE. The rule BINDS
+        // this line — so it is about this line — and its `when` uses something this reader cannot
+        // model. Not "a rule retypes this", which is now answerable, but "a rule I cannot read
+        // MIGHT retype this", which is not. Recorded and then withheld below rather than seeding a
+        // type the engine may immediately change.
+        unevaluable = { rule, reason: error.message };
+        // NOT A DROP HERE: the drop is RECORDED BELOW, once, against the section rather than the
+        // rule — `unevaluable` carries it out of the loop. Dropping here would state the same
+        // withholding once per pass of the cascade.
+        continue;
+      }
+      // NOT A DROP: loop control. The rule's `when` was evaluated and answered NO for this line,
+      // so nothing the operator declared is withheld — the rule simply does not retype it.
+      if (!fires) continue;
+      fired.add(rule.id);
+      chain.push(`'${rule.id}' retypes '${resolvedType}' to '${rule.becomes}'`);
+      resolvedType = rule.becomes;
+      fields.node_type = resolvedType;
+      changed = true;
     }
-    if (fires) retypedBy = rule;
+    if (!changed) break;
   }
 
-  const typeToken = spelling.typeTokens[nodeType];
-  if (retypedBy !== null) {
-    // DROP PATH 19. design-the-rule-mirror.md §3.3, derived rather than named: the registration
-    // answer is contradicted by a rule inside the same pass that minted the line.
+  const typeToken = spelling.typeTokens[resolvedType];
+  if (unevaluable !== null) {
+    // DROP PATH 19, NARROWED TO WHAT IT IS ACTUALLY ABOUT. Withheld because the answer is UNKNOWN,
+    // never because it is inconvenient — and the sentence says which, so a reader of the ledger can
+    // tell "this generator cannot model that rule" from "a rule fired and I gave up".
     ledger.drop(
       what,
-      `its type tag is not seeded — rule '${retypedBy.id}' retypes a '${nodeType}' to ` +
-        `'${retypedBy.becomes}' for a line whose fields it matches, and ${CAPTURE_FIELDS_NOTE}`,
+      `its type tag is not seeded — rule '${unevaluable.rule.id}' matches a line typed here and ` +
+        `${unevaluable.reason}, so whether it retypes the line is UNKNOWN to this generator. ` +
+        `Seeding '${resolvedType}' would state an answer that rule may contradict, and ` +
+        CAPTURE_FIELDS_NOTE,
     );
   } else if (typeToken === undefined) {
     // DROP PATH 20. A resolved node type no vocabulary tag spells. The engine prints no type tag
     // for it either, so the absence is agreement, and it is still worth stating.
-    ledger.drop(what, `no vocabulary tag spells the node type '${nodeType}', so none is seeded`);
+    // `resolvedType`, NOT `nodeType` — if a rule retyped the line, the type with no spelling is the
+    // one it BECAME, and naming the declared one would send the reader to the wrong vocabulary row.
+    ledger.drop(what, `no vocabulary tag spells the node type '${resolvedType}', so none is seeded`);
   } else {
     tokens.push(typeToken);
   }
