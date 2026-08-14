@@ -4411,3 +4411,68 @@ capabilities:
     unrelated decompositions that happen to total three. Datomic is the evidence that
     settles it: a datom is a FIVE-tuple because a semantic triple cannot express change
     without a transaction id and an assert/retract flag.
+
+- id: a-view-may-not-override-what-the-engine-reads-once
+  tier: functional
+  rooting: >-
+    scripts/compile-resolution.mjs declares the view-sheet and section keys it reads, in
+    three lists (PUBLISHED / REFUSED / NOT_PUBLISHED); scripts/view-key-agreement.py
+    captures the ENGINE's own two allow-lists live; tests/view-key-agreement.test.mjs
+    asserts the union equals them, in both directions. UNLIKE most rows here the enforcer
+    exists and is green — but read what it measures: it does not prove any of the four
+    kinds below SHOULD be global, it proves the browser has not invented a slot the
+    engine cannot fill, and that a new engine key cannot arrive unnoticed.
+  intent: >-
+    THE COMPILED DECLARATION EXPRESSES THE CASCADE FOR SOME KINDS AND NOT OTHERS.
+    `defaultNodeType`, `registration` and `ordering` each carry a per-section answer.
+    `chromeShapes`, `composition`, `tagOrder` and `dayBoundary` are published as ONE
+    GLOBAL answer with no override slot at all. The question this row settles is whether
+    that asymmetry is a gap in the browser or a property of the four facts, because the
+    test this repo is held to is "could we add any new thing and see it work".
+
+    THE MEASUREMENT THAT DECIDES IT. The engine's view-sheet validator hard-rejects an
+    unknown key at BOTH levels. Run 2026-08-14: `validate_views` over a sheet declaring
+    `composition:` raised `BundleValidationError` at sheet level AND at section level, and
+    the bundle did not load. So the operator's declarable surface is exactly
+    `_ALLOWED_SHEET_KEYS` / `_ALLOWED_SECTION_KEYS`, and a slot the browser publishes for
+    a key outside them is not merely unbacked — it is UNREACHABLE. No config that fills it
+    loads at all, so the branch reading it can never run and can never be measured. That
+    is worse than the missing slot, because it reads as a working feature.
+
+    THE FOUR, EACH ON ITS OWN TERMS.
+
+    `dayBoundary` IS GLOBAL BY NATURE, and should never get a slot. The engine states the
+    invariant in `substrate_wiring/day_boundary.py`: "the boundary that decides which day
+    a completion is stamped for is the SAME boundary that defines the window reading it
+    back." Its subject is the node's stored `completed_at` / `available_date`, and a node
+    belongs to N views. A per-view boundary means one node is stamped for two different
+    days depending on which sheet you typed in. That is `base_node_type`'s documented
+    2026-07-27 race (`resolution/registration.py`: "GLOBAL only, forever") in a different
+    key — a revert target that depends on which view you deleted from is not a resolution.
+
+    `chromeShapes` IS NOT MISSING A SLOT — ITS SLOT IS `default_node_type`, WHICH ALREADY
+    CASCADES. The section declares what a line BECOMES; `schema.yaml` declares how that
+    type renders. `collectDefaultNodeTypeCandidates` already gathers every view-level and
+    section-level `default_node_type`, and `resolutiontable.ts` already joins the two. A
+    direct per-section chrome override would be a SECOND way to say the same thing, and
+    would let two nodes of one type render differently in one vault — the same race again.
+
+    `tagOrder` IS A REAL GAP, BUT THE MISSING RUNG IS GLOBAL, NOT VIEW. The engine's
+    `render/contracts/order_tags.yaml` says of itself "To change the order the operator
+    sees, edit THIS list" — the engine's own source, not the operator's config. There is
+    no operator surface at ANY level, which is why `tagOrderSource` is always
+    `engine-literal`. A view-level slot would be the roof before the walls.
+
+    `composition` IS THE ONE GENUINE PER-VIEW CANDIDATE, AND THE CHANGE LANDS IN THE
+    ENGINE FIRST. `renderer.py`'s `render()` already resolves composition once per call
+    and already logs `sheet_id=compiled_sheet.id`, so the sheet is in hand at the exact
+    point the answer is chosen — the hard part is done. What is missing is the operator
+    surface. The browser cannot go first: that is the asymmetry monorepo PR #72 opened for
+    `composition:` at the GLOBAL rung, pointing the other way, and worse, because a config
+    declaring the key does not load at all rather than merely being ignored.
+
+    WHAT WAS FOUND ON THE WAY, AND IS NOT PART OF THE ARGUMENT ABOVE. `rendering_contract`
+    is an accepted-and-unread per-view key in the engine: `validators/views.py` admits it,
+    `render/compiler.py:209` carries it onto the compiled sheet, and no consumer of
+    `compiled_sheet.rendering_contract` exists (grepped live, 2026-08-14). A per-view
+    rendering slot that already parses and already decides nothing.

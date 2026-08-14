@@ -234,6 +234,84 @@ export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
 // Pinned against a LIVE import by `scripts/retype-agreement.py` (same discipline `composition-
 // agreement.py` established) — see `tests/retype-agreement.test.mjs` for the exhaustive, family-wide
 // proof (every `qualification.tokens.node_type` entry, not a sample).
+// ── WHAT THIS GENERATOR READS FROM A VIEW SHEET, DECLARED RATHER THAN ENACTED ─────────────────
+//
+// Until now the answer lived only in the reads themselves — `view.default_node_type` here,
+// `section.ordering` there, `"input_grammar" in view` in a third place — so the question "does
+// this generator see key K?" had no lookup, only a grep. The three lists below are that lookup,
+// and they exist to be CHECKED: `tests/view-key-agreement.test.mjs` asserts their union equals
+// the ENGINE's own `_ALLOWED_SHEET_KEYS` / `_ALLOWED_SECTION_KEYS`
+// (`apps/qntm-md/src/qntm_md/bundle/validators/views.py`), captured live by
+// `scripts/view-key-agreement.py`.
+//
+// WHY THAT CHECK AND NOT A COMMENT. The engine's view-sheet validator hard-rejects an unknown key
+// at BOTH levels (measured 2026-08-14: a sheet or section declaring `composition:` raises
+// `BundleValidationError` and the operator's bundle does not load). So the operator's declarable
+// surface is exactly that allow-list, and the day a key is ADDED to it — a per-view `composition:`
+// is the live candidate — this generator must decide what to do with it rather than carry on
+// publishing a global answer for a view that overrides it. That is the asymmetry monorepo PR #72
+// opened for `composition:` at the GLOBAL rung and `readGlobalComposition` closed six weeks later;
+// the check below is what makes the NEXT one fail loudly on the day it opens instead.
+//
+// THREE LISTS, NOT TWO, because "this generator does not publish it" has two different causes and
+// collapsing them is how a refusal becomes an omission:
+//   PUBLISHED     — read, and it reaches the browser.
+//   REFUSED       — read, and this generator REFUSES to compile at all while a sheet declares it,
+//                   because `resolution/registration.py`'s own `LEVELS_FOR` grants the key a VIEW
+//                   or STRUCTURAL_NODE level this generator does not resolve, so the GLOBAL answer
+//                   it would publish is stale. Enforced in `readRegistration`, not here.
+//   NOT_PUBLISHED — genuinely another declaration's concern (qualification, structure, write
+//                   policy). Not read, not lost: the browser never needed it.
+// A key in NONE of the three is the dangerous fourth state — silently ignored — and gets a drop.
+export const VIEW_SHEET_KEYS_PUBLISHED = Object.freeze(["sections", "default_node_type"]);
+export const VIEW_SHEET_KEYS_REFUSED = Object.freeze(["input_grammar", "default_tags"]);
+export const VIEW_SHEET_KEYS_NOT_PUBLISHED = Object.freeze([
+  "version",
+  "domain",
+  "path",
+  "defaults",
+  "write_policy",
+  // ACCEPTED BY THE ENGINE AND READ BY NOTHING — `validators/views.py` admits it, `render/
+  // compiler.py:209` carries it onto the compiled sheet, and no consumer of
+  // `compiled_sheet.rendering_contract` exists (grepped live, 2026-08-14). A per-view rendering
+  // slot that already parses and already decides nothing. Not this generator's to fill.
+  "rendering_contract",
+]);
+export const VIEW_SECTION_KEYS_PUBLISHED = Object.freeze([
+  "id",
+  "name",
+  "default_node_type",
+  "defaults",
+  "ordering",
+  "ordering_mode",
+]);
+export const VIEW_SECTION_KEYS_REFUSED = Object.freeze(["input_grammar", "default_tags"]);
+export const VIEW_SECTION_KEYS_NOT_PUBLISHED = Object.freeze([
+  "qualification",
+  "pin_after_qualification_drops",
+  "parameters",
+  "header_value",
+  "render_body",
+  "include_ancestors",
+  "structural_edge_types",
+  "structural_edge_direction",
+  "pull_context",
+  "empty_children_placeholder",
+  "container_node",
+  "membership",
+]);
+
+const VIEW_SHEET_KEYS_KNOWN = new Set([
+  ...VIEW_SHEET_KEYS_PUBLISHED,
+  ...VIEW_SHEET_KEYS_REFUSED,
+  ...VIEW_SHEET_KEYS_NOT_PUBLISHED,
+]);
+const VIEW_SECTION_KEYS_KNOWN = new Set([
+  ...VIEW_SECTION_KEYS_PUBLISHED,
+  ...VIEW_SECTION_KEYS_REFUSED,
+  ...VIEW_SECTION_KEYS_NOT_PUBLISHED,
+]);
+
 export const ENGINE_LITERAL_TAG_ORDER = Object.freeze({
   canonicalOrder: Object.freeze([
     "#project",
@@ -537,6 +615,38 @@ export function compile(files, ledger = new Ledger()) {
             "overrides were neither published nor checked",
         );
         continue;
+      }
+      // DROP PATHS 23-24. A key the operator's sheet declares that this generator has no read for
+      // at all — the "silently ignores it" row of `ledger.mjs`'s own three-outcome table, which
+      // every other declaration in this file already escaped. NOT a `GenerationError`: an unknown
+      // key is not a malformed one, and the ledger's whole posture is that refusing is data while
+      // only DISAGREEING with the committed data is an error. See `VIEW_SHEET_KEYS_PUBLISHED`'s
+      // own header for the three states a key can be in and why a fourth is a defect.
+      for (const key of Object.keys(view)) {
+        // NOT A DROP: this is the KEEP branch — the key IS one of the three decided lists, so a
+        // decision about it already exists and there is nothing unrecorded. (`viewId` is this
+        // function's own addition to the object, never the operator's declaration.)
+        if (key === "viewId" || VIEW_SHEET_KEYS_KNOWN.has(key)) continue;
+        ledger.drop(
+          `views/${file}`,
+          `view '${viewId}' declares '${key}:' on the sheet — this generator has no read for that ` +
+            "key, so whatever it says was published nowhere and refused nowhere",
+        );
+      }
+      for (const [index, section] of view.sections.entries()) {
+        // NOT A DROP: a non-mapping section is already recorded by DROP PATHs 7 and 22, which
+        // name the same section for a cause that subsumes this one.
+        if (!section || typeof section !== "object" || Array.isArray(section)) continue;
+        const where = isNonEmptyString(section.id) ? `'${section.id}'` : `at index ${index}`;
+        for (const key of Object.keys(section)) {
+          // NOT A DROP: the KEEP branch again — see the sheet loop above, same reason.
+          if (VIEW_SECTION_KEYS_KNOWN.has(key)) continue;
+          ledger.drop(
+            `views/${file}`,
+            `section ${where} of view '${viewId}' declares '${key}:' — this generator has no read ` +
+              "for that key, so whatever it says was published nowhere and refused nowhere",
+          );
+        }
       }
       out.push([file, { viewId, ...view }]);
     }
