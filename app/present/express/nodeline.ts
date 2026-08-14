@@ -194,9 +194,15 @@ function markerCells(node: ComposableNode, resolution: ConfigResolutionTable, or
 /**
  * The chrome cell: `#<tag> [[<target title>]]` per chrome-eligible outgoing edge, in `edgeTagOrder`.
  *
- * CARDINALITY IS OBEYED. `one` means a second edge of that type REPLACES rather than appends, so
- * only the first is emitted — without it a composer prints two `#next` cells for a relation the
- * config says holds one.
+ * CARDINALITY IS OBEYED, AND IT GUARDS THE CALLER RATHER THAN THE GRAPH. `one` means a second edge
+ * of that type replaces rather than appends, so only the first is emitted.
+ *
+ * A SECOND SUCH EDGE CANNOT COME FROM THE GRAPH — `qntm_graph` enforces cardinality at creation and
+ * raises "Cardinality violation: source already has an outgoing edge of type 'NEXT'". Found by
+ * trying to build the fixture, not by reading. So this branch defends against a caller that
+ * assembled `outgoingEdges` wrongly, which is a real risk because that list is a plain array this
+ * module does not derive. Saying which it guards matters: a comment implying it mirrors an engine
+ * behaviour would send the next reader looking for engine code that does not exist.
  */
 function chromeCells(
   edges: readonly OutgoingEdge[],
@@ -247,13 +253,20 @@ export function composeNodeLine(node: ComposableNode, context: ComposeContext): 
     checkbox = checkboxGlyph(resolution.renderCheckbox, node.fields);
   }
 
-  // THE STAMP. Suppressed for a unique-identity type (its name IS its identity), for a read_only
-  // sheet, and when the node carries no id — `decide_stamp`'s three empty-string branches.
-  const qntmId = node.fields.qntm_id;
+  // THE STAMP. Suppressed for a unique-identity type (its name IS its identity) and for a
+  // read_only sheet — `decide_stamp`'s empty-string branches.
+  //
+  // IT FALLS BACK TO THE NODE'S OWN `id`, and that is not a detail. `_resolved_qntm_id`
+  // (renderer.py:1606) is `node.id if qntm_id_value is None else qntm_id_value`, so a node with no
+  // `qntm_id` field still stamps — with its uuid. The first draft here read `fields.qntm_id` alone
+  // and emitted NO stamp for such a node, which is most of them; the agreement differential caught
+  // it on its first run, on the very first fixture.
+  const declared = node.fields.qntm_id;
+  const resolvedId = declared === undefined || declared === null ? node.id : String(declared);
   const stamp =
-    identity.unique || context.writePolicy === "read_only" || qntmId === undefined || qntmId === null || qntmId === ""
+    identity.unique || context.writePolicy === "read_only" || resolvedId === ""
       ? ""
-      : `[[qntm:${String(qntmId)}]]`;
+      : `[[qntm:${resolvedId}]]`;
 
   // ONE FLAT LIST, WRAPPED ONCE — see the header. The per-node answer first, then the global one,
   // which is the order `_render_node_line` extends them in; `applyTitleStyles` nests by kind rather

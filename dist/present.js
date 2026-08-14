@@ -2761,8 +2761,9 @@ function composeNodeLine(node, context) {
     if (resolution.renderCheckbox === void 0) return { ok: false, because: "no-checkbox-table" };
     checkbox = checkboxGlyph(resolution.renderCheckbox, node.fields);
   }
-  const qntmId = node.fields.qntm_id;
-  const stamp = identity.unique || context.writePolicy === "read_only" || qntmId === void 0 || qntmId === null || qntmId === "" ? "" : `[[qntm:${String(qntmId)}]]`;
+  const declared = node.fields.qntm_id;
+  const resolvedId = declared === void 0 || declared === null ? node.id : String(declared);
+  const stamp = identity.unique || context.writePolicy === "read_only" || resolvedId === "" ? "" : `[[qntm:${resolvedId}]]`;
   const perNode = resolution.renderTitleStyle === void 0 ? [] : titleStyleFor(
     resolution.renderTitleStyle,
     nodeLocalContext(
@@ -2791,10 +2792,10 @@ function composeNodeLine(node, context) {
     context.depth ?? 0
   );
   const continuationLines = [];
-  for (const declared of resolution.continuationFields?.[node.type] ?? []) {
-    const value = node.fields[declared.field];
+  for (const declared2 of resolution.continuationFields?.[node.type] ?? []) {
+    const value = node.fields[declared2.field];
     if (typeof value !== "string" || value.trim() === "") continue;
-    const tag = declared.token === null ? "" : ` ${declared.token}`;
+    const tag = declared2.token === null ? "" : ` ${declared2.token}`;
     continuationLines.push(`${indent((context.depth ?? 0) + 1)}${composition.bullet} ${value}${tag}`);
   }
   return { ok: true, line: { text, continuationLines } };
