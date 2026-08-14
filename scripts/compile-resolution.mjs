@@ -271,7 +271,7 @@ export const ENGINE_LITERAL_COMPOSITION = Object.freeze({
 //   NOT_PUBLISHED — genuinely another declaration's concern (qualification, structure, write
 //                   policy). Not read, not lost: the browser never needed it.
 // A key in NONE of the three is the dangerous fourth state — silently ignored — and gets a drop.
-export const VIEW_SHEET_KEYS_PUBLISHED = Object.freeze(["sections", "default_node_type"]);
+export const VIEW_SHEET_KEYS_PUBLISHED = Object.freeze(["sections", "default_node_type", "composition"]);
 export const VIEW_SHEET_KEYS_REFUSED = Object.freeze(["input_grammar", "default_tags"]);
 export const VIEW_SHEET_KEYS_NOT_PUBLISHED = Object.freeze([
   "version",
@@ -928,67 +928,109 @@ export function compile(files, ledger = new Ledger()) {
       };
     }
     const raw = declared.composition;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition:' is not a mapping`);
-    }
-    const unknownTop = Object.keys(raw).filter((k) => !COMPOSITION_TOP_KEYS.has(k));
-    if (unknownTop.length > 0) {
-      throw new GenerationError(
-        `${GLOBAL_DEFAULTS_KEY}: 'composition:' has unknown key(s) ${JSON.stringify(unknownTop)} ` +
-          `(known: ${[...COMPOSITION_TOP_KEYS].sort().join(", ")})`,
-      );
-    }
-    const rawHeads = raw.heads;
-    if (!rawHeads || typeof rawHeads !== "object" || Array.isArray(rawHeads) || Object.keys(rawHeads).length === 0) {
-      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition.heads:' is not a non-empty mapping`);
-    }
-    const missingShapes = COMPOSITION_REQUIRED_HEAD_SHAPES.filter(
-      (shape) => !Object.prototype.hasOwnProperty.call(rawHeads, shape),
-    );
-    if (missingShapes.length > 0) {
-      throw new GenerationError(
-        `${GLOBAL_DEFAULTS_KEY}: 'composition.heads:' is missing required shape(s) ` +
-          `${JSON.stringify(missingShapes)}`,
-      );
-    }
-    const heads = {};
-    for (const [shape, cells] of Object.entries(rawHeads)) {
-      if (!Array.isArray(cells) || cells.length === 0 || !cells.every((c) => typeof c === "string")) {
+    return readCompositionShape(raw, GLOBAL_DEFAULTS_KEY);
+  }
+
+  /** THE `composition:` SHAPE, VALIDATED ONCE, FOR EVERY RUNG THAT MAY DECLARE IT.
+   *
+   * Extracted 2026-08-14 when the VIEW rung arrived. The alternative was a second copy of a
+   * seven-class cell-class check inside `readViewComposition`, and two copies of a vocabulary
+   * two rungs must both admit is a guaranteed drift — the engine made exactly this call in the
+   * same week (`bundle/validators/composition.py`, monorepo #111, moved out of `loader.py` for
+   * the identical reason). `where` names the rung in every diagnostic so the message points at
+   * the file the operator edited.
+   *
+   * ABSENCE IS THE CALLER'S CONCERN at both rungs: a raw that never reaches here is opt-out; a
+   * PRESENT but malformed one is a hard `GenerationError`, never a silent fallback.
+   */
+  function readCompositionShape(raw, where) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        throw new GenerationError(`${where}: 'composition:' is not a mapping`);
+      }
+      const unknownTop = Object.keys(raw).filter((k) => !COMPOSITION_TOP_KEYS.has(k));
+      if (unknownTop.length > 0) {
         throw new GenerationError(
-          `${GLOBAL_DEFAULTS_KEY}: 'composition.heads.${shape}:' is not a non-empty list of strings`,
+          `${where}: 'composition:' has unknown key(s) ${JSON.stringify(unknownTop)} ` +
+            `(known: ${[...COMPOSITION_TOP_KEYS].sort().join(", ")})`,
         );
       }
-      const unknown = cells.filter((c) => !COMPOSITION_HEAD_CELL_CLASSES.has(c));
-      if (unknown.length > 0) {
+      const rawHeads = raw.heads;
+      if (!rawHeads || typeof rawHeads !== "object" || Array.isArray(rawHeads) || Object.keys(rawHeads).length === 0) {
+        throw new GenerationError(`${where}: 'composition.heads:' is not a non-empty mapping`);
+      }
+      const missingShapes = COMPOSITION_REQUIRED_HEAD_SHAPES.filter(
+        (shape) => !Object.prototype.hasOwnProperty.call(rawHeads, shape),
+      );
+      if (missingShapes.length > 0) {
         throw new GenerationError(
-          `${GLOBAL_DEFAULTS_KEY}: 'composition.heads.${shape}:' names unknown cell class(es) ` +
-            `${JSON.stringify(unknown)} (known: ${[...COMPOSITION_HEAD_CELL_CLASSES].sort().join(", ")})`,
+          `${where}: 'composition.heads:' is missing required shape(s) ` +
+            `${JSON.stringify(missingShapes)}`,
         );
       }
-      heads[shape] = [...cells];
+      const heads = {};
+      for (const [shape, cells] of Object.entries(rawHeads)) {
+        if (!Array.isArray(cells) || cells.length === 0 || !cells.every((c) => typeof c === "string")) {
+          throw new GenerationError(
+            `${where}: 'composition.heads.${shape}:' is not a non-empty list of strings`,
+          );
+        }
+        const unknown = cells.filter((c) => !COMPOSITION_HEAD_CELL_CLASSES.has(c));
+        if (unknown.length > 0) {
+          throw new GenerationError(
+            `${where}: 'composition.heads.${shape}:' names unknown cell class(es) ` +
+              `${JSON.stringify(unknown)} (known: ${[...COMPOSITION_HEAD_CELL_CLASSES].sort().join(", ")})`,
+          );
+        }
+        heads[shape] = [...cells];
+      }
+      const rawTail = raw.tail;
+      if (!Array.isArray(rawTail) || rawTail.length === 0 || !rawTail.every((c) => typeof c === "string")) {
+        throw new GenerationError(`${where}: 'composition.tail:' is not a non-empty list of strings`);
+      }
+      const unknownTail = rawTail.filter((c) => !COMPOSITION_TAIL_CELL_CLASSES.has(c));
+      if (unknownTail.length > 0) {
+        throw new GenerationError(
+          `${where}: 'composition.tail:' names unknown cell class(es) ` +
+            `${JSON.stringify(unknownTail)} (known: ${[...COMPOSITION_TAIL_CELL_CLASSES].sort().join(", ")})`,
+        );
+      }
+      // `separator` is not a declared key on either side of this pair — see the domain header's own
+      // paragraph on why: the engine always joins with `" "` (renderer.py:1003), unchanged by the
+      // monorepo PR that made heads/tail declarable, so this generator always publishes it too.
+      const { bullet, titleStyles } = readCompositionForm(raw.form);
+      return {
+        composition: { heads, tail: [...rawTail], separator: " ", bullet, titleStyles },
+        source: "config",
+        // The form is optional INSIDE an optional block, so it carries its own answer — see
+        // `compositionFormSource`'s own paragraph at the assembly below.
+        formSource: raw.form === undefined ? "engine-fallback" : "config",
+      };
     }
-    const rawTail = raw.tail;
-    if (!Array.isArray(rawTail) || rawTail.length === 0 || !rawTail.every((c) => typeof c === "string")) {
-      throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'composition.tail:' is not a non-empty list of strings`);
+
+  // ── 4d. views/*.yaml -> per-sheet `composition:`, the VIEW rung ────────────────────────────
+  //
+  // THE RUNG THE ENGINE OPENED AND THIS FILE HAD NOT DECIDED ABOUT. Until monorepo #111,
+  // `composition:` was declarable at GLOBAL and nowhere else, and `tests/view-key-agreement.
+  // test.mjs` went RED the moment the engine's `_ALLOWED_SHEET_KEYS` admitted it on a sheet —
+  // which is exactly what that gate exists to do. This closes it in the direction the gate
+  // asked for: publish the slot, now that a config can actually fill it.
+  //
+  // ABSENCE IS OPT-OUT AND STAYS SILENT. A sheet that declares no `composition:` contributes
+  // NO ENTRY to the published map — not an empty one — so a reader falls through to the global
+  // answer exactly as it did before this rung existed. That is why the map is keyed by view and
+  // not pre-filled: an entry means "this sheet decided", and its absence means "ask below".
+  //
+  // SAME VALIDATION AS THE RUNG ABOVE, deliberately: both call `readCompositionShape`, so a
+  // view-level declaration is admitted on exactly the terms a global one is and neither rung can
+  // quietly widen the cell-class vocabulary the other enforces.
+  function readViewComposition(viewFiles) {
+    const out = {};
+    for (const [file, view] of viewFiles) {
+      if (!Object.prototype.hasOwnProperty.call(view, "composition")) continue; // NOT A DROP: silent sheet, see above.
+      const { composition, formSource } = readCompositionShape(view.composition, `views/${file}`);
+      out[view.viewId] = { ...composition, formSource };
     }
-    const unknownTail = rawTail.filter((c) => !COMPOSITION_TAIL_CELL_CLASSES.has(c));
-    if (unknownTail.length > 0) {
-      throw new GenerationError(
-        `${GLOBAL_DEFAULTS_KEY}: 'composition.tail:' names unknown cell class(es) ` +
-          `${JSON.stringify(unknownTail)} (known: ${[...COMPOSITION_TAIL_CELL_CLASSES].sort().join(", ")})`,
-      );
-    }
-    // `separator` is not a declared key on either side of this pair — see the domain header's own
-    // paragraph on why: the engine always joins with `" "` (renderer.py:1003), unchanged by the
-    // monorepo PR that made heads/tail declarable, so this generator always publishes it too.
-    const { bullet, titleStyles } = readCompositionForm(raw.form);
-    return {
-      composition: { heads, tail: [...rawTail], separator: " ", bullet, titleStyles },
-      source: "config",
-      // The form is optional INSIDE an optional block, so it carries its own answer — see
-      // `compositionFormSource`'s own paragraph at the assembly below.
-      formSource: raw.form === undefined ? "engine-fallback" : "config",
-    };
+    return out;
   }
 
   /** `composition.form:` — see `ENGINE_LITERAL_COMPOSITION`'s own header for the two capabilities
@@ -1884,6 +1926,7 @@ export function compile(files, ledger = new Ledger()) {
   const registrationResult = readSectionRegistration(viewFiles, registration, ledger);
   const sectionRegistration = registrationResult.sectionRegistration;
   const compositionResult = readGlobalComposition();
+  const viewComposition = readViewComposition(viewFiles);
 
   const declaration = {
     registration,
@@ -1927,6 +1970,27 @@ export function compile(files, ledger = new Ledger()) {
     // wrap agrees with the engine byte for byte. There is no default to invent here; there was
     // only a provenance flag that could not tell you so.
     compositionFormSource: compositionResult.formSource,
+    // ── THE VIEW RUNG OF `composition:` — the SLOT, not a second answer ──────────────────
+    //
+    // `{ [viewId]: Composition & { formSource } }`, and a view is PRESENT only when its own
+    // sheet declared `composition:`. Absence is the whole mechanism: a reader asks this map
+    // first, and falls through to `composition`/`compositionSource` above when the view is not
+    // in it — which is byte-identical to the behaviour before this key existed, for every
+    // config that declares nothing.
+    //
+    // WHY NO `viewCompositionSource` MAP BESIDE IT. There is nothing for one to say. Presence
+    // in this map IS the source: an entry means the VIEW rung answered, absence means ask the
+    // rung below and read ITS source. A parallel map whose every value was the string "view"
+    // would be a field that cannot vary, which is a field that cannot be wrong and therefore
+    // cannot be checked. `resolutiontable.ts`'s `compositionFor` returns the resolved answer
+    // AND which rung produced it, so the caller still never has to guess — the source is
+    // DERIVED at the read, rather than published per view and kept in step by hand.
+    //
+    // `formSource` IS carried per entry, because it genuinely varies: a sheet may reorder cells
+    // without declaring `form:` at all, and then its bullet is the engine literal while its
+    // tail is the sheet's. That is the same asymmetry `compositionFormSource` records at the
+    // global rung, and one flag could not speak for both facts there either.
+    viewComposition,
     // WITHIN "tags" — see `ENGINE_LITERAL_TAG_ORDER`'s own header. Always the engine literal (no
     // config override surface exists for this file), always published (never optional the way
     // `priorityRank` below is) — a caller with no notion of tag order at all is exactly the caller
