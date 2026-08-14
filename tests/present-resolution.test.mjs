@@ -933,3 +933,111 @@ describe("9. the stamp cell — identity modes, generator through reader", () =>
     }
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 10. CONTINUATION LINES — the extra lines a node re-emits beneath its own
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// `_render_node_line` composes each as `{indent+1}{bullet} {value} {token}`. BOTH halves are
+// config: the field names from `schema.yaml`'s `render.continuation_fields` (the file `chromeShapes`
+// and `identityModes` already read) and the trailing tag from `vocabulary/structural_tokens.yaml`'s
+// `field_bindings:` (a file `spelling` already walks). Neither is engine source, so unlike
+// `renderCheckbox` there is no copy and nothing to pin.
+//
+// Compiled from the committed fixture, like §8 and §9, for the same reason and with the same limit.
+
+describe("10. continuation lines — both halves, from config", () => {
+  const FIXTURE_DIR = resolve(HERE, "fixtures", "config");
+
+  test("the reader accepts the generator's own continuation map, with no problem reported", () => {
+    const compiled = generateResolution(FIXTURE_DIR);
+    const { problems } = readConfigResolutionDeclaration({ resolution: compiled });
+    assert.deepEqual(problems, [], "the reader objected to the generator's output");
+  });
+
+  test("A TYPE THAT DECLARES ONE GETS BOTH HALVES — the field AND the tag that re-ingests it", () => {
+    // THE FALSIFIER, by mutation, because the fixture declares no continuation field of its own.
+    // The tag is not decoration: `view-render-language-is-ingest-language` means a rendered
+    // continuation line must be its own valid re-ingest input, or the next cycle reads it as an
+    // untagged line and mints a stray PART_OF child.
+    const scratch = mkdtempSync(join(tmpdir(), "continuation-fields-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const schemaPath = join(configDir, "schema.yaml");
+      writeFileSync(
+        schemaPath,
+        readFileSync(schemaPath, "utf8").replace(
+          "  person:\n    fields: [title]\n    render:\n      shape: plain_line\n",
+          "  person:\n    fields: [title, summary]\n    render:\n      shape: plain_line\n      continuation_fields: [summary]\n",
+        ),
+      );
+      const tokensPath = join(configDir, "vocabulary", "structural_tokens.yaml");
+      writeFileSync(
+        tokensPath,
+        readFileSync(tokensPath, "utf8") +
+          '  - token: "#gloss"\n    structural_token:\n      kind: field_binding\n      field_bindings:\n        - token: "#gloss"\n          field: summary\n',
+      );
+      const { resolution, problems } = readConfigResolutionDeclaration({ resolution: generateResolution(configDir) });
+      assert.deepEqual(problems, []);
+      assert.deepEqual(
+        resolution.continuationFields.person,
+        [{ field: "summary", token: "#gloss" }],
+        "the continuation line lost its field or its re-ingest tag",
+      );
+      // A TYPE THAT DECLARES NONE IS SIMPLY ABSENT — one meaning, unlike chromeShapes' key set.
+      assert.equal(resolution.continuationFields.task, undefined);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("`token: null` IS AN ANSWER — an ambiguous binding renders no tag, and is not a gap", () => {
+    // `field_binding_token_for` ends `matches[0] if len(matches) == 1 else None`: two tokens bound
+    // to one field is not a pick the engine makes, and `_render_node_line`'s `if tag` guard then
+    // emits the line with no trailing tag at all. Mirrored, and RECORDED — a bare absence would
+    // read as "unknown" when it is the engine's own answer.
+    const scratch = mkdtempSync(join(tmpdir(), "continuation-ambiguous-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const schemaPath = join(configDir, "schema.yaml");
+      writeFileSync(
+        schemaPath,
+        readFileSync(schemaPath, "utf8").replace(
+          "  person:\n    fields: [title]\n    render:\n      shape: plain_line\n",
+          "  person:\n    fields: [title, summary]\n    render:\n      shape: plain_line\n      continuation_fields: [summary]\n",
+        ),
+      );
+      const tokensPath = join(configDir, "vocabulary", "structural_tokens.yaml");
+      writeFileSync(
+        tokensPath,
+        readFileSync(tokensPath, "utf8") +
+          '  - token: "#gloss"\n    structural_token:\n      kind: field_binding\n      field_bindings:\n        - token: "#gloss"\n          field: summary\n        - token: "#blurb"\n          field: summary\n',
+      );
+      const compiled = generateResolution(configDir);
+      assert.deepEqual(compiled.continuationFields.person, [{ field: "summary", token: null }]);
+      assert.match(
+        compiled.dropped["node type 'person' continuation field 'summary'"] ?? "",
+        /2 vocabulary tokens bind that field/,
+        "an ambiguous binding was published as null with no reason recorded",
+      );
+      // AND `null` SURVIVES THE READER, because it is the engine's answer rather than a malformed
+      // value. A reader that refused it would refuse a config the engine renders.
+      const { resolution, problems } = readConfigResolutionDeclaration({ resolution: compiled });
+      assert.deepEqual(problems, []);
+      assert.equal(resolution.continuationFields.person[0].token, null);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("ONE BAD ENTRY POISONS THE MAP — a dropped line is a line the node stops carrying", () => {
+    const compiled = generateResolution(FIXTURE_DIR);
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...compiled, continuationFields: { ticket: [{ field: "summary", token: 7 }] } },
+    });
+    assert.equal(resolution.continuationFields, undefined, "a malformed entry left a partial map readable");
+    assert.ok(problems.some((p) => p.includes("continuationFields.ticket[0].token")), problems.join("; "));
+  });
+});

@@ -320,6 +320,37 @@ const VIEW_SECTION_KEYS_KNOWN = new Set([
   ...VIEW_SECTION_KEYS_NOT_PUBLISHED,
 ]);
 
+// ── THE OTHER TWO CANONICAL ORDERS — same contract family as `order_tags`, same shape ─────────
+//
+// `composition.tail` names three cell families that carry more than one cell: `tags`, `markers`
+// and `chrome`. Each has its own canonical order, each declared by its own contract, and until now
+// only ONE of the three was published. A composer holding `tagOrder` alone could order the tag cell
+// and would have to invent an order for the other two — which is not a smaller failure than
+// inventing a glyph, it is the same failure one cell along.
+//
+//   order_markers    the MARKER cell — emoji keys (`📅 2026-09-01`), ordered by their glyph.
+//   order_edge_tags  the CHROME cell — outgoing-edge tags (`#waiting-for [[Some node]]`).
+//
+// BOTH ARE `"engine-literal"`, like `tagOrder` and for the same reason: the contracts live in the
+// engine's own source with no operator override surface. `order_markers.yaml`'s own header says so
+// — "to change the marker order the operator sees, edit THIS list" — and names
+// `config/rendering/marker_ordering.yaml` as a RETIRED COPY "kept in sync by nothing".
+//
+// PINNED BY DRIVING THE DISPATCHER, NOT BY READING THE FILE, and here that matters more than it did
+// for `render_checkbox`: these contracts are being MOVED out of the engine's source tree into
+// config. `renderer.py`'s `_engine_render_dispatcher(table_id)` takes a table id and returns a
+// dispatcher; the path is inside it. So a pin that asks the FACTORY survives the move, and a pin
+// that named `src/qntm_md/render/contracts/order_markers.yaml` would break on the day it lands.
+export const ENGINE_LITERAL_MARKER_ORDER = Object.freeze({
+  canonicalOrder: Object.freeze(["📅", "🛫", "⏫", "🔽", "✅"]),
+  unrankedPolicy: "append_stable",
+});
+
+export const ENGINE_LITERAL_EDGE_TAG_ORDER = Object.freeze({
+  canonicalOrder: Object.freeze(["#requires", "#blocks", "#next", "#parallel", "#waiting-for"]),
+  unrankedPolicy: "append_stable",
+});
+
 export const ENGINE_LITERAL_TAG_ORDER = Object.freeze({
   canonicalOrder: Object.freeze([
     "#project",
@@ -1108,6 +1139,136 @@ export function compile(files, ledger = new Ledger()) {
     return out;
   }
 
+  // ── 5c. schema.yaml + vocabulary -> the CONTINUATION LINES a node type re-emits ────────────────
+  //
+  // A node type may declare `render: {continuation_fields: [...]}` — its OWN fields that render as
+  // extra INDENTED lines beneath the node's own line, never separate nodes. `_render_node_line`
+  // builds each as:
+  //
+  //     `{'    ' * (depth + 1)}{bullet} {value} {tag}`
+  //
+  // one indent level deeper than the node line, the same bullet, the field's value, and a trailing
+  // BARE TAG. Nine of the operator's types declare them: ticket/book/writer/blog carry `link` or
+  // `summary`, and capability/principle/package/class/sink carry `summary`.
+  //
+  // ── BOTH HALVES ARE CONFIG, WHICH IS WHY THIS NEEDS NO PIN ──
+  //
+  // The FIELD NAMES come from `schema.yaml`'s `render.continuation_fields` — the same file, the
+  // same `node_types:` mapping, that `chromeShapes` and `identityModes` already read. The TRAILING
+  // TAG comes from `StructuralTokenResolver.field_binding_token_for(field)`, which resolves from
+  // `vocabulary/structural_tokens.yaml`'s `field_bindings:` — a file this generator already walks
+  // for `spelling`. Neither half is engine source, so there is no copy to drift and nothing to pin.
+  //
+  // The tag matters as much as the value: `view-render-language-is-ingest-language` — a rendered
+  // continuation line must be its own valid re-ingest input, or the next cycle reads it as an
+  // untagged line and mints a stray PART_OF child. Publishing the value without the tag would let a
+  // composer write a line the engine then turns into a node.
+  //
+  // ── AMBIGUITY RESOLVES TO NOTHING, MIRRORING THE ENGINE RATHER THAN IMPROVING ON IT ──
+  //
+  // `field_binding_token_for` ends `return matches[0] if len(matches) == 1 else None` — two tokens
+  // bound to one field is not a choice it makes. `_render_node_line` then emits the line with NO
+  // trailing tag at all (the `if tag` guard). Mirrored exactly: `token: null` is published, and the
+  // drop is recorded so the absence is a stated answer rather than a silence.
+
+  function readContinuationFields(ledger) {
+    if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
+    const nodeTypes = readYaml(SCHEMA_KEY)?.node_types;
+    if (!nodeTypes || typeof nodeTypes !== "object" || Array.isArray(nodeTypes)) {
+      throw new GenerationError(`${SCHEMA_KEY}: no 'node_types:' mapping`);
+    }
+    // field -> the bare tag that renders it, from vocabulary/structural_tokens.yaml. Assembled
+    // first so the ambiguity rule can be applied once rather than per node type.
+    const bindingsByField = {};
+    // NOT A DROP, for every skip in this vocabulary walk. This loop is looking for ONE optional
+    // key (`field_bindings:`) inside a file it does not own — `readSpelling` above is the reader
+    // that answers for these files, and it records its own drops for every malformed shape it
+    // meets. A second reader over the same bytes recording the same failures again would double
+    // every entry in the ledger and make one broken file look like two. Nothing is discarded here
+    // that is not already accounted for there; what this loop cannot find, it reports as the
+    // continuation field's own `token: null` drop below, which names the field rather than the file.
+    for (const key of allKeys().filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml")).sort()) {
+      const document = readYaml(key);
+      if (!document || typeof document !== "object" || Array.isArray(document)) continue;
+      // `field_bindings:` sits on a token ENTRY'S PAYLOAD, not on the family — the real shape is
+      // `structural_tokens: [ { token: ..., structural_token: { field_bindings: [...] } } ]`. The
+      // first draft read `family.field_bindings` and found nothing, which published a `token: null`
+      // for all nine types and looked exactly like "the operator declared no bindings". Every
+      // payload is searched rather than one key path being assumed, so a binding declared under a
+      // differently-named payload key is still found.
+      // NOT A DROP — every skip in this nested walk, for the reason stated above the loop:
+      // `readSpelling` owns these files and records their malformed shapes; this pass is only
+      // looking for one optional key inside them, and re-recording the same failure would double
+      // the ledger. A field binding this walk cannot find surfaces as that continuation field's own
+      // `token: null` drop, which names the field rather than the file.
+      for (const family of Object.values(document)) {
+        if (!Array.isArray(family)) continue;
+        for (const entry of family) {
+          if (!entry || typeof entry !== "object") continue;
+          for (const payload of Object.values(entry)) {
+            if (!payload || typeof payload !== "object" || Array.isArray(payload)) continue;
+            const declared = payload.field_bindings;
+            if (!Array.isArray(declared)) continue;
+            for (const binding of declared) {
+              // NOT A DROP: a malformed binding row declares no (token, field) pair, so there is
+              // no spelling to discard. Its consequence IS recorded, one level up and in the
+              // caller's own terms — the continuation field it would have named publishes
+              // `token: null` with a reason, which is the fact a composer needs.
+              if (!binding || typeof binding !== "object") continue;
+              if (!isNonEmptyString(binding.token) || !isNonEmptyString(binding.field)) continue;
+              (bindingsByField[binding.field] ??= []).push(binding.token);
+            }
+          }
+        }
+      }
+    }
+
+    const out = {};
+    for (const name of Object.keys(nodeTypes).sort()) {
+      const definition = nodeTypes[name];
+      const render = definition && typeof definition === "object" ? definition.render : undefined;
+      const declared = render && typeof render === "object" ? render.continuation_fields : undefined;
+      // NOT A DROP: a node type that declares no `continuation_fields` emits no continuation line,
+      // which is the overwhelming majority (27 of the operator's 36) and is not a discarded
+      // declaration — there is nothing to publish and nothing was lost. Absence in the published
+      // map carries exactly this meaning; see the key's own header for why it is unambiguous here
+      // and had to be closed for `chromeShapes`.
+      if (!Array.isArray(declared) || declared.length === 0) continue;
+      const fields = [];
+      for (const field of declared) {
+        if (!isNonEmptyString(field)) {
+          ledger.drop(
+            `node type '${name}' continuation field`,
+            `its 'render.continuation_fields' names ${JSON.stringify(field)}, which is not a field ` +
+              "name, so no continuation line can be composed for it",
+          );
+          continue;
+        }
+        const tokens = bindingsByField[field] ?? [];
+        // ONE BINDING OR NONE — `field_binding_token_for`'s own rule, mirrored. Two tokens bound to
+        // one field is not a pick this generator makes either.
+        const token = tokens.length === 1 ? tokens[0] : null;
+        if (tokens.length > 1) {
+          ledger.drop(
+            `node type '${name}' continuation field '${field}'`,
+            `${tokens.length} vocabulary tokens bind that field (${tokens.join(", ")}), and the ` +
+              "engine's own reverse lookup refuses an ambiguous one, so the continuation line " +
+              "renders with no trailing tag — published with token null rather than a guess",
+          );
+        } else if (tokens.length === 0) {
+          ledger.drop(
+            `node type '${name}' continuation field '${field}'`,
+            "no vocabulary token binds that field, so the continuation line renders with no " +
+              "trailing tag and would not re-ingest as a field write",
+          );
+        }
+        fields.push({ field, token });
+      }
+      if (fields.length > 0) out[name] = fields;
+    }
+    return out;
+  }
+
   function readChromeShapes(mintable, ledger) {
     if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
     const schema = readYaml(SCHEMA_KEY);
@@ -1670,6 +1831,7 @@ export function compile(files, ledger = new Ledger()) {
   );
   const chromeShapes = readChromeShapes(candidates, ledger);
   const identityModes = readIdentityModes();
+  const continuationFields = readContinuationFields(ledger);
   const registrationResult = readSectionRegistration(viewFiles, registration, ledger);
   const sectionRegistration = registrationResult.sectionRegistration;
   const compositionResult = readGlobalComposition();
@@ -1722,6 +1884,13 @@ export function compile(files, ledger = new Ledger()) {
     // this axis was silently missing for until today.
     tagOrder: ENGINE_LITERAL_TAG_ORDER,
     tagOrderSource: "engine-literal",
+    // THE OTHER TWO CELL FAMILIES THAT CARRY MORE THAN ONE CELL — see the literals' own header.
+    // `tagOrder` has been published alone since 2026-08-07; a composer could order one of the three
+    // and had to invent the rest.
+    markerOrder: ENGINE_LITERAL_MARKER_ORDER,
+    markerOrderSource: "engine-literal",
+    edgeTagOrder: ENGINE_LITERAL_EDGE_TAG_ORDER,
+    edgeTagOrderSource: "engine-literal",
     // THE FIRST CELL OF EVERY CHECKBOX LINE — see `ENGINE_LITERAL_RENDER_CHECKBOX`'s own header for
     // why it is published as ordered rows plus a fallback and never as a map, and for what the map
     // shape cost the operator the last time these two homes were allowed to drift.
@@ -1749,6 +1918,12 @@ export function compile(files, ledger = new Ledger()) {
     // from this repo, and NOT a reason to withhold the fact — the six `plain_line` unique types
     // ARE stampless, and a composer that guessed otherwise would be wrong in a second way.
     identityModes,
+    // THE EXTRA LINES A NODE RE-EMITS BENEATH ITS OWN — see `readContinuationFields`' own header.
+    // Keyed ONLY by the types that declare them (9 of 36 today), unlike `chromeShapes` and
+    // `identityModes`: those answer a question about EVERY node, and absence there would be
+    // ambiguous. Here absence has one meaning — this type emits no continuation line — and it is
+    // the same answer an empty list would give.
+    continuationFields,
     // ── THE VOCABULARY, IN THE DIRECTION THAT PRINTS (2026-08-14) ──
     //
     // `sectionRegistration[view][section].tokens` above is the SEED answer: the tags a new line
