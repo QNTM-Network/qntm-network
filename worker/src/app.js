@@ -529,7 +529,21 @@ async function editFile(request, env, origin, session, ctx) {
   // are all the same thing here — this write makes no claim — and the difference between "no
   // claim" and "a claim I cannot read" is the receiver's to draw, not this Worker's, which is
   // exactly why nothing is substituted for an absent one.
-  const write = { path, markdown: body.markdown };
+  // THE EDIT, PREFERRED OVER THE FOLD WHEN THE BROWSER SENT ONE. `ops` is `[[start, end, [line]]]`
+  // — the edit the browser actually made, rather than the whole file it folded that edit into. The
+  // graph server accepts EITHER but never both (it 422s on both), so exactly one is forwarded.
+  //
+  // WHY THE BROWSER SENDS BOTH AND THIS CHOOSES: it makes the change deployable in ANY ORDER. A
+  // browser predating `ops` sends only `markdown` and takes the arm below, unchanged. A Worker
+  // predating this line ignores `ops` and forwards the `markdown` the browser also sent, which is
+  // byte-identical to today. Nothing has to ship first.
+  //
+  // NOT ADJUDICATED HERE. This Worker does not apply an op, does not check a range against a file
+  // it has never read, and does not decide whether one is applicable — the graph server owns that
+  // and answers 422 when a position does not exist. An op this Worker cannot understand is still
+  // just a value it hands on, exactly as `base` and `token` are.
+  const opsSent = Array.isArray(body?.ops) && body.ops.length > 0;
+  const write = opsSent ? { path, ops: body.ops } : { path, markdown: body.markdown };
   if (typeof body?.base === "string" && body.base !== "") write.base = body.base;
   // THE CORRELATION TOKEN, FORWARDED ON EXACTLY THE SAME TERMS AS `base` IMMEDIATELY ABOVE, and for
   // exactly the same reason. `token` is the browser's opaque per-write handle
