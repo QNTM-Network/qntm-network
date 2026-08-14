@@ -231,6 +231,25 @@ export interface RenderCheckboxRow {
   readonly then: string;
 }
 
+/**
+ * HOW A NODE OF THIS TYPE IS IDENTIFIED — and therefore whether its line carries a stamp.
+ *
+ * `unique: true` means the type declares `identity: {unique: true}` in `schema.yaml`, and
+ * `decide_stamp` (renderer.py) returns `""` for it: the line renders WITHOUT `[[qntm:N]]`, because
+ * a structural node's identity is its unique NAME. `field` is what carries that name — the field
+ * `applier.py`'s own by-title survival guard matches on when the stamp is absent.
+ *
+ * `unique: false, field: null` is the ordinary pathway: mint fresh, stamp the line.
+ *
+ * BOTH HALVES, DELIBERATELY. A reader given `unique` alone knows to omit the stamp and does not
+ * know what identifies the node instead — the same half-a-decision shape as publishing
+ * `renderCheckbox`'s rows without its `fallback`.
+ */
+export interface IdentityMode {
+  readonly unique: boolean;
+  readonly field: string | null;
+}
+
 export interface RenderCheckbox {
   readonly rows: readonly RenderCheckboxRow[];
   readonly fallback: string;
@@ -442,6 +461,13 @@ export interface ConfigResolutionTable {
    * no config/engine-fallback split to report. Published so the kind of fact is stated. */
   readonly renderCheckboxSource: "engine-literal" | undefined;
   /**
+   * node type -> how it is identified. See `IdentityMode`. Keyed over EVERY type `schema.yaml`
+   * declares, which is what makes a MISSING key meaningful: it is a type this config does not
+   * declare, and a caller must refuse to compose its line rather than assume the ordinary
+   * stamped pathway. `undefined` for the whole map when the served declaration predates this key.
+   */
+  readonly identityModes: Readonly<Record<string, IdentityMode>> | undefined;
+  /**
    * WHICH ANSWER `composition.bullet`/`composition.titleStyles` ARE, separately from the block's
    * own `compositionSource`. `composition.form:` is optional INSIDE an optional `composition:`, so
    * a config that orders cells without wrapping a title publishes `compositionSource: "config"`
@@ -537,6 +563,9 @@ const TOP_KEYS = [
   // never a map, because first-match-wins and "no status at all" are both real answers.
   "renderCheckbox",
   "renderCheckboxSource",
+  // Whether a type's line carries a stamp, and what identifies it when it does not. Keyed over
+  // every declared type, so absence means "unknown type", never "ordinary type".
+  "identityModes",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
@@ -1115,6 +1144,48 @@ function readRenderCheckbox(value: unknown, problems: string[]): RenderCheckbox 
   return { rows, fallback: value.fallback };
 }
 
+/**
+ * `resolution.identityModes` — see `IdentityMode`. Whole-fact `undefined` on a malformed map, and
+ * ONE bad entry poisons it, unlike `chromeShapes`' per-entry tolerance. The asymmetry is the point:
+ * a dropped `chromeShapes` entry makes a type undrawable and the caller notices, whereas a dropped
+ * identity entry is indistinguishable from "this type is ordinary" — which silently stamps a node
+ * the engine renders stampless.
+ */
+function readIdentityModes(value: unknown, problems: string[]): Readonly<Record<string, IdentityMode>> | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.identityModes`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — how any node is identified stays unknown`);
+    return undefined;
+  }
+  const out: Record<string, IdentityMode> = {};
+  for (const [nodeType, mode] of Object.entries(value)) {
+    if (!isPlainObject(mode) || typeof mode.unique !== "boolean") {
+      problems.push(
+        `'${path}.${nodeType}' is not {unique: boolean, field: string|null} — the whole identity ` +
+          "map stays unknown, because a missing entry reads as 'ordinary type' and would stamp a " +
+          "node the engine renders stampless",
+      );
+      return undefined;
+    }
+    if (mode.field !== null && (typeof mode.field !== "string" || mode.field === "")) {
+      problems.push(`'${path}.${nodeType}.field' is ${JSON.stringify(mode.field)}, not a non-empty string or null`);
+      return undefined;
+    }
+    // `unique: true` WITH `field: null` IS LEGAL, AND IT IS NOT THE SAME AS `unique: false`.
+    //
+    // Refusing it was this reader's first instinct and it was WRONG — caught by the committed
+    // fixture config, whose `header` declares `identity: {unique: true}` and no `field:` at all.
+    // The engine accepts that and the two halves are read by DIFFERENT callers:
+    //   `decide_stamp` (renderer.py) consults ONLY `unique`, so the line renders STAMPLESS.
+    //   `applier.py`'s by-title survival guard needs BOTH — `if not unique or not id_field: return
+    //   False` — so it does not fire, and nothing re-identifies the node once the stamp is gone.
+    // So this combination means "stampless, and no name carries its identity either". Publishing
+    // it faithfully is the point; a reader that refused it would refuse a config the engine runs.
+    out[nodeType] = { unique: mode.unique, field: mode.field };
+  }
+  return out;
+}
+
 /** `resolution.renderCheckboxSource` — one legal value, checked rather than assumed. */
 function readRenderCheckboxSource(value: unknown, problems: string[]): "engine-literal" | undefined {
   if (value !== "engine-literal") {
@@ -1492,6 +1563,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       // anyway, and validated, so the KIND of fact is stated rather than assumed.
       renderCheckboxSource:
         "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : undefined,
+      identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : undefined,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : undefined,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},

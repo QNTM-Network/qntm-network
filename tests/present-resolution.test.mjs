@@ -34,6 +34,7 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readConfigResolutionDeclaration, readDeclaration, presentationFromDeclaration } from "../dist/present.js";
+import { parseYamlSubset } from "../scripts/yaml-subset.mjs";
 import {
   generateResolution,
   DEFAULT_CONFIG_DIR,
@@ -819,6 +820,114 @@ describe("8. the output half — chromeShapes, the form's own source, and the sp
           assert.ok(!entry.tokens.includes("☑️"), "a render_only glyph was seeded into a new line");
         }
       }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// 9. THE STAMP CELL — which types are identified by name, and therefore render stampless
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// `composition.tail` names `stamp`. Whether a node gets one is a property of its TYPE, not its
+// line: `decide_stamp` (renderer.py) asks `identity_spec` and returns `""` when the type declares
+// `identity: {unique: true}`. Seven of the operator's 36 types do, and nothing told the browser.
+//
+// COMPILED FROM THE COMMITTED FIXTURE, like §8 and for the same reason: these keys are not in
+// `presentation.json` (not regenerated — still blocked on the seed question), so the served file is
+// the wrong subject and the fixture is the right one. It runs on every PR with no monorepo.
+//
+// THE PYTHON HALF is `scripts/resolution-agreement.py`, which drives the engine's own
+// `identity_spec` over a real Graph and REFUSES on any disagreement. Falsified: forcing `unique`
+// false in the generator makes it refuse on all seven types. It is not exercised in CI, because it
+// reads the operator's config; that is the same limit every `*-agreement.py` in this repo carries.
+
+describe("9. the stamp cell — identity modes, generator through reader", () => {
+  const FIXTURE_DIR = resolve(HERE, "fixtures", "config");
+  const compiledIdentity = generateResolution(FIXTURE_DIR);
+  const identityReading = readConfigResolutionDeclaration({ resolution: compiledIdentity });
+
+  test("the reader accepts the generator's own identity map, with no problem reported", () => {
+    assert.deepEqual(identityReading.problems, [], "the reader objected to the generator's output");
+  });
+
+  test("EVERY declared type is keyed, so a missing key means 'unknown type', not 'ordinary type'", () => {
+    // THE PROPERTY THE WHOLE SHAPE EXISTS FOR. A sparse map makes "this type is ordinary" and "I
+    // have never heard of this type" the same lookup, and they are opposite instructions: the first
+    // says stamp it, the second says refuse to compose it.
+    // Parsed through the generators' OWN reader, not a regex over the file — a regex that matched
+    // the wrong shape would silently check nothing, which is how this test first passed vacuously.
+    const declared = Object.keys(
+      parseYamlSubset(readFileSync(resolve(FIXTURE_DIR, "schema.yaml"), "utf8"), "schema.yaml").node_types,
+    );
+    assert.ok(declared.length >= 3, `only ${declared.length} types found in the fixture schema`);
+    // NON-VACUITY, stated as the property rather than as a count: this proves nothing unless the
+    // fixture carries BOTH kinds. A schema where every type were ordinary would pass the loop below
+    // while never exercising the branch that matters.
+    const modes = Object.values(identityReading.resolution.identityModes);
+    assert.ok(modes.some((m) => m.unique), "no unique-identity type in the fixture — nothing proven");
+    assert.ok(modes.some((m) => !m.unique), "every type is unique in the fixture — nothing proven");
+    for (const nodeType of declared) {
+      assert.ok(
+        identityReading.resolution.identityModes[nodeType] !== undefined,
+        `'${nodeType}' is declared in schema.yaml but absent from identityModes`,
+      );
+    }
+  });
+
+  test("a unique-identity type is published stampless, WITH the field that identifies it instead", () => {
+    // The fixture declares `header` with `identity: {field: title, unique: true}`.
+    // THE FIXTURE'S OWN SHAPE, and it is the more interesting one: `header` declares
+    // `identity: {unique: true}` with NO `field:`. The engine accepts that — `decide_stamp` reads
+    // only `unique` and renders it stampless, while `applier.py`'s by-title guard needs both and so
+    // never fires. "Stampless, and nothing re-identifies it" is a real state, published as it is.
+    assert.deepEqual(identityReading.resolution.identityModes.header, { unique: true, field: null });
+    // And an ordinary type carries the mint-fresh-and-stamp pathway.
+    assert.deepEqual(identityReading.resolution.identityModes.task, { unique: false, field: null });
+  });
+
+  test("`unique: true, field: null` IS PUBLISHED, not refused — the engine accepts it", () => {
+    // This reader first REFUSED that combination, on the reasoning that a unique type with no
+    // field identifies nothing once its stamp is omitted. True, and not the reader's call: the
+    // fixture's own `header` is exactly that shape, the engine runs it, and `decide_stamp` reads
+    // only `unique` — so the line IS stampless. Refusing would have refused a real config.
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...compiledIdentity, identityModes: { header: { unique: true, field: null } } },
+    });
+    assert.deepEqual(problems, []);
+    assert.deepEqual(resolution.identityModes.header, { unique: true, field: null });
+  });
+
+  test("ONE BAD ENTRY POISONS THE MAP, unlike chromeShapes' per-entry tolerance", () => {
+    // The asymmetry is deliberate. A dropped `chromeShapes` entry makes a type undrawable and the
+    // caller notices. A dropped identity entry is indistinguishable from "ordinary type", which
+    // silently stamps a node the engine renders stampless.
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...compiledIdentity, identityModes: { ...compiledIdentity.identityModes, header: "yes" } },
+    });
+    assert.equal(resolution.identityModes, undefined, "a malformed entry left a partial map readable");
+    assert.ok(problems.some((p) => p.includes("identityModes.header")), problems.join("; "));
+  });
+
+  test("the map follows the CONFIG — declare a second unique type and it appears", () => {
+    // THE FALSIFIER: this reads schema.yaml rather than carrying a list. Make `person` unique in a
+    // scratch copy and the published answer must move with it, with no code change.
+    const scratch = mkdtempSync(join(tmpdir(), "identity-modes-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const schemaPath = join(configDir, "schema.yaml");
+      writeFileSync(
+        schemaPath,
+        readFileSync(schemaPath, "utf8").replace(
+          "  person:\n    fields: [title]\n",
+          "  person:\n    fields: [title]\n    identity:\n      field: title\n      unique: true\n",
+        ),
+      );
+      const moved = generateResolution(configDir).identityModes;
+      assert.deepEqual(moved.person, { unique: true, field: "title" }, "the published answer did not follow the config");
+      assert.deepEqual(moved.task, { unique: false, field: null }, "an unrelated type moved too");
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
