@@ -4806,4 +4806,39 @@ backlog:
     grows. tests/present-seed.test.mjs section 2c already carries a filed TODO for a
     sibling defect exposed the same way. Nothing published to the browser can be refreshed
     until this is settled, which blocks the members-to-markdown composer.'
+- id: give-composition-a-view-level-slot-engine-first
+  title: 'Give `composition:` a VIEW-level slot, in the ENGINE first. The browser cannot
+    go first: `bundle/validators/views.py` rejects `composition:` on a sheet and on a
+    section (measured 2026-08-14 — `BundleValidationError` at both levels, bundle does
+    not load), so a slot published by `compile-resolution.mjs` today is unreachable by
+    any config that works. The engine half is small: `renderer.py`''s `render()` already
+    resolves composition once per call and already logs `sheet_id=compiled_sheet.id`, so
+    the sheet is in hand where the answer is chosen; what is missing is the operator
+    surface (`_ALLOWED_SHEET_KEYS` + a read at the sheet rung, falling back to the
+    bundle global). The browser half then follows the shape `readGlobalComposition`
+    already has, and `tests/view-key-agreement.test.mjs` turns RED on the day the engine
+    key lands, which is the prompt to build it.'
+  driving_capability: a-view-may-not-override-what-the-engine-reads-once
+  captured: '2026-08-14'
+- id: give-tag-order-an-operator-surface-at-global-first
+  title: 'Give tag order an operator config surface AT GLOBAL, before anyone asks for a
+    per-view one. Today `render/contracts/order_tags.yaml` is the whole answer and says
+    of itself "To change the order the operator sees, edit THIS list" — the engine''s own
+    source. `tagOrderSource` is therefore always `engine-literal`, and unlike
+    `composition` and `defaultOrdering` there is no `config` branch to fall back FROM. The
+    missing rung is GLOBAL, not view; a view-level slot would be the roof before the
+    walls.'
+  driving_capability: a-view-may-not-override-what-the-engine-reads-once
+  captured: '2026-08-14'
+- id: flag-rendering-contract-is-an-accepted-and-unread-per-view-key
+  title: '[asserted] `rendering_contract` is an accepted-and-unread per-view key in the
+    engine. `bundle/validators/views.py:67` admits it on a sheet and type-checks it,
+    `render/compiler.py:209` carries it onto the compiled sheet, and NO consumer of
+    `compiled_sheet.rendering_contract` exists (grepped live, 2026-08-14). An operator
+    can declare it, it will validate, and it will decide nothing — the "silently ignores
+    it" outcome, at the exact rung a per-view rendering override would land on. Either
+    wire it or drop it from the allow-list; leaving it is a slot that reads as available.'
+  driving_capability: a-view-may-not-override-what-the-engine-reads-once
+  asserted: '`rendering_contract` is admitted by the engine''s view-sheet validator,
+    carried onto the compiled sheet, and read by nothing.'
   captured: '2026-08-14'
