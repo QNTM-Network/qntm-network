@@ -92,12 +92,18 @@ export type {
   EdgeTag,
   IdentityMode,
   RenderCheckbox,
+  RenderTitleStyle,
+  TitleStylePredicate,
+  TitleStyleRow,
   RenderCheckboxRow,
   RenderedFieldMarker,
   RenderedSpelling,
   SectionOrdering,
   TagOrder,
 } from "./resolutiontable.js";
+
+export { titleStyleFor, titleStylePredicateHolds, nodeLocalContext } from "./express/titlestyle.js";
+export type { TitleStyleNode } from "./express/titlestyle.js";
 
 export { composeLine, composeSeed } from "./express/composition.js";
 export type { KnownCells, LineCells } from "./express/composition.js";

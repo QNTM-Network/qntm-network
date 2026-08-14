@@ -352,3 +352,156 @@ describe("the three canonical cell orders — published literals against the rea
     assert.ok(!bad.problems.some((p) => p.includes("resolution.tagOrder")), "it blamed tagOrder");
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE TITLE WRAP — the published table evaluated over the ENGINE'S OWN ANSWERS
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// The other pins in this file compare a published literal against an extracted one. This cannot:
+// `CompiledRow.when_ast` is an OPAQUE compiled AST, so transcribing it would be guessing at a
+// structure the engine never promised.
+//
+// So `title_style_pin` drove the REAL `_title_style_dispatcher()` over a grid of real node
+// contexts — every node type the rows name plus one they do not, every status they test plus one
+// they do not and the absent case, and the WAITING_FOR count on both sides of the `gte 1` boundary
+// — and recorded what the engine ANSWERED. This side evaluates the PUBLISHED table over the same
+// grid and must agree on every cell.
+//
+// That is stronger than a transcription check: a predicate merely WORDED differently passes, and a
+// predicate that is wrong fails, because neither is asserted — only the answers are.
+
+import { ENGINE_LITERAL_RENDER_TITLE_STYLE } from "../scripts/compile-resolution.mjs";
+import { titleStyleFor, nodeLocalContext } from "../dist/present.js";
+
+describe("the title wrap — the published table against the engine's own answers", () => {
+  const PIN = FIXTURE.titleStyle;
+
+  test("the fixture carries the pin, and the grid actually separates the rows", () => {
+    assert.ok(PIN?.grid?.length > 0, "the fixture has no titleStyle grid; regenerate it");
+    const answers = new Set(PIN.grid.map((cell) => JSON.stringify(cell.styles)));
+    assert.ok(answers.size >= 3, `the grid produced only ${answers.size} distinct answers`);
+    assert.ok(PIN.grid.some((c) => c.styles.length === 0), "no cell reaches an empty answer");
+  });
+
+  test("THE DIFFERENTIAL: the published table agrees with the engine on every grid cell", () => {
+    const table = readConfigResolutionDeclaration({
+      resolution: { ...SERVED.resolution, renderTitleStyle: ENGINE_LITERAL_RENDER_TITLE_STYLE },
+    }).resolution.renderTitleStyle;
+    assert.ok(table, "the reader refused the generator's own title-style table");
+
+    let checked = 0;
+    for (const cell of PIN.grid) {
+      const fields = cell.status === null ? {} : { status: cell.status };
+      const outgoing = Array.from({ length: cell.waitingForOutgoing }, () => "WAITING_FOR");
+      const context = nodeLocalContext({ type: cell.nodeType, fields }, outgoing);
+      assert.deepEqual(
+        [...titleStyleFor(table, context)],
+        cell.styles,
+        `disagreed on ${cell.nodeType} / status=${cell.status} / WAITING_FOR=${cell.waitingForOutgoing}`,
+      );
+      checked += 1;
+    }
+    assert.ok(checked > 20, `only ${checked} cells were compared`);
+  });
+
+  test("THE TWO CONTEXT DEFAULTS, each isolated — they are what make the agreement above real", () => {
+    const table = ENGINE_LITERAL_RENDER_TITLE_STYLE;
+    // ZERO-DEFAULT COUNT. A task that is `waiting` with NO outgoing WAITING_FOR edge must not match
+    // the `gte 1` row. If the count resolved to undefined instead of 0 the comparison would be
+    // meaningless, and this is the commonest shape in his vault — the contract's own header records
+    // that these all render UNSTYLED today.
+    assert.deepEqual(
+      [...titleStyleFor(table, nodeLocalContext({ type: "task", fields: { status: "waiting" } }, []))],
+      [],
+    );
+    assert.deepEqual(
+      [...titleStyleFor(table, nodeLocalContext({ type: "task", fields: { status: "waiting" } }, ["WAITING_FOR"]))],
+      ["italic"],
+    );
+    // NULL-DEFAULT FIELD. A node with no `status` at all must fall through every status row to the
+    // fallback, not error and not match.
+    assert.deepEqual([...titleStyleFor(table, nodeLocalContext({ type: "task", fields: {} }))], []);
+  });
+
+  test("FIRST MATCH WINS, and a later row cannot answer for an earlier one", () => {
+    const table = ENGINE_LITERAL_RENDER_TITLE_STYLE;
+    // `in_progress` is row 3 and `explainer` is row 5; a task in progress takes bold, and only a
+    // node reaching neither takes the fallback.
+    assert.deepEqual(
+      [...titleStyleFor(table, nodeLocalContext({ type: "task", fields: { status: "in_progress" } }))],
+      ["bold"],
+    );
+    assert.deepEqual(
+      [...titleStyleFor(table, nodeLocalContext({ type: "explainer", fields: { status: "open" } }))],
+      ["italic"],
+    );
+    assert.deepEqual(
+      [...titleStyleFor(table, nodeLocalContext({ type: "outcome", fields: { status: "in_progress" } }))],
+      [],
+      "a non-task took the task-only in_progress row",
+    );
+  });
+
+  test("THE OPERATOR SET IS PINNED — a new engine operator is a refusal, not a silent gap", () => {
+    // The published shape carries the rule engine's OWN nine operators rather than the three these
+    // rows use, so a row using `or` or `ne` needs no shape change. If the engine's set GROWS, the
+    // reader has an operator it cannot evaluate; the Python pin refuses, and this asserts the set
+    // the reader was written against.
+    assert.deepEqual(PIN.operators, ["and", "eq", "gt", "gte", "lt", "lte", "ne", "not", "or"]);
+  });
+
+  test("THE ROW ALREADY KNOWN TO BE WRONG IS EXPRESSIBLE, AND EVALUABLE, TODAY", () => {
+    // THE POINT OF PUBLISHING THE ENGINE'S OWN OPERATOR SET AND OPAQUE PATHS, proven rather than
+    // asserted. The contract's own header (`render_title_style.yaml`) records that its WAITING_FOR
+    // row is DEAD in its live form: it tests an OUTGOING edge as a proxy for an incoming one, and
+    // under `waiter_status_propagation` the awaited dependency holds the INCOMING edge — so the
+    // nodes the row exists to italicise all render unstyled. The fix is not available to the engine
+    // yet, because `incoming_edge_ids` is a plain dict with no default and reaching for it raises a
+    // ResolutionError out of `decide` — aborting a whole cycle rather than mis-styling a line.
+    //
+    // A vocabulary carrying only today's five rows could not SAY the corrected row: a slot no
+    // config can fill. This one can, with no shape change — the path is opaque and
+    // `nodeLocalContext` already resolves the incoming mirror with the same zero default.
+    const future = {
+      rows: [{
+        when: { op: "and", terms: [
+          { op: "eq", path: "node.type", value: "task" },
+          { op: "eq", path: "node.fields.status", value: "waiting" },
+          { op: "gte", path: "node.incoming_edge_type_counts.WAITING_FOR", value: 1 },
+        ] },
+        then: ["italic"],
+      }],
+      fallback: [],
+    };
+    const waiting = { type: "task", fields: { status: "waiting" } };
+    // The awaited dependency — what the live graph actually makes, and what the row is aiming at.
+    assert.deepEqual([...titleStyleFor(future, nodeLocalContext(waiting, [], ["WAITING_FOR"]))], ["italic"]);
+    // The waiter, holding the OUTGOING edge — what today's row lights instead.
+    assert.deepEqual([...titleStyleFor(future, nodeLocalContext(waiting, ["WAITING_FOR"], []))], []);
+    // And the zero default holds on the incoming side too, or the corrected row would misfire the
+    // same way the current one does.
+    assert.deepEqual([...titleStyleFor(future, nodeLocalContext(waiting))], []);
+
+    // AND THE READER ACCEPTS IT — the shape is publishable, not merely evaluable in a test.
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...SERVED.resolution, renderTitleStyle: future },
+    });
+    assert.deepEqual(problems, []);
+    assert.equal(resolution.renderTitleStyle.rows.length, 1);
+  });
+
+  test("AN UNKNOWN OPERATOR REFUSES THE WHOLE TABLE, never one row", () => {
+    // First-match-wins: skipping an unreadable row silently promotes every row after it, so a node
+    // that should have matched the skipped one takes the next row's styles. Refusing gives no
+    // answer; skipping gives a wrong one.
+    const broken = {
+      rows: [{ when: { op: "matches", path: "node.type", value: "task" }, then: ["bold"] }],
+      fallback: [],
+    };
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...SERVED.resolution, renderTitleStyle: broken },
+    });
+    assert.equal(resolution.renderTitleStyle, undefined, "a table with an unreadable row was accepted");
+    assert.ok(problems.some((p) => p.includes('"matches"')), problems.join("; "));
+  });
+});

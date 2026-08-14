@@ -488,16 +488,16 @@ function readPredicate(path, value, problems) {
     return inner === void 0 ? void 0 : { not: inner };
   }
   if (keys.length > 0 && keys.every((k) => COMPARISON_OPERATORS.includes(k))) {
-    const compare = {};
+    const compare2 = {};
     for (const operator of keys) {
       const operand = value[operator];
       if (!isFieldValue(operand)) {
         problems.push(`'${path}.${operator}' is ${shapeOf(operand)}, not a scalar or null`);
         return void 0;
       }
-      compare[operator] = operand;
+      compare2[operator] = operand;
     }
-    return compare;
+    return compare2;
   }
   problems.push(
     `'${path}' carries ${keys.length} operator(s) (${keys.join(", ")}) \u2014 exactly one of eq, not, or one or more of gt/gte/lt/lte`
@@ -884,6 +884,10 @@ var TOP_KEYS2 = [
   // never a map, because first-match-wins and "no status at all" are both real answers.
   "renderCheckbox",
   "renderCheckboxSource",
+  // The per-node title wrap. Nested predicates over an opaque path, unlike renderCheckbox's
+  // one-field comparison — see `TitleStylePredicate`.
+  "renderTitleStyle",
+  "renderTitleStyleSource",
   // Whether a type's line carries a stamp, and what identifies it when it does not. Keyed over
   // every declared type, so absence means "unknown type", never "ordinary type".
   "identityModes",
@@ -1418,10 +1422,83 @@ function readContinuationFields(value, problems) {
   }
   return out;
 }
-function readRenderCheckboxSource(value, problems) {
+var TITLE_STYLE_COMPARISONS = /* @__PURE__ */ new Set(["eq", "ne", "gt", "gte", "lt", "lte"]);
+function readTitleStylePredicate(value, path, problems) {
+  if (!isPlainObject3(value) || typeof value.op !== "string") {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not a predicate with an 'op'`);
+    return void 0;
+  }
+  const op = value.op;
+  if (TITLE_STYLE_COMPARISONS.has(op)) {
+    if (typeof value.path !== "string" || value.path === "") {
+      problems.push(`'${path}.path' is ${JSON.stringify(value.path)}, not a non-empty string`);
+      return void 0;
+    }
+    if (typeof value.value !== "string" && typeof value.value !== "number") {
+      problems.push(`'${path}.value' is ${JSON.stringify(value.value)}, not a string or number`);
+      return void 0;
+    }
+    return { op, path: value.path, value: value.value };
+  }
+  if (op === "and" || op === "or") {
+    if (!Array.isArray(value.terms) || value.terms.length === 0) {
+      problems.push(`'${path}.terms' is ${shapeOf2(value.terms)}, not a non-empty array`);
+      return void 0;
+    }
+    const terms = [];
+    for (const [index, term] of value.terms.entries()) {
+      const read = readTitleStylePredicate(term, `${path}.terms[${index}]`, problems);
+      if (read === void 0) return void 0;
+      terms.push(read);
+    }
+    return { op, terms };
+  }
+  if (op === "not") {
+    const term = readTitleStylePredicate(value.term, `${path}.term`, problems);
+    return term === void 0 ? void 0 : { op: "not", term };
+  }
+  problems.push(
+    `'${path}.op' is ${JSON.stringify(op)}, which this reader cannot evaluate \u2014 the whole title style table stays unknown rather than skipping the row, because first-match-wins means a skipped row silently promotes every row after it`
+  );
+  return void 0;
+}
+function readRenderTitleStyle(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.renderTitleStyle`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 the title wrap stays unknown`);
+    return void 0;
+  }
+  const readStyles = (raw, where) => {
+    if (!Array.isArray(raw) || !raw.every((x) => typeof x === "string" && x !== "")) {
+      problems.push(`'${where}' is ${shapeOf2(raw)}, not an array of non-empty strings`);
+      return void 0;
+    }
+    return raw;
+  };
+  const fallback = readStyles(value.fallback, `${path}.fallback`);
+  if (fallback === void 0) return void 0;
+  if (!Array.isArray(value.rows)) {
+    problems.push(`'${path}.rows' is ${shapeOf2(value.rows)}, not an array`);
+    return void 0;
+  }
+  const rows = [];
+  for (const [index, row] of value.rows.entries()) {
+    if (!isPlainObject3(row)) {
+      problems.push(`'${path}.rows[${index}]' is ${shapeOf2(row)}, not an object`);
+      return void 0;
+    }
+    const when = readTitleStylePredicate(row.when, `${path}.rows[${index}].when`, problems);
+    if (when === void 0) return void 0;
+    const then = readStyles(row.then, `${path}.rows[${index}].then`);
+    if (then === void 0) return void 0;
+    rows.push({ when, then });
+  }
+  return { rows, fallback };
+}
+function readRenderCheckboxSource(value, problems, key = "renderCheckboxSource") {
   if (value !== "engine-literal") {
     problems.push(
-      `'${RESOLUTION_TABLE_KEY}.renderCheckboxSource' is ${JSON.stringify(value)}, not "engine-literal" \u2014 the checkbox contract is engine source with no operator override surface, so any other answer means this declaration was produced by something else`
+      `'${RESOLUTION_TABLE_KEY}.${key}' is ${JSON.stringify(value)}, not "engine-literal" \u2014 the checkbox contract is engine source with no operator override surface, so any other answer means this declaration was produced by something else`
     );
     return void 0;
   }
@@ -1711,6 +1788,8 @@ function readConfigResolutionDeclaration(document2) {
       // override surface, so there is no second answer for a reader to distinguish. Published
       // anyway, and validated, so the KIND of fact is stated rather than assumed.
       renderCheckboxSource: "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : void 0,
+      renderTitleStyle: "renderTitleStyle" in raw ? readRenderTitleStyle(raw.renderTitleStyle, problems) : void 0,
+      renderTitleStyleSource: "renderTitleStyleSource" in raw ? readRenderCheckboxSource(raw.renderTitleStyleSource, problems, "renderTitleStyleSource") : void 0,
       identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : void 0,
       continuationFields: "continuationFields" in raw ? readContinuationFields(raw.continuationFields, problems) : void 0,
       // REUSES `readTagOrder`/`readTagOrderSource` — three canonical orders, one shape, one reader.
@@ -1857,6 +1936,62 @@ function sectionOrderFor(view, declared) {
     return declared;
   }
   return { ...declared, [view.id]: view.sections };
+}
+
+// app/present/express/titlestyle.ts
+function nodeLocalContext(node, outgoingEdgeTypes = [], incomingEdgeTypes = []) {
+  const count = (types) => {
+    const out = {};
+    for (const type of types) out[type] = (out[type] ?? 0) + 1;
+    return out;
+  };
+  return {
+    node: {
+      type: node.type,
+      fields: { ...node.fields },
+      edge_type_counts: count(outgoingEdgeTypes),
+      incoming_edge_type_counts: count(incomingEdgeTypes)
+    }
+  };
+}
+function resolvePath(context, path) {
+  const segments = path.split(".");
+  let cursor = context;
+  for (const [index, segment] of segments.entries()) {
+    if (cursor === null || typeof cursor !== "object") return void 0;
+    const parent = cursor;
+    if (!(segment in parent)) {
+      const container = segments.slice(0, index).join(".");
+      if (container === "node.edge_type_counts" || container === "node.incoming_edge_type_counts") return 0;
+      if (container === "node.fields") return null;
+      return void 0;
+    }
+    cursor = parent[segment];
+  }
+  return cursor;
+}
+function compare(op, left, right) {
+  if (op === "eq") return left === right;
+  if (op === "ne") return left !== right;
+  if (typeof left !== "number" || typeof right !== "number") return false;
+  if (op === "gt") return left > right;
+  if (op === "gte") return left >= right;
+  if (op === "lt") return left < right;
+  if (op === "lte") return left <= right;
+  return false;
+}
+function titleStylePredicateHolds(predicate, context) {
+  if ("terms" in predicate) {
+    return predicate.op === "and" ? predicate.terms.every((term) => titleStylePredicateHolds(term, context)) : predicate.terms.some((term) => titleStylePredicateHolds(term, context));
+  }
+  if ("term" in predicate) return !titleStylePredicateHolds(predicate.term, context);
+  return compare(predicate.op, resolvePath(context, predicate.path), predicate.value);
+}
+function titleStyleFor(table, context) {
+  for (const row of table.rows) {
+    if (titleStylePredicateHolds(row.when, context)) return row.then;
+  }
+  return table.fallback;
 }
 
 // app/present/express/composition.ts
@@ -7312,6 +7447,7 @@ export {
   membershipFor,
   membershipSpec,
   mintWriteToken,
+  nodeLocalContext,
   openDrawer,
   openLine,
   orderingFor,
@@ -7359,6 +7495,8 @@ export {
   structuralRelationshipChangeFor,
   tagSpans,
   titleSpans,
+  titleStyleFor,
+  titleStylePredicateHolds,
   todayFor,
   viewButtons,
   visualLineOrder,
