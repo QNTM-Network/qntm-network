@@ -4765,3 +4765,20 @@ backlog:
     payload, not three semantic roles, and Datomic's five-tuple is why a semantic triple
     cannot carry change on its own.
   captured: '2026-08-14'
+- id: flag-app-index-html-2676-toggletask-and
+  title: '[asserted] app/index.html:2676 toggleTask and app/present/commit.ts:164 commitLine
+    are two write paths for ONE act: a checkbox flip. A tick by mouse reaches toggleTask;
+    the same tick by ''x'' reaches commitLine, which runs the resolver walk, arms settle/predict,
+    and holds a rebase retry on a 409. The mouse tick gets none of that. This divergence
+    IS why PR #176 existed — ops landed on commitLine in #174 and the mouse path kept
+    posting whole files for three weeks with nothing red. Every future write-path change
+    has to be made twice or it ships half-applied again.'
+  driving_capability: every-affordance-writes-back-through-the-source
+  asserted: 'app/index.html:2676 toggleTask and app/present/commit.ts:164 commitLine
+    are two write paths for ONE act: a checkbox flip. A tick by mouse reaches toggleTask;
+    the same tick by ''x'' reaches commitLine, which runs the resolver walk, arms settle/predict,
+    and holds a rebase retry on a 409. The mouse tick gets none of that. This divergence
+    IS why PR #176 existed — ops landed on commitLine in #174 and the mouse path kept
+    posting whole files for three weeks with nothing red. Every future write-path change
+    has to be made twice or it ships half-applied again.'
+  captured: '2026-08-14'

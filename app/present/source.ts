@@ -235,9 +235,20 @@ export type LineOp = readonly [number, number, readonly string[]];
  * `null` rather than a guess when the index is out of range: `writeFile` then sends no `ops` field
  * at all, which is byte-for-byte the request this browser sent before ops existed. A misplaced op
  * is silent corruption; a missing one is just today's whole-file write.
+ *
+ * ── IT TAKES `SourceEdit["kind"]`, NOT A UNION WRITTEN OUT BY HAND ──
+ *
+ * Every kind this file can fold, this function can express, and the type says so rather than a
+ * comment promising it. That is not tidiness: the hand-written union `"set-line" | "insert-line"`
+ * was silently NARROWER than `applyEdit`'s, so a caller holding the third kind — which is the
+ * commonest gesture in the app — could not ask for its ops at all, and the omission looked like a
+ * deliberate exclusion rather than the oversight it was. Tying the parameter to the union makes a
+ * FOURTH kind a compile error here on the day it is added to `SourceEdit`, in the one module that
+ * owns source edits, instead of a fourth affordance quietly posting whole files. The same closed-
+ * union discipline `applyEdit`'s explicit refusal branch already keeps, expressed in the type.
  */
 export function lineOps(
-  kind: "set-line" | "insert-line",
+  kind: SourceEdit["kind"],
   lineIndex: number,
   markdown: string,
 ): readonly LineOp[] | null {
@@ -245,9 +256,16 @@ export function lineOps(
   const lines = markdown.split("\n");
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex] as string];
-  // set-line REPLACES the row at lineIndex; insert-line OPENS a new row there and pushes the rest
-  // down. The half-open range is the only difference, and it is the same distinction `SourceEdit`
-  // already draws between its two line kinds.
+  // set-line and set-checkbox both REPLACE the row at lineIndex; insert-line OPENS a new row there
+  // and pushes the rest down. The half-open range is the only difference, and it is the same
+  // distinction `SourceEdit` already draws — a kind that names a line already in the file against
+  // the one kind that names the place a line is about to be.
+  //
+  // A CHECKBOX FLIP IS A REPLACE, AND THE ONE-CHARACTER RANGE IT LOOKS LIKE IS NOT AVAILABLE. The
+  // glyph is one character, but `line_cache` is keyed `(file_path, line_number)` and fingerprinted
+  // per line — nothing in the model is keyed below a line — so `[i, i + 1, [the whole new row]]`
+  // is the narrowest op the far end can resolve, and it is identical to `set-line`'s. That the two
+  // ranges coincide is a property of the wire format, not a coincidence worth a separate branch.
   return kind === "insert-line"
     ? [[lineIndex, lineIndex, replacement] as const]
     : [[lineIndex, lineIndex + 1, replacement] as const];

@@ -177,6 +177,51 @@ describe("app.html's own write path", () => {
     }
   });
 
+  test("the tick sends the edit it IS, alongside the file — and the two agree by construction", async () => {
+    // ── WHY THIS ASSERTION LIVES HERE AND NOT ONLY IN `tests/present-line-ops.test.mjs` ──
+    //
+    // That file proves `lineOps("set-checkbox", i, markdown)` returns the right op. It cannot prove
+    // that THIS PAGE asks for one. `app/index.html` is outside `tsconfig.json`'s `include`, so a
+    // `writeFile(view, next, source, token)` missing its fifth argument compiles, ships, and posts
+    // a whole file exactly as it did before — no error anywhere, just the graph server going back
+    // to reconstructing the edit with `difflib`. That is precisely the shape `f448da2` shipped on
+    // this same page and `tests/app-gesture-write-path.test.mjs` exists to catch for the keyboard.
+    // A real click through the real page is the only thing that sees it.
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    paintParked();
+    const box = walk(elements.get("viewBody")).find((el) => el.type === "checkbox");
+    box.checked = true;
+    box.dispatch("change");
+    await new Promise((r) => setImmediate(r));
+
+    const after = posted.body.markdown.split("\n");
+    // Line 3 is the first task row — the same line the byte-for-byte test above proves is the only
+    // one that changed. Half-open over the file's line list: `[3, 4)` replaces exactly that row.
+    assert.deepEqual(posted.body.ops, [[3, 4, [after[3]]]], "the tick posted no edit, or the wrong one");
+
+    // AND THE OP'S TEXT IS THE FILE'S, NOT A SECOND COPY OF IT. Read the op's range back out of the
+    // whole-file body that rode with it: if these ever diverge, one request describes two different
+    // edits and the server picks one. Sending both bodies is only safe because it cannot happen.
+    const [[start, end, replacement]] = posted.body.ops;
+    assert.equal(after.slice(start, end).join("\n"), replacement.join("\n"));
+    assert.ok(replacement[0].startsWith("- [x] "), "the op does not carry the ticked glyph");
+  });
+
+  test("the whole file still rides with the op, so a Worker that ignores ops writes the same bytes", async () => {
+    // THE SHIPPING CONDITION, ASSERTED RATHER THAN INTENDED. The Worker 422s any body with no
+    // `markdown` (its own `body?.markdown == null` check), so an ops-only tick could not reach the
+    // server at all until that Worker ships. Sending both means neither half has to ship first.
+    page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
+    paintParked();
+    const box = walk(elements.get("viewBody")).find((el) => el.type === "checkbox");
+    box.checked = true;
+    box.dispatch("change");
+    await new Promise((r) => setImmediate(r));
+
+    assert.equal(typeof posted.body.markdown, "string");
+    assert.equal(posted.body.markdown.length, VIEW.markdown.length, "the whole-file body stopped being whole");
+  });
+
   test("a nested task edits its own line and not its parent's", async () => {
     page.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
     paintParked();

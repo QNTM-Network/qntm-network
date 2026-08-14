@@ -990,6 +990,7 @@ import {
   paint,
   visualLineOrder,
   applyEdit,
+  lineOps,
   boundaryLine,
   classifyLine,
   indentedLine,
@@ -2683,8 +2684,26 @@ async function toggleTask(view, toggle) {
   // air at once, and the register has to be able to tell its answer from a line commit's. That is
   // the whole of the two-writes-to-one-path case.
   const token = mintWriteToken();
+  // THE EDIT THIS TICK IS, NO LONGER DISCARDED — and this gesture is the one that was still
+  // discarding it. The line commit path (`commitLine`, app/present/commit.ts) has sent its ops
+  // since #174; a tick went through this function instead and posted the whole file, so the
+  // commonest gesture in the app was the only one the graph server still had to reconstruct with
+  // `difflib`. `toggle.lineIndex` is the index `applyEdit` was given, and `next` is the file it
+  // returned, so the op's text is read OUT OF the fold rather than rebuilt beside it — the same
+  // by-construction agreement between the two halves of the request that `lineOps`' own header
+  // describes, and the reason both bodies can ride together at any server.
+  //
+  // `set-checkbox` IS PASSED AS ITSELF, not translated to `set-line` here. The two mint the same
+  // range, so nothing on the wire differs — but this page is outside `tsconfig.json`'s `include`
+  // and a translation written here is checked by nothing. Handing the module the kind the edit
+  // actually has leaves the mapping in `lineOps`, where the type checker reads it.
+  //
+  // `null` when the index is out of range, which sends no `ops` field and is byte-for-byte the
+  // request this line posted before this change. A misplaced op is silent corruption; a missing
+  // one is just today's whole-file write.
+  const ops = lineOps("set-checkbox", toggle.lineIndex, next);
   try {
-    const data = await writeFile(view, next, toggle.source, token);
+    const data = await writeFile(view, next, toggle.source, token, ops);
     // THE MARKDOWN THAT WENT ON THE WIRE, HANDED TO `arrive` SO AN ACK MEANS SOMETHING. Without it
     // an accepted write is indistinguishable from an answer that lost its projection: the server's
     // claim is "this file now says what you sent", and the only copy of "what you sent" is here.
