@@ -245,6 +245,27 @@ export interface RenderCheckboxRow {
  * know what identifies the node instead — the same half-a-decision shape as publishing
  * `renderCheckbox`'s rows without its `fallback`.
  */
+/**
+ * ONE CONTINUATION LINE a node type re-emits beneath its own line.
+ *
+ * `_render_node_line` composes it as `{indent+1}{bullet} {value} {token}` — one indent level
+ * deeper than the node line, the field's value, and a trailing BARE tag.
+ *
+ * `token: null` means the engine emits the line with NO trailing tag, which happens when no
+ * vocabulary token binds the field or when MORE THAN ONE does — `field_binding_token_for` returns
+ * `null` on an ambiguous reverse mapping rather than picking. It is not "unknown": it is the
+ * engine's own answer, and a composer must omit the tag too.
+ *
+ * THE TAG IS LOAD-BEARING, not decoration. `view-render-language-is-ingest-language`: a rendered
+ * continuation line has to be its own valid re-ingest input, or the next cycle reads it as an
+ * untagged line and mints a stray PART_OF child. A composer that wrote the value without the tag
+ * would be authoring a line the engine then turns into a node.
+ */
+export interface ContinuationField {
+  readonly field: string;
+  readonly token: string | null;
+}
+
 export interface IdentityMode {
   readonly unique: boolean;
   readonly field: string | null;
@@ -468,6 +489,21 @@ export interface ConfigResolutionTable {
    */
   readonly identityModes: Readonly<Record<string, IdentityMode>> | undefined;
   /**
+   * node type -> the continuation lines it re-emits. See `ContinuationField`.
+   *
+   * Keyed ONLY by the types that declare them, unlike `chromeShapes`/`identityModes`. Those answer
+   * a question about EVERY node, so a missing key there is ambiguous and had to be closed. Here a
+   * missing key has exactly one meaning — this type emits no continuation line — which is the same
+   * answer an empty list would give, so the total-function treatment would buy nothing.
+   */
+  readonly continuationFields: Readonly<Record<string, readonly ContinuationField[]>> | undefined;
+  /** WITHIN "markers" — which marker glyph comes first. `tagOrder`'s sibling, same shape. */
+  readonly markerOrder: TagOrder | undefined;
+  readonly markerOrderSource: "engine-literal" | undefined;
+  /** WITHIN "chrome" — which outgoing-edge tag comes first. `tagOrder`'s sibling, same shape. */
+  readonly edgeTagOrder: TagOrder | undefined;
+  readonly edgeTagOrderSource: "engine-literal" | undefined;
+  /**
    * WHICH ANSWER `composition.bullet`/`composition.titleStyles` ARE, separately from the block's
    * own `compositionSource`. `composition.form:` is optional INSIDE an optional `composition:`, so
    * a config that orders cells without wrapping a title publishes `compositionSource: "config"`
@@ -535,6 +571,23 @@ export interface ConfigResolutionReading {
 /** The top-level key this module owns. `declaration.ts` knows its name only to skip it. */
 export const RESOLUTION_TABLE_KEY = "resolution";
 
+// ── A RULE FOR EVERY READER BELOW, LEARNED TWICE AND BOTH TIMES THE SAME WAY ──
+//
+// A READER THAT NAMES ITS KEY IN PROSE STOPS BEING REUSABLE THE MOMENT IT READS A SECOND KEY, and
+// the failure is not cosmetic: the diagnostic sends the operator to a file that is perfectly fine.
+//
+// It has happened twice here. `readCompositionSource` hardcoded `compositionSource` and was then
+// reused for `compositionFormSource`; `readTagOrder`/`readTagOrderSource` hardcoded `tagOrder` and
+// were then reused for `markerOrder` and `edgeTagOrder`. In both cases the reader was correct, the
+// validation was correct, and a malformed `markerOrder` reported a problem in `tagOrder`.
+//
+// Both were found by REUSING the reader, never by reading it — which is why this is written here
+// rather than left to review. When a reader can answer for more than one key, its key is a
+// PARAMETER and the problem text interpolates it. When it answers for exactly one, naming that key
+// is fine, and the day it gains a second is the day this applies.
+//
+// The generator side is where that day arrives: adding a key to `compile-resolution.mjs` means
+// adding a reader here, and the cheapest reader is a copy of the nearest one.
 const TOP_KEYS = [
   "registration",
   "lineGrammars",
@@ -566,6 +619,15 @@ const TOP_KEYS = [
   // Whether a type's line carries a stamp, and what identifies it when it does not. Keyed over
   // every declared type, so absence means "unknown type", never "ordinary type".
   "identityModes",
+  // The extra indented lines a node type re-emits beneath its own line, and the bare tag each
+  // carries. Keyed only by the types that declare them — absence has one meaning here.
+  "continuationFields",
+  // The other two canonical cell orders. `tagOrder` shipped alone; a composer could order one of
+  // the three cell families that carry more than one cell, and had to invent the rest.
+  "markerOrder",
+  "markerOrderSource",
+  "edgeTagOrder",
+  "edgeTagOrderSource",
   "dropped",
 ] as const;
 const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
@@ -1186,6 +1248,45 @@ function readIdentityModes(value: unknown, problems: string[]): Readonly<Record<
   return out;
 }
 
+/**
+ * `resolution.continuationFields` — see `ContinuationField`. Whole-fact `undefined` on a malformed
+ * map, and one bad entry poisons it: a dropped continuation line is a line the operator's node
+ * silently stops carrying, and a partial map cannot be told from a type that declares none.
+ */
+function readContinuationFields(
+  value: unknown,
+  problems: string[],
+): Readonly<Record<string, readonly ContinuationField[]>> | undefined {
+  const path = `${RESOLUTION_TABLE_KEY}.continuationFields`;
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — every continuation line stays unknown`);
+    return undefined;
+  }
+  const out: Record<string, readonly ContinuationField[]> = {};
+  for (const [nodeType, declared] of Object.entries(value)) {
+    if (!Array.isArray(declared) || declared.length === 0) {
+      problems.push(`'${path}.${nodeType}' is ${shapeOf(declared)}, not a non-empty array`);
+      return undefined;
+    }
+    const lines: ContinuationField[] = [];
+    for (const [index, entry] of declared.entries()) {
+      if (!isPlainObject(entry) || typeof entry.field !== "string" || entry.field === "") {
+        problems.push(`'${path}.${nodeType}[${index}].field' is not a non-empty string`);
+        return undefined;
+      }
+      // `null` IS AN ANSWER, not a gap — the engine emits the line with no trailing tag when the
+      // reverse lookup is empty or ambiguous. Only a non-string, non-null value is malformed.
+      if (entry.token !== null && (typeof entry.token !== "string" || entry.token === "")) {
+        problems.push(`'${path}.${nodeType}[${index}].token' is ${JSON.stringify(entry.token)}, not a non-empty string or null`);
+        return undefined;
+      }
+      lines.push({ field: entry.field, token: entry.token });
+    }
+    out[nodeType] = lines;
+  }
+  return out;
+}
+
 /** `resolution.renderCheckboxSource` — one legal value, checked rather than assumed. */
 function readRenderCheckboxSource(value: unknown, problems: string[]): "engine-literal" | undefined {
   if (value !== "engine-literal") {
@@ -1404,8 +1505,16 @@ function readCompositionSource(
  * the WHOLE fact, the same posture `readComposition` takes: a half-declared order (a
  * `canonicalOrder` but no `unrankedPolicy`) is a worse failure to hand a caller silently than
  * declining to publish an order at all. */
-function readTagOrder(value: unknown, problems: string[]): TagOrder | undefined {
-  const path = `${RESOLUTION_TABLE_KEY}.tagOrder`;
+function readTagOrder(
+  value: unknown,
+  problems: string[],
+  key: "tagOrder" | "markerOrder" | "edgeTagOrder" = "tagOrder",
+): TagOrder | undefined {
+  // `key` IS A PARAMETER BECAUSE THIS READER IS NOW SHARED by three orders. It hardcoded
+  // `tagOrder`, which was harmless while it read one key and became a lie the moment it read
+  // three: a problem naming `tagOrder` when `markerOrder` was the malformed one sends the operator
+  // to a key that is perfectly fine. Same correction `readCompositionSource` took on 2026-08-14.
+  const path = `${RESOLUTION_TABLE_KEY}.${key}`;
   if (!isPlainObject(value)) {
     problems.push(`'${path}' is ${shapeOf(value)}, not an object — tag order stays unknown`);
     return undefined;
@@ -1435,11 +1544,15 @@ function readTagOrder(value: unknown, problems: string[]): TagOrder | undefined 
 
 /** `resolution.tagOrderSource` — see `TagOrder`'s own header for why `"engine-literal"` is the
  * only real value. Mirrors `readCompositionSource` exactly, one member narrower. */
-function readTagOrderSource(value: unknown, problems: string[]): "engine-literal" | undefined {
+function readTagOrderSource(
+  value: unknown,
+  problems: string[],
+  key: "tagOrderSource" | "markerOrderSource" | "edgeTagOrderSource" = "tagOrderSource",
+): "engine-literal" | undefined {
   if (!(TAG_ORDER_SOURCES as readonly string[]).includes(value as string)) {
     problems.push(
-      `'${RESOLUTION_TABLE_KEY}.tagOrderSource' is ${JSON.stringify(value)}, not one of ` +
-        `${TAG_ORDER_SOURCES.join(", ")} — which answer tagOrder is stays unknown`,
+      `'${RESOLUTION_TABLE_KEY}.${key}' is ${JSON.stringify(value)}, not one of ` +
+        `${TAG_ORDER_SOURCES.join(", ")} — which answer that order is stays unknown`,
     );
     return undefined;
   }
@@ -1564,6 +1677,16 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
       renderCheckboxSource:
         "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : undefined,
       identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : undefined,
+      continuationFields:
+        "continuationFields" in raw ? readContinuationFields(raw.continuationFields, problems) : undefined,
+      // REUSES `readTagOrder`/`readTagOrderSource` — three canonical orders, one shape, one reader.
+      // Three copies of the same validation is how three orders drift into three dialects.
+      markerOrder: "markerOrder" in raw ? readTagOrder(raw.markerOrder, problems, "markerOrder") : undefined,
+      markerOrderSource:
+        "markerOrderSource" in raw ? readTagOrderSource(raw.markerOrderSource, problems, "markerOrderSource") : undefined,
+      edgeTagOrder: "edgeTagOrder" in raw ? readTagOrder(raw.edgeTagOrder, problems, "edgeTagOrder") : undefined,
+      edgeTagOrderSource:
+        "edgeTagOrderSource" in raw ? readTagOrderSource(raw.edgeTagOrderSource, problems, "edgeTagOrderSource") : undefined,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : undefined,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : undefined,
       dropped: "dropped" in raw ? readDropped(raw.dropped, problems) : {},

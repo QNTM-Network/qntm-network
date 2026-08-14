@@ -83,6 +83,7 @@ authored.
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import logging
 import sys
@@ -102,6 +103,7 @@ from qntm_md.render.renderer import (  # noqa: E402
     _title_style_dispatcher,
     _order_tags_dispatcher,
     _order_markers_dispatcher,
+    _order_edge_tags_dispatcher,
     _assemble_marker_cells,
     _outgoing_edge_chrome_cells,
     _apply_title_style,
@@ -562,6 +564,116 @@ def build_fixtures() -> list[dict[str, Any]]:
     return fixtures
 
 
+def canonical_order_pins() -> dict[str, dict[str, Any]]:
+    """The three canonical cell orders, READ THROUGH THE REAL DISPATCHER FACTORIES.
+
+    `composition.tail` names three cell families that can carry more than one cell — `tags`,
+    `markers`, `chrome` — and each has its own canonical order contract. `tagOrder` has been
+    published alone since 2026-08-07; this pins all three, so a composer never has to invent one.
+
+    ── WHY THE FACTORY AND NOT THE FILE, AND WHY IT MATTERS MORE HERE THAN FOR THE CHECKBOX ──
+
+    These contracts are being MOVED out of `src/qntm_md/render/contracts/` into config.
+    `renderer.py`'s `_engine_render_dispatcher(table_id)` takes a table id, resolves the path
+    ITSELF, and caches the dispatcher; the five named wrappers are no-argument delegates to it. So
+    asking the factory survives the move and naming a path would not. Same lesson as pinning the
+    checkbox against `_checkbox_dispatcher()` rather than parsing its YAML, one level up.
+
+    ── THE SIGNATURE IS PART OF WHAT THIS ASSERTS, DELIBERATELY ──
+
+    Finishing `rendering_contract` means keying the dispatcher cache BY SHEET, at which point a
+    no-argument `_order_markers_dispatcher()` cannot answer — the order would depend on which view
+    is rendering, and this pin would be asserting a global answer that no longer exists. A pin that
+    kept passing through that change would be the same shape as the retired copies these contracts
+    warn about: still green, no longer true. So the arity is checked, and the failure is a REFUSAL
+    naming the change rather than a silently narrower claim.
+    """
+    # (published key, factory, table id, the params key THAT dispatcher reads). The last is not
+    # cosmetic: `OrderMarkersActionDispatcher` reads `params["markers"]` and the two tag dispatchers
+    # read `params["tags"]`, so one shared probe payload would KeyError on the marker table rather
+    # than prove anything about it.
+    dispatchers = (
+        ("tagOrder", _order_tags_dispatcher, "order_tags", "tags"),
+        ("markerOrder", _order_markers_dispatcher, "order_markers", "markers"),
+        ("edgeTagOrder", _order_edge_tags_dispatcher, "order_edge_tags", "tags"),
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for key, factory, table_id, params_key in dispatchers:
+        signature = inspect.signature(factory)
+        if signature.parameters:
+            print(
+                f"REFUSING: {factory.__name__}{signature} now takes argument(s) "
+                f"{list(signature.parameters)} — the canonical order is no longer one global "
+                "answer, so publishing it as one would be a claim the engine has stopped making. "
+                "This pin needs re-scoping to whatever the parameter keys it by.",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        dispatcher = factory()
+        # THE ORDER AS THE DISPATCHER HOLDS IT, not as the YAML spells it — the same "agree with the
+        # decision, not with a file" posture the checkbox pin takes. `_table` is the compiled
+        # contract the dispatcher was constructed with; reaching for it is an extraction, and an
+        # extraction can be wrong, so it is CONFIRMED BY DISPATCH immediately below rather than
+        # trusted. If the attribute ever disappears this refuses loudly instead of guessing.
+        table = getattr(dispatcher, "_table", None)
+        if table is None or not hasattr(table, "canonical_order"):
+            print(
+                f"REFUSING: {factory.__name__}() no longer exposes a compiled table with a "
+                "canonical_order — the extraction below is guessing, so it stops here",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        canonical = [str(token) for token in table.canonical_order]
+        # `.value`, NOT `str()`. `unranked_policy` is an enum, and `str()` on it yields
+        # "UnrankedPolicy.APPEND_STABLE" — which is not what the contract spells, not what
+        # `tagOrder` has published since 2026-08-07, and would have made this pin disagree with the
+        # literal it exists to confirm. Caught by the first run.
+        policy = getattr(table.unranked_policy, "value", None) or str(table.unranked_policy)
+        # CONFIRMED BY DRIVING IT. Hand the dispatcher the canonical tokens REVERSED plus one token
+        # it cannot know, and the answer must be the canonical order followed by the stranger. That
+        # proves the extracted list IS the ranking the dispatcher applies, and proves the policy is
+        # append_stable, without either fact being read twice from the same place.
+        stranger = "#\u0000-not-a-real-token"
+        driven = dispatcher.dispatch(table_id, {params_key: list(reversed(canonical)) + [stranger]}).result
+        # AN UNRECOGNISED POLICY REFUSES; IT DOES NOT SKIP THE CHECK. The first draft wrote
+        # `if policy == "append_stable" else None` and then only asserted when it was — and because
+        # `str()` on the enum yielded "UnrankedPolicy.APPEND_STABLE", the confirmation quietly did
+        # not run at all while the script printed success. A guard that turns itself off when it
+        # does not recognise the input is the vacuity this whole file exists to refuse.
+        if policy != "append_stable":
+            print(
+                f"REFUSING: {key} declares unranked_policy {policy!r}, which this pin cannot "
+                "confirm by dispatch — extend the probe rather than letting it pass unchecked",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        if list(driven) != canonical + [stranger]:
+            print(
+                f"REFUSING: {key} extracted {canonical!r} but dispatching returned {list(driven)!r} "
+                "— the extraction does not describe the decision",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
+        if not canonical:
+            print(f"REFUSING: {key} resolved an EMPTY canonical order — pinning it proves nothing", file=sys.stderr)
+            raise SystemExit(2)
+        if len(set(canonical)) != len(canonical):
+            print(f"REFUSING: {key} repeats a token in its canonical order: {canonical}", file=sys.stderr)
+            raise SystemExit(2)
+        out[key] = {"canonicalOrder": canonical, "unrankedPolicy": policy}
+
+    # POSITIVE CONTROL: three tables that all resolved the SAME list would mean the factory is
+    # ignoring its `table_id` and every comparison below would hold vacuously.
+    if len({tuple(v["canonicalOrder"]) for v in out.values()}) != len(out):
+        print(
+            "REFUSING: two canonical orders are identical — the dispatcher factory may be ignoring "
+            "its table_id, which would make all three pins one pin",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return out
+
+
 def render_checkbox_pin() -> dict[str, Any]:
     """The `render_checkbox` contract, READ THROUGH THE REAL DISPATCHER, as publishable rows.
 
@@ -687,6 +799,10 @@ def main() -> int:
         # asserts `presentation.json`'s `resolution.renderCheckbox` equals this, so the literal in
         # `compile-resolution.mjs` cannot drift from the contract without a red test.
         "renderCheckbox": render_checkbox_pin(),
+        # The three canonical cell orders — see `canonical_order_pins`. `tests/composition-
+        # agreement.test.mjs` asserts the published literals equal these, so a contract edit that
+        # does not reach `compile-resolution.mjs` is a red test rather than a silent divergence.
+        "canonicalOrders": canonical_order_pins(),
         "fixtures": fixtures,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

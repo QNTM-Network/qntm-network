@@ -886,6 +886,15 @@ var TOP_KEYS2 = [
   // Whether a type's line carries a stamp, and what identifies it when it does not. Keyed over
   // every declared type, so absence means "unknown type", never "ordinary type".
   "identityModes",
+  // The extra indented lines a node type re-emits beneath its own line, and the bare tag each
+  // carries. Keyed only by the types that declare them — absence has one meaning here.
+  "continuationFields",
+  // The other two canonical cell orders. `tagOrder` shipped alone; a composer could order one of
+  // the three cell families that carry more than one cell, and had to invent the rest.
+  "markerOrder",
+  "markerOrderSource",
+  "edgeTagOrder",
+  "edgeTagOrderSource",
   "dropped"
 ];
 var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
@@ -1362,6 +1371,34 @@ function readIdentityModes(value, problems) {
   }
   return out;
 }
+function readContinuationFields(value, problems) {
+  const path = `${RESOLUTION_TABLE_KEY}.continuationFields`;
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 every continuation line stays unknown`);
+    return void 0;
+  }
+  const out = {};
+  for (const [nodeType, declared] of Object.entries(value)) {
+    if (!Array.isArray(declared) || declared.length === 0) {
+      problems.push(`'${path}.${nodeType}' is ${shapeOf2(declared)}, not a non-empty array`);
+      return void 0;
+    }
+    const lines = [];
+    for (const [index, entry] of declared.entries()) {
+      if (!isPlainObject3(entry) || typeof entry.field !== "string" || entry.field === "") {
+        problems.push(`'${path}.${nodeType}[${index}].field' is not a non-empty string`);
+        return void 0;
+      }
+      if (entry.token !== null && (typeof entry.token !== "string" || entry.token === "")) {
+        problems.push(`'${path}.${nodeType}[${index}].token' is ${JSON.stringify(entry.token)}, not a non-empty string or null`);
+        return void 0;
+      }
+      lines.push({ field: entry.field, token: entry.token });
+    }
+    out[nodeType] = lines;
+  }
+  return out;
+}
 function readRenderCheckboxSource(value, problems) {
   if (value !== "engine-literal") {
     problems.push(
@@ -1518,15 +1555,15 @@ function readCompositionSource(value, problems, key) {
   }
   return value;
 }
-function readTagOrder(value, problems) {
-  const path = `${RESOLUTION_TABLE_KEY}.tagOrder`;
+function readTagOrder(value, problems, key = "tagOrder") {
+  const path = `${RESOLUTION_TABLE_KEY}.${key}`;
   if (!isPlainObject3(value)) {
     problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 tag order stays unknown`);
     return void 0;
   }
-  for (const key of Object.keys(value)) {
-    if (!TAG_ORDER_KEYS.includes(key)) {
-      problems.push(`'${path}.${key}' is not a recognised key \u2014 the keys are ${TAG_ORDER_KEYS.join(", ")}`);
+  for (const key2 of Object.keys(value)) {
+    if (!TAG_ORDER_KEYS.includes(key2)) {
+      problems.push(`'${path}.${key2}' is not a recognised key \u2014 the keys are ${TAG_ORDER_KEYS.join(", ")}`);
     }
   }
   const { canonicalOrder, unrankedPolicy } = value;
@@ -1545,10 +1582,10 @@ function readTagOrder(value, problems) {
     unrankedPolicy
   };
 }
-function readTagOrderSource(value, problems) {
+function readTagOrderSource(value, problems, key = "tagOrderSource") {
   if (!TAG_ORDER_SOURCES.includes(value)) {
     problems.push(
-      `'${RESOLUTION_TABLE_KEY}.tagOrderSource' is ${JSON.stringify(value)}, not one of ${TAG_ORDER_SOURCES.join(", ")} \u2014 which answer tagOrder is stays unknown`
+      `'${RESOLUTION_TABLE_KEY}.${key}' is ${JSON.stringify(value)}, not one of ${TAG_ORDER_SOURCES.join(", ")} \u2014 which answer that order is stays unknown`
     );
     return void 0;
   }
@@ -1611,6 +1648,13 @@ function readConfigResolutionDeclaration(document2) {
       // anyway, and validated, so the KIND of fact is stated rather than assumed.
       renderCheckboxSource: "renderCheckboxSource" in raw ? readRenderCheckboxSource(raw.renderCheckboxSource, problems) : void 0,
       identityModes: "identityModes" in raw ? readIdentityModes(raw.identityModes, problems) : void 0,
+      continuationFields: "continuationFields" in raw ? readContinuationFields(raw.continuationFields, problems) : void 0,
+      // REUSES `readTagOrder`/`readTagOrderSource` — three canonical orders, one shape, one reader.
+      // Three copies of the same validation is how three orders drift into three dialects.
+      markerOrder: "markerOrder" in raw ? readTagOrder(raw.markerOrder, problems, "markerOrder") : void 0,
+      markerOrderSource: "markerOrderSource" in raw ? readTagOrderSource(raw.markerOrderSource, problems, "markerOrderSource") : void 0,
+      edgeTagOrder: "edgeTagOrder" in raw ? readTagOrder(raw.edgeTagOrder, problems, "edgeTagOrder") : void 0,
+      edgeTagOrderSource: "edgeTagOrderSource" in raw ? readTagOrderSource(raw.edgeTagOrderSource, problems, "edgeTagOrderSource") : void 0,
       tagOrder: "tagOrder" in raw ? readTagOrder(raw.tagOrder, problems) : void 0,
       tagOrderSource: "tagOrderSource" in raw ? readTagOrderSource(raw.tagOrderSource, problems) : void 0,
       dropped: "dropped" in raw ? readDropped2(raw.dropped, problems) : {}

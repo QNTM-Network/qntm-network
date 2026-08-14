@@ -247,3 +247,100 @@ describe("the checkbox glyph — a decision, pinned against the engine's own dis
     assert.equal(resolution.spelling.fieldMarkerValues.status, undefined);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// THE OTHER TWO CANONICAL ORDERS — pinned against the same dispatcher factories
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// `composition.tail` names three cell families that can carry MORE THAN ONE cell — `tags`,
+// `markers`, `chrome` — and each has its own canonical order contract. `tagOrder` shipped alone on
+// 2026-08-07, so a composer could order one of the three and had to invent the other two. Inventing
+// an order is not a smaller failure than inventing a glyph; it is the same failure one cell along.
+//
+// PINNED BY THE FACTORY, NOT THE FILE, and here that matters more than it did for the checkbox:
+// these contracts are being MOVED out of the engine's source tree into config. `renderer.py`'s
+// `_engine_render_dispatcher(table_id)` resolves the path ITSELF, so asking the factory survives
+// the move and naming a path would not.
+
+import {
+  ENGINE_LITERAL_TAG_ORDER,
+  ENGINE_LITERAL_MARKER_ORDER,
+  ENGINE_LITERAL_EDGE_TAG_ORDER,
+} from "../scripts/compile-resolution.mjs";
+
+describe("the three canonical cell orders — published literals against the real dispatchers", () => {
+  const PINNED = FIXTURE.canonicalOrders;
+
+  test("the fixture carries all three pins — otherwise everything below is vacuous", () => {
+    assert.ok(PINNED, "the fixture has no canonicalOrders pin; regenerate it");
+    for (const key of ["tagOrder", "markerOrder", "edgeTagOrder"]) {
+      assert.ok(PINNED[key]?.canonicalOrder?.length > 0, `${key} pinned an empty order`);
+    }
+  });
+
+  test("THE PIN: each published literal is exactly what its dispatcher ranked", () => {
+    const published = {
+      tagOrder: ENGINE_LITERAL_TAG_ORDER,
+      markerOrder: ENGINE_LITERAL_MARKER_ORDER,
+      edgeTagOrder: ENGINE_LITERAL_EDGE_TAG_ORDER,
+    };
+    for (const [key, literal] of Object.entries(published)) {
+      assert.deepEqual(
+        JSON.parse(JSON.stringify(literal)),
+        PINNED[key],
+        `compile-resolution.mjs's ${key} literal has drifted from the engine contract — re-run ` +
+          "'apps/qntm-md/.venv/bin/python scripts/composition-agreement.py' and reconcile the " +
+          "literal TO the contract, never the other way round",
+      );
+    }
+  });
+
+  test("the three are DISTINCT — one factory answering every table would make three pins one", () => {
+    const orders = ["tagOrder", "markerOrder", "edgeTagOrder"].map((k) => JSON.stringify(PINNED[k].canonicalOrder));
+    assert.equal(new Set(orders).size, 3, `two canonical orders are identical: ${orders.join(" | ")}`);
+  });
+
+  test("markers are ordered by GLYPH and edge tags by TAG — different alphabets, not a copy", () => {
+    // A cheap shape check that would catch the marker order being accidentally seeded from a tag
+    // contract: no marker key may start with `#`, and every edge-tag key must.
+    for (const token of PINNED.markerOrder.canonicalOrder) {
+      assert.ok(!token.startsWith("#"), `markerOrder ranks '${token}', which is a tag, not a marker glyph`);
+    }
+    for (const token of PINNED.edgeTagOrder.canonicalOrder) {
+      assert.ok(token.startsWith("#"), `edgeTagOrder ranks '${token}', which is not a tag`);
+    }
+  });
+
+  test("all three declare append_stable, so an UNRANKED cell trails rather than vanishing", () => {
+    // The policy is half the answer. `append_stable` means a glyph the contract does not rank still
+    // prints, after the ranked ones, in its own arrival order — a composer that dropped it instead
+    // would silently lose a cell the engine emits.
+    for (const key of ["tagOrder", "markerOrder", "edgeTagOrder"]) {
+      assert.equal(PINNED[key].unrankedPolicy, "append_stable", `${key} changed its unranked policy`);
+    }
+  });
+
+  test("the reader accepts all three, and names the RIGHT key when one is malformed", () => {
+    const withOrders = {
+      ...SERVED.resolution,
+      markerOrder: ENGINE_LITERAL_MARKER_ORDER,
+      markerOrderSource: "engine-literal",
+      edgeTagOrder: ENGINE_LITERAL_EDGE_TAG_ORDER,
+      edgeTagOrderSource: "engine-literal",
+    };
+    const good = readConfigResolutionDeclaration({ resolution: withOrders });
+    assert.deepEqual(good.problems, []);
+    assert.deepEqual(good.resolution.markerOrder.canonicalOrder, ENGINE_LITERAL_MARKER_ORDER.canonicalOrder);
+    assert.deepEqual(good.resolution.edgeTagOrder.canonicalOrder, ENGINE_LITERAL_EDGE_TAG_ORDER.canonicalOrder);
+
+    // ONE READER, THREE KEYS — so it must say WHICH. It hardcoded `tagOrder` in its problem text,
+    // which was harmless while it read one key and became a lie the moment it read three.
+    const bad = readConfigResolutionDeclaration({ resolution: { ...withOrders, markerOrder: 7 } });
+    assert.equal(bad.resolution.markerOrder, undefined);
+    assert.ok(
+      bad.problems.some((p) => p.includes("resolution.markerOrder")),
+      `the problem named the wrong key: ${bad.problems.join("; ")}`,
+    );
+    assert.ok(!bad.problems.some((p) => p.includes("resolution.tagOrder")), "it blamed tagOrder");
+  });
+});

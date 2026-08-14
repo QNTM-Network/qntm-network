@@ -70,6 +70,44 @@
     ],
     "fallback": "[ ]"
   },
+  "canonicalOrders": {
+    "tagOrder": {
+      "canonicalOrder": [
+        "#project",
+        "#outcome",
+        "#habit",
+        "#task",
+        "#routine",
+        "#work",
+        "#personal",
+        "#health",
+        "#next",
+        "#parallel",
+        "#waiting-for"
+      ],
+      "unrankedPolicy": "append_stable"
+    },
+    "markerOrder": {
+      "canonicalOrder": [
+        "📅",
+        "🛫",
+        "⏫",
+        "🔽",
+        "✅"
+      ],
+      "unrankedPolicy": "append_stable"
+    },
+    "edgeTagOrder": {
+      "canonicalOrder": [
+        "#requires",
+        "#blocks",
+        "#next",
+        "#parallel",
+        "#waiting-for"
+      ],
+      "unrankedPolicy": "append_stable"
+    }
+  },
   "fixtures": [
     {
       "id": "bare_title_no_stamp",
