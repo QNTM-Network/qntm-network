@@ -4972,3 +4972,38 @@ backlog:
   asserted: '`rendering_contract` is admitted by the engine''s view-sheet validator,
     carried onto the compiled sheet, and read by nothing.'
   captured: '2026-08-14'
+- id: flag-write-policy-gates-the-stamp-cell
+  title: '[asserted] write_policy gates the stamp cell and is deliberately NOT published
+    — filed so the absence is a decision on record rather than an oversight. decide_stamp
+    (renderer.py) returns '''' for a read_only sheet, so whether a line carries [[qntm:N]]
+    depends on it. No view in the operator''s config declares it, render/compiler.py:150
+    defaults it to ''writable'', and it appears nowhere in presentation.json. A composer
+    hardcoding ''writable'' is therefore RIGHT TODAY AND RIGHT BY COINCIDENCE — the
+    same shape as reading the checkbox glyph from spelling.fieldTokens.status, which
+    agreed with the engine until the day it did not. NOT PUBLISHED, because a table
+    with exactly one possible value across every view is the empty-table problem: it
+    would look like coverage and assert nothing. Instead the composer must take write_policy
+    as a STATED CALLER INPUT rather than assuming it, so the assumption lives at the
+    call site where a second value would be passed rather than buried in a lookup that
+    cannot express one. REVISIT WHEN any view declares write_policy: read_only, at which
+    point this becomes a real per-view fact and belongs in sectionRegistration or beside
+    it. Surfaced while scoping the members-to-markdown composer (qntm.network); the
+    four graph-dependent cells and the other publications are tracked there.'
+  driving_capability: presentation-is-resolved-not-chosen
+  asserted: 'write_policy gates the stamp cell and is deliberately NOT published — filed
+    so the absence is a decision on record rather than an oversight. decide_stamp (renderer.py)
+    returns '''' for a read_only sheet, so whether a line carries [[qntm:N]] depends
+    on it. No view in the operator''s config declares it, render/compiler.py:150 defaults
+    it to ''writable'', and it appears nowhere in presentation.json. A composer hardcoding
+    ''writable'' is therefore RIGHT TODAY AND RIGHT BY COINCIDENCE — the same shape
+    as reading the checkbox glyph from spelling.fieldTokens.status, which agreed with
+    the engine until the day it did not. NOT PUBLISHED, because a table with exactly
+    one possible value across every view is the empty-table problem: it would look like
+    coverage and assert nothing. Instead the composer must take write_policy as a STATED
+    CALLER INPUT rather than assuming it, so the assumption lives at the call site where
+    a second value would be passed rather than buried in a lookup that cannot express
+    one. REVISIT WHEN any view declares write_policy: read_only, at which point this
+    becomes a real per-view fact and belongs in sectionRegistration or beside it. Surfaced
+    while scoping the members-to-markdown composer (qntm.network); the four graph-dependent
+    cells and the other publications are tracked there.'
+  captured: '2026-08-14'

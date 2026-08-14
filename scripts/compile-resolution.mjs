@@ -628,6 +628,7 @@ function sortSpelling(rendered) {
     sortMap(Object.fromEntries(Object.entries(m).map(([field, table]) => [field, sortMap(table)])));
   return {
     typeTokens: sortMap(rendered.typeTokens),
+    edgeTags: sortMap(rendered.edgeTags),
     fieldTags: sortNested(rendered.fieldTags),
     fieldMarkerValues: sortNested(rendered.fieldMarkerValues),
     fieldMarkers: sortMap(rendered.fieldMarkers),
@@ -1523,7 +1524,7 @@ export function compile(files, ledger = new Ledger()) {
     const fieldOrder = [];
     const fieldTokens = {};
     // The output-side twin of `fieldTokens`/`typeTokens`. Never consulted by `seedTokens`.
-    const rendered = { typeTokens: {}, fieldTags: {}, fieldMarkerValues: {}, fieldMarkers: {} };
+    const rendered = { typeTokens: {}, edgeTags: {}, fieldTags: {}, fieldMarkerValues: {}, fieldMarkers: {} };
     const vocabularyKeys = allKeys().filter((k) => k.startsWith(VOCABULARY_PREFIX) && k.endsWith(".yaml")).sort();
     for (const key of vocabularyKeys) {
       const file = key.slice(VOCABULARY_PREFIX.length);
@@ -1562,8 +1563,56 @@ export function compile(files, ledger = new Ledger()) {
             // answer this generator could publish instead.
             continue;
           }
-          // NOT A DROP: an entry declaring neither `node_type:` nor `field:` spells no field, so
-          // nothing was discarded.
+          // ── THE THIRD KIND OF VOCABULARY ENTRY, AND THE GAP THAT LET A CELL GO UNFILLED ──
+          //
+          // `vocabulary/edge_tags.yaml` declares `{token, edge_type, cardinality}` — the tag the
+          // engine prints for an OUTGOING edge. `_outgoing_edge_chrome_cells` emits
+          // `#<tag> [[<target title>]]` for every outgoing edge whose type is chrome-eligible, and
+          // driving `TokenResolver.chrome_edge_types()` over the operator's own bundle returns ALL
+          // SEVEN of his edge types. (Driven, not read: `rendered_as_chrome:` appears nowhere in
+          // his config, so reading for it would have answered "none".)
+          //
+          // This reader handled `node_type:` and `field:` and fell through on everything else, so
+          // an edge tag was neither — not refused, just never a case. Four of the seven tags
+          // occurred ZERO times in the served declaration.
+          //
+          // ── THE RULE THAT WOULD HAVE CAUGHT IT SOONER ──
+          //
+          // `edgeTagOrder` was published in #182: the ORDER of the chrome cell. AN ORDERING IS A
+          // CLAIM ABOUT A CELL, so publishing one asserts the cell can be populated — and nothing
+          // could populate this one. The check that passed asked whether the three orders were
+          // distinct, which is a different question and could not have answered this.
+          //
+          // CARDINALITY IS CARRIED, not dropped as metadata. `one` versus `many` decides whether a
+          // second edge of that type REPLACES or APPENDS; a composer that ignores it emits two
+          // `#next` cells for a relation the config says holds one.
+          if (isNonEmptyString(entry.edge_type)) {
+            if (rendered.edgeTags[entry.edge_type] === undefined) {
+              const cardinality = entry.cardinality === "one" || entry.cardinality === "many"
+                ? entry.cardinality
+                : null;
+              if (cardinality === null) {
+                // DROP PATH 23. A declared edge tag whose cardinality this app does not recognise.
+                // Published WITHOUT it would be worse than not publishing the row: a composer
+                // reading a missing cardinality as "many" appends where the engine replaces.
+                ledger.drop(
+                  `edge tag '${entry.token}'`,
+                  `spells edge type '${entry.edge_type}' but declares cardinality ` +
+                    `${JSON.stringify(entry.cardinality ?? null)}, which is neither 'one' nor ` +
+                    "'many', so how a second edge of that type renders is unknown and the tag is " +
+                    "not published",
+                );
+              } else {
+                rendered.edgeTags[entry.edge_type] = { token: entry.token, cardinality };
+              }
+            }
+            // NOT A DROP: an `edge_type:` entry is kept above, or recorded by DROP PATH 23. A
+            // later entry for a type already spelled is not discarded either — first-declaration-
+            // wins, the same rule the `node_type:` branch states.
+            continue;
+          }
+          // NOT A DROP: an entry declaring none of `node_type:`, `edge_type:` or `field:` spells
+          // nothing this table can carry, so nothing was discarded.
           if (!isNonEmptyString(entry.field)) continue;
 
           // ── THE OUTPUT SIDE, FILLED FIRST AND UNCONDITIONALLY ON `render_only` ──

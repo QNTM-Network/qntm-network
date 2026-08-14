@@ -240,7 +240,15 @@ describe("the checkbox glyph — a decision, pinned against the engine's own dis
     // would have been the obvious thing to reach for. There is now no table it can come from: the
     // split is on the engine's own `tag.startswith("#")` filter, and `status` is in neither half.
     const { resolution } = readConfigResolutionDeclaration({
-      resolution: { ...SERVED.resolution, spelling: { typeTokens: { task: "#task" }, fieldTags: {}, fieldMarkerValues: {}, fieldMarkers: {} } },
+      // `edgeTags` IS REQUIRED, like every other table on `spelling` — a hand-built literal here
+      // has to carry it. That is deliberate rather than incidental: `readSpelling` refuses the
+      // WHOLE fact when any of its tables is missing, because a composer holding a partial spelling
+      // prints lines that are wrong in ways nothing flags. A served declaration predating a table
+      // loses the spelling table loudly instead of quietly composing without one cell.
+      resolution: {
+        ...SERVED.resolution,
+        spelling: { typeTokens: { task: "#task" }, edgeTags: {}, fieldTags: {}, fieldMarkerValues: {}, fieldMarkers: {} },
+      },
     });
     assert.equal(resolution.spelling.fieldTokens, undefined, "the conflated table is back");
     assert.equal(resolution.spelling.fieldTags.status, undefined);

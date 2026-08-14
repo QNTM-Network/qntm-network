@@ -89,6 +89,7 @@ export type {
   OrderingKey,
   RegistrationTable,
   ContinuationField,
+  EdgeTag,
   IdentityMode,
   RenderCheckbox,
   RenderCheckboxRow,

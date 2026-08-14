@@ -1278,6 +1278,24 @@ function readSpelling(value, problems) {
   };
   const typeTokens = readStringMap(value.typeTokens, `${path}.typeTokens`);
   if (typeTokens === void 0) return void 0;
+  if (!isPlainObject3(value.edgeTags)) {
+    problems.push(`'${path}.edgeTags' is ${shapeOf2(value.edgeTags)}, not an object \u2014 every edge tag stays unknown`);
+    return void 0;
+  }
+  const edgeTags = {};
+  for (const [edgeType, tag] of Object.entries(value.edgeTags)) {
+    if (!isPlainObject3(tag) || typeof tag.token !== "string" || tag.token === "") {
+      problems.push(`'${path}.edgeTags.${edgeType}.token' is not a non-empty string \u2014 this edge tag stays unknown`);
+      continue;
+    }
+    if (tag.cardinality !== "one" && tag.cardinality !== "many") {
+      problems.push(
+        `'${path}.edgeTags.${edgeType}.cardinality' is ${JSON.stringify(tag.cardinality)}, not "one" or "many" \u2014 whether a second edge of this type replaces or appends is unknown, so the tag is not published`
+      );
+      continue;
+    }
+    edgeTags[edgeType] = { token: tag.token, cardinality: tag.cardinality };
+  }
   const readNested = (raw, where) => {
     if (!isPlainObject3(raw)) {
       problems.push(`'${where}' is ${shapeOf2(raw)}, not an object \u2014 every spelling in it stays unknown`);
@@ -1319,7 +1337,7 @@ function readSpelling(value, problems) {
     }
     fieldMarkers[field] = renderOnly === true ? { kind, token, renderOnly: true } : { kind, token };
   }
-  return { typeTokens, fieldTags, fieldMarkerValues, fieldMarkers };
+  return { typeTokens, edgeTags, fieldTags, fieldMarkerValues, fieldMarkers };
 }
 function readRenderCheckbox(value, problems) {
   const path = `${RESOLUTION_TABLE_KEY}.renderCheckbox`;
