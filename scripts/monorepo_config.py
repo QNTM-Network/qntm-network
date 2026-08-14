@@ -87,9 +87,105 @@ def config_dir(start: Path, home: Path | None = None) -> Path:
     return (start.resolve().parent / MONOREPO_DIR_NAME / CONFIG_SUBPATH).resolve()
 
 
+#: The engine-source counterpart of `QNTM_MONOREPO_CONFIG_DIR`. It exists for one measured
+#: reason: `engine_src` LOCATES a checkout and says nothing about which REVISION of the engine
+#: that checkout is sitting on. On 2026-08-14 the shared trunk clone spent three hours on a
+#: feature branch that predated the change under test, and every agreement script on this
+#: machine read that engine and reported success — a capture cannot be trusted if the caller
+#: has no way to name the tree it wants. On a machine where several sessions share one trunk,
+#: "whatever branch it happens to be on" is the normal state, not an edge case.
+ENGINE_SRC_ENV = "QNTM_MONOREPO_ENGINE_SRC"
+
+
 def engine_src(start: Path, home: Path | None = None) -> Path:
-    """The qntm-md engine source inside the monorepo, by the same rule."""
+    """The qntm-md engine source inside the monorepo, by the same rule.
+
+    `QNTM_MONOREPO_ENGINE_SRC` wins outright, exactly as `QNTM_MONOREPO_CONFIG_DIR` does for
+    `config_dir` — so a caller who needs a SPECIFIC engine revision (a worktree at a merge
+    base, a checkout at a PR head) can name it instead of hoping the trunk is where they left
+    it. Callers that capture from this path should also record WHICH revision they read; see
+    `engine_revision`.
+    """
+    override = os.environ.get(ENGINE_SRC_ENV)
+    if override:
+        return Path(override).resolve()
     root = locate_monorepo(start, home)
     if root is not None:
         return root / ENGINE_SRC_SUBPATH
     return (start.resolve().parent / MONOREPO_DIR_NAME / ENGINE_SRC_SUBPATH).resolve()
+
+
+def engine_revision(engine_source: Path) -> dict[str, str | bool | None]:
+    """WHICH engine a capture read — sha, branch, and whether the tree was dirty.
+
+    A capture that records WHAT it found and not WHERE it found it cannot tell "the engine has
+    not changed" from "I read an engine from three days ago": both spell the same counts and
+    the same exit 0. This is the `...Source` discipline `compile-resolution.mjs` already keeps
+    for every answer it publishes, applied to the capture step.
+
+    `dirty` is reported for the ENGINE SUBTREE, not the whole repo: a monorepo whose `tools/`
+    has uncommitted edits is not a reason to distrust a read of `apps/qntm-md/src`, but an
+    uncommitted edit INSIDE that subtree means the sha names something other than what was
+    read. Every field is None/False when git cannot answer, and the caller decides what an
+    unanswerable provenance is worth — this function never guesses.
+    """
+    import subprocess
+
+    def _git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(
+                ["git", "-C", str(engine_source), *args],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    status = _git("status", "--porcelain", "--", ".")
+    return {
+        "sha": _git("rev-parse", "HEAD"),
+        "branch": branch,
+        "dirty": None if status is None else bool(status.strip()),
+        "overridden": bool(os.environ.get(ENGINE_SRC_ENV)),
+    }
+
+
+def capture_refusal(
+    revision: dict[str, object], engine_source: Path, env_name: str = ENGINE_SRC_ENV
+) -> str | None:
+    """The one reason a capture from `engine_source` must be REFUSED, or None.
+
+    A pure decision over an already-read revision, so it can be exercised without moving a
+    shared checkout — the auto-located-trunk-on-a-feature-branch case is exactly the one a
+    test cannot stage by hand without breaking every other session on the machine.
+
+    THE ASYMMETRY IS DELIBERATE. A wrong BRANCH is refused only for the AUTO-LOCATED trunk:
+    naming a checkout explicitly is a choice, and a caller capturing from a PR head or a
+    merge base means it. A DIRTY tree is refused always, override or not, because the
+    recorded sha would then name something other than what was read — that is a false
+    provenance rather than a narrow one, and a false map is worse than a gap.
+    """
+    if revision.get("sha") is None:
+        return (
+            f"cannot determine which engine revision {engine_source} is — git could not "
+            "answer. A capture that cannot name what it captured turns every downstream "
+            "comparison into a check whose arms agree for a reason nobody chose."
+        )
+    if revision.get("dirty"):
+        return (
+            f"{engine_source} has uncommitted changes, so the recorded sha would not name "
+            f"what was read. Commit or stash them in that checkout, or point {env_name} at "
+            "a clean one."
+        )
+    if revision.get("branch") != "main" and not revision.get("overridden"):
+        return (
+            f"{engine_source} is on branch {revision.get('branch')!r}, not `main`. This is "
+            "the AUTO-LOCATED trunk, and on a machine where several sessions share one "
+            "clone, whatever branch it happens to be on is not what you meant to capture. "
+            f"Return it to main, or set {env_name} to name the checkout you DO mean — an "
+            "explicit choice is recorded and allowed; an accidental one is not."
+        )
+    return None
