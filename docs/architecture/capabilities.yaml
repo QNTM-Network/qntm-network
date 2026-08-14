@@ -4354,3 +4354,60 @@ capabilities:
 #
 # WHAT SURVIVED THE RETRACTION: docs/architecture/packages.yaml and the twelve `packages:` citations
 # in classes.yaml. The declaration was never what was objected to.
+
+- id: the-reply-identifies-the-change-without-carrying-the-view
+  tier: functional
+  rooting: >-
+    isolated — THERE IS NO CODE TO ROOT AGAINST. Nothing is built. This row is a DESIGN
+    PIN, recorded so an evaluated alternative to `_record_write_token` survives outside a
+    chat log, and it is deliberately declared with NO ENFORCER. It will therefore derive
+    as unscoped, which is the correct and honest state for a capability whose
+    implementation does not exist. A scenario minted to make this read green would pass
+    on nothing — the exact failure this project spent two days removing from its own
+    instrument — so none was written. The enforcer belongs to whoever implements it, RED
+    first, against real behaviour.
+  intent: >-
+    A CLIENT THAT APPLIES AN EDIT LOCALLY AND STREAMS IT MUST BE ABLE TO RECOGNISE ITS
+    OWN CHANGE COMING BACK. Without that it double-applies, flickers, or overwrites what
+    the operator typed next.
+
+    TODAY'S ANSWER IS `_record_write_token`, AND IT IS THE WEAK FORM. The browser mints a
+    token, sends it beside `{path, markdown, base}`, and the server echoes it in the
+    envelope; `app/present/correlation.ts` then searches for that token to find its own
+    save. The mechanism is sound and its own header states the narrow claim it makes. Its
+    cost is structural: THE ENTIRE VIEW HAS TO COME BACK FOR THE BROWSER TO SEARCH IT.
+    The reply is doing two jobs — carrying the new state AND identifying whose change it
+    was — and only the second is still needed now that ops are on the wire (`44171b4`;
+    `server/vault_text.py` accepts them, and the reply shape is the named open question
+    in that PR).
+
+    THE STRONGER FORM, TAKEN FROM TANA'S SHIPPED ARCHITECTURE. Its export (2025-07-15,
+    330,039 docs) carries three fields that together describe an optimistic-apply-and-
+    reconcile loop. `lastTxid` is 1752577197484 — a MILLISECOND EPOCH, not a counter.
+    `lastFbKey` is "-OVCjRIYdECbx7Rz1b21" — a Firebase push key, which is
+    timestamp-prefixed, CLIENT-GENERATED and chronologically sortable. `optimisticTransIds`
+    is an empty list here, but the FIELD EXISTS: it is the holding pen for locally-applied
+    transactions awaiting confirmation. The trick is the combination — a client mints a
+    transaction id BEFORE the server has seen anything, applies the change immediately,
+    and the id still sorts correctly into the server's log when it lands.
+
+    WHAT THAT WOULD BUY HERE. Ordering becomes a property OF THE ID rather than of the
+    reply, so the reply can be very small — an id and a position — instead of a
+    re-rendered view. The browser stops searching for itself inside a document.
+
+    WHAT WAS NOT ESTABLISHED, AND IT BOUNDS EVERY LINE ABOVE. TANA'S TRANSACTION FORMAT IS
+    NOT PUBLICLY DOCUMENTED. `tanainc/tana-import-tools` publishes only the IMPORT shape,
+    which is a different and simpler thing, and its README does not carry the schema. The
+    three field names are what the export LEAKS; the mechanism is INFERRED from what a
+    Firebase push key is, not read from a spec. Treat this as a design to EVALUATE, never
+    a protocol to copy — and if it is implemented, the ordering guarantee is the first
+    thing to test, because it is the part that is inferred rather than observed.
+
+    THE ARITY COINCIDENCE THAT LED HERE IS NOT PART OF THE CLAIM, and is recorded so it is
+    not later mistaken for evidence. Tana's export does carry 105,965 semantic triples
+    (`_docType: "tuple"`, subject in `_ownerId`, attribute and value in `children`), and
+    this repo's edit-op is also a triple — but the second is `current[start:end] =
+    replacement`, a slice assignment whose arity is two bounds plus one payload. They are
+    unrelated decompositions that happen to total three. Datomic is the evidence that
+    settles it: a datom is a FIVE-tuple because a semantic triple cannot express change
+    without a transaction id and an assert/retract flag.
