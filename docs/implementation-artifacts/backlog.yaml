@@ -4730,3 +4730,38 @@ backlog:
     app/index.html''s cache-bust hash follows. demo/ UNCHANGED. 2630 tests, 14 failures — the same
     pre-existing 14. Sinks 4/4 governed, scenarios 19/19, routed 3.'
   captured: '2026-08-13'
+
+- id: pin-the-optimistic-transaction-id
+  title: '[design] Record the optimistic-transaction-id alternative to `_record_write_token`
+    — a client-minted, chronologically sortable id that lets the reply be an id and a
+    position instead of a whole re-rendered view. DECLARATION ONLY: no code, no enforcer.'
+  driving_capability: the-reply-identifies-the-change-without-carrying-the-view
+  record: >-
+    2026-08-14 — A DECLARATION, NOT AN ENFORCER, AND THAT IS STATED RATHER THAN LEFT TO BE
+    DISCOVERED. Nothing is built, so there is nothing running to check. No scenario was
+    minted: one written now would pass on nothing, which is precisely the defect class this
+    project spent two days removing from its own instrument, and committing that while
+    recording a finding about honesty would be the worst possible place to do it. The
+    capability therefore carries no enforcer and will derive as unscoped. That is the
+    correct state, not an oversight.
+
+    WHY IT WAS CAPTURED AT ALL. Ops are now on the wire (`44171b4`) and `server/vault_text.py`
+    accepts them, but the REPLY SHAPE is the open question that PR named and did not answer.
+    `_record_write_token` answers it today by echoing a token the browser searches for —
+    which requires the whole view to come back, so the reply carries new state AND identity
+    when only identity is still needed. Tana's export leaks a shipped alternative
+    (`lastTxid`, `lastFbKey`, `optimisticTransIds`); the capability row holds the mechanism
+    and its evidence.
+
+    THE LIMIT, WHICH IS THE PART MOST LIKELY TO BE LOST: Tana's transaction format is NOT
+    publicly documented. `tanainc/tana-import-tools` publishes only the import shape. The
+    field names are observed in the export; the mechanism is inferred from what a Firebase
+    push key is. This is a design to evaluate, never a protocol to copy, and the ordering
+    guarantee is the first thing an implementer should test because it is the inferred part.
+
+    The arity observation that started the investigation (Tana's 105,965 `_docType: "tuple"`
+    docs versus this repo's `(start, end, replacement)`) is recorded in the capability as a
+    COINCIDENCE and explicitly not as evidence — a slice assignment is two bounds and a
+    payload, not three semantic roles, and Datomic's five-tuple is why a semantic triple
+    cannot carry change on its own.
+  captured: '2026-08-14'
