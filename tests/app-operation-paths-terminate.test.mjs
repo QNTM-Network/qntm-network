@@ -163,7 +163,20 @@ describe("2. THE REAL PAGE — every write operation reaches a terminal state on
   });
 
   test("the site count is pinned — a new or vanished operation site needs a deliberate look here", () => {
-    // 1 writeFile(...) call site (toggleTask) + 1 collect()-exhausted site, as of this change
+    // ── ONE, NOT TWO, SINCE THE WRITE PATHS MERGED — 2026-08-14 ──
+    //
+    // The one `writeFile(...)` call site this checker could see was `toggleTask`'s. A checkbox flip
+    // is a line commit now, so it is gone, and what is left in `app/index.html` is the
+    // `collect()`-exhausted site alone.
+    //
+    // AND THAT IS WORTH SAYING PLAINLY RATHER THAN JUST DECREMENTING. This file's headline claim is
+    // "every write operation reaches a terminal state on every path THIS CHECKER CAN SEE", and its
+    // sight is one HTML file. Its coverage of writes has now gone to ZERO: every write in the app
+    // lives in `app/present/commit.ts`, which this AST walk does not parse. The number moving from
+    // 2 to 1 is not a tidy-up — it is this checker reporting that the thing it was built to guard
+    // has left the room. Extending it to `.ts` modules is the real fix and is not attempted here.
+    //
+    // 1 collect()-exhausted site, as of this change
     // (2026-08-07). It WAS 4 — 3 writeFile(...) call sites (toggleTask, commitLine, commitLine's
     // rebase retry) + 1 collect()-exhausted site, as of 65ba882 — until `commitLine` relocated to
     // app/present/commit.ts (see that module's own header for why). This checker parses ONLY
@@ -178,7 +191,7 @@ describe("2. THE REAL PAGE — every write operation reaches a terminal state on
     // pin as part of that change, deliberately, rather than letting it drift unnoticed.
     const html = readFileSync(APP_HTML_PATH, "utf8");
     const { sitesChecked } = checkOperationCompleteness(html);
-    assert.equal(sitesChecked, 2);
+    assert.equal(sitesChecked, 1);
   });
 });
 
@@ -213,7 +226,13 @@ describe("3. THE CI GATE — fails, as a real subprocess, on a real new hanging 
       // own header claims is its main strength: nobody has to remember to register a new write path
       // for this to catch it. Inserted right after writeFile's own declaration closes, so it is
       // unambiguously a sibling function and not accidentally nested inside anything real.
-      const marker = "async function toggleTask(view, toggle) {";
+      //
+      // THE ANCHOR MOVED WHEN THE WRITE PATHS MERGED — 2026-08-14. It used to be
+      // `async function toggleTask(view, toggle) {`, which is exactly the shape this checker's
+      // own CI gate was pinned to: a function that should never have existed, load-bearing in the
+      // guard that sat on top of it. `toggleTaskCommit` is its replacement, and it BUILDS a commit
+      // rather than sending one — which is why it is only an anchor here and not a write site.
+      const marker = "function toggleTaskCommit(view, toggle) {";
       assert.ok(real.includes(marker), "app/index.html's shape moved — this mutation anchor is stale");
       const hang =
         "\nasync function quickSaveNoCatch(view, markdown, source) {\n" +

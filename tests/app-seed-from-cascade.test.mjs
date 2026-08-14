@@ -66,6 +66,7 @@ import { generateResolution } from "../scripts/generate-resolution-declaration.m
 import { generateQualification } from "../scripts/generate-qualification-declaration.mjs";
 import { DEFAULT_CONFIG_DIR } from "../scripts/monorepo-config.mjs";
 import { Ledger } from "../scripts/ledger.mjs";
+import { assertOneWritePath } from "./fixtures/write-path-callers.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
@@ -743,14 +744,12 @@ describe("7. NOTHING LOCAL IS WRITTEN beyond the seed characters themselves", ()
     );
   });
 
-  test("`writeFile(` is called in exactly four places, split across the page and the bundle, and every argument is the server's own", () => {
-    // Declaration + toggleTask on the page, commitLine's own attempt + commitLine's bounded
-    // rebase retry (`app/present/rebase.ts`, `feat/a-refusal-rebases`) in dist/present.js —
-    // `commitLine` relocated to app/present/commit.ts (2026-08-07). Two OCCURRENCES each, the
-    // same two CALLERS. Unrelated to the seed fix this suite is about.
-    const BUNDLE = readFileSync(join(REPO, "dist", "present.js"), "utf8");
-    assert.equal((APP.match(/\bwriteFile\(/g) ?? []).length, 2, "the seed fix must not add a write");
-    assert.equal((BUNDLE.match(/\bdeps\.writeFile\(/g) ?? []).length, 2, "the seed fix must not add a write");
+  // ONE RULE, ONE EXPRESSION — see tests/fixtures/write-path-callers.mjs. This was the SEVENTH
+  // copy of the same invariant, and like the other six it asserted TWO callers when the correct
+  // number was always ONE. Unrelated to the seed fix this suite is about; it is here so the seed
+  // fix cannot add a write, and that claim is unchanged.
+  test("the seed fix adds no write — there is still exactly ONE write path", () => {
+    assertOneWritePath();
   });
 
   test("`applyEdit(` is called in exactly three places in paint.ts and two in the page", () => {
