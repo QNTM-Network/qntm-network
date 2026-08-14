@@ -36,6 +36,7 @@
  */
 
 import { test, describe } from "node:test";
+import { ledgerIsPresent, readLedger } from "../scripts/dropped-ledger.mjs";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
@@ -48,7 +49,40 @@ import { Ledger } from "../scripts/ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
-const SERVED = JSON.parse(readFileSync(join(REPO, "presentation.json"), "utf8"));
+const PRESENTATION_PATH = join(REPO, "presentation.json");
+const SERVED = JSON.parse(readFileSync(PRESENTATION_PATH, "utf8"));
+/**
+ * THE SERVED SHAPE PLUS ITS SIBLING LEDGER — what the committed PAIR declares, not half of it.
+ *
+ * `presentation.json` used to carry its own `dropped` map. The four generators now write it to
+ * `presentation-dropped.json` instead, so the served file alone no longer holds everything the
+ * generator produced. Comparing against the served half ALONE would go green the day a ledger
+ * silently stopped being written — the thing that stopped being written would simply be absent
+ * from both sides of the assertion, which is the failure the ledger move was made to avoid one
+ * layer down (`scripts/dropped-ledger.mjs`: every reader spells it `?.dropped ?? {}`, so a
+ * missing ledger reads as "nothing was dropped" rather than throwing).
+ *
+ * So this reconstitutes the pair and compares THAT. It asserts two things at once: the served
+ * declaration still matches a fresh compile, AND no drop was lost in the move.
+ *
+ * IT WORKS BEFORE AND AFTER THE REGENERATION, deliberately, because today it runs before.
+ * `presentation.json` still holds its own `dropped` and the sibling does not exist; `readLedger`
+ * returns `{}` for an absent file, this returns `served` untouched, and the assertion is
+ * byte-identical to the one it replaces. After the next regeneration the served half loses
+ * `dropped`, the sibling supplies it, and the same line keeps asserting the same total.
+ */
+function servedWithLedger(key, served) {
+  // THE SWITCH IS THE FILE'S ABSENCE, NOT THE LEDGER'S EMPTINESS, and the difference is a real
+  // one this file got wrong first time round. `structural`'s ledger is legitimately EMPTY — it
+  // drops nothing. Short-circuiting on `Object.keys(ledger).length === 0` therefore returned the
+  // served half untouched for structural even AFTER the regeneration, at which point the served
+  // half has no `dropped` key at all while a fresh compile has `dropped: {}` — and the assertion
+  // fails on a key nobody changed. `ledgerIsPresent` is in `dropped-ledger.mjs` for exactly this
+  // distinction: "the file is gone" and "the file says nothing was dropped" are different facts.
+  if (!ledgerIsPresent(PRESENTATION_PATH)) return served;
+  return { ...served, dropped: { ...(served?.dropped ?? {}), ...readLedger(PRESENTATION_PATH, key) } };
+}
+
 
 const FIXTURE_DIR = join(HERE, "fixtures", "rules-category");
 const fixtureFiles = () => readConfigTree(FIXTURE_DIR);
@@ -138,7 +172,7 @@ describe("3. the served value is what the monorepo's rules/ directory actually d
     () => {
       const generated = generateRules(DEFAULT_CONFIG_DIR);
       assert.deepEqual(
-        SERVED.rules,
+        servedWithLedger("rules", SERVED.rules),
         generated,
         "presentation.json's rules key is STALE — run 'node scripts/generate-rules-declaration.mjs' " +
           "and commit the result",
