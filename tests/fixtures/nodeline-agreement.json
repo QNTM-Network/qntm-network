@@ -5,7 +5,7 @@
     {
       "id": "bare",
       "node": {
-        "id": "788f16aa-4258-4142-bbe8-3aee18ec516b",
+        "id": "62faba02-6aa0-484d-a194-c6d729ff378f",
         "type": "task",
         "fields": {
           "title": "Bare title"
@@ -15,13 +15,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Bare title [[qntm:788f16aa-4258-4142-bbe8-3aee18ec516b]] #task",
+      "expectedLine": "- [ ] Bare title [[qntm:62faba02-6aa0-484d-a194-c6d729ff378f]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "done",
       "node": {
-        "id": "97130b7f-637c-4516-96af-5adc9d01599f",
+        "id": "b677e7dc-fdaa-493f-9796-f308a2eddd6e",
         "type": "task",
         "fields": {
           "title": "Done thing",
@@ -32,13 +32,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [x] Done thing [[qntm:97130b7f-637c-4516-96af-5adc9d01599f]] #task",
+      "expectedLine": "- [x] Done thing [[qntm:b677e7dc-fdaa-493f-9796-f308a2eddd6e]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "in_progress",
       "node": {
-        "id": "7fe2b202-be88-4269-b715-aa94f93b7099",
+        "id": "a82d7ffa-14b8-4ca8-aab3-62c3dce90871",
         "type": "task",
         "fields": {
           "title": "Underway",
@@ -49,13 +49,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [/] **Underway** [[qntm:7fe2b202-be88-4269-b715-aa94f93b7099]] #task",
+      "expectedLine": "- [/] **Underway** [[qntm:a82d7ffa-14b8-4ca8-aab3-62c3dce90871]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "cancelled",
       "node": {
-        "id": "145c7086-9549-4033-9867-61d9a19297df",
+        "id": "ef2ad48a-36e2-44fb-89f9-d58a97e703b2",
         "type": "task",
         "fields": {
           "title": "Dropped",
@@ -66,13 +66,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [-] Dropped [[qntm:145c7086-9549-4033-9867-61d9a19297df]] #task",
+      "expectedLine": "- [-] Dropped [[qntm:ef2ad48a-36e2-44fb-89f9-d58a97e703b2]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "domain_tag",
       "node": {
-        "id": "d4352f49-37f4-4ab7-be3d-04683b690535",
+        "id": "da726bc7-12ce-4f98-970f-0ccf56a10ec3",
         "type": "task",
         "fields": {
           "title": "Work item",
@@ -84,13 +84,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Work item [[qntm:d4352f49-37f4-4ab7-be3d-04683b690535]] #task #work",
+      "expectedLine": "- [ ] Work item [[qntm:da726bc7-12ce-4f98-970f-0ccf56a10ec3]] #task #work",
       "expectedContinuationLines": []
     },
     {
       "id": "stamped",
       "node": {
-        "id": "0f7099f7-5e28-4feb-a4bc-442c662b3722",
+        "id": "283f7f4c-fe8d-4599-9447-cced60875ab0",
         "type": "task",
         "fields": {
           "title": "Has an id",
@@ -108,7 +108,7 @@
     {
       "id": "read_only",
       "node": {
-        "id": "17e9dc0a-a660-42b5-a94d-ab0c517f7b67",
+        "id": "cb672d36-86dd-4638-9818-9b8d16fc27e5",
         "type": "task",
         "fields": {
           "title": "Read only",
@@ -126,7 +126,7 @@
     {
       "id": "marker_date",
       "node": {
-        "id": "c62dc79e-2e1a-47c0-b501-43f1f3b5eb6d",
+        "id": "ada9bd97-34c3-4754-9f1c-a97a4c788402",
         "type": "task",
         "fields": {
           "title": "Due soon",
@@ -138,13 +138,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Due soon [[qntm:c62dc79e-2e1a-47c0-b501-43f1f3b5eb6d]] #task 📅 2026-09-01",
+      "expectedLine": "- [ ] Due soon [[qntm:ada9bd97-34c3-4754-9f1c-a97a4c788402]] #task 📅 2026-09-01",
       "expectedContinuationLines": []
     },
     {
       "id": "marker_enum",
       "node": {
-        "id": "ff66083f-572a-4317-b0b2-da45ae661a4c",
+        "id": "5208b9a9-6f9e-40b0-a6dd-624b879c43c0",
         "type": "task",
         "fields": {
           "title": "Urgent",
@@ -156,13 +156,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Urgent [[qntm:ff66083f-572a-4317-b0b2-da45ae661a4c]] #task ⏫",
+      "expectedLine": "- [ ] Urgent [[qntm:5208b9a9-6f9e-40b0-a6dd-624b879c43c0]] #task ⏫",
       "expectedContinuationLines": []
     },
     {
       "id": "two_markers",
       "node": {
-        "id": "5763f80a-eb59-4421-966e-97df7427a335",
+        "id": "f05e6f4f-3e51-49cc-b56e-5c9b402d9e28",
         "type": "task",
         "fields": {
           "title": "Both",
@@ -175,13 +175,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Both [[qntm:5763f80a-eb59-4421-966e-97df7427a335]] #task 📅 2026-09-01 🔽",
+      "expectedLine": "- [ ] Both [[qntm:f05e6f4f-3e51-49cc-b56e-5c9b402d9e28]] #task 📅 2026-09-01 🔽",
       "expectedContinuationLines": []
     },
     {
       "id": "plain_line",
       "node": {
-        "id": "c367dc28-0840-40d7-895e-26615ed61e3b",
+        "id": "3969adad-f972-4baf-b178-b6f9c4bea344",
         "type": "person",
         "fields": {
           "title": "Alice"
@@ -191,13 +191,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- Alice [[qntm:c367dc28-0840-40d7-895e-26615ed61e3b]] #person",
+      "expectedLine": "- Alice [[qntm:3969adad-f972-4baf-b178-b6f9c4bea344]] #person",
       "expectedContinuationLines": []
     },
     {
       "id": "nested",
       "node": {
-        "id": "302a7e1c-c465-4eca-bff6-9101775f4982",
+        "id": "756f2019-f313-4050-8a42-8e9966e8dfeb",
         "type": "task",
         "fields": {
           "title": "A child",
@@ -208,13 +208,13 @@
       "writePolicy": "writable",
       "depth": 2,
       "expectRefusal": false,
-      "expectedLine": "        - [ ] A child [[qntm:302a7e1c-c465-4eca-bff6-9101775f4982]] #task",
+      "expectedLine": "        - [ ] A child [[qntm:756f2019-f313-4050-8a42-8e9966e8dfeb]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "chrome",
       "node": {
-        "id": "5a8d118b-4892-44c8-8421-b01bc5f01fe7",
+        "id": "40bf5b7d-52b4-4a2c-b867-4be64d0f0d72",
         "type": "task",
         "fields": {
           "title": "Blocked one",
@@ -230,13 +230,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Blocked one [[qntm:5a8d118b-4892-44c8-8421-b01bc5f01fe7]] #task #requires [[The prerequisite]]",
+      "expectedLine": "- [ ] Blocked one [[qntm:40bf5b7d-52b4-4a2c-b867-4be64d0f0d72]] #task #requires [[The prerequisite]]",
       "expectedContinuationLines": []
     },
     {
       "id": "chrome_two",
       "node": {
-        "id": "6eb27827-b9a3-48f3-ac96-767304f8d71d",
+        "id": "531d95a8-e95c-4538-a574-421a2c484fdf",
         "type": "task",
         "fields": {
           "title": "Blocked twice",
@@ -256,13 +256,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Blocked twice [[qntm:6eb27827-b9a3-48f3-ac96-767304f8d71d]] #task #requires [[First dep]] #requires [[Second dep]]",
+      "expectedLine": "- [ ] Blocked twice [[qntm:531d95a8-e95c-4538-a574-421a2c484fdf]] #task #requires [[First dep]] #requires [[Second dep]]",
       "expectedContinuationLines": []
     },
     {
       "id": "chrome_one",
       "node": {
-        "id": "3f5b625c-a9d3-4a04-accc-706582c17a82",
+        "id": "908100fa-6861-4804-a822-a21320dd368d",
         "type": "task",
         "fields": {
           "title": "Has a next",
@@ -278,13 +278,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Has a next [[qntm:3f5b625c-a9d3-4a04-accc-706582c17a82]] #task #next [[The next one]]",
+      "expectedLine": "- [ ] Has a next [[qntm:908100fa-6861-4804-a822-a21320dd368d]] #task #next [[The next one]]",
       "expectedContinuationLines": []
     },
     {
       "id": "chrome_mixed",
       "node": {
-        "id": "6c8fc2b2-30d8-488c-87f3-503c44473aca",
+        "id": "d51b10d9-a256-4c37-9e4f-77dccc24424c",
         "type": "task",
         "fields": {
           "title": "Both kinds",
@@ -304,13 +304,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Both kinds [[qntm:6c8fc2b2-30d8-488c-87f3-503c44473aca]] #task #requires [[A dep]] #next [[A successor]]",
+      "expectedLine": "- [ ] Both kinds [[qntm:d51b10d9-a256-4c37-9e4f-77dccc24424c]] #task #requires [[A dep]] #next [[A successor]]",
       "expectedContinuationLines": []
     },
     {
       "id": "tag_order",
       "node": {
-        "id": "f74cf167-459d-46f7-9936-7afda1faaafe",
+        "id": "1e30dc24-e3f7-4ae8-ac46-8764e4f82449",
         "type": "album",
         "fields": {
           "title": "A record",
@@ -321,13 +321,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] A record [[qntm:f74cf167-459d-46f7-9936-7afda1faaafe]] #work #album",
+      "expectedLine": "- [ ] A record [[qntm:1e30dc24-e3f7-4ae8-ac46-8764e4f82449]] #work #album",
       "expectedContinuationLines": []
     },
     {
       "id": "chrome_order",
       "node": {
-        "id": "0cf90eb1-850c-4fe1-8678-5d979e3e503c",
+        "id": "5de1762d-2dde-4595-b149-f7f6f067ddad",
         "type": "task",
         "fields": {
           "title": "Out of order",
@@ -347,13 +347,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": false,
-      "expectedLine": "- [ ] Out of order [[qntm:0cf90eb1-850c-4fe1-8678-5d979e3e503c]] #task #requires [[Comes first]] #next [[Comes second]]",
+      "expectedLine": "- [ ] Out of order [[qntm:5de1762d-2dde-4595-b149-f7f6f067ddad]] #task #requires [[Comes first]] #next [[Comes second]]",
       "expectedContinuationLines": []
     },
     {
       "id": "stampless",
       "node": {
-        "id": "f7a192b8-782a-4faf-a173-f9ada309b436",
+        "id": "bdd835a2-84e4-4eb9-a7b7-763c499c7239",
         "type": "explainer",
         "fields": {
           "title": "A unique name"
@@ -369,7 +369,7 @@
     {
       "id": "continuation",
       "node": {
-        "id": "89449d73-e96e-426e-a003-8bd5dd47e669",
+        "id": "c89e66f5-2112-4f4c-bfff-9ace3cb33dac",
         "type": "capability",
         "fields": {
           "title": "A capability",
@@ -388,7 +388,7 @@
     {
       "id": "refuse_bold",
       "node": {
-        "id": "3aaa38a8-f554-4eba-bf8f-6b61603081d4",
+        "id": "d90ce68f-1c0d-4796-898e-854ab0108005",
         "type": "task",
         "fields": {
           "title": "**Bold wrapped**",
@@ -399,13 +399,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": true,
-      "expectedLine": "- [ ] Bold wrapped [[qntm:3aaa38a8-f554-4eba-bf8f-6b61603081d4]] #task",
+      "expectedLine": "- [ ] Bold wrapped [[qntm:d90ce68f-1c0d-4796-898e-854ab0108005]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "refuse_italic",
       "node": {
-        "id": "cd8ca8d8-b2bc-4f6d-a2d7-0c3200c0ecb8",
+        "id": "63d44e5a-2ae1-4b1e-a8be-5016a1fbbb66",
         "type": "task",
         "fields": {
           "title": "*Italic wrapped*",
@@ -416,13 +416,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": true,
-      "expectedLine": "- [ ] Italic wrapped [[qntm:cd8ca8d8-b2bc-4f6d-a2d7-0c3200c0ecb8]] #task",
+      "expectedLine": "- [ ] Italic wrapped [[qntm:63d44e5a-2ae1-4b1e-a8be-5016a1fbbb66]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "refuse_strike",
       "node": {
-        "id": "f7b0ca67-4a74-4c89-a211-4891e4f4cb81",
+        "id": "901db376-3e3f-42a0-bc56-7bffb31137f8",
         "type": "task",
         "fields": {
           "title": "~~Struck wrapped~~",
@@ -433,13 +433,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": true,
-      "expectedLine": "- [ ] Struck wrapped [[qntm:f7b0ca67-4a74-4c89-a211-4891e4f4cb81]] #task",
+      "expectedLine": "- [ ] Struck wrapped [[qntm:901db376-3e3f-42a0-bc56-7bffb31137f8]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "refuse_link",
       "node": {
-        "id": "62a65bd7-ae54-47fe-8de3-8e29c45e5806",
+        "id": "2634b458-f4c4-4340-862f-5433259267bc",
         "type": "task",
         "fields": {
           "title": "Ends with a link [[Some node]]",
@@ -450,13 +450,13 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": true,
-      "expectedLine": "- [ ] Ends with a link [[qntm:62a65bd7-ae54-47fe-8de3-8e29c45e5806]] #task",
+      "expectedLine": "- [ ] Ends with a link [[qntm:2634b458-f4c4-4340-862f-5433259267bc]] #task",
       "expectedContinuationLines": []
     },
     {
       "id": "refuse_marker",
       "node": {
-        "id": "dd92acf7-2bc2-4576-8100-b5a2c760ad7e",
+        "id": "2419837e-68b6-4645-aa82-36835e3e7a20",
         "type": "task",
         "fields": {
           "title": "Read the paper 📅 2026-09-01",
@@ -467,7 +467,7 @@
       "writePolicy": "writable",
       "depth": 0,
       "expectRefusal": true,
-      "expectedLine": "- [ ] Read the paper [[qntm:dd92acf7-2bc2-4576-8100-b5a2c760ad7e]] #task",
+      "expectedLine": "- [ ] Read the paper [[qntm:2419837e-68b6-4645-aa82-36835e3e7a20]] #task",
       "expectedContinuationLines": []
     }
   ]

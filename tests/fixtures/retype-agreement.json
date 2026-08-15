@@ -77,6 +77,11 @@
       "expectedLine": "- [ ] Renew passport [[qntm:n-initiative]] #work #initiative 📅 2026-09-01"
     },
     {
+      "token": "#latent",
+      "nodeType": "latent",
+      "expectedLine": "- [ ] Renew passport [[qntm:n-latent]] #work #latent 📅 2026-09-01"
+    },
+    {
       "token": "#mandate",
       "nodeType": "mandate",
       "expectedLine": "- [ ] Renew passport [[qntm:n-mandate]] #work #mandate 📅 2026-09-01"
