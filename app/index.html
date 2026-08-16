@@ -1065,7 +1065,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=219356480d";
+} from "/dist/present.js?v=a02123d63f";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2092,7 +2092,7 @@ const nowMs = () => Date.now();
 function sourceOfView(view) {
   const engine = view?.markdown;
   if (!COMPOSE_VIEW_IN_BROWSER) return engine;
-  const { qualification, resolution } = declaration;
+  const { qualification, resolution, structural } = declaration;
   if (qualification === undefined || resolution === undefined || typeof view?.id !== "string") {
     return engine;
   }
@@ -2117,6 +2117,10 @@ function sourceOfView(view) {
     // Absent whenever `graphQuerySuffix()` did not ask for it, which is every read while this flag
     // stays off — so this line adds nothing to the flag-off page, exactly like every line above it.
     ...(view.sections === undefined ? {} : { sectionTrees: view.sections }),
+    // `structural` NARROWS which edge a member touching means "this section might nest" —
+    // structural-edges-resolve-from-declared-config, 2026-08-16. `undefined` (no structural
+    // declaration compiled yet) keeps the old blunt rule; see `viewmarkdown.ts`'s own header.
+    ...(structural === undefined ? {} : { structural }),
   });
   return composed.ok ? composed.markdown : engine;
 }

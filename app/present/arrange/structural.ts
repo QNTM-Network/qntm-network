@@ -109,6 +109,18 @@ export interface SectionStructuralLanguage {
 export interface StructuralLanguage {
   readonly indent: IndentBinding | undefined;
   readonly edgeCardinality: Readonly<Record<string, string>>;
+  /**
+   * EVERY EDGE TYPE `schema.yaml` DECLARES, its `direction` (`child_to_parent` / `parent_to_child`
+   * / `directed` / `bidirectional`) — a DIFFERENT fact from `edgeCardinality` above (which carries
+   * `cardinality`, arity, off the same schema block) and unlike it, NOT narrowed to types a
+   * declaration already names. Structural-edges-resolve-from-declared-config (2026-08-16): a
+   * RENDER-side reader asking "for a section with no override, which edge types make up the
+   * engine's own default hierarchy walk" cannot be answered from the narrowed table — that table
+   * only ever contains what someone already declared, and the whole point of a DEFAULT is that
+   * nothing was. Every `child_to_parent`/`parent_to_child` entry here is that default walk, for
+   * any config, not hardcoded to this operator's own edge type names.
+   */
+  readonly edgeDirectionRegistry: Readonly<Record<string, string>>;
   readonly sections: Readonly<Record<string, Readonly<Record<string, SectionStructuralLanguage>>>>;
   /**
    * EVERY DECLARATION THE GENERATOR READ AND DID NOT PUBLISH, `what -> why`. Not read to decide
@@ -133,13 +145,14 @@ export const STRUCTURAL_KEY = "structural";
 
 const EDGE_SOURCES: readonly EdgeSource[] = ["self", "position"];
 const EDGE_DIRECTIONS: readonly EdgeDirection[] = ["incoming", "outgoing"];
-const STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections", "dropped"] as const;
+const STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "edgeDirectionRegistry", "sections", "dropped"] as const;
 const INDENT_KEYS = ["edgeType", "edgeSource"] as const;
 const SECTION_LANGUAGE_KEYS = ["edgeTypes", "edgeDirection"] as const;
 
 const EMPTY: StructuralLanguage = {
   indent: undefined,
   edgeCardinality: {},
+  edgeDirectionRegistry: {},
   sections: {},
   dropped: {},
 };
@@ -209,10 +222,12 @@ function readIndent(value: unknown, problems: string[]): IndentBinding | undefin
   return { edgeType: edgeType as string, edgeSource: edgeSource as EdgeSource };
 }
 
-function readEdgeCardinality(value: unknown, problems: string[]): Record<string, string> {
+/** Shared by `edgeCardinality` and `edgeDirectionRegistry` — same shape, same rules, `path`
+ * naming which top-level key a problem is actually about. */
+function readEdgeCardinality(path: string, value: unknown, problems: string[]): Record<string, string> {
   if (!isPlainObject(value)) {
     problems.push(
-      `'structural.edgeCardinality' is ${Array.isArray(value) ? "an array" : typeof value}, ` +
+      `'${path}' is ${Array.isArray(value) ? "an array" : typeof value}, ` +
         "not an object — every edge type's cardinality stays unknown",
     );
     return {};
@@ -221,7 +236,7 @@ function readEdgeCardinality(value: unknown, problems: string[]): Record<string,
   for (const [edgeType, cardinality] of Object.entries(value)) {
     if (typeof cardinality !== "string" || cardinality === "") {
       problems.push(
-        `'structural.edgeCardinality.${edgeType}' is ${JSON.stringify(cardinality)}, not a ` +
+        `'${path}.${edgeType}' is ${JSON.stringify(cardinality)}, not a ` +
           "non-empty string — that edge type's cardinality stays unknown",
       );
       continue;
@@ -351,8 +366,14 @@ export function readStructuralDeclaration(document: unknown): StructuralReading 
   }
   const indent = "indent" in raw ? readIndent(raw.indent, problems) : undefined;
   const edgeCardinality =
-    "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
+    "edgeCardinality" in raw
+      ? readEdgeCardinality(`${STRUCTURAL_KEY}.edgeCardinality`, raw.edgeCardinality, problems)
+      : {};
+  const edgeDirectionRegistry =
+    "edgeDirectionRegistry" in raw
+      ? readEdgeCardinality(`${STRUCTURAL_KEY}.edgeDirectionRegistry`, raw.edgeDirectionRegistry, problems)
+      : {};
   const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
   const dropped = "dropped" in raw ? readDropped(raw.dropped, problems) : {};
-  return { structural: { indent, edgeCardinality, sections, dropped }, problems };
+  return { structural: { indent, edgeCardinality, edgeDirectionRegistry, sections, dropped }, problems };
 }

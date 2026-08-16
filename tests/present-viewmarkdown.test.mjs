@@ -352,4 +352,136 @@ describe("every refusal fires, and none of them is a silent empty view", () => {
       assert.equal(composed.markdown, "## Section\n- [ ] Node a [[qntm:a]]");
     });
   });
+
+  // ── WHICH EDGE COUNTS AS "TOUCHES", NARROWED BY DECLARED CONFIG (2026-08-16) ──
+  //
+  // Everything above answers "what happens once a member touches A relevant edge". These answer
+  // the question one level up: which edges are relevant AT ALL for THIS section — the fix for the
+  // blunt "any edge, any type, anywhere" rule the tests above were written against.
+  describe("which edge types count as touching, narrowed by structural config", () => {
+    const composeStructural = (graph, structural, resolution = TABLE, language = LANGUAGE) =>
+      composeViewMarkdown("v", { resolution, language, ordering: ORDERING, graph, today: TODAY, structural });
+
+    test("NO `structural` AT ALL — the OLD blunt rule, unchanged: any edge type refuses", () => {
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "UNRELATED", source: "b", target: "a", fields: {} }],
+      };
+      const composed = composeStructural(graph, undefined);
+      assert.deepEqual(composed, { ok: false, because: "member-touches-an-edge", section: "s" });
+    });
+
+    test("NO SECTION OVERRIDE, registry says the touched type is NOT hierarchy — flat path, no refusal", () => {
+      // `UNRELATED` is `directed` in this registry, not `child_to_parent`/`parent_to_child` — so it
+      // is not part of the engine's own default hierarchy walk, and touching it means nothing.
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "UNRELATED", source: "b", target: "a", fields: {} }],
+      };
+      const structural = {
+        indent: undefined,
+        edgeCardinality: {},
+        edgeDirectionRegistry: { UNRELATED: "directed", PART_OF: "child_to_parent" },
+        sections: {},
+        dropped: {},
+      };
+      const composed = composeStructural(graph, structural);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(composed.markdown, "## Section\n- [ ] Node a [[qntm:a]]\n- [ ] Node b [[qntm:b]]");
+    });
+
+    test("NO SECTION OVERRIDE, registry says the touched type IS hierarchy — refuses, the default walk", () => {
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "PART_OF", source: "b", target: "a", fields: {} }],
+      };
+      const structural = {
+        indent: undefined,
+        edgeCardinality: {},
+        edgeDirectionRegistry: { PART_OF: "child_to_parent" },
+        sections: {},
+        dropped: {},
+      };
+      const composed = composeStructural(graph, structural);
+      assert.deepEqual(composed, { ok: false, because: "member-touches-an-edge", section: "s" });
+    });
+
+    test("A SECTION OVERRIDE WINS OVER THE DEFAULT — declared type refuses, an undeclared type does not", () => {
+      // The section declares WAITING_FOR as its own structural edge. A PART_OF edge touching a
+      // member is schema-default hierarchy, but THIS section named its own language, and the
+      // engine's `_resolve_nesting` reads the declared override exclusively, never falling back to
+      // the schema default alongside it.
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "PART_OF", source: "b", target: "a", fields: {} }],
+      };
+      const structural = {
+        indent: undefined,
+        edgeCardinality: {},
+        edgeDirectionRegistry: { PART_OF: "child_to_parent" },
+        sections: { v: { s: { edgeTypes: ["WAITING_FOR"], edgeDirection: "incoming" } } },
+        dropped: {},
+      };
+      const composed = composeStructural(graph, structural);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(composed.markdown, "## Section\n- [ ] Node a [[qntm:a]]\n- [ ] Node b [[qntm:b]]");
+    });
+
+    test("...AND THE SAME OVERRIDE CATCHES ITS OWN DECLARED TYPE", () => {
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "WAITING_FOR", source: "a", target: "b", fields: {} }],
+      };
+      const structural = {
+        indent: undefined,
+        edgeCardinality: {},
+        edgeDirectionRegistry: { PART_OF: "child_to_parent" },
+        sections: { v: { s: { edgeTypes: ["WAITING_FOR"], edgeDirection: "incoming" } } },
+        dropped: {},
+      };
+      const composed = composeStructural(graph, structural);
+      assert.deepEqual(composed, { ok: false, because: "member-touches-an-edge", section: "s" });
+    });
+
+    test("AN EMPTY REGISTRY IS UNKNOWN, NOT 'NOTHING IS HIERARCHY' — stays blunt", () => {
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "PART_OF", source: "b", target: "a", fields: {} }],
+      };
+      const structural = {
+        indent: undefined,
+        edgeCardinality: {},
+        edgeDirectionRegistry: {},
+        sections: {},
+        dropped: {},
+      };
+      const composed = composeStructural(graph, structural);
+      assert.deepEqual(composed, { ok: false, because: "member-touches-an-edge", section: "s" });
+    });
+
+    test("`cardinality` VALUES NEVER MATCH — the exact regression this suite was written to catch", () => {
+      // `many_to_one` is a CARDINALITY, never a DIRECTION. A reader that confused the two fields
+      // (compile-structural.mjs's first draft did) would see "many_to_one" fail to match
+      // child_to_parent/parent_to_child and silently treat every edge as irrelevant — composing a
+      // flat, unnested view where the engine renders a real tree. This is that exact shape, pinned.
+      const graph = {
+        nodes: [node("a"), node("b")],
+        edges: [{ id: "e", type: "PART_OF", source: "b", target: "a", fields: {} }],
+      };
+      const structural = {
+        indent: undefined,
+        edgeCardinality: {},
+        edgeDirectionRegistry: { PART_OF: "many_to_one" },
+        sections: {},
+        dropped: {},
+      };
+      const composed = composeStructural(graph, structural);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(
+        composed.markdown,
+        "## Section\n- [ ] Node a [[qntm:a]]\n- [ ] Node b [[qntm:b]]",
+        "a cardinality value must not accidentally pass as a hierarchy direction",
+      );
+    });
+  });
 });

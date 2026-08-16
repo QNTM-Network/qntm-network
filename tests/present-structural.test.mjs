@@ -108,6 +108,7 @@ describe("1. the shipped declaration's structural key reads cleanly", () => {
     assert.deepEqual(structural, {
       indent: undefined,
       edgeCardinality: {},
+      edgeDirectionRegistry: {},
       sections: {},
       // `dropped` joined the EMPTY shape when the generators started recording what they refuse
       // to publish (scripts/ledger.mjs). Empty here for the same reason every other key is: this
@@ -142,6 +143,7 @@ describe("2. an unrecognised structural declaration is reported, never guessed",
     assert.deepEqual(structural, {
       indent: undefined,
       edgeCardinality: {},
+      edgeDirectionRegistry: {},
       sections: {},
       // `dropped` joined the EMPTY shape when the generators started recording what they refuse
       // to publish (scripts/ledger.mjs). Empty here for the same reason every other key is: this
@@ -233,6 +235,33 @@ describe("3. the served value is what the monorepo's config actually declares", 
         "presentation.json's structural key is STALE — run " +
           "'node scripts/generate-structural-declaration.mjs' and commit the result",
       );
+    },
+  );
+
+  // A FRESH COMPILE, NOT THE COMMITTED FIXTURE — structural-edges-resolve-from-declared-config
+  // (2026-08-16). Deliberately independent of `presentation.json`'s own freshness (the test above
+  // this one), so a stale commit can never mask whether `edgeDirectionRegistry` itself is correct.
+  test(
+    "edgeDirectionRegistry is EXHAUSTIVE — every schema edge type, not just ones a section names",
+    { skip: available ? false : `monorepo not checked out at ${DEFAULT_CONFIG_DIR}` },
+    () => {
+      const { edgeCardinality, edgeDirectionRegistry } = generateStructural(DEFAULT_CONFIG_DIR);
+      // `edgeCardinality` is the OLD, narrowed table — every key in it names an edge type someone
+      // declared. `edgeDirectionRegistry` must be a SUPERSET: every one of those keys, PLUS every
+      // other edge type schema.yaml declares that nothing narrows away.
+      for (const edgeType of Object.keys(edgeCardinality)) {
+        assert.ok(edgeType in edgeDirectionRegistry, `${edgeType} is in the narrowed table but not the full one`);
+      }
+      assert.ok(
+        Object.keys(edgeDirectionRegistry).length > Object.keys(edgeCardinality).length,
+        "the registry is not actually wider than the narrowed table — this operator's schema " +
+          "declares more edge types than his structural language currently names, so an equal " +
+          "count means nothing was widened",
+      );
+      // THE FACT THE WHOLE FEATURE DEPENDS ON: PART_OF is his one hierarchy edge, and its
+      // `direction` (not `cardinality` — `many_to_one` is a different fact) is `child_to_parent`.
+      assert.equal(edgeDirectionRegistry.PART_OF, "child_to_parent");
+      assert.notEqual(edgeDirectionRegistry.PART_OF, edgeCardinality.PART_OF, "direction and cardinality must not collapse into the same string");
     },
   );
 });
