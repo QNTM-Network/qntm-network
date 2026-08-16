@@ -1065,7 +1065,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=97e42a05d0";
+} from "/dist/present.js?v=219356480d";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1927,7 +1927,7 @@ async function collect(path) {
   }
   let data = null;
   try {
-    data = await api("/app/graph", { method: "GET", auth: true });
+    data = await api("/app/graph" + graphQuerySuffix(), { method: "GET", auth: true });
   } catch {
     data = null;
   }
@@ -2060,6 +2060,18 @@ function viewSources(data) {
 const COMPOSE_VIEW_IN_BROWSER = false;
 
 /**
+ * `?include_structure=true`, or nothing — the query suffix both `GET /app/graph` call sites append.
+ *
+ * TIED TO THE SAME FLAG, so the flag off (today's default) asks for exactly what it always asked
+ * for, byte for byte: `worker/src/app.js`'s `graphGet` only asks Fly for the extra `sections` key
+ * when THIS route was asked for it, and there is no reason to pay that on every read while nothing
+ * on this page can use the answer. See `sourceOfView`, below, for the composer that does.
+ */
+function graphQuerySuffix() {
+  return COMPOSE_VIEW_IN_BROWSER ? "?include_structure=true" : "";
+}
+
+/**
  * THE PAGE'S ONE CLOCK READ, AND NOW IT IS A NAME RATHER THAN A COUNT.
  *
  * `app/present/` reads no clock at all — `today.ts`'s own rule, pinned by
@@ -2098,6 +2110,11 @@ function sourceOfView(view) {
     },
     graph: graphSnapshotOf(graphData, graphBlob),
     ...(reading.kind === "answer" ? { today: reading.answer } : {}),
+    // `view.sections` IS `ComposeViewContext.sectionTrees`, UNCHANGED — `GET /graph?include_
+    // structure=true`'s per-view key, already keyed by section id (`server/app.py`'s `_envelope`).
+    // Absent whenever `graphQuerySuffix()` did not ask for it, which is every read while this flag
+    // stays off — so this line adds nothing to the flag-off page, exactly like every line above it.
+    ...(view.sections === undefined ? {} : { sectionTrees: view.sections }),
   });
   return composed.ok ? composed.markdown : engine;
 }
@@ -3134,7 +3151,7 @@ function landOn(views, keep, landingViewId) {
  * same boot handler, which is the code path that tells a 401 from a tunnel.
  */
 function readGraph() {
-  const pending = api("/app/graph", { method: "GET", auth: true });
+  const pending = api("/app/graph" + graphQuerySuffix(), { method: "GET", auth: true });
   pending.catch(() => {});
   return pending;
 }

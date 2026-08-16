@@ -200,7 +200,15 @@ async function graphGet(request, env, origin, session) {
       const inm = request.headers.get("If-None-Match");
       if (inm) flyHeaders["If-None-Match"] = inm;
 
-      const r = await fetch(`${env.GRAPH_SERVER_URL}/graph`, { headers: flyHeaders });
+      // RELAYED VERBATIM, NEVER DEFAULTED ON. `server/app.py`'s `GET /graph?include_structure=true`
+      // (section-trees-have-a-persisted-home, 2026-08-16) is a second envelope VARIANT, exactly like
+      // `include_blob` two paragraphs below this route's own comment — this Worker asks Fly for it
+      // only when the browser asked THIS route for it, so a caller that never requests the flag pays
+      // nothing extra and gets today's bytes. `e.views` (below) already carries each view's `sections`
+      // key when Fly sent one; nothing else here needs to change to relay it.
+      const includeStructure = new URL(request.url).searchParams.get("include_structure") === "true";
+      const flyUrl = `${env.GRAPH_SERVER_URL}/graph${includeStructure ? "?include_structure=true" : ""}`;
+      const r = await fetch(flyUrl, { headers: flyHeaders });
 
       if (r.status === 304) {
         // Fly's own answer already proves the tag is still current, so it is the fallback even in

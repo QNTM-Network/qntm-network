@@ -52,17 +52,27 @@
  * is not a new discovery — `app/present/arrange/incoming-section-tree.ts` is a file with no code in
  * it that exists to name exactly this seam.
  *
- * So there is one condition under which a flat member list IS the tree, and this module refuses
- * every view that does not meet it: NO MEMBER OF THE VIEW MAY TOUCH AN EDGE, of any type, in either
- * direction. A node with no edges has no ancestors to pull, no descendants to pull, and no
- * children, whatever `pull_context` says — so the three unpublished keys cannot change the answer.
+ * So there is one condition under which a flat member list IS the tree: NO MEMBER OF THE VIEW MAY
+ * TOUCH AN EDGE, of any type, in either direction. A node with no edges has no ancestors to pull,
+ * no descendants to pull, and no children, whatever `pull_context` says — so the three unpublished
+ * keys cannot change the answer, and a section that meets it stays on the flat path below,
+ * unconditionally, whether or not a real tree is also available.
  *
- * THE RULE IS DELIBERATELY BLUNTER THAN IT COULD BE. Refusing on the STRUCTURAL edge type alone
- * would cover the ordinary indent, and it would be wrong the moment a section declares
- * `structural_edge_types: [WAITING_FOR]` — which 14 of his sections do, and which is not published.
- * A rule that is right for the config as it stands and silently wrong for the config as it is
- * written is the shape this whole table exists to refuse. The cost is that the chrome cell never
- * runs through this path; that is a named gap, not an oversight.
+ * A SECTION THAT DOES NOT MEET IT IS NOT AUTOMATICALLY REFUSED ANY MORE (section-trees-have-a-
+ * persisted-home, 2026-08-16). `GET /graph?include_structure=true` publishes the SAME tree
+ * `section_builder.build()` computed and the renderer walked — `roots`, `children`,
+ * `is_qualifying` — and when the caller passes one for this section on `ComposeViewContext.
+ * sectionTrees`, THAT is walked instead: every tree node composes a line, qualifying or not, at its
+ * own depth, mirroring `renderer.py`'s `_render_tree_node`. `member-touches-an-edge` now means only
+ * "a member touches an edge and the caller held no tree for it" — the honest answer while the flag
+ * that fetches `include_structure` stays off, or for a section too new to have a persisted tree.
+ *
+ * REFUSING ON THE STRUCTURAL EDGE TYPE ALONE WOULD STILL BE WRONG, tree or no tree. It would cover
+ * the ordinary indent, and it would be wrong the moment a section declares `structural_edge_types:
+ * [WAITING_FOR]` — which 14 of his sections do, and which is not published. A rule that is right
+ * for the config as it stands and silently wrong for the config as it is written is the shape this
+ * whole table exists to refuse. The cost is that the chrome cell never runs through either path;
+ * that is a named gap, not an oversight.
  *
  *   `view-not-declared`           `computeViewMembers` does not know this view
  *   `no-section-presentation`     no heading facts for it — every `## ` line would be a guess
@@ -72,7 +82,8 @@
  *   `section-undecided-member`    the graph could not answer for a node; it is not a non-member
  *   `section-not-presented`       a section computed with no heading facts published for it
  *   `render-shape-unpublished`    a node backs this heading and its render shape is not on the wire
- *   `member-touches-an-edge`      see above — the tree may not be the list
+ *   `member-touches-an-edge`      a member touches an edge and no real tree was held for this section
+ *   `section-tree-node-unresolved` a held tree names a node this graph snapshot does not have
  *   `node-refused`                `composeNodeLine` refused a member, for its own stated reason
  *
  * EVERY REFUSAL NAMES ITS SECTION. A caller reporting "this view could not be composed" without
@@ -100,6 +111,24 @@ import type { TodayAnswer } from "../today.js";
 import { composeNodeLine, markerCells } from "./nodeline.js";
 import type { ComposeRefusal } from "./nodeline.js";
 
+/** A tree node as `GET /graph?include_structure=true` actually carries it —
+ * `section_builder.serialize_section_tree`'s wire shape. No `fields`: a caller resolves them off
+ * the graph snapshot it already holds (this module's own docstring says why the wire form omits
+ * them), so every consumer here re-resolves by `node_id` rather than trusting a second copy. */
+export interface SectionTreeNodeWire {
+  readonly node_id: string;
+  readonly node_type: string;
+  readonly is_qualifying: boolean;
+  readonly children: readonly SectionTreeNodeWire[];
+}
+
+/** `GET /graph?include_structure=true`'s per-section entry — `{section_id, roots}`, unchanged
+ * from `section_builder.serialize_section_tree`'s own shape. */
+export interface SectionTreeWire {
+  readonly section_id: string;
+  readonly roots: readonly SectionTreeNodeWire[];
+}
+
 export interface ComposeViewContext {
   readonly resolution: ConfigResolutionTable;
   readonly language: QualificationLanguage;
@@ -109,6 +138,16 @@ export interface ComposeViewContext {
   readonly today?: TodayAnswer;
   /** Stated, not assumed — the same input `composeNodeLine` takes, for the same reason. */
   readonly writePolicy?: "writable" | "read_only";
+  /**
+   * `GET /graph?include_structure=true`'s `sections` key for THIS view, keyed by section id.
+   * `undefined` when the caller never asked — today's default, and nothing below changes for it.
+   * `{}` when the caller asked and the engine has published nothing for this view yet.
+   *
+   * ONLY CONSULTED WHEN A MEMBER TOUCHES AN EDGE. A section with no edges never reads this key —
+   * `section.members` already IS its tree, and the flat path stays exactly as proven. This key
+   * answers the one question the flat list cannot: how a touched section actually nests.
+   */
+  readonly sectionTrees?: Readonly<Record<string, SectionTreeWire>>;
 }
 
 export type ComposeViewRefusal =
@@ -121,6 +160,7 @@ export type ComposeViewRefusal =
   | "section-not-presented"
   | "render-shape-unpublished"
   | "member-touches-an-edge"
+  | "section-tree-node-unresolved"
   | "node-refused";
 
 export type ComposeViewResult =
@@ -274,6 +314,61 @@ export function composeSectionHeading(
   return { kind: "heading", text: cells.length === 0 ? text : `${text} ${cells.join(" ")}` };
 }
 
+type TreeWalkResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly because: "section-tree-node-unresolved" }
+  | { readonly ok: false; readonly because: "node-refused"; readonly nodeRefusal: ComposeRefusal };
+
+/**
+ * Walk a real section tree and compose every node's line, appending to `lines` — mirroring
+ * `renderer.py`'s `_render_tree_node`: a node's own line, then its children at `depth + 1`, then a
+ * placeholder ONLY for a qualifying node with none.
+ *
+ * EVERY TREE NODE COMPOSES, QUALIFYING OR NOT. A context node the engine pulled in via
+ * `include_ancestors`/`pull_context` renders exactly like a qualifying one — the tree names which
+ * nodes EARNED the placeholder, not which nodes to skip.
+ */
+function composeSectionTreeLines(
+  roots: readonly SectionTreeNodeWire[],
+  depth: number,
+  graph: GraphSnapshot,
+  resolution: ConfigResolutionTable,
+  placeholder: string | undefined,
+  writePolicy: "writable" | "read_only" | undefined,
+  lines: string[],
+): TreeWalkResult {
+  for (const treeNode of roots) {
+    const graphNode = graph.nodes.find((n) => n.id === treeNode.node_id);
+    if (graphNode === undefined) {
+      return { ok: false, because: "section-tree-node-unresolved" };
+    }
+    const line = composeNodeLine(graphNode, {
+      resolution,
+      ...(writePolicy === undefined ? {} : { writePolicy }),
+      depth,
+    });
+    if (!line.ok) {
+      return { ok: false, because: "node-refused", nodeRefusal: line.because };
+    }
+    lines.push(line.line.text, ...line.line.continuationLines);
+    if (treeNode.children.length > 0) {
+      const nested = composeSectionTreeLines(
+        treeNode.children,
+        depth + 1,
+        graph,
+        resolution,
+        placeholder,
+        writePolicy,
+        lines,
+      );
+      if (!nested.ok) return nested;
+    } else if (treeNode.is_qualifying && placeholder !== undefined) {
+      lines.push(`${indent(depth + 1)}- ${placeholder}`);
+    }
+  }
+  return { ok: true };
+}
+
 /**
  * Compose one view's whole markdown, or refuse it. See this module's header for the branches and
  * the refusals.
@@ -359,10 +454,30 @@ export function composeViewMarkdown(viewId: string, context: ComposeViewContext)
       continue;
     }
 
-    for (const member of section.members) {
-      if (touched.has(member.id)) {
+    const sectionTouchesAnEdge = section.members.some((member) => touched.has(member.id));
+    if (sectionTouchesAnEdge) {
+      const tree = context.sectionTrees?.[section.sectionId];
+      if (tree === undefined) {
         return { ok: false, because: "member-touches-an-edge", section: section.sectionId };
       }
+      const walked = composeSectionTreeLines(
+        tree.roots,
+        0,
+        graph,
+        resolution,
+        presentation.emptyChildrenPlaceholder,
+        context.writePolicy,
+        lines,
+      );
+      if (!walked.ok) {
+        return walked.because === "node-refused"
+          ? { ok: false, because: "node-refused", section: section.sectionId, nodeRefusal: walked.nodeRefusal }
+          : { ok: false, because: walked.because, section: section.sectionId };
+      }
+      continue;
+    }
+
+    for (const member of section.members) {
       const line = composeNodeLine(member, {
         resolution,
         ...(context.writePolicy === undefined ? {} : { writePolicy: context.writePolicy }),
