@@ -284,32 +284,44 @@ export interface ContinuationField {
 }
 
 /**
- * HOW ONE SECTION'S HEADING RENDERS. `compose_section_header` (section_builder.py:619) composes
- * `## {name or id}` with a count suffix — NOT `## {id}`.
+ * HOW ONE SECTION'S HEADING AND BODY RENDER.
  *
- * `name` is the live fact: 303 of the operator's 304 sections declare one, so a composer using the
- * section id would print `## to-do (5)` where the engine prints `## To Do`, on every section of
- * every view. It was already published on `ordering[view][section].name`, which exists only for the
- * 15 sections declaring an `ordering:` — coverage-shaped, and not coverage.
+ * `ViewRegistration.section_heading` (view_registration.py:132) is the single source of truth and
+ * it has three branches, in this order: the pinned container node's own title (+stamp); the
+ * DECLARED NAME, returned CLEAN with no count suffix; and only then
+ * `compose_section_header`'s `{id} ({count})`.
  *
- * `headerValue` replaces the count suffix with a field value resolved off the first member.
+ * `name` is the live fact and it is that declared name: 303 of the operator's 304 sections declare
+ * one, so a composer using the section id would print `## to-do (5)` where the engine prints
+ * `## To Do`, on every section of every view. It was already published on
+ * `ordering[view][section].name`, which exists only for the 15 sections declaring an `ordering:` —
+ * coverage-shaped, and not coverage.
+ *
+ * `headerValue` replaces the count suffix with a field value resolved off the first member, and is
+ * reached ONLY when no name is declared.
  *
  * `bodyPolicy` is an ANSWER, never an absence: `header_only` emits the heading and NO members, and
  * "renders empty by policy" produces the same line as "has no members today" while being a
- * different and more stable fact.
+ * different and more stable fact. Twenty of his sections declare it, across four views.
  *
- * `containerNode`/`declaredName` mean the section is BACKED BY A NODE — its heading is that node's
- * own title and stamp, and if the node's render shape is not `heading` the section renders as a
- * node LINE rather than a `##` heading at all. Resolving that needs the graph, so only the
- * DECLARATION is published: enough for a composer to know it must refuse. Nobody declares one
- * today, which is exactly why it is on the wire — the browser cannot notice one arriving otherwise.
+ * `emptyChildrenPlaceholder` is the synthetic `{indent+1}- {placeholder}` line a QUALIFYING node
+ * with no rendered children carries beneath itself (`_render_tree_node`'s tail). Forty of his
+ * sections declare one, across ten views; a composer that did not know would drop a real line.
+ *
+ * `containerNode` means the section is BACKED BY A NODE — its heading is that node's own title and
+ * stamp, and if the node's render shape is not `heading` the section renders as a node LINE rather
+ * than a `##` heading at all.
+ *
+ * THERE IS NO `declaredName`. An earlier version of this type carried one beside `name`, reading a
+ * key (`declared_name`) that a view file cannot declare — it is the COMPILED name for `name`
+ * itself. Two keys for one fact, one of them permanently empty.
  */
 export interface SectionPresentation {
   readonly name?: string;
   readonly headerValue?: string;
   readonly bodyPolicy?: "full_body" | "header_only";
+  readonly emptyChildrenPlaceholder?: string;
   readonly containerNode?: string;
-  readonly declaredName?: string;
 }
 
 export interface IdentityMode {
@@ -505,6 +517,22 @@ export interface ConfigResolutionTable {
    * (`newline.ts`'s GLOBAL rung), so the added entries are ones today's callers never reach.
    */
   readonly chromeShapes: Readonly<Record<string, ChromeShape>>;
+  /**
+   * THE SAME QUESTION ASKED WITHOUT THE CAPABILITY FILTER — every node type's declared render
+   * shape, as the raw string, `undefined` only when the whole key is absent or malformed.
+   *
+   * `chromeShapes` above is this map's SEEDABLE SUBSET: `heading` and `stat_line` are dropped there
+   * with a ledger reason, because nothing in this app can open a line of either. That drop is right
+   * for its own question and it makes a second question unanswerable — `composeViewMarkdown` asks
+   * whether a section's backing node renders as a `## ` heading or as a body line, and in
+   * `chromeShapes` an absent entry means `heading`, `stat_line` and "no such type" at once. The
+   * first keeps the heading; the others delete it.
+   *
+   * NOT A CLOSED SET, on purpose. A shape added to the schema tomorrow arrives here as its own name
+   * and its reader refuses it BY NAME, rather than arriving as an absence that three other things
+   * already mean.
+   */
+  readonly renderShapes: Readonly<Record<string, string>> | undefined;
   /**
    * `view -> section -> what a new line under it becomes`, for EVERY section of every view sheet.
    *
@@ -728,6 +756,9 @@ const TOP_KEYS = [
   "orderingFields",
   "dayBoundary",
   "chromeShapes",
+  // The unfiltered twin of the line above. Both are published because they answer different
+  // questions — see `renderShapes`' own comment on the interface for the one that made it necessary.
+  "renderShapes",
   "sectionRegistration",
   "defaultOrdering",
   "defaultOrderingSource",
@@ -1566,7 +1597,7 @@ function readSectionPresentation(
         return undefined;
       }
       const at = `${path}.${viewId}.${sectionId}`;
-      for (const key of ["name", "headerValue", "containerNode", "declaredName"]) {
+      for (const key of ["name", "headerValue", "containerNode", "emptyChildrenPlaceholder"]) {
         const v = (entry as Record<string, unknown>)[key];
         if (v !== undefined && (typeof v !== "string" || v === "")) {
           problems.push(`'${at}.${key}' is ${JSON.stringify(v)}, not a non-empty string`);
@@ -1581,7 +1612,7 @@ function readSectionPresentation(
         return undefined;
       }
       const kept: Record<string, unknown> = {};
-      for (const key of ["name", "headerValue", "bodyPolicy", "containerNode", "declaredName"]) {
+      for (const key of ["name", "headerValue", "bodyPolicy", "containerNode", "emptyChildrenPlaceholder"]) {
         const v = (entry as Record<string, unknown>)[key];
         if (v !== undefined) kept[key] = v;
       }
@@ -1607,6 +1638,38 @@ function readRenderCheckboxSource(
     return undefined;
   }
   return "engine-literal";
+}
+
+/**
+ * `resolution.renderShapes` — the RAW declared shape of every node type, no closed set.
+ *
+ * DELIBERATELY NOT VALIDATED AGAINST A LIST OF KNOWN SHAPES, which is the opposite posture from
+ * `readChromeShapes` immediately below and the reason both exist. That one is a CAPABILITY table —
+ * "can this app draw it" — so a shape it does not know is correctly refused. This one is the
+ * ENGINE'S ANSWER, and a reader that dropped an unrecognised value would hand its caller an absence
+ * meaning "no such type" and "a shape you have not met" at once. A caller can then refuse by name;
+ * that is a decision it is entitled to make and this reader is not.
+ */
+function readRenderShapes(value: unknown, problems: string[]): Record<string, string> | undefined {
+  if (!isPlainObject(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.renderShapes' is ${shapeOf(value)}, not an object — whether a ` +
+        "section keeps its heading line stays unknown",
+    );
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [nodeType, shape] of Object.entries(value)) {
+    if (typeof shape !== "string" || shape === "") {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.renderShapes.${nodeType}' is ${JSON.stringify(shape)}, not a ` +
+          "non-empty string",
+      );
+      return undefined;
+    }
+    out[nodeType] = shape;
+  }
+  return out;
 }
 
 function readChromeShapes(value: unknown, problems: string[]): Record<string, ChromeShape> {
@@ -2042,6 +2105,7 @@ export function readConfigResolutionDeclaration(document: unknown): ConfigResolu
         "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
+      renderShapes: "renderShapes" in raw ? readRenderShapes(raw.renderShapes, problems) : undefined,
       sectionRegistration:
         "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
       defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],

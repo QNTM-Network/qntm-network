@@ -222,11 +222,17 @@ function tagCells(node: ComposableNode, resolution: ConfigResolutionTable, order
  * The markers cell. Two shapes, both from `spelling`: a FIXED-value marker prints its glyph alone
  * (`⏫`), a TRAILING marker prints `<glyph> <value>` (`📅 2026-09-01`).
  *
+ * EXPORTED FOR THE HEADING, WHICH IS THE SAME CELL ON A DIFFERENT LINE.
+ * `_container_heading_marker_suffix` (renderer.py:509) appends a registered container node's own
+ * field-markers to the `##` line, and its docstring says why the sharing is required rather than
+ * convenient: "the SAME marker path body lines use … No `node_type == "header"` branch". A second
+ * builder here would be the one thing that file refuses.
+ *
  * ORDERED BY GLYPH, NOT BY CELL — the engine orders the marker KEYS and re-attaches the cells
  * (`_assemble_marker_cells`), because a cell carrying a value could never match a canonical order
  * listing bare emoji.
  */
-function markerCells(node: ComposableNode, resolution: ConfigResolutionTable, order: TagOrder | undefined): readonly string[] {
+export function markerCells(node: ComposableNode, resolution: ConfigResolutionTable, order: TagOrder | undefined): readonly string[] {
   const spelling = resolution.spelling;
   if (spelling === undefined) return [];
   const byGlyph = new Map<string, string>();

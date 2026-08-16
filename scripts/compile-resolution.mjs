@@ -1429,6 +1429,40 @@ export function compile(files, ledger = new Ledger()) {
     return out;
   }
 
+  /**
+   * EVERY DECLARED RENDER SHAPE, UNFILTERED — `chromeShapes` is this table's SEEDABLE SUBSET.
+   *
+   * The two answer different questions and only one of them was ever published. `chromeShapes` says
+   * "can this app OPEN a line of this type", so `heading` and `stat_line` are dropped (DROP PATH 8)
+   * and that drop is correct: nothing here can seed one. `composeViewMarkdown` asks the other
+   * question — "does this node render as a `## ` heading or as a body line" — and the drop makes it
+   * unanswerable, because an absent entry means `heading`, `stat_line`, or a shape added tomorrow,
+   * and the first of those keeps the section's `## ` line while the others delete it.
+   *
+   * PUBLISHED AS THE RAW STRING, WITH NO CLOSED SET. A future shape reaches a reader that can then
+   * refuse it BY NAME, instead of arriving as an absence indistinguishable from three other things.
+   * `chromeShapes` keeps its own filter and its own ledger entry; nothing about it changes.
+   */
+  function readRenderShapes() {
+    if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
+    const schema = readYaml(SCHEMA_KEY);
+    const nodeTypes = schema?.node_types;
+    if (!nodeTypes || typeof nodeTypes !== "object" || Array.isArray(nodeTypes)) {
+      throw new GenerationError(`${SCHEMA_KEY}: no 'node_types:' mapping`);
+    }
+    const out = {};
+    for (const name of Object.keys(nodeTypes).sort()) {
+      const definition = nodeTypes[name];
+      const render = definition && typeof definition === "object" ? definition.render : undefined;
+      // The SAME default `readChromeShapes` applies, from the same documented rule: no `render:`
+      // block renders as `checkbox`. Stated in both places rather than shared, because sharing it
+      // would make one of them the other's caller and the drop ledger belongs to only one.
+      out[name] =
+        render && typeof render === "object" && typeof render.shape === "string" ? render.shape : "checkbox";
+    }
+    return out;
+  }
+
   function readChromeShapes(mintable, ledger) {
     if (!has(SCHEMA_KEY)) throw new GenerationError(`${SCHEMA_KEY} does not exist`);
     const schema = readYaml(SCHEMA_KEY);
@@ -1976,30 +2010,58 @@ export function compile(files, ledger = new Ledger()) {
   //
   // ── WHAT THE READ TURNED UP, AND THE FIRST ONE IS LIVE ──
   //
-  // `name`         303 OF HIS 304 SECTIONS DECLARE IT. `compose_section_header` renders the
-  //                declared name, so a browser using `section.id` would print `## to-do (5)` where
-  //                the engine prints `## To Do` — on every section of every view. It IS published
-  //                today, but only on `ordering[view][section].name`, which exists for the 15
-  //                sections that declare an `ordering:`. Fifteen of three hundred and three, in a
-  //                table keyed by a different concern: coverage-shaped, and not coverage.
-  // `headerValue`  none declared. When present the heading becomes `"{id}: {resolved field}"`.
-  // `bodyPolicy`   none declared. `header_only` emits the heading and NO members — which is a
-  //                POSITIVE ANSWER, not an absence: "renders empty by policy" and "has no members
-  //                today" produce the same line and are not the same fact, and only one is stable.
-  // `containerNode`/`declaredName`
-  //                none live (one retired mention in a comment). When present the section is BACKED
-  //                BY A NODE: its heading is that node's own title and stamp, and if the node's
-  //                render shape is not `heading` the section renders as a NODE LINE rather than a
-  //                `##` heading at all (renderer.py:511-556). Resolving it needs the graph, so this
-  //                publishes the DECLARATION only — enough for a composer to know it must refuse,
-  //                which is the whole point of publishing a fact nobody declares yet.
+  // `name`         303 OF HIS 304 SECTIONS DECLARE IT, and it is the DECLARED NAME the engine
+  //                renders — `ViewRegistration.section_heading` returns `declared_name.strip()`
+  //                CLEAN, with no count suffix, and only falls through to
+  //                `compose_section_header`'s `{id} ({count})` when no name is declared. So a
+  //                browser using `section.id` would print `## to-do (5)` where the engine prints
+  //                `## To Do`, on every section of every view. It IS published today, but only on
+  //                `ordering[view][section].name`, which exists for the 15 sections that declare an
+  //                `ordering:`. Fifteen of three hundred and three, in a table keyed by a different
+  //                concern: coverage-shaped, and not coverage.
+  // `headerValue`  none declared. When present, and ONLY when no name is, the heading becomes
+  //                `"{id}: {resolved field}"`.
+  // `bodyPolicy`   TWENTY SECTIONS DECLARE IT, across four views. `header_only` emits the heading
+  //                and NO members — a POSITIVE ANSWER, not an absence: "renders empty by policy"
+  //                and "has no members today" produce the same line and are not the same fact.
+  // `emptyChildrenPlaceholder`
+  //                FORTY SECTIONS DECLARE IT, across ten views. A qualifying node with no rendered
+  //                children emits one extra synthetic line beneath itself
+  //                (`{indent+1}- {placeholder}`, renderer.py's `_render_tree_node` tail). A
+  //                composer that did not know would drop a real line from ten of his views.
+  // `containerNode`
+  //                one declared. The section is BACKED BY A NODE: its heading is that node's own
+  //                title and stamp, and if the node's render shape is not `heading` the section
+  //                renders as a NODE LINE rather than a `##` heading at all (renderer.py:511-556).
   //
-  // ── WHY PUBLISH THE FOUR NOBODY DECLARES ──
+  // ── THE AUTHORED KEY NAMES ARE READ FROM THE VALIDATOR'S OWN ALLOW-LIST, NOT GUESSED ──
   //
-  // Because the browser cannot notice them arriving. `write_policy` was left unpublished and made a
+  // `bundle/validators/views.py`'s `_SECTION_FLAG_KEYS_ORDER` is the closed set a section may
+  // declare: `header_value`, `render_body`, `include_ancestors`, `structural_edge_types`,
+  // `structural_edge_direction`, `pull_context`, `empty_children_placeholder`, `container_node`,
+  // `name`, `membership`. There is no `body_policy` key and no `declared_name` key — those are the
+  // COMPILED names (`RegisteredNode.declared_name = section.name`;
+  // `compose_section_body_policy(section)` maps the `render_body` BOOL). The first version of this
+  // reader read the compiled names off the authored YAML, so `bodyPolicy` published `full_body` for
+  // all 304 sections INCLUDING the 20 that switch it off, and `declaredName` was a key that could
+  // never be populated. Both are corrected here; `declaredName` is gone rather than fixed, because
+  // `name` already IS it and two keys for one fact is the shape this table refuses elsewhere.
+  //
+  // ── WHY PUBLISH WHAT NOBODY DECLARES ──
+  //
+  // Because the browser cannot notice it arriving. `write_policy` was left unpublished and made a
   // stated caller input, and that was right: a caller can see and override it. These it cannot —
   // they are not on the wire, so the day one is declared the browser renders the wrong heading
   // silently, in the one surface the operator looks at, with the write base taken from it.
+  //
+  // ── WHAT IS STILL NOT PUBLISHED, NAMED SO IT IS A GAP AND NOT A SILENCE ──
+  //
+  // `pull_context` (185 declarations), `structural_edge_types` (14) and `include_ancestors` (1)
+  // decide which NON-QUALIFYING nodes join a section's render tree and how deep each sits. They are
+  // absent here on purpose: a composer cannot use them without the tree itself, which the browser
+  // does not receive (see `app/present/arrange/incoming-section-tree.ts`). `composeViewMarkdown`
+  // therefore refuses any view whose members touch an edge at all, which makes those three
+  // unreachable rather than unpublished-and-quietly-wrong.
   function readSectionPresentation(viewFiles, ledger) {
     const out = {};
     for (const [file, view] of viewFiles) {
@@ -2012,28 +2074,33 @@ export function compile(files, ledger = new Ledger()) {
         const entry = {};
         if (isNonEmptyString(section.name)) entry.name = section.name;
         if (isNonEmptyString(section.header_value)) entry.headerValue = section.header_value;
-        // PUBLISHED AS AN ANSWER, NOT AN ABSENCE. `full_body` is the engine's default
-        // (`compose_section_body_policy`), and it is written down rather than left to a reader's
-        // assumption, so `header_only` is a value it can be told rather than one it must detect.
-        const policy = section.body_policy;
-        if (policy === "header_only" || policy === "full_body") {
-          entry.bodyPolicy = policy;
-        } else if (policy !== undefined) {
-          // DROP PATH 24. A body policy this app does not recognise. Defaulting it to `full_body`
+        // PUBLISHED AS AN ANSWER, NOT AN ABSENCE. `compose_section_body_policy` is
+        // `"full_body" if section.render_body else "header_only"`, and `render_body` defaults to
+        // `True` — so an undeclared key is `full_body`, written down rather than left to a reader's
+        // assumption.
+        const renderBody = section.render_body;
+        if (renderBody === true || renderBody === undefined) {
+          entry.bodyPolicy = "full_body";
+        } else if (renderBody === false) {
+          entry.bodyPolicy = "header_only";
+        } else {
+          // DROP PATH 24. A `render_body` this app does not recognise. Defaulting it to `full_body`
           // would render members the engine may be withholding, so the section is published without
           // one and a composer refuses it.
           ledger.drop(
             `section '${view.viewId}.${section.id}'`,
-            `declares body_policy ${JSON.stringify(policy)}, which is neither 'full_body' nor ` +
-              "'header_only', so whether its members render at all is unknown",
+            `declares render_body ${JSON.stringify(renderBody)}, which is neither true nor false, ` +
+              "so whether its members render at all is unknown",
           );
-        } else {
-          entry.bodyPolicy = "full_body";
+        }
+        // THE SYNTHETIC LINE A CHILDLESS QUALIFYING NODE CARRIES. Published as the STRING, because
+        // the composer emits it verbatim — a boolean "has one" would leave the bytes unknowable.
+        if (isNonEmptyString(section.empty_children_placeholder)) {
+          entry.emptyChildrenPlaceholder = section.empty_children_placeholder;
         }
         // THE NODE-BACKED DECLARATION, carried so a composer can REFUSE rather than synthesise a
         // count-suffix heading over a section whose heading is a node's own line.
         if (isNonEmptyString(section.container_node)) entry.containerNode = section.container_node;
-        if (isNonEmptyString(section.declared_name)) entry.declaredName = section.declared_name;
         sections[section.id] = entry;
       }
       if (Object.keys(sections).length > 0) out[view.viewId] = sections;
@@ -2126,6 +2193,9 @@ export function compile(files, ledger = new Ledger()) {
     orderingFields,
     dayBoundary: readDayBoundary(),
     chromeShapes,
+    // The unfiltered twin of the line above — see `readRenderShapes`'s own header for why the
+    // seedable subset cannot answer "does this section keep its `## ` line".
+    renderShapes: readRenderShapes(),
     sectionRegistration,
     // THE FLOOR OF THE CASCADE, DECLARED — see this file's own header ("THE DEFAULT ORDERING").
     // `defaultOrdering` is what every section with NEITHER `ordering` NOR `orderingMode` above sorts

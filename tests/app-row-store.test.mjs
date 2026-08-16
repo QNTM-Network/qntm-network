@@ -529,8 +529,12 @@ describe("6. break the store's readers and the acceptance test goes red", () => 
       (source) =>
         assertMutated(
           source,
-          "  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);\n  //",
-          "  const source = accepted.sourceFor(v.path) ?? v.markdown;\n  //",
+          // `v.markdown` became `sourceOfView(v)` when the four view-text readers were routed
+          // through one decision (`COMPOSE_VIEW_IN_BROWSER`). The MUTATION is unchanged in meaning —
+          // drop the store's answer — and the pattern follows the line rather than the line being
+          // held still for the pattern.
+          "  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? sourceOfView(v));\n  //",
+          "  const source = accepted.sourceFor(v.path) ?? sourceOfView(v);\n  //",
         ),
       (bundle) =>
         assertMutated(

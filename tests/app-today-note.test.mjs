@@ -100,16 +100,28 @@ describe("NOTHING LOCAL REACHES A WRITE, AND THE CLOCK IS READ IN EXACTLY ONE PL
     assert.doesNotMatch(codeOnly(TODAY_SOURCE), /Date\.now\(\)/);
   });
 
-  test("Date.now() is called from exactly one place in app/index.html's CODE — resolverContextFor", () => {
+  test("Date.now() is called from exactly one place in app/index.html's CODE — `nowMs`", () => {
     // `sayAsOf` was the other legitimate call site; it is gone (chore/retire-the-status-line), and
     // this count moved from two to one along with it, in the safe direction.
+    //
+    // THE ONE PLACE IS NOW A NAMED FUNCTION RATHER THAN AN EXPRESSION INSIDE `resolverContextFor`,
+    // and this test says so because the change STRENGTHENS what it pins. A second legitimate reader
+    // arrived (`sourceOfView`, which needs the logical day to compose a view), and the choice was
+    // between a count of two that nobody could defend and one reading with two callers. Naming it
+    // keeps the count at one AND names what a third caller has to reach for; the assertions below
+    // check both halves, so `nowMs` cannot quietly become an inline `Date.now()` again.
     const appCode = codeOnly(APP_SOURCE);
+    assert.match(
+      appCode,
+      /const nowMs = \(\) => Date\.now\(\)/,
+      "the page's one clock read must be the named `nowMs` — the only legitimate call site left",
+    );
     const contextFn = /function resolverContextFor[\s\S]*?\n\}\n/.exec(appCode)?.[0];
     assert.ok(contextFn, "resolverContextFor was not found — this test is checking the wrong source");
     assert.match(
       contextFn,
-      /now: \(\) => Date\.now\(\)/,
-      "resolverContextFor must supply the clock reader — the one legitimate call site left",
+      /now: nowMs,/,
+      "resolverContextFor must supply the clock reader, and must take it from the one place",
     );
     const allCalls = appCode.match(/Date\.now\(\)/g) ?? [];
     assert.equal(allCalls.length, 1, "Date.now() must be called from exactly one place in app/index.html's code");
