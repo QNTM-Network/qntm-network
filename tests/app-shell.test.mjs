@@ -1059,7 +1059,10 @@ describe("8. a re-read keeps your place", () => {
 
     assert.equal(page.__currentViewId(), "flowtrace-queue", "the re-read moved the reader");
     assert.deepEqual(calls.map((c) => c.method), ["GET"], "the re-read wrote something");
-    assert.match(calls[0].url, /\/app\/graph$/);
+    // `?include_structure=true` rides this same request now that `COMPOSE_VIEW_IN_BROWSER` defaults
+    // on (`graphQuerySuffix`, turn-on-browser-composition, 2026-08-16) — the path is what this test
+    // is about, not the query string.
+    assert.match(calls[0].url, /\/app\/graph(\?|$)/);
   });
 
   test("it says it is working, and stops saying so when it lands", async () => {

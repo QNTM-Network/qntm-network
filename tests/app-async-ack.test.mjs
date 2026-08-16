@@ -884,7 +884,11 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
 
     const good = globalThis.fetch;
     globalThis.fetch = async (url, init) => {
-      if (String(url).endsWith("/app/graph")) throw new Error("network");
+      // MATCHED BY PATHNAME, NOT THE RAW STRING — `?include_structure=true` rides this request now
+      // that `COMPOSE_VIEW_IN_BROWSER` defaults on (`graphQuerySuffix`, turn-on-browser-composition,
+      // 2026-08-16), and a raw `endsWith` would silently stop matching the route this test means to
+      // fail.
+      if (new URL(String(url)).pathname === "/app/graph") throw new Error("network");
       return good(url, init);
     };
     try {
