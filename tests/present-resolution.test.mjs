@@ -1241,10 +1241,25 @@ describe("12. section presentation — the heading's own facts", () => {
     }
   });
 
-  test("`header_only` and `container_node` ARE CARRIED — the facts nobody declares yet", () => {
-    // They are on the wire precisely BECAUSE nobody declares them. `write_policy` could be left off
-    // because a caller can see and override it; these a caller cannot notice arriving, so the day
-    // one is declared the browser must be able to tell rather than silently render the old shape.
+  /**
+   * ── THE KEY NAMES ARE READ OFF THE ENGINE'S OWN ALLOW-LIST, AND THE FIRST VERSION WAS NOT ──
+   *
+   * These tests used to declare `body_policy:` and `declared_name:` into the fixture and assert the
+   * published answer. Both passed. NEITHER KEY EXISTS: `bundle/validators/views.py`'s
+   * `_SECTION_FLAG_KEYS_ORDER` lists `render_body` (a BOOL) and `name`, and `body_policy`/
+   * `declared_name` are the COMPILED names the engine derives from them. The generator read the
+   * compiled names off the authored YAML and the tests declared the same wrong keys back at it, so
+   * a test and its subject shared one mistake and agreed with each other.
+   *
+   * It cost the operator's own 20 `render_body: false` sections, published as `full_body` — a
+   * composer would render every member the engine withholds. The fixtures below now use the keys a
+   * view file can actually carry, which is why the assertions look different rather than merely
+   * renamed.
+   */
+  test("`header_only` and `container_node` ARE CARRIED — one live in his config, one not", () => {
+    // `container_node` is on the wire precisely BECAUSE almost nobody declares it. `write_policy`
+    // could be left off because a caller can see and override it; this a caller cannot notice
+    // arriving, so the day it is declared the browser must be able to tell.
     const scratch = mkdtempSync(join(tmpdir(), "section-presentation-rare-"));
     try {
       const configDir = join(scratch, "config");
@@ -1254,7 +1269,8 @@ describe("12. section presentation — the heading's own facts", () => {
         viewPath,
         readFileSync(viewPath, "utf8").replace(
           'name: "Open"',
-          'name: "Open"\n      body_policy: header_only\n      container_node: "819"\n      header_value: domain',
+          'name: "Open"\n      render_body: false\n      container_node: "819"\n      header_value: domain\n' +
+            '      empty_children_placeholder: "(none)"',
         ),
       );
       const { resolution, problems } = readConfigResolutionDeclaration({ resolution: generateResolution(configDir) });
@@ -1264,13 +1280,14 @@ describe("12. section presentation — the heading's own facts", () => {
         bodyPolicy: "header_only",
         containerNode: "819",
         headerValue: "domain",
+        emptyChildrenPlaceholder: "(none)",
       });
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
   });
 
-  test("AN UNRECOGNISED `body_policy` IS DROPPED WITH A REASON, never defaulted to full_body", () => {
+  test("AN UNRECOGNISED `render_body` IS DROPPED WITH A REASON, never defaulted to full_body", () => {
     // Defaulting would render members the engine may be withholding — visibly MORE than the engine
     // rather than less, which is the harder failure to spot.
     const scratch = mkdtempSync(join(tmpdir(), "section-presentation-bad-"));
@@ -1280,14 +1297,63 @@ describe("12. section presentation — the heading's own facts", () => {
       const viewPath = join(configDir, "views", "main.yaml");
       writeFileSync(
         viewPath,
-        readFileSync(viewPath, "utf8").replace('name: "Open"', 'name: "Open"\n      body_policy: sometimes'),
+        readFileSync(viewPath, "utf8").replace('name: "Open"', 'name: "Open"\n      render_body: sometimes'),
       );
       const compiled = generateResolution(configDir);
       assert.equal(compiled.sectionPresentation.main.open.bodyPolicy, undefined);
-      assert.match(compiled.dropped["section 'main.open'"] ?? "", /neither 'full_body' nor 'header_only'/);
+      assert.match(compiled.dropped["section 'main.open'"] ?? "", /neither true nor false/);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
+  });
+
+  test("THE FALSIFIER FOR `render_body`: switching it off moves the published answer", () => {
+    // The generator used to read a key the config cannot declare, so this assertion would have
+    // failed then and passes now. It is the test the first version needed and did not have.
+    const scratch = mkdtempSync(join(tmpdir(), "section-presentation-body-"));
+    try {
+      const configDir = join(scratch, "config");
+      cpSync(FIXTURE_DIR, configDir, { recursive: true });
+      const viewPath = join(configDir, "views", "main.yaml");
+      assert.equal(generateResolution(configDir).sectionPresentation.main.open.bodyPolicy, "full_body");
+      writeFileSync(
+        viewPath,
+        readFileSync(viewPath, "utf8").replace('name: "Open"', 'name: "Open"\n      render_body: false'),
+      );
+      assert.equal(generateResolution(configDir).sectionPresentation.main.open.bodyPolicy, "header_only");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  test("`renderShapes` CARRIES WHAT `chromeShapes` DROPS, which is the only reason it exists", () => {
+    // `chromeShapes` answers "can this app OPEN a line of this type" and correctly drops `heading`
+    // and `stat_line`. `composeViewMarkdown` asks a different question — does this section keep its
+    // `## ` line — and in `chromeShapes` an absent entry means `heading`, `stat_line` and "no such
+    // type" at once. The first keeps the heading and the others delete it.
+    const shapes = sectionReading.resolution.renderShapes;
+    assert.ok(shapes !== undefined, "renderShapes did not publish");
+    const dropped = Object.keys(shapes).filter((t) => sectionReading.resolution.chromeShapes[t] === undefined);
+    for (const type of dropped) {
+      assert.ok(
+        typeof shapes[type] === "string" && shapes[type] !== "",
+        `${type} is dropped from chromeShapes and carries no renderShapes answer either`,
+      );
+    }
+    // And the KEEP half agrees rather than being a second opinion.
+    for (const [type, shape] of Object.entries(sectionReading.resolution.chromeShapes)) {
+      assert.equal(shapes[type], shape, `${type} disagrees between the two tables`);
+    }
+  });
+
+  test("`renderShapes` IS NOT A CLOSED SET — an unmet shape arrives by name, not as an absence", () => {
+    const { resolution, problems } = readConfigResolutionDeclaration({
+      resolution: { ...compiledSections, renderShapes: { ...compiledSections.renderShapes, gizmo: "sparkline" } },
+    });
+    assert.deepEqual(problems, []);
+    assert.equal(resolution.renderShapes.gizmo, "sparkline");
+    // …and it stays OUT of the capability table, which is the whole point of the two being separate.
+    assert.equal(resolution.chromeShapes.gizmo, undefined);
   });
 
   test("ONE BAD ENTRY REFUSES THE WHOLE MAP", () => {

@@ -1032,6 +1032,12 @@ import {
   armSettle,
   armPredict,
   graphSnapshotOf,
+  // ── THE VIEW COMPOSER (app/present/express/viewmarkdown.ts) ──
+  // `computeViewMembers` + `composeNodeLine` + the published heading facts, joined into the one
+  // string this page paints and takes its write base from. Reached only through `sourceOfView`
+  // below, which is the single place the flag is read — see that function's own header.
+  composeViewMarkdown,
+  todayFor,
   // `commitLine` ITSELF (app/present/commit.ts) — the connecting act, relocated so a caller-chain
   // probe can see it call `runResolvers` and, on the write's own answer, reach `paint`. This page
   // still builds it: `createCommitLine(deps)` below hands it the page state it cannot hold itself
@@ -1059,7 +1065,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=1a146c95b8";
+} from "/dist/present.js?v=97e42a05d0";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2005,7 +2011,95 @@ async function collect(path) {
  */
 function viewSources(data) {
   const views = data?.snapshot?.views;
-  return Array.isArray(views) ? views.map((v) => v?.markdown).filter((m) => typeof m === "string") : [];
+  return Array.isArray(views) ? views.map((v) => sourceOfView(v)).filter((m) => typeof m === "string") : [];
+}
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ * WHERE A VIEW'S MARKDOWN COMES FROM — THE ONE DECISION, MADE ONCE, FOR ALL FOUR READERS
+ * ══════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ── WHY ONE FUNCTION AND NOT FOUR CALL SITES ──
+ *
+ * `snapshot.views[].markdown` is read in four places and they are NOT four opinions:
+ *
+ *   the painter        `repaintCurrentView` — what is on screen
+ *   the write base     `paintView` — `served.take`, the string the next save is computed against
+ *   the way station    `drainProjection` — the same base, set while a projection is held
+ *   the staleness read `viewSources` above — what `stampsLanded` searches for a saved body in
+ *
+ * `paintView`'s own comment states the property that keeps the stale-write detector honest:
+ * neither base site "can pass a string this app computed". THE MOMENT THE PAINTER WALKS A COMPOSED
+ * STRING, THAT SENTENCE IS ONLY TRUE IF THE BASE IS THE SAME COMPOSED STRING. A painter on the
+ * composer with a base on the engine's markdown is not a cosmetic mismatch — it is a save computed
+ * against a file the operator was never shown, on the one surface he types into.
+ *
+ * So the four move together or not at all, and this function is what makes "together" a property
+ * of the code rather than a promise in a comment.
+ *
+ * ── THE FLAG DEFAULTS OFF, AND OFF IS BYTE-IDENTICAL ──
+ *
+ * `COMPOSE_VIEW_IN_BROWSER` false returns `view.markdown` verbatim — the same expression every one
+ * of the four sites held before this function existed, with no formatting, no fallback and no
+ * normalisation in between. Nothing about the shipped page changes until the flag moves.
+ *
+ * ── THE REFUSAL IS PER VIEW, NEVER PER LINE ──
+ *
+ * `composeViewMarkdown` answers for a whole view or refuses it, and this returns the engine's
+ * markdown on a refusal. A view assembled half from the composer and half from the engine is a
+ * string this app computed, and it would become the base of the next save — the exact thing the
+ * paragraph above says must not happen. There is deliberately no per-line fallback to reach for.
+ *
+ * ── WHY IT TAKES THE VIEW AND NOT THE ENVELOPE ──
+ *
+ * A composed view is a function of the graph and the config, never of which envelope the view
+ * object arrived in. So `drainProjection` (holding a projection that has not been installed) and
+ * `viewSources` (walking a whole envelope) can both call this with a view they are holding, and get
+ * the same answer the painter would.
+ */
+const COMPOSE_VIEW_IN_BROWSER = false;
+
+/**
+ * THE PAGE'S ONE CLOCK READ, AND NOW IT IS A NAME RATHER THAN A COUNT.
+ *
+ * `app/present/` reads no clock at all — `today.ts`'s own rule, pinned by
+ * `tests/app-today-note.test.mjs` — so the reading happens here, on the page. There used to be
+ * exactly one call and the rule was kept by COUNTING them: two legitimate sites once existed
+ * (`sayAsOf` was the other) and the count fell to one when that was retired.
+ *
+ * A SECOND READER ARRIVED — `sourceOfView` needs the logical day to compute a view whose sections
+ * compare against the day boundary. Two `Date.now()` calls would have made the rule a number nobody
+ * could defend, so the reading is named instead: one function, two callers, and the count is still
+ * one. That is a stricter pin than the count was, not a relaxation of it — a third caller now has
+ * to reach this name, and a bare `Date.now()` anywhere in this page still goes red.
+ */
+const nowMs = () => Date.now();
+
+function sourceOfView(view) {
+  const engine = view?.markdown;
+  if (!COMPOSE_VIEW_IN_BROWSER) return engine;
+  const { qualification, resolution } = declaration;
+  if (qualification === undefined || resolution === undefined || typeof view?.id !== "string") {
+    return engine;
+  }
+  // THE CLOCK IS READ HERE, ON THIS PAGE, exactly as `resolverContextFor` reads it — `app/present/`
+  // holds no clock of its own and `today.ts`'s own rule says so. An abstention is passed through as
+  // "no today", which makes every clock-dependent section refuse rather than be computed against a
+  // guessed day.
+  const reading = todayFor(nowMs(), resolution.dayBoundary);
+  const composed = composeViewMarkdown(view.id, {
+    resolution,
+    language: qualification,
+    ordering: {
+      ordering: resolution.ordering,
+      orderingFields: resolution.orderingFields,
+      defaultOrdering: resolution.defaultOrdering,
+      priorityRank: resolution.priorityRank,
+    },
+    graph: graphSnapshotOf(graphData, graphBlob),
+    ...(reading.kind === "answer" ? { today: reading.answer } : {}),
+  });
+  return composed.ok ? composed.markdown : engine;
 }
 
 /**
@@ -2040,7 +2134,12 @@ function drainProjection(path) {
     // from "a string this app computed"; this one is read straight out of the envelope, for the one
     // path this projection describes. The painter's source is untouched, so a `served.read` against
     // it would answer `stale` — which is exactly true, whether or not anything still asks.
-    const markdown = pending.data.snapshot.views?.find((v) => v.path === path)?.markdown;
+    //
+    // AND IT GOES THROUGH `sourceOfView` FOR THE SAME REASON THE PAINTER DOES. This is a BASE, and
+    // a base that describes a different string from the one the painter will walk when this
+    // projection installs is the fault this whole block exists to prevent — see `sourceOfView`'s
+    // own header. Flag off, the expression is `view.markdown`, exactly as it was.
+    const markdown = sourceOfView(pending.data.snapshot.views?.find((v) => v.path === path));
     if (typeof markdown === "string") {
       served.take(path, markdown);
     }
@@ -2131,6 +2230,23 @@ function paintView(id, why) {
   // `repaintCurrentView` below does NOT repeat this coercion — see its own comment for why a
   // deliberately blurred focus (`o`/`O` opening a draft) has to survive the repaints in between.
   const entering = graphData?.snapshot?.views.find((x) => x.id === id);
+  // ── THE ARRIVING TEXT, RESOLVED ONCE, AND EVERY DECISION BELOW READS THIS ONE STRING ──
+  //
+  // `entering.markdown` used to appear seven times in this function: the write base, the draft
+  // row's placement, the cursor's re-anchor, the seeding clamp's line count, and `paintedSource`.
+  // They are not seven facts. They are five questions about ONE string, and the only thing that
+  // made writing `entering.markdown` seven times safe was that there was nothing else it could be.
+  //
+  // There is now — see `sourceOfView`. A cursor re-anchored against the engine's markdown while the
+  // painter walks a composed one lands on a line that is not on screen, and the draft row is placed
+  // beside a neighbour that moved. So the resolution happens ONCE, here, and the name below is what
+  // every reader takes. Flag off it is `entering.markdown`, unchanged, in all five places.
+  //
+  // THE CONDITION BELOW IS UNTOUCHED, AND THAT IS DELIBERATE. Narrowing it to "and the text is a
+  // string" would look like defensiveness and would be a behaviour change with the flag OFF: a view
+  // whose `markdown` was not a string used to enter this branch and throw, and would now silently
+  // take the `else`. Flag-off has to be identical in the broken cases too, or the claim is not one.
+  const arriving = entering === undefined ? undefined : sourceOfView(entering);
   if (entering !== undefined) {
     // THE BASE IS TAKEN HERE, from the markdown the server sent, in the same call that installs it
     // for painting — the discipline `focus`'s anchor already follows, applied to a
@@ -2145,7 +2261,7 @@ function paintView(id, why) {
     // the day an arrival could be deferred, and this surface answers the FIRST question. Both sites
     // pass markdown straight out of an envelope; neither can pass a string this app computed, which
     // is the property the single-site rule was really protecting.
-    served.take(entering.path, entering.markdown);
+    served.take(entering.path, arriving);
     // AND THE ACCEPTED SOURCE IS DISCARDED, BECAUSE THE PROJECTION IS THE NEWER TRUTH. What was
     // accepted is what THIS BROWSER posted; what arrived is what the ENGINE made of it, and the
     // engine is entitled to rewrite, move or delete what it ingests. Where the two disagree, the
@@ -2184,9 +2300,9 @@ function paintView(id, why) {
     //             projection arrival.
     let keeping = false;
     if (carried !== null) {
-      const placement = placeDraft(carried, wasShowing, entering.markdown, id);
+      const placement = placeDraft(carried, wasShowing, arriving, id);
       if (placement.outcome === "placed") {
-        draftLine.carry(placement.lineIndex, placeFor(entering.markdown, placement.lineIndex, id));
+        draftLine.carry(placement.lineIndex, placeFor(arriving, placement.lineIndex, id));
         keeping = true;
       } else {
         draftLine.drop();
@@ -2205,7 +2321,7 @@ function paintView(id, why) {
     // `id` IS THE VIEW `reanchor` NAMESPACES THE LOOKUP BY — it is the view this whole function is
     // (re)painting, and `sameView` above is exactly the guard that makes it also the view the
     // anchor being resolved was taken against.
-    const cursorReading = sameView ? focus.reanchor(entering.markdown, id) : { outcome: "unanchored" };
+    const cursorReading = sameView ? focus.reanchor(arriving, id) : { outcome: "unanchored" };
     // HIS LINE IS NOT IN WHAT ARRIVED. `absent` IS THE WHOLE TRIGGER, AND `ambiguous` IS
     // DELIBERATELY NOT ONE. Ambiguous means the view prints that line in MORE THAN ONE place — the
     // characters are demonstrably still in the file, twice. The cursor is not moved.
@@ -2230,12 +2346,12 @@ function paintView(id, why) {
       // line's anchor intact — that is where the parked row's identity has to be read from — so
       // when that row lands it must take `focus.anchor` BEFORE this seeding runs, not after.
       focus.place(
-        clampLine(focus.lineIndex ?? 0, Math.max(0, entering.markdown.split("\n").length - 1)),
+        clampLine(focus.lineIndex ?? 0, Math.max(0, arriving.split("\n").length - 1)),
         // LINE-START — entering a view puts the cursor at the head of its line, which is what the
         // literal `0` here always meant. Declared now rather than typed as a number: this file is
         // outside tsconfig, so nothing would have caught it if the meaning had drifted.
         { kind: "line-start" },
-        entering.markdown,
+        arriving,
         id,
       );
     }
@@ -2246,7 +2362,7 @@ function paintView(id, why) {
     mode.enterNormal();
   }
   paintedViewId = id;
-  paintedSource = entering === undefined ? "" : entering.markdown;
+  paintedSource = arriving === undefined ? "" : arriving;
   repaintCurrentView();
 }
 
@@ -2293,7 +2409,13 @@ function repaintCurrentView() {
   // (`paint.ts`'s `settle` -> `repaint(markdown)`). `rows.showing` is handed the server's newest and
   // answers with the one on screen: the browser's own edit survives until the server says something
   // newer, and then it does not. See app/present/rows.ts for the rule and for the defect it ends.
-  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? v.markdown);
+  //
+  // THE FOURTH OF THE FOUR SITES, AND THE ONLY ONE THE OPERATOR CAN SEE. `sourceOfView` replaces
+  // `v.markdown` here and at the three base/staleness sites in one gesture, because a painter on a
+  // composed string with a base on the engine's is a save computed against a file he was never
+  // shown. `accepted` STILL WINS OVER IT, unchanged: an ack is what the SERVER says it holds, which
+  // outranks both the projection's copy and anything this page composed from the graph.
+  const source = rows.showing(v.id, accepted.sourceFor(v.path) ?? sourceOfView(v));
   // ── WHERE THE CURSOR GOES: BY IDENTITY WHEN THE WORLD MOVED, BY POSITION WHEN IT DID NOT ──────
   //
   // The clamp below is what this function always did, and it is right for the repaint a MOTION
@@ -2553,7 +2675,7 @@ function resolverContextFor(view, commit) {
     // sent at all (graph-envelope-composition-separates-blob-from-view-markdown) — see
     // `graphSnapshotOf`'s own header for which of the two wins when both are present.
     graph: graphSnapshotOf(graphData, graphBlob),
-    now: () => Date.now(),
+    now: nowMs,
   };
 }
 

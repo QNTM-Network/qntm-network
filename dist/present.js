@@ -402,11 +402,11 @@ function readStructuralDeclaration(document2) {
       );
     }
   }
-  const indent2 = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
+  const indent3 = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
   const edgeCardinality = "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
   const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
   const dropped = "dropped" in raw ? readDropped(raw.dropped, problems) : {};
-  return { structural: { indent: indent2, edgeCardinality, sections, dropped }, problems };
+  return { structural: { indent: indent3, edgeCardinality, sections, dropped }, problems };
 }
 
 // app/present/select/qualification.ts
@@ -862,6 +862,9 @@ var TOP_KEYS2 = [
   "orderingFields",
   "dayBoundary",
   "chromeShapes",
+  // The unfiltered twin of the line above. Both are published because they answer different
+  // questions — see `renderShapes`' own comment on the interface for the one that made it necessary.
+  "renderShapes",
   "sectionRegistration",
   "defaultOrdering",
   "defaultOrderingSource",
@@ -1516,7 +1519,7 @@ function readSectionPresentation(value, problems) {
         return void 0;
       }
       const at = `${path}.${viewId}.${sectionId}`;
-      for (const key of ["name", "headerValue", "containerNode", "declaredName"]) {
+      for (const key of ["name", "headerValue", "containerNode", "emptyChildrenPlaceholder"]) {
         const v = entry[key];
         if (v !== void 0 && (typeof v !== "string" || v === "")) {
           problems.push(`'${at}.${key}' is ${JSON.stringify(v)}, not a non-empty string`);
@@ -1530,7 +1533,7 @@ function readSectionPresentation(value, problems) {
         return void 0;
       }
       const kept = {};
-      for (const key of ["name", "headerValue", "bodyPolicy", "containerNode", "declaredName"]) {
+      for (const key of ["name", "headerValue", "bodyPolicy", "containerNode", "emptyChildrenPlaceholder"]) {
         const v = entry[key];
         if (v !== void 0) kept[key] = v;
       }
@@ -1548,6 +1551,25 @@ function readRenderCheckboxSource(value, problems, key = "renderCheckboxSource")
     return void 0;
   }
   return "engine-literal";
+}
+function readRenderShapes(value, problems) {
+  if (!isPlainObject3(value)) {
+    problems.push(
+      `'${RESOLUTION_TABLE_KEY}.renderShapes' is ${shapeOf2(value)}, not an object \u2014 whether a section keeps its heading line stays unknown`
+    );
+    return void 0;
+  }
+  const out = {};
+  for (const [nodeType, shape] of Object.entries(value)) {
+    if (typeof shape !== "string" || shape === "") {
+      problems.push(
+        `'${RESOLUTION_TABLE_KEY}.renderShapes.${nodeType}' is ${JSON.stringify(shape)}, not a non-empty string`
+      );
+      return void 0;
+    }
+    out[nodeType] = shape;
+  }
+  return out;
 }
 function readChromeShapes(value, problems) {
   if (!isPlainObject3(value)) {
@@ -1815,6 +1837,7 @@ function readConfigResolutionDeclaration(document2) {
       orderingFields: "orderingFields" in raw ? readOrderingFieldMarkers(raw.orderingFields, problems) : {},
       dayBoundary,
       chromeShapes: "chromeShapes" in raw ? readChromeShapes(raw.chromeShapes, problems) : {},
+      renderShapes: "renderShapes" in raw ? readRenderShapes(raw.renderShapes, problems) : void 0,
       sectionRegistration: "sectionRegistration" in raw ? readSectionRegistration(raw.sectionRegistration, problems) : {},
       defaultOrdering: "defaultOrdering" in raw ? readDefaultOrdering(raw.defaultOrdering, problems) : [],
       defaultOrderingSource: "defaultOrderingSource" in raw ? readDefaultOrderingSource(raw.defaultOrderingSource, problems) : void 0,
@@ -2870,6 +2893,100 @@ function composeNodeLine(node, context) {
   return { ok: true, line: { text, continuationLines } };
 }
 
+// app/present/graphmatch.ts
+function resolvedQntmId(node) {
+  const raw = node.fields["qntm_id"];
+  return String(raw === void 0 || raw === null ? node.id : raw);
+}
+function candidateFieldsOf(node) {
+  return { node_type: node.type, ...node.fields };
+}
+function neighboursOf(candidateId, edgeType, direction, edgeSourceOf, graph) {
+  const touching = graph.edges.filter(
+    (e) => e.type === edgeType && (e.source === candidateId || e.target === candidateId)
+  );
+  if (touching.length === 0) return [];
+  const source = edgeSourceOf(edgeType);
+  if (source === void 0) return void 0;
+  const candidateIsSource = direction === "children" && source === "position" || direction === "parents" && source === "self";
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const neighbourIds = /* @__PURE__ */ new Set();
+  for (const edge of touching) {
+    if (candidateIsSource) {
+      if (edge.source === candidateId) neighbourIds.add(edge.target);
+    } else {
+      if (edge.target === candidateId) neighbourIds.add(edge.source);
+    }
+  }
+  const out = [];
+  for (const id of neighbourIds) {
+    const node = byId.get(id);
+    if (node === void 0) return void 0;
+    out.push(node);
+  }
+  return out;
+}
+function edgeStepIsSatisfied(candidateId, step, edgeSourceOf, graph, prospective) {
+  const candidates = [];
+  for (const edgeType of step.edgeType) {
+    const found = neighboursOf(candidateId, edgeType, step.direction, edgeSourceOf, graph);
+    if (found === void 0) return void 0;
+    for (const node of found) candidates.push(candidateFieldsOf(node));
+  }
+  if (prospective !== void 0 && step.direction === "children" && step.edgeType.includes(prospective.edgeType)) {
+    candidates.push(prospective.fields);
+  }
+  const clause = { nodeType: step.nodeType, fields: step.fields };
+  const anyMatches = candidates.some((fields) => matchesFindClause(fields, clause));
+  return step.mustExist ? anyMatches : !anyMatches;
+}
+function matchesQualifierGraphAware(candidateFields, candidateId, qualifier, graph, edgeSourceOf, prospective, today) {
+  if (qualifierNeedsClock(qualifier) && today === void 0) return void 0;
+  if (!matchesFindClause(candidateFields, qualifier.find, today)) return false;
+  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause, today))) return false;
+  const steps = qualifier.edgeSteps ?? [];
+  if (steps.length === 0) return true;
+  const id = candidateId ?? "";
+  for (const step of steps) {
+    const ok = edgeStepIsSatisfied(id, step, edgeSourceOf, graph, prospective);
+    if (ok === void 0) return void 0;
+    if (!ok) return false;
+  }
+  return true;
+}
+function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf, prospective, today) {
+  let working = { ...fields };
+  const applied = [];
+  const partial = [];
+  const undecidable = [];
+  for (const ruleId of language.order) {
+    const rule = language.rules[ruleId];
+    if (rule === void 0) continue;
+    const qualifier = language.patterns[rule.pattern];
+    if (qualifier === void 0) continue;
+    const matched = matchesQualifierGraphAware(
+      working,
+      candidateId,
+      qualifier,
+      graph,
+      edgeSourceOf,
+      prospective,
+      today
+    );
+    if (matched === void 0) {
+      undecidable.push(ruleId);
+      continue;
+    }
+    if (!matched) continue;
+    if (!evaluateWhen(rule.when, working)) continue;
+    if (rule.partial === true) partial.push(ruleId);
+    const { working: nextWorking, effects } = applyRuleActions(ruleId, rule.actions, working, today);
+    working = nextWorking;
+    applied.push(...effects);
+  }
+  return { fields: working, applied, partial, undecidable };
+}
+
 // app/present/arrange/ordering.ts
 var abstains2 = (because) => ({ kind: "abstains", because });
 function sectionBounds(lines, lineIndex) {
@@ -2904,11 +3021,11 @@ function parentLineOf(lines, start, end) {
   for (let at = start; at < end; at += 1) {
     const match = /^(\s*)\S/.exec(lines[at] ?? "");
     if (match === null) continue;
-    const indent2 = match[1]?.length ?? 0;
-    while (stack.length > 0 && (stack[stack.length - 1]?.indent ?? -1) >= indent2) stack.pop();
+    const indent3 = match[1]?.length ?? 0;
+    while (stack.length > 0 && (stack[stack.length - 1]?.indent ?? -1) >= indent3) stack.pop();
     const parent = stack[stack.length - 1];
     parentOf2.set(at, parent === void 0 ? null : parent.lineIndex);
-    stack.push({ lineIndex: at, indent: indent2 });
+    stack.push({ lineIndex: at, indent: indent3 });
   }
   return parentOf2;
 }
@@ -3257,98 +3374,257 @@ function resolveOrderingPlacementFor(viewId, sectionId, source, lineIndex, after
   );
 }
 
-// app/present/graphmatch.ts
-function resolvedQntmId(node) {
-  const raw = node.fields["qntm_id"];
-  return String(raw === void 0 || raw === null ? node.id : raw);
+// app/present/select/viewmembers.ts
+function fieldsOf(node) {
+  return candidateFieldsOf(node);
 }
-function candidateFieldsOf(node) {
-  return { node_type: node.type, ...node.fields };
+function defaultKeyForField(fields, field, ordering) {
+  const raw = fields[field];
+  if (field === "title") {
+    return typeof raw === "string" && raw.length > 0 ? { tier: 0, value: raw } : { tier: 1, value: "" };
+  }
+  const marker = ordering.orderingFields[field];
+  if (marker === void 0) return { tier: 1, value: "" };
+  if (marker.kind === "enum") {
+    if (typeof raw !== "string") return { tier: 1, value: 0 };
+    const rank = ordering.priorityRank[raw];
+    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
+  }
+  if (raw === void 0 || raw === null || raw === "") {
+    return { tier: 1, value: marker.kind === "date" ? "" : 0 };
+  }
+  return marker.kind === "date" ? { tier: 0, value: String(raw) } : { tier: 0, value: Number(raw) };
 }
-function neighboursOf(candidateId, edgeType, direction, edgeSourceOf, graph) {
-  const touching = graph.edges.filter(
-    (e) => e.type === edgeType && (e.source === candidateId || e.target === candidateId)
-  );
-  if (touching.length === 0) return [];
-  const source = edgeSourceOf(edgeType);
-  if (source === void 0) return void 0;
-  const candidateIsSource = direction === "children" && source === "position" || direction === "parents" && source === "self";
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]));
-  const neighbourIds = /* @__PURE__ */ new Set();
-  for (const edge of touching) {
-    if (candidateIsSource) {
-      if (edge.source === candidateId) neighbourIds.add(edge.target);
-    } else {
-      if (edge.target === candidateId) neighbourIds.add(edge.source);
-    }
+function declaredTupleFor(fields, keys, ordering) {
+  const values = [];
+  for (const key of keys) {
+    const marker = ordering.orderingFields[key.field];
+    if (marker === void 0) return void 0;
+    if (marker.kind === "enum") return void 0;
+    const raw = fields[key.field];
+    if (raw === void 0 || raw === null || raw === "") return void 0;
+    values.push(String(raw));
   }
-  const out = [];
-  for (const id of neighbourIds) {
-    const node = byId.get(id);
-    if (node === void 0) return void 0;
-    out.push(node);
-  }
-  return out;
+  return values;
 }
-function edgeStepIsSatisfied(candidateId, step, edgeSourceOf, graph, prospective) {
-  const candidates = [];
-  for (const edgeType of step.edgeType) {
-    const found = neighboursOf(candidateId, edgeType, step.direction, edgeSourceOf, graph);
-    if (found === void 0) return void 0;
-    for (const node of found) candidates.push(candidateFieldsOf(node));
-  }
-  if (prospective !== void 0 && step.direction === "children" && step.edgeType.includes(prospective.edgeType)) {
-    candidates.push(prospective.fields);
-  }
-  const clause = { nodeType: step.nodeType, fields: step.fields };
-  const anyMatches = candidates.some((fields) => matchesFindClause(fields, clause));
-  return step.mustExist ? anyMatches : !anyMatches;
+function qualifies(node, qualifier, graph, edgeSourceOf, today) {
+  const fields = fieldsOf(node);
+  if (!qualifierNeedsGraph(qualifier)) return matchesQualifier(fields, qualifier, today);
+  if (graph === void 0 || edgeSourceOf === void 0) return void 0;
+  return matchesQualifierGraphAware(fields, node.id, qualifier, graph, edgeSourceOf, void 0, today);
 }
-function matchesQualifierGraphAware(candidateFields, candidateId, qualifier, graph, edgeSourceOf, prospective, today) {
-  if (qualifierNeedsClock(qualifier) && today === void 0) return void 0;
-  if (!matchesFindClause(candidateFields, qualifier.find, today)) return false;
-  if (qualifier.exclude.some((clause) => matchesFindClause(candidateFields, clause, today))) return false;
-  const steps = qualifier.edgeSteps ?? [];
-  if (steps.length === 0) return true;
-  const id = candidateId ?? "";
-  for (const step of steps) {
-    const ok = edgeStepIsSatisfied(id, step, edgeSourceOf, graph, prospective);
-    if (ok === void 0) return void 0;
-    if (!ok) return false;
-  }
-  return true;
-}
-function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf, prospective, today) {
-  let working = { ...fields };
-  const applied = [];
-  const partial = [];
-  const undecidable = [];
-  for (const ruleId of language.order) {
-    const rule = language.rules[ruleId];
-    if (rule === void 0) continue;
-    const qualifier = language.patterns[rule.pattern];
-    if (qualifier === void 0) continue;
-    const matched = matchesQualifierGraphAware(
-      working,
-      candidateId,
-      qualifier,
-      graph,
-      edgeSourceOf,
-      prospective,
-      today
-    );
-    if (matched === void 0) {
-      undecidable.push(ruleId);
+function computeViewMembers(viewId, nodes, language, ordering, options) {
+  const sectionIds = language.sectionOrder[viewId];
+  const declared = language.sections[viewId];
+  if (sectionIds === void 0 || declared === void 0) return void 0;
+  const graph = options?.graph;
+  const edgeSourceOf = options?.edgeSourceOf;
+  const today = options?.today;
+  const sections = [];
+  const uncomputed = [];
+  for (const sectionId of sectionIds) {
+    const section = declared[sectionId];
+    if (section === void 0) continue;
+    const name = section.name ?? sectionId;
+    const qualifier = language.predicates[section.qualification];
+    if (qualifier === void 0) {
+      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "no-predicate" });
       continue;
     }
-    if (!matched) continue;
-    if (!evaluateWhen(rule.when, working)) continue;
-    if (rule.partial === true) partial.push(ruleId);
-    const { working: nextWorking, effects } = applyRuleActions(ruleId, rule.actions, working, today);
-    working = nextWorking;
-    applied.push(...effects);
+    if (qualifierNeedsClock(qualifier) && today === void 0) {
+      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "needs-clock" });
+      continue;
+    }
+    if (qualifierNeedsGraph(qualifier) && (graph === void 0 || edgeSourceOf === void 0)) {
+      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "needs-graph" });
+      continue;
+    }
+    const members = [];
+    const undecided = [];
+    for (const node of nodes) {
+      const answer = qualifies(node, qualifier, graph, edgeSourceOf, today);
+      if (answer === true) members.push(node);
+      else if (answer === void 0) undecided.push(node);
+    }
+    const declaredOrdering = ordering.ordering[viewId]?.[sectionId];
+    const placed = orderMembers(members, declaredOrdering, ordering);
+    sections.push({
+      sectionId,
+      name,
+      qualification: section.qualification,
+      members: placed.members,
+      ordered: placed.ordered,
+      ...placed.because === void 0 ? {} : { orderAbstention: placed.because },
+      undecided
+    });
   }
-  return { fields: working, applied, partial, undecidable };
+  return { viewId, sections, uncomputed };
+}
+function orderMembers(members, declaredOrdering, ordering) {
+  if (declaredOrdering !== void 0) {
+    const keys2 = declaredOrdering.ordering;
+    if (keys2 === void 0 || keys2.length === 0) return { members, ordered: false };
+    const tuples2 = /* @__PURE__ */ new Map();
+    for (const node of members) {
+      const tuple = declaredTupleFor(fieldsOf(node), keys2, ordering);
+      if (tuple === void 0) {
+        return { members, ordered: false, because: "ordering-field-not-published" };
+      }
+      tuples2.set(node.id, tuple);
+    }
+    const sorted2 = [...members].sort(
+      (a, b) => compareTuples(tuples2.get(a.id) ?? [], tuples2.get(b.id) ?? [], keys2, ordering.orderingFields)
+    );
+    return { members: sorted2, ordered: true };
+  }
+  const keys = ordering.defaultOrdering;
+  if (keys.length === 0) return { members, ordered: false };
+  const tuples = /* @__PURE__ */ new Map();
+  for (const node of members) {
+    const fields = fieldsOf(node);
+    tuples.set(node.id, keys.map((key) => defaultKeyForField(fields, key.field, ordering)));
+  }
+  const sorted = [...members].sort(
+    (a, b) => compareDefaultTuples(tuples.get(a.id) ?? [], tuples.get(b.id) ?? [], keys)
+  );
+  return { members: sorted, ordered: true };
+}
+
+// app/present/express/viewmarkdown.ts
+function countSuffixHeader(sectionId, count) {
+  return count === 0 ? sectionId : `${sectionId} (${count})`;
+}
+var CURRENT_FIELD_PREFIX = "$current.";
+function resolveHeaderFieldValue(ref, node) {
+  if (!ref.startsWith(CURRENT_FIELD_PREFIX)) return ref;
+  const value = node.fields[ref.slice(CURRENT_FIELD_PREFIX.length)];
+  return value === void 0 || value === null ? null : String(value);
+}
+function composeSectionHeader(sectionId, headerValue, members) {
+  const count = members.length;
+  if (headerValue === void 0 || members.length === 0) return countSuffixHeader(sectionId, count);
+  const resolved = resolveHeaderFieldValue(headerValue, members[0]);
+  if (resolved === null || resolved.trim() === "" || resolved.includes("\n") || resolved.includes("\r")) {
+    return countSuffixHeader(sectionId, count);
+  }
+  return `${sectionId}: ${resolved}`;
+}
+function pinnedContainerNode(containerNode, graph) {
+  if (containerNode === void 0) return void 0;
+  return graph.nodes.find((n) => resolvedQntmId(n) === containerNode) ?? graph.nodes.find((n) => n.id === containerNode);
+}
+function headingNode(presentation, resolution, graph) {
+  const pinned = pinnedContainerNode(presentation.containerNode, graph);
+  if (pinned !== void 0) return pinned;
+  const name = presentation.name?.trim();
+  if (name === void 0 || name === "") return void 0;
+  return graph.nodes.find(
+    (n) => resolution.identityModes?.[n.type]?.unique === true && String(n.fields.title ?? "").trim() === name
+  );
+}
+function indent2(depth) {
+  return "    ".repeat(Math.max(0, depth));
+}
+function composeSectionHeading(sectionId, presentation, members, resolution, graph, writePolicy) {
+  const backing = headingNode(presentation, resolution, graph);
+  if (backing !== void 0) {
+    const shape = resolution.renderShapes?.[backing.type];
+    if (shape === void 0) return { kind: "refused", because: "render-shape-unpublished" };
+    if (shape !== "heading") return { kind: "node-line", node: backing };
+  }
+  const pinned = pinnedContainerNode(presentation.containerNode, graph);
+  const pinnedTitle = pinned === void 0 ? "" : String(pinned.fields.title ?? "").trim();
+  let text;
+  if (pinned !== void 0 && pinnedTitle !== "") {
+    const resolved = resolvedQntmId(pinned);
+    const stamp = writePolicy === "read_only" || resolved === "" ? "" : `[[qntm:${resolved}]]`;
+    text = stamp === "" ? pinnedTitle : `${pinnedTitle} ${stamp}`;
+  } else if (presentation.name !== void 0 && presentation.name.trim() !== "") {
+    text = presentation.name.trim();
+  } else {
+    text = composeSectionHeader(sectionId, presentation.headerValue, members);
+  }
+  const cells = backing === void 0 ? [] : markerCells(backing, resolution, resolution.markerOrder);
+  return { kind: "heading", text: cells.length === 0 ? text : `${text} ${cells.join(" ")}` };
+}
+function composeViewMarkdown(viewId, context) {
+  const { resolution, graph } = context;
+  const presented = resolution.sectionPresentation?.[viewId];
+  if (presented === void 0) return { ok: false, because: "no-section-presentation" };
+  if (graph === null) return { ok: false, because: "no-graph" };
+  const computed = computeViewMembers(viewId, graph.nodes, context.language, context.ordering, {
+    graph,
+    ...context.today === void 0 ? {} : { today: context.today }
+  });
+  if (computed === void 0) return { ok: false, because: "view-not-declared" };
+  const firstUncomputed = computed.uncomputed[0];
+  if (firstUncomputed !== void 0) {
+    return { ok: false, because: "section-uncomputed", section: firstUncomputed.sectionId };
+  }
+  const touched = /* @__PURE__ */ new Set();
+  for (const edge of graph.edges) {
+    touched.add(edge.source);
+    touched.add(edge.target);
+  }
+  const lines = [];
+  for (const section of computed.sections) {
+    const presentation = presented[section.sectionId];
+    if (presentation === void 0) {
+      return { ok: false, because: "section-not-presented", section: section.sectionId };
+    }
+    if (!section.ordered) {
+      return { ok: false, because: "section-order-abstained", section: section.sectionId };
+    }
+    if (section.undecided.length > 0) {
+      return { ok: false, because: "section-undecided-member", section: section.sectionId };
+    }
+    const heading = composeSectionHeading(
+      section.sectionId,
+      presentation,
+      section.members,
+      resolution,
+      graph,
+      context.writePolicy
+    );
+    if (heading.kind === "refused") {
+      return { ok: false, because: heading.because, section: section.sectionId };
+    }
+    if (heading.kind === "node-line") {
+      const line = composeNodeLine(heading.node, {
+        resolution,
+        ...context.writePolicy === void 0 ? {} : { writePolicy: context.writePolicy }
+      });
+      if (!line.ok) {
+        return { ok: false, because: "node-refused", section: section.sectionId, nodeRefusal: line.because };
+      }
+      lines.push(line.line.text, ...line.line.continuationLines);
+    } else {
+      lines.push(`## ${heading.text}`);
+    }
+    if (presentation.bodyPolicy !== "full_body") {
+      if (presentation.bodyPolicy === void 0) {
+        return { ok: false, because: "section-not-presented", section: section.sectionId };
+      }
+      continue;
+    }
+    for (const member of section.members) {
+      if (touched.has(member.id)) {
+        return { ok: false, because: "member-touches-an-edge", section: section.sectionId };
+      }
+      const line = composeNodeLine(member, {
+        resolution,
+        ...context.writePolicy === void 0 ? {} : { writePolicy: context.writePolicy }
+      });
+      if (!line.ok) {
+        return { ok: false, because: "node-refused", section: section.sectionId, nodeRefusal: line.because };
+      }
+      lines.push(line.line.text, ...line.line.continuationLines);
+      if (presentation.emptyChildrenPlaceholder !== void 0) {
+        lines.push(`${indent2(1)}- ${presentation.emptyChildrenPlaceholder}`);
+      }
+    }
+  }
+  return { ok: true, markdown: lines.join("\n") };
 }
 
 // app/present/arrange/orderingqualify.ts
@@ -5168,14 +5444,14 @@ function seedFor(source, lineIndex, declared) {
   const tokens = sectionId === null || declared === void 0 ? [] : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
   if (declared?.composition !== void 0) {
     const indentMatch = /^\s*/.exec(chrome.text);
-    const indent2 = indentMatch === null ? "" : indentMatch[0];
+    const indent3 = indentMatch === null ? "" : indentMatch[0];
     const known = chrome.shape === "checkbox" ? { checkbox: "[ ]", tags: tokens } : { tags: tokens };
     const seed = composeSeed(chrome.shape, known, declared.composition, 0);
     return {
-      text: `${indent2}${seed.text}`,
+      text: `${indent3}${seed.text}`,
       level: chrome.level,
       tokens,
-      cursorOffset: indent2.length + seed.cursorOffset
+      cursorOffset: indent3.length + seed.cursorOffset
     };
   }
   const text = tokens.length === 0 ? chrome.text : `${chrome.text}${tokens.join(" ")} `;
@@ -6632,9 +6908,9 @@ var WAITING_FOR_TAG_BINDING = {
 };
 function edgeSourceOfFor(structural) {
   return (edgeType) => {
-    const indent2 = structural?.indent;
-    if (indent2 !== void 0 && indent2.edgeType === edgeType) {
-      return indent2.edgeSource;
+    const indent3 = structural?.indent;
+    if (indent3 !== void 0 && indent3.edgeType === edgeType) {
+      return indent3.edgeSource;
     }
     if (WAITING_FOR_TAG_BINDING.edgeType === edgeType) {
       return WAITING_FOR_TAG_BINDING.edgeSource;
@@ -6646,11 +6922,11 @@ function prospectiveEdgeBinding(line, structural) {
   if (tagSpans(line).some((span) => span.text === WAITING_FOR_TAG_BINDING.tag)) {
     return { edgeType: WAITING_FOR_TAG_BINDING.edgeType };
   }
-  const indent2 = structural?.indent;
-  if (indent2 === void 0) {
+  const indent3 = structural?.indent;
+  if (indent3 === void 0) {
     return void 0;
   }
-  return { edgeType: indent2.edgeType };
+  return { edgeType: indent3.edgeType };
 }
 function structuralParentLineIndex(lines, lineIndex) {
   const leadingWhitespace = (line) => (/^\s*/.exec(line) ?? [""])[0].length;
@@ -7427,122 +7703,6 @@ function globalKey(deps, e) {
 function installGlobalKeys(deps, on = document) {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
 }
-
-// app/present/select/viewmembers.ts
-function fieldsOf(node) {
-  return candidateFieldsOf(node);
-}
-function defaultKeyForField(fields, field, ordering) {
-  const raw = fields[field];
-  if (field === "title") {
-    return typeof raw === "string" && raw.length > 0 ? { tier: 0, value: raw } : { tier: 1, value: "" };
-  }
-  const marker = ordering.orderingFields[field];
-  if (marker === void 0) return { tier: 1, value: "" };
-  if (marker.kind === "enum") {
-    if (typeof raw !== "string") return { tier: 1, value: 0 };
-    const rank = ordering.priorityRank[raw];
-    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
-  }
-  if (raw === void 0 || raw === null || raw === "") {
-    return { tier: 1, value: marker.kind === "date" ? "" : 0 };
-  }
-  return marker.kind === "date" ? { tier: 0, value: String(raw) } : { tier: 0, value: Number(raw) };
-}
-function declaredTupleFor(fields, keys, ordering) {
-  const values = [];
-  for (const key of keys) {
-    const marker = ordering.orderingFields[key.field];
-    if (marker === void 0) return void 0;
-    if (marker.kind === "enum") return void 0;
-    const raw = fields[key.field];
-    if (raw === void 0 || raw === null || raw === "") return void 0;
-    values.push(String(raw));
-  }
-  return values;
-}
-function qualifies(node, qualifier, graph, edgeSourceOf, today) {
-  const fields = fieldsOf(node);
-  if (!qualifierNeedsGraph(qualifier)) return matchesQualifier(fields, qualifier, today);
-  if (graph === void 0 || edgeSourceOf === void 0) return void 0;
-  return matchesQualifierGraphAware(fields, node.id, qualifier, graph, edgeSourceOf, void 0, today);
-}
-function computeViewMembers(viewId, nodes, language, ordering, options) {
-  const sectionIds = language.sectionOrder[viewId];
-  const declared = language.sections[viewId];
-  if (sectionIds === void 0 || declared === void 0) return void 0;
-  const graph = options?.graph;
-  const edgeSourceOf = options?.edgeSourceOf;
-  const today = options?.today;
-  const sections = [];
-  const uncomputed = [];
-  for (const sectionId of sectionIds) {
-    const section = declared[sectionId];
-    if (section === void 0) continue;
-    const name = section.name ?? sectionId;
-    const qualifier = language.predicates[section.qualification];
-    if (qualifier === void 0) {
-      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "no-predicate" });
-      continue;
-    }
-    if (qualifierNeedsClock(qualifier) && today === void 0) {
-      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "needs-clock" });
-      continue;
-    }
-    if (qualifierNeedsGraph(qualifier) && (graph === void 0 || edgeSourceOf === void 0)) {
-      uncomputed.push({ sectionId, name, qualification: section.qualification, because: "needs-graph" });
-      continue;
-    }
-    const members = [];
-    const undecided = [];
-    for (const node of nodes) {
-      const answer = qualifies(node, qualifier, graph, edgeSourceOf, today);
-      if (answer === true) members.push(node);
-      else if (answer === void 0) undecided.push(node);
-    }
-    const declaredOrdering = ordering.ordering[viewId]?.[sectionId];
-    const placed = orderMembers(members, declaredOrdering, ordering);
-    sections.push({
-      sectionId,
-      name,
-      qualification: section.qualification,
-      members: placed.members,
-      ordered: placed.ordered,
-      ...placed.because === void 0 ? {} : { orderAbstention: placed.because },
-      undecided
-    });
-  }
-  return { viewId, sections, uncomputed };
-}
-function orderMembers(members, declaredOrdering, ordering) {
-  if (declaredOrdering !== void 0) {
-    const keys2 = declaredOrdering.ordering;
-    if (keys2 === void 0 || keys2.length === 0) return { members, ordered: false };
-    const tuples2 = /* @__PURE__ */ new Map();
-    for (const node of members) {
-      const tuple = declaredTupleFor(fieldsOf(node), keys2, ordering);
-      if (tuple === void 0) {
-        return { members, ordered: false, because: "ordering-field-not-published" };
-      }
-      tuples2.set(node.id, tuple);
-    }
-    const sorted2 = [...members].sort(
-      (a, b) => compareTuples(tuples2.get(a.id) ?? [], tuples2.get(b.id) ?? [], keys2, ordering.orderingFields)
-    );
-    return { members: sorted2, ordered: true };
-  }
-  const keys = ordering.defaultOrdering;
-  if (keys.length === 0) return { members, ordered: false };
-  const tuples = /* @__PURE__ */ new Map();
-  for (const node of members) {
-    const fields = fieldsOf(node);
-    tuples.set(node.id, keys.map((key) => defaultKeyForField(fields, key.field, ordering)));
-  }
-  const sorted = [...members].sort(
-    (a, b) => compareDefaultTuples(tuples.get(a.id) ?? [], tuples.get(b.id) ?? [], keys)
-  );
-  return { members: sorted, ordered: true };
-}
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -7598,7 +7758,9 @@ export {
   columnFor,
   composeLine,
   composeNodeLine,
+  composeSectionHeading,
   composeSeed,
+  composeViewMarkdown,
   compositionFor,
   computeViewMembers,
   coverageOf,
@@ -7628,6 +7790,7 @@ export {
   lineBody,
   lineOps,
   markWhereWeAre,
+  markerCells,
   markerSpans,
   markerValue,
   matchesFindClause,

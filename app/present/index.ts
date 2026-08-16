@@ -103,8 +103,19 @@ export type {
   TagOrder,
 } from "./resolutiontable.js";
 
-export { composeNodeLine } from "./express/nodeline.js";
+export { composeNodeLine, markerCells } from "./express/nodeline.js";
 export type { ComposableNode, ComposeContext, ComposeResult, ComposeRefusal, ComposedNodeLine, OutgoingEdge } from "./express/nodeline.js";
+
+// The whole-view join — `computeViewMembers` + `composeNodeLine` + the heading facts, producing the
+// one string `app/index.html` paints and takes its write base from. See `viewmarkdown.ts`'s header
+// for why its refusal is per VIEW and never per line.
+export { composeViewMarkdown, composeSectionHeading } from "./express/viewmarkdown.js";
+export type {
+  ComposeViewContext,
+  ComposeViewRefusal,
+  ComposeViewResult,
+  SectionHeadingResult,
+} from "./express/viewmarkdown.js";
 
 export { titleStyleFor, titleStylePredicateHolds, nodeLocalContext } from "./express/titlestyle.js";
 export type { TitleStyleNode } from "./express/titlestyle.js";

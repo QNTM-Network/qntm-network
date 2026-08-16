@@ -169,6 +169,15 @@ export const __declaration = () => declaration;
 // path itself measures and carries the base, independently of which gesture reached it.
 export const __served = () => served;
 export { writeFile as __writeFile };
+// ── THE FOUR READERS OF A VIEW'S TEXT, MADE OBSERVABLE AS THE FOUR THEY ARE ──
+//
+// \`sourceOfView\` is the ONE decision \`COMPOSE_VIEW_IN_BROWSER\` moves, and \`paintedSource\` /
+// \`viewSources\` are two of the four places its answer lands (the other two, the base and the
+// held-projection way station, are already readable through \`__served\`). Exported together
+// because the property under test is that they AGREE: a painter on a composed string with a base
+// on the engine's is a save computed against a file the operator was never shown.
+export const __paintedSource = () => paintedSource;
+export { sourceOfView as __sourceOfView, viewSources as __viewSources };
 export { buildDrawer, openDrawer, closeDrawer, folderOf, foldersOf, drawerStops, viewButtons };
 export { landOn, loadGraph, refresh, showShell, bootRead };
 export { register, login, logout, friendlyAuthError, showEmpty, hideEmpty, HANDLE_RE, api };
