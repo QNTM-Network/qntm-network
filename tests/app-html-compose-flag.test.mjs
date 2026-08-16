@@ -28,6 +28,12 @@
  *   3. FLAG ON, REFUSING — a view the composer cannot answer for falls back to the engine's
  *      markdown in ALL FOUR, per view, never per line. A view assembled half from each would be a
  *      string this app computed, arriving as a write base.
+ *   4. FLAG ON, WITH A TREE — claim 3's exact edge-touching graph, but this time the envelope's own
+ *      view carries a `sections` key (`GET /graph?include_structure=true`, section-trees-have-a-
+ *      persisted-home, 2026-08-16). The refusal LIFTS: all four readers nest instead of falling
+ *      back — proving `sourceOfView`'s `view.sections` plumbing reaches the composer, not only that
+ *      the composer can accept one when handed it directly (`present-viewmarkdown.test.mjs` already
+ *      proves that half).
  */
 
 import { test, describe, before } from "node:test";
@@ -174,6 +180,65 @@ describe("COMPOSE_VIEW_IN_BROWSER", () => {
       // one this app computed, and `paintView` would take the next save's base from it.
       assert.ok(!page.__paintedSource().includes(COMPOSED), page.__paintedSource());
       assert.equal(page.__paintedSource().split("\n").length, ENGINE.split("\n").length);
+    });
+  });
+
+  describe("4. ON, WITH A TREE — the same edges, but the refusal lifts", () => {
+    // THE SAME GRAPH AS CLAIM 3, so the only variable is the `sections` key — measured against the
+    // real config by a one-off probe against `dist/present.js` before being pinned here.
+    const NESTED = "## To Do\n- [ ] Parent [[qntm:a]] #task #admin\n    - [ ] Child [[qntm:b]] #task #admin\n## Done";
+    const VIEW_WITH_TREE = {
+      ...VIEW,
+      sections: {
+        "to-do": {
+          section_id: "to-do",
+          roots: [
+            {
+              node_id: "a",
+              node_type: "task",
+              is_qualifying: true,
+              children: [{ node_id: "b", node_type: "task", is_qualifying: true, children: [] }],
+            },
+          ],
+        },
+      },
+    };
+    let page;
+    before(async () => {
+      const { elements } = installBrowser();
+      globalThis.fetch = () => new Promise(() => {});
+      page = (
+        await importPage(
+          makeWorkDir(`compose-flag-tree-${Math.random().toString(36).slice(2)}`),
+          (source) => assertMutated(source, FLAG_OFF, FLAG_ON),
+        )
+      );
+      page.__applyPresentation(liveDeclaration());
+      page.__setGraphData({
+        snapshot: {
+          generated_at: "2026-08-16T00:00:00Z",
+          views: [VIEW_WITH_TREE],
+          graph: {
+            nodes: [
+              { id: "a", type: "task", fields: { title: "Parent", domain: "admin", status: "open" } },
+              { id: "b", type: "task", fields: { title: "Child", domain: "admin", status: "open" } },
+            ],
+            edges: [{ id: "e1", type: "PART_OF", source: "b", target: "a", fields: {} }],
+          },
+        },
+      });
+      page.paintView("admin");
+    });
+
+    test("all four readers nest instead of falling back to the engine's markdown", () => {
+      const painted = page.__paintedSource();
+      const base = page.__served().markdown;
+      const wayStation = page.__sourceOfView(VIEW_WITH_TREE);
+      const staleness = page.__viewSources({ snapshot: { views: [VIEW_WITH_TREE] } });
+      assert.equal(painted, NESTED, "the painter did not walk the tree-composed view");
+      assert.equal(base, NESTED, "the base did not follow the painter");
+      assert.equal(wayStation, NESTED);
+      assert.deepEqual(staleness, [NESTED]);
     });
   });
 });

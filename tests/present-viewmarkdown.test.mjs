@@ -10,11 +10,11 @@
  *
  * ── WHAT IT DELIBERATELY DOES NOT CLAIM ──
  *
- * That a composed view equals the engine's rendered file. It cannot, yet, and pretending otherwise
- * is the failure this whole effort exists to avoid: the engine renders a section's TREE and the
- * browser never receives one (`app/present/arrange/incoming-section-tree.ts` is a file with no code
- * that names exactly this gap). The composer's answer to that is `member-touches-an-edge`, and the
- * test below is what proves the refusal is real rather than documented.
+ * That a composed view equals the engine's rendered file WHEN THE CALLER HELD NO TREE. The engine
+ * renders a section's TREE, and until `GET /graph?include_structure=true` (section-trees-have-a-
+ * persisted-home, 2026-08-16) a caller with only the flat member list could not reproduce it — so
+ * `member-touches-an-edge` refuses rather than guess. The "a real tree lifts the refusal" describe
+ * block below proves the OTHER half: a caller that DID pass a tree gets the real nesting.
  */
 
 import { test, describe } from "node:test";
@@ -232,5 +232,124 @@ describe("every refusal fires, and none of them is a silent empty view", () => {
     assert.ok(composed.ok, JSON.stringify(composed));
     assert.ok(!composed.markdown.includes("## "), composed.markdown);
     assert.match(composed.markdown, /^- \[ \] The container/);
+  });
+
+  // ── THE REAL TREE, WHEN THE CALLER HELD ONE (section-trees-have-a-persisted-home, 2026-08-16) ──
+  //
+  // `member-touches-an-edge` above still fires when no tree was held — these prove the OTHER half:
+  // a caller that DID fetch `GET /graph?include_structure=true` and passed it through gets the real
+  // nesting instead of a refusal, mirroring `renderer.py`'s `_render_tree_node`.
+  describe("a real tree lifts the refusal, when the caller held one", () => {
+    const composeWith = (graph, sectionTrees, resolution = TABLE, language = LANGUAGE) =>
+      composeViewMarkdown("v", { resolution, language, ordering: ORDERING, graph, today: TODAY, sectionTrees });
+
+    const TOUCHING_GRAPH = {
+      nodes: [node("a"), node("b")],
+      edges: [{ id: "e", type: "PART_OF", source: "b", target: "a", fields: {} }],
+    };
+
+    test("no tree HELD FOR THIS SECTION — still refused, byte-identical to before this feature", () => {
+      const composed = composeWith(TOUCHING_GRAPH, { "some-other-section": { section_id: "some-other-section", roots: [] } });
+      assert.deepEqual(composed, { ok: false, because: "member-touches-an-edge", section: "s" });
+    });
+
+    test("a tree HELD FOR THIS SECTION nests instead of refusing — a member as its parent's child", () => {
+      const tree = {
+        s: {
+          section_id: "s",
+          roots: [{ node_id: "a", node_type: "task", is_qualifying: true, children: [
+            { node_id: "b", node_type: "task", is_qualifying: true, children: [] },
+          ] }],
+        },
+      };
+      const composed = composeWith(TOUCHING_GRAPH, tree);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(composed.markdown, "## Section\n- [ ] Node a [[qntm:a]]\n    - [ ] Node b [[qntm:b]]");
+    });
+
+    test("A CONTEXT NODE (is_qualifying: false) RENDERS TOO — the tree names who to skip nothing for", () => {
+      // `include_ancestors`/`pull_context` pull a non-qualifying node into the tree so the qualifying
+      // one nests correctly under it. The engine renders it exactly like a qualifying node; so does
+      // this. Absent from `LANGUAGE.predicates` entirely — the composer never asks whether it
+      // qualifies, only what the tree says.
+      const graph = {
+        nodes: [node("parent"), node("a")],
+        edges: [{ id: "e", type: "PART_OF", source: "a", target: "parent", fields: {} }],
+      };
+      const tree = {
+        s: {
+          section_id: "s",
+          roots: [{ node_id: "parent", node_type: "task", is_qualifying: false, children: [
+            { node_id: "a", node_type: "task", is_qualifying: true, children: [] },
+          ] }],
+        },
+      };
+      const composed = composeWith(graph, tree);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(composed.markdown, "## Section\n- [ ] Node parent [[qntm:parent]]\n    - [ ] Node a [[qntm:a]]");
+    });
+
+    test("THE PLACEHOLDER STILL FOLLOWS A CHILDLESS QUALIFYING NODE, at its own depth", () => {
+      const resolution = {
+        ...TABLE,
+        sectionPresentation: {
+          v: { s: { name: "Section", bodyPolicy: "full_body", emptyChildrenPlaceholder: "(none)" } },
+        },
+      };
+      const tree = {
+        s: {
+          section_id: "s",
+          roots: [{ node_id: "a", node_type: "task", is_qualifying: true, children: [
+            { node_id: "b", node_type: "task", is_qualifying: true, children: [] },
+          ] }],
+        },
+      };
+      const composed = composeWith(TOUCHING_GRAPH, tree, resolution);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(
+        composed.markdown,
+        "## Section\n- [ ] Node a [[qntm:a]]\n    - [ ] Node b [[qntm:b]]\n        - (none)",
+      );
+      // AND NOT after `a` — `a` has a real child (`b`), so it earned no placeholder of its own.
+      assert.ok(!composed.markdown.includes("Node a [[qntm:a]]\n    - (none)"));
+    });
+
+    test("`section-tree-node-unresolved` — a held tree names a node this graph snapshot does not have", () => {
+      const tree = {
+        s: { section_id: "s", roots: [{ node_id: "ghost", node_type: "task", is_qualifying: true, children: [] }] },
+      };
+      const composed = composeWith(TOUCHING_GRAPH, tree);
+      assert.deepEqual(composed, { ok: false, because: "section-tree-node-unresolved", section: "s" });
+    });
+
+    test("`node-refused` reaches the caller from A NESTED TREE NODE too, not only depth zero", () => {
+      const tree = {
+        s: {
+          section_id: "s",
+          roots: [{ node_id: "a", node_type: "task", is_qualifying: true, children: [
+            { node_id: "bold", node_type: "task", is_qualifying: true, children: [] },
+          ] }],
+        },
+      };
+      const graph = { nodes: [node("a"), node("bold", { title: "**Bold**" })], edges: TOUCHING_GRAPH.edges };
+      const composed = composeWith(graph, tree);
+      assert.deepEqual(composed, {
+        ok: false,
+        because: "node-refused",
+        section: "s",
+        nodeRefusal: "title-not-canonical",
+      });
+    });
+
+    test("AN UNTOUCHED SECTION NEVER CONSULTS THE TREE AT ALL — even a malformed one is ignored", () => {
+      // The flat path stays exactly as proven above; `sectionTrees` is read only after the edge
+      // check fails. A tree that would throw if walked (a node id that is not even a string) proves
+      // it was never reached.
+      const untouchedGraph = { nodes: [node("a")], edges: [] };
+      const poisonedTree = { s: { section_id: "s", roots: [{ node_id: 42, children: "not an array" }] } };
+      const composed = composeWith(untouchedGraph, poisonedTree);
+      assert.ok(composed.ok, JSON.stringify(composed));
+      assert.equal(composed.markdown, "## Section\n- [ ] Node a [[qntm:a]]");
+    });
   });
 });

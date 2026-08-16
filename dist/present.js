@@ -3547,6 +3547,38 @@ function composeSectionHeading(sectionId, presentation, members, resolution, gra
   const cells = backing === void 0 ? [] : markerCells(backing, resolution, resolution.markerOrder);
   return { kind: "heading", text: cells.length === 0 ? text : `${text} ${cells.join(" ")}` };
 }
+function composeSectionTreeLines(roots, depth, graph, resolution, placeholder, writePolicy, lines) {
+  for (const treeNode of roots) {
+    const graphNode = graph.nodes.find((n) => n.id === treeNode.node_id);
+    if (graphNode === void 0) {
+      return { ok: false, because: "section-tree-node-unresolved" };
+    }
+    const line = composeNodeLine(graphNode, {
+      resolution,
+      ...writePolicy === void 0 ? {} : { writePolicy },
+      depth
+    });
+    if (!line.ok) {
+      return { ok: false, because: "node-refused", nodeRefusal: line.because };
+    }
+    lines.push(line.line.text, ...line.line.continuationLines);
+    if (treeNode.children.length > 0) {
+      const nested = composeSectionTreeLines(
+        treeNode.children,
+        depth + 1,
+        graph,
+        resolution,
+        placeholder,
+        writePolicy,
+        lines
+      );
+      if (!nested.ok) return nested;
+    } else if (treeNode.is_qualifying && placeholder !== void 0) {
+      lines.push(`${indent2(depth + 1)}- ${placeholder}`);
+    }
+  }
+  return { ok: true };
+}
 function composeViewMarkdown(viewId, context) {
   const { resolution, graph } = context;
   const presented = resolution.sectionPresentation?.[viewId];
@@ -3607,10 +3639,27 @@ function composeViewMarkdown(viewId, context) {
       }
       continue;
     }
-    for (const member of section.members) {
-      if (touched.has(member.id)) {
+    const sectionTouchesAnEdge = section.members.some((member) => touched.has(member.id));
+    if (sectionTouchesAnEdge) {
+      const tree = context.sectionTrees?.[section.sectionId];
+      if (tree === void 0) {
         return { ok: false, because: "member-touches-an-edge", section: section.sectionId };
       }
+      const walked = composeSectionTreeLines(
+        tree.roots,
+        0,
+        graph,
+        resolution,
+        presentation.emptyChildrenPlaceholder,
+        context.writePolicy,
+        lines
+      );
+      if (!walked.ok) {
+        return walked.because === "node-refused" ? { ok: false, because: "node-refused", section: section.sectionId, nodeRefusal: walked.nodeRefusal } : { ok: false, because: walked.because, section: section.sectionId };
+      }
+      continue;
+    }
+    for (const member of section.members) {
       const line = composeNodeLine(member, {
         resolution,
         ...context.writePolicy === void 0 ? {} : { writePolicy: context.writePolicy }
