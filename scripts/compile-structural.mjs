@@ -94,9 +94,18 @@ function parseIndentBinding(content, label) {
   return { edgeType, edgeSource };
 }
 
-// ── 2. schema.yaml content -> edge_types: { NAME: { cardinality } } ────────────────────────────
+// ── 2. schema.yaml content -> edge_types: { NAME: { cardinality, direction } } ─────────────────
+//
+// TWO SIBLING KEYS, NOT ONE — `cardinality` (many_to_one / many_to_many / one_to_one, arity) and
+// `direction` (child_to_parent / parent_to_child / directed / bidirectional, traversal semantics)
+// are DIFFERENT facts under the same edge type name. `qntm_graph.core.traversal`'s `children`/
+// `parents` docstring — "When edge_type is None (default), only child_to_parent and parent_to_
+// child edges contribute" — is a claim about `direction`, never `cardinality`; conflating the two
+// (structural-edges-resolve-from-declared-config's first draft did exactly this, caught by
+// `tests/app-html-compose-flag.test.mjs` before it shipped) silently narrows nothing, because
+// `cardinality`'s values (`many_to_one`, `many_to_many`, ...) never match `direction`'s.
 
-function parseEdgeCardinalityRegistry(content, label) {
+function parseEdgeTypeRegistry(content, label) {
   const lines = content.split(/\r?\n/);
   const start = lines.findIndex((l) => l.trim() === "edge_types:" && indentOf(l) === 0);
   if (start === -1) {
@@ -113,12 +122,15 @@ function parseEdgeCardinalityRegistry(content, label) {
     const nameMatch = depth === 2 && line.match(/^\s{2}([A-Za-z0-9_]+):\s*$/);
     if (nameMatch) {
       current = nameMatch[1];
+      registry.set(current, {});
       // NOT A DROP: loop control — the edge type name was just captured.
       continue;
     }
     if (current !== null && depth >= 4) {
       const cardMatch = line.match(/^\s*cardinality:\s*(\S+)\s*$/);
-      if (cardMatch) registry.set(current, cardMatch[1]);
+      if (cardMatch) registry.get(current).cardinality = cardMatch[1];
+      const dirMatch = line.match(/^\s*direction:\s*(\S+)\s*$/);
+      if (dirMatch) registry.get(current).direction = dirMatch[1];
     }
   }
   if (registry.size === 0) {
@@ -280,7 +292,7 @@ export function compile(files, ledger = new Ledger()) {
   if (!has(SCHEMA_KEY)) {
     throw new GenerationError(`${SCHEMA_KEY} does not exist`);
   }
-  const cardinalityRegistry = parseEdgeCardinalityRegistry(get(SCHEMA_KEY), SCHEMA_KEY);
+  const edgeTypeRegistry = parseEdgeTypeRegistry(get(SCHEMA_KEY), SCHEMA_KEY);
 
   // SORTED EXPLICITLY. A files map — an object or a Map built from a POSTed JSON body, or from a
   // directory read — carries no directory-walk order of its own once it is in memory, and an
@@ -331,7 +343,7 @@ export function compile(files, ledger = new Ledger()) {
 
   const edgeCardinality = {};
   for (const edgeType of referenced) {
-    const cardinality = cardinalityRegistry.get(edgeType);
+    const cardinality = edgeTypeRegistry.get(edgeType)?.cardinality;
     if (cardinality === undefined) {
       // THE §1 GAP, CLOSED FOR THIS PUBLISH: a name the structural language declares that the
       // edge registry has never heard of. Refuse rather than publish a name the app could show
@@ -345,9 +357,28 @@ export function compile(files, ledger = new Ledger()) {
     edgeCardinality[edgeType] = cardinality;
   }
 
+  // THE WHOLE REGISTRY'S `direction`, UNNARROWED — structural-edges-resolve-from-declared-config
+  // (2026-08-16). `edgeCardinality` above answers "what does the STRUCTURAL LANGUAGE already
+  // name" — the right question for the ingest consumer it was built for, and deliberately narrow
+  // (see this module's own comment above, and `structural.ts`'s header). It cannot answer a
+  // different question a RENDER-side reader needs: for a section that names no
+  // `structural_edge_types` at all, which edge types make up the engine's own DEFAULT hierarchy
+  // walk — `qntm_graph`'s `children`/`parents` with no `edge_type` filter, which the graph library
+  // itself resolves to "every edge type whose `direction` is `child_to_parent` or `parent_to_
+  // child`", schema-wide, not just the ones a config happens to mention. `edgeTypeRegistry`
+  // already holds every entry schema.yaml declares — this publishes each one's `direction` whole,
+  // so that question is answerable for ANY config, not hardcoded to this operator's own edge type
+  // names. NEVER `cardinality` here: that is a different fact (arity — many_to_one, many_to_many,
+  // ...) that happens to share a schema block with `direction`, and does not answer this question.
+  const edgeDirectionRegistry = {};
+  for (const [edgeType, facts] of edgeTypeRegistry) {
+    if (facts.direction !== undefined) edgeDirectionRegistry[edgeType] = facts.direction;
+  }
+
   const declaration = {
     indent: { edgeType: indent.edgeType, edgeSource: indent.edgeSource },
     edgeCardinality,
+    edgeDirectionRegistry,
     sections,
   };
   // Every declaration this generator read and did not publish. See `scripts/ledger.mjs`.

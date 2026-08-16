@@ -53,26 +53,34 @@
  * it that exists to name exactly this seam.
  *
  * So there is one condition under which a flat member list IS the tree: NO MEMBER OF THE VIEW MAY
- * TOUCH AN EDGE, of any type, in either direction. A node with no edges has no ancestors to pull,
- * no descendants to pull, and no children, whatever `pull_context` says — so the three unpublished
- * keys cannot change the answer, and a section that meets it stays on the flat path below,
- * unconditionally, whether or not a real tree is also available.
+ * TOUCH A RELEVANT EDGE, in either direction. A node with no relevant edges has no ancestors to
+ * pull, no descendants to pull, and no children — because `_resolve_nesting`'s `pull_context`
+ * walks the identical edge-type set `render_children`/`render_parents` does (`section_builder.py`:
+ * one `edges` variable, three lambdas), never an independent one. So "relevant" is answerable, and
+ * a section that has none stays on the flat path below, unconditionally, whether or not a real
+ * tree is also available.
  *
- * A SECTION THAT DOES NOT MEET IT IS NOT AUTOMATICALLY REFUSED ANY MORE (section-trees-have-a-
- * persisted-home, 2026-08-16). `GET /graph?include_structure=true` publishes the SAME tree
+ * WHICH EDGES ARE RELEVANT IS ITSELF CONFIG, NOT A GUESS AND NOT HARDCODED TO `PART_OF`
+ * (structural-edges-resolve-from-declared-config, 2026-08-16). A section that declares
+ * `structural_edge_types` (14 of his sections do — `WAITING_FOR` among them) is scoped to exactly
+ * those, off `ComposeViewContext.structural.sections[view][section].edgeTypes`. A section that
+ * declares none falls to the ENGINE'S OWN default hierarchy walk — every edge type whose schema
+ * `direction` is `child_to_parent`/`parent_to_child` — off the unnarrowed `structural.
+ * edgeDirectionRegistry` (`compile-structural.mjs`'s own comment on that key says why it is
+ * `direction`, never `cardinality`, and why unnarrowed). `context.structural` absent (today's default
+ * everywhere this isn't wired yet) keeps the OLD blunt rule exactly as it was: every edge type of
+ * any kind counts as relevant, never a false narrowing from an unknown answer.
+ *
+ * A SECTION THAT DOES TOUCH A RELEVANT EDGE IS NOT AUTOMATICALLY REFUSED ANY MORE (section-trees-
+ * have-a-persisted-home, 2026-08-16). `GET /graph?include_structure=true` publishes the SAME tree
  * `section_builder.build()` computed and the renderer walked — `roots`, `children`,
  * `is_qualifying` — and when the caller passes one for this section on `ComposeViewContext.
  * sectionTrees`, THAT is walked instead: every tree node composes a line, qualifying or not, at its
  * own depth, mirroring `renderer.py`'s `_render_tree_node`. `member-touches-an-edge` now means only
- * "a member touches an edge and the caller held no tree for it" — the honest answer while the flag
- * that fetches `include_structure` stays off, or for a section too new to have a persisted tree.
+ * "a member touches a relevant edge and the caller held no tree for it" — the honest answer while
+ * the flag that fetches `include_structure` stays off, or for a section too new to have one.
  *
- * REFUSING ON THE STRUCTURAL EDGE TYPE ALONE WOULD STILL BE WRONG, tree or no tree. It would cover
- * the ordinary indent, and it would be wrong the moment a section declares `structural_edge_types:
- * [WAITING_FOR]` — which 14 of his sections do, and which is not published. A rule that is right
- * for the config as it stands and silently wrong for the config as it is written is the shape this
- * whole table exists to refuse. The cost is that the chrome cell never runs through either path;
- * that is a named gap, not an oversight.
+ * THE CHROME CELL STILL NEVER RUNS THROUGH EITHER PATH — that is a named gap, not an oversight.
  *
  *   `view-not-declared`           `computeViewMembers` does not know this view
  *   `no-section-presentation`     no heading facts for it — every `## ` line would be a guess
@@ -104,6 +112,7 @@ import type {
 } from "../resolutiontable.js";
 import type { GraphNode, GraphSnapshot } from "../graphmatch.js";
 import { resolvedQntmId } from "../graphmatch.js";
+import type { StructuralLanguage } from "../arrange/structural.js";
 import type { QualificationLanguage } from "../select/qualification.js";
 import type { OrderingLanguage, ViewSection } from "../select/viewmembers.js";
 import { computeViewMembers } from "../select/viewmembers.js";
@@ -148,6 +157,13 @@ export interface ComposeViewContext {
    * answers the one question the flat list cannot: how a touched section actually nests.
    */
   readonly sectionTrees?: Readonly<Record<string, SectionTreeWire>>;
+  /**
+   * `structural-edges-resolve-from-declared-config` (2026-08-16) — narrows WHICH edge touching a
+   * member actually means "this section might nest", instead of any edge of any type anywhere in
+   * the graph. `undefined` (the default) keeps the old blunt rule exactly as it was: every edge
+   * type counts. See `relevantEdgeTypes`, below, for what this unlocks and what it still cannot.
+   */
+  readonly structural?: StructuralLanguage;
 }
 
 export type ComposeViewRefusal =
@@ -314,6 +330,54 @@ export function composeSectionHeading(
   return { kind: "heading", text: cells.length === 0 ? text : `${text} ${cells.join(" ")}` };
 }
 
+/** The two cardinalities `qntm_graph`'s own `children`/`parents` treat as hierarchy when no
+ * `edge_type` filter is given — `core/graph/src/qntm_graph/core/traversal.py`'s own rule,
+ * mirrored here rather than re-derived from behaviour. */
+const HIERARCHY_DIRECTIONS: ReadonlySet<string> = new Set(["child_to_parent", "parent_to_child"]);
+
+/**
+ * Which edge types could possibly nest a member of THIS section — declared `structural_edge_types`
+ * when the section names one, else the schema's own default hierarchy walk: every edge type whose
+ * `direction` is `child_to_parent`/`parent_to_child`, general for any config (see
+ * `compile-structural.mjs`'s own comment on `edgeDirectionRegistry` for why the UNNARROWED
+ * registry, not `edgeCardinality`, is what answers the "nothing declared" case — and why it is
+ * `direction`, never `cardinality`, that answers it).
+ *
+ * `undefined` means UNKNOWN, never "none". A caller with no answer must stay blunt — treat every
+ * edge type as possibly relevant — not read an inability to narrow as permission to narrow to
+ * nothing.
+ */
+function relevantEdgeTypes(
+  viewId: string,
+  sectionId: string,
+  structural: StructuralLanguage | undefined,
+): ReadonlySet<string> | undefined {
+  const declared = structural?.sections?.[viewId]?.[sectionId]?.edgeTypes;
+  if (declared !== undefined) return new Set(declared);
+  const registry = structural?.edgeDirectionRegistry;
+  if (registry === undefined || Object.keys(registry).length === 0) return undefined;
+  const hierarchy = new Set<string>();
+  for (const [edgeType, direction] of Object.entries(registry)) {
+    if (HIERARCHY_DIRECTIONS.has(direction)) hierarchy.add(edgeType);
+  }
+  return hierarchy;
+}
+
+/** Union of `touchedByType`'s sets over `types` — the node ids touched by an edge of any of
+ * THOSE types alone, not every edge in the graph. */
+function touchedIdsForTypes(
+  touchedByType: ReadonlyMap<string, ReadonlySet<string>>,
+  types: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const type of types) {
+    const ids = touchedByType.get(type);
+    if (ids === undefined) continue;
+    for (const id of ids) out.add(id);
+  }
+  return out;
+}
+
 type TreeWalkResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly because: "section-tree-node-unresolved" }
@@ -393,10 +457,23 @@ export function composeViewMarkdown(viewId: string, context: ComposeViewContext)
   //
   // Built as a set of endpoint ids rather than a scan per member: a view with 200 members over a
   // graph with 3,000 edges would otherwise be 600,000 comparisons on every repaint.
+  //
+  // TWO SHAPES, ONE PASS. `touched` is the blunt answer (every edge type) and stays the fallback
+  // when `relevantEdgeTypes` cannot narrow. `touchedByType` is keyed so a section CAN narrow to
+  // only the edge types that could actually nest it, when `context.structural` says which those
+  // are — see `relevantEdgeTypes`, below.
   const touched = new Set<string>();
+  const touchedByType = new Map<string, Set<string>>();
   for (const edge of graph.edges) {
     touched.add(edge.source);
     touched.add(edge.target);
+    let byType = touchedByType.get(edge.type);
+    if (byType === undefined) {
+      byType = new Set<string>();
+      touchedByType.set(edge.type, byType);
+    }
+    byType.add(edge.source);
+    byType.add(edge.target);
   }
 
   const lines: string[] = [];
@@ -454,7 +531,9 @@ export function composeViewMarkdown(viewId: string, context: ComposeViewContext)
       continue;
     }
 
-    const sectionTouchesAnEdge = section.members.some((member) => touched.has(member.id));
+    const relevant = relevantEdgeTypes(viewId, section.sectionId, context.structural);
+    const sectionTouched = relevant === undefined ? touched : touchedIdsForTypes(touchedByType, relevant);
+    const sectionTouchesAnEdge = section.members.some((member) => sectionTouched.has(member.id));
     if (sectionTouchesAnEdge) {
       const tree = context.sectionTrees?.[section.sectionId];
       if (tree === undefined) {

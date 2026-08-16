@@ -233,12 +233,13 @@ function cleanTitleFor(line) {
 var STRUCTURAL_KEY = "structural";
 var EDGE_SOURCES = ["self", "position"];
 var EDGE_DIRECTIONS = ["incoming", "outgoing"];
-var STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "sections", "dropped"];
+var STRUCTURAL_TOP_KEYS = ["indent", "edgeCardinality", "edgeDirectionRegistry", "sections", "dropped"];
 var INDENT_KEYS = ["edgeType", "edgeSource"];
 var SECTION_LANGUAGE_KEYS = ["edgeTypes", "edgeDirection"];
 var EMPTY = {
   indent: void 0,
   edgeCardinality: {},
+  edgeDirectionRegistry: {},
   sections: {},
   dropped: {}
 };
@@ -298,10 +299,10 @@ function readIndent(value, problems) {
   }
   return { edgeType, edgeSource };
 }
-function readEdgeCardinality(value, problems) {
+function readEdgeCardinality(path, value, problems) {
   if (!isPlainObject(value)) {
     problems.push(
-      `'structural.edgeCardinality' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 every edge type's cardinality stays unknown`
+      `'${path}' is ${Array.isArray(value) ? "an array" : typeof value}, not an object \u2014 every edge type's cardinality stays unknown`
     );
     return {};
   }
@@ -309,7 +310,7 @@ function readEdgeCardinality(value, problems) {
   for (const [edgeType, cardinality] of Object.entries(value)) {
     if (typeof cardinality !== "string" || cardinality === "") {
       problems.push(
-        `'structural.edgeCardinality.${edgeType}' is ${JSON.stringify(cardinality)}, not a non-empty string \u2014 that edge type's cardinality stays unknown`
+        `'${path}.${edgeType}' is ${JSON.stringify(cardinality)}, not a non-empty string \u2014 that edge type's cardinality stays unknown`
       );
       continue;
     }
@@ -403,10 +404,11 @@ function readStructuralDeclaration(document2) {
     }
   }
   const indent3 = "indent" in raw ? readIndent(raw.indent, problems) : void 0;
-  const edgeCardinality = "edgeCardinality" in raw ? readEdgeCardinality(raw.edgeCardinality, problems) : {};
+  const edgeCardinality = "edgeCardinality" in raw ? readEdgeCardinality(`${STRUCTURAL_KEY}.edgeCardinality`, raw.edgeCardinality, problems) : {};
+  const edgeDirectionRegistry = "edgeDirectionRegistry" in raw ? readEdgeCardinality(`${STRUCTURAL_KEY}.edgeDirectionRegistry`, raw.edgeDirectionRegistry, problems) : {};
   const sections = "sections" in raw ? readSections(raw.sections, problems) : {};
   const dropped = "dropped" in raw ? readDropped(raw.dropped, problems) : {};
-  return { structural: { indent: indent3, edgeCardinality, sections, dropped }, problems };
+  return { structural: { indent: indent3, edgeCardinality, edgeDirectionRegistry, sections, dropped }, problems };
 }
 
 // app/present/select/qualification.ts
@@ -3547,6 +3549,27 @@ function composeSectionHeading(sectionId, presentation, members, resolution, gra
   const cells = backing === void 0 ? [] : markerCells(backing, resolution, resolution.markerOrder);
   return { kind: "heading", text: cells.length === 0 ? text : `${text} ${cells.join(" ")}` };
 }
+var HIERARCHY_DIRECTIONS = /* @__PURE__ */ new Set(["child_to_parent", "parent_to_child"]);
+function relevantEdgeTypes(viewId, sectionId, structural) {
+  const declared = structural?.sections?.[viewId]?.[sectionId]?.edgeTypes;
+  if (declared !== void 0) return new Set(declared);
+  const registry = structural?.edgeDirectionRegistry;
+  if (registry === void 0 || Object.keys(registry).length === 0) return void 0;
+  const hierarchy = /* @__PURE__ */ new Set();
+  for (const [edgeType, direction] of Object.entries(registry)) {
+    if (HIERARCHY_DIRECTIONS.has(direction)) hierarchy.add(edgeType);
+  }
+  return hierarchy;
+}
+function touchedIdsForTypes(touchedByType, types) {
+  const out = /* @__PURE__ */ new Set();
+  for (const type of types) {
+    const ids = touchedByType.get(type);
+    if (ids === void 0) continue;
+    for (const id of ids) out.add(id);
+  }
+  return out;
+}
 function composeSectionTreeLines(roots, depth, graph, resolution, placeholder, writePolicy, lines) {
   for (const treeNode of roots) {
     const graphNode = graph.nodes.find((n) => n.id === treeNode.node_id);
@@ -3594,9 +3617,17 @@ function composeViewMarkdown(viewId, context) {
     return { ok: false, because: "section-uncomputed", section: firstUncomputed.sectionId };
   }
   const touched = /* @__PURE__ */ new Set();
+  const touchedByType = /* @__PURE__ */ new Map();
   for (const edge of graph.edges) {
     touched.add(edge.source);
     touched.add(edge.target);
+    let byType = touchedByType.get(edge.type);
+    if (byType === void 0) {
+      byType = /* @__PURE__ */ new Set();
+      touchedByType.set(edge.type, byType);
+    }
+    byType.add(edge.source);
+    byType.add(edge.target);
   }
   const lines = [];
   for (const section of computed.sections) {
@@ -3639,7 +3670,9 @@ function composeViewMarkdown(viewId, context) {
       }
       continue;
     }
-    const sectionTouchesAnEdge = section.members.some((member) => touched.has(member.id));
+    const relevant = relevantEdgeTypes(viewId, section.sectionId, context.structural);
+    const sectionTouched = relevant === void 0 ? touched : touchedIdsForTypes(touchedByType, relevant);
+    const sectionTouchesAnEdge = section.members.some((member) => sectionTouched.has(member.id));
     if (sectionTouchesAnEdge) {
       const tree = context.sectionTrees?.[section.sectionId];
       if (tree === void 0) {
