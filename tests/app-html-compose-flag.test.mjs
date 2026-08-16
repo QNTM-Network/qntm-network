@@ -17,14 +17,15 @@
  * base holds the engine's is not a cosmetic mismatch — it is a save computed against a file the
  * operator was never shown, on the one surface he types into.
  *
- * So this file's whole subject is that the four move TOGETHER. Three claims:
+ * So this file's whole subject is that the four move TOGETHER. Four claims:
  *
- *   1. FLAG OFF — every one of the four is byte-identical to `view.markdown`, which is what the
- *      page did before `sourceOfView` existed. Proved against an UNMUTATED page, so "off" is the
- *      shipped behaviour and not a reconstruction of it.
+ *   1. FLAG OFF — every one of the four is byte-identical to `view.markdown`, the shape the page
+ *      shipped before `sourceOfView` existed. `COMPOSE_VIEW_IN_BROWSER` DEFAULTS TRUE now
+ *      (turn-on-browser-composition, 2026-08-16), so this claim mutates the shipped page DOWN to
+ *      off, the mirror image of what claim 1 used to prove.
  *   2. FLAG ON, COMPOSING — all four come from the composer, and none of them is the engine's
- *      string. The mutation is applied to the page's own `const`, so the code under test is the
- *      code that ships.
+ *      string. Proved against an UNMUTATED page — this is now the shipped default, not a
+ *      reconstruction of it.
  *   3. FLAG ON, REFUSING — a view the composer cannot answer for falls back to the engine's
  *      markdown in ALL FOUR, per view, never per line. A view assembled half from each would be a
  *      string this app computed, arriving as a write base.
@@ -80,7 +81,8 @@ async function pageWith(flagOn, { graph }) {
   globalThis.fetch = () => new Promise(() => {});
   const page = await importPage(
     makeWorkDir(`compose-flag-${flagOn ? "on" : "off"}-${Math.random().toString(36).slice(2)}`),
-    flagOn ? (source) => assertMutated(source, FLAG_OFF, FLAG_ON) : undefined,
+    // ON IS THE SHIPPED DEFAULT NOW — mutating DOWN to off is the one that needs a pattern.
+    flagOn ? undefined : (source) => assertMutated(source, FLAG_ON, FLAG_OFF),
   );
   page.__applyPresentation(liveDeclaration());
   page.__setGraphData({ snapshot: { generated_at: "2026-08-16T00:00:00Z", views: [VIEW], graph } });
@@ -103,7 +105,7 @@ describe("COMPOSE_VIEW_IN_BROWSER", () => {
     return;
   }
 
-  describe("1. OFF — the shipped page, unmutated, byte-identical to before this existed", () => {
+  describe("1. OFF — the shipped page, mutated DOWN to off, byte-identical to before this existed", () => {
     let page;
     before(async () => {
       ({ page } = await pageWith(false, { graph: { nodes: [], edges: [] } }));
@@ -127,7 +129,7 @@ describe("COMPOSE_VIEW_IN_BROWSER", () => {
     });
   });
 
-  describe("2. ON — all four come from the composer, together", () => {
+  describe("2. ON — the shipped page, unmutated — all four come from the composer, together", () => {
     let page;
     before(async () => {
       ({ page } = await pageWith(true, { graph: { nodes: [], edges: [] } }));
@@ -207,12 +209,8 @@ describe("COMPOSE_VIEW_IN_BROWSER", () => {
     before(async () => {
       const { elements } = installBrowser();
       globalThis.fetch = () => new Promise(() => {});
-      page = (
-        await importPage(
-          makeWorkDir(`compose-flag-tree-${Math.random().toString(36).slice(2)}`),
-          (source) => assertMutated(source, FLAG_OFF, FLAG_ON),
-        )
-      );
+      // ON IS THE SHIPPED DEFAULT NOW — no mutation needed, same as claim 2 and claim 3.
+      page = await importPage(makeWorkDir(`compose-flag-tree-${Math.random().toString(36).slice(2)}`));
       page.__applyPresentation(liveDeclaration());
       page.__setGraphData({
         snapshot: {

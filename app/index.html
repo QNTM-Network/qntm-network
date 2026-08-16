@@ -2037,11 +2037,13 @@ function viewSources(data) {
  * So the four move together or not at all, and this function is what makes "together" a property
  * of the code rather than a promise in a comment.
  *
- * ── THE FLAG DEFAULTS OFF, AND OFF IS BYTE-IDENTICAL ──
+ * ── THE FLAG NOW DEFAULTS ON, AND A REFUSAL IS STILL BYTE-IDENTICAL ──
  *
- * `COMPOSE_VIEW_IN_BROWSER` false returns `view.markdown` verbatim — the same expression every one
- * of the four sites held before this function existed, with no formatting, no fallback and no
- * normalisation in between. Nothing about the shipped page changes until the flag moves.
+ * `COMPOSE_VIEW_IN_BROWSER` true routes all four sites through `composeViewMarkdown`. A view it
+ * cannot answer for returns `view.markdown` verbatim — the same expression the flag held while it
+ * was off, and the same expression every one of the four sites held before this function existed.
+ * So turning the flag on never worsens a section this composer cannot yet reach; it only widens how
+ * many sections skip the engine's own round trip.
  *
  * ── THE REFUSAL IS PER VIEW, NEVER PER LINE ──
  *
@@ -2057,7 +2059,7 @@ function viewSources(data) {
  * `viewSources` (walking a whole envelope) can both call this with a view they are holding, and get
  * the same answer the painter would.
  */
-const COMPOSE_VIEW_IN_BROWSER = false;
+const COMPOSE_VIEW_IN_BROWSER = true;
 
 /**
  * `?include_structure=true`, or nothing — the query suffix both `GET /app/graph` call sites append.
