@@ -228,3 +228,24 @@ sinks:
 # the resolver walk through the write's own answer — ever qualifies). `commit-line-routing` is the
 # closest true statement flow-trace can check: not "a resolver reaches the screen" but "the ONE
 # function through which every resolver's answer must pass before it can" does.
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# ADDED 2026-08-17 — the graph read for a CROSS-LINE decision (`promotion` is the one resolver
+# of the four that needs one; see classes.yaml's `graph-aware-resolution-reads-one-modelled-graph`
+# for why this is a class named before it is built, and the live defect that named it).
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+  - id: structural-node-candidate-is-the-graph-read-for-cross-line-resolution
+    sink: app/present/resolvers/promotion:structuralNodeCandidateFor
+    description: >-
+      The one place a graph-aware resolver looks up ANOTHER line's (a structural parent's or
+      child's) current id and fields — the front end's only read of graph state for a
+      cross-line decision, as opposed to the line the operator just committed. `parentCandidateFor`
+      and `childCandidateFor` both delegate here rather than reading `snapshot.nodes` themselves
+      (2026-08-07, unifying what used to be two lookups into one); a second graph-aware resolver,
+      or a third candidate kind added to this one, that queries the snapshot some other way is the
+      identical duplication this unification already closed once.
+    canonical_home: graph-aware-resolution-reads-one-modelled-graph
+    chokepoint: app/present/resolvers/promotion:structuralNodeCandidateFor
+    carries_only:
+      - a structural node's graph id + resolved fields, read from `ctx.graph` — the browser's
+        current model of the graph, whatever that model currently knows
