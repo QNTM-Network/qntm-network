@@ -389,8 +389,11 @@ describe("4. THE SWEEP — every one of the 72 real views this instance declares
 /**
  * ── STEP 11 — `sectionOrderFor`, AND ITS OWN FALSIFIER, SIMULATED ──
  *
- * `server/app.py` does not serve a `sections` field today (design doc §5.9, address.ts's own
- * header), so there is nothing live to compare against. What can be proven here, honestly:
+ * `server/app.py`'s PLAIN view envelope (`?include_structure` unset) does not serve a `sections`
+ * field, so section 5 below still has nothing live to compare against for a genuine array-shaped
+ * override. UPDATE 2026-08-17: `?include_structure=true` DOES now put a `sections` key on every
+ * served view — a section TREE, not an order array (section 8, below, is the regression test for
+ * the collision that shape caused). What can be proven for the array-shaped override, honestly:
  *
  *   5. IGNORING THE FIELD REPRODUCES TODAY'S BEHAVIOUR EXACTLY — proof standard #3. A served view
  *      shaped exactly as `server/app.py:_read_views` emits it today (`{id, path, title, domain,
@@ -577,5 +580,46 @@ describe("7. sectionOrderFor — no fork: a disagreeing served order wins WHOLES
     const merged = sectionOrderFor(servedView, DECLARED);
     assert.deepEqual(merged.inbox, []);
     assert.equal(sectionAt("## Anything", 0, "inbox", merged), null, "nothing to address into an empty order");
+  });
+});
+
+/**
+ * ── LIVE DEFECT, OBSERVED 2026-08-17 — the section TREE from `?include_structure=true` collides
+ * with THIS function's own `view.sections` name ──
+ *
+ * `GET /app/graph?include_structure=true` puts a `sections` key on every served view — but it is
+ * `Record<sectionId, {section_id, roots}>` (`app/present/express/viewmarkdown.ts`'s
+ * `SectionTreeWire`), not the plain ordered array this function has always expected. Before the
+ * `Array.isArray` guard, this function could not tell the two apart: it read the tree object as an
+ * order override, `sectionAt` tried to index into it positionally, and every graph-aware resolver
+ * abstained `no-section-declaration` universally — reported live in `docs/architecture/
+ * classes.yaml`'s `graph-aware-resolution-reads-one-modelled-graph`. This is the regression test
+ * for that collision, using the actual shape the server sends today, not a synthetic stand-in.
+ */
+describe("8. sectionOrderFor — the section-tree shape from ?include_structure=true is not an order override", () => {
+  const DECLARED = { inbox: ["inbox-tagged", "domain-empty"] };
+  const SECTION_TREE_SHAPED = {
+    "inbox-tagged": { section_id: "inbox-tagged", roots: [] },
+    "domain-empty": {
+      section_id: "domain-empty",
+      roots: [{ node_id: "n1", node_type: "task", is_qualifying: true, children: [] }],
+    },
+  };
+
+  test("a tree-shaped `sections` object is ignored — `declared` returned BY REFERENCE, same as absent", () => {
+    const servedView = { id: "inbox", sections: SECTION_TREE_SHAPED };
+    const result = sectionOrderFor(servedView, DECLARED);
+    assert.equal(result, DECLARED, "a non-array sections value must not be read as an order override");
+  });
+
+  test("sectionAt through it still names the DECLARED id at each ordinal — the exact live abstain this closes", () => {
+    const servedView = { id: "inbox", sections: SECTION_TREE_SHAPED };
+    const merged = sectionOrderFor(servedView, DECLARED);
+    const source = ["## Inbox", "## Domain Empty", "- [ ] a new one", "- [ ] a new one 2"].join("\n");
+    assert.equal(
+      sectionAt(source, 3, "inbox", merged),
+      "domain-empty",
+      "must resolve to the declared section id, not null — this is what made promotion abstain live",
+    );
   });
 });

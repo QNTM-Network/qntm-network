@@ -206,17 +206,39 @@ export function sectionForInsertAt(
  * silently misalign every ordinal after the first point they disagree, which is a worse failure
  * than either list alone.
  *
- * ADDITIVE BY CONSTRUCTION, NOT BY CONVENTION: `server/app.py`'s served view is `{id, path, title,
- * domain, markdown}` today, with no `sections` key at all, so `view.sections` reads `undefined` for
- * every real view and this function returns `declared` UNCHANGED (same reference, not a copy) —
- * "a client that ignores the new field behaves exactly as today" holds because there is, today,
- * nothing to ignore.
+ * CORRECTED 2026-08-17 — THE PREMISE BELOW WAS TRUE WHEN WRITTEN (2026-08-01) AND STOPPED BEING
+ * TRUE FIFTEEN DAYS LATER, SILENTLY. `GET /app/graph?include_structure=true` (2026-08-16, structural
+ * composition) now DOES put a `sections` key on every served view — but it is a section TREE,
+ * `Record<sectionId, {section_id, roots}>`, a completely different shape built for a completely
+ * different reader (`app/present/express/viewmarkdown.ts`'s structural nesting). It has nothing to
+ * do with THIS function's `sections`, which was always meant to be a plain ordered array of section
+ * ids. Same field name, two unrelated features, fifteen days apart — and because this function
+ * only checked `!== undefined`, it read the tree object as if it were the array, silently replacing
+ * every view's correct declared order with a non-array it could never index into. Observed live
+ * 2026-08-17: `sectionAt` returned `null` for every commit on every view, because `order[ordinal]`
+ * was `object[0]` — not the section id at that position, since the object has no numeric keys at
+ * all — and every graph-aware resolver (promotion is the one that surfaces it, being the only one
+ * that needs a section id for a DIFFERENT line) abstained `no-section-declaration` universally,
+ * including for relationships that had always existed and had nothing to do with anything new.
+ *
+ * THE GUARD BELOW IS THE FIX, AND IT IS NARROW ON PURPOSE: `Array.isArray` is the one true fact
+ * that tells the two shapes apart (an array vs. a plain object keyed by section id), so a genuine
+ * future array-shaped override (server/app.py has still never sent one — see below) still applies
+ * exactly as designed, and the tree object is now correctly treated as "nothing to override with,"
+ * the same as `undefined` always was.
+ *
+ * ADDITIVE BY CONSTRUCTION, NOT BY CONVENTION: `server/app.py`'s served view was `{id, path, title,
+ * domain, markdown}` on 2026-08-01, with no `sections` key at all, so `view.sections` read
+ * `undefined` for every real view and this function returned `declared` UNCHANGED (same reference,
+ * not a copy). That premise is what the 2026-08-17 correction above restates precisely: additive
+ * held only until a second feature reused the field name, which is exactly the failure a type guard
+ * — not a comment — has to stand between the two.
  */
 export function sectionOrderFor(
-  view: { readonly id: string; readonly sections?: readonly string[] },
+  view: { readonly id: string; readonly sections?: unknown },
   declared: Readonly<Record<string, readonly string[]>>,
 ): Readonly<Record<string, readonly string[]>> {
-  if (view.sections === undefined) {
+  if (!Array.isArray(view.sections)) {
     return declared;
   }
   return { ...declared, [view.id]: view.sections };

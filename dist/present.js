@@ -2003,7 +2003,7 @@ function sectionForInsertAt(source, lineIndex, view, sectionOrder) {
   return sectionAt(source, lineIndex - 1, view, sectionOrder);
 }
 function sectionOrderFor(view, declared) {
-  if (view.sections === void 0) {
+  if (!Array.isArray(view.sections)) {
     return declared;
   }
   return { ...declared, [view.id]: view.sections };
