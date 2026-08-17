@@ -325,6 +325,25 @@ export type {
 
 export { RESOLVERS } from "./resolvers/registry.js";
 
+// ── THE GRAPH BLOB CACHE — RELOCATED (see graph.ts's own header) ──
+//
+// `app/index.html` used to hold `graphBlob`/`graphBlobEtag`/`graphBlobInFlight` as bare `let`s and
+// `refreshGraphBlob` as a bare function, both inside its own unobservable `<script type="module">`.
+// It now constructs one `GraphBlobCache` via `createGraphBlobCache(deps)`, once, at page scope —
+// the identical shape `createCommitLine(deps)` already established.
+export { createGraphBlobCache } from "./graph.js";
+export type { GraphBlobCache, GraphBlobDeps } from "./graph.js";
+
+// ── THE PROMOTION RETRY SURFACE — WHICH ROW MOST RECENTLY ABSTAINED FOR A GRAPH REASON ──
+//
+// See retry.ts's own header: a small PURE surface, the same shape `PredictSurface`/`SettleSurface`
+// already are, tracking the one commit a graph refresh should re-offer to `promotionSpec.read`.
+// `createRetryPromotion(deps)` is the connecting act for THAT surface — the identical
+// "createCommitLine(deps)" shape, so the second `armPredict` call site a retry needs lives under
+// `app/present/` rather than on the page (see that factory's own header for why).
+export { PromotionRetrySurface, GRAPH_RETRYABLE_ABSTENTIONS, createRetryPromotion } from "./retry.js";
+export type { RetryPromotionDeps, RetryPromotionView } from "./retry.js";
+
 // ── commitLine ITSELF — THE CONNECTING ACT, RELOCATED (see commit.ts's own header) ──
 //
 // `app/index.html` used to hand-author this function; it now constructs one via

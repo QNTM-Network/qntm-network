@@ -7433,6 +7433,123 @@ var RESOLVERS = [
   defineResolver(promotionSpec)
 ];
 
+// app/present/graph.ts
+function createGraphBlobCache(deps) {
+  let graphBlob = null;
+  let graphBlobEtag = null;
+  let graphBlobInFlight = null;
+  async function refreshGraphBlob() {
+    if (!deps.token()) return;
+    if (graphBlobInFlight) return graphBlobInFlight;
+    graphBlobInFlight = (async () => {
+      try {
+        const headers = { Authorization: "Bearer " + deps.token() };
+        if (graphBlobEtag) headers["If-None-Match"] = graphBlobEtag;
+        const res = await fetch(deps.api + "/app/graph/blob", { method: "GET", headers });
+        if (res.status === 304 || !res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data || !data.snapshot) return;
+        graphBlob = data.snapshot;
+        graphBlobEtag = res.headers.get("ETag") || graphBlobEtag;
+      } catch {
+      } finally {
+        graphBlobInFlight = null;
+      }
+    })();
+    return graphBlobInFlight;
+  }
+  return {
+    refresh: refreshGraphBlob,
+    blob: () => graphBlob,
+    etag: () => graphBlobEtag,
+    setBlob(next) {
+      graphBlob = next;
+    },
+    setEtag(next) {
+      graphBlobEtag = next;
+    },
+    reset() {
+      graphBlob = null;
+      graphBlobEtag = null;
+    }
+  };
+}
+
+// app/present/retry.ts
+var PromotionRetrySurface = class {
+  #source = null;
+  #view = "";
+  #commit = null;
+  /**
+   * Promotion abstained for `commit` (committed against `view`, producing `source` —
+   * `commit.markdown`, the same base `armPredict`/`armSettle` key against) for a graph-related
+   * reason. Overwrites whatever was pending before — see this class's own header.
+   */
+  arm(source, view, commit) {
+    this.#source = source;
+    this.#view = view;
+    this.#commit = commit;
+  }
+  /**
+   * The commit pending retry for the EXACT `source`/`view` still on screen, or `null` when there
+   * is nothing pending, the pending retry belongs to a different view, or the operator has typed
+   * something else since — see this class's own header for why a source mismatch alone is enough
+   * to treat a pending retry as stale, with no separate staleness check. Does not clear: a retry
+   * that still cannot decide (the fresh graph still does not carry the row it needs) stays pending
+   * for the NEXT graph refresh, exactly as an honest abstain would if it were asked again by hand.
+   */
+  pending(source, view) {
+    if (this.#source !== source || this.#view !== view) {
+      return null;
+    }
+    return this.#commit;
+  }
+  /** The retry decided (armed a real prediction) or the operator moved on some other way this
+   * class was not built to detect on its own. Nothing left pending for a later refresh to find. */
+  clear() {
+    this.#source = null;
+    this.#view = "";
+    this.#commit = null;
+  }
+};
+var GRAPH_RETRYABLE_ABSTENTIONS = /* @__PURE__ */ new Set([
+  "graph-not-loaded",
+  "parent-not-in-graph",
+  "child-not-in-graph"
+]);
+function createRetryPromotion(deps) {
+  function retryPromotion() {
+    const view = deps.currentView();
+    if (view === null) {
+      return;
+    }
+    const pending = deps.retrySurface.pending(deps.paintedSource(), view.id);
+    if (pending === null) {
+      return;
+    }
+    const ctx = deps.buildContext(view, pending);
+    const reading = promotionSpec.read(ctx);
+    if (reading.kind !== "answer" || reading.applied.length === 0) {
+      return;
+    }
+    if (promotionSpec.arm === void 0) {
+      return;
+    }
+    const armed = promotionSpec.arm(ctx, reading);
+    if (armed.kind !== "answer") {
+      return;
+    }
+    const predictions = armed.armings.filter((arming) => arming.surface === "predict").map((arming) => arming.prediction);
+    if (predictions.length === 0) {
+      return;
+    }
+    armPredict(deps.predict, pending.markdown, view.id, predictions);
+    deps.retrySurface.clear();
+    deps.repaint();
+  }
+  return retryPromotion;
+}
+
 // app/present/commit.ts
 function createCommitLine(deps) {
   async function commitLine(view, commit) {
@@ -7795,6 +7912,7 @@ export {
   DEFAULT_TRAVERSAL_DEPTH,
   DraftSurface,
   FocusSurface,
+  GRAPH_RETRYABLE_ABSTENTIONS,
   INDENT_UNIT,
   LANDING_VIEW_KEY,
   ModeSurface,
@@ -7807,6 +7925,7 @@ export {
   PresentationCascade,
   PresentationContext,
   ProjectionQueue,
+  PromotionRetrySurface,
   QUALIFICATION_KEY,
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,
@@ -7847,6 +7966,8 @@ export {
   computeViewMembers,
   coverageOf,
   createCommitLine,
+  createGraphBlobCache,
+  createRetryPromotion,
   declarationFrom,
   defaultOrderingFor,
   defaultOrderingPlacementFor,

@@ -4300,7 +4300,8 @@ capabilities:
     `blob` parameter: `graphData.snapshot.graph` (the pre-existing D1-fallback shape, still inline
     for a non-operator session) wins when present; a separately-fetched `blob` is the fallback,
     consulted only when the envelope carries no graph at all — the shape `GET /app/graph` now
-    serves by default. `app/index.html`'s `refreshGraphBlob` is the fetch: fire-and-forget,
+    serves by default. `app/present/graph.ts`'s `refreshGraphBlob` (relocated 2026-08-17, formerly
+    a bare function on the page — see `rooting` below) is the fetch: fire-and-forget,
     conditional (`If-None-Match` against the ETag `GET /app/graph/blob` minted last), triggered
     from `installProjection`/`loadGraph` every time a fresh envelope lands (the only available
     signal the graph might have moved), and cleared on `logout` (so a second sign-in on the same
@@ -4319,10 +4320,18 @@ capabilities:
     directly (verified this session: `flow-trace verify . --scenario graph_blob_fallback` exits 0,
     0 FAIL, against this tree) — though no class in `docs/architecture/classes.yaml` covers
     `app/present/resolve.ts` today, so it is not CLASS-rooted, only scenario-reachable.
-    `refreshGraphBlob`, `installProjection`'s and `loadGraph`'s trigger calls, and the `logout` reset
-    are ISOLATED inside `app/index.html`, the identical posture every sibling page-level row in
-    this file already carries: node cannot import an HTML document, so flow-trace cannot see those
-    edges however real they are. `tests/app-graph-blob.test.mjs` (the fetch/cache/merge contract,
+    `refreshGraphBlob` ITSELF RELOCATED 2026-08-17 (`app/present/graph.ts`'s `createGraphBlobCache`,
+    the identical move `commit.ts` made for `commitLine`) — the symbol is now real and inside the
+    capture filter. It did NOT gain a class-rooted status from the move alone: `flow-trace verify`
+    run against this tree after the relocation reports no PASS, FAIL or INFO anywhere naming
+    `app/present/graph`, because `refreshGraphBlob`'s only onward call is the global `fetch`, never
+    a second `app/present/` module — there is no module-to-module edge for a scenario to make
+    canonical-routing observe, unlike `commitLine`'s own case. See `docs/architecture/classes.yaml`'s
+    `graph-aware-resolution-reads-one-modelled-graph` for the full argument. `installProjection`'s
+    and `loadGraph`'s trigger calls (now `graphCache.refresh()`) and the `logout` reset (now
+    `graphCache.reset()`) are STILL ISOLATED inside `app/index.html`, the identical posture every
+    sibling page-level row in this file already carries: node cannot import an HTML document, so
+    flow-trace cannot see those edges however real they are. `tests/app-graph-blob.test.mjs` (the fetch/cache/merge contract,
     8 arms) and `tests/app-async-ack.test.mjs` (the trigger wiring — a fresh envelope lands, exactly
     one background `GET /app/graph/blob` follows) are the substitute, both driving the real lifted
     page through `tests/fixtures/app-html-page.mjs`'s extractor rather than a reimplementation of

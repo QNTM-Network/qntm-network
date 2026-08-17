@@ -733,7 +733,13 @@ classes:
   # ══════════════════════════════════════════════════════════════════════════════════════════
   # ADDED 2026-08-17 — NAMED BEFORE IT IS BUILT, on the same "a wrong pin beats no pin" principle
   # `movement` above states: deferring this until the model exists is how it never gets named at
-  # all. `canonical_class` below does not exist in the tree yet; it names where this belongs.
+  # all. `canonical_class` below did not exist in the tree yet when this row was written.
+  #
+  # RELOCATED, SAME DAY, SECOND CHANGE — `canonical_class` now names a real symbol.
+  # `createGraphBlobCache` (`app/present/graph.ts`) builds it; see that module's own header for
+  # the move, which is the identical shape `commit.ts`'s `createCommitLine` already established.
+  # `status` did NOT flip on the strength of the move alone — see the concern's own closing
+  # paragraph for why the relocation and the status are two separate questions here.
   # ══════════════════════════════════════════════════════════════════════════════════════════
   - id: graph-aware-resolution-reads-one-modelled-graph
     concern: >
@@ -772,12 +778,46 @@ classes:
       and, if it now decides, arm it exactly the way a fresh commit would. One reconciliation
       trigger, already built and already trusted; a second consumer of it, not a second mechanism.
 
-      WHY THIS IS STILL `declared`, NOT `working`: `installProjection` and `refreshGraphBlob` both
-      live in `app/index.html`'s own `<script type="module">` — the same unreachable-by-flow-trace
-      region `commit-line-routing`'s own header already documents at length for `commitLine`, and
-      `capture-rule-application`'s addendum documents for the identical reason. Neither can be a
-      governed sink until relocated into a real module, the same move that made `commitLine`
-      observable. This row names the target; it does not yet claim the route is enforced.
+      RELOCATED 2026-08-17, SAME DAY, THIRD CHANGE — `refreshGraphBlob` and the `graphBlob`/
+      `graphBlobEtag`/`graphBlobInFlight` state it owns moved into `app/present/graph.ts`'s
+      `createGraphBlobCache`, the identical move `commit.ts` made for `commitLine`. `installProjection`
+      itself STAYS in `app/index.html` (it is page-shaped for the same reason `resolverContextFor`
+      is — it calls `paintView`, which touches the DOM) and now calls `graphCache.refresh()`.
+
+      STILL `declared`, NOT `working`, AND NOT FOR THE REASON THE PARAGRAPH ABOVE USED TO GIVE.
+      The relocation is real and `npm run build` + `node --test tests/app-graph-blob.test.mjs`
+      both confirm it changed nothing about what the function does. But `flow-trace verify` run
+      against this tree after the move reports the SAME `fail_count: 1` (the pre-existing,
+      unrelated `locations_field_has_no_reader`) and NO finding anywhere mentions
+      `app/present/graph` — not a PASS, not a FAIL, not even an "observed but not declared" INFO.
+      That absence is not a gap this row can close with a scenario: `refreshGraphBlob`'s only
+      onward call is the global `fetch`, never a second `app/present/` module, so there is no
+      `from -> to.callee` edge `docs/architecture/flows.yaml` could declare and no caller-chain a
+      scenario could make canonical-routing observe — unlike `commit-line-routing`, whose whole
+      case rested on `commitLine` calling `runResolvers`/`armSettle`/`armPredict`/`paint`, real
+      module-to-module edges once relocated. This class's relationship to the sink it governs
+      (`structural-node-candidate-is-the-graph-read-for-cross-line-resolution`) is a DATA
+      relationship — one cache, one writer, every reader consults it through `graphSnapshotOf` —
+      not a CALL relationship, and flow-trace's routing check adjudicates calls. So the honest
+      state is: the symbol is real and correctly named, and there is nothing left for THIS
+      mechanism to confirm or deny. `status` stays `declared` until a form of evidence that fits
+      the actual shape of the claim exists, rather than being flipped on the strength of the
+      relocation alone.
+
+      THE TARGET SHAPE, BUILT, SAME DAY, FOURTH CHANGE — `app/present/retry.ts`'s
+      `PromotionRetrySurface` (a small PURE surface, the same shape `predict.ts`/`settle.ts` are)
+      remembers whichever commit `promotionSpec.read` most recently abstained on for a
+      graph-related reason; `createRetryPromotion(deps)` (same file) re-runs `promotionSpec.read`/
+      `.arm` against it once a graph refresh lands genuinely fresh (a changed ETag, checked by
+      `app/index.html`'s `refreshGraphBlobAndRetryPromotion`), matched against the exact source
+      still on screen, and feeds a real answer into `predict` through the SAME `armPredict` shape
+      `commit.ts` already uses. `tests/app-promotion-retries-on-graph-refresh.test.mjs` drives the
+      whole path through the real page: a stale blob abstains and arms nothing, a fresh one arms
+      the parent's own `#outcome` prediction, a stale pending retry is discarded rather than
+      applied, and a 304 retries nothing. `armPredict` gained a SECOND call site for this — see
+      `createRetryPromotion`'s own header (retry.ts) for why it lives under `app/present/` rather
+      than on the page, keeping `tests/app-predict-wiring.test.mjs`'s own "one call site per
+      surface-arming trigger" invariant intact rather than breaking it.
     canonical_class: app/present/graph:refreshGraphBlob
     packages:
       - presentation

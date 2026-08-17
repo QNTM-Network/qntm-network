@@ -187,16 +187,24 @@ export const __currentViewId = () => currentViewId;
 export function __setGraphData(next) { graphData = next; }
 export function __setCurrentViewId(next) { currentViewId = next; }
 // THE GRAPH BLOB CACHE (graph-envelope-composition-separates-blob-from-view-markdown,
-// 2026-08-07). Getters, the same reason \`__served\`/\`__queued\` are: a suite reads what the page
-// is holding NOW. \`__setGraphBlob\`/\`__setGraphBlobEtag\` let a suite seed the cache directly
-// (proving what a commit does once the blob HAS arrived, without waiting out a real fetch);
-// \`__refreshGraphBlob\` drives the real fetch-and-merge function itself, the same "alias for the
-// real thing, not a restatement of it" posture \`__collect\`/\`__correlate\` take for their own axes.
-export const __graphBlob = () => graphBlob;
-export const __graphBlobEtag = () => graphBlobEtag;
-export function __setGraphBlob(next) { graphBlob = next; }
-export function __setGraphBlobEtag(next) { graphBlobEtag = next; }
-export { refreshGraphBlob as __refreshGraphBlob };
+// 2026-08-07 — relocated into app/present/graph.ts's \`createGraphBlobCache\`, 2026-08-17).
+// Getters, the same reason \`__served\`/\`__queued\` are: a suite reads what the page is holding
+// NOW. \`__setGraphBlob\`/\`__setGraphBlobEtag\` let a suite seed the cache directly (proving what a
+// commit does once the blob HAS arrived, without waiting out a real fetch); \`__refreshGraphBlob\`
+// drives the real fetch-and-merge function itself, the same "alias for the real thing, not a
+// restatement of it" posture \`__collect\`/\`__correlate\` take for their own axes.
+export const __graphBlob = () => graphCache.blob();
+export const __graphBlobEtag = () => graphCache.etag();
+export function __setGraphBlob(next) { graphCache.setBlob(next); }
+export function __setGraphBlobEtag(next) { graphCache.setEtag(next); }
+export const __refreshGraphBlob = () => graphCache.refresh();
+// THE GRAPH RETRY ARM (app/present/retry.ts) — \`__promotionRetry\` is a getter, the same reason
+// \`__predict\`/\`__settle\` are: a suite reads what the page is holding NOW.
+// \`__refreshGraphBlobAndRetryPromotion\` drives the REAL wrapper both real trigger points
+// (\`installProjection\`, \`loadGraph\`) call — the fetch AND the fresh-ETag-triggered retry
+// together, exactly as production wires them, rather than either half alone.
+export const __promotionRetry = () => promotionRetry;
+export const __refreshGraphBlobAndRetryPromotion = () => refreshGraphBlobAndRetryPromotion();
 export const __drawerIsOpen = () => drawerIsOpen;
 // VIM. \`mode\` and \`focus\` are module-scoped consts, same shape as \`currentViewId\` above —
 // getters rather than raw exports so a test reads the live value instead of a snapshot from
