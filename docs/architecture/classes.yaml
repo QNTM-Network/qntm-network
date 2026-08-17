@@ -743,9 +743,13 @@ classes:
   # ══════════════════════════════════════════════════════════════════════════════════════════
   - id: graph-aware-resolution-reads-one-modelled-graph
     concern: >
-      Every graph-aware resolver's read of ANOTHER line's current state (today: `promotion`, the
-      only one of the four that needs one — see `resolvers-child-candidate-reads-the-graph`) reads
-      `ctx.graph`, sourced from a bare module-level `let graphBlob` in `app/index.html`.
+      Every graph-aware resolver's read of ANOTHER line's current state reads `ctx.graph`, sourced
+      from a bare module-level `let graphBlob` in `app/index.html`. TWO OF THE FOUR NEED IT, NOT
+      ONE — `promotion`'s `structuralNodeCandidateFor` (`resolvers/promotion.ts`) AND `ordering`'s
+      `classifierFor` (`resolvers/ordering.ts`, feeding `arrange/orderingqualify.ts`'s
+      `qualifyingClassifierFor`), corrected 2026-08-17 from an earlier version of this row that
+      named promotion alone — see `resolvers-child-candidate-reads-the-graph` for the first and
+      that resolver's own header for the second.
 
       REVISED 2026-08-17, SAME DAY AS FIRST WRITTEN — the first version of this row proposed a NEW
       surface with a local, optimistic patch, on the premise that nothing already reconciles graph
@@ -804,20 +808,49 @@ classes:
       the actual shape of the claim exists, rather than being flipped on the strength of the
       relocation alone.
 
-      THE TARGET SHAPE, BUILT, SAME DAY, FOURTH CHANGE — `app/present/retry.ts`'s
-      `PromotionRetrySurface` (a small PURE surface, the same shape `predict.ts`/`settle.ts` are)
-      remembers whichever commit `promotionSpec.read` most recently abstained on for a
-      graph-related reason; `createRetryPromotion(deps)` (same file) re-runs `promotionSpec.read`/
-      `.arm` against it once a graph refresh lands genuinely fresh (a changed ETag, checked by
-      `app/index.html`'s `refreshGraphBlobAndRetryPromotion`), matched against the exact source
-      still on screen, and feeds a real answer into `predict` through the SAME `armPredict` shape
-      `commit.ts` already uses. `tests/app-promotion-retries-on-graph-refresh.test.mjs` drives the
-      whole path through the real page: a stale blob abstains and arms nothing, a fresh one arms
-      the parent's own `#outcome` prediction, a stale pending retry is discarded rather than
-      applied, and a 304 retries nothing. `armPredict` gained a SECOND call site for this — see
-      `createRetryPromotion`'s own header (retry.ts) for why it lives under `app/present/` rather
-      than on the page, keeping `tests/app-predict-wiring.test.mjs`'s own "one call site per
-      surface-arming trigger" invariant intact rather than breaking it.
+      THE FOURTH CHANGE, SAME DAY, BUILT AND THEN REPLACED WITHIN HOURS — `app/present/retry.ts`'s
+      `PromotionRetrySurface` remembered whichever commit `promotionSpec.read` most recently
+      abstained on for a graph-related reason, and re-ran `promotionSpec.read`/`.arm` against it
+      alone once a graph refresh landed fresh. It shipped and worked
+      (`tests/app-promotion-retries-on-graph-refresh.test.mjs` drove it through the real page), and
+      the operator caught the shape directly: "we shouldn't have dual pathways, just the right
+      governing class for how things should be done." The SAME DAY, a SECOND live defect turned up
+      that a promotion-shaped retry could never have caught: `ordering`'s `classifierFor` depends
+      on `ctx.graph` too, but does not ABSTAIN when the graph is stale — it silently drops whichever
+      sibling the classifier cannot yet read from the ranked set and answers with a placement
+      computed from what remains, which can be confidently WRONG rather than merely absent.
+      Reproduced live: pressing `o` on the true last row of a list opened the new line in the
+      middle, because ordering placed that row from an incomplete sibling set while the graph blob
+      was still catching up. A resolver-specific retry surface for ordering too would have been
+      the exact duplication the operator was objecting to, built beside a mechanism that had
+      already been judged the wrong shape.
+
+      THE FIFTH CHANGE, SAME DAY — THE GENERIC MECHANISM, REPLACING THE FOURTH ENTIRELY.
+      `app/present/commit.ts` gained `resolveAndArm(deps, view, commit)`: the "run the registry,
+      report what it refused, arm settle, arm predict" step extracted out of `commitLine`'s own
+      body — the ONLY place `runResolvers`/`armSettle`/`armPredict` are ever called, reused
+      unmodified by both `commitLine` (the write path) and the retry trigger below (the no-write
+      refresh path). `app/present/retry.ts` was deleted and replaced by
+      `app/present/graph-refresh-retry.ts`'s `GraphRefreshRetrySurface`/`createGraphRefreshRetry`:
+      instead of tracking an abstain REASON, it tracks, for EVERY commit unconditionally, the ETag
+      `app/present/graph.ts`'s `GraphBlobCache.etag()` held at the moment that commit's own
+      `CommitContext` was built. When a later graph refresh lands with a DIFFERENT ETag, the
+      pending commit is worth re-deriving through `resolveAndArm` — regardless of which resolver
+      would benefit or whether anything explicitly abstained, because both defects above reduce to
+      the identical underlying fact: this commit's resolver walk ran against a graph that was not
+      yet the freshest available. One check covers promotion's honest abstain and ordering's silent
+      wrong answer with the same mechanism. `app/index.html`'s `commitLineAndArmGraphRefreshRetry`
+      arms the surface (unconditionally, on every commit, no resolver named); the same page's
+      `refreshGraphBlobAndRetryGraphRefresh` is the only place the retry ever fires, replacing
+      `refreshGraphBlobAndRetryPromotion`. `tests/app-promotion-retries-on-graph-refresh.test.mjs`
+      still drives promotion's own scenario end to end, unmodified in what it asserts — only the
+      hook names it exercises changed; `tests/app-ordering-retries-on-graph-refresh.test.mjs` is
+      the new proof this generalisation exists for, reproducing the `o`-on-the-last-row defect
+      directly: a stale blob excludes a sibling and arms no placement, a fresh one arms the correct
+      one. `armPredict`/`armSettle` are now each called from EXACTLY ONE place in the whole bundle
+      (inside `resolveAndArm`) rather than one-per-trigger — `tests/app-predict-wiring.test.mjs`
+      §6 tightened from "one call site per surface-arming trigger" to "one call site, period,
+      reused by every trigger."
     canonical_class: app/present/graph:refreshGraphBlob
     packages:
       - presentation

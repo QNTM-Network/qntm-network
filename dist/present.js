@@ -7475,96 +7475,25 @@ function createGraphBlobCache(deps) {
   };
 }
 
-// app/present/retry.ts
-var PromotionRetrySurface = class {
-  #source = null;
-  #view = "";
-  #commit = null;
-  /**
-   * Promotion abstained for `commit` (committed against `view`, producing `source` —
-   * `commit.markdown`, the same base `armPredict`/`armSettle` key against) for a graph-related
-   * reason. Overwrites whatever was pending before — see this class's own header.
-   */
-  arm(source, view, commit) {
-    this.#source = source;
-    this.#view = view;
-    this.#commit = commit;
-  }
-  /**
-   * The commit pending retry for the EXACT `source`/`view` still on screen, or `null` when there
-   * is nothing pending, the pending retry belongs to a different view, or the operator has typed
-   * something else since — see this class's own header for why a source mismatch alone is enough
-   * to treat a pending retry as stale, with no separate staleness check. Does not clear: a retry
-   * that still cannot decide (the fresh graph still does not carry the row it needs) stays pending
-   * for the NEXT graph refresh, exactly as an honest abstain would if it were asked again by hand.
-   */
-  pending(source, view) {
-    if (this.#source !== source || this.#view !== view) {
-      return null;
-    }
-    return this.#commit;
-  }
-  /** The retry decided (armed a real prediction) or the operator moved on some other way this
-   * class was not built to detect on its own. Nothing left pending for a later refresh to find. */
-  clear() {
-    this.#source = null;
-    this.#view = "";
-    this.#commit = null;
-  }
-};
-var GRAPH_RETRYABLE_ABSTENTIONS = /* @__PURE__ */ new Set([
-  "graph-not-loaded",
-  "parent-not-in-graph",
-  "child-not-in-graph"
-]);
-function createRetryPromotion(deps) {
-  function retryPromotion() {
-    const view = deps.currentView();
-    if (view === null) {
-      return;
-    }
-    const pending = deps.retrySurface.pending(deps.paintedSource(), view.id);
-    if (pending === null) {
-      return;
-    }
-    const ctx = deps.buildContext(view, pending);
-    const reading = promotionSpec.read(ctx);
-    if (reading.kind !== "answer" || reading.applied.length === 0) {
-      return;
-    }
-    if (promotionSpec.arm === void 0) {
-      return;
-    }
-    const armed = promotionSpec.arm(ctx, reading);
-    if (armed.kind !== "answer") {
-      return;
-    }
-    const predictions = armed.armings.filter((arming) => arming.surface === "predict").map((arming) => arming.prediction);
-    if (predictions.length === 0) {
-      return;
-    }
-    armPredict(deps.predict, pending.markdown, view.id, predictions);
-    deps.retrySurface.clear();
-    deps.repaint();
-  }
-  return retryPromotion;
-}
-
 // app/present/commit.ts
+function resolveAndArm(deps, view, commit) {
+  const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
+  deps.reportAbstentions(outcome.diagnostics);
+  armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
+  armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
+  return outcome;
+}
 function createCommitLine(deps) {
   async function commitLine(view, commit) {
     if (commit.markdown === null) {
       queueMicrotask(deps.drainPainted);
       return;
     }
-    const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
-    deps.reportAbstentions(outcome.diagnostics);
     if (commit.kind === "set-line") {
       deps.settle.supersede(commit.source, view.id, commit.lineIndex);
     }
+    resolveAndArm(deps, view, commit);
     deps.queued.drop(view.path);
-    armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
-    armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
     const token = mintWriteToken();
     try {
       const ops = lineOps(commit.kind, commit.lineIndex, commit.markdown);
@@ -7618,6 +7547,69 @@ function createCommitLine(deps) {
     }
   }
   return commitLine;
+}
+
+// app/present/graph-refresh-retry.ts
+var GraphRefreshRetrySurface = class {
+  #source = null;
+  #view = "";
+  #commit = null;
+  #etag = null;
+  /**
+   * `commit` (committed against `view`, producing `source` — `commit.markdown`, the same base
+   * `armSettle`/`armPredict` key against) ran its resolver walk against the graph blob at `etag`
+   * (`graphCache.etag()` at the moment `commit`'s own context was built). Called on EVERY commit,
+   * unconditionally — see this class's own header for why there is no gate on what any resolver
+   * decided. Overwrites whatever was pending before.
+   */
+  arm(source, view, commit, etag) {
+    this.#source = source;
+    this.#view = view;
+    this.#commit = commit;
+    this.#etag = etag;
+  }
+  /**
+   * The commit pending retry for the EXACT `source`/`view` still on screen, when the graph blob's
+   * OWN etag has genuinely moved since that commit's context was built — or `null` when there is
+   * nothing pending, the pending retry belongs to a different view, the operator has typed
+   * something else since, or (`currentEtag` unchanged) the graph has not actually moved and
+   * re-deriving would only repeat the identical walk. Does not clear on its own — the caller
+   * clears once it has actually used the answer (see `createGraphRefreshRetry`).
+   */
+  pending(source, view, currentEtag) {
+    if (this.#source !== source || this.#view !== view) {
+      return null;
+    }
+    if (this.#etag === currentEtag) {
+      return null;
+    }
+    return this.#commit;
+  }
+  /** The retry ran (whatever it found), or the operator moved on some other way this class was
+   * not built to detect on its own. Nothing left pending for a later refresh to find. */
+  clear() {
+    this.#source = null;
+    this.#view = "";
+    this.#commit = null;
+    this.#etag = null;
+  }
+};
+function createGraphRefreshRetry(deps) {
+  function retryGraphRefresh() {
+    const view = deps.currentView();
+    if (view === null) {
+      return;
+    }
+    const currentEtag = deps.currentEtag();
+    const pending = deps.retrySurface.pending(deps.paintedSource(), view.id, currentEtag);
+    if (pending === null) {
+      return;
+    }
+    resolveAndArm(deps, view, pending);
+    deps.retrySurface.clear();
+    deps.repaint();
+  }
+  return retryGraphRefresh;
 }
 
 // app/shell/drawer.ts
@@ -7912,7 +7904,7 @@ export {
   DEFAULT_TRAVERSAL_DEPTH,
   DraftSurface,
   FocusSurface,
-  GRAPH_RETRYABLE_ABSTENTIONS,
+  GraphRefreshRetrySurface,
   INDENT_UNIT,
   LANDING_VIEW_KEY,
   ModeSurface,
@@ -7925,7 +7917,6 @@ export {
   PresentationCascade,
   PresentationContext,
   ProjectionQueue,
-  PromotionRetrySurface,
   QUALIFICATION_KEY,
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,
@@ -7967,7 +7958,7 @@ export {
   coverageOf,
   createCommitLine,
   createGraphBlobCache,
-  createRetryPromotion,
+  createGraphRefreshRetry,
   declarationFrom,
   defaultOrderingFor,
   defaultOrderingPlacementFor,
@@ -8028,6 +8019,7 @@ export {
   rebaseLineEdit,
   relativeAnchorFor,
   renderRuleEffects,
+  resolveAndArm,
   resolveInstanceAnchor,
   resolveLineFields,
   resolveLogicalDate,

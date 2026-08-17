@@ -22,15 +22,32 @@
  *      real `>` keypress — the write posts, and NO prediction is armed. This is the bug itself,
  *      falsified here before the fix's own mechanism ever runs.
  *   2. THE RETRY, PROVEN. The graph blob refreshes with a NEW ETag that now carries the child —
- *      driven through the real `refreshGraphBlobAndRetryPromotion` wrapper both real trigger
+ *      driven through the real `refreshGraphBlobAndRetryGraphRefresh` wrapper both real trigger
  *      points (`installProjection`, `loadGraph`) call — and the CORRECT prediction (the parent's
  *      own row, `#outcome`) is now armed, through the real `PredictSurface`.
  *   3. STALENESS IS RESPECTED. If the operator types something else before the fresh refresh
- *      lands, the retry must be discarded, never applied — `PromotionRetrySurface`'s own "matches
- *      by exact source string" discipline, proven directly rather than assumed.
+ *      lands, the retry must be discarded, never applied — `GraphRefreshRetrySurface`'s own
+ *      "matches by exact source string" discipline, proven directly rather than assumed.
  *   4. A 304 RETRIES NOTHING. An unchanged blob (the ETag the operator's own client already holds)
- *      must not re-ask promotion at all — asking again against unchanged data could only repeat
- *      the identical abstain.
+ *      must not re-derive the pending commit at all — asking again against unchanged data could
+ *      only repeat the identical walk.
+ *
+ * ── RENAMED 2026-08-17, SAME DAY: THE MECHANISM GENERALISED, THIS PROOF DID NOT CHANGE ──
+ *
+ * `PromotionRetrySurface`/`createRetryPromotion` (`app/present/retry.ts`) — promotion-specific,
+ * keyed off `promotionSpec`'s own abstain reasons — were replaced by `GraphRefreshRetrySurface`/
+ * `createGraphRefreshRetry` (`app/present/graph-refresh-retry.ts`), keyed off the graph blob
+ * cache's own ETag instead: a commit is worth re-deriving whenever the ETag its own context was
+ * built against differs from the one the cache holds now, regardless of which resolver would
+ * benefit or whether anything explicitly abstained. Every assertion below is unchanged from
+ * before that generalisation — only the hook names (`__graphRefreshRetry`,
+ * `__refreshGraphBlobAndRetryGraphRefresh`) and `pending()`'s own signature (it now also takes the
+ * ETag to compare against — a page-level caller reads `graphCache.etag()`; a precondition check
+ * here that only wants to know "is SOMETHING armed for this source/view" passes `PRECONDITION_ETAG`,
+ * a sentinel guaranteed not to equal any real ETag this file ever sets, so the comparison always
+ * falls through to source/view matching alone). `tests/app-ordering-retries-on-graph-refresh.
+ * test.mjs` is the new proof this generalisation exists for: the identical mechanism, driven
+ * through ordering's own silent-fallback defect rather than promotion's abstain.
  */
 
 import { test, describe } from "node:test";
@@ -72,6 +89,11 @@ const GRAPH_WITH_CHILD = {
 
 const ETAG_STALE = '"blob-without-child"';
 const ETAG_FRESH = '"blob-with-child"';
+
+// A sentinel `pending()`'s own ETag comparison can never equal — see this file's own header for
+// why a precondition check that only wants "is something armed" (never "is it retryable right
+// now") passes this rather than a real ETag.
+const PRECONDITION_ETAG = "test-sentinel-etag-never-real";
 
 const settle = () => new Promise((r) => setImmediate(r));
 
@@ -150,7 +172,7 @@ describe("1. THE STALE WINDOW, REPRODUCED — an indent with the child not yet i
 
     // THE GRAPH BLOB IS FETCHED ONCE, MISSING THE CHILD — the moment `installProjection`'s own
     // trigger would have fired for the parent's own earlier write, well before the child existed.
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
     assert.deepEqual(page.__graphBlob(), { graph: GRAPH_WITHOUT_CHILD });
 
     press("j"); // line 1: the parent
@@ -169,8 +191,8 @@ describe("1. THE STALE WINDOW, REPRODUCED — an indent with the child not yet i
 
     // AND THE RETRY WAS ARMED IN ITS PLACE — the mechanism this file exists to prove, about to be
     // exercised in section 2.
-    const pending = page.__promotionRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id);
-    assert.notEqual(pending, null, "promotionRetry must remember this commit for when the graph catches up");
+    const pending = page.__graphRefreshRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id, PRECONDITION_ETAG);
+    assert.notEqual(pending, null, "graphRefreshRetry must remember this commit for when the graph catches up");
     assert.equal(pending.lineIndex, 2);
   });
 });
@@ -178,7 +200,7 @@ describe("1. THE STALE WINDOW, REPRODUCED — an indent with the child not yet i
 describe("2. THE RETRY, PROVEN — a fresh graph blob carrying the child gives promotion a second chance", () => {
   test("the fresh refresh arms the correct prediction, through the real PredictSurface", async () => {
     const { page, press, setBlob } = await freshPage("retry-fresh-graph");
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
 
     press("j");
     press("j");
@@ -186,11 +208,11 @@ describe("2. THE RETRY, PROVEN — a fresh graph blob carrying the child gives p
     await settle();
 
     assert.equal(page.__predict().take(AFTER_INDENT, PROMOTION_VIEW.id), null, "precondition: still abstained");
-    assert.notEqual(page.__promotionRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id), null, "precondition: retry armed");
+    assert.notEqual(page.__graphRefreshRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id, PRECONDITION_ETAG), null, "precondition: retry armed");
 
     // THE GRAPH CATCHES UP — a genuinely fresh fetch (a new ETag), now carrying the child.
     setBlob(GRAPH_WITH_CHILD, ETAG_FRESH);
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
 
     assert.deepEqual(page.__graphBlob(), { graph: GRAPH_WITH_CHILD });
 
@@ -206,20 +228,20 @@ describe("2. THE RETRY, PROVEN — a fresh graph blob carrying the child gives p
     assert.doesNotMatch(instruction.predictions[0].fullText, /#task/, "the swap must replace #task, not append beside it");
 
     // AND THE RETRY IS CONSUMED — a second fresh refresh must not re-arm the identical claim.
-    assert.equal(page.__promotionRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id), null, "the retry must clear once it succeeds");
+    assert.equal(page.__graphRefreshRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id, PRECONDITION_ETAG), null, "the retry must clear once it succeeds");
   });
 });
 
 describe("3. STALENESS IS RESPECTED — a retry armed against a source the operator has since edited is discarded, not applied", () => {
   test("a later, unrelated projection landing moves paintedSource past the pending retry's own key", async () => {
     const { page, press, setBlob } = await freshPage("retry-stale-source");
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
 
     press("j");
     press("j");
     press(">");
     await settle();
-    assert.notEqual(page.__promotionRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id), null, "precondition: retry armed");
+    assert.notEqual(page.__graphRefreshRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id, PRECONDITION_ETAG), null, "precondition: retry armed");
 
     // THE WORLD MOVED WHILE HE STAYED PUT — a projection for an EDIT UNRELATED to the pending
     // retry lands (a rename on the parent's own row, nothing to do with the child's indent), the
@@ -240,7 +262,7 @@ describe("3. STALENESS IS RESPECTED — a retry armed against a source the opera
     // THE GRAPH NOW CATCHES UP — but the retry armed above was for `AFTER_INDENT`, a source no
     // longer on screen (`RENAMED`, just installed, is).
     setBlob(GRAPH_WITH_CHILD, ETAG_FRESH);
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
 
     // THE STALE RETRY MUST NEVER APPLY. Read against the ORIGINAL source it was armed against —
     // exactly the discipline `PredictSurface` itself already keeps.
@@ -258,20 +280,20 @@ describe("3. STALENESS IS RESPECTED — a retry armed against a source the opera
 describe("4. A 304 RETRIES NOTHING — an unchanged blob must not re-ask promotion at all", () => {
   test("the same ETag comes back — no retry attempt, nothing armed", async () => {
     const { page, press } = await freshPage("retry-unchanged-blob");
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
 
     press("j");
     press("j");
     press(">");
     await settle();
-    assert.notEqual(page.__promotionRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id), null, "precondition: retry armed");
+    assert.notEqual(page.__graphRefreshRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id, PRECONDITION_ETAG), null, "precondition: retry armed");
 
     // THE SAME BLOB, REFETCHED — a 304, unchanged. Still missing the child.
-    await page.__refreshGraphBlobAndRetryPromotion();
+    await page.__refreshGraphBlobAndRetryGraphRefresh();
 
     assert.equal(page.__predict().take(AFTER_INDENT, PROMOTION_VIEW.id), null, "a 304 must never arm a prediction");
     assert.notEqual(
-      page.__promotionRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id),
+      page.__graphRefreshRetry().pending(AFTER_INDENT, PROMOTION_VIEW.id, PRECONDITION_ETAG),
       null,
       "the retry must stay pending for the NEXT genuinely fresh refresh, not be dropped on a 304",
     );

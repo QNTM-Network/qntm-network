@@ -54,10 +54,84 @@
 import { lineOps, type LineOp } from "./source.js";
 import { RESOLVERS } from "./resolvers/registry.js";
 import { runResolvers, armSettle, armPredict } from "./resolve.js";
-import type { CommitContext, Diagnostic, PredictArm } from "./resolve.js";
+import type { CommitContext, CommitOutcome, Diagnostic, PredictArm, SettleArm } from "./resolve.js";
 import type { LineCommit } from "./paint.js";
 import { rebaseLineEdit } from "./rebase.js";
 import { mintWriteToken } from "./correlation.js";
+
+/**
+ * THE VIEW A RESOLVER WALK IS ASKED AGAINST, NARROWED TO WHAT `resolveAndArm` ITSELF NEEDS — the
+ * same `{id, sections?}` shape `resolve.ts`'s own `ViewIdentity` already names, restated here
+ * (rather than imported) for the identical reason `retry.ts`'s old `RetryPromotionView` restated
+ * it: a caller of THIS function should not have to import a type from `resolve.ts` just to
+ * describe "the view on screen". `CommitLineView` (below) is a strict superset — `path` is the
+ * WRITE path's own business, and this function never writes anything.
+ */
+export interface ResolveAndArmView {
+  readonly id: string;
+  readonly sections?: readonly string[];
+}
+
+/**
+ * EVERYTHING `resolveAndArm` NEEDS FROM WHOEVER CALLS IT — the four-line block `commitLine` used
+ * to run inline, narrowed to exactly the fields it reads. `CommitLineDeps` (below) satisfies this
+ * structurally without change: `settle`/`predict` are unnarrowed supersets (`CommitLineSettle`
+ * adds `supersede`, which this function never calls) and `buildContext`/`reportAbstentions` are
+ * verbatim.
+ */
+export interface ResolveAndArmDeps {
+  /** `resolverContextFor(view, commit)`, unmoved, on the page — see `CommitLineDeps.buildContext`'s
+   * own comment for why this is a function and not a value. */
+  buildContext(view: ResolveAndArmView, commit: LineCommit): CommitContext;
+  /** `reportAbstentions(diagnostics)`, unmoved, on the page. */
+  reportAbstentions(diagnostics: readonly Diagnostic[]): void;
+  readonly settle: SettleArm;
+  readonly predict: PredictArm;
+}
+
+/**
+ * RUN THE REGISTRY, REPORT WHAT IT REFUSED, ARM WHATEVER IT DECIDED — THE ONE STEP EVERY COMMIT
+ * TAKES, WRITE OR RETRY, AND THE ONLY PLACE `runResolvers`/`armSettle`/`armPredict` ARE EVER
+ * CALLED.
+ *
+ * ── WHY THIS IS ITS OWN FUNCTION (2026-08-17) ──
+ *
+ * Extracted out of `commitLine`'s body so a LATER, NO-WRITE TRIGGER — a graph refresh landing
+ * fresh, re-deriving a commit already posted — can run the identical step without a second,
+ * hand-copied `runResolvers`/`reportAbstentions`/`armSettle`/`armPredict` sequence living
+ * somewhere else. The operator's own words, on the FIRST shape this took (a promotion-only retry
+ * surface, `app/present/retry.ts`, since deleted): "we shouldn't have dual pathways, just the
+ * right governing class for how things should be done." This function is that governing class —
+ * `commitLine` (below) calls it for the write path; `createGraphRefreshRetry`
+ * (`graph-refresh-retry.ts`) calls the SAME function, unmodified, for the refresh path. Nothing
+ * about "which resolver decided what" is known by either caller; both simply ask "run the walk,
+ * arm whatever it found" and let the registry answer for itself.
+ *
+ * ── WHAT DELIBERATELY STAYED IN `commitLine`, AND WHY ──
+ *
+ * `settle.supersede` (a stale claim about the row THIS commit is re-touching, discarded before a
+ * fresh one can replace it) and `queued.drop` (whatever was queued for this write's own path is
+ * now stale) are both WRITE-PATH facts — a retry re-derives an ALREADY-POSTED commit against a
+ * fresher graph, and neither "this write is happening again" (it is not) nor "the queue for this
+ * path is stale" (nothing new is being queued) is true of that. Folding them in here would give a
+ * retry two side effects it has no business having. `commitLine` still calls `supersede` itself,
+ * before this function runs — see that function's own comment for why the order it calls things
+ * in still lands `supersede` strictly before `armSettle` reaches the same row, which is the one
+ * ordering fact `settle.ts`'s own header (`supersede`'s doc comment) actually depends on.
+ */
+export function resolveAndArm(
+  deps: ResolveAndArmDeps,
+  view: ResolveAndArmView,
+  commit: LineCommit,
+): CommitOutcome {
+  const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
+  deps.reportAbstentions(outcome.diagnostics);
+  // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST — see
+  // `armSettle`/`armPredict`'s own headers (resolve.ts) for why the two are not symmetric.
+  armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
+  armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
+  return outcome;
+}
 
 /**
  * The view a commit was made against, narrowed to what `commitLine` itself reads. A superset of
@@ -184,20 +258,30 @@ export function createCommitLine(
       queueMicrotask(deps.drainPainted);
       return;
     }
-    // ── ONE CONTEXT, ONE WALK, AND THIS FUNCTION NAMES NO RESOLVER ── (unchanged from the page)
-    const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
-    deps.reportAbstentions(outcome.diagnostics);
-    // A SECOND COMMIT TO THE ROW `settle` IS CURRENTLY ARMED FOR, BEFORE THE WALK ABOVE CAN
-    // RE-ARM IT — see settle.ts's own header. Scoped to `"set-line"`, unchanged.
+    // A SECOND COMMIT TO THE ROW `settle` IS CURRENTLY ARMED FOR, BEFORE THE WALK BELOW CAN
+    // RE-ARM IT — see settle.ts's own header. Scoped to `"set-line"`, unchanged. MOVED AHEAD OF
+    // THE WALK (2026-08-17, `resolveAndArm`'s own extraction) rather than left between
+    // `runResolvers` and `armSettle` — `supersede` reads only `commit.source`/`view.id`/
+    // `commit.lineIndex`, none of which the walk produces, so it does not depend on running after
+    // it; what DOES matter, and is unchanged, is that this still runs strictly before `armSettle`
+    // (inside `resolveAndArm`, immediately below) reaches the same row — see `SettleSurface.
+    // supersede`'s own doc comment for why that one ordering fact, and only that one, is load-
+    // bearing.
     if (commit.kind === "set-line") {
       deps.settle.supersede(commit.source, view.id, commit.lineIndex);
     }
+    // ── ONE CONTEXT, ONE WALK, ONE ARM — AND THIS FUNCTION NAMES NO RESOLVER ── `resolveAndArm`
+    // (above) is the extracted step: `runResolvers`, `reportAbstentions`, `armSettle`, `armPredict`,
+    // in that order — the SAME sequence a graph-refresh retry runs later, unmodified, for a commit
+    // this walk already decided once. See that function's own header for why it is a function at
+    // all rather than left inline.
+    resolveAndArm(deps, view, commit);
     // WHATEVER IS STILL QUEUED FOR THIS PATH IS NOW STALE — see the original's own long comment,
-    // unchanged, still on the page beside `queued`'s own declaration.
+    // unchanged, still on the page beside `queued`'s own declaration. Independent of `settle`/
+    // `predict` (a different surface, a different kind of staleness), so its position relative to
+    // `resolveAndArm` above is not load-bearing either way; kept after, closest to where the write
+    // itself begins.
     deps.queued.drop(view.path);
-    // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST.
-    armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
-    armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
     const token = mintWriteToken();
     try {
       // THE EDIT, NO LONGER DISCARDED. Derived from the commit's own `kind` and `lineIndex`, with

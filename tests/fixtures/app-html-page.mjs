@@ -198,13 +198,13 @@ export const __graphBlobEtag = () => graphCache.etag();
 export function __setGraphBlob(next) { graphCache.setBlob(next); }
 export function __setGraphBlobEtag(next) { graphCache.setEtag(next); }
 export const __refreshGraphBlob = () => graphCache.refresh();
-// THE GRAPH RETRY ARM (app/present/retry.ts) — \`__promotionRetry\` is a getter, the same reason
-// \`__predict\`/\`__settle\` are: a suite reads what the page is holding NOW.
-// \`__refreshGraphBlobAndRetryPromotion\` drives the REAL wrapper both real trigger points
+// THE GRAPH REFRESH RETRY (app/present/graph-refresh-retry.ts) — \`__graphRefreshRetry\` is a
+// getter, the same reason \`__predict\`/\`__settle\` are: a suite reads what the page is holding
+// NOW. \`__refreshGraphBlobAndRetryGraphRefresh\` drives the REAL wrapper both real trigger points
 // (\`installProjection\`, \`loadGraph\`) call — the fetch AND the fresh-ETag-triggered retry
 // together, exactly as production wires them, rather than either half alone.
-export const __promotionRetry = () => promotionRetry;
-export const __refreshGraphBlobAndRetryPromotion = () => refreshGraphBlobAndRetryPromotion();
+export const __graphRefreshRetry = () => graphRefreshRetry;
+export const __refreshGraphBlobAndRetryGraphRefresh = () => refreshGraphBlobAndRetryGraphRefresh();
 export const __drawerIsOpen = () => drawerIsOpen;
 // VIM. \`mode\` and \`focus\` are module-scoped consts, same shape as \`currentViewId\` above —
 // getters rather than raw exports so a test reads the live value instead of a snapshot from

@@ -661,34 +661,67 @@ describe("8. `commitLine` names no resolver — it builds a context, walks the r
     }
   });
 
-  test("it walks the registry exactly once and arms exactly what does real work with what comes back", () => {
+  // `resolveAndArm` — the extracted "run resolvers, report abstentions, arm settle, arm predict"
+  // step (2026-08-17, so the SAME sequence can be reused by a graph-refresh retry without a second,
+  // hand-copied one living elsewhere — see commit.ts's own header on that function). `commitLine`
+  // itself now reaches all four calls only by calling THIS function; the assertions this section
+  // used to make directly against `commitLineBody` for those four calls now check `resolveAndArm`'s
+  // own body instead, extracted the identical way `commitLineBody` above is (a literal start/end
+  // marker into the raw source, so a future edit that moves the boundary breaks this test rather
+  // than silently stops checking anything).
+  const resolveAndArmBody = (() => {
+    const at = COMMIT_SOURCE.indexOf("export function resolveAndArm(");
+    assert.ok(at > 0, "resolveAndArm was not found — this test is checking the wrong source");
+    const end = COMMIT_SOURCE.indexOf("\n  return outcome;\n}", at);
+    assert.ok(end > at, "resolveAndArm's own closing could not be found — this test is checking the wrong source");
+    return COMMIT_SOURCE.slice(at, end);
+  })();
+
+  test("commitLine reaches the walk through resolveAndArm, exactly once, and calls none of its four steps directly", () => {
     // `deps.buildContext(view, commit)`, not the bare `resolverContextFor(view, commit)` the page
     // used to call directly — `resolverContextFor` itself DID NOT move (see commit.ts's own header
-    // for why); this module reaches it only through the deps object.
-    assert.match(commitLineBody, /runResolvers\(RESOLVERS, deps\.buildContext\(view, commit\)\)/);
-    assert.equal((commitLineBody.match(/runResolvers\(/g) ?? []).length, 1);
+    // for why); `resolveAndArm` reaches it only through the deps object (checked below, on
+    // `resolveAndArm`'s own body).
+    const codeOnly = commitLineBody.replace(/\/\/.*$/gm, "");
+    assert.match(codeOnly, /resolveAndArm\(deps, view, commit\)/, "commitLine must reach the resolver walk through resolveAndArm");
+    assert.equal((codeOnly.match(/resolveAndArm\(/g) ?? []).length, 1, "commitLine must call resolveAndArm exactly once");
+    // NONE of the four calls `resolveAndArm` itself makes may ALSO appear directly in commitLine's
+    // own body — a second, hand-copied call here would be exactly the duplication `resolveAndArm`
+    // exists to prevent (see that function's own header).
+    for (const call of ["runResolvers(", "armSettle(", "armPredict("]) {
+      assert.doesNotMatch(
+        codeOnly,
+        new RegExp(call.replace(/[()]/g, "\\$&")),
+        `commitLine must not call ${call} directly — that belongs to resolveAndArm alone`,
+      );
+    }
+  });
+
+  test("resolveAndArm walks the registry exactly once and arms exactly what does real work with what comes back", () => {
+    assert.match(resolveAndArmBody, /runResolvers\(RESOLVERS, deps\.buildContext\(view, commit\)\)/);
+    assert.equal((resolveAndArmBody.match(/runResolvers\(/g) ?? []).length, 1);
     // `outcome.notes.join(" · ")` (the freshness line's prediction clause) is GONE
-    // (chore/retire-the-status-line) and STAYS gone — commitLine must never re-narrate what it
+    // (chore/retire-the-status-line) and STAYS gone — `resolveAndArm` must never re-narrate what it
     // already decided into an on-screen sentence, the operator's own reason for killing it.
     //
     // `outcome.diagnostics` IS DIFFERENT, AND IS DELIBERATELY BACK (2026-08-07,
     // design-the-rule-mirror.md §9.2 / roadmap-the-road-ahead.md step 2) — but ONLY through
     // `reportAbstentions`, which narrows to genuine refusals (`abstentionsOf`) and writes to
     // `console.debug`, never a DOM badge. `tests/app-abstention-diagnostic.test.mjs` is the
-    // falsifier for that mechanism; this test only pins that `commitLine`'s OWN body reads the
+    // falsifier for that mechanism; this test only pins that `resolveAndArm`'s OWN body reads the
     // field through that one function and no other way.
-    // CODE ONLY — commitLine's own comment explains what used to be here, in prose, and a bare
+    // CODE ONLY — resolveAndArm's own comment explains what used to be here, in prose, and a bare
     // string search would mistake that sentence for the code it describes.
-    const codeOnly = commitLineBody.replace(/\/\/.*$/gm, "");
-    assert.doesNotMatch(codeOnly, /outcome\.notes\b/, "commitLine still reads outcome.notes — the retired narration is back");
+    const codeOnly = resolveAndArmBody.replace(/\/\/.*$/gm, "");
+    assert.doesNotMatch(codeOnly, /outcome\.notes\b/, "resolveAndArm still reads outcome.notes — the retired narration is back");
     assert.equal(
       (codeOnly.match(/outcome\.diagnostics\b/g) ?? []).length,
       1,
-      "commitLine must read outcome.diagnostics exactly once, and only to hand it to reportAbstentions",
+      "resolveAndArm must read outcome.diagnostics exactly once, and only to hand it to reportAbstentions",
     );
-    assert.match(codeOnly, /deps\.reportAbstentions\(outcome\.diagnostics\)/, "commitLine must route outcome.diagnostics through reportAbstentions, never a bare loop or a DOM write");
-    assert.match(commitLineBody, /armSettle\(deps\.settle, commit\.markdown, view\.id, outcome\.placements\)/);
-    assert.match(commitLineBody, /armPredict\(deps\.predict, commit\.markdown, view\.id, outcome\.predictions\)/);
+    assert.match(codeOnly, /deps\.reportAbstentions\(outcome\.diagnostics\)/, "resolveAndArm must route outcome.diagnostics through reportAbstentions, never a bare loop or a DOM write");
+    assert.match(resolveAndArmBody, /armSettle\(deps\.settle, commit\.markdown, view\.id, outcome\.placements\)/);
+    assert.match(resolveAndArmBody, /armPredict\(deps\.predict, commit\.markdown, view\.id, outcome\.predictions\)/);
   });
 
   test("MUTATION PROOF: a page that named one axis fails the grep above", () => {

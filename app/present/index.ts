@@ -334,28 +334,34 @@ export { RESOLVERS } from "./resolvers/registry.js";
 export { createGraphBlobCache } from "./graph.js";
 export type { GraphBlobCache, GraphBlobDeps } from "./graph.js";
 
-// ── THE PROMOTION RETRY SURFACE — WHICH ROW MOST RECENTLY ABSTAINED FOR A GRAPH REASON ──
+// ── THE GRAPH REFRESH RETRY SURFACE — WHICH COMMIT'S WALK RAN AGAINST A GRAPH THAT HAS SINCE
+//    GONE STALE (renamed 2026-08-17 from the promotion-specific `PromotionRetrySurface`/
+//    `retry.ts` — see graph-refresh-retry.ts's own header for why) ──
 //
-// See retry.ts's own header: a small PURE surface, the same shape `PredictSurface`/`SettleSurface`
-// already are, tracking the one commit a graph refresh should re-offer to `promotionSpec.read`.
-// `createRetryPromotion(deps)` is the connecting act for THAT surface — the identical
-// "createCommitLine(deps)" shape, so the second `armPredict` call site a retry needs lives under
-// `app/present/` rather than on the page (see that factory's own header for why).
-export { PromotionRetrySurface, GRAPH_RETRYABLE_ABSTENTIONS, createRetryPromotion } from "./retry.js";
-export type { RetryPromotionDeps, RetryPromotionView } from "./retry.js";
+// A small PURE surface, the same shape `PredictSurface`/`SettleSurface` already are, tracking the
+// one commit a graph refresh should re-derive through `resolveAndArm` (commit.ts).
+// `createGraphRefreshRetry(deps)` is the connecting act for THAT surface — the identical
+// "createCommitLine(deps)" shape, reusing the SAME `resolveAndArm` step `commitLine` itself calls
+// rather than naming any resolver of its own.
+export { GraphRefreshRetrySurface, createGraphRefreshRetry } from "./graph-refresh-retry.js";
+export type { GraphRefreshRetryDeps, GraphRefreshRetryView } from "./graph-refresh-retry.js";
 
 // ── commitLine ITSELF — THE CONNECTING ACT, RELOCATED (see commit.ts's own header) ──
 //
 // `app/index.html` used to hand-author this function; it now constructs one via
 // `createCommitLine(deps)`, once, at page scope. See commit.ts for what stayed on the page
-// (`resolverContextFor`, `reportAbstentions`) and why.
-export { createCommitLine } from "./commit.js";
+// (`resolverContextFor`, `reportAbstentions`) and why, and for `resolveAndArm` — the "run
+// resolvers, report abstentions, arm settle, arm predict" step both `commitLine` and a graph
+// refresh retry share, extracted 2026-08-17 so neither reimplements it.
+export { createCommitLine, resolveAndArm } from "./commit.js";
 export type {
   CommitLineDeps,
   CommitLineQueue,
   CommitLineSettle,
   CommitLineView,
   CommitLineWrites,
+  ResolveAndArmDeps,
+  ResolveAndArmView,
 } from "./commit.js";
 // THE SPECS THEMSELVES, BESIDE THE REGISTRY THAT ERASES THEM. `RESOLVERS` holds `Resolver`s, whose
 // reading type is deliberately erased (see `Resolver`'s own header) — a caller that wants to drive

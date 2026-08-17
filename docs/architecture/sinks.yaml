@@ -230,9 +230,11 @@ sinks:
 # function through which every resolver's answer must pass before it can" does.
 
 # ══════════════════════════════════════════════════════════════════════════════════════════════
-# ADDED 2026-08-17 — the graph read for a CROSS-LINE decision (`promotion` is the one resolver
-# of the four that needs one; see classes.yaml's `graph-aware-resolution-reads-one-modelled-graph`
-# for why this is a class named before it is built, and the live defect that named it).
+# ADDED 2026-08-17 — the graph read for a CROSS-LINE decision. `promotion` is the resolver this
+# ONE sink governs; `ordering`'s own `classifierFor` reads `ctx.graph` for the identical reason and
+# is covered by the same class without a sink of its own (see classes.yaml's
+# `graph-aware-resolution-reads-one-modelled-graph`, corrected the same day from an earlier version
+# of this note that named promotion as the only one of the four that needs the graph — it is not).
 # ══════════════════════════════════════════════════════════════════════════════════════════════
   - id: structural-node-candidate-is-the-graph-read-for-cross-line-resolution
     sink: app/present/resolvers/promotion:structuralNodeCandidateFor

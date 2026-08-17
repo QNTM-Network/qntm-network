@@ -412,25 +412,29 @@ describe("6. THE WRITE PATH IS UNTOUCHED", () => {
       assert.doesNotMatch(source, /\.text\s*=(?!=)/, `${name} assigns .text`);
       assert.doesNotMatch(source, /\bonLineCommit\b|\bonCheckboxToggle\b/, `${name} reaches a write callback`);
     }
-    // THE CALL SITE, RELOCATED (2026-08-07). `armPredict` used to be reached from exactly one
-    // place ON THE PAGE, inside hand-authored `commitLine`; `commitLine` itself has since moved to
-    // app/present/commit.ts (see that module's own header — the relocation this leg's brief asked
-    // for, so a caller-chain probe can see it call `runResolvers`) and the call moved with it.
+    // THE CALL SITE, RELOCATED (2026-08-07), THEN SHARED (2026-08-17). `armPredict` used to be
+    // reached from exactly one place ON THE PAGE, inside hand-authored `commitLine`; `commitLine`
+    // itself has since moved to app/present/commit.ts (see that module's own header — the
+    // relocation this leg's brief asked for, so a caller-chain probe can see it call
+    // `runResolvers`) and the call moved with it.
     //
-    // A SECOND CALL SITE JOINED IT (2026-08-17), AND THE INVARIANT NARROWED RATHER THAN BROKE —
-    // see `app/present/retry.ts`'s `createRetryPromotion` for the reason: a graph refresh landing
-    // fresh is a SECOND, LATER trigger for the identical surface (a commit's own abstain, given a
-    // second chance once the graph catches up — `docs/architecture/classes.yaml`'s
-    // `graph-aware-resolution-reads-one-modelled-graph`), and it earns its own call site rather
-    // than being folded into `commit.ts`'s. What stays true, checked below, is the part that
-    // matters: `app/index.html` itself still calls `armPredict` NOWHERE — every trigger reaches it
-    // through a real module under `app/present/`, never directly from the page.
+    // A SECOND TRIGGER JOINED IT (2026-08-17) AND THE INVARIANT TIGHTENED RATHER THAN LOOSENED —
+    // a graph refresh landing fresh is a SECOND, LATER opportunity to re-derive a commit already
+    // decided once (`docs/architecture/classes.yaml`'s `graph-aware-resolution-reads-one-modelled-
+    // graph`), but it reaches `armPredict` THROUGH `commit.ts`'s own `resolveAndArm` — the exact
+    // "run resolvers, report abstentions, arm settle, arm predict" step `commitLine` itself calls
+    // — rather than a second, hand-copied call. So `armPredict` still has exactly ONE call site in
+    // the whole bundle, reused by both triggers, which is a stronger claim than "one per trigger"
+    // ever was. `app/present/graph-refresh-retry.ts` (the promotion-specific `retry.ts` it
+    // replaced) calls `resolveAndArm`, never `armPredict` directly — checked below, alongside the
+    // part that has always been true: `app/index.html` itself calls `armPredict` NOWHERE.
     const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
     assert.equal((APP_SOURCE.match(/\barmPredict\(/g) ?? []).length, 0, "app/index.html must call armPredict nowhere — every trigger routes through app/present/");
     const COMMIT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "commit.ts"), "utf8");
-    assert.equal((COMMIT_SOURCE.match(/\barmPredict\(/g) ?? []).length, 1, "the fresh-commit trigger must arm predict from exactly one place");
-    const RETRY_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "retry.ts"), "utf8");
-    assert.equal((RETRY_SOURCE.match(/\barmPredict\(/g) ?? []).length, 1, "the graph-refresh retry trigger must arm predict from exactly one place");
+    assert.equal((COMMIT_SOURCE.match(/\barmPredict\(/g) ?? []).length, 1, "armPredict must be called from exactly one place, reused by every trigger");
+    const RETRY_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "graph-refresh-retry.ts"), "utf8");
+    assert.equal((RETRY_SOURCE.match(/\barmPredict\(/g) ?? []).length, 0, "the graph-refresh retry trigger must reuse commit.ts's resolveAndArm, never call armPredict itself");
+    assert.match(RETRY_SOURCE, /\bresolveAndArm\(/, "the graph-refresh retry trigger must reach armPredict through the shared resolveAndArm step");
   });
 });
 

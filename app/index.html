@@ -1017,12 +1017,11 @@ import {
   NOT_YET_DECLARED,
   SettleSurface,
   PredictSurface,
-  // `PromotionRetrySurface`/`GRAPH_RETRYABLE_ABSTENTIONS`/`createRetryPromotion`
-  // (app/present/retry.ts) — see `promotionRetry`'s and `retryPromotionIfPending`'s own
-  // construction below and that module's own header.
-  PromotionRetrySurface,
-  GRAPH_RETRYABLE_ABSTENTIONS,
-  createRetryPromotion,
+  // `GraphRefreshRetrySurface`/`createGraphRefreshRetry` (app/present/graph-refresh-retry.ts) —
+  // see `graphRefreshRetry`'s and `retryGraphRefreshIfPending`'s own construction below and that
+  // module's own header.
+  GraphRefreshRetrySurface,
+  createGraphRefreshRetry,
   RowStore,
   existingLineCommit,
   rebaseLineEdit,
@@ -1038,11 +1037,6 @@ import {
   armSettle,
   armPredict,
   graphSnapshotOf,
-  // `promotionSpec` ITSELF, NAMED — the one resolver `promotionRetry`'s own retry needs to re-run
-  // directly (`promotionSpec.read`/`.arm`) rather than through the generic registry walk, because
-  // a retry is never "every axis re-evaluates this commit", only "the one axis that abstained for
-  // a reason a graph refresh can fix, asked again". See `retryPromotionIfPending`'s own comment.
-  promotionSpec,
   // ── THE VIEW COMPOSER (app/present/express/viewmarkdown.ts) ──
   // `computeViewMembers` + `composeNodeLine` + the published heading facts, joined into the one
   // string this page paints and takes its write base from. Reached only through `sourceOfView`
@@ -1081,7 +1075,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=42971e82fe";
+} from "/dist/present.js?v=38140ec408";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1398,12 +1392,13 @@ const settle = new SettleSurface();
 // into `paint()` is the only place it is ever read.
 const predict = new PredictSurface();
 
-// WHICH ROW'S PROMOTION MOST RECENTLY ABSTAINED FOR A GRAPH-RELATED REASON
-// (app/present/retry.ts) — one surface for the page, the same reason `settle`/`predict` are.
-// `commitLineAndArmRetry` (below) arms it; `refreshGraphBlobAndRetryPromotion` (below) is the only
-// place it is ever read. See retry.ts's own header for what closes and why an abstain alone
-// (never a decided answer) is worth remembering across the wait for fresh graph state.
-const promotionRetry = new PromotionRetrySurface();
+// WHICH COMMIT'S OWN RESOLVER WALK MOST RECENTLY RAN AGAINST A GRAPH THAT HAS SINCE GONE STALE
+// (app/present/graph-refresh-retry.ts) — one surface for the page, the same reason `settle`/
+// `predict` are. `commitLineAndArmGraphRefreshRetry` (below) arms it, unconditionally, on every
+// commit; `refreshGraphBlobAndRetryGraphRefresh` (below) is the only place it is ever read. See
+// graph-refresh-retry.ts's own header for why the signal is the graph blob's own ETag rather than
+// any one resolver's abstain reason.
+const graphRefreshRetry = new GraphRefreshRetrySurface();
 
 // WHAT THE SERVER LAST SENT FOR THE FILE ON SCREEN (app/present/base.ts). One surface for the page,
 // same reason as the three above — it has to survive the repaint it describes.
@@ -1608,10 +1603,10 @@ function installProjection(pending) {
   paintView(currentViewId, "arrived");
   // A fresh projection is the only signal available that the graph MIGHT have moved (see
   // `graphCache`'s own header) — fire-and-forget, never on the paint's own critical path.
-  // `refreshGraphBlobAndRetryPromotion`, not `graphCache.refresh()` directly, so a fresh answer
-  // also gives `promotionRetry`'s own pending commit, if any, a second chance — see that
+  // `refreshGraphBlobAndRetryGraphRefresh`, not `graphCache.refresh()` directly, so a fresh
+  // answer also gives `graphRefreshRetry`'s own pending commit, if any, a second chance — see that
   // function's own comment.
-  refreshGraphBlobAndRetryPromotion();
+  refreshGraphBlobAndRetryGraphRefresh();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
@@ -2493,7 +2488,7 @@ function repaintCurrentView() {
     // refused edit, which posts nothing exactly as it always did.
     onCheckboxToggle: (toggle) => {
       const commit = toggleTaskCommit(v, toggle);
-      if (commit !== null) commitLineAndArmRetry(v, commit);
+      if (commit !== null) commitLineAndArmGraphRefreshRetry(v, commit);
     },
     // ONE CALLBACK FOR BOTH KINDS OF WRITE, AND THAT IS THE POINT. A line replaced and a line
     // created arrive here identically — `commit.markdown` is the whole view source either way, and
@@ -2501,10 +2496,11 @@ function repaintCurrentView() {
     // write unit and one place a view is replaced; a second write path would have shown up as a
     // second callback here, and it did not.
     //
-    // `commitLineAndArmRetry`, NOT `commitLine` DIRECTLY — see that wrapper's own comment (beside
-    // `promotionRetry`'s construction). It calls the real `commitLine` unconditionally; the only
-    // thing it adds is remembering a graph-related abstain for a later retry.
-    onLineCommit: (commit) => commitLineAndArmRetry(v, commit),
+    // `commitLineAndArmGraphRefreshRetry`, NOT `commitLine` DIRECTLY — see that wrapper's own
+    // comment (beside `graphRefreshRetry`'s construction). It calls the real `commitLine`
+    // unconditionally; the only thing it adds is remembering this commit for a later retry,
+    // against whatever etag the graph blob cache holds right now.
+    onLineCommit: (commit) => commitLineAndArmGraphRefreshRetry(v, commit),
     // THE APP DECLINES TO OPEN A LINE IN THE SAME SITUATIONS AS BEFORE. See `newline.ts`'s own
     // header for exactly when that still happens now that `declared` (below) lets the GLOBAL rung
     // answer for more views than before — it is fewer situations than it used to be, never zero.
@@ -2979,70 +2975,80 @@ const commitLine = createCommitLine({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// THE GRAPH RETRY ARM (app/present/retry.ts) — GIVING PROMOTION A SECOND CHANCE ONCE THE GRAPH
-// CATCHES UP
+// THE GRAPH REFRESH RETRY (app/present/graph-refresh-retry.ts) — GIVING A COMMIT'S RESOLVER WALK
+// A SECOND CHANCE ONCE THE GRAPH CATCHES UP
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 //
-// THE LIVE DEFECT THIS CLOSES (2026-08-17): type a task, type a second task, indent the second
-// beneath the first. The parent should flip to `#outcome` immediately (an optimistic prediction),
-// matching what the engine's own cycle eventually confirms — but the child was still mid-flight
-// through its own write when the indent happened, so `graphCache.blob()` did not carry it yet and
-// `promotionSpec.read` correctly abstained `child-not-in-graph`. `installProjection` already
-// refreshes the graph blob on every projection it installs (see `graphCache`'s own header) — the
-// missing half was that NOTHING re-asked promotion once that refresh landed fresh. `classes.yaml`'s
-// `graph-aware-resolution-reads-one-modelled-graph` names this row.
+// TWO LIVE DEFECTS THIS CLOSES (both 2026-08-17), THE SAME MECHANISM FOR BOTH:
 //
-// `commitLineAndArmRetry` REPLACES `commitLine` AT BOTH ITS CALL SITES, BELOW — see `paint`'s own
-// `onCheckboxToggle`/`onLineCommit` deps. It calls `promotionSpec.read` A SECOND, INDEPENDENT TIME
-// per commit — pure, so the duplicate cost is a handful of comparisons, never a fetch — purely to
-// see whether THIS commit is one `promotionRetry` should remember. `commitLine` (`commit.ts`) is
-// deliberately unchanged and still names no resolver; the one axis this needs to know by name
-// lives here, on the page, the same way `resolverContextFor` and `reportAbstentions` already do.
-function commitLineAndArmRetry(view, commit) {
+//   PROMOTION: type a task, type a second task, indent the second beneath the first. The parent
+//   should flip to `#outcome` immediately (an optimistic prediction) — but the child was still
+//   mid-flight through its own write when the indent happened, so `graphCache.blob()` did not
+//   carry it yet and `promotionSpec.read` correctly abstained `child-not-in-graph`.
+//
+//   ORDERING: press `o` on the true last row of a list. `resolvers/ordering.ts`'s `classifierFor`
+//   depends on `ctx.graph` too, but does NOT abstain when the graph is stale — it silently falls
+//   back to a non-graph-aware default ordering and answers with THAT, wrong, placement, so the new
+//   line opens in the middle of the list rather than at the end.
+//
+// `installProjection` already refreshes the graph blob on every projection it installs (see
+// `graphCache`'s own header) — the missing half, for both, was that NOTHING re-derived the
+// commit once that refresh landed fresh. `classes.yaml`'s `graph-aware-resolution-reads-one-
+// modelled-graph` names this row. See `graph-refresh-retry.ts`'s own header for why the fix is
+// ONE generic mechanism (keyed off the graph blob's own ETag) rather than a retry surface per
+// resolver — the first, promotion-only shape of this fix could never have covered ordering's own
+// silent-fallback case, because ordering never abstains in a way a promotion-shaped retry would
+// even notice.
+//
+// `commitLineAndArmGraphRefreshRetry` REPLACES `commitLine` AT BOTH ITS CALL SITES, BELOW — see
+// `paint`'s own `onCheckboxToggle`/`onLineCommit` deps and `globalKeyDeps.commitLine` further
+// down. It arms `graphRefreshRetry` UNCONDITIONALLY, on every commit — no resolver is named or
+// consulted here, only the etag the graph blob cache holds right now. `commitLine` (`commit.ts`)
+// is deliberately unchanged and still names no resolver.
+function commitLineAndArmGraphRefreshRetry(view, commit) {
   if (commit.markdown !== null) {
-    const reading = promotionSpec.read(resolverContextFor(view, commit));
-    if (reading.kind === "abstains" && GRAPH_RETRYABLE_ABSTENTIONS.has(reading.because)) {
-      promotionRetry.arm(commit.markdown, view.id, commit);
-    }
+    graphRefreshRetry.arm(commit.markdown, view.id, commit, graphCache.etag());
   }
   return commitLine(view, commit);
 }
 
 /**
- * THE RETRY ATTEMPT ITSELF (app/present/retry.ts) — BUILT ONCE, THE IDENTICAL PATTERN
- * `createCommitLine(deps)` ESTABLISHES.
+ * THE RETRY ATTEMPT ITSELF (app/present/graph-refresh-retry.ts) — BUILT ONCE, THE IDENTICAL
+ * PATTERN `createCommitLine(deps)` ESTABLISHES.
  *
- * `armPredict` IS NOT CALLED HERE, AND THAT IS THE WHOLE REASON THIS IS A CONSTRUCTED FUNCTION
- * RATHER THAN A HAND-WRITTEN ONE. `tests/app-predict-wiring.test.mjs` §6 pins `armPredict` to
- * exactly one call site inside `commit.ts` and zero inside this page; a retry needs a SECOND call
- * site (the identical surface, armed by a later trigger), and `createRetryPromotion`'s own header
- * explains why that second site belongs under `app/present/`, not here. What stays page-shaped is
- * only what `resolverContextFor`/`paintedSource`/`currentViewId`/`paintView` already are.
+ * REACHES `resolveAndArm` (`commit.ts`), NOT `armSettle`/`armPredict` DIRECTLY — the SAME step
+ * `commitLine` itself calls for the write path, so this is the only other place either is ever
+ * reached, and it is reached through that one function rather than a second, hand-copied
+ * sequence. What stays page-shaped is only what `resolverContextFor`/`reportAbstentions`/
+ * `paintedSource`/`currentViewId`/`paintView` already are.
  */
-const retryPromotionIfPending = createRetryPromotion({
-  retrySurface: promotionRetry,
+const retryGraphRefreshIfPending = createGraphRefreshRetry({
+  retrySurface: graphRefreshRetry,
   buildContext: (view, commit) => resolverContextFor(view, commit),
+  reportAbstentions,
+  settle,
   predict,
   currentView: () => graphData?.snapshot?.views.find((x) => x.id === currentViewId) ?? null,
   paintedSource: () => paintedSource,
+  currentEtag: () => graphCache.etag(),
   repaint: () => paintView(currentViewId, "arrived"),
 });
 
 /**
  * `graphCache.refresh()`, WITH ONE ADDED STEP: if the fetch landed genuinely fresh (its ETag
  * changed — the same conditional-request evidence the cache itself keys its own revalidation on,
- * read rather than re-derived), give `retryPromotionIfPending` a chance to run. A 304, a failed
+ * read rather than re-derived), give `retryGraphRefreshIfPending` a chance to run. A 304, a failed
  * fetch, or no session leaves the ETag exactly as it was, and nothing here fires for any of those
- * — a 304 in particular means the graph did not move, so re-asking promotion would only repeat
- * the identical abstain.
+ * — a 304 in particular means the graph did not move, so re-deriving the pending commit would
+ * only repeat the identical walk.
  */
-function refreshGraphBlobAndRetryPromotion() {
+function refreshGraphBlobAndRetryGraphRefresh() {
   const etagBefore = graphCache.etag();
   return graphCache.refresh().then(() => {
     if (graphCache.etag() === etagBefore) {
       return;
     }
-    retryPromotionIfPending();
+    retryGraphRefreshIfPending();
   });
 }
 
@@ -3281,7 +3287,7 @@ async function loadGraph(keep = null, why = "chosen", pending = null) {
   paintView(def.id, why);
   // Same reasoning as `installProjection`'s own call — a fresh projection is the only signal
   // this page has that the graph might have moved, and the fetch is conditional either way.
-  refreshGraphBlobAndRetryPromotion();
+  refreshGraphBlobAndRetryGraphRefresh();
 }
 
 // READ THE GRAPH AGAIN, AND STAY WHERE YOU ARE.
@@ -3524,12 +3530,12 @@ const globalKeyDeps = {
   currentViewId: () => currentViewId,
   drawerIsOpen: () => drawerIsOpen,
   globalRegistrationFor,
-  // `commitLineAndArmRetry`, NOT `commitLine` DIRECTLY — the `x`/`>`/`<` handlers in
+  // `commitLineAndArmGraphRefreshRetry`, NOT `commitLine` DIRECTLY — the `x`/`>`/`<` handlers in
   // `app/shell/keys.ts` reach `commitLine` through THIS dep, a separate call site from `paint`'s
   // own `onLineCommit`/`onCheckboxToggle` (see those deps' own comment). Both must arm the retry
   // the identical way, or the operator's own commonest gesture for THIS defect — `>` on an
   // existing line — would silently miss it while `o`/Enter did not.
-  commitLine: commitLineAndArmRetry,
+  commitLine: commitLineAndArmGraphRefreshRetry,
   repaintCurrentView,
   drainPainted,
   openDrawer,
