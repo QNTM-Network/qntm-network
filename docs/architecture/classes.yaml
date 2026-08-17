@@ -738,36 +738,47 @@ classes:
   - id: graph-aware-resolution-reads-one-modelled-graph
     concern: >
       Every graph-aware resolver's read of ANOTHER line's current state (today: `promotion`, the
-      only one of the four that needs one — see `resolvers-child-candidate-reads-the-graph`) should
-      come from ONE surface, the same shape `app/index.html` already uses for every other piece of
-      state that must survive its own repaint (`FocusSurface`, `DraftSurface`, `SettleSurface`,
-      `PredictSurface`, `BaseSurface`). That surface does not exist. Today `ctx.graph` is sourced
-      from a bare module-level `let graphBlob` in `app/index.html`, populated exclusively by
-      `refreshGraphBlob`'s background fetch — fire-and-forget, never awaited by the commit that
-      triggers it, and PULL-ONLY: nothing ever locally patches it when a commit mints or reparents
-      a node. It is a cache of what the server last confirmed, never a model of what the operator
-      just did.
+      only one of the four that needs one — see `resolvers-child-candidate-reads-the-graph`) reads
+      `ctx.graph`, sourced from a bare module-level `let graphBlob` in `app/index.html`.
+
+      REVISED 2026-08-17, SAME DAY AS FIRST WRITTEN — the first version of this row proposed a NEW
+      surface with a local, optimistic patch, on the premise that nothing already reconciles graph
+      state against a slow write. That premise was wrong, found by reading `installProjection`
+      (`app/index.html`) directly rather than assumed: it already calls `refreshGraphBlob()` on
+      EVERY projection it installs — boot, the re-read button, a write's own synchronous return,
+      AND a pickup's delayed answer (`app/present/pickup.ts` — the "write accepted, cycle runs
+      behind it, come back and collect the answer" mechanism, already built and tested). So the
+      graph blob already gets refreshed by the identical trigger every other piece of post-write
+      state uses — there is no second mechanism to build, and the operator's own instruction, once
+      this was found, was explicit: "all reconciliation should go through that."
 
       THE FAILURE THIS CLASS EXISTS TO CATCH, OBSERVED LIVE 2026-08-17: type a task, type a second
       task, indent the second beneath the first. The parent does not flip to `#outcome` in the
-      browser. It DOES flip once the real engine cycle round-trips (~10-14s — `POST /app/edit-file`
-      runs a full server cycle before it returns; see `worker/src/app.js`'s own comment on that
-      route). This is NOT a routing split — `>`/`<` and every other commit already share the one
-      `commitLine` write path (`commit-line-routing`, above), confirmed by reading
-      `app/shell/keys.ts` directly, not assumed. It is a DATA gap: `structuralNodeCandidateFor`
-      (the sink this class governs, `sinks.yaml`) is the correct and only chokepoint already, and
-      correctly abstains `child-not-in-graph` — the model it reads genuinely does not know the
-      child exists yet, because nothing tells it until a slow round trip does. The resolver is
-      neither broken nor slow; the model it depends on has no fast path at all, only a slow one.
+      browser during the wait, though it always has, correctly, by the time the real cycle's
+      answer lands (installProjection repaints the engine's own byte-exact rendering, refreshes
+      the blob, done — nothing missing there). The remaining gap is narrower than first stated:
+      NOTHING RE-EVALUATES A RESOLVER THAT PREVIOUSLY ABSTAINED once `refreshGraphBlob` resolves.
+      `PredictSurface` (`predict.ts`) already reconciles an ARMED prediction against newer source
+      text on the next repaint — confirming it came true or reporting it withdrawn — but promotion
+      armed NOTHING to reconcile: `structuralNodeCandidateFor` (the sink this class governs)
+      correctly abstained `child-not-in-graph`, and an abstain arms an empty prediction, which
+      `PredictSurface.take` treats as nothing pending, by design (`predict.ts`'s own header: an
+      empty arm still has to happen on every commit, so a stale unrelated one is never read).
 
-      THE TARGET SHAPE: a surface that updates two ways. The CONFIRMED way, unchanged from today —
-      a server fetch, exactly what `graphBlob` already does. And the PREDICTED way, which does not
-      exist yet — a local, optimistic patch applied the moment a commit that would mint or reparent
-      a node is made, so the model a resolver reads a few keystrokes later already reflects what
-      the operator just typed, without waiting on the network at all. Building the second half is
-      real, separately-scoped work; this row is the name it will attach to once built, and the
-      reason, findable, for why it is worth building.
-    canonical_class: app/present/graph:GraphSurface
+      THE TARGET SHAPE, NARROWED TO MATCH WHAT ALREADY EXISTS: no new surface, no new fetch, no
+      local patch. `refreshGraphBlob`'s own completion — the SAME event `installProjection` already
+      reacts to — becomes a second, later opportunity to re-run `promotionSpec.read` for whichever
+      row(s) most recently abstained on `graph-not-loaded`/`child-not-in-graph`/`parent-not-in-graph`,
+      and, if it now decides, arm it exactly the way a fresh commit would. One reconciliation
+      trigger, already built and already trusted; a second consumer of it, not a second mechanism.
+
+      WHY THIS IS STILL `declared`, NOT `working`: `installProjection` and `refreshGraphBlob` both
+      live in `app/index.html`'s own `<script type="module">` — the same unreachable-by-flow-trace
+      region `commit-line-routing`'s own header already documents at length for `commitLine`, and
+      `capture-rule-application`'s addendum documents for the identical reason. Neither can be a
+      governed sink until relocated into a real module, the same move that made `commitLine`
+      observable. This row names the target; it does not yet claim the route is enforced.
+    canonical_class: app/present/graph:refreshGraphBlob
     packages:
       - presentation
     governs_sinks:
