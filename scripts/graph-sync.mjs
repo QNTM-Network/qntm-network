@@ -646,7 +646,7 @@ async function serverPull(targetDir, opts = {}) {
   if (!quiet && !dryRun) console.log(`pulled projection -> ${expand(targetDir)}`);
 }
 
-async function serverCycle({ allowMismatch = false, allowDestructive = false } = {}) {
+async function serverCycle({ allowMismatch = false, allowDestructive = false, allowDestructivePush = false } = {}) {
   const cfg = loadConfig();
   const base = serverUrl(cfg);
   const key = serverAuth();
@@ -666,13 +666,34 @@ async function serverCycle({ allowMismatch = false, allowDestructive = false } =
   });
   if (!cfgUp.ok) throw new Error(`config push failed: ${cfgUp.status}`);
 
-  // 1. push the whole vault up (the delta surface) — silent; the summary below is the signal
-  const up = await fetchRetry(`${base}/vault`, {
+  // 1. push the whole vault up (the delta surface) — silent; the summary below is the signal.
+  //    GUARD 3 lives server-side (`_inspect_vault_push` in server/app.py) — it refuses a push
+  //    that would blank out content the server never independently touched (409), the same
+  //    blanked-file + shrink-floor check GUARD 1 runs on a pull, mirrored onto the push
+  //    direction. This client cannot run that check itself: the thing being guarded against is
+  //    THIS machine's own `~/qntm` looking wrong, so the only place left to catch it is the
+  //    server, which still holds the last-known-good copy to compare against.
+  const vaultUrl = `${base}/vault${allowDestructivePush ? "?allow_destructive=true" : ""}`;
+  const up = await fetchRetry(vaultUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/gzip" },
     body: tarVault(cfg.vaultDir),
   });
+  if (up.status === 409) {
+    const body = await up.json().catch(() => null);
+    const detail = body?.detail;
+    if (detail && typeof detail === "object") {
+      refuse([
+        detail.message || "REFUSED: this push would destroy content in the live vault.",
+        ...(detail.blanked || []).slice(0, 12).map((f) => `      ${f}`),
+        ...((detail.blanked_count || 0) > 12 ? [`      … and ${detail.blanked_count - 12} more`] : []),
+        `Override (logged): --allow-destructive-push`,
+      ]);
+    }
+    throw new Error(`vault push refused: 409 ${JSON.stringify(body)}`);
+  }
   if (!up.ok) throw new Error(`vault push failed: ${up.status}`);
+  if (allowDestructivePush) logOverride("--allow-destructive-push", `target=${base}/vault`);
 
   // 2. run the cycle ON THE SERVER — the model updates there, not here. Send our terminal width
   //    so the rules fit, and print qntm-md's own canonical summary verbatim (it carries the
@@ -702,11 +723,16 @@ const USAGE = [
   "",
   "  --dry-run                        pull: fetch and check the archive, write nothing",
   "  --allow-destructive-pull         apply a projection that blanks or guts existing files (logged)",
+  "  --allow-destructive-push         cycle: ship a vault push that blanks or guts what the server",
+  "                                   holds (logged) — refused (409) by the server otherwise",
   "  --allow-config-engine-mismatch   ship config that is not what the deployed engine was built",
   "                                   with, or that the guard could not verify (logged)",
 ].join("\n");
 
-const KNOWN = new Set(["--dry-run", "--allow-destructive-pull", "--allow-config-engine-mismatch", "--to"]);
+const KNOWN = new Set([
+  "--dry-run", "--allow-destructive-pull", "--allow-destructive-push",
+  "--allow-config-engine-mismatch", "--to",
+]);
 const [cmd, ...rest] = process.argv.slice(2);
 const toIdx = rest.indexOf("--to");
 const toDir = toIdx >= 0 ? rest[toIdx + 1] : null;
@@ -718,10 +744,11 @@ if (unknown.length) {
 }
 const dryRun = rest.includes("--dry-run");
 const allowDestructive = rest.includes("--allow-destructive-pull");
+const allowDestructivePush = rest.includes("--allow-destructive-push");
 const allowMismatch = rest.includes("--allow-config-engine-mismatch");
 
 const commands = {
-  cycle: () => serverCycle({ allowMismatch, allowDestructive }),
+  cycle: () => serverCycle({ allowMismatch, allowDestructive, allowDestructivePush }),
   pull: () => serverPull(toDir || loadConfig().vaultDir, { dryRun, allowDestructive }),
   push: () => push({ dryRun }), // legacy: laptop-computed D1 snapshot
 };
