@@ -1841,7 +1841,10 @@ export function paint(
       // The declared status rides on the row, so a scheduled/waiting/in-progress line is a real
       // checkbox that still says what it is (styled in the page's stylesheet, named on hover).
       row.dataset["status"] = shape.status;
-      if (shape.status !== "open" && shape.status !== "done") box.title = shape.status;
+      if (shape.status !== "open" && shape.status !== "done") {
+        row.classList.add(`status-${shape.status}`);
+        box.title = shape.status;
+      }
       box.addEventListener("change", () => {
         // The affordance's source edit, computed in the module that owns source edits. The
         // painter never reads the DOM to build markdown; it reads the source string it was

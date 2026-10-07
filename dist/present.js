@@ -6206,7 +6206,10 @@ function paint(body, source, context, deps) {
       box.type = "checkbox";
       box.checked = shape.done;
       row.dataset["status"] = shape.status;
-      if (shape.status !== "open" && shape.status !== "done") box.title = shape.status;
+      if (shape.status !== "open" && shape.status !== "done") {
+        row.classList.add(`status-${shape.status}`);
+        box.title = shape.status;
+      }
       box.addEventListener("change", () => {
         const completion = deps.completion?.();
         const markdown = applyEdit(source, {

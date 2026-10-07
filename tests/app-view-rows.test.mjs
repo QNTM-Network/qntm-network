@@ -664,7 +664,12 @@ describe("one row geometry, two renditions", () => {
     // registered here rather than folded into TOKENS: the test below holds the base class to the
     // chip's own row-safety rule, and the withdrawn modifier only ever touches `border`/`color`/
     // `text-decoration`/`opacity`, none of which are BOX_PROPERTIES either.
-    const LINES = ["task", "done", "syncing", "rawline", "vim-selected"];
+    // `status-*` (2026-10-07): a declared checkbox state other than open/done. Colour and opacity
+    // only — no box property — so the geometry assertions above already cover them.
+    const LINES = [
+      "task", "done", "syncing", "rawline", "vim-selected",
+      "status-scheduled", "status-waiting", "status-in_progress", "status-cancelled",
+    ];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
     const TOKENS = ["tagchip", "vim-block", "stampmark", "row-prediction", "row-prediction-withdrawn"];
     const known = new Set([...LINES, ...TRAILING, ...TOKENS]);
