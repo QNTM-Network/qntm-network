@@ -274,6 +274,15 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
         deps.commitLine(v, existingLineCommit(source, current, markdown));
       }
     }
+  } else if (effect.kind === "delete-line") {
+    // `dd` — remove the selected line. `applyEdit` refuses a blank or heading line, so only a line
+    // that is a node can go. The commit's `text` is EMPTY on purpose: a refused delete (409) then
+    // takes `commitLine`'s heal branch and adopts the server's current file, rather than trying to
+    // rebase a line that no longer exists. The operator presses `dd` again on what is now there.
+    const markdown = applyEdit(source, { kind: "delete-line", lineIndex: current });
+    if (markdown !== null) {
+      deps.commitLine(v, { lineIndex: current, text: "", markdown, source, kind: "delete-line" });
+    }
   } else if (effect.kind === "indent") {
     // `>`/`<` — `indentedLine` (app/present/indent.ts) decides the new leading whitespace, in
     // whole units of `indentUnit` (read from presentation.json, falling back to the engine's
@@ -339,4 +348,13 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
  */
 export function installGlobalKeys(deps: GlobalKeyDeps, on: Document = document): void {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
+  // DOUBLE-CLICK TO EDIT (2026-10-07, operator-directed: "plain click-to-edit alongside the vim
+  // keys"). The first click of the pair already selects the line, exactly as a single click does;
+  // the second is then the same `i` a keyboard would send, through the same handler — so there is
+  // no second way into INSERT, only a second key that reaches the one there is.
+  if (typeof KeyboardEvent === "function") {
+    deps.viewBody.addEventListener("dblclick", () => {
+      globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
+    });
+  }
 }

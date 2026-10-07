@@ -109,7 +109,12 @@
  * stop and say so rather than to go on reading. The re-read button is one press away and it is the
  * operator's, which is the right place for an unbounded retry to live.
  */
-export const PICKUP_DELAYS: readonly number[] = [10_000, 10_000, 20_000];
+// RE-MEASURED 2026-10-07: the live cycle now takes 41–66 s (server cycle logs: 41.1 s, 51.4 s,
+// 66.2 s; the web app's own Cycle button: 42 s). Under the old [10, 10, 20] all three reads
+// landed before the cycle finished — a new line stayed an un-stamped draft until the operator
+// pressed Refresh, measured in the browser the same day. The first read now waits for a typical
+// cycle, and the two overruns cover the slow end. Still three reads, still caused by a write.
+export const PICKUP_DELAYS: readonly number[] = [45_000, 20_000, 30_000];
 
 /**
  * THE MOST LINE BODIES ONE PATH'S PICKUP WILL REMEMBER IT IS OWED A STAMP FOR.

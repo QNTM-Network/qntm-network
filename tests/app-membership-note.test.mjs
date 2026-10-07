@@ -404,10 +404,10 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
     const keysCalls = KEYS_SOURCE.match(/\bapplyEdit\(/g) ?? [];
     const paintCalls = PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? [];
     assert.equal(pageCalls.length, 0, "the page must hold no edit constructor at all now");
-    assert.equal(keysCalls.length, 2, "`x` and `>`/`<` are the two, and they live in keys.ts");
+    assert.equal(keysCalls.length, 3, "`x`, `>`/`<` and `dd` (2026-10-07) are the three, and they live in keys.ts");
     assert.equal(
       pageCalls.length + keysCalls.length + paintCalls.length,
-      5,
+      6,
       "membershipNoteFor computes an ANSWER, never an edit, and must reach applyEdit zero times",
     );
     // Named separately so a future count drift says WHICH side moved.

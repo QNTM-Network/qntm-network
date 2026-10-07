@@ -432,7 +432,7 @@ describe("5. the union stayed closed", () => {
   test("an edit kind this function does not know is refused, not run", () => {
     // The defect this repo has already paid for: an unknown kind used to fall through to the
     // checkbox branch, and `edit.checked` being undefined meant it silently UNTICKED a box.
-    const rogue = { kind: "delete-line", lineIndex: 3, checked: true, text: "x" };
+    const rogue = { kind: "delete-span", lineIndex: 3, checked: true, text: "x" };
     assert.equal(applyEdit(CHECKBOX_VIEW, rogue), null, "an unknown edit kind was executed");
     assert.equal(applyEdit(CHECKBOX_VIEW, { kind: "", lineIndex: 3 }), null);
   });
@@ -482,7 +482,7 @@ describe("6. what was deliberately NOT shipped", () => {
     // NODE, and this app has no undo. It is also not clear the gesture would even do what it looks
     // like: the engine rewrites every view from the graph on every cycle, so a node that still
     // qualifies for the section simply comes back.
-    assert.equal(applyEdit(CHECKBOX_VIEW, { kind: "delete-line", lineIndex: 3 }), null);
+    assert.equal(applyEdit(CHECKBOX_VIEW, { kind: "delete-span", lineIndex: 3 }), null);
     const v = view(CHECKBOX_VIEW);
     const target = walk(v.body).find((el) => el.tagName === "label");
     assert.deepEqual([...target.listeners.keys()], [], "a rendered line grew a listener of its own");

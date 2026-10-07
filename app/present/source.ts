@@ -126,7 +126,19 @@ export interface InsertLine {
   readonly text: string;
 }
 
-export type SourceEdit = SetCheckbox | SetLine | InsertLine;
+/**
+ * Remove one line (2026-10-07, operator report: the web app had no way to delete a line).
+ *
+ * The engine reads a removed line as the deletion gesture — the same thing deleting the line in
+ * Obsidian does. Only a line that carries content can be deleted here: a blank or a heading is
+ * refused, because removing a heading is a change to the view's shape, not to a node.
+ */
+export interface DeleteLine {
+  readonly kind: "delete-line";
+  readonly lineIndex: number;
+}
+
+export type SourceEdit = SetCheckbox | SetLine | InsertLine | DeleteLine;
 
 // VERBATIM from app.html:275 as it stood at 64c3a87. The capture groups are what make this an
 // edit and not a rewrite: group 1 is everything up to the glyph, group 2 is everything after it,
@@ -175,6 +187,15 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
   const line = lines[edit.lineIndex];
   if (line === undefined) {
     return null;
+  }
+
+  if (edit.kind === "delete-line") {
+    const trimmed = line.trim();
+    if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) {
+      return null;
+    }
+    lines.splice(edit.lineIndex, 1);
+    return lines.join("\n");
   }
 
   if (edit.kind === "set-line") {
@@ -294,6 +315,9 @@ export function lineOps(
 ): readonly LineOp[] | null {
   if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
   const lines = markdown.split("\n");
+  // A DELETION'S MARKDOWN NO LONGER HOLDS THE LINE, so its op is read from the index alone: the
+  // half-open range over the one removed row, with nothing put back.
+  if (kind === "delete-line") return [[lineIndex, lineIndex + 1, []] as const];
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex] as string];
   // set-line and set-checkbox both REPLACE the row at lineIndex; insert-line OPENS a new row there

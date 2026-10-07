@@ -4226,6 +4226,7 @@ var ModeSurface = class {
   #mode = "NORMAL";
   #count = "";
   #pendingG = false;
+  #pendingD = false;
   #caretHint = void 0;
   get mode() {
     return this.#mode;
@@ -4251,6 +4252,7 @@ var ModeSurface = class {
     this.#caretHint = caret;
     this.#count = "";
     this.#pendingG = false;
+    this.#pendingD = false;
   }
   /**
    * The caret hint set by the last `enterInsert`, consumed once and cleared.
@@ -4277,6 +4279,7 @@ var ModeSurface = class {
     this.#caretHint = void 0;
     this.#count = "";
     this.#pendingG = false;
+    this.#pendingD = false;
   }
   /**
    * One keystroke while in NORMAL mode. No-op (and reports unhandled) while in INSERT — the
@@ -4317,6 +4320,7 @@ var ModeSurface = class {
     }
     if (this.#pendingG) {
       this.#pendingG = false;
+      this.#pendingD = false;
       if (key === "g") {
         this.#count = "";
         return { handled: true, effect: { kind: "move", lineIndex: clampLine(0, lastIndex) } };
@@ -4325,6 +4329,17 @@ var ModeSurface = class {
     if (key === "g") {
       this.#pendingG = true;
       return { handled: false, effect: { kind: "none" } };
+    }
+    if (this.#pendingD) {
+      this.#pendingD = false;
+      if (key === "d") {
+        this.#count = "";
+        return { handled: true, effect: { kind: "delete-line" } };
+      }
+    }
+    if (key === "d") {
+      this.#pendingD = true;
+      return { handled: true, effect: { kind: "none" } };
     }
     if (DIGIT.test(key)) {
       if (key === "0" && this.#count === "") {
@@ -5111,7 +5126,7 @@ var ProjectionQueue = class {
 };
 
 // app/present/pickup.ts
-var PICKUP_DELAYS = [1e4, 1e4, 2e4];
+var PICKUP_DELAYS = [45e3, 2e4, 3e4];
 var OWED_LIMIT = 16;
 var PickupSchedule = class {
   #delays;
@@ -5637,6 +5652,14 @@ function applyEdit(source, edit) {
   if (line === void 0) {
     return null;
   }
+  if (edit.kind === "delete-line") {
+    const trimmed = line.trim();
+    if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) {
+      return null;
+    }
+    lines.splice(edit.lineIndex, 1);
+    return lines.join("\n");
+  }
   if (edit.kind === "set-line") {
     if (edit.text === line) {
       return null;
@@ -5679,6 +5702,7 @@ function applyEdit(source, edit) {
 function lineOps(kind, lineIndex, markdown) {
   if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
   const lines = markdown.split("\n");
+  if (kind === "delete-line") return [[lineIndex, lineIndex + 1, []]];
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex]];
   return kind === "insert-line" ? [[lineIndex, lineIndex, replacement]] : [[lineIndex, lineIndex + 1, replacement]];
@@ -7921,6 +7945,11 @@ function globalKey(deps, e) {
         deps.commitLine(v, existingLineCommit(source, current, markdown));
       }
     }
+  } else if (effect.kind === "delete-line") {
+    const markdown = applyEdit(source, { kind: "delete-line", lineIndex: current });
+    if (markdown !== null) {
+      deps.commitLine(v, { lineIndex: current, text: "", markdown, source, kind: "delete-line" });
+    }
   } else if (effect.kind === "indent") {
     const line = source.split("\n")[current] ?? "";
     const text = indentedLine(line, effect.direction, effect.count, deps.declaration().indentUnit);
@@ -7943,6 +7972,11 @@ function globalKey(deps, e) {
 }
 function installGlobalKeys(deps, on = document) {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
+  if (typeof KeyboardEvent === "function") {
+    deps.viewBody.addEventListener("dblclick", () => {
+      globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
+    });
+  }
 }
 export {
   ANCHOR_TRUST,

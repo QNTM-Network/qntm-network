@@ -657,7 +657,7 @@ describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
     // two this used to assert.
     const KEYS_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "keys.ts"), "utf8");
     assert.equal((APP_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 0);
-    assert.equal((KEYS_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 2);
+    assert.equal((KEYS_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 3); // + `dd` (2026-10-07)
     assert.equal((PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? []).length, 3);
   });
 

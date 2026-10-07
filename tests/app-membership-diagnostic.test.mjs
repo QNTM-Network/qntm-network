@@ -385,8 +385,8 @@ describe("5. NOTHING LOCAL REACHES A WRITE — re-verified, and the new function
     const keysCalls = KEYS_SOURCE.match(/\bapplyEdit\(/g) ?? [];
     const paintCalls = PAINT_SOURCE.match(/\bapplyEdit\(/g) ?? [];
     assert.equal(pageCalls.length, 0, "the page must hold no edit constructor at all now");
-    assert.equal(keysCalls.length, 2, "`x` and `>`/`<` are the two, and they live in keys.ts");
-    assert.equal(pageCalls.length + keysCalls.length + paintCalls.length, 5, "the abstention register must reach applyEdit zero times");
+    assert.equal(keysCalls.length, 3, "`x`, `>`/`<` and `dd` (2026-10-07) are the three, and they live in keys.ts");
+    assert.equal(pageCalls.length + keysCalls.length + paintCalls.length, 6, "the abstention register must reach applyEdit zero times");
   });
 
   test("`.markdown` is still never ASSIGNED in app/ — the page, the painter, AND every resolver", () => {

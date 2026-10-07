@@ -760,7 +760,7 @@ describe("7. NOTHING LOCAL IS WRITTEN beyond the seed characters themselves", ()
     // two this used to assert.
     const KEYS = readFileSync(join(REPO, "app", "shell", "keys.ts"), "utf8");
     assert.equal((PAINT.match(/\bapplyEdit\(/g) ?? []).length, 3);
-    assert.equal((KEYS.match(/\bapplyEdit\(/g) ?? []).length, 2);
+    assert.equal((KEYS.match(/\bapplyEdit\(/g) ?? []).length, 3); // + `dd` (2026-10-07)
     assert.equal((APP.match(/\bapplyEdit\(/g) ?? []).length, 0);
   });
 

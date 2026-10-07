@@ -92,6 +92,7 @@ const COVERED_KINDS = {
   column: "no commit — 0/$ move the column only",
   open: "reaches commitLine via paint.ts's own draftInput.settle (kind: insert-line) once the operator blurs; same as enter-insert, never the defect",
   "toggle-done": "reaches commitLine directly from app/index.html — THE FIX under test",
+  "delete-line": "reaches commitLine as a delete-line commit with empty text (2026-10-07, `dd`)",
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine directly from app/index.html — THE OTHER FIX under test",
   word: "no commit — w/b/e move the column only",
