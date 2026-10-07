@@ -8051,54 +8051,76 @@ function applyTag(text, query, tag) {
   return { text: next, caret: query.start + tag.length + 1 };
 }
 
-// app/shell/tagpicker.ts
+// app/present/completion.ts
+function completeWith(sources, text, caret) {
+  for (const source of sources) {
+    const answer = source(text, caret);
+    if (answer !== null && answer.items.length > 0) return answer;
+  }
+  return null;
+}
+function applyCompletion(text, completion, insert) {
+  const after = text.slice(completion.end);
+  const spacer = after.startsWith(" ") ? "" : " ";
+  return {
+    text: text.slice(0, completion.start) + insert + spacer + after,
+    caret: completion.start + insert.length + 1
+  };
+}
+function tagSource(vocabulary) {
+  return (text, caret) => {
+    const query = tagQueryAt(text, caret);
+    if (query === null) return null;
+    const items = matchingTags(vocabulary, query).map((tag) => ({ label: tag, insert: tag }));
+    return { start: query.start, end: query.end, items };
+  };
+}
+
+// app/shell/completer.ts
 var isLineEditor = (target) => typeof HTMLInputElement !== "undefined" && target instanceof HTMLInputElement && target.classList.contains("rawline");
-function installTagPicker(deps) {
+function installCompleter(deps) {
   let made = null;
   const listEl = (doc) => {
     if (made !== null) return made;
     made = doc.createElement("ul");
     made.className = "tag-picker";
     made.setAttribute("role", "listbox");
-    made.setAttribute("aria-label", "Tags");
+    made.setAttribute("aria-label", "Suggestions");
     made.hidden = true;
     doc.body.append(made);
     return made;
   };
   const isOpen = () => made !== null && !made.hidden;
   let active = null;
-  let query = null;
-  let items = [];
+  let offer = null;
   let selected = 0;
   const close = () => {
     if (made !== null) made.hidden = true;
-    items = [];
-    query = null;
+    offer = null;
   };
   const accept = (index) => {
-    const tag = items[index];
-    if (active === null || query === null || tag === void 0) return;
-    const out = applyTag(active.value, query, tag);
+    const item = offer?.items[index];
+    if (active === null || offer === null || item === void 0) return;
+    const out = applyCompletion(active.value, offer, item.insert);
     active.value = out.text;
     active.setSelectionRange(out.caret, out.caret);
     close();
     active.dispatchEvent(new Event("input", { bubbles: true }));
   };
   const render = () => {
-    if (active === null) return;
-    const doc = active.ownerDocument;
-    const list = listEl(doc);
+    if (active === null || offer === null) return;
+    const list = listEl(active.ownerDocument);
     list.replaceChildren(
-      ...items.map((tag, index) => {
-        const item = doc.createElement("li");
-        item.textContent = tag;
-        item.setAttribute("role", "option");
-        item.setAttribute("aria-selected", String(index === selected));
-        item.addEventListener("mousedown", (event) => {
+      ...offer.items.map((item, index) => {
+        const row = active.ownerDocument.createElement("li");
+        row.textContent = item.label;
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", String(index === selected));
+        row.addEventListener("mousedown", (event) => {
           event.preventDefault();
           accept(index);
         });
-        return item;
+        return row;
       })
     );
     const box = active.getBoundingClientRect();
@@ -8108,13 +8130,12 @@ function installTagPicker(deps) {
   };
   const refresh = (input) => {
     active = input;
-    query = tagQueryAt(input.value, input.selectionStart ?? input.value.length);
-    items = query === null ? [] : matchingTags(deps.vocabulary(), query);
-    if (items.length === 0) {
+    offer = completeWith(deps.sources(), input.value, input.selectionStart ?? input.value.length);
+    if (offer === null) {
       close();
       return;
     }
-    selected = Math.min(selected, items.length - 1);
+    selected = Math.min(selected, offer.items.length - 1);
     render();
   };
   deps.viewBody.addEventListener("input", (event) => {
@@ -8125,13 +8146,14 @@ function installTagPicker(deps) {
   deps.viewBody.addEventListener(
     "keydown",
     (event) => {
-      if (!isOpen() || event.target !== active || items.length === 0) return;
+      if (!isOpen() || event.target !== active || offer === null) return;
+      const count = offer.items.length;
       const key = event.key;
       if (key === "ArrowDown") {
-        selected = (selected + 1) % items.length;
+        selected = (selected + 1) % count;
         render();
       } else if (key === "ArrowUp") {
-        selected = (selected - 1 + items.length) % items.length;
+        selected = (selected - 1 + count) % count;
         render();
       } else if (key === "Tab" || key === "Enter") {
         accept(selected);
@@ -8148,6 +8170,65 @@ function installTagPicker(deps) {
   deps.viewBody.addEventListener("focusout", (event) => {
     if (event.target === active) close();
   });
+}
+
+// app/present/datecomplete.ts
+function dateMarkers(sources) {
+  const out = [];
+  for (const [field, marker] of Object.entries(sources.qualification?.extractionFields ?? {})) {
+    if (field === "created_at" || field === "completed_at") continue;
+    if (marker?.kind === "date" && typeof marker.token === "string" && marker.token !== "") out.push(marker.token);
+  }
+  return out;
+}
+var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+function addDays(date, days) {
+  const [y, m, d] = date.split("-").map(Number);
+  const at = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1) + days * 864e5);
+  return at.toISOString().slice(0, 10);
+}
+function addMonths(date, months) {
+  const [y, m, d] = date.split("-").map(Number);
+  const target = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d ?? 1, last));
+  return target.toISOString().slice(0, 10);
+}
+function dateChoices(today, weekStartsOn) {
+  const [y, m, d] = today.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+  const startIndex = Math.max(0, WEEKDAYS.indexOf(weekStartsOn.toLowerCase()));
+  const toWeekStart = (startIndex - weekday + 7) % 7 || 7;
+  const startName = (WEEKDAYS[startIndex] ?? "monday").replace(/^./, (c) => c.toUpperCase());
+  return [
+    { label: "Today", date: today },
+    { label: "Tomorrow", date: addDays(today, 1) },
+    { label: `Next ${startName}`, date: addDays(today, toWeekStart) },
+    { label: "In a week", date: addDays(today, 7) },
+    { label: "In 2 weeks", date: addDays(today, 14) },
+    { label: "In a month", date: addMonths(today, 1) }
+  ];
+}
+function dateSource(markers, today, weekStartsOn) {
+  return (text, caret) => {
+    const before = text.slice(0, caret);
+    for (const marker of markers) {
+      const at = before.lastIndexOf(marker);
+      if (at === -1) continue;
+      const tail = before.slice(at + marker.length);
+      const typed = /^ ([0-9-]*)$/.exec(tail);
+      if (typed === null) continue;
+      const day = today();
+      if (day === void 0) return null;
+      const start = at + marker.length + 1;
+      let end = caret;
+      while (end < text.length && /[0-9-]/.test(text[end] ?? "")) end += 1;
+      const prefix = typed[1] ?? "";
+      const items = dateChoices(day, weekStartsOn).filter((choice) => choice.date.startsWith(prefix)).map((choice) => ({ label: `${choice.label} \xB7 ${choice.date}`, insert: choice.date }));
+      return { start, end, items };
+    }
+    return null;
+  };
 }
 export {
   ANCHOR_TRUST,
@@ -8186,6 +8267,8 @@ export {
   WRITE_ECHO_KEY,
   WriteRegister,
   abstentionsOf,
+  addDays,
+  applyCompletion,
   applyEdit,
   applyGraphAwareRules,
   applyRuleActions,
@@ -8204,6 +8287,7 @@ export {
   cleanTitleFor,
   closeDrawer,
   columnFor,
+  completeWith,
   composeLine,
   composeNodeLine,
   composeSectionHeading,
@@ -8215,6 +8299,9 @@ export {
   createCommitLine,
   createGraphBlobCache,
   createGraphRefreshRetry,
+  dateChoices,
+  dateMarkers,
+  dateSource,
   declarationFrom,
   defaultOrderingFor,
   defaultOrderingPlacementFor,
@@ -8232,8 +8319,8 @@ export {
   globalKey,
   graphSnapshotOf,
   indentedLine,
+  installCompleter,
   installGlobalKeys,
-  installTagPicker,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
@@ -8299,6 +8386,7 @@ export {
   structuralParentLineIndex,
   structuralRelationshipChangeFor,
   tagQueryAt,
+  tagSource,
   tagSpans,
   tagVocabulary,
   titleSpans,

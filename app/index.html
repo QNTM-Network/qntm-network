@@ -1110,9 +1110,12 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-  installTagPicker,
+  installCompleter,
   tagVocabulary,
-} from "/dist/present.js?v=a3d0550a3c";
+  tagSource,
+  dateMarkers,
+  dateSource,
+} from "/dist/present.js?v=06e63264a8";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3682,9 +3685,25 @@ const globalKeyDeps = {
   closeDrawer,
 };
 installGlobalKeys(globalKeyDeps);
-// THE TAG PICKER (2026-10-07): `#` in a line being edited offers the config's own tags. Reads the
-// declaration fresh on every keystroke, so a config change is offered as soon as it is published.
-installTagPicker({ viewBody: $("viewBody"), vocabulary: () => tagVocabulary(declaration) });
+// SUGGEST WHILE TYPING (2026-10-07): tags after `#`, dates after a date marker (📅 ⏳ 🛫 …). Both are
+// read from the published config on every keystroke, so a config change is offered as soon as it
+// is published; today is the LOGICAL day from the declared boundary, read through `nowMs` like
+// every other clock read on this page, and an abstaining clock offers no dates rather than a guess.
+installCompleter({
+  viewBody: $("viewBody"),
+  sources: () => {
+    const boundary = declaration.resolution?.dayBoundary;
+    const today = () => {
+      if (boundary === undefined) return undefined;
+      const reading = todayFor(nowMs(), boundary);
+      return reading.kind === "answer" ? reading.answer.logicalDate : undefined;
+    };
+    return [
+      tagSource(tagVocabulary(declaration)),
+      dateSource(dateMarkers(declaration), today, boundary?.weekStartsOn ?? "monday"),
+    ];
+  },
+});
 
 
 // --- boot: try the stored session, else show entry ---
