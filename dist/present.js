@@ -7887,6 +7887,12 @@ function globalKey(deps, e) {
     deps.openDrawer();
     return;
   }
+  if (e.key === "Escape" && deps.mode.mode !== "NORMAL" && !typingIn(e.target)) {
+    e.preventDefault();
+    deps.mode.enterNormal();
+    deps.repaintCurrentView();
+    return;
+  }
   deps.drainPainted();
   const viewId = deps.currentViewId();
   if (deps.mode.mode !== "NORMAL" || deps.drawerIsOpen() || typingIn(e.target) || viewId === null) return;
@@ -7998,11 +8004,20 @@ function globalKey(deps, e) {
     deps.repaintCurrentView();
   }
 }
+var DOUBLE_CLICK_MS = 450;
 function installGlobalKeys(deps, on = document) {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
   if (typeof KeyboardEvent === "function") {
-    deps.viewBody.addEventListener("dblclick", () => {
-      globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
+    let lastClick = -Infinity;
+    deps.viewBody.addEventListener("click", (event) => {
+      if (typingIn(event.target)) return;
+      const now = event.timeStamp;
+      if (now - lastClick <= DOUBLE_CLICK_MS) {
+        lastClick = -Infinity;
+        globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
+      } else {
+        lastClick = now;
+      }
     });
   }
 }
