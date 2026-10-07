@@ -765,7 +765,8 @@ describe("7. the rail is one element, and it holds actions", () => {
   test("there is exactly one rail, and exactly one of each control inside it", () => {
     assert.ok(RAIL_MARKUP, "app/index.html has no <nav id=\"rail\">");
     assert.equal((PAGE.match(/<nav id="rail"/g) ?? []).length, 1, "the rail is declared twice");
-    assert.deepEqual(RAIL_BUTTON_IDS, ["viewsBtn", "refreshBtn", "signOut"]);
+    // `cycleBtn` (2026-10-07, operator-directed): one engine cycle on demand — see `runCycle`.
+    assert.deepEqual(RAIL_BUTTON_IDS, ["viewsBtn", "refreshBtn", "cycleBtn", "signOut"]);
     // DUPLICATION IS THE MECHANISM OF DRIFT. A control that exists once cannot fall out of step
     // with itself, so the whole "two layouts" objection is answered by counting.
     for (const id of RAIL_BUTTON_IDS) {
@@ -874,7 +875,7 @@ describe("7. the rail is one element, and it holds actions", () => {
 
   test("the icons are one grid at one weight, and no glyph carries its own", () => {
     const icons = [...RAIL_MARKUP.matchAll(/<svg class="ico"([^>]*)>([\s\S]*?)<\/svg>/g)];
-    assert.equal(icons.length, 3, "the rail does not have exactly three icons");
+    assert.equal(icons.length, 4, "the rail does not have exactly four icons");
     for (const [, attributes, guts] of icons) {
       assert.match(attributes, /viewBox="0 0 24 24"/, "an icon is drawn on a different grid");
       assert.match(attributes, /aria-hidden="true"/, "an icon is read aloud beside its own label");
@@ -937,7 +938,8 @@ describe("7. the rail is one element, and it holds actions", () => {
     const writes = [...CODE.matchAll(/api\("([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(
       [...new Set(writes)].sort(),
-      ["/app/edit-file", "/app/graph",
+      // `/app/cycle` runs the engine on what is already in the vault; it writes no line itself.
+      ["/app/cycle", "/app/edit-file", "/app/graph",
        "/auth/login/options", "/auth/login/verify", "/auth/logout",
        "/auth/register/options", "/auth/register/verify"],
       "the page calls an endpoint it did not before",
