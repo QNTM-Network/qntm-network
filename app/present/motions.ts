@@ -274,6 +274,8 @@ export type NormalEffect =
   /** `x` asked to toggle done on the selected line. Whether it HAS a checkbox is the caller's to
    * decide — this module does not import `resolution.ts`'s `classifyLine` either. */
   | { readonly kind: "toggle-done" }
+  /** `dd` asked to delete the selected line. Whether it MAY be deleted is the caller's to decide. */
+  | { readonly kind: "delete-line" }
   /**
    * `{`/`}` asked for the boundary `count` jumps away, in `direction`. This module cannot compute
    * WHICH LINE that is — that needs `classifyLine` (resolution.ts) over the actual source lines,
@@ -317,6 +319,7 @@ export class ModeSurface {
   #mode: Mode = "NORMAL";
   #count = "";
   #pendingG = false;
+  #pendingD = false;
   #caretHint: CaretIntent | undefined = undefined;
 
   get mode(): Mode {
@@ -344,6 +347,7 @@ export class ModeSurface {
     this.#caretHint = caret;
     this.#count = "";
     this.#pendingG = false;
+    this.#pendingD = false;
   }
 
   /**
@@ -372,6 +376,7 @@ export class ModeSurface {
     this.#caretHint = undefined;
     this.#count = "";
     this.#pendingG = false;
+    this.#pendingD = false;
   }
 
   /**
@@ -414,6 +419,7 @@ export class ModeSurface {
 
     if (this.#pendingG) {
       this.#pendingG = false;
+    this.#pendingD = false;
       if (key === "g") {
         this.#count = "";
         return { handled: true, effect: { kind: "move", lineIndex: clampLine(0, lastIndex) } };
@@ -424,6 +430,20 @@ export class ModeSurface {
     if (key === "g") {
       this.#pendingG = true;
       return { handled: false, effect: { kind: "none" } };
+    }
+
+    // `dd` — vim's delete-line, the second two-key binding, built exactly like `gg`: a `d` not
+    // followed by a second `d` is abandoned and the breaking key is processed normally.
+    if (this.#pendingD) {
+      this.#pendingD = false;
+      if (key === "d") {
+        this.#count = "";
+        return { handled: true, effect: { kind: "delete-line" } };
+      }
+    }
+    if (key === "d") {
+      this.#pendingD = true;
+      return { handled: true, effect: { kind: "none" } };
     }
 
     if (DIGIT.test(key)) {

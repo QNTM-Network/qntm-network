@@ -165,7 +165,7 @@ export interface LineCommit {
    * line's own before" would compare two different lines and call it one line's history. A caller
    * that cannot tell the two apart has no honest way to ask "did this line's own answer change".
    */
-  readonly kind: "set-line" | "insert-line";
+  readonly kind: "set-line" | "insert-line" | "delete-line";
   /**
    * THE STRING THE EDIT WAS APPLIED TO — `applyEdit`'s own input, verbatim.
    *
