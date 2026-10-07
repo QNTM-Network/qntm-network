@@ -284,6 +284,11 @@ export function existingLineCommit(
 export interface PaintDeps {
   readonly markdown: InlineMarkdown;
   /**
+   * Line indexes the server has not confirmed yet (`unconfirmedLines`). A checkbox row in the set
+   * is marked `unconfirmed`; the mark is colour and underline only, never a box property.
+   */
+  readonly unconfirmed?: ReadonlySet<number> | undefined;
+  /**
    * The operator's declared checkbox glyphs (`qualification.tokens.status`). With it every
    * declared state — `[>]` scheduled, `[~]` waiting, `[/]` in progress, `[-]` cancelled — paints
    * as a checkbox carrying its status; without it only `[ ]`/`[x]` do, as before.
@@ -1819,7 +1824,7 @@ export function paint(
         return;
       }
       const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "");
+      row.className = "task" + (shape.done ? " done" : "") + (deps.unconfirmed?.has(index) ? " unconfirmed" : "");
       // Two spaces of source indent is one nesting level, and one nesting level is 1.2rem.
       // Carried across unchanged from app.html:246 — the arithmetic is a presentation decision
       // and it now lives in the painter rather than in a page.

@@ -470,3 +470,5 @@ export { KEY_HELP } from "./keyhelp.js";
 export type { KeyHelpGroup, KeyHelpRow } from "./keyhelp.js";
 export { searchViews } from "./search.js";
 export type { SearchHit, SearchView } from "./search.js";
+// ── UNCONFIRMED LINES (2026-10-07) — what the painter marks "saved, not yet back from the server" ──
+export { unconfirmedLines } from "./unconfirmed.js";
