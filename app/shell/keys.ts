@@ -77,6 +77,10 @@ export interface GlobalKeyDeps {
   /** `AcceptedSource.sourceFor(path)` — the accepted string for a path, or null. */
   readonly sourceFor: (path: string) => string | null;
   readonly declaration: () => Declaration;
+  /** The view `c` captures into (the inbox), or `undefined` when there is none. */
+  readonly captureViewId?: () => string | undefined;
+  /** Switch to a view, exactly as choosing it in the drawer does. */
+  readonly chooseView?: (viewId: string) => void;
   /** The completion stamp a tick should add now — see `SetCheckbox.completion` (source.ts). */
   readonly completion?: () => { readonly token: string; readonly date: string } | undefined;
   readonly viewOf: (viewId: string) => GlobalKeyView | undefined;
@@ -234,6 +238,32 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
       // `<input>` if focus still pointed at it. Blurring is what leaves exactly one row
       // editable; `draftInput`'s own `returnToVim` (paint.ts) hands the cursor back once this
       // row settles or is abandoned.
+      deps.focus.blur();
+      deps.mode.enterInsert();
+    }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "capture") {
+    // `c` — QUICK CAPTURE (2026-10-07). Go to the capture view (the inbox) if not already there,
+    // and open a new line at its end — the SAME `openLine` `o` calls, so a captured line is seeded,
+    // drafted and saved exactly as a line opened in the inbox by hand. Nothing here writes.
+    const target = deps.captureViewId?.();
+    if (target === undefined) return;
+    if (target !== v.id) deps.chooseView?.(target);
+    const tv = deps.viewOf(target);
+    if (tv === undefined) return;
+    const targetSource = deps.showing(tv.id, deps.sourceFor(tv.path) ?? tv.markdown);
+    const lines = targetSource.split("\n");
+    let end = lines.length;
+    while (end > 0 && (lines[end - 1] ?? "").trim() === "") end -= 1;
+    const opened = openLine(
+      targetSource,
+      end,
+      deps.draftLine,
+      undefined,
+      deps.globalRegistrationFor(tv.id),
+      tv.id,
+    );
+    if (opened) {
       deps.focus.blur();
       deps.mode.enterInsert();
     }

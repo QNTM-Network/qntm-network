@@ -1112,7 +1112,7 @@ import {
   installGlobalKeys,
   installTagPicker,
   tagVocabulary,
-} from "/dist/present.js?v=d6f34b9a4f";
+} from "/dist/present.js?v=a3d0550a3c";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3651,6 +3651,7 @@ $("scrim").addEventListener("click", closeDrawer);
 // page REASSIGNS them (`declaration`, `graphData`, `currentViewId`, `drawerIsOpen`); a value read
 // once at wiring time would freeze the world the handler decides against. Same technique, same
 // reason, as `createCommitLine(deps)` and `drawerDeps` above.
+const CAPTURE_VIEW_ID = "inbox";
 const globalKeyDeps = {
   viewBody: $("viewBody"),
   focus,
@@ -3660,6 +3661,11 @@ const globalKeyDeps = {
   sourceFor: (path) => accepted.sourceFor(path),
   declaration: () => declaration,
   completion: completionStamp,
+  // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch
+  // the drawer makes. `inbox` is the operator's inbox view id; a view that is absent from the
+  // snapshot makes `c` do nothing rather than capture somewhere else.
+  captureViewId: () => (graphData?.snapshot?.views.some((x) => x.id === CAPTURE_VIEW_ID) ? CAPTURE_VIEW_ID : undefined),
+  chooseView: (viewId) => paintView(viewId, "chosen"),
   viewOf: (viewId) => graphData?.snapshot?.views.find((x) => x.id === viewId),
   currentViewId: () => currentViewId,
   drawerIsOpen: () => drawerIsOpen,
