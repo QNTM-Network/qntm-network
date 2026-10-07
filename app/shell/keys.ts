@@ -125,6 +125,16 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   // is still evidence that nothing is open, and the keys it DOES handle are then applied to the
   // projection that just landed rather than to the one it replaced. In INSERT the gate inside
   // `drainProjection` refuses anyway, so this is a no-op exactly when it must be.
+  // THE WAY OUT OF A STRANDED INSERT (2026-10-07, measured twice in the live app): a line that is
+  // discarded can leave the mode at INSERT with no line open — nothing then listens for Escape,
+  // because every key below is gated on NORMAL and there is no `<input>` to own it. Escape with no
+  // editor focused always returns to NORMAL. With an editor focused it is the editor's, unchanged.
+  if (e.key === "Escape" && deps.mode.mode !== "NORMAL" && !typingIn(e.target)) {
+    e.preventDefault();
+    deps.mode.enterNormal();
+    deps.repaintCurrentView();
+    return;
+  }
   deps.drainPainted();
   // VIM NORMAL MODE. `typingIn(e.target)` is the SAME refusal `\` already earns. Also refused
   // while the drawer is modal (its own Tab trap owns the keyboard) and while there is no view to
@@ -376,15 +386,31 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
  * reachable without it, which is what lets a test or a probe drive `globalKey` directly instead of
  * synthesising DOM events at a document that wired itself on import.
  */
+/** Two clicks on the view this close together are a double-click. */
+const DOUBLE_CLICK_MS = 450;
+
 export function installGlobalKeys(deps: GlobalKeyDeps, on: Document = document): void {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
   // DOUBLE-CLICK TO EDIT (2026-10-07, operator-directed: "plain click-to-edit alongside the vim
   // keys"). The first click of the pair already selects the line, exactly as a single click does;
   // the second is then the same `i` a keyboard would send, through the same handler — so there is
   // no second way into INSERT, only a second key that reaches the one there is.
+  //
+  // TWO CLICKS, NOT `dblclick` (fixed 2026-10-07, measured in the live app): the first click
+  // selects the line and the view repaints, so the second click lands on a NEW element and the
+  // browser never fires `dblclick`. Two clicks on the view within DOUBLE_CLICK_MS are counted here
+  // instead; the second one's own click handler has already selected the line it landed on.
   if (typeof KeyboardEvent === "function") {
-    deps.viewBody.addEventListener("dblclick", () => {
-      globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
+    let lastClick = -Infinity;
+    deps.viewBody.addEventListener("click", (event) => {
+      if (typingIn(event.target)) return;
+      const now = event.timeStamp;
+      if (now - lastClick <= DOUBLE_CLICK_MS) {
+        lastClick = -Infinity;
+        globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
+      } else {
+        lastClick = now;
+      }
     });
   }
 }
