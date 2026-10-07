@@ -455,6 +455,49 @@ async function cycleOnceMore(env, auth) {
   return null;
 }
 
+// POST /app/cycle (session, operator only) — run one engine cycle on demand and say what it did.
+//
+// THE WEB APP'S CYCLE BUTTON (2026-10-07, operator-directed). Every save already runs a cycle in the
+// background; this is the explicit "run it now and tell me" the laptop gets from `graph-sync cycle`.
+// It writes nothing itself — it asks Fly for `/cycle` and relays the cycle's own summary, its
+// needs-attention count and its write refusals. The browser then re-reads the projection through
+// `GET /app/graph`, the same read the Refresh button makes, so there is one install path, not two.
+// A `rerun_recommended` answer gets AT MOST ONE rerun, exactly as the edit path does.
+async function cyclePost(request, env, origin, session) {
+  if (!isOperatorSession(env, session)) {
+    return json({ ok: false, error: "not your graph" }, 403, origin);
+  }
+  if (!env.GRAPH_SERVER_URL || !env.SERVER_TOKEN) {
+    return json({ ok: false, error: "server not configured" }, 503, origin);
+  }
+  const auth = { Authorization: `Bearer ${env.SERVER_TOKEN}` };
+  let r;
+  try {
+    r = await fetch(`${env.GRAPH_SERVER_URL}/cycle`, { method: "POST", headers: auth });
+  } catch {
+    return json({ ok: false, error: "graph server unreachable" }, 502, origin);
+  }
+  let cd = await r.json().catch(() => ({}));
+  if (!r.ok || !cd.ok) {
+    return json({ ok: false, error: cd.detail || "cycle failed" }, 502, origin);
+  }
+  if (cd.rerun_recommended === true) {
+    const again = await cycleOnceMore(env, auth);
+    if (again) cd = again;
+  }
+  return json(
+    {
+      ok: true,
+      summary_text: typeof cd.summary_text === "string" ? cd.summary_text : "",
+      needs_attention: Number(cd.needs_attention) || 0,
+      elapsed_seconds: cd.elapsed_seconds ?? null,
+      write_refusals: Array.isArray(cd.write_refusals) ? cd.write_refusals : [],
+    },
+    200,
+    origin
+  );
+}
+
 // POST /app/edit-file (session) — the web write path. The browser sends {path, markdown, base,
 // token} for one view; we write it on the hosted model, run a cycle, and return the fresh
 // projection. `base` and `token` are both OPTIONAL and both forwarded only when present. The
@@ -825,6 +868,7 @@ export async function handleApp(request, env, url, origin, ctx) {
     "GET /app/graph/blob": graphGetBlob,
     "POST /app/edit": editPost,
     "POST /app/edit-file": editFile,
+    "POST /app/cycle": cyclePost,
   };
   const fn = sessionRoutes[key];
   if (!fn) return null;

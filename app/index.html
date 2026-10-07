@@ -356,6 +356,14 @@
     font-size: var(--t2); font-weight: 500; white-space: nowrap;
   }
   .railbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
+  .railbtn[aria-busy="true"] { color: var(--green); border-color: var(--green-hairline); }
+  .cycle-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(46rem, calc(100vw - 2rem));
+    max-height: 60vh; display: flex; flex-direction: column; background: var(--bg, #0b0d10);
+    border: 1px solid var(--green-hairline); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+  .cycle-note.hidden { display: none; }
+  .cycle-note-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem .75rem; }
+  .cycle-note-title { color: var(--ink); font-size: .85rem; }
+  .cycle-note-body { margin: 0; padding: 0 .75rem .75rem; overflow: auto; font-size: .72rem; line-height: 1.35; color: var(--dim); white-space: pre; }
   /* The drawer's own state, said on the control that owns it — `aria-expanded` is already kept
      in step by openDrawer/closeDrawer, so this marks the rail from the fact rather than from a
      second flag that could disagree with it. */
@@ -874,6 +882,12 @@
     </svg>
     <span>Refresh</span>
   </button>
+  <button id="cycleBtn" class="railbtn" aria-label="Run a cycle now">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M8 5.5v13l10.5-6.5z" />
+    </svg>
+    <span>Cycle</span>
+  </button>
   <button id="signOut" class="railbtn" aria-label="Sign out">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M14.5 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8.5" />
@@ -897,6 +911,16 @@
   <p id="drawerNote" class="drawer-note"></p>
 </aside>
 
+<!-- THE CYCLE'S OWN ANSWER (2026-10-07). What the engine said it did, verbatim, after the Cycle
+     button ran one — the same summary `graph-sync cycle` prints on the laptop. Dismissed by Close;
+     replaced by the next cycle. -->
+<aside id="cycleNote" class="cycle-note hidden" role="status" aria-live="polite">
+  <div class="cycle-note-head">
+    <span id="cycleNoteTitle" class="cycle-note-title"></span>
+    <button id="cycleNoteClose" class="barbtn" aria-label="Close the cycle summary">Close</button>
+  </div>
+  <pre id="cycleNoteBody" class="cycle-note-body"></pre>
+</aside>
 <div class="wrap">
 
   <!-- BOOT — the only thing on the screen before the module script has done anything.
@@ -3355,6 +3379,41 @@ async function refresh() {
   }
 }
 
+// ── THE CYCLE BUTTON (2026-10-07, operator-directed) ─────────────────────────────────────────
+//
+// One engine cycle on demand, then the same re-read the Refresh button makes. The server's own
+// summary is shown verbatim; nothing here interprets it. While a cycle runs the button says so and
+// ignores a second press — the server serialises cycles anyway, so a second press would only queue
+// a wait.
+let cycling = false;
+
+function showCycleNote(title, body) {
+  $("cycleNoteTitle").textContent = title;
+  $("cycleNoteBody").textContent = body;
+  $("cycleNote").classList.remove("hidden");
+}
+
+async function runCycle() {
+  if (cycling || !token) return;
+  cycling = true;
+  const button = $("cycleBtn");
+  button.setAttribute("aria-busy", "true");
+  showCycleNote("Cycling…", "Running on the server — this usually takes under a minute.");
+  const started = nowMs();
+  try {
+    const out = await api("/app/cycle", { auth: true });
+    await loadGraph(currentViewId, "arrived");
+    const seconds = Math.round(out.elapsed_seconds ?? (nowMs() - started) / 1000);
+    const attention = out.needs_attention > 0 ? ` · ${out.needs_attention} need attention` : "";
+    showCycleNote(`Cycle done in ${seconds}s${attention}`, out.summary_text || "");
+  } catch (e) {
+    showCycleNote("Cycle failed", e?.message || String(e));
+  } finally {
+    cycling = false;
+    button.removeAttribute("aria-busy");
+  }
+}
+
 // --- passkey register / login ---
 
 // THE HANDLE RULE, WRITTEN A SECOND TIME ON PURPOSE.
@@ -3527,6 +3586,8 @@ $("signOut").addEventListener("click", logout);
 
 // --- the shell ---
 $("refreshBtn").addEventListener("click", refresh);
+$("cycleBtn").addEventListener("click", runCycle);
+$("cycleNoteClose").addEventListener("click", () => $("cycleNote").classList.add("hidden"));
 $("viewsBtn").addEventListener("click", () => (drawerIsOpen ? closeDrawer() : openDrawer()));
 $("drawerClose").addEventListener("click", closeDrawer);
 $("scrim").addEventListener("click", closeDrawer);
