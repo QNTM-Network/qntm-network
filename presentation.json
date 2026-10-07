@@ -10370,5 +10370,6 @@
       "rule-set field 'domain'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it",
       "rule-set field 'interval_days'": "a published rule's 'set_field' targets it, but vocabulary/markers.yaml declares no trailing marker for it, so this app cannot write a value into a line for it"
     }
-  }
+  },
+  "landingView": "daily"
 }
