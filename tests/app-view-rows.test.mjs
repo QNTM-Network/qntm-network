@@ -669,6 +669,8 @@ describe("one row geometry, two renditions", () => {
     const LINES = [
       "task", "done", "syncing", "rawline", "vim-selected",
       "status-scheduled", "status-waiting", "status-in_progress", "status-cancelled",
+      // `unconfirmed` (2026-10-07): saved, not yet back from the server. Underline only.
+      "unconfirmed",
     ];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
     const TOKENS = ["tagchip", "vim-block", "stampmark", "row-prediction", "row-prediction-withdrawn"];

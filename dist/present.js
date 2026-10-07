@@ -6233,7 +6233,7 @@ function paint(body, source, context, deps) {
         return;
       }
       const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "");
+      row.className = "task" + (shape.done ? " done" : "") + (deps.unconfirmed?.has(index) ? " unconfirmed" : "");
       row.style.marginLeft = shape.indent.length / 2 * 1.2 + "rem";
       const box = document.createElement("input");
       box.type = "checkbox";
@@ -8469,6 +8469,17 @@ function dateSource(markers, today, weekStartsOn) {
     return null;
   };
 }
+
+// app/present/unconfirmed.ts
+function unconfirmedLines(painted, served) {
+  const out = /* @__PURE__ */ new Set();
+  if (served === void 0 || painted === served) return out;
+  const known = new Set(served.split("\n"));
+  painted.split("\n").forEach((line, index) => {
+    if (line.trim() !== "" && !known.has(line)) out.add(index);
+  });
+  return out;
+}
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -8636,6 +8647,7 @@ export {
   titleStyleFor,
   titleStylePredicateHolds,
   todayFor,
+  unconfirmedLines,
   viewButtons,
   visualLineOrder,
   wikiLinkSpans,

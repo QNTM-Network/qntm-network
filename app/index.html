@@ -637,6 +637,8 @@
   .viewbody .task input { flex: none; width: 1rem; height: 1rem; margin-top: calc((var(--row) - 1rem) / 2); accent-color: var(--glow); cursor: pointer; }
   .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task.syncing { opacity: .5; }
+  /* Saved but not yet confirmed by the server's cycle (2026-10-07). Colour and underline only. */
+  .viewbody .task.unconfirmed span { text-decoration: underline dotted var(--glow); text-underline-offset: 3px; }
   /* Declared states other than open/done (2026-10-07): still a real checkbox, marked by its status. */
   .viewbody .task.status-scheduled input,
   .viewbody .task.status-waiting input,
@@ -1131,11 +1133,12 @@ import {
   installCompleter,
   installKeyHelp,
   installSearch,
+  unconfirmedLines,
   tagVocabulary,
   tagSource,
   dateMarkers,
   dateSource,
-} from "/dist/present.js?v=a3b13202ed";
+} from "/dist/present.js?v=548d6e51b7";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2539,6 +2542,9 @@ function repaintCurrentView() {
   paint(body, source, declaration.context, {
     markdown: md,
     view: v.id,
+    // SAVED, NOT YET BACK (2026-10-07): lines on screen that the server's last projection of this
+    // view does not hold — marked until the cycle's answer arrives. See `unconfirmedLines`.
+    unconfirmed: unconfirmedLines(source, sourceOfView(v)),
     // EVERY DECLARED CHECKBOX STATE, AND THE STAMP A TICK ADDS — both read from the published
     // config, never typed here. See `checkboxStatuses()` / `completionStamp()`.
     checkboxStatuses: checkboxStatuses(),
