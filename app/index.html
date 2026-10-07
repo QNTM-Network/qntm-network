@@ -2247,6 +2247,7 @@ function paintView(id, why) {
   // stayed put. Only the second one has a cursor worth carrying across.
   const sameView = id === paintedViewId;
   currentViewId = id;
+  rememberView(id);
   markWhereWeAre();
   // ── A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN, AND SURVIVES A PROJECTION IN IT ──
   //
@@ -3183,7 +3184,7 @@ async function enterGraph() {
   // front of everything here.
   const graph = readGraph();
   await loadPresentation();
-  await loadGraph(null, "chosen", graph);
+  await loadGraph(rememberedView(), "chosen", graph);
 }
 
 // HOW MANY AUTOMATIC ATTEMPTS `bootRead` BUYS BEYOND THE FIRST, AND HOW LONG IT WAITS BETWEEN THEM.
@@ -3271,6 +3272,32 @@ async function bootRead(delays = BOOT_READ_DELAYS) {
  * way, the same "costs nothing but a warning" posture every other declaration axis already takes
  * — but it SAYS SO, loudly, every single time, until the operator declares one.
  */
+// ── THE LAST VIEW, REMEMBERED IN THIS BROWSER (2026-10-07, operator-directed) ─────────────────
+//
+// A reload used to land on the declared landing view, or the first view when none is declared —
+// so the operator re-opened the drawer after every reload. The view he was last in is kept here,
+// per browser, and `landOn` prefers it exactly as it prefers `keep` on a re-read; a view that has
+// since left the snapshot falls through to the declared landing view as before. Storage can be
+// absent or throw (private windows, blocked site data), so both sides fail quietly to "nothing
+// remembered".
+const LAST_VIEW_KEY = "qntm_last_view";
+
+function rememberedView() {
+  try {
+    return localStorage.getItem(LAST_VIEW_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberView(id) {
+  try {
+    if (typeof id === "string") localStorage.setItem(LAST_VIEW_KEY, id);
+  } catch {
+    // nothing remembered — the next boot lands on the declared view, as before
+  }
+}
+
 function landOn(views, keep, landingViewId) {
   const kept = views.find((v) => v.id === keep);
   if (kept) return kept;
