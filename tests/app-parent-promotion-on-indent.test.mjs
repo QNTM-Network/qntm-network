@@ -485,6 +485,7 @@ const PROMOTION_COVERAGE = {
   column: "no commit — 0/$ move the column only",
   open: "reaches commitLine as insert-line; promotion reached when the opened line is typed at a deeper indent than the line above it",
   "toggle-done": "reaches commitLine as set-line with UNCHANGED leading whitespace — promotion never reached (section 4's own control)",
+  "capture": "opens a new line at the end of the capture view — no indent, nothing to promote (2026-10-07)",
   "delete-line": "removes the line; there is no relationship left to promote (2026-10-07, `dd`)",
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine as set-line; promotion reached on `>` (section 1 — THE HEADLINE FIX), abstains on `<` (section 3)",

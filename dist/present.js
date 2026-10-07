@@ -4390,6 +4390,11 @@ var ModeSurface = class {
           return { handled: true, effect: { kind: "none" } };
         }
         return { handled: true, effect: { kind: "open", direction: "above" } };
+      case "c":
+        if (pending !== null) {
+          return { handled: true, effect: { kind: "none" } };
+        }
+        return { handled: true, effect: { kind: "capture" } };
       case "x":
         if (pending !== null) {
           return { handled: true, effect: { kind: "none" } };
@@ -7922,6 +7927,29 @@ function globalKey(deps, e) {
       // `paintView` resolves against and `globalRegistrationFor` can return nothing at all (no
       // declaration read yet), in which case there would be no view id inside it to fall back to.
       v.id
+    );
+    if (opened) {
+      deps.focus.blur();
+      deps.mode.enterInsert();
+    }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "capture") {
+    const target = deps.captureViewId?.();
+    if (target === void 0) return;
+    if (target !== v.id) deps.chooseView?.(target);
+    const tv = deps.viewOf(target);
+    if (tv === void 0) return;
+    const targetSource = deps.showing(tv.id, deps.sourceFor(tv.path) ?? tv.markdown);
+    const lines = targetSource.split("\n");
+    let end = lines.length;
+    while (end > 0 && (lines[end - 1] ?? "").trim() === "") end -= 1;
+    const opened = openLine(
+      targetSource,
+      end,
+      deps.draftLine,
+      void 0,
+      deps.globalRegistrationFor(tv.id),
+      tv.id
     );
     if (opened) {
       deps.focus.blur();
