@@ -42,6 +42,21 @@ export interface SetCheckbox {
   readonly kind: "set-checkbox";
   readonly lineIndex: number;
   readonly checked: boolean;
+  /**
+   * The operator's declared checkbox glyphs (`qualification.tokens.status`). With it, a tick on a
+   * `[>]`/`[~]`/`[/]` line applies too; without it only `[ ]`/`[x]` lines do, as before.
+   */
+  readonly statuses?: Readonly<Record<string, string>> | undefined;
+  /**
+   * THE COMPLETION STAMP, AS OBSIDIAN'S TASKS PLUGIN WRITES IT (2026-10-07, operator report: a web
+   * tick reached the server with no `✅` date, so the task went done with `completed_at` null and
+   * dropped out of every "done today" count). `token` is the `completed_at` marker the engine
+   * declares (`qualification.extractionFields.completed_at.token`); `date` is the logical day the
+   * PAGE resolved from the declared day boundary — this module holds no clock. Ticking appends
+   * ` <token> <date>` unless the line already carries the token (an operator-typed backdate wins);
+   * unticking removes it. Absent, the glyph alone changes, as before.
+   */
+  readonly completion?: { readonly token: string; readonly date: string };
 }
 
 /**
@@ -117,6 +132,11 @@ export type SourceEdit = SetCheckbox | SetLine | InsertLine;
 // edit and not a rewrite: group 1 is everything up to the glyph, group 2 is everything after it,
 // and the only character this function is permitted to change sits between them.
 const CHECKBOX_GLYPH = /^(\s*- \[)[ xX](\] .*)$/;
+
+/** The same three groups, any glyph — consulted only when the edit carries a declared table. */
+const ANY_CHECKBOX_GLYPH = /^(\s*- \[)(.)(\] .*)$/;
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
  * Apply one edit to the whole source and return the whole source.
@@ -194,12 +214,32 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
     return null;
   }
 
+  let head: string;
+  let rest: string;
   const match = CHECKBOX_GLYPH.exec(line);
-  if (match === null) {
-    return null;
+  if (match !== null) {
+    head = match[1] ?? "";
+    rest = match[2] ?? "";
+  } else {
+    const other = edit.statuses === undefined ? null : ANY_CHECKBOX_GLYPH.exec(line);
+    if (other === null || edit.statuses?.[`[${other[2] ?? ""}]`] === undefined) {
+      return null;
+    }
+    head = other[1] ?? "";
+    rest = other[3] ?? "";
   }
 
-  lines[edit.lineIndex] = (match[1] ?? "") + (edit.checked ? "x" : " ") + (match[2] ?? "");
+  if (edit.completion !== undefined) {
+    const token = edit.completion.token;
+    const stamp = new RegExp(`\\s*${escapeRegExp(token)}\\s*\\d{4}-\\d{2}-\\d{2}`, "g");
+    if (edit.checked) {
+      if (!rest.includes(token)) rest = `${rest.replace(/\s+$/, "")} ${token} ${edit.completion.date}`;
+    } else {
+      rest = rest.replace(stamp, "");
+    }
+  }
+
+  lines[edit.lineIndex] = head + (edit.checked ? "x" : " ") + rest;
   return lines.join("\n");
 }
 

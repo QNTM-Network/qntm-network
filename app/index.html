@@ -605,6 +605,11 @@
   .viewbody .task input { flex: none; width: 1rem; height: 1rem; margin-top: calc((var(--row) - 1rem) / 2); accent-color: var(--glow); cursor: pointer; }
   .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task.syncing { opacity: .5; }
+  /* Declared states other than open/done (2026-10-07): still a real checkbox, marked by its status. */
+  .viewbody .task[data-status="scheduled"] input,
+  .viewbody .task[data-status="waiting"] input,
+  .viewbody .task[data-status="in_progress"] input { opacity: .55; outline: 1px dashed var(--glow); outline-offset: 1px; }
+  .viewbody .task[data-status="cancelled"] span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task span { flex: 1; cursor: text; }
 
   /* THE FOCUSED LINE — the same row, now holding its own source.
@@ -1075,7 +1080,7 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=38140ec408";
+} from "/dist/present.js?v=f75a0c0f5c";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2474,6 +2479,10 @@ function repaintCurrentView() {
   paint(body, source, declaration.context, {
     markdown: md,
     view: v.id,
+    // EVERY DECLARED CHECKBOX STATE, AND THE STAMP A TICK ADDS — both read from the published
+    // config, never typed here. See `checkboxStatuses()` / `completionStamp()`.
+    checkboxStatuses: checkboxStatuses(),
+    completion: completionStamp,
     focus,
     mode,
     draft: draftLine,
@@ -2860,6 +2869,30 @@ async function writeFile(view, markdown, source, token = null, ops = null) {
 // `existingLineCommit` (app/present/paint.ts) rather than an object literal, for the reason its own
 // header gives: a `LineCommit` hand-rolled on this page is how `kind`/`source` went missing once
 // already, in the one file TypeScript never checks.
+// ── WHAT A TICK MEANS, AS THE OPERATOR'S CONFIG SAYS IT (2026-10-07) ─────────────────────────
+//
+// `checkboxStatuses` — glyph -> status, `qualification.tokens.status`, published from the engine's
+// `vocabulary/checkbox.yaml`. The painter and `x` read it so a `[>]`/`[~]`/`[/]` line is a checkbox
+// with its status, not a bullet with its brackets showing.
+//
+// `completionStamp` — what Obsidian's Tasks plugin appends on a tick, so the engine's `completed_at`
+// lands exactly as it does from the laptop: the `completed_at` marker the engine declares
+// (`qualification.extractionFields.completed_at.token`, ✅) and the LOGICAL day from the declared day
+// boundary, read on this page as every other clock read is. An abstaining clock or an undeclared
+// marker returns `undefined`, and the tick changes the glyph alone — never a guessed date.
+function checkboxStatuses() {
+  const table = declaration.qualification?.tokens?.status;
+  return table && typeof table === "object" ? table : undefined;
+}
+
+function completionStamp() {
+  const token = declaration.qualification?.extractionFields?.completed_at?.token;
+  const boundary = declaration.resolution?.dayBoundary;
+  if (typeof token !== "string" || boundary === undefined) return undefined;
+  const reading = todayFor(nowMs(), boundary);
+  return reading.kind === "answer" ? { token, date: reading.answer.logicalDate } : undefined;
+}
+
 function toggleTaskCommit(view, toggle) {
   const { box, row, markdown: next } = toggle;
   if (next === null) return null;
@@ -3526,6 +3559,7 @@ const globalKeyDeps = {
   showing: (view, served) => rows.showing(view, served),
   sourceFor: (path) => accepted.sourceFor(path),
   declaration: () => declaration,
+  completion: completionStamp,
   viewOf: (viewId) => graphData?.snapshot?.views.find((x) => x.id === viewId),
   currentViewId: () => currentViewId,
   drawerIsOpen: () => drawerIsOpen,

@@ -284,6 +284,17 @@ export function existingLineCommit(
 export interface PaintDeps {
   readonly markdown: InlineMarkdown;
   /**
+   * The operator's declared checkbox glyphs (`qualification.tokens.status`). With it every
+   * declared state — `[>]` scheduled, `[~]` waiting, `[/]` in progress, `[-]` cancelled — paints
+   * as a checkbox carrying its status; without it only `[ ]`/`[x]` do, as before.
+   */
+  readonly checkboxStatuses?: Readonly<Record<string, string>> | undefined;
+  /**
+   * The completion stamp a tick should add, as the page resolves it now (the `completed_at`
+   * marker plus the logical day). See `SetCheckbox.completion` in source.ts.
+   */
+  readonly completion?: () => { readonly token: string; readonly date: string } | undefined;
+  /**
    * THE VIEW'S OWN ID — `view.id` off the wire payload (`app/index.html`'s `{id, path, title,
    * markdown}`) — optional, and its absence is a real configuration exactly as `focus`'s is.
    *
@@ -1739,7 +1750,7 @@ export function paint(
     if (draft?.isDraftAt(index) === true) {
       paintDraft();
     }
-    const shape = classifyLine(line);
+    const shape = classifyLine(line, deps.checkboxStatuses);
 
     if (shape.kind === "blank") {
       // A blank line has no rendition at either end — it vanished in the old painter and it
@@ -1827,15 +1838,22 @@ export function paint(
       const box = document.createElement("input");
       box.type = "checkbox";
       box.checked = shape.done;
+      // The declared status rides on the row, so a scheduled/waiting/in-progress line is a real
+      // checkbox that still says what it is (styled in the page's stylesheet, named on hover).
+      row.dataset["status"] = shape.status;
+      if (shape.status !== "open" && shape.status !== "done") box.title = shape.status;
       box.addEventListener("change", () => {
         // The affordance's source edit, computed in the module that owns source edits. The
         // painter never reads the DOM to build markdown; it reads the source string it was
         // given. tests/present-cascade.test.mjs proves that by corrupting the rendered DOM
         // first and asserting the posted markdown is unaffected.
+        const completion = deps.completion?.();
         const markdown = applyEdit(source, {
           kind: "set-checkbox",
           lineIndex: index,
           checked: box.checked,
+          statuses: deps.checkboxStatuses,
+          ...(completion === undefined ? {} : { completion }),
         });
         deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
       });
