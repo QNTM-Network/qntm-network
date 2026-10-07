@@ -3135,7 +3135,16 @@ const retryGraphRefreshIfPending = createGraphRefreshRetry({
  * — a 304 in particular means the graph did not move, so re-deriving the pending commit would
  * only repeat the identical walk.
  */
+// THE GRAPH BLOB IS FETCHED ONLY WHILE SOMETHING ON THIS PAGE READS IT (2026-10-07, operator-
+// directed: "skip unneeded data download"). Its readers are the browser-side composer and the
+// resolvers' predictions — the front-running layer `COMPOSE_VIEW_IN_BROWSER` switched off. With the
+// switch off, the ~740 KB blob was still re-fetched after every projection for nothing to read;
+// now it follows the same one-line switch. The resolvers then see no graph and abstain, which is
+// the state the operator asked for.
+const FETCH_GRAPH_BLOB = COMPOSE_VIEW_IN_BROWSER;
+
 function refreshGraphBlobAndRetryGraphRefresh() {
+  if (!FETCH_GRAPH_BLOB) return Promise.resolve();
   const etagBefore = graphCache.etag();
   return graphCache.refresh().then(() => {
     if (graphCache.etag() === etagBefore) {

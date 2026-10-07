@@ -52,6 +52,14 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+// THE GRAPH BLOB FOLLOWS THE COMPOSE SWITCH (2026-10-07): with `COMPOSE_VIEW_IN_BROWSER` off the
+// page fetches no blob, so a test that needs one through the real page skips, saying why, and
+// comes back by itself when the switch is turned on again.
+const BLOB_FETCHED = !/const COMPOSE_VIEW_IN_BROWSER = false;/.test(
+  readFileSync(new URL("../app/index.html", import.meta.url), "utf8"),
+);
 
 import { importPage, installBrowser, makeEvent, makeWorkDir } from "./fixtures/app-html-page.mjs";
 import { PROMOTION_DECLARATION, PROMOTION_VIEW } from "./fixtures/promotion-scenarios.mjs";
@@ -167,7 +175,7 @@ async function freshPage(label) {
 }
 
 describe("1. THE STALE WINDOW, REPRODUCED — an indent with the child not yet in the graph blob abstains, and arms nothing", () => {
-  test("through the real page: `>` posts the indent, and the predict surface stays empty", async () => {
+  test("through the real page: `>` posts the indent, and the predict surface stays empty", { skip: BLOB_FETCHED ? false : "the page fetches no graph blob while COMPOSE_VIEW_IN_BROWSER is off" }, async () => {
     const { page, posted, press } = await freshPage("retry-stale-window");
 
     // THE GRAPH BLOB IS FETCHED ONCE, MISSING THE CHILD — the moment `installProjection`'s own
@@ -198,7 +206,7 @@ describe("1. THE STALE WINDOW, REPRODUCED — an indent with the child not yet i
 });
 
 describe("2. THE RETRY, PROVEN — a fresh graph blob carrying the child gives promotion a second chance", () => {
-  test("the fresh refresh arms the correct prediction, through the real PredictSurface", async () => {
+  test("the fresh refresh arms the correct prediction, through the real PredictSurface", { skip: BLOB_FETCHED ? false : "the page fetches no graph blob while COMPOSE_VIEW_IN_BROWSER is off" }, async () => {
     const { page, press, setBlob } = await freshPage("retry-fresh-graph");
     await page.__refreshGraphBlobAndRetryGraphRefresh();
 
