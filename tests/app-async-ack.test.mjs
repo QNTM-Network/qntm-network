@@ -58,7 +58,15 @@
 
 import { test, describe, before, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+// THE GRAPH BLOB FOLLOWS THE COMPOSE SWITCH (2026-10-07): with `COMPOSE_VIEW_IN_BROWSER` off the
+// page fetches no blob, so a test that needs one through the real page skips, saying why, and
+// comes back by itself when the switch is turned on again.
+const BLOB_FETCHED = !/const COMPOSE_VIEW_IN_BROWSER = false;/.test(
+  readFileSync(new URL("../app/index.html", import.meta.url), "utf8"),
+);
 
 import { handleApp } from "../worker/src/app.js";
 import {
@@ -733,7 +741,7 @@ describe("3. THE PAGE — a projection arrives with no gesture behind it", () =>
     // that the graph might have moved. It is not on this test's critical path (nothing here reads
     // `ctx.graph`), so it is asserted present rather than re-proven; `app-graph-blob.test.mjs`
     // owns the blob cache's own behaviour.
-    assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph", "GET /app/graph/blob"]);
+    assert.deepEqual(d.control.calls, ["POST /app/edit-file", "GET /app/graph", ...(BLOB_FETCHED ? ["GET /app/graph/blob"] : [])]);
     assert.match(d.onScreen(), /🛫 2026-08-04/, "the projection did not reach the screen");
     assert.equal(d.page.__pickups().waiting(PATH), false, "an answered pickup is still waiting");
   });
@@ -1020,7 +1028,7 @@ describe("3b. A PICKUP STOPS ON THE LINE BEING STAMPED, NOT ON A NEWER PROJECTIO
     // identical note on this suite's §3 test above.
     assert.deepEqual(
       d.control.calls,
-      ["POST /app/edit-file", "GET /app/graph", "GET /app/graph/blob"],
+      ["POST /app/edit-file", "GET /app/graph", ...(BLOB_FETCHED ? ["GET /app/graph/blob"] : [])],
       "the tick cost more than one read",
     );
     assert.equal(d.page.__pickups().waiting(PATH), false, "the tick's pickup is still waiting");

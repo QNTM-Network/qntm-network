@@ -55,6 +55,14 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+// THE GRAPH BLOB FOLLOWS THE COMPOSE SWITCH (2026-10-07): with `COMPOSE_VIEW_IN_BROWSER` off the
+// page fetches no blob, so a test that needs one through the real page skips, saying why, and
+// comes back by itself when the switch is turned on again.
+const BLOB_FETCHED = !/const COMPOSE_VIEW_IN_BROWSER = false;/.test(
+  readFileSync(new URL("../app/index.html", import.meta.url), "utf8"),
+);
 
 import { importPage, installBrowser, makeEvent, makeWorkDir, walk } from "./fixtures/app-html-page.mjs";
 
@@ -186,7 +194,7 @@ function typeMangoAtTheEnd(page, elements, press) {
 }
 
 describe("1. THE STALE WINDOW, REPRODUCED — a stale blob drops a sibling silently, and ordering arms nothing", () => {
-  test("through the real page: `o`/type/blur posts the capture, and settle stays empty though the row belongs before Zulu", async () => {
+  test("through the real page: `o`/type/blur posts the capture, and settle stays empty though the row belongs before Zulu", { skip: BLOB_FETCHED ? false : "the page fetches no graph blob while COMPOSE_VIEW_IN_BROWSER is off" }, async () => {
     const { page, elements, press } = await freshPage("ordering-retry-stale-window");
     await page.__refreshGraphBlobAndRetryGraphRefresh();
     assert.deepEqual(page.__graphBlob(), { graph: GRAPH_WITHOUT_ZULU });
@@ -210,7 +218,7 @@ describe("1. THE STALE WINDOW, REPRODUCED — a stale blob drops a sibling silen
 });
 
 describe("2. THE RETRY, PROVEN — a fresh graph blob carrying Zulu gives ordering a second, CORRECT chance", () => {
-  test("the fresh refresh re-derives the commit and arms the row before Zulu, through the real SettleSurface", async () => {
+  test("the fresh refresh re-derives the commit and arms the row before Zulu, through the real SettleSurface", { skip: BLOB_FETCHED ? false : "the page fetches no graph blob while COMPOSE_VIEW_IN_BROWSER is off" }, async () => {
     const { page, elements, press, setBlob } = await freshPage("ordering-retry-fresh-graph");
     await page.__refreshGraphBlobAndRetryGraphRefresh();
 
