@@ -77,6 +77,10 @@ export interface GlobalKeyDeps {
   /** `AcceptedSource.sourceFor(path)` — the accepted string for a path, or null. */
   readonly sourceFor: (path: string) => string | null;
   readonly declaration: () => Declaration;
+  /** Open or close the `?` key help overlay. */
+  readonly toggleHelp?: () => void;
+  /** Open the `/` search box. */
+  readonly openSearch?: () => void;
   /** The view `c` captures into (the inbox), or `undefined` when there is none. */
   readonly captureViewId?: () => string | undefined;
   /** Switch to a view, exactly as choosing it in the drawer does. */
@@ -278,6 +282,10 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
       deps.mode.enterInsert();
     }
     deps.repaintCurrentView();
+  } else if (effect.kind === "help") {
+    deps.toggleHelp?.();
+  } else if (effect.kind === "search") {
+    deps.openSearch?.();
   } else if (effect.kind === "toggle-done") {
     // `x` — reuses `applyEdit`'s existing `set-checkbox` case (source.ts). If the selected line
     // has no checkbox, `classifyLine` says so and nothing happens — no repaint, no POST, exactly

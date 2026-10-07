@@ -422,6 +422,9 @@ export type { DrawerDeps, DrawerView, FolderNode } from "../shell/drawer.js";
 // at all. See keys.ts's own header for the two defects that lived in that blind spot.
 export { globalKey, installGlobalKeys } from "../shell/keys.js";
 export { installCompleter } from "../shell/completer.js";
+export { installKeyHelp } from "../shell/help.js";
+export { installSearch } from "../shell/search.js";
+export type { SearchDeps } from "../shell/search.js";
 export type { CompleterDeps } from "../shell/completer.js";
 export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";
 
@@ -461,3 +464,9 @@ export { applyCompletion, completeWith, tagSource } from "./completion.js";
 export type { Completion, CompletionItem, CompletionSource } from "./completion.js";
 export { addDays, dateChoices, dateMarkers, dateSource } from "./datecomplete.js";
 export type { TagQuery, TagSources } from "./tagcomplete.js";
+
+// ── KEY HELP (2026-10-07) — the data behind `?`; the overlay is app/shell/help.ts ──
+export { KEY_HELP } from "./keyhelp.js";
+export type { KeyHelpGroup, KeyHelpRow } from "./keyhelp.js";
+export { searchViews } from "./search.js";
+export type { SearchHit, SearchView } from "./search.js";

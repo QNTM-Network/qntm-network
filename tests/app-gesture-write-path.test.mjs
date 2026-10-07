@@ -93,6 +93,8 @@ const COVERED_KINDS = {
   open: "reaches commitLine via paint.ts's own draftInput.settle (kind: insert-line) once the operator blurs; same as enter-insert, never the defect",
   "toggle-done": "reaches commitLine directly from app/index.html — THE FIX under test",
   "capture": "opens a draft line in the capture view through the same openLine as `o` (2026-10-07)",
+  "help": "opens the key help overlay; never reaches commitLine (2026-10-07)",
+  "search": "opens the search box; never reaches commitLine (2026-10-07)",
   "delete-line": "reaches commitLine as a delete-line commit with empty text (2026-10-07, `dd`)",
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine directly from app/index.html — THE OTHER FIX under test",
