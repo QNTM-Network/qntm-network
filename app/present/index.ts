@@ -421,6 +421,8 @@ export type { DrawerDeps, DrawerView, FolderNode } from "../shell/drawer.js";
 // compiled and observable, which is what lets `classes.yaml`'s `movement` class be asked anything
 // at all. See keys.ts's own header for the two defects that lived in that blind spot.
 export { globalKey, installGlobalKeys } from "../shell/keys.js";
+export { installTagPicker } from "../shell/tagpicker.js";
+export type { TagPickerDeps } from "../shell/tagpicker.js";
 export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";
 
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
@@ -452,3 +454,7 @@ export type {
   ViewComputation,
   ViewSection,
 } from "./select/viewmembers.js";
+
+// ── TAG COMPLETION (2026-10-07) — pure; the DOM half is app/shell/tagpicker.ts ──
+export { applyTag, matchingTags, tagQueryAt, tagVocabulary } from "./tagcomplete.js";
+export type { TagQuery, TagSources } from "./tagcomplete.js";

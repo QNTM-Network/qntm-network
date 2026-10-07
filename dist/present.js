@@ -7978,6 +7978,149 @@ function installGlobalKeys(deps, on = document) {
     });
   }
 }
+
+// app/present/tagcomplete.ts
+function tagVocabulary(sources) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const add = (token) => {
+    if (typeof token !== "string" || !/^#[^\s#]+$/.test(token) || seen.has(token)) return;
+    seen.add(token);
+    out.push(token);
+  };
+  for (const token of sources.resolution?.tagOrder?.canonicalOrder ?? []) add(token);
+  const fields = sources.qualification?.tokens ?? {};
+  for (const field of Object.keys(fields).sort()) {
+    for (const token of Object.keys(fields[field] ?? {}).sort()) add(token);
+  }
+  return out;
+}
+function tagQueryAt(text, caret) {
+  if (caret < 0 || caret > text.length) return null;
+  let start = caret;
+  while (start > 0 && !/\s/.test(text[start - 1] ?? "")) start -= 1;
+  if (text[start] !== "#") return null;
+  let end = caret;
+  while (end < text.length && !/\s/.test(text[end] ?? "")) end += 1;
+  const typed = text.slice(start + 1, caret);
+  if (typed.includes("#")) return null;
+  return { start, end, prefix: typed.toLowerCase() };
+}
+function matchingTags(vocabulary, query, limit = 8) {
+  const starts = [];
+  const contains = [];
+  for (const tag of vocabulary) {
+    const name = tag.slice(1).toLowerCase();
+    if (name.startsWith(query.prefix)) starts.push(tag);
+    else if (query.prefix !== "" && name.includes(query.prefix)) contains.push(tag);
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
+function applyTag(text, query, tag) {
+  const after = text.slice(query.end);
+  const spacer = after.startsWith(" ") ? "" : " ";
+  const next = text.slice(0, query.start) + tag + spacer + after;
+  return { text: next, caret: query.start + tag.length + 1 };
+}
+
+// app/shell/tagpicker.ts
+var isLineEditor = (target) => typeof HTMLInputElement !== "undefined" && target instanceof HTMLInputElement && target.classList.contains("rawline");
+function installTagPicker(deps) {
+  let made = null;
+  const listEl = (doc) => {
+    if (made !== null) return made;
+    made = doc.createElement("ul");
+    made.className = "tag-picker";
+    made.setAttribute("role", "listbox");
+    made.setAttribute("aria-label", "Tags");
+    made.hidden = true;
+    doc.body.append(made);
+    return made;
+  };
+  const isOpen = () => made !== null && !made.hidden;
+  let active = null;
+  let query = null;
+  let items = [];
+  let selected = 0;
+  const close = () => {
+    if (made !== null) made.hidden = true;
+    items = [];
+    query = null;
+  };
+  const accept = (index) => {
+    const tag = items[index];
+    if (active === null || query === null || tag === void 0) return;
+    const out = applyTag(active.value, query, tag);
+    active.value = out.text;
+    active.setSelectionRange(out.caret, out.caret);
+    close();
+    active.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const render = () => {
+    if (active === null) return;
+    const doc = active.ownerDocument;
+    const list = listEl(doc);
+    list.replaceChildren(
+      ...items.map((tag, index) => {
+        const item = doc.createElement("li");
+        item.textContent = tag;
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", String(index === selected));
+        item.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          accept(index);
+        });
+        return item;
+      })
+    );
+    const box = active.getBoundingClientRect();
+    list.style.left = `${Math.round(box.left)}px`;
+    list.style.top = `${Math.round(box.bottom + 4)}px`;
+    list.hidden = false;
+  };
+  const refresh = (input) => {
+    active = input;
+    query = tagQueryAt(input.value, input.selectionStart ?? input.value.length);
+    items = query === null ? [] : matchingTags(deps.vocabulary(), query);
+    if (items.length === 0) {
+      close();
+      return;
+    }
+    selected = Math.min(selected, items.length - 1);
+    render();
+  };
+  deps.viewBody.addEventListener("input", (event) => {
+    if (!isLineEditor(event.target)) return;
+    selected = 0;
+    refresh(event.target);
+  });
+  deps.viewBody.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isOpen() || event.target !== active || items.length === 0) return;
+      const key = event.key;
+      if (key === "ArrowDown") {
+        selected = (selected + 1) % items.length;
+        render();
+      } else if (key === "ArrowUp") {
+        selected = (selected - 1 + items.length) % items.length;
+        render();
+      } else if (key === "Tab" || key === "Enter") {
+        accept(selected);
+      } else if (key === "Escape") {
+        close();
+      } else {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    true
+  );
+  deps.viewBody.addEventListener("focusout", (event) => {
+    if (event.target === active) close();
+  });
+}
 export {
   ANCHOR_TRUST,
   AcceptedSource,
@@ -8019,6 +8162,7 @@ export {
   applyGraphAwareRules,
   applyRuleActions,
   applyRules,
+  applyTag,
   armPredict,
   armSettle,
   baseOf,
@@ -8061,6 +8205,7 @@ export {
   graphSnapshotOf,
   indentedLine,
   installGlobalKeys,
+  installTagPicker,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
@@ -8074,6 +8219,7 @@ export {
   matchesFindClause,
   matchesQualifier,
   matchesQualifierGraphAware,
+  matchingTags,
   membershipFor,
   membershipSpec,
   mintWriteToken,
@@ -8124,7 +8270,9 @@ export {
   stampsOwed,
   structuralParentLineIndex,
   structuralRelationshipChangeFor,
+  tagQueryAt,
   tagSpans,
+  tagVocabulary,
   titleSpans,
   titleStyleFor,
   titleStylePredicateHolds,
