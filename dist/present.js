@@ -28,17 +28,34 @@ var DEFAULT = Object.freeze({
   stamp: "raw"
 });
 var TASK = /^(\s*)- \[( |x|X)\] (.*)$/;
+var ANY_GLYPH_TASK = /^(\s*)- \[(.)\] (.*)$/;
 var HEADING = /^(#{1,6})\s+(.*)$/;
-function classifyLine(line) {
+function classifyLine(line, statuses) {
   const task = TASK.exec(line);
   if (task !== null) {
+    const done = (task[2] ?? "").toLowerCase() === "x";
     return {
       kind: "checkbox",
       source: line,
       indent: task[1] ?? "",
-      done: (task[2] ?? "").toLowerCase() === "x",
-      tail: task[3] ?? ""
+      done,
+      tail: task[3] ?? "",
+      status: statuses?.[`[${task[2] ?? " "}]`] ?? (done ? "done" : "open")
     };
+  }
+  if (statuses !== void 0) {
+    const other = ANY_GLYPH_TASK.exec(line);
+    const status = other === null ? void 0 : statuses[`[${other[2] ?? ""}]`];
+    if (other !== null && status !== void 0) {
+      return {
+        kind: "checkbox",
+        source: line,
+        indent: other[1] ?? "",
+        done: status === "done",
+        tail: other[3] ?? "",
+        status
+      };
+    }
   }
   const heading = HEADING.exec(line);
   if (heading !== null) {
@@ -5599,6 +5616,8 @@ function openLine(from, lineIndex, draft, onDeclined, declared, view) {
 
 // app/present/source.ts
 var CHECKBOX_GLYPH2 = /^(\s*- \[)[ xX](\] .*)$/;
+var ANY_CHECKBOX_GLYPH = /^(\s*- \[)(.)(\] .*)$/;
+var escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function applyEdit(source, edit) {
   const lines = source.split("\n");
   if (edit.kind === "insert-line") {
@@ -5631,11 +5650,30 @@ function applyEdit(source, edit) {
   if (edit.kind !== "set-checkbox") {
     return null;
   }
+  let head;
+  let rest;
   const match = CHECKBOX_GLYPH2.exec(line);
-  if (match === null) {
-    return null;
+  if (match !== null) {
+    head = match[1] ?? "";
+    rest = match[2] ?? "";
+  } else {
+    const other = edit.statuses === void 0 ? null : ANY_CHECKBOX_GLYPH.exec(line);
+    if (other === null || edit.statuses?.[`[${other[2] ?? ""}]`] === void 0) {
+      return null;
+    }
+    head = other[1] ?? "";
+    rest = other[3] ?? "";
   }
-  lines[edit.lineIndex] = (match[1] ?? "") + (edit.checked ? "x" : " ") + (match[2] ?? "");
+  if (edit.completion !== void 0) {
+    const token = edit.completion.token;
+    const stamp = new RegExp(`\\s*${escapeRegExp(token)}\\s*\\d{4}-\\d{2}-\\d{2}`, "g");
+    if (edit.checked) {
+      if (!rest.includes(token)) rest = `${rest.replace(/\s+$/, "")} ${token} ${edit.completion.date}`;
+    } else {
+      rest = rest.replace(stamp, "");
+    }
+  }
+  lines[edit.lineIndex] = head + (edit.checked ? "x" : " ") + rest;
   return lines.join("\n");
 }
 function lineOps(kind, lineIndex, markdown) {
@@ -6144,7 +6182,7 @@ function paint(body, source, context, deps) {
     if (draft?.isDraftAt(index) === true) {
       paintDraft();
     }
-    const shape = classifyLine(line);
+    const shape = classifyLine(line, deps.checkboxStatuses);
     if (shape.kind === "blank") {
       if (mode !== void 0 && mode.mode === "NORMAL" && focus !== void 0 && focus.isFocused(index)) {
         const mark = document.createElement("div");
@@ -6167,11 +6205,19 @@ function paint(body, source, context, deps) {
       const box = document.createElement("input");
       box.type = "checkbox";
       box.checked = shape.done;
+      row.dataset["status"] = shape.status;
+      if (shape.status !== "open" && shape.status !== "done") {
+        row.classList.add(`status-${shape.status}`);
+        box.title = shape.status;
+      }
       box.addEventListener("change", () => {
+        const completion = deps.completion?.();
         const markdown = applyEdit(source, {
           kind: "set-checkbox",
           lineIndex: index,
-          checked: box.checked
+          checked: box.checked,
+          statuses: deps.checkboxStatuses,
+          ...completion === void 0 ? {} : { completion }
         });
         deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
       });
@@ -7860,12 +7906,16 @@ function globalKey(deps, e) {
     deps.repaintCurrentView();
   } else if (effect.kind === "toggle-done") {
     const line = source.split("\n")[current] ?? "";
-    const shape = classifyLine(line);
+    const statuses = deps.declaration().qualification?.tokens["status"];
+    const shape = classifyLine(line, statuses);
     if (shape.kind === "checkbox") {
+      const completion = deps.completion?.();
       const markdown = applyEdit(source, {
         kind: "set-checkbox",
         lineIndex: current,
-        checked: !shape.done
+        checked: !shape.done,
+        statuses,
+        ...completion === void 0 ? {} : { completion }
       });
       if (markdown !== null) {
         deps.commitLine(v, existingLineCommit(source, current, markdown));

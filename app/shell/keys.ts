@@ -77,6 +77,8 @@ export interface GlobalKeyDeps {
   /** `AcceptedSource.sourceFor(path)` — the accepted string for a path, or null. */
   readonly sourceFor: (path: string) => string | null;
   readonly declaration: () => Declaration;
+  /** The completion stamp a tick should add now — see `SetCheckbox.completion` (source.ts). */
+  readonly completion?: () => { readonly token: string; readonly date: string } | undefined;
   readonly viewOf: (viewId: string) => GlobalKeyView | undefined;
   readonly currentViewId: () => string | null;
   readonly drawerIsOpen: () => boolean;
@@ -251,12 +253,18 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     // was in the right place — beside the divergence — and simply wrong, which is worse than
     // absent: it reads as an assurance the paths are already one.
     const line = source.split("\n")[current] ?? "";
-    const shape = classifyLine(line);
+    const statuses = deps.declaration().qualification?.tokens["status"] as
+      | Readonly<Record<string, string>>
+      | undefined;
+    const shape = classifyLine(line, statuses);
     if (shape.kind === "checkbox") {
+      const completion = deps.completion?.();
       const markdown = applyEdit(source, {
         kind: "set-checkbox",
         lineIndex: current,
         checked: !shape.done,
+        statuses,
+        ...(completion === undefined ? {} : { completion }),
       });
       if (markdown !== null) {
         // `existingLineCommit` (app/present/paint.ts), not a hand-built object — see its own

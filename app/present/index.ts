@@ -32,6 +32,7 @@ export {
   wikiLinkSpans,
 } from "./express/rendition.js";
 export type {
+  CheckboxStatuses,
   CleanTitleAbstention,
   CleanTitleReading,
   Contribution,

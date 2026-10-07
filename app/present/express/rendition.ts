@@ -170,6 +170,12 @@ export type LineShape =
       readonly indent: string;
       readonly done: boolean;
       readonly tail: string;
+      /**
+       * The status the glyph declares — `open`/`done` for the two glyphs every reader knows, and
+       * whatever the operator's `vocabulary/checkbox.yaml` maps the rest to (`scheduled` for `[>]`,
+       * `waiting` for `[~]` …) when the caller passes that table. See `classifyLine`.
+       */
+      readonly status: string;
     }
   | {
       readonly kind: "heading";
@@ -185,6 +191,16 @@ export type LineShape =
 // change, and a "harmless" improvement to either regex would silently falsify it. If either
 // should be different, that is a separate change with its own evidence.
 const TASK = /^(\s*)- \[( |x|X)\] (.*)$/;
+
+/** Any single-character glyph — used only together with a declared status table. */
+const ANY_GLYPH_TASK = /^(\s*)- \[(.)\] (.*)$/;
+
+/**
+ * Checkbox glyph -> status, exactly as the engine's `vocabulary/checkbox.yaml` declares it and
+ * `presentation.json` publishes it (`qualification.tokens.status`): `{"[ ]": "open", "[>]":
+ * "scheduled", …}`.
+ */
+export type CheckboxStatuses = Readonly<Record<string, string>>;
 const HEADING = /^(#{1,6})\s+(.*)$/;
 
 /**
@@ -195,16 +211,39 @@ const HEADING = /^(#{1,6})\s+(.*)$/;
  * to nothing vanished from the old painter; a line matching neither and holding characters became
  * its own one-line markdown document. Both are preserved.
  */
-export function classifyLine(line: string): LineShape {
+export function classifyLine(line: string, statuses?: CheckboxStatuses): LineShape {
   const task = TASK.exec(line);
   if (task !== null) {
+    const done = (task[2] ?? "").toLowerCase() === "x";
     return {
       kind: "checkbox",
       source: line,
       indent: task[1] ?? "",
-      done: (task[2] ?? "").toLowerCase() === "x",
+      done,
       tail: task[3] ?? "",
+      status: statuses?.[`[${task[2] ?? " "}]`] ?? (done ? "done" : "open"),
     };
+  }
+
+  // EVERY OTHER CHECKBOX STATE, READ FROM THE OPERATOR'S OWN VOCABULARY (2026-10-07, operator
+  // report: `[>]` scheduled and `[~]` waiting lines painted as bullets with the brackets showing).
+  // `TASK` above stays the verbatim transcription its own comment protects; this is the separate,
+  // evidenced widening that comment asks for. It fires ONLY for a glyph the caller's table
+  // declares (`qualification.tokens.status`, published from `vocabulary/checkbox.yaml`), so with no
+  // table every line classifies exactly as it did before.
+  if (statuses !== undefined) {
+    const other = ANY_GLYPH_TASK.exec(line);
+    const status = other === null ? undefined : statuses[`[${other[2] ?? ""}]`];
+    if (other !== null && status !== undefined) {
+      return {
+        kind: "checkbox",
+        source: line,
+        indent: other[1] ?? "",
+        done: status === "done",
+        tail: other[3] ?? "",
+        status,
+      };
+    }
   }
 
   const heading = HEADING.exec(line);
