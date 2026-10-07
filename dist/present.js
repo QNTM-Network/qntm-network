@@ -4395,6 +4395,10 @@ var ModeSurface = class {
           return { handled: true, effect: { kind: "none" } };
         }
         return { handled: true, effect: { kind: "capture" } };
+      case "?":
+        return { handled: true, effect: { kind: "help" } };
+      case "/":
+        return { handled: true, effect: { kind: "search" } };
       case "x":
         if (pending !== null) {
           return { handled: true, effect: { kind: "none" } };
@@ -7962,6 +7966,10 @@ function globalKey(deps, e) {
       deps.mode.enterInsert();
     }
     deps.repaintCurrentView();
+  } else if (effect.kind === "help") {
+    deps.toggleHelp?.();
+  } else if (effect.kind === "search") {
+    deps.openSearch?.();
   } else if (effect.kind === "toggle-done") {
     const line = source.split("\n")[current] ?? "";
     const statuses = deps.declaration().qualification?.tokens["status"];
@@ -8187,6 +8195,222 @@ function installCompleter(deps) {
   });
 }
 
+// app/present/keyhelp.ts
+var KEY_HELP = [
+  {
+    title: "Move",
+    rows: [
+      { keys: ["j", "\u2193"], does: "Next line" },
+      { keys: ["k", "\u2191"], does: "Previous line" },
+      { keys: ["gg", "G"], does: "First / last line" },
+      { keys: ["{", "}"], does: "Previous / next section" },
+      { keys: ["w", "b", "e"], does: "Next word / back a word / end of word" },
+      { keys: ["0", "$"], does: "Start / end of the line" },
+      { keys: ["3j"], does: "A number before a move repeats it" }
+    ]
+  },
+  {
+    title: "Edit",
+    rows: [
+      { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
+      { keys: ["a"], does: "Edit the line, after the cursor" },
+      { keys: ["click twice"], does: "Edit the line you clicked" },
+      { keys: ["o", "O"], does: "New line below / above" },
+      { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
+      { keys: ["x"], does: "Tick / untick (adds or removes \u2705 today)" },
+      { keys: ["dd"], does: "Delete the line" },
+      { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" }
+    ]
+  },
+  {
+    title: "While editing a line",
+    rows: [
+      { keys: ["Enter"], does: "Save the line" },
+      { keys: ["Escape"], does: "Leave without saving" },
+      { keys: ["#"], does: "Suggest tags from your config" },
+      { keys: ["\u{1F4C5} \u23F3 \u{1F6EB} + space"], does: "Suggest dates" },
+      { keys: ["\u2191", "\u2193", "Tab"], does: "Choose a suggestion" }
+    ]
+  },
+  {
+    title: "App",
+    rows: [
+      { keys: ["\\"], does: "Open the views list" },
+      { keys: ["/"], does: "Search tasks across all views" },
+      { keys: ["?"], does: "This help" },
+      { keys: ["Escape"], does: "Close a panel, or get out of a stuck edit" }
+    ]
+  }
+];
+
+// app/shell/help.ts
+function installKeyHelp(doc = document) {
+  let overlay = null;
+  const close = () => {
+    if (overlay !== null) overlay.hidden = true;
+  };
+  const make = () => {
+    const root = doc.createElement("div");
+    root.className = "key-help";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-modal", "true");
+    root.setAttribute("aria-label", "Keyboard help");
+    const panel = doc.createElement("div");
+    panel.className = "key-help-panel";
+    const heading = doc.createElement("h2");
+    heading.textContent = "Keys";
+    panel.append(heading);
+    for (const group of KEY_HELP) {
+      const title = doc.createElement("h3");
+      title.textContent = group.title;
+      const table = doc.createElement("dl");
+      for (const row of group.rows) {
+        const dt = doc.createElement("dt");
+        for (const key of row.keys) {
+          const kbd = doc.createElement("kbd");
+          kbd.textContent = key;
+          dt.append(kbd);
+        }
+        const dd = doc.createElement("dd");
+        dd.textContent = row.does;
+        table.append(dt, dd);
+      }
+      panel.append(title, table);
+    }
+    root.append(panel);
+    root.addEventListener("click", (event) => {
+      if (event.target === root) close();
+    });
+    doc.addEventListener(
+      "keydown",
+      (event) => {
+        if (root.hidden) return;
+        if (event.key === "Escape" || event.key === "?") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          close();
+        }
+      },
+      true
+    );
+    doc.body.append(root);
+    return root;
+  };
+  return () => {
+    if (overlay === null) {
+      overlay = make();
+      return;
+    }
+    overlay.hidden = !overlay.hidden;
+  };
+}
+
+// app/present/search.ts
+var ID = /\[\[qntm:(\d+)\]\]/;
+function searchViews(views, query, preferViewId, limit = 30) {
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+  if (words.length === 0) return [];
+  const ordered = [...views].sort((a, b) => Number(b.id === preferViewId) - Number(a.id === preferViewId));
+  const seen = /* @__PURE__ */ new Set();
+  const hits = [];
+  for (const view of ordered) {
+    const lines = view.markdown.split("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? "";
+      const id = ID.exec(line)?.[1];
+      if (id === void 0 || seen.has(id)) continue;
+      const lower = line.toLowerCase();
+      if (!words.every((w) => lower.includes(w))) continue;
+      seen.add(id);
+      hits.push({
+        qntmId: id,
+        text: line.replace(/^\s*- \[.\]\s*/, "").replace(ID, "").replace(/\s+/g, " ").trim(),
+        viewId: view.id,
+        viewTitle: view.title ?? view.id,
+        lineIndex: index
+      });
+      if (hits.length >= limit) return hits;
+    }
+  }
+  return hits;
+}
+
+// app/shell/search.ts
+function installSearch(deps, doc = document) {
+  let root = null;
+  let input = null;
+  let list = null;
+  let hits = [];
+  let selected = 0;
+  const close = () => {
+    if (root !== null) root.hidden = true;
+  };
+  const choose = (index) => {
+    const hit = hits[index];
+    if (hit === void 0) return;
+    close();
+    deps.go(hit.viewId, hit.lineIndex);
+  };
+  const render = () => {
+    if (list === null) return;
+    list.replaceChildren(
+      ...hits.map((hit, index) => {
+        const row = doc.createElement("li");
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", String(index === selected));
+        const text = doc.createElement("span");
+        text.textContent = hit.text;
+        const where = doc.createElement("small");
+        where.textContent = hit.viewTitle;
+        row.append(text, where);
+        row.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          choose(index);
+        });
+        return row;
+      })
+    );
+  };
+  const make = () => {
+    root = doc.createElement("div");
+    root.className = "search-box";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-label", "Search");
+    input = doc.createElement("input");
+    input.type = "search";
+    input.placeholder = "Search tasks in every view\u2026";
+    input.setAttribute("aria-label", "Search tasks");
+    list = doc.createElement("ul");
+    list.setAttribute("role", "listbox");
+    root.append(input, list);
+    input.addEventListener("input", () => {
+      hits = searchViews(deps.views(), input.value, deps.currentViewId());
+      selected = 0;
+      render();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" && hits.length > 0) selected = (selected + 1) % hits.length;
+      else if (event.key === "ArrowUp" && hits.length > 0) selected = (selected - 1 + hits.length) % hits.length;
+      else if (event.key === "Enter") choose(selected);
+      else if (event.key === "Escape") close();
+      else return;
+      event.preventDefault();
+      event.stopPropagation();
+      render();
+    });
+    input.addEventListener("blur", () => close());
+    doc.body.append(root);
+  };
+  return () => {
+    if (root === null) make();
+    root.hidden = false;
+    input.value = "";
+    hits = [];
+    render();
+    input.focus();
+  };
+}
+
 // app/present/datecomplete.ts
 function dateMarkers(sources) {
   const out = [];
@@ -8257,6 +8481,7 @@ export {
   FocusSurface,
   GraphRefreshRetrySurface,
   INDENT_UNIT,
+  KEY_HELP,
   LANDING_VIEW_KEY,
   ModeSurface,
   NOT_EVALUATED,
@@ -8336,6 +8561,8 @@ export {
   indentedLine,
   installCompleter,
   installGlobalKeys,
+  installKeyHelp,
+  installSearch,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
@@ -8390,6 +8617,7 @@ export {
   resolvedQntmId,
   rulesSpec,
   runResolvers,
+  searchViews,
   sectionAt,
   sectionForInsertAt,
   sectionOrderFor,

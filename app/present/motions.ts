@@ -274,6 +274,10 @@ export type NormalEffect =
   /** `x` asked to toggle done on the selected line. Whether it HAS a checkbox is the caller's to
    * decide — this module does not import `resolution.ts`'s `classifyLine` either. */
   | { readonly kind: "toggle-done" }
+  /** `?` asked for the key help overlay. */
+  | { readonly kind: "help" }
+  /** `/` asked for the search box. */
+  | { readonly kind: "search" }
   /** `c` asked to capture a new line into the capture view (the inbox), from wherever the cursor is. */
   | { readonly kind: "capture" }
   /** `dd` asked to delete the selected line. Whether it MAY be deleted is the caller's to decide. */
@@ -543,6 +547,10 @@ export class ModeSurface {
           return { handled: true, effect: { kind: "none" } };
         }
         return { handled: true, effect: { kind: "capture" } };
+      case "?":
+        return { handled: true, effect: { kind: "help" } };
+      case "/":
+        return { handled: true, effect: { kind: "search" } };
       case "x":
         if (pending !== null) {
           // Same refusal as `o`/`O`: "toggle done three times" has no well-defined meaning, so a

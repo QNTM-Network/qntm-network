@@ -365,6 +365,24 @@
     max-height: 16rem; overflow: auto; background: var(--bg, #0b0d10); border: 1px solid var(--green-hairline);
     border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.45); font-size: .85rem; }
   .tag-picker[hidden] { display: none; }
+  .key-help { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,.55); }
+  .key-help[hidden] { display: none; }
+  .search-box { position: fixed; top: 4rem; left: 50%; transform: translateX(-50%); z-index: 60; width: min(40rem, calc(100vw - 2rem));
+    background: var(--bg, #0b0d10); border: 1px solid var(--green-hairline); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .search-box[hidden] { display: none; }
+  .search-box input { width: 100%; box-sizing: border-box; padding: .6rem .75rem; border: 0; border-bottom: 1px solid var(--green-hairline); background: transparent; color: var(--ink); font-size: .95rem; outline: none; }
+  .search-box ul { list-style: none; margin: 0; padding: .25rem 0; max-height: 60vh; overflow: auto; }
+  .search-box li { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem .75rem; cursor: pointer; color: var(--ink); font-size: .85rem; }
+  .search-box li small { color: var(--dim); white-space: nowrap; }
+  .search-box li[aria-selected="true"] { background: var(--green-hairline); color: var(--green); }
+  .key-help-panel { width: min(40rem, calc(100vw - 2rem)); max-height: 85vh; overflow: auto; padding: 1rem 1.25rem;
+    background: var(--bg, #0b0d10); border: 1px solid var(--green-hairline); border-radius: 8px; }
+  .key-help-panel h2 { margin: 0 0 .5rem; font-size: 1rem; color: var(--ink); }
+  .key-help-panel h3 { margin: .9rem 0 .35rem; font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .key-help-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0; font-size: .85rem; }
+  .key-help-panel dt { display: flex; gap: .25rem; flex-wrap: wrap; }
+  .key-help-panel dd { margin: 0; color: var(--ink); }
+  .key-help-panel kbd { padding: 0 .35rem; border: 1px solid var(--green-hairline); border-radius: 4px; font-family: ui-monospace, monospace; font-size: .8rem; color: var(--green); }
   .tag-picker li { padding: .2rem .75rem; color: var(--ink); cursor: pointer; }
   .tag-picker li[aria-selected="true"] { background: var(--green-hairline); color: var(--green); }
   .cycle-note-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem .75rem; }
@@ -1111,11 +1129,13 @@ import {
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
   installCompleter,
+  installKeyHelp,
+  installSearch,
   tagVocabulary,
   tagSource,
   dateMarkers,
   dateSource,
-} from "/dist/present.js?v=8938c167b0";
+} from "/dist/present.js?v=a3b13202ed";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3664,6 +3684,22 @@ const globalKeyDeps = {
   sourceFor: (path) => accepted.sourceFor(path),
   declaration: () => declaration,
   completion: completionStamp,
+  // `?` (2026-10-07): the key help overlay, every key read from KEY_HELP.
+  toggleHelp: installKeyHelp(),
+  // `/` (2026-10-07): search every view the server sent; choosing a hit shows its view with the
+  // cursor on its line, the same view switch the drawer makes.
+  openSearch: installSearch({
+    views: () => (graphData?.snapshot?.views ?? []).filter((x) => typeof x.markdown === "string"),
+    currentViewId: () => currentViewId,
+    go: (viewId, lineIndex) => {
+      paintView(viewId, "chosen");
+      const view = graphData?.snapshot?.views.find((x) => x.id === viewId);
+      if (view === undefined) return;
+      const source = rows.showing(view.id, accepted.sourceFor(view.path) ?? view.markdown);
+      focus.place(lineIndex, { kind: "line-start" }, source, view.id);
+      repaintCurrentView();
+    },
+  }),
   // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch
   // the drawer makes. `inbox` is the operator's inbox view id; a view that is absent from the
   // snapshot makes `c` do nothing rather than capture somewhere else.
