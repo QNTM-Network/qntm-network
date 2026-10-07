@@ -361,6 +361,12 @@
     max-height: 60vh; display: flex; flex-direction: column; background: var(--bg, #0b0d10);
     border: 1px solid var(--green-hairline); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
   .cycle-note.hidden { display: none; }
+  .tag-picker { position: fixed; z-index: 50; margin: 0; padding: .25rem 0; list-style: none; min-width: 12rem;
+    max-height: 16rem; overflow: auto; background: var(--bg, #0b0d10); border: 1px solid var(--green-hairline);
+    border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.45); font-size: .85rem; }
+  .tag-picker[hidden] { display: none; }
+  .tag-picker li { padding: .2rem .75rem; color: var(--ink); cursor: pointer; }
+  .tag-picker li[aria-selected="true"] { background: var(--green-hairline); color: var(--green); }
   .cycle-note-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem .75rem; }
   .cycle-note-title { color: var(--ink); font-size: .85rem; }
   .cycle-note-body { margin: 0; padding: 0 .75rem .75rem; overflow: auto; font-size: .72rem; line-height: 1.35; color: var(--dim); white-space: pre; }
@@ -1104,7 +1110,9 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
-} from "/dist/present.js?v=6f312788f5";
+  installTagPicker,
+  tagVocabulary,
+} from "/dist/present.js?v=d6f34b9a4f";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3668,6 +3676,9 @@ const globalKeyDeps = {
   closeDrawer,
 };
 installGlobalKeys(globalKeyDeps);
+// THE TAG PICKER (2026-10-07): `#` in a line being edited offers the config's own tags. Reads the
+// declaration fresh on every keystroke, so a config change is offered as soon as it is published.
+installTagPicker({ viewBody: $("viewBody"), vocabulary: () => tagVocabulary(declaration) });
 
 
 // --- boot: try the stored session, else show entry ---
