@@ -2063,7 +2063,11 @@ function viewSources(data) {
  * `viewSources` (walking a whole envelope) can both call this with a view they are holding, and get
  * the same answer the painter would.
  */
-const COMPOSE_VIEW_IN_BROWSER = true;
+// OFF AGAIN (2026-10-07, operator-directed): the web app shows what the SERVER rendered and
+// nothing else, until the browser-side composer is worth its cost. A view then reads, paints and
+// saves against `view.markdown` verbatim — the same expression every one of the four sites held
+// before this function existed, as the header above says. Turned back on by this one line.
+const COMPOSE_VIEW_IN_BROWSER = false;
 
 /**
  * `?include_structure=true`, or nothing — the query suffix both `GET /app/graph` call sites append.
