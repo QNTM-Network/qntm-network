@@ -9,7 +9,7 @@ import { KEY_HELP, ModeSurface } from "../dist/present.js";
 
 const MOTIONS = readFileSync(new URL("../app/present/motions.ts", import.meta.url), "utf8");
 const DOCUMENTED = new Set(KEY_HELP.flatMap((g) => g.rows.flatMap((r) => r.keys)));
-const ALIASES = { ArrowDown: "↓", ArrowUp: "↑", g: "gg", d: "dd" };
+const ALIASES = { ArrowDown: "↓", ArrowUp: "↑", g: "gg", d: "dd", y: "yy" };
 
 test("every key motions.ts binds has a help row", () => {
   const bound = [...MOTIONS.matchAll(/case "([^"]+)":/g)].map((m) => m[1]);

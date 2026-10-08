@@ -4227,6 +4227,7 @@ var ModeSurface = class {
   #count = "";
   #pendingG = false;
   #pendingD = false;
+  #pendingY = false;
   #caretHint = void 0;
   get mode() {
     return this.#mode;
@@ -4253,6 +4254,7 @@ var ModeSurface = class {
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
+    this.#pendingY = false;
   }
   /**
    * The caret hint set by the last `enterInsert`, consumed once and cleared.
@@ -4280,6 +4282,7 @@ var ModeSurface = class {
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
+    this.#pendingY = false;
   }
   /**
    * One keystroke while in NORMAL mode. No-op (and reports unhandled) while in INSERT — the
@@ -4321,6 +4324,7 @@ var ModeSurface = class {
     if (this.#pendingG) {
       this.#pendingG = false;
       this.#pendingD = false;
+      this.#pendingY = false;
       if (key === "g") {
         this.#count = "";
         return { handled: true, effect: { kind: "move", lineIndex: clampLine(0, lastIndex) } };
@@ -4339,7 +4343,23 @@ var ModeSurface = class {
     }
     if (key === "d") {
       this.#pendingD = true;
+      this.#pendingY = false;
       return { handled: true, effect: { kind: "none" } };
+    }
+    if (this.#pendingY) {
+      this.#pendingY = false;
+      if (key === "y") {
+        this.#count = "";
+        return { handled: true, effect: { kind: "yank" } };
+      }
+    }
+    if (key === "y") {
+      this.#pendingY = true;
+      return { handled: true, effect: { kind: "none" } };
+    }
+    if (key === "p" || key === "P") {
+      this.#count = "";
+      return { handled: true, effect: { kind: "paste", where: key === "p" ? "below" : "above" } };
     }
     if (DIGIT.test(key)) {
       if (key === "0" && this.#count === "") {
@@ -5666,6 +5686,15 @@ function applyEdit(source, edit) {
   if (line === void 0) {
     return null;
   }
+  if (edit.kind === "move-line") {
+    const trimmed = line.trim();
+    if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) return null;
+    if (!Number.isInteger(edit.to) || edit.to < 0 || edit.to > lines.length) return null;
+    if (edit.to === edit.lineIndex || edit.to === edit.lineIndex + 1) return null;
+    lines.splice(edit.lineIndex, 1);
+    lines.splice(edit.to > edit.lineIndex ? edit.to - 1 : edit.to, 0, line);
+    return lines.join("\n");
+  }
   if (edit.kind === "delete-line") {
     const trimmed = line.trim();
     if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) {
@@ -5717,6 +5746,7 @@ function lineOps(kind, lineIndex, markdown) {
   if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
   const lines = markdown.split("\n");
   if (kind === "delete-line") return [[lineIndex, lineIndex + 1, []]];
+  if (kind === "move-line") return null;
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex]];
   return kind === "insert-line" ? [[lineIndex, lineIndex, replacement]] : [[lineIndex, lineIndex + 1, replacement]];
@@ -5744,6 +5774,16 @@ function rebaseLineEdit(view, base, lineIndex, edited, current) {
   if (markdown === null) {
     return { outcome: "refused", reason: "no-edit" };
   }
+  return { outcome: "rebased", markdown, lineIndex: reading.lineIndex };
+}
+function rebaseLineDelete(view, base, lineIndex, current) {
+  const anchor = instanceAnchorFor(base, lineIndex, view);
+  if (anchor === null) return { outcome: "refused", reason: "no-anchor" };
+  const reading = resolveInstanceAnchor(anchor, current, view);
+  if (reading.outcome === "ambiguous") return { outcome: "refused", reason: "ambiguous" };
+  if (reading.outcome !== "found") return { outcome: "refused", reason: "not-found" };
+  const markdown = applyEdit(current, { kind: "delete-line", lineIndex: reading.lineIndex });
+  if (markdown === null) return { outcome: "refused", reason: "no-edit" };
   return { outcome: "rebased", markdown, lineIndex: reading.lineIndex };
 }
 
@@ -5775,6 +5815,62 @@ var PresentationCascade = class {
     return { rendition: DEFAULT[key], level: "GLOBAL" };
   }
 };
+
+// app/present/register.ts
+var STAMP = /\s*\[\[qntm:[^\]]+\]\]/g;
+var LineRegister = class {
+  #text = void 0;
+  #cut = void 0;
+  /** `yy` — the line's text, as a copy: no cut is pending afterwards. */
+  yank(text) {
+    this.#text = text;
+  }
+  /** `dd` — mark the line; nothing is posted yet. A second `dd` replaces the first. */
+  cut(cut, text) {
+    this.#cut = cut;
+    this.#text = text;
+  }
+  /** The cut still waiting for `p`, when it was taken from exactly this file; else `undefined`. */
+  pendingCut(view, source) {
+    const cut = this.#cut;
+    if (cut === void 0) return void 0;
+    if (cut.view !== view || cut.source !== source) {
+      this.#cut = void 0;
+      return void 0;
+    }
+    return cut;
+  }
+  /** The pending cut's line, for the painter's mark — a read only, never clears anything. */
+  cutLineIn(view, source) {
+    const cut = this.#cut;
+    return cut !== void 0 && cut.view === view && cut.source === source ? cut.lineIndex : void 0;
+  }
+  /** Forget the pending cut and hand it back (the page posts its delete, or has moved it). */
+  takeCut() {
+    const cut = this.#cut;
+    this.#cut = void 0;
+    return cut;
+  }
+  /** What `p` puts down when no cut is pending: the text, as a NEW line — its identity stamp
+   *  removed, so the engine mints a new node rather than seeing one node on two lines. */
+  copyText() {
+    return this.#text?.replace(STAMP, "");
+  }
+};
+function deleteCommit(source, lineIndex) {
+  const markdown = applyEdit(source, { kind: "delete-line", lineIndex });
+  return markdown === null ? null : { lineIndex, text: "", markdown, source, kind: "delete-line" };
+}
+function moveCommit(source, from, to) {
+  const markdown = applyEdit(source, { kind: "move-line", lineIndex: from, to });
+  if (markdown === null) return null;
+  const landed = to > from ? to - 1 : to;
+  return { lineIndex: landed, text: markdown.split("\n")[landed] ?? "", markdown, source, kind: "move-line" };
+}
+function insertCommit(source, at, text) {
+  const markdown = applyEdit(source, { kind: "insert-line", lineIndex: at, text });
+  return markdown === null ? null : { lineIndex: at, text, markdown, source, kind: "insert-line" };
+}
 
 // app/present/caret.ts
 function placeCaret(element, at) {
@@ -6106,6 +6202,7 @@ function paint(body, source, context, deps) {
   };
   const markLineIndex = (element, lineIndex) => {
     element.dataset.lineIndex = String(lineIndex);
+    if (deps.cutLine === lineIndex) element.classList.add("cut");
   };
   const repaint = (nextSource) => {
     if (deps.view !== void 0) {
@@ -7563,8 +7660,6 @@ function createGraphBlobCache(deps) {
 function resolveAndArm(deps, view, commit) {
   const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
   deps.reportAbstentions(outcome.diagnostics);
-  armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
-  armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
   return outcome;
 }
 function createCommitLine(deps) {
@@ -7586,7 +7681,7 @@ function createCommitLine(deps) {
     } catch (error) {
       const e = error;
       if (e?.status === 409) {
-        if (commit.text.trim() === "") {
+        if (commit.text.trim() === "" && commit.kind !== "delete-line") {
           if (token !== null) {
             deps.writes.concludeGiveUp(token);
           }
@@ -7594,14 +7689,14 @@ function createCommitLine(deps) {
           return;
         }
         const refusedCurrent = typeof e.current === "string" ? e.current : null;
-        const rebase = commit.kind === "set-line" && refusedCurrent !== null ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, refusedCurrent) : null;
+        const rebase = refusedCurrent === null ? null : commit.kind === "set-line" ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, refusedCurrent) : commit.kind === "delete-line" ? rebaseLineDelete(view.id, commit.source, commit.lineIndex, refusedCurrent) : null;
         if (rebase?.outcome === "rebased" && refusedCurrent !== null) {
           if (token !== null) {
             deps.writes.concludeGiveUp(token);
           }
           const retryToken = mintWriteToken();
           try {
-            const retryOps = lineOps("set-line", rebase.lineIndex, rebase.markdown);
+            const retryOps = lineOps(commit.kind === "delete-line" ? "delete-line" : "set-line", rebase.lineIndex, rebase.markdown);
             const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken, retryOps);
             deps.arrive(view.path, data, {
               markdown: rebase.markdown,
@@ -7625,6 +7720,7 @@ function createCommitLine(deps) {
           deps.writes.concludeGiveUp(token);
         }
         commit.onRefusalIsFinal?.(e.current);
+        if (commit.kind === "delete-line") deps.healFromRefusal(view.path, e.current);
         return;
       }
       deps.repaintArrived();
@@ -7881,6 +7977,14 @@ function markWhereWeAre(deps, views, currentViewId) {
 }
 
 // app/shell/keys.ts
+var CUT_ENDING_EDITS = /* @__PURE__ */ new Set([
+  "toggle-done",
+  "delete-line",
+  "indent",
+  "open",
+  "enter-insert",
+  "capture"
+]);
 var typingIn = (target) => {
   const tag = String(target?.tagName ?? "").toLowerCase();
   return tag === "input" || tag === "textarea" || tag === "select";
@@ -7907,8 +8011,8 @@ function globalKey(deps, e) {
   if (deps.mode.mode !== "NORMAL" || deps.drawerIsOpen() || typingIn(e.target) || viewId === null) return;
   const v = deps.viewOf(viewId);
   if (v === void 0) return;
-  const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
-  const current = deps.focus.lineIndex ?? 0;
+  let source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
+  let current = deps.focus.lineIndex ?? 0;
   const visualOrder = visualLineOrder(deps.viewBody);
   const visualPos = visualOrder.indexOf(current);
   const visualCurrent = visualPos === -1 ? 0 : visualPos;
@@ -7917,6 +8021,21 @@ function globalKey(deps, e) {
   if (!outcome.handled) return;
   e.preventDefault();
   const effect = outcome.effect;
+  const register = deps.register;
+  const cut = register?.pendingCut(v.id, source);
+  if (register !== void 0 && cut !== void 0 && CUT_ENDING_EDITS.has(effect.kind) && !(effect.kind === "delete-line" && current !== cut.lineIndex)) {
+    register.takeCut();
+    const removal = deleteCommit(source, cut.lineIndex);
+    if (removal !== null && removal.markdown !== null) {
+      deps.commitLine(v, removal);
+      if (effect.kind !== "toggle-done" && effect.kind !== "indent") {
+        deps.repaintCurrentView();
+        return;
+      }
+      source = removal.markdown;
+      if (current > cut.lineIndex) current -= 1;
+    }
+  }
   if (effect.kind === "move") {
     deps.focus.place(visualOrder[effect.lineIndex] ?? current, { kind: "line-start" }, source, v.id);
     deps.repaintCurrentView();
@@ -7992,6 +8111,31 @@ function globalKey(deps, e) {
         deps.commitLine(v, existingLineCommit(source, current, markdown));
       }
     }
+  } else if (effect.kind === "delete-line" && register !== void 0) {
+    if (cut !== void 0 && current !== cut.lineIndex) {
+      register.takeCut();
+      const removal = deleteCommit(source, cut.lineIndex);
+      if (removal !== null) deps.commitLine(v, removal);
+    } else if (deleteCommit(source, current) !== null) {
+      register.cut({ view: v.id, source, lineIndex: current }, source.split("\n")[current] ?? "");
+    }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "yank") {
+    const line = source.split("\n")[current] ?? "";
+    if (line.trim() !== "") register?.yank(line);
+  } else if (effect.kind === "paste") {
+    const to = effect.where === "below" ? current + 1 : current;
+    const moving = register?.pendingCut(v.id, source);
+    if (register !== void 0 && moving !== void 0) {
+      register.takeCut();
+      const move = moveCommit(source, moving.lineIndex, to);
+      if (move !== null) deps.commitLine(v, move);
+    } else {
+      const text = register?.copyText();
+      const put = text === void 0 ? null : insertCommit(source, to, text);
+      if (put !== null) deps.commitLine(v, put);
+    }
+    deps.repaintCurrentView();
   } else if (effect.kind === "delete-line") {
     const markdown = applyEdit(source, { kind: "delete-line", lineIndex: current });
     if (markdown !== null) {
@@ -8224,7 +8368,9 @@ var KEY_HELP = [
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
       { keys: ["x"], does: "Tick / untick (adds or removes \u2705 today)" },
-      { keys: ["dd"], does: "Delete the line" },
+      { keys: ["dd"], does: "Cut the line (p puts it back elsewhere; any other edit deletes it)" },
+      { keys: ["yy"], does: "Copy the line" },
+      { keys: ["p", "P"], does: "Put the cut or copied line below / above" },
       { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" }
     ]
   },
@@ -8542,6 +8688,7 @@ export {
   INDENT_UNIT,
   KEY_HELP,
   LANDING_VIEW_KEY,
+  LineRegister,
   ModeSurface,
   NOT_EVALUATED,
   NOT_YET_DECLARED,

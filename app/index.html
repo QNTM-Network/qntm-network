@@ -665,6 +665,8 @@
   .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task.syncing { opacity: .5; }
   /* Saved but not yet confirmed by the server's cycle (2026-10-07). Colour and underline only. */
+  /* A line `dd` cut and `p` has not put down yet. Colour only. */
+  .viewbody .cut { opacity: .4; text-decoration: line-through; }
   .viewbody .task.unconfirmed span { text-decoration: underline dotted var(--glow); text-underline-offset: 3px; }
   /* Declared states other than open/done (2026-10-07): still a real checkbox, marked by its status. */
   .viewbody .task.status-scheduled input,
@@ -1161,13 +1163,14 @@ import {
   installKeyHelp,
   installSearch,
   unconfirmedLines,
+  LineRegister,
   tagVocabulary,
   tagSource,
   dateMarkers,
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=eb0a051f4f";
+} from "/dist/present.js?v=5446c749b0";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1475,6 +1478,8 @@ const mode = new ModeSurface();
 // header for why it is source-keyed rather than cleared after one use. `commitLine` arms it;
 // `repaintCurrentView`'s call into `paint()` is the only place it is ever read.
 const settle = new SettleSurface();
+// What `dd`/`yy` hold for `p`/`P` (app/present/register.ts). One per page, like the cursor.
+const lineRegister = new LineRegister();
 
 // AN ARMED PREDICTION — "the browser expects the engine's next answer to change this row (or the
 // one above it)" — app/present/predict.ts. One surface for the page, same reason as `settle`: it
@@ -2574,6 +2579,7 @@ function repaintCurrentView() {
     // SAVED, NOT YET BACK (2026-10-07): lines on screen that the server's last projection of this
     // view does not hold — marked until the cycle's answer arrives. See `unconfirmedLines`.
     unconfirmed: unconfirmedLines(source, sourceOfView(v)),
+    cutLine: lineRegister.cutLineIn(v.id, source),
     // EVERY DECLARED CHECKBOX STATE, AND THE STAMP A TICK ADDS — both read from the published
     // config, never typed here. See `checkboxStatuses()` / `completionStamp()`.
     checkboxStatuses: checkboxStatuses(),
@@ -3759,6 +3765,7 @@ const globalKeyDeps = {
   // the identical way, or the operator's own commonest gesture for THIS defect — `>` on an
   // existing line — would silently miss it while `o`/Enter did not.
   commitLine: commitLineAndArmGraphRefreshRetry,
+  register: lineRegister,
   repaintCurrentView,
   drainPainted,
   openDrawer,

@@ -488,6 +488,8 @@ const PROMOTION_COVERAGE = {
   "capture": "opens a new line at the end of the capture view — no indent, nothing to promote (2026-10-07)",
   "help": "shows the key help; writes nothing (2026-10-07)",
   "search": "opens search; writes nothing (2026-10-07)",
+  "paste": "p/P: moves or copies a line; no indentation change of its own (2026-10-08)",
+  "yank": "yy: copies; writes nothing (2026-10-08)",
   "delete-line": "removes the line; there is no relationship left to promote (2026-10-07, `dd`)",
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine as set-line; promotion reached on `>` (section 1 — THE HEADLINE FIX), abstains on `<` (section 3)",

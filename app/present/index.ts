@@ -270,8 +270,10 @@ export { PresentationCascade } from "./express/cascade.js";
 export type { Resolved } from "./express/cascade.js";
 
 export { applyEdit, lineOps } from "./source.js";
+export { LineRegister } from "./register.js";
+export type { Cut } from "./register.js";
 export type { LineOp } from "./source.js";
-export type { InsertLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
+export type { InsertLine, MoveLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
 export { paint, existingLineCommit, visualLineOrder } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";

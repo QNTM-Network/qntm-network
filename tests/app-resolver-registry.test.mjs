@@ -720,8 +720,9 @@ describe("8. `commitLine` names no resolver — it builds a context, walks the r
       "resolveAndArm must read outcome.diagnostics exactly once, and only to hand it to reportAbstentions",
     );
     assert.match(codeOnly, /deps\.reportAbstentions\(outcome\.diagnostics\)/, "resolveAndArm must route outcome.diagnostics through reportAbstentions, never a bare loop or a DOM write");
-    assert.match(resolveAndArmBody, /armSettle\(deps\.settle, commit\.markdown, view\.id, outcome\.placements\)/);
-    assert.match(resolveAndArmBody, /armPredict\(deps\.predict, commit\.markdown, view\.id, outcome\.predictions\)/);
+    // NO BROWSER PLACEMENT OR PREDICTION (2026-10-08): the row stays where the file has it until the
+    // engine's own answer arrives, so `o`/`>`/`dd` act on the line the operator sees.
+    assert.doesNotMatch(codeOnly, /armSettle\(|armPredict\(/, "resolveAndArm moves rows on screen again");
   });
 
   test("MUTATION PROOF: a page that named one axis fails the grep above", () => {
