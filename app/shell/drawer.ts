@@ -492,6 +492,12 @@ export function openDrawer(deps: DrawerDeps, currentViewId: string | null): void
       buildDrawer(deps, shownViews, currentViewId);
     }
     deps.filter.focus();
+    // AND ONCE MORE AFTER THE CLICK THAT OPENED IT HAS FINISHED: a mouse click on the Views button
+    // can leave the cursor on the button (measured in Chrome, 2026-10-08).
+    const filter = deps.filter;
+    setTimeout(() => {
+      if (drawerIsOpen && document.activeElement !== filter) filter.focus();
+    }, 0);
     return;
   }
   const target = (currentViewId === null ? undefined : viewButtons.get(currentViewId)) ?? drawerStops[0] ?? deps.panel;
