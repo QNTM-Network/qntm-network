@@ -8207,6 +8207,10 @@ function openDrawer(deps, currentViewId) {
       buildDrawer(deps, shownViews, currentViewId);
     }
     deps.filter.focus();
+    const filter = deps.filter;
+    setTimeout(() => {
+      if (drawerIsOpen && document.activeElement !== filter) filter.focus();
+    }, 0);
     return;
   }
   const target = (currentViewId === null ? void 0 : viewButtons.get(currentViewId)) ?? drawerStops[0] ?? deps.panel;
