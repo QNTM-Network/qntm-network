@@ -125,6 +125,10 @@ const typingIn = (target: EventTarget | null): boolean => {
  * registration sequence, which is a behaviour change wearing a refactor's clothes.
  */
 export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
+  // A KEY SOMETHING ELSE ALREADY HANDLED IS NOT A COMMAND (2026-10-08, operator report: choosing a
+  // view with Enter opened its first line for editing). The drawer, the search box and the
+  // suggestion list each `preventDefault` the keys they act on.
+  if (e.defaultPrevented) return;
   if (e.key === "Escape" && deps.drawerIsOpen()) { e.preventDefault(); deps.closeDrawer(); return; }
   if (e.key === "\\" && !deps.drawerIsOpen() && !typingIn(e.target)) { e.preventDefault(); deps.openDrawer(); return; }
   // THE THIRD DRAIN POINT — the world catches up the moment he is not typing into it.

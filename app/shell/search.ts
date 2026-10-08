@@ -39,11 +39,14 @@ export function installSearch(deps: SearchDeps, doc: Document = document): () =>
         const row = doc.createElement("li");
         row.setAttribute("role", "option");
         row.setAttribute("aria-selected", String(index === selected));
+        const kind = doc.createElement("em");
+        kind.className = `search-kind search-kind-${hit.kind}`;
+        kind.textContent = hit.kind === "view" ? "View" : hit.kind === "section" ? "Section" : "Task";
         const text = doc.createElement("span");
         text.textContent = hit.text;
         const where = doc.createElement("small");
         where.textContent = hit.viewTitle;
-        row.append(text, where);
+        row.append(kind, text, where);
         row.addEventListener("mousedown", (event) => {
           event.preventDefault();
           choose(index);
@@ -60,8 +63,8 @@ export function installSearch(deps: SearchDeps, doc: Document = document): () =>
     root.setAttribute("aria-label", "Search");
     input = doc.createElement("input");
     input.type = "search";
-    input.placeholder = "Search tasks in every view…";
-    input.setAttribute("aria-label", "Search tasks");
+    input.placeholder = "Search views, sections and tasks…";
+    input.setAttribute("aria-label", "Search views, sections and tasks");
     list = doc.createElement("ul");
     list.setAttribute("role", "listbox");
     root.append(input, list);

@@ -5929,15 +5929,6 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     }
   };
   let settlement = "open";
-  const discard = () => {
-    if (settlement !== "open") {
-      return;
-    }
-    settlement = "discarded";
-    focus.moveTo({ kind: "leave-insert" }, lineSource);
-    leaveInsert();
-    repaint(fileSource);
-  };
   const settle = (openBelow = false) => {
     if (settlement !== "open") {
       return;
@@ -5956,6 +5947,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
       if (opened && mode !== void 0) {
         mode.enterInsert();
       } else {
+        focus.moveTo({ kind: "leave-insert" }, markdown === null ? lineSource : text);
         leaveInsert();
       }
     }
@@ -5974,7 +5966,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
       settle(true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
-      discard();
+      settle();
     }
   });
   return input;
@@ -6030,7 +6022,7 @@ function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
       settle();
     } else if (key === "Escape") {
       event?.preventDefault?.();
-      abandon();
+      settle();
     } else if (key === "Backspace" && input.value === seed) {
       event?.preventDefault?.();
       abandon();
@@ -7870,7 +7862,82 @@ function paintFolder(deps, node, into, currentViewId) {
     viewButtons.set(v.id, button);
   }
 }
+var shownViews = [];
+var shownCurrent = null;
+function filterViews(views, query) {
+  const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+  if (words2.length === 0) return views;
+  const q = query.trim().toLowerCase();
+  return views.filter((v) => {
+    const hay = `${v.title} ${folderOf(v.path)}`.toLowerCase();
+    return words2.every((w) => hay.includes(w));
+  }).sort((a, b) => {
+    const sa = a.title.toLowerCase().startsWith(q) ? 0 : 1;
+    const sb = b.title.toLowerCase().startsWith(q) ? 0 : 1;
+    return sa - sb || a.title.localeCompare(b.title);
+  });
+}
+function paintMatches(deps, query) {
+  drawerStops.length = 0;
+  viewButtons.clear();
+  drawerStops.push(deps.closeButton);
+  deps.tree.innerHTML = "";
+  const matches = filterViews(shownViews, query);
+  for (const v of matches) {
+    const button = treeRow("viewbtn", null, v.title, null);
+    const where = document.createElement("span");
+    where.className = "count";
+    where.textContent = folderOf(v.path);
+    button.append(where);
+    if (v.id === shownCurrent) button.classList.add("current");
+    button.addEventListener("click", () => {
+      deps.onChoose(v.id);
+      closeDrawer(deps);
+    });
+    deps.tree.append(button);
+    drawerStops.push(button);
+    viewButtons.set(v.id, button);
+  }
+  if (matches.length === 0) {
+    const note = document.createElement("p");
+    note.className = "treenote";
+    note.textContent = "No view matches.";
+    deps.tree.append(note);
+  }
+  drawerStops.forEach((stop, index) => stop.addEventListener("keydown", (e) => drawerKey(deps, e, index)));
+}
+var wiredFilters = /* @__PURE__ */ new WeakSet();
+function wireFilter(deps) {
+  const filter = deps.filter;
+  if (filter === void 0 || wiredFilters.has(filter)) return;
+  wiredFilters.add(filter);
+  filter.addEventListener("input", () => {
+    if (filter.value.trim() === "") buildDrawer(deps, shownViews, shownCurrent);
+    else paintMatches(deps, filter.value);
+  });
+  filter.addEventListener("keydown", (e) => {
+    const key = e.key;
+    if (key === "ArrowDown") drawerStops[1]?.focus();
+    else if (key === "Enter") drawerStops[1]?.click();
+    else if (key === "Escape") {
+      if (filter.value !== "") {
+        filter.value = "";
+        buildDrawer(deps, shownViews, shownCurrent);
+      } else closeDrawer(deps);
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+}
 function buildDrawer(deps, views, currentViewId) {
+  shownViews = views;
+  shownCurrent = currentViewId;
+  wireFilter(deps);
+  if (deps.filter !== void 0 && deps.filter.value.trim() !== "") {
+    paintMatches(deps, deps.filter.value);
+    markWhereWeAre(deps, views, currentViewId);
+    return;
+  }
   drawerStops.length = 0;
   viewButtons.clear();
   drawerStops.push(deps.closeButton);
@@ -7936,7 +8003,15 @@ function drawerKey(deps, e, index) {
   }
   if (e.key === "Enter") {
     e.preventDefault();
+    e.stopPropagation();
     drawerStops[index]?.click();
+    return;
+  }
+  if (deps.filter !== void 0 && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    deps.filter.focus();
+    deps.filter.value += e.key;
+    paintMatches(deps, deps.filter.value);
     return;
   }
   if (e.key !== "Tab" || drawerStops.length === 0) return;
@@ -7956,6 +8031,14 @@ function openDrawer(deps, currentViewId) {
   deps.panel.setAttribute("aria-hidden", "false");
   deps.openButton.setAttribute("aria-expanded", "true");
   document.body.classList.add("noscroll");
+  if (deps.filter !== void 0) {
+    if (deps.filter.value !== "") {
+      deps.filter.value = "";
+      buildDrawer(deps, shownViews, currentViewId);
+    }
+    deps.filter.focus();
+    return;
+  }
   const target = (currentViewId === null ? void 0 : viewButtons.get(currentViewId)) ?? drawerStops[0] ?? deps.panel;
   target.focus();
 }
@@ -7990,6 +8073,7 @@ var typingIn = (target) => {
   return tag === "input" || tag === "textarea" || tag === "select";
 };
 function globalKey(deps, e) {
+  if (e.defaultPrevented) return;
   if (e.key === "Escape" && deps.drawerIsOpen()) {
     e.preventDefault();
     deps.closeDrawer();
@@ -8378,7 +8462,7 @@ var KEY_HELP = [
     title: "While editing a line",
     rows: [
       { keys: ["Enter"], does: "Save the line" },
-      { keys: ["Escape"], does: "Leave without saving" },
+      { keys: ["Escape"], does: "Stop editing (keeps what you typed)" },
       { keys: ["#"], does: "Suggest tags from your config" },
       { keys: [":"], does: "Suggest markers by name (:sched \u2192 \u23F3)" },
       { keys: ["\u{1F4C5} \u23F3 \u{1F6EB} + space"], does: "Suggest dates" },
@@ -8466,6 +8550,28 @@ function searchViews(views, query, preferViewId, limit = 30) {
   const ordered = [...views].sort((a, b) => Number(b.id === preferViewId) - Number(a.id === preferViewId));
   const seen = /* @__PURE__ */ new Set();
   const hits = [];
+  const matches = (text) => {
+    const lower = text.toLowerCase();
+    return words2.every((w) => lower.includes(w));
+  };
+  for (const view of ordered) {
+    const title = view.title ?? view.id;
+    if (matches(title)) {
+      hits.push({ kind: "view", qntmId: "", text: title, viewId: view.id, viewTitle: title, lineIndex: 0 });
+    }
+  }
+  const sections = /* @__PURE__ */ new Set();
+  for (const view of ordered) {
+    view.markdown.split("\n").forEach((line, index) => {
+      const heading = /^#{2,6}\s+(.*)$/.exec(line)?.[1]?.trim();
+      if (heading === void 0 || heading === "" || !matches(heading)) return;
+      const key = `${view.id}\0${heading}`;
+      if (sections.has(key)) return;
+      sections.add(key);
+      hits.push({ kind: "section", qntmId: "", text: heading, viewId: view.id, viewTitle: view.title ?? view.id, lineIndex: index });
+    });
+  }
+  if (hits.length >= limit) return hits.slice(0, limit);
   for (const view of ordered) {
     const lines = view.markdown.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
@@ -8476,6 +8582,7 @@ function searchViews(views, query, preferViewId, limit = 30) {
       if (!words2.every((w) => lower.includes(w))) continue;
       seen.add(id);
       hits.push({
+        kind: "task",
         qntmId: id,
         text: line.replace(/^\s*- \[.\]\s*/, "").replace(ID, "").replace(/\s+/g, " ").trim(),
         viewId: view.id,
@@ -8511,11 +8618,14 @@ function installSearch(deps, doc = document) {
         const row = doc.createElement("li");
         row.setAttribute("role", "option");
         row.setAttribute("aria-selected", String(index === selected));
+        const kind = doc.createElement("em");
+        kind.className = `search-kind search-kind-${hit.kind}`;
+        kind.textContent = hit.kind === "view" ? "View" : hit.kind === "section" ? "Section" : "Task";
         const text = doc.createElement("span");
         text.textContent = hit.text;
         const where = doc.createElement("small");
         where.textContent = hit.viewTitle;
-        row.append(text, where);
+        row.append(kind, text, where);
         row.addEventListener("mousedown", (event) => {
           event.preventDefault();
           choose(index);
@@ -8531,8 +8641,8 @@ function installSearch(deps, doc = document) {
     root.setAttribute("aria-label", "Search");
     input = doc.createElement("input");
     input.type = "search";
-    input.placeholder = "Search tasks in every view\u2026";
-    input.setAttribute("aria-label", "Search tasks");
+    input.placeholder = "Search views, sections and tasks\u2026";
+    input.setAttribute("aria-label", "Search views, sections and tasks");
     list = doc.createElement("ul");
     list.setAttribute("role", "listbox");
     root.append(input, list);

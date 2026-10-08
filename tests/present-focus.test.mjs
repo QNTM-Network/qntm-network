@@ -168,16 +168,16 @@ describe("2. the cursor leaves and the rendition returns", () => {
     assert.equal(serialize(v.body), before, "the view did not return to what it was");
   });
 
-  test("Escape returns the rendition and drops what was typed", () => {
+  test("Escape keeps what was typed — it saves the line, like vim (2026-10-08)", () => {
     const v = view();
-    const before = serialize(v.body);
     taskText(v.body).dispatch("click");
     const line = inputs(v.body)[0];
     line.value = "- [ ] something else entirely";
     line.dispatch("keydown", makeEvent({ key: "Escape" }));
 
-    assert.deepEqual(v.commits, [], "Escape posted an edit");
-    assert.equal(serialize(v.body), before, "Escape did not restore the view");
+    assert.equal(v.commits.length, 1, "Escape dropped the edit");
+    assert.equal(v.commits[0].text, "- [ ] something else entirely");
+    assert.equal(inputs(v.body).length, 0, "Escape left the line editable");
   });
 
   test("Enter commits and returns the rendition", () => {
