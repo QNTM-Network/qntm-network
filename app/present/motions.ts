@@ -331,6 +331,24 @@ const DIGIT = /^[0-9]$/;
 
 export class ModeSurface {
   #mode: Mode = "NORMAL";
+  /** Told every time the mode changes — see `onChange`. */
+  #listeners: Array<(mode: Mode) => void> = [];
+
+  /**
+   * CALL `fn` WHENEVER THE MODE CHANGES (2026-10-08). The mode badge and the phone's touch bar
+   * show the mode. They used to be updated by one repaint path, and a line editor's own save
+   * repaints by another, so after Escape or Enter the badge could still say INSERT. The surface
+   * that changes the mode is now the one that says so.
+   */
+  onChange(fn: (mode: Mode) => void): void {
+    this.#listeners.push(fn);
+  }
+
+  #set(mode: Mode): void {
+    const changed = this.#mode !== mode;
+    this.#mode = mode;
+    if (changed) for (const fn of this.#listeners) fn(mode);
+  }
   #count = "";
   #pendingG = false;
   #pendingD = false;
@@ -358,12 +376,12 @@ export class ModeSurface {
    * See `takeCaretHint` for how the painter reads it back.
    */
   enterInsert(caret?: CaretIntent): void {
-    this.#mode = "INSERT";
     this.#caretHint = caret;
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
     this.#pendingY = false;
+    this.#set("INSERT");
   }
 
   /**
@@ -388,12 +406,12 @@ export class ModeSurface {
    * for text ever turns off.
    */
   enterNormal(): void {
-    this.#mode = "NORMAL";
     this.#caretHint = undefined;
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
     this.#pendingY = false;
+    this.#set("NORMAL");
   }
 
   /**

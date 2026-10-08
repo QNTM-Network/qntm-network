@@ -4224,6 +4224,22 @@ function clampColumn(column, text) {
 var DIGIT = /^[0-9]$/;
 var ModeSurface = class {
   #mode = "NORMAL";
+  /** Told every time the mode changes — see `onChange`. */
+  #listeners = [];
+  /**
+   * CALL `fn` WHENEVER THE MODE CHANGES (2026-10-08). The mode badge and the phone's touch bar
+   * show the mode. They used to be updated by one repaint path, and a line editor's own save
+   * repaints by another, so after Escape or Enter the badge could still say INSERT. The surface
+   * that changes the mode is now the one that says so.
+   */
+  onChange(fn) {
+    this.#listeners.push(fn);
+  }
+  #set(mode) {
+    const changed = this.#mode !== mode;
+    this.#mode = mode;
+    if (changed) for (const fn of this.#listeners) fn(mode);
+  }
   #count = "";
   #pendingG = false;
   #pendingD = false;
@@ -4249,12 +4265,12 @@ var ModeSurface = class {
    * See `takeCaretHint` for how the painter reads it back.
    */
   enterInsert(caret) {
-    this.#mode = "INSERT";
     this.#caretHint = caret;
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
     this.#pendingY = false;
+    this.#set("INSERT");
   }
   /**
    * The caret hint set by the last `enterInsert`, consumed once and cleared.
@@ -4277,12 +4293,12 @@ var ModeSurface = class {
    * for text ever turns off.
    */
   enterNormal() {
-    this.#mode = "NORMAL";
     this.#caretHint = void 0;
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
     this.#pendingY = false;
+    this.#set("NORMAL");
   }
   /**
    * One keystroke while in NORMAL mode. No-op (and reports unhandled) while in INSERT — the
@@ -6214,6 +6230,9 @@ function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
 var TAG_CHIP_CLASS = "tagchip";
 var CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
 var CHIP_CLOSE = "</span>";
+var LINK_CHIP_CLASS = "linkchip";
+var LINK_OPEN = `<span class="${LINK_CHIP_CLASS}">`;
+var IDENTITY = /^\[\[qntm:\d+\]\]$/i;
 var STAMP_MARK_CLASS = "stampmark";
 var STAMP_OPEN = `<span class="${STAMP_MARK_CLASS}"`;
 var STAMP_MARK_GLYPH = "\u2022";
@@ -6234,6 +6253,11 @@ function renderTokens(text, tags, stamp, render) {
         text: span.text,
         html: CHIP_OPEN + span.text + CHIP_CLOSE
       });
+    }
+    for (const span of wikiLinkSpans(text)) {
+      const whole = text.slice(span.start, span.end);
+      if (IDENTITY.test(whole)) continue;
+      injections.push({ start: span.start, end: span.end, text: whole, html: LINK_OPEN + whole + CHIP_CLOSE });
     }
   }
   if (injections.length === 0) {
@@ -6256,7 +6280,7 @@ function renderTokens(text, tags, stamp, render) {
   const html = render(injected);
   const survived = (open) => html.split(open).length - 1;
   const wanted = (open) => claimed.filter((c) => c.html.startsWith(open)).length;
-  const intact = survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN);
+  const intact = survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN) && survived(LINK_OPEN) === wanted(LINK_OPEN);
   return intact ? html : render(text);
 }
 var SETTLE_CLASS = "settle-move";
@@ -8812,6 +8836,34 @@ function searchViews(views, query, preferViewId, limit = 30) {
   }
   return hits;
 }
+function taskTitle(text) {
+  const cut = text.search(/\s#[^\s#]|\s\[\[|\s\p{Extended_Pictographic}/u);
+  return (cut === -1 ? text : text.slice(0, cut)).trim();
+}
+function linkTargets(views, query, preferViewId, limit = 8) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const hit of searchViews(views, query, preferViewId, 200)) {
+    if (hit.kind !== "task") continue;
+    const title = taskTitle(hit.text);
+    const key = title.toLowerCase();
+    if (title === "" || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...hit, title });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+function findLinkTarget(views, target, preferViewId) {
+  const id = /^qntm:(\d+)$/i.exec(target.trim())?.[1];
+  const want = target.trim().toLowerCase();
+  const hits = searchViews(views, id === void 0 ? target : `qntm:${id}`, preferViewId, 500);
+  for (const hit of hits) {
+    if (hit.kind !== "task") continue;
+    if (id !== void 0 ? hit.qntmId === id : taskTitle(hit.text).toLowerCase() === want) return hit;
+  }
+  return null;
+}
 
 // app/shell/search.ts
 function installSearch(deps, doc = document) {
@@ -8890,6 +8942,49 @@ function installSearch(deps, doc = document) {
     render();
     input.focus();
   };
+}
+
+// app/present/linkcomplete.ts
+function linkQueryAt(text, caret) {
+  const before = text.slice(0, caret);
+  const start = before.lastIndexOf("[[");
+  if (start === -1) return null;
+  const query = before.slice(start + 2);
+  if (query.includes("]]") || query.includes("[")) return null;
+  return { start, query };
+}
+function linkSource(views, preferViewId) {
+  return (text, caret) => {
+    const open = linkQueryAt(text, caret);
+    if (open === null || open.query.trim() === "") return null;
+    const end = text.startsWith("]]", caret) ? caret + 2 : caret;
+    const items = linkTargets(views(), open.query, preferViewId()).map((hit) => ({
+      label: `${hit.title}  \xB7  ${hit.viewTitle}`,
+      insert: `[[${hit.title}]]`
+    }));
+    return { start: open.start, end, items };
+  };
+}
+
+// app/shell/links.ts
+function installLinks(deps) {
+  deps.viewBody.addEventListener(
+    "click",
+    (event) => {
+      const chip = event.target?.closest?.(".linkchip");
+      if (chip == null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const target = (chip.textContent ?? "").replace(/^\[\[|\]\]$/g, "");
+      const hit = findLinkTarget(deps.views(), target, deps.currentViewId());
+      if (hit === null) {
+        console.info(`[qntm] no view has a task called ${JSON.stringify(target)}`);
+        return;
+      }
+      deps.go(hit.viewId, hit.lineIndex);
+    },
+    true
+  );
 }
 
 // app/shell/touchbar.ts
@@ -9159,6 +9254,7 @@ export {
   existingLineCommit,
   extendsLine,
   findLine,
+  findLinkTarget,
   flushMarks,
   folderOf,
   foldersOf,
@@ -9168,6 +9264,7 @@ export {
   installCompleter,
   installGlobalKeys,
   installKeyHelp,
+  installLinks,
   installSearch,
   installTouchBar,
   instanceAnchorFor,
@@ -9176,6 +9273,9 @@ export {
   isSilent,
   lineBody,
   lineOps,
+  linkQueryAt,
+  linkSource,
+  linkTargets,
   markWhereWeAre,
   markerCells,
   markerQueryAt,
@@ -9244,6 +9344,7 @@ export {
   tagSource,
   tagSpans,
   tagVocabulary,
+  taskTitle,
   titleSpans,
   titleStyleFor,
   titleStylePredicateHolds,

@@ -109,7 +109,7 @@ import { instancesOf } from "./instance.js";
 import type { ModeSurface } from "./motions.js";
 import { openLine } from "./newline.js";
 import type { GlobalRegistration } from "./newline.js";
-import { classifyLine, stampSpans, tagSpans } from "./express/rendition.js";
+import { classifyLine, stampSpans, tagSpans, wikiLinkSpans } from "./express/rendition.js";
 import type { Rendition } from "./express/rendition.js";
 import type { RowSink } from "./rows.js";
 import type { SettleSurface } from "./settle.js";
@@ -940,6 +940,16 @@ const CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
 const CHIP_CLOSE = "</span>";
 
 /**
+ * A TITLE-FORM LINK, `[[Title]]`, drawn in link style (2026-10-08, operator-asked: click into the
+ * node a link names). It rides the `tags` rendition: a link is a token beside the words exactly as
+ * a tag is. Every character stays, brackets included — the title is the operator's own words, and
+ * tests/present-stamp.test.mjs §4 holds that no rendition takes them off his page. `app/shell/links.ts` opens the node on a click. An identity stamp `[[qntm:N]]` is never one.
+ */
+const LINK_CHIP_CLASS = "linkchip";
+const LINK_OPEN = `<span class="${LINK_CHIP_CLASS}">`;
+const IDENTITY = /^\[\[qntm:\d+\]\]$/i;
+
+/**
  * THE `wired` RENDITION OF THE IDENTITY STAMP — a small mark where `[[qntm:3]]` was printed.
  *
  * ── WHAT THE WIRED FORM IS, AND WHY IT IS A MARK RATHER THAN NOTHING AT ALL ──
@@ -1107,6 +1117,11 @@ function renderTokens(
         html: CHIP_OPEN + span.text + CHIP_CLOSE,
       });
     }
+    for (const span of wikiLinkSpans(text)) {
+      const whole = text.slice(span.start, span.end);
+      if (IDENTITY.test(whole)) continue;
+      injections.push({ start: span.start, end: span.end, text: whole, html: LINK_OPEN + whole + CHIP_CLOSE });
+    }
   }
   if (injections.length === 0) {
     return render(text);
@@ -1132,7 +1147,9 @@ function renderTokens(
   const survived = (open: string): number => html.split(open).length - 1;
   const wanted = (open: string): number => claimed.filter((c) => c.html.startsWith(open)).length;
   const intact =
-    survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN);
+    survived(CHIP_OPEN) === wanted(CHIP_OPEN) &&
+    survived(STAMP_OPEN) === wanted(STAMP_OPEN) &&
+    survived(LINK_OPEN) === wanted(LINK_OPEN);
   return intact ? html : render(text);
 }
 
