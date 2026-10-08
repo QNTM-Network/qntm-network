@@ -49,6 +49,14 @@ test("[[ suggests tasks from every view, and choosing one writes [[Title]]", () 
   assert.equal(source("x [[", 4), null);
 });
 
+test("a link is suggested by its title, not by a link on its line", () => {
+  const views = [{ id: "w", title: "W", markdown: [
+    "- [ ] Compliance to come back [[qntm:1]] #task #unlocks [[Revert to George]]",
+    "- [ ] Revert to George [[qntm:2]] #task",
+  ].join("\n") }];
+  assert.deepEqual(linkTargets(views, "revert").map((h) => h.title), ["Revert to George"]);
+});
+
 test("each title is offered once, best first", () => {
   const doubled = [...VIEWS, { ...VIEWS[0], id: "all", title: "All" }];
   assert.equal(linkTargets(doubled, "riser").length, 1);

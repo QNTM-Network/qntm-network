@@ -128,11 +128,14 @@ export function linkTargets(
 ): readonly (SearchHit & { readonly title: string })[] {
   const seen = new Set<string>();
   const out: (SearchHit & { readonly title: string })[] = [];
-  for (const hit of searchViews(views, query, preferViewId, 200)) {
+  // THE TITLE MUST MATCH, NOT THE LINE (2026-10-08, measured live): `[[revert` listed "Compliance
+  // to come back" first, because that line carries `#unlocks [[Revert to George]]`.
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+  for (const hit of searchViews(views, query, preferViewId, 500)) {
     if (hit.kind !== "task") continue;
     const title = taskTitle(hit.text);
     const key = title.toLowerCase();
-    if (title === "" || seen.has(key)) continue;
+    if (title === "" || seen.has(key) || !words.every((w) => key.includes(w))) continue;
     seen.add(key);
     out.push({ ...hit, title });
     if (out.length >= limit) break;
