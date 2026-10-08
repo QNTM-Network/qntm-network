@@ -7716,11 +7716,11 @@ function createCommitLine(deps) {
           }
           return;
         }
+        if (commit.kind === "delete-line") deps.healFromRefusal(view.path, e.current);
         if (token !== null) {
           deps.writes.concludeGiveUp(token);
         }
         commit.onRefusalIsFinal?.(e.current);
-        if (commit.kind === "delete-line") deps.healFromRefusal(view.path, e.current);
         return;
       }
       deps.repaintArrived();

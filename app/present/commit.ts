@@ -357,6 +357,8 @@ export function createCommitLine(
           return;
         }
         // NO REBASE WAS POSSIBLE — refused, not guessed. BOUND: ZERO further retries. (unchanged)
+        // A delete that could not be found again heals from the server's copy, as it always did.
+        if (commit.kind === "delete-line") deps.healFromRefusal(view.path, e.current);
         if (token !== null) {
           deps.writes.concludeGiveUp(token);
         }
@@ -365,7 +367,6 @@ export function createCommitLine(
         // exit is reached only after `rebaseLineEdit` has REFUSED to guess, so it is the moment
         // the change stops being streamed-from-the-view. See `LineCommit.onRefusalIsFinal`.
         commit.onRefusalIsFinal?.(e.current);
-        if (commit.kind === "delete-line") deps.healFromRefusal(view.path, e.current);
         return;
       }
       // The write itself failed (not a refusal) — repaint from the last known server state.
