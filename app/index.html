@@ -521,6 +521,8 @@
      layout, so a line gaining or losing the mark cannot be the jump `.viewbody`'s own comment
      block already refuses. */
   .viewbody .vim-selected {
+    /* When `j`/`k` scroll the page, keep a quarter of the screen visible past the cursor. */
+    scroll-margin-block: 25vh;
     background: rgba(63,240,127,.06);
     box-shadow: inset 3px 0 0 var(--green);
   }
