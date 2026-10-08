@@ -463,6 +463,8 @@ export { applyTag, matchingTags, tagQueryAt, tagVocabulary } from "./tagcomplete
 export { applyCompletion, completeWith, tagSource } from "./completion.js";
 export type { Completion, CompletionItem, CompletionSource } from "./completion.js";
 export { addDays, dateChoices, dateMarkers, dateSource } from "./datecomplete.js";
+export { markerQueryAt, markerSource, markerVocabulary } from "./markercomplete.js";
+export type { Marker, MarkerSources } from "./markercomplete.js";
 export type { TagQuery, TagSources } from "./tagcomplete.js";
 
 // ── KEY HELP (2026-10-07) — the data behind `?`; the overlay is app/shell/help.ts ──

@@ -301,6 +301,15 @@ describe("5. i and Enter start INSERT; Escape's job belongs to the input, not to
     assert.equal(columnFor({ kind: "append" }, "a line with plenty of characters", 11), 12);
   });
 
+  test("A enters INSERT at the end of the line, wherever the cursor is", () => {
+    const mode = new ModeSurface();
+    const outcome = mode.handleKey("A", 4, 100);
+    assert.deepEqual(outcome.effect, { kind: "enter-insert", caret: "append-end" });
+    assert.equal(mode.mode, "INSERT");
+    assert.equal(mode.takeCaretHint(), "append-end");
+    assert.equal(columnFor({ kind: "append-end" }, "a line", 0), 6);
+  });
+
   test("takeCaretHint is an INTENT for i/Enter/a, and undefined for a click-equivalent enterInsert()", () => {
     // IT WAS A NUMBER UNTIL 2026-08-12 and is now "insert"/"append". The painter no longer reads a
     // position out of it at all — it reads PERMISSION, and takes the position from FocusSurface,

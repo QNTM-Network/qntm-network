@@ -21,9 +21,18 @@
      (Do not write the opening style tag in prose anywhere above that sheet. That reader finds it
      with a regex over the whole document and does not skip comments, so a mention of it in one
      becomes the start of the stylesheet as far as CI is concerned. Learned the hard way.) -->
+<!-- The home page's type (2026-10-08): Inter for words, JetBrains Mono for labels and tokens. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/app/mark/qmark.css" />
 <style>
   :root {
+    /* Dark native controls — scrollbars, checkboxes, date pickers — on every platform. Without it
+       Windows draws a white scrollbar and white checkboxes on this black page (2026-10-08). */
+    color-scheme: dark;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     --bg: #07080a; --ink: #eef1f4; --dim: #8b93a1; --line: #1b1f26;
     --glow: #7cc7ff; --accent: #cfe8ff;
     /* THE DECLARED GREEN. brand/BRAND.md section 2: "Colour system: green #3ff07f · black #0a0b0a
@@ -90,7 +99,7 @@
        `size-the-column-to-a-declared-measure`). `#entry`/`#boot` are short-form screens, not the
        reading column, and are held back to the old measure below (`--form-w`) rather than
        stretching with it. */
-    --col-w: clamp(35rem, calc(100vw - var(--rail-side) - (2 * var(--s4)) - (2 * var(--s6))), 46rem);
+    --col-w: clamp(35rem, calc(100vw - var(--rail-side) - (2 * var(--s4)) - (2 * var(--s6))), 72rem);
     --form-w: 35rem;        /* the entry/boot screens' width — 560px, unchanged, see --col-w above */
     --radius-sm: 6px; --radius: 10px; --radius-lg: 16px; --pill: 999px;
 
@@ -118,7 +127,7 @@
      permanently costs a strip of background nobody looks at and makes the arithmetic constant.
      On a phone it is inert: overlay scrollbars take no space to begin with, so there is none to
      reclaim and nothing to move. */
-  html { margin: 0; height: 100%; scrollbar-gutter: stable; }
+  html { margin: 0; height: 100%; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #2a303a transparent; }
   body {
     margin: 0;
     /* `min-height`, NOT `height`. This was `height: 100%` and that quietly threw the bottom
@@ -134,8 +143,9 @@
     min-height: 100%;
     background: radial-gradient(1200px 800px at 50% -10%, #0e1420 0%, var(--bg) 60%);
     color: var(--ink);
-    font: var(--t4)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
+    font: var(--t4)/1.5 var(--sans);
+    font-feature-settings: "cv11", "ss03";
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
     display: flex; align-items: flex-start; justify-content: center;
     /* The menu bar is FIXED, so the column starts below it — the one place that arithmetic is
        written, and it is written in tokens. Left/right pay the safe-area insets so a landscape
@@ -280,13 +290,13 @@
      disagree the bar would be the one nobody thought to look in. Below 20px the mark's own sheet
      settles the electron rather than orbiting it, so a bar that ever wants a smaller mark gets a
      still one, which is the right trade and is the component's decision, not this page's. */
-  .bar-word { letter-spacing: var(--track); font-size: var(--t2); color: var(--ink); }
+  .bar-word { font-family: var(--mono); font-weight: 500; font-size: var(--t3); color: var(--ink); }
   /* WHERE YOU ARE. Takes the slack, and gives it back first: `min-width: 0` is what lets the
      view's title ellipse instead of shoving the controls off a 320px screen. */
   .bar-where { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s2); overflow: hidden; }
   .bar-folder { flex: none; font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); white-space: nowrap; }
   .bar-view { font-size: var(--t3); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar-who { flex: none; font-size: var(--t2); color: var(--dim); font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  .bar-who { flex: none; font-size: var(--t2); color: var(--dim); font-family: var(--mono); }
   /* Every control in the bar is at least --touch tall AND --touch wide. `.barbtn` is now worn by
      the drawer's own close button alone; the rail's controls wear `.railbtn`, which takes the
      same minimum from the same token. */
@@ -299,7 +309,7 @@
   }
   .barbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
   .kbd {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--mono);
     font-size: var(--t1); opacity: .55;
   }
 
@@ -353,9 +363,9 @@
     min-height: var(--touch); min-width: var(--touch); padding: 0 var(--s3);
     background: transparent; color: var(--dim);
     border: 1px solid transparent; border-radius: var(--radius); box-shadow: none;
-    font-size: var(--t2); font-weight: 500; white-space: nowrap;
+    font-family: var(--mono); font-size: var(--t2); font-weight: 500; white-space: nowrap;
   }
-  .railbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
+  .railbtn:hover { color: var(--ink); background: rgba(255,255,255,.05); box-shadow: none; }
   .railbtn[aria-busy="true"] { color: var(--green); border-color: var(--green-hairline); }
   .cycle-note { position: fixed; right: 1rem; bottom: 1rem; z-index: 40; width: min(46rem, calc(100vw - 2rem));
     max-height: 60vh; display: flex; flex-direction: column; background: var(--bg, #0b0d10);
@@ -382,7 +392,7 @@
   .key-help-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0; font-size: .85rem; }
   .key-help-panel dt { display: flex; gap: .25rem; flex-wrap: wrap; }
   .key-help-panel dd { margin: 0; color: var(--ink); }
-  .key-help-panel kbd { padding: 0 .35rem; border: 1px solid var(--green-hairline); border-radius: 4px; font-family: ui-monospace, monospace; font-size: .8rem; color: var(--green); }
+  .key-help-panel kbd { padding: 0 .35rem; border: 1px solid var(--green-hairline); border-radius: 4px; font-family: var(--mono); font-size: .8rem; color: var(--green); }
   .tag-picker li { padding: .2rem .75rem; color: var(--ink); cursor: pointer; }
   .tag-picker li[aria-selected="true"] { background: var(--green-hairline); color: var(--green); }
   .cycle-note-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem .75rem; }
@@ -437,7 +447,7 @@
     padding: var(--s2) var(--s2) var(--s2) var(--s4);
     border-bottom: 1px solid var(--line);
   }
-  .drawer-title { font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); }
+  .drawer-title { font-family: var(--mono); font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); }
   .tree {
     order: 2; flex: 1; min-height: 0;
     overflow-y: auto; overscroll-behavior: contain;
@@ -487,7 +497,7 @@
      narrated what the app had just done or could not tell; this states what mode the operator is
      in right now, the same kind of fact a caret's own colour already carries. */
   .vim-badge {
-    margin: 0 0 var(--s2);
+    margin: 0 0 var(--s2); font-family: var(--mono);
     font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; font-weight: 600;
   }
   .vim-badge-normal { color: var(--dim); }
@@ -592,10 +602,12 @@
      WHAT THIS DOES NOT REACH: a line whose rendition WRAPS. A wrapped paragraph is two rows, an
      <input> cannot hold a second one, and no rule here can make it. That case needs the painter. */
   .viewbody {
-    --row: 1.5rem;       /* one line of a view, in either rendition — the body's own line box */
-    --row-gap: .5rem;    /* the space BETWEEN lines — the column's, never any one line's */
-    --box-gap: .5rem;    /* checkbox to words, sized so the words barely move when the source shows */
+    --row: 1.75rem;      /* one line of a view, in either rendition — the body's own line box */
+    --row-gap: .375rem;  /* the space BETWEEN lines — the column's, never any one line's */
+    --box-gap: .625rem;  /* checkbox to words, sized so the words barely move when the source shows */
     overflow-x: auto;
+    scrollbar-width: thin; scrollbar-color: #2a303a transparent;
+    font-size: 1.0625rem;
     line-height: var(--row);
   }
   /* No line owns its own vertical space. A margin on a heading is a margin the <input> that
@@ -620,11 +632,16 @@
   .viewbody h2, .viewbody h3, .viewbody h4, .viewbody h5, .viewbody h6 {
     font-weight: 600; line-height: var(--row);
   }
-  .viewbody h2 { font-size: 1.05rem; color: var(--accent); }
-  .viewbody h3 { font-size: .95rem; color: var(--dim); }
-  .viewbody h4 { font-size: .86rem; color: var(--dim); }
-  .viewbody h5 { font-size: .78rem; color: var(--dim); }
-  .viewbody h6 { font-size: .72rem; color: var(--dim); }
+  .viewbody h2 { font-size: 1.375rem; font-weight: 650; color: var(--ink); letter-spacing: -.01em; }
+  .viewbody h3 { font-size: 1.05rem; color: var(--accent); }
+  .viewbody h4 { font-size: .95rem; color: var(--dim); }
+  .viewbody h5 { font-size: .86rem; color: var(--dim); }
+  .viewbody h6 { font-size: .78rem; color: var(--dim); }
+  /* A section heading carries a hairline under it. An inset shadow, so it costs the row no height. */
+  .viewbody h2, .viewbody h3 { box-shadow: inset 0 -1px 0 var(--line); }
+  /* Hover marks the line under the pointer. The spread fills the gap above and below and costs no
+     layout; the vim selection keeps its own mark. */
+  .viewbody > :not(.vim-selected):not(.newline):hover { background: rgba(255,255,255,.03); box-shadow: 0 0 0 var(--s1) rgba(255,255,255,.03); border-radius: 2px; }
 
   .viewbody a { color: var(--glow); }
   .viewbody code { background: #0c0f14; border: 1px solid var(--line); border-radius: 6px; padding: .05rem .35rem; font-size: .85em; }
@@ -634,7 +651,17 @@
   .viewbody hr { border: 0; border-top: 1px solid var(--line); margin: calc((var(--row) - 1px) / 2) 0; }
 
   .viewbody .task { display: flex; gap: var(--box-gap); align-items: flex-start; padding: 0; cursor: pointer; }
-  .viewbody .task input { flex: none; width: 1rem; height: 1rem; margin-top: calc((var(--row) - 1rem) / 2); accent-color: var(--glow); cursor: pointer; }
+  .viewbody .task input {
+    flex: none; width: 1rem; height: 1rem; padding: 0; margin-top: calc((var(--row) - 1rem) / 2); cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    border: 1.5px solid #4a5260; border-radius: 4px; background: transparent no-repeat center / 75%;
+    transition: border-color .12s ease, background-color .12s ease;
+  }
+  .viewbody .task input:hover { border-color: var(--green); }
+  .viewbody .task input:checked {
+    border-color: var(--green); background-color: var(--green);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.6 3.6' fill='none' stroke='%2307080a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
   .viewbody .task.done span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task.syncing { opacity: .5; }
   /* Saved but not yet confirmed by the server's cycle (2026-10-07). Colour and underline only. */
@@ -743,7 +770,7 @@
     background: rgba(63,240,127,.10);
     border: 1px solid rgba(63,240,127,.30);
     color: var(--green);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--mono);
     font-size: .82em;
     line-height: 1;
     white-space: nowrap;
@@ -1138,7 +1165,9 @@ import {
   tagSource,
   dateMarkers,
   dateSource,
-} from "/dist/present.js?v=548d6e51b7";
+  markerVocabulary,
+  markerSource,
+} from "/dist/present.js?v=eb0a051f4f";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3752,6 +3781,7 @@ installCompleter({
     return [
       tagSource(tagVocabulary(declaration)),
       dateSource(dateMarkers(declaration), today, boundary?.weekStartsOn ?? "monday"),
+      markerSource(markerVocabulary(declaration)),
     ];
   },
 });

@@ -186,7 +186,7 @@ function titleSpans(line) {
   }
   claims.sort((a, b) => a.start - b.start);
   const atomAt = (index) => claims.find((claim) => index >= claim.start && index < claim.end);
-  const words = [];
+  const words2 = [];
   let i = 0;
   while (i < content.length) {
     const atom = atomAt(i);
@@ -202,9 +202,9 @@ function titleSpans(line) {
     while (i < content.length && atomAt(i) === void 0 && !/\s/.test(content[i] ?? "")) {
       i += 1;
     }
-    words.push({ start: start + prefixLen, end: i + prefixLen });
+    words2.push({ start: start + prefixLen, end: i + prefixLen });
   }
-  return words;
+  return words2;
 }
 var STYLE_WRAPS = ["~~", "**", "*", "_"];
 function cleanTitleFor(line) {
@@ -4378,6 +4378,9 @@ var ModeSurface = class {
       case "a":
         this.enterInsert("append");
         return { handled: true, effect: { kind: "enter-insert", caret: "append" } };
+      case "A":
+        this.enterInsert("append-end");
+        return { handled: true, effect: { kind: "enter-insert", caret: "append-end" } };
       case "$":
         return { handled: true, effect: { kind: "column", to: "end" } };
       case "o":
@@ -4426,21 +4429,21 @@ var ModeSurface = class {
 
 // app/present/word.ts
 function wordCaret(line, motion, count, from) {
-  const words = titleSpans(line);
-  if (words.length === 0) {
+  const words2 = titleSpans(line);
+  if (words2.length === 0) {
     return null;
   }
   const n = Math.max(1, count);
-  const last = words[words.length - 1];
-  const first = words[0];
+  const last = words2[words2.length - 1];
+  const first = words2[0];
   if (motion === "b") {
-    const before = words.map((word2) => word2.start).filter((at) => at < from);
+    const before = words2.map((word2) => word2.start).filter((at) => at < from);
     if (before.length === 0) {
       return first.start;
     }
     return before[Math.max(0, before.length - n)];
   }
-  const after = motion === "e" ? words.map((word2) => word2.end - 1).filter((at) => at > from) : words.map((word2) => word2.start).filter((at) => at > from);
+  const after = motion === "e" ? words2.map((word2) => word2.end - 1).filter((at) => at > from) : words2.map((word2) => word2.start).filter((at) => at > from);
   if (after.length === 0) {
     return motion === "e" ? last.end - 1 : last.start;
   }
@@ -4449,7 +4452,7 @@ function wordCaret(line, motion, count, from) {
 
 // app/present/column.ts
 function isInsertSpace(instruction) {
-  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "at";
+  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "append-end" || instruction.kind === "at";
 }
 function columnFor(instruction, lineText, from) {
   const raw = rawColumnFor(instruction, lineText, from);
@@ -4476,6 +4479,8 @@ function rawColumnFor(instruction, lineText, from) {
       return from;
     case "append":
       return from + 1;
+    case "append-end":
+      return lineText === null ? from : lineText.length;
     case "word":
       return lineText === null ? from : wordCaret(lineText, instruction.motion, instruction.count, from);
     case "at":
@@ -4772,7 +4777,7 @@ var H0 = Uint32Array.from([
   1541459225
 ]);
 var rotr = (word2, bits) => word2 >>> bits | word2 << 32 - bits;
-var word = (words, index) => words[index] ?? 0;
+var word = (words2, index) => words2[index] ?? 0;
 function sha256Hex(bytes) {
   const blocks = new Uint8Array(((bytes.length + 9 + 63) / 64 | 0) * 64);
   blocks.set(bytes);
@@ -7214,12 +7219,12 @@ var promotionSpec = {
     if (reading.kind !== "answer" || reading.applied.length === 0) {
       return "";
     }
-    const words = reading.applied.map((effect) => {
+    const words2 = reading.applied.map((effect) => {
       if (effect.verb === "retype") return `becomes ${effect.to}`;
       if (effect.verb === "set") return `sets ${effect.field}`;
       return `clears ${effect.field}`;
     });
-    return `the row above ${words.join(", ")}`;
+    return `the row above ${words2.join(", ")}`;
   },
   show(reading) {
     if (reading.kind === "not-evaluated") {
@@ -7455,12 +7460,12 @@ var rulesSpec = {
     if (reading.kind !== "answer" || reading.applied.length === 0 || reading.text === null) {
       return "";
     }
-    const words = reading.applied.map((effect) => {
+    const words2 = reading.applied.map((effect) => {
       if (effect.verb === "retype") return `becomes ${effect.to}`;
       if (effect.verb === "set") return `sets ${effect.field}`;
       return `clears ${effect.field}`;
     });
-    return `this line ${words.join(", ")}`;
+    return `this line ${words2.join(", ")}`;
   },
   show(reading) {
     if (reading.kind === "not-evaluated") {
@@ -8214,6 +8219,7 @@ var KEY_HELP = [
     rows: [
       { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
       { keys: ["a"], does: "Edit the line, after the cursor" },
+      { keys: ["A"], does: "Edit the line, at the end" },
       { keys: ["click twice"], does: "Edit the line you clicked" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
@@ -8228,6 +8234,7 @@ var KEY_HELP = [
       { keys: ["Enter"], does: "Save the line" },
       { keys: ["Escape"], does: "Leave without saving" },
       { keys: ["#"], does: "Suggest tags from your config" },
+      { keys: [":"], does: "Suggest markers by name (:sched \u2192 \u23F3)" },
       { keys: ["\u{1F4C5} \u23F3 \u{1F6EB} + space"], does: "Suggest dates" },
       { keys: ["\u2191", "\u2193", "Tab"], does: "Choose a suggestion" }
     ]
@@ -8308,8 +8315,8 @@ function installKeyHelp(doc = document) {
 // app/present/search.ts
 var ID = /\[\[qntm:(\d+)\]\]/;
 function searchViews(views, query, preferViewId, limit = 30) {
-  const words = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-  if (words.length === 0) return [];
+  const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+  if (words2.length === 0) return [];
   const ordered = [...views].sort((a, b) => Number(b.id === preferViewId) - Number(a.id === preferViewId));
   const seen = /* @__PURE__ */ new Set();
   const hits = [];
@@ -8320,7 +8327,7 @@ function searchViews(views, query, preferViewId, limit = 30) {
       const id = ID.exec(line)?.[1];
       if (id === void 0 || seen.has(id)) continue;
       const lower = line.toLowerCase();
-      if (!words.every((w) => lower.includes(w))) continue;
+      if (!words2.every((w) => lower.includes(w))) continue;
       seen.add(id);
       hits.push({
         qntmId: id,
@@ -8470,6 +8477,47 @@ function dateSource(markers, today, weekStartsOn) {
   };
 }
 
+// app/present/markercomplete.ts
+var words = (field) => field.replace(/_/g, " ");
+function markerVocabulary(sources) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (token, name) => {
+    if (token === "" || seen.has(token)) return;
+    seen.add(token);
+    out.push({ token, name });
+  };
+  for (const [field, marker] of Object.entries(sources.qualification?.extractionFields ?? {})) {
+    if (typeof marker?.token === "string") add(marker.token, words(field));
+  }
+  for (const [field, spellings] of Object.entries(sources.qualification?.tokens ?? {})) {
+    for (const [token, value] of Object.entries(spellings ?? {})) {
+      if (token.startsWith("#") || token.startsWith("[")) continue;
+      add(token, `${words(String(value))} \xB7 ${words(field)}`);
+    }
+  }
+  return out;
+}
+function markerQueryAt(text, caret) {
+  const match = /(^|\s):([a-z0-9_ ]{0,24})$/i.exec(text.slice(0, caret));
+  if (match === null) return null;
+  const query = match[2] ?? "";
+  if (query.startsWith(" ")) return null;
+  return { start: caret - query.length - 1, query: query.toLowerCase() };
+}
+function markerSource(markers) {
+  return (text, caret) => {
+    const at = markerQueryAt(text, caret);
+    if (at === null) return null;
+    const wanted = at.query.split(/[\s_]+/).filter((w) => w !== "");
+    const items = markers.filter((marker) => {
+      const nameWords = marker.name.toLowerCase().split(/[\s·]+/).filter((w) => w !== "");
+      return wanted.every((w) => nameWords.some((n) => n.startsWith(w)));
+    }).map((marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token }));
+    return { start: at.start, end: caret, items };
+  };
+}
+
 // app/present/unconfirmed.ts
 function unconfirmedLines(painted, served) {
   const out = /* @__PURE__ */ new Set();
@@ -8582,8 +8630,11 @@ export {
   lineOps,
   markWhereWeAre,
   markerCells,
+  markerQueryAt,
+  markerSource,
   markerSpans,
   markerValue,
+  markerVocabulary,
   matchesFindClause,
   matchesQualifier,
   matchesQualifierGraphAware,

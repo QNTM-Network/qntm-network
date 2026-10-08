@@ -33,6 +33,7 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
     rows: [
       { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
       { keys: ["a"], does: "Edit the line, after the cursor" },
+      { keys: ["A"], does: "Edit the line, at the end" },
       { keys: ["click twice"], does: "Edit the line you clicked" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
@@ -47,6 +48,7 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
       { keys: ["Enter"], does: "Save the line" },
       { keys: ["Escape"], does: "Leave without saving" },
       { keys: ["#"], does: "Suggest tags from your config" },
+      { keys: [":"], does: "Suggest markers by name (:sched → ⏳)" },
       { keys: ["📅 ⏳ 🛫 + space"], does: "Suggest dates" },
       { keys: ["↑", "↓", "Tab"], does: "Choose a suggestion" },
     ],

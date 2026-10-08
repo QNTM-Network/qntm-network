@@ -233,7 +233,7 @@ export function clampColumn(column: number, text: string | null): number {
  * for `import` lines. Coupling to `CursorInstruction` by string value is the price of keeping that
  * invariant, and it is cheaper than breaking it. `column.ts` names the same two strings.
  */
-export type CaretIntent = "insert" | "append";
+export type CaretIntent = "insert" | "append" | "append-end";
 
 /** What a NORMAL-mode keystroke does, once it is fully decided. */
 export type NormalEffect =
@@ -523,6 +523,11 @@ export class ModeSurface {
         // mistaken for skipping.
         this.enterInsert("append");
         return { handled: true, effect: { kind: "enter-insert", caret: "append" } };
+      case "A":
+        // vim's `A` (2026-10-08, operator-asked): INSERT at the end of the line, wherever the
+        // cursor is. A count is discarded, as for `a`.
+        this.enterInsert("append-end");
+        return { handled: true, effect: { kind: "enter-insert", caret: "append-end" } };
       case "$":
         // THE OTHER HALF OF `0`, AND THE SAME NON-COST. "The last character of the line" needs the
         // line's LENGTH and nothing else, so like `0` it asks no module a second question — the

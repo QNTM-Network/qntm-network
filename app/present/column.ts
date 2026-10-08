@@ -72,6 +72,8 @@ export type CursorInstruction =
   | { readonly kind: "insert" }
   /** `a` — an INSERT caret one past the character under the cursor. */
   | { readonly kind: "append" }
+  /** `A` — an INSERT caret after the line's last character. */
+  | { readonly kind: "append-end" }
   /** `w`/`b`/`e` — the count-th title word from here. */
   | { readonly kind: "word"; readonly motion: WordMotion; readonly count: number }
   /**
@@ -108,7 +110,10 @@ function isInsertSpace(instruction: CursorInstruction): boolean {
   // `at` is INSERT space because the only thing that reports one is a live `<input>`, whose caret
   // legitimately sits one past the last character. `leave-insert` is NOT: its whole job is to land
   // the cursor back ON a character.
-  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "at";
+  return (
+    instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "append-end" ||
+    instruction.kind === "at"
+  );
 }
 
 /**
@@ -167,6 +172,8 @@ function rawColumnFor(
       // to live in motions.ts as `column + 1`, where it could not see the line it indexed, with the
       // clamp stranded in paint.ts. Both halves are here now, next to the string they measure.
       return from + 1;
+    case "append-end":
+      return lineText === null ? from : lineText.length;
     case "word":
       return lineText === null ? from : wordCaret(lineText, instruction.motion, instruction.count, from);
     case "at":
