@@ -39,4 +39,6 @@ test("a click on the selected line is `i`, through globalKey — no timer, no se
   assert.match(keys, /closest\?\.\("\.vim-selected"\)/);
   assert.match(keys, /globalKey\(deps, new KeyboardEvent\("keydown", \{ key: "i"/);
   assert.doesNotMatch(keys, /DOUBLE_CLICK_MS/);
+  // Capture phase: the selected row's own click handler stops the click from bubbling.
+  assert.match(keys, /\}, true\);/);
 });
