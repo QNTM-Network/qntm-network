@@ -8843,11 +8843,12 @@ function taskTitle(text) {
 function linkTargets(views, query, preferViewId, limit = 8) {
   const seen = /* @__PURE__ */ new Set();
   const out = [];
-  for (const hit of searchViews(views, query, preferViewId, 200)) {
+  const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+  for (const hit of searchViews(views, query, preferViewId, 500)) {
     if (hit.kind !== "task") continue;
     const title = taskTitle(hit.text);
     const key = title.toLowerCase();
-    if (title === "" || seen.has(key)) continue;
+    if (title === "" || seen.has(key) || !words2.every((w) => key.includes(w))) continue;
     seen.add(key);
     out.push({ ...hit, title });
     if (out.length >= limit) break;
