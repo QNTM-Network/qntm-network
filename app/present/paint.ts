@@ -165,7 +165,7 @@ export interface LineCommit {
    * line's own before" would compare two different lines and call it one line's history. A caller
    * that cannot tell the two apart has no honest way to ask "did this line's own answer change".
    */
-  readonly kind: "set-line" | "insert-line" | "delete-line";
+  readonly kind: "set-line" | "insert-line" | "delete-line" | "move-line";
   /**
    * THE STRING THE EDIT WAS APPLIED TO — `applyEdit`'s own input, verbatim.
    *
@@ -288,6 +288,8 @@ export interface PaintDeps {
    * is marked `unconfirmed`; the mark is colour and underline only, never a box property.
    */
   readonly unconfirmed?: ReadonlySet<number> | undefined;
+  /** The line `dd` cut and `p` has not put down yet (app/present/register.ts). Marked `cut`. */
+  readonly cutLine?: number | undefined;
   /**
    * The operator's declared checkbox glyphs (`qualification.tokens.status`). With it every
    * declared state — `[>]` scheduled, `[~]` waiting, `[/]` in progress, `[-]` cancelled — paints
@@ -1462,6 +1464,7 @@ export function paint(
    */
   const markLineIndex = (element: HTMLElement, lineIndex: number): void => {
     element.dataset.lineIndex = String(lineIndex);
+    if (deps.cutLine === lineIndex) element.classList.add("cut");
   };
 
   /**

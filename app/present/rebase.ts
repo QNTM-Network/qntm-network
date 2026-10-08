@@ -130,3 +130,21 @@ export function rebaseLineEdit(
   }
   return { outcome: "rebased", markdown, lineIndex: reading.lineIndex };
 }
+
+/**
+ * Reconcile a DELETE against a base that moved (2026-10-08, operator report: "dd doesn't work on
+ * non cycled"). A line just typed is rewritten by the cycle (its stamp and created date arrive), so
+ * the delete computed against the screen's copy is refused. The line is found again by its
+ * identity in the server's copy and deleted THERE. Unlike an edit, a changed line is still the line
+ * the operator asked to remove, so `"line-changed"` does not refuse here.
+ */
+export function rebaseLineDelete(view: string, base: string, lineIndex: number, current: string): RebaseOutcome {
+  const anchor = instanceAnchorFor(base, lineIndex, view);
+  if (anchor === null) return { outcome: "refused", reason: "no-anchor" };
+  const reading = resolveInstanceAnchor(anchor, current, view);
+  if (reading.outcome === "ambiguous") return { outcome: "refused", reason: "ambiguous" };
+  if (reading.outcome !== "found") return { outcome: "refused", reason: "not-found" };
+  const markdown = applyEdit(current, { kind: "delete-line", lineIndex: reading.lineIndex });
+  if (markdown === null) return { outcome: "refused", reason: "no-edit" };
+  return { outcome: "rebased", markdown, lineIndex: reading.lineIndex };
+}

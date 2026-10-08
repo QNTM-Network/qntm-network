@@ -53,10 +53,10 @@
 
 import { lineOps, type LineOp } from "./source.js";
 import { RESOLVERS } from "./resolvers/registry.js";
-import { runResolvers, armSettle, armPredict } from "./resolve.js";
+import { runResolvers } from "./resolve.js";
 import type { CommitContext, CommitOutcome, Diagnostic, PredictArm, SettleArm } from "./resolve.js";
 import type { LineCommit } from "./paint.js";
-import { rebaseLineEdit } from "./rebase.js";
+import { rebaseLineDelete, rebaseLineEdit } from "./rebase.js";
 import { mintWriteToken } from "./correlation.js";
 
 /**
@@ -126,10 +126,11 @@ export function resolveAndArm(
 ): CommitOutcome {
   const outcome = runResolvers(RESOLVERS, deps.buildContext(view, commit));
   deps.reportAbstentions(outcome.diagnostics);
-  // SETTLE ONLY WHEN THERE IS A PLACEMENT; PREDICT ALWAYS, EVEN WITH AN EMPTY LIST — see
-  // `armSettle`/`armPredict`'s own headers (resolve.ts) for why the two are not symmetric.
-  armSettle(deps.settle, commit.markdown, view.id, outcome.placements);
-  armPredict(deps.predict, commit.markdown, view.id, outcome.predictions);
+  // NO BROWSER PLACEMENT AND NO BROWSER PREDICTION (2026-10-08, operator report). Moving a row on
+  // screen to where the browser predicted the engine would sort it left the FILE unchanged, so
+  // `o`, `>`, `dd` acted on the row's file position while the operator saw it somewhere else —
+  // "a disconnect between the entered and landed placing". A row now stays exactly where it is in
+  // the file until the cycle's own answer arrives; the engine is the only thing that orders.
   return outcome;
 }
 
@@ -296,7 +297,9 @@ export function createCommitLine(
       const e = error as WriteRefusal;
       // ── A REFUSAL AND A FAILURE ARE THE SAME `catch` AND OPPOSITE ANSWERS ── (unchanged)
       if (e?.status === 409) {
-        if (commit.text.trim() === "") {
+        // A DELETE IS RETRIED BELOW, against the server's copy; only when that cannot find the
+        // line does it heal from the server's copy, like any other empty commit.
+        if (commit.text.trim() === "" && commit.kind !== "delete-line") {
           if (token !== null) {
             deps.writes.concludeGiveUp(token);
           }
@@ -312,9 +315,13 @@ export function createCommitLine(
         // asserted twice, which is worse than asserting it once and reusing the narrowed value.
         const refusedCurrent = typeof e.current === "string" ? e.current : null;
         const rebase =
-          commit.kind === "set-line" && refusedCurrent !== null
-            ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, refusedCurrent)
-            : null;
+          refusedCurrent === null
+            ? null
+            : commit.kind === "set-line"
+              ? rebaseLineEdit(view.id, commit.source, commit.lineIndex, commit.text, refusedCurrent)
+              : commit.kind === "delete-line"
+                ? rebaseLineDelete(view.id, commit.source, commit.lineIndex, refusedCurrent)
+                : null;
         if (rebase?.outcome === "rebased" && refusedCurrent !== null) {
           if (token !== null) {
             deps.writes.concludeGiveUp(token);
@@ -326,7 +333,7 @@ export function createCommitLine(
             // this write declares as its base one argument along. `set-line` because that is the
             // edit `rebaseLineEdit` made; `null` when the index is out of range, which sends no
             // `ops` field and is byte-for-byte the retry this path posted before.
-            const retryOps = lineOps("set-line", rebase.lineIndex, rebase.markdown);
+            const retryOps = lineOps(commit.kind === "delete-line" ? "delete-line" : "set-line", rebase.lineIndex, rebase.markdown);
             const data = await deps.writeFile(view, rebase.markdown, refusedCurrent, retryToken, retryOps);
             deps.arrive(view.path, data, {
               markdown: rebase.markdown,
@@ -350,6 +357,8 @@ export function createCommitLine(
           return;
         }
         // NO REBASE WAS POSSIBLE — refused, not guessed. BOUND: ZERO further retries. (unchanged)
+        // A delete that could not be found again heals from the server's copy, as it always did.
+        if (commit.kind === "delete-line") deps.healFromRefusal(view.path, e.current);
         if (token !== null) {
           deps.writes.concludeGiveUp(token);
         }

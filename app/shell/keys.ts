@@ -48,8 +48,15 @@ import { openLine } from "../present/newline.js";
 import { existingLineCommit, visualLineOrder } from "../present/paint.js";
 import type { LineCommit } from "../present/paint.js";
 import { classifyLine } from "../present/express/rendition.js";
+import { deleteCommit, insertCommit, moveCommit } from "../present/register.js";
+import type { LineRegister } from "../present/register.js";
 import { applyEdit } from "../present/source.js";
 import { wordCaret } from "../present/word.js";
+
+/** The edits that delete a cut still waiting for `p` (app/present/register.ts). */
+const CUT_ENDING_EDITS: ReadonlySet<string> = new Set([
+  "toggle-done", "delete-line", "indent", "open", "enter-insert", "capture",
+]);
 
 /** The view the handler is acting on — the wire payload's own shape, narrowed to what is read. */
 export interface GlobalKeyView {
@@ -92,6 +99,8 @@ export interface GlobalKeyDeps {
   readonly drawerIsOpen: () => boolean;
   readonly globalRegistrationFor: (viewId: string) => GlobalRegistration | undefined;
   readonly commitLine: (view: GlobalKeyView, commit: LineCommit) => void;
+  /** What `dd`/`yy` hold for `p`/`P` (app/present/register.ts). Absent: `dd` deletes at once. */
+  readonly register?: LineRegister;
   readonly repaintCurrentView: () => void;
   readonly drainPainted: () => void;
   readonly openDrawer: () => void;
@@ -163,8 +172,8 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   // `rows.showing` is handed the same server-side newest the repaint hands it, and answers the
   // same string — one expression, one answer, and the two can no longer disagree about what the
   // operator is looking at.
-  const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
-  const current = deps.focus.lineIndex ?? 0;
+  let source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
+  let current = deps.focus.lineIndex ?? 0;
   // ── `j`/`k`/`gg`/`G` MOVE THROUGH THE ROWS AS THEY ARE PAINTED, NOT THROUGH `source`'S OWN
   // LINE NUMBERS — the census this fixes: `settleRow` (app/present/paint.ts) moves a row's DOM
   // element the instant its placement is armed, and that move is COSMETIC ONLY — it never edits
@@ -197,6 +206,26 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   // `repaintCurrentView`, not `paintView`: the latter forces NORMAL on the way in, which would
   // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
   const effect = outcome.effect;
+  // ── A CUT WAITING FOR `p` IS DELETED BY ANY OTHER EDIT (app/present/register.ts) ──
+  // `x` and `>`/`<` then go on, against the file without the cut line. Every other edit stops
+  // here: it would open or seed a line against a screen that still shows the cut line, so the
+  // operator presses it again once the delete lands.
+  const register = deps.register;
+  const cut = register?.pendingCut(v.id, source);
+  if (register !== undefined && cut !== undefined && CUT_ENDING_EDITS.has(effect.kind) &&
+      !(effect.kind === "delete-line" && current !== cut.lineIndex)) {
+    register.takeCut();
+    const removal = deleteCommit(source, cut.lineIndex);
+    if (removal !== null && removal.markdown !== null) {
+      deps.commitLine(v, removal);
+      if (effect.kind !== "toggle-done" && effect.kind !== "indent") {
+        deps.repaintCurrentView();
+        return;
+      }
+      source = removal.markdown;
+      if (current > cut.lineIndex) current -= 1;
+    }
+  }
   if (effect.kind === "move") {
     // `effect.lineIndex` IS A POSITION WITHIN `visualOrder` HERE, NOT A FILE LINE INDEX —
     // `mode.handleKey` clamped it against `visualLastIndex`, above, so it has to be translated
@@ -322,6 +351,34 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
         deps.commitLine(v, existingLineCommit(source, current, markdown));
       }
     }
+  } else if (effect.kind === "delete-line" && register !== undefined) {
+    // `dd` CUTS. The line is marked and held; `p`/`P` moves it in one write, any other edit
+    // deletes it (above). A second `dd` on another line deletes the first cut and cuts this one.
+    if (cut !== undefined && current !== cut.lineIndex) {
+      register.takeCut();
+      const removal = deleteCommit(source, cut.lineIndex);
+      if (removal !== null) deps.commitLine(v, removal);
+    } else if (deleteCommit(source, current) !== null) {
+      register.cut({ view: v.id, source, lineIndex: current }, source.split("\n")[current] ?? "");
+    }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "yank") {
+    const line = source.split("\n")[current] ?? "";
+    if (line.trim() !== "") register?.yank(line);
+  } else if (effect.kind === "paste") {
+    // `p` below, `P` above. A pending cut MOVES; otherwise the copied text becomes a NEW line.
+    const to = effect.where === "below" ? current + 1 : current;
+    const moving = register?.pendingCut(v.id, source);
+    if (register !== undefined && moving !== undefined) {
+      register.takeCut();
+      const move = moveCommit(source, moving.lineIndex, to);
+      if (move !== null) deps.commitLine(v, move);
+    } else {
+      const text = register?.copyText();
+      const put = text === undefined ? null : insertCommit(source, to, text);
+      if (put !== null) deps.commitLine(v, put);
+    }
+    deps.repaintCurrentView();
   } else if (effect.kind === "delete-line") {
     // `dd` — remove the selected line. `applyEdit` refuses a blank or heading line, so only a line
     // that is a node can go. The commit's `text` is EMPTY on purpose: a refused delete (409) then

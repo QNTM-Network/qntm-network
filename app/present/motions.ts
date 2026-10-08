@@ -282,6 +282,10 @@ export type NormalEffect =
   | { readonly kind: "capture" }
   /** `dd` asked to delete the selected line. Whether it MAY be deleted is the caller's to decide. */
   | { readonly kind: "delete-line" }
+  /** `p`/`P` — put the register's line below / above the selected one (app/present/register.ts). */
+  | { readonly kind: "paste"; readonly where: "below" | "above" }
+  /** `yy` — copy the selected line into the register. */
+  | { readonly kind: "yank" }
   /**
    * `{`/`}` asked for the boundary `count` jumps away, in `direction`. This module cannot compute
    * WHICH LINE that is — that needs `classifyLine` (resolution.ts) over the actual source lines,
@@ -326,6 +330,7 @@ export class ModeSurface {
   #count = "";
   #pendingG = false;
   #pendingD = false;
+  #pendingY = false;
   #caretHint: CaretIntent | undefined = undefined;
 
   get mode(): Mode {
@@ -354,6 +359,7 @@ export class ModeSurface {
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
+    this.#pendingY = false;
   }
 
   /**
@@ -383,6 +389,7 @@ export class ModeSurface {
     this.#count = "";
     this.#pendingG = false;
     this.#pendingD = false;
+    this.#pendingY = false;
   }
 
   /**
@@ -426,6 +433,7 @@ export class ModeSurface {
     if (this.#pendingG) {
       this.#pendingG = false;
     this.#pendingD = false;
+    this.#pendingY = false;
       if (key === "g") {
         this.#count = "";
         return { handled: true, effect: { kind: "move", lineIndex: clampLine(0, lastIndex) } };
@@ -449,7 +457,25 @@ export class ModeSurface {
     }
     if (key === "d") {
       this.#pendingD = true;
+      this.#pendingY = false;
       return { handled: true, effect: { kind: "none" } };
+    }
+
+    // `yy`, built exactly like `dd`.
+    if (this.#pendingY) {
+      this.#pendingY = false;
+      if (key === "y") {
+        this.#count = "";
+        return { handled: true, effect: { kind: "yank" } };
+      }
+    }
+    if (key === "y") {
+      this.#pendingY = true;
+      return { handled: true, effect: { kind: "none" } };
+    }
+    if (key === "p" || key === "P") {
+      this.#count = "";
+      return { handled: true, effect: { kind: "paste", where: key === "p" ? "below" : "above" } };
     }
 
     if (DIGIT.test(key)) {

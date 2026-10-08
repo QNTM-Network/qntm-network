@@ -138,7 +138,19 @@ export interface DeleteLine {
   readonly lineIndex: number;
 }
 
-export type SourceEdit = SetCheckbox | SetLine | InsertLine | DeleteLine;
+/**
+ * Move one line (2026-10-08, operator-asked: `dd` then `p` moves an item). `to` is the place the
+ * line goes, counted in the SAME source, before the line is taken out — `p` on line 7 is `to: 8`.
+ * One write carries the whole move, so the engine sees the line move, never a delete and a new
+ * line.
+ */
+export interface MoveLine {
+  readonly kind: "move-line";
+  readonly lineIndex: number;
+  readonly to: number;
+}
+
+export type SourceEdit = SetCheckbox | SetLine | InsertLine | DeleteLine | MoveLine;
 
 // VERBATIM from app.html:275 as it stood at 64c3a87. The capture groups are what make this an
 // edit and not a rewrite: group 1 is everything up to the glyph, group 2 is everything after it,
@@ -187,6 +199,17 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
   const line = lines[edit.lineIndex];
   if (line === undefined) {
     return null;
+  }
+
+  if (edit.kind === "move-line") {
+    const trimmed = line.trim();
+    if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) return null;
+    if (!Number.isInteger(edit.to) || edit.to < 0 || edit.to > lines.length) return null;
+    // Landing just above or just below itself is not a move.
+    if (edit.to === edit.lineIndex || edit.to === edit.lineIndex + 1) return null;
+    lines.splice(edit.lineIndex, 1);
+    lines.splice(edit.to > edit.lineIndex ? edit.to - 1 : edit.to, 0, line);
+    return lines.join("\n");
   }
 
   if (edit.kind === "delete-line") {
@@ -318,6 +341,9 @@ export function lineOps(
   // A DELETION'S MARKDOWN NO LONGER HOLDS THE LINE, so its op is read from the index alone: the
   // half-open range over the one removed row, with nothing put back.
   if (kind === "delete-line") return [[lineIndex, lineIndex + 1, []] as const];
+  // A MOVE TOUCHES TWO PLACES. No single op names it, so the whole file goes, which the server
+  // has always accepted (the `null` contract above).
+  if (kind === "move-line") return null;
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex] as string];
   // set-line and set-checkbox both REPLACE the row at lineIndex; insert-line OPENS a new row there

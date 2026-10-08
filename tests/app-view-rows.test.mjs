@@ -671,6 +671,8 @@ describe("one row geometry, two renditions", () => {
       "status-scheduled", "status-waiting", "status-in_progress", "status-cancelled",
       // `unconfirmed` (2026-10-07): saved, not yet back from the server. Underline only.
       "unconfirmed",
+      // `cut` (2026-10-08): the line `dd` cut, waiting for `p`. Opacity and strike-through only.
+      "cut",
     ];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
     const TOKENS = ["tagchip", "vim-block", "stampmark", "row-prediction", "row-prediction-withdrawn"];

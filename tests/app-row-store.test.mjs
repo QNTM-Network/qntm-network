@@ -539,8 +539,8 @@ describe("6. break the store's readers and the acceptance test goes red", () => 
       (bundle) =>
         assertMutated(
           bundle,
-          "const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);",
-          "const source = v.markdown;",
+          "let source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);",
+          "let source = v.markdown;",
         ),
     );
     mutant = await import(`file://${file}`);
