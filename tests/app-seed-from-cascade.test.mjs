@@ -189,18 +189,20 @@ describe("1. `o` ON THE TRAILING BLANK LINE — the browser's own observation, d
   // spaces, so the first character typed lands where the title belongs and both spaces resolve to
   // one on either side of it, matching the engine's own title-then-tag order.
 
-  test("in `personal/all` it seeds `- [ ]  #task #personal`, the same as one line higher", () => {
+  // 2026-10-08: the default type's own tag (`#task`) is no longer seeded — the engine makes an
+  // untagged line a task anyway (newline.ts, `impliedTokens`). Every other declared token still is.
+  test("in `personal/all` it seeds `- [ ]  #personal`, the same as one line higher", () => {
     assert.equal(
       openAt("all-personal", toLastLine),
-      "- [ ]  #task #personal",
+      "- [ ]  #personal",
       "`o` on the trailing blank line copied the neighbour's chrome and dropped the declaration",
     );
   });
 
-  test("in `inbox` it seeds `- [ ]  #task`, the same as one line higher", () => {
+  test("in `inbox` it seeds a bare `- [ ] `, the same as one line higher", () => {
     assert.equal(
       openAt("inbox", toLastLine),
-      "- [ ]  #task",
+      "- [ ] ",
       "`o` on the trailing blank line copied the neighbour's chrome and dropped the declaration",
     );
   });
@@ -209,10 +211,10 @@ describe("1. `o` ON THE TRAILING BLANK LINE — the browser's own observation, d
   // are a comparison rather than a bare literal: what the trailing blank line now gives is exactly
   // what a real line already gave, which is the operator's own way of putting it.
   test("THE CONTROL: `o` on a real line is unchanged, in both views", () => {
-    assert.equal(openAt("all-personal", (press) => (press("g"), press("g"), press("j"))), "- [ ]  #task #personal");
+    assert.equal(openAt("all-personal", (press) => (press("g"), press("g"), press("j"))), "- [ ]  #personal");
     assert.equal(
       openAt("inbox", (press) => (press("g"), press("g"), press("j"), press("j"))),
-      "- [ ]  #task",
+      "- [ ] ",
     );
   });
 
@@ -223,7 +225,7 @@ describe("1. `o` ON THE TRAILING BLANK LINE — the browser's own observation, d
     toLastLine(press);
     press("o");
     const row = inputs()[0];
-    assert.equal(row.value, "- [ ]  #task #personal");
+    assert.equal(row.value, "- [ ]  #personal");
     assert.equal(row.selectionStart, 6, "cursor must land right after the checkbox, before the tag");
   });
 });
