@@ -427,6 +427,7 @@ export { flushMarks, globalKey, installGlobalKeys } from "../shell/keys.js";
 export { installCompleter } from "../shell/completer.js";
 export { installKeyHelp } from "../shell/help.js";
 export { installSearch } from "../shell/search.js";
+export { installTouchBar, showTouchMode, TOUCH_KEYS } from "../shell/touchbar.js";
 export type { SearchDeps } from "../shell/search.js";
 export type { CompleterDeps } from "../shell/completer.js";
 export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";

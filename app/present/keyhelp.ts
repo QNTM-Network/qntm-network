@@ -34,7 +34,7 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
       { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
       { keys: ["a"], does: "Edit the line, after the cursor" },
       { keys: ["A"], does: "Edit the line, at the end" },
-      { keys: ["click twice"], does: "Edit the line you clicked" },
+      { keys: ["click the selected line"], does: "Edit it (on a phone: tap it)" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
       { keys: ["x", "Space"], does: "Tick / untick (adds or removes ✅ today)" },

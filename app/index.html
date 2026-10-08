@@ -161,6 +161,35 @@
       max(calc(var(--rail-side) + var(--s4)), var(--safe-l));
   }
   .wrap { width: 100%; max-width: var(--col-w); }
+
+  /* THE TOUCH BAR — vim's keys as buttons (app/shell/touchbar.ts). Off by default; on where there
+     is probably no keyboard. It sits on the rail, or on the phone's keyboard when one is open
+     (`--kb`, set from `visualViewport`), and the column reserves its height like it reserves the
+     rail's, so it never covers the last line. Each mode shows its own buttons. */
+  :root { --touchbar-h: 0px; }
+  .touchbar { display: none; }
+  @media (pointer: coarse), (max-width: 40rem) {
+    :root { --touchbar-h: var(--touch); }
+    body { padding-bottom: calc(var(--rail-bottom) + var(--touchbar-h) + var(--s6) + var(--safe-b)); }
+    .touchbar {
+      position: fixed; z-index: 20; left: 0; right: 0;
+      bottom: max(var(--kb, 0px), calc(var(--rail-bottom) + var(--safe-b)));
+      display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none;
+      height: var(--touchbar-h); align-items: center;
+      padding: 0 max(var(--s2), var(--safe-r)) 0 max(calc(var(--rail-side) + var(--s2)), var(--safe-l));
+      background: var(--bg); border-top: 1px solid var(--line);
+    }
+    .touchbar.hidden { display: none; }
+    .touchkey {
+      flex: none; min-width: var(--touch); height: calc(var(--touch) - var(--s2)); padding: 0 var(--s3);
+      background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
+      font: inherit; font-family: var(--mono); font-size: .875rem;
+      touch-action: manipulation;
+    }
+    .touchkey:active { background: var(--line); }
+    .touchbar[data-mode="NORMAL"] .touchkey:not([data-modes~="NORMAL"]),
+    .touchbar[data-mode="INSERT"] .touchkey:not([data-modes~="INSERT"]) { display: none; }
+  }
   /* THE TWO SHORT-FORM SCREENS DO NOT STRETCH WITH THE READING COLUMN. `.wrap` now grows on a
      wide screen so the graph section (the reading column, `#graph` > `.viewbody`) can use the
      room — but a sign-in card and a "opening your graph…" line are not prose, and a 736px-wide
@@ -978,6 +1007,10 @@
   </button>
 </nav>
 
+<!-- THE TOUCH BAR (2026-10-08, app/shell/touchbar.ts): vim's keys as buttons, for a phone. Shown
+     only where there is probably no keyboard — a touch screen or a narrow window. -->
+<div id="touchBar" class="touchbar hidden" role="toolbar" aria-label="Keys" data-mode="NORMAL"></div>
+
 <!-- ══ THE VIEW DRAWER ════════════════════════════════════════════════════════════════════════
      Off the right edge until asked for. The scrim is a sibling rather than a parent so the
      drawer can slide over it, and it is clickable: a tap anywhere on the page outside the
@@ -1191,6 +1224,8 @@ import {
   installCompleter,
   installKeyHelp,
   installSearch,
+  installTouchBar,
+  showTouchMode,
   unconfirmedLines,
   LineRegister,
   UndoHistory,
@@ -1201,7 +1236,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=b44309ca08";
+} from "/dist/present.js?v=9cfda90779";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1408,6 +1443,7 @@ function showShell(on) {
   $("barWhere").classList.toggle("hidden", !on);
   $("who").classList.toggle("hidden", !on);
   $("rail").classList.toggle("hidden", !on);
+  $("touchBar").classList.toggle("hidden", !on);
 }
 // THE STATUS TRAVELS WITH THE ERROR, and that is not decoration. Every failure used to arrive as
 // a bare Error, so the boot sequence could not tell "your session has expired" from "the train
@@ -2684,6 +2720,7 @@ function updateVimBadge() {
   badge.textContent = mode.mode === "NORMAL" ? "NORMAL" : "INSERT";
   badge.classList.toggle("vim-badge-normal", mode.mode === "NORMAL");
   badge.classList.toggle("vim-badge-insert", mode.mode === "INSERT");
+  showTouchMode($("touchBar"), mode.mode);
 }
 
 /**
@@ -3850,6 +3887,13 @@ const globalKeyDeps = {
   closeDrawer,
 };
 installGlobalKeys(globalKeyDeps);
+// THE TOUCH BAR (2026-10-08): each button presses a key through the handler the keyboard reaches.
+installTouchBar({
+  bar: $("touchBar"),
+  viewBody: $("viewBody"),
+  pressNormal: (event) => globalKey(globalKeyDeps, event),
+  mode: () => mode.mode,
+});
 // SUGGEST WHILE TYPING (2026-10-07): tags after `#`, dates after a date marker (📅 ⏳ 🛫 …). Both are
 // read from the published config on every keystroke, so a config change is offered as soon as it
 // is published; today is the LOGICAL day from the declared boundary, read through `nowMs` like
