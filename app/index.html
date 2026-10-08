@@ -445,7 +445,9 @@
     transform: translateX(100%); visibility: hidden;
     transition: transform var(--slide), visibility var(--slide);
   }
-  .drawer.open { transform: translateX(0); visibility: visible; }
+  /* Visible AT ONCE on open (the slide still runs), so the filter box can take the cursor in the
+     same click — a still-hidden element refuses focus (2026-10-08, measured in Chrome). */
+  .drawer.open { transform: translateX(0); visibility: visible; transition: transform var(--slide), visibility 0s; }
   .drawer-head {
     order: 1; flex: none;
     display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
