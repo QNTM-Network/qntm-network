@@ -4427,6 +4427,7 @@ var ModeSurface = class {
       case "/":
         return { handled: true, effect: { kind: "search" } };
       case "x":
+      case " ":
         if (pending !== null) {
           return { handled: true, effect: { kind: "none" } };
         }
@@ -5687,6 +5688,17 @@ function applyEdit(source, edit) {
     lines.splice(edit.lineIndex, 0, edit.text);
     return lines.join("\n");
   }
+  if (edit.kind === "delete-lines") {
+    const unique = [...new Set(edit.lineIndexes)].sort((a, b) => b - a);
+    for (const index of unique) {
+      const target = lines[index];
+      if (target === void 0) return null;
+      const trimmed = target.trim();
+      if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) return null;
+      lines.splice(index, 1);
+    }
+    return unique.length === 0 ? null : lines.join("\n");
+  }
   const line = lines[edit.lineIndex];
   if (line === void 0) {
     return null;
@@ -5751,7 +5763,7 @@ function lineOps(kind, lineIndex, markdown) {
   if (!Number.isInteger(lineIndex) || lineIndex < 0) return null;
   const lines = markdown.split("\n");
   if (kind === "delete-line") return [[lineIndex, lineIndex + 1, []]];
-  if (kind === "move-line") return null;
+  if (kind === "move-line" || kind === "delete-lines") return null;
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex]];
   return kind === "insert-line" ? [[lineIndex, lineIndex, replacement]] : [[lineIndex, lineIndex + 1, replacement]];
@@ -5821,64 +5833,8 @@ var PresentationCascade = class {
   }
 };
 
-// app/present/register.ts
-var STAMP = /\s*\[\[qntm:[^\]]+\]\]/g;
-var LineRegister = class {
-  #text = void 0;
-  #cut = void 0;
-  /** `yy` — the line's text, as a copy: no cut is pending afterwards. */
-  yank(text) {
-    this.#text = text;
-  }
-  /** `dd` — mark the line; nothing is posted yet. A second `dd` replaces the first. */
-  cut(cut, text) {
-    this.#cut = cut;
-    this.#text = text;
-  }
-  /** The cut still waiting for `p`, when it was taken from exactly this file; else `undefined`. */
-  pendingCut(view, source) {
-    const cut = this.#cut;
-    if (cut === void 0) return void 0;
-    if (cut.view !== view || cut.source !== source) {
-      this.#cut = void 0;
-      return void 0;
-    }
-    return cut;
-  }
-  /** The pending cut's line, for the painter's mark — a read only, never clears anything. */
-  cutLineIn(view, source) {
-    const cut = this.#cut;
-    return cut !== void 0 && cut.view === view && cut.source === source ? cut.lineIndex : void 0;
-  }
-  /** Forget the pending cut and hand it back (the page posts its delete, or has moved it). */
-  takeCut() {
-    const cut = this.#cut;
-    this.#cut = void 0;
-    return cut;
-  }
-  /** What `p` puts down when no cut is pending: the text, as a NEW line — its identity stamp
-   *  removed, so the engine mints a new node rather than seeing one node on two lines. */
-  copyText() {
-    return this.#text?.replace(STAMP, "");
-  }
-};
-function deleteCommit(source, lineIndex) {
-  const markdown = applyEdit(source, { kind: "delete-line", lineIndex });
-  return markdown === null ? null : { lineIndex, text: "", markdown, source, kind: "delete-line" };
-}
-function moveCommit(source, from, to) {
-  const markdown = applyEdit(source, { kind: "move-line", lineIndex: from, to });
-  if (markdown === null) return null;
-  const landed = to > from ? to - 1 : to;
-  return { lineIndex: landed, text: markdown.split("\n")[landed] ?? "", markdown, source, kind: "move-line" };
-}
-function insertCommit(source, at, text) {
-  const markdown = applyEdit(source, { kind: "insert-line", lineIndex: at, text });
-  return markdown === null ? null : { lineIndex: at, text, markdown, source, kind: "insert-line" };
-}
-
 // app/present/undo.ts
-var STAMP2 = /\[\[qntm:([^\]]+)\]\]/;
+var STAMP = /\[\[qntm:([^\]]+)\]\]/;
 var CYCLE_ADDED = /\s*\[\[qntm:[^\]]+\]\]|\s*🆕\s*\d{4}-\d{2}-\d{2}/gu;
 var plain = (line) => line.replace(CYCLE_ADDED, "").replace(/\s+/g, " ").trim();
 function findLine(source, line) {
@@ -5894,9 +5850,9 @@ function findLine(source, line) {
   };
   const exact = unique((candidate) => candidate === line);
   if (exact >= 0) return exact;
-  const stamp = STAMP2.exec(line)?.[1];
+  const stamp = STAMP.exec(line)?.[1];
   if (stamp !== void 0) {
-    const byStamp = unique((candidate) => STAMP2.exec(candidate)?.[1] === stamp);
+    const byStamp = unique((candidate) => STAMP.exec(candidate)?.[1] === stamp);
     if (byStamp >= 0) return byStamp;
   }
   const wanted = plain(line);
@@ -5917,6 +5873,7 @@ function changeOf(view, commit) {
     case "delete-line":
       return { view, before: before[i] ?? null, after: null, neighbour: i > 0 ? before[i - 1] ?? null : null };
     case "move-line":
+    case "delete-lines":
       return null;
   }
 }
@@ -5983,6 +5940,103 @@ var UndoHistory = class {
     return edit;
   }
 };
+
+// app/present/register.ts
+var STAMP2 = /\s*\[\[qntm:[^\]]+\]\]/g;
+var LineRegister = class {
+  #text = void 0;
+  /** view -> the marked lines' text, oldest first. */
+  #marks = /* @__PURE__ */ new Map();
+  /** `yy` — the line's text, as a copy. */
+  yank(text) {
+    this.#text = text;
+  }
+  /** `dd` — mark `text` in `view`, or unmark it if it is marked. Answers whether it is now marked. */
+  toggleMark(view, text) {
+    const marks = this.#marks.get(view) ?? [];
+    const at = marks.indexOf(text);
+    if (at !== -1) {
+      marks.splice(at, 1);
+      this.#marks.set(view, marks);
+      return false;
+    }
+    marks.push(text);
+    this.#marks.set(view, marks);
+    this.#text = text;
+    return true;
+  }
+  /** Where the marks in `view` are in `source` now; a mark that cannot be found is dropped. */
+  markedLines(view, source) {
+    const marks = this.#marks.get(view) ?? [];
+    const kept = [];
+    const found = [];
+    for (const text of marks) {
+      const at = findLine(source, text);
+      if (at < 0) continue;
+      kept.push(text);
+      found.push(at);
+    }
+    this.#marks.set(view, kept);
+    return found;
+  }
+  /** The same lines, read only — for the painter's cross. Drops nothing. */
+  markedLinesIn(view, source) {
+    const out = /* @__PURE__ */ new Set();
+    for (const text of this.#marks.get(view) ?? []) {
+      const at = findLine(source, text);
+      if (at >= 0) out.add(at);
+    }
+    return out;
+  }
+  /** The views that have a mark. */
+  markedViews() {
+    return [...this.#marks].filter(([, marks]) => marks.length > 0).map(([view]) => view);
+  }
+  /** `u` with marks pending: unmark the last one. Answers whether there was one. */
+  unmarkLast(view) {
+    const marks = this.#marks.get(view) ?? [];
+    if (marks.length === 0) return false;
+    marks.pop();
+    return true;
+  }
+  /** `p`: the last mark's line in `source`, taken off the marks; `undefined` if none is found. */
+  takeLast(view, source) {
+    const marks = this.#marks.get(view) ?? [];
+    while (marks.length > 0) {
+      const text = marks.pop();
+      const at = findLine(source, text);
+      if (at >= 0) return at;
+    }
+    return void 0;
+  }
+  /** Every mark in `view`, found in `source` and taken off; the page deletes them in one write. */
+  takeAll(view, source) {
+    const found = this.markedLines(view, source);
+    this.#marks.set(view, []);
+    return found;
+  }
+  /** What `p` puts down when no line is marked: the text as a NEW line — its identity stamp
+   *  removed, so the engine mints a new node rather than seeing one node on two lines. */
+  copyText() {
+    return this.#text?.replace(STAMP2, "");
+  }
+};
+function deleteLinesCommit(source, lineIndexes) {
+  if (lineIndexes.length === 0) return null;
+  const markdown = applyEdit(source, { kind: "delete-lines", lineIndexes });
+  const first = Math.min(...lineIndexes);
+  return markdown === null ? null : { lineIndex: first, text: "", markdown, source, kind: "delete-lines" };
+}
+function moveCommit(source, from, to) {
+  const markdown = applyEdit(source, { kind: "move-line", lineIndex: from, to });
+  if (markdown === null) return null;
+  const landed = to > from ? to - 1 : to;
+  return { lineIndex: landed, text: markdown.split("\n")[landed] ?? "", markdown, source, kind: "move-line" };
+}
+function insertCommit(source, at, text) {
+  const markdown = applyEdit(source, { kind: "insert-line", lineIndex: at, text });
+  return markdown === null ? null : { lineIndex: at, text, markdown, source, kind: "insert-line" };
+}
 
 // app/present/caret.ts
 function placeCaret(element, at) {
@@ -6306,7 +6360,7 @@ function paint(body, source, context, deps) {
   };
   const markLineIndex = (element, lineIndex) => {
     element.dataset.lineIndex = String(lineIndex);
-    if (deps.cutLine === lineIndex) element.classList.add("cut");
+    if (deps.cutLines?.has(lineIndex) === true) element.classList.add("cut");
   };
   const repaint = (nextSource) => {
     if (deps.view !== void 0) {
@@ -6586,6 +6640,10 @@ function visualLineOrder(body) {
     }
   }
   return order;
+}
+function revealSelection(body, block = "nearest") {
+  const row = body.querySelector?.(`.${VIM_SELECTED_CLASS}`) ?? body.querySelector?.("input.rawline");
+  row?.scrollIntoView?.({ block, inline: "nearest" });
 }
 
 // app/present/settle.ts
@@ -8172,14 +8230,6 @@ function markWhereWeAre(deps, views, currentViewId) {
 }
 
 // app/shell/keys.ts
-var CUT_ENDING_EDITS = /* @__PURE__ */ new Set([
-  "toggle-done",
-  "delete-line",
-  "indent",
-  "open",
-  "enter-insert",
-  "capture"
-]);
 var typingIn = (target) => {
   const tag = String(target?.tagName ?? "").toLowerCase();
   return tag === "input" || tag === "textarea" || tag === "select";
@@ -8220,23 +8270,10 @@ function globalKey(deps, e) {
   e.preventDefault();
   const effect = outcome.effect;
   const register = deps.register;
-  const cut = register?.pendingCut(v.id, source);
-  if (register !== void 0 && cut !== void 0 && CUT_ENDING_EDITS.has(effect.kind) && !(effect.kind === "delete-line" && current !== cut.lineIndex)) {
-    register.takeCut();
-    const removal = deleteCommit(source, cut.lineIndex);
-    if (removal !== null && removal.markdown !== null) {
-      deps.commitLine(v, removal);
-      if (effect.kind !== "toggle-done" && effect.kind !== "indent") {
-        deps.repaintCurrentView();
-        return;
-      }
-      source = removal.markdown;
-      if (current > cut.lineIndex) current -= 1;
-    }
-  }
   if (effect.kind === "move") {
     deps.focus.place(visualOrder[effect.lineIndex] ?? current, { kind: "line-start" }, source, v.id);
     deps.repaintCurrentView();
+    revealSelection(deps.viewBody);
   } else if (effect.kind === "boundary") {
     deps.focus.place(
       boundaryLine(source.split("\n"), current, effect.direction, effect.count),
@@ -8247,6 +8284,7 @@ function globalKey(deps, e) {
       v.id
     );
     deps.repaintCurrentView();
+    revealSelection(deps.viewBody);
   } else if (effect.kind === "open") {
     const targetIndex = effect.direction === "below" ? current + 1 : current;
     const opened = openLine(
@@ -8310,16 +8348,11 @@ function globalKey(deps, e) {
       }
     }
   } else if (effect.kind === "delete-line" && register !== void 0) {
-    if (cut !== void 0 && current !== cut.lineIndex) {
-      register.takeCut();
-      const removal = deleteCommit(source, cut.lineIndex);
-      if (removal !== null) deps.commitLine(v, removal);
-    } else if (deleteCommit(source, current) !== null) {
-      register.cut({ view: v.id, source, lineIndex: current }, source.split("\n")[current] ?? "");
-    }
+    const line = source.split("\n")[current] ?? "";
+    if (applyEditable(source, current)) register.toggleMark(v.id, line);
     deps.repaintCurrentView();
   } else if (effect.kind === "undo" || effect.kind === "redo") {
-    if (register?.takeCut() !== void 0) {
+    if (effect.kind === "undo" && register?.unmarkLast(v.id) === true) {
       deps.repaintCurrentView();
       return;
     }
@@ -8330,10 +8363,9 @@ function globalKey(deps, e) {
     if (line.trim() !== "") register?.yank(line);
   } else if (effect.kind === "paste") {
     const to = effect.where === "below" ? current + 1 : current;
-    const moving = register?.pendingCut(v.id, source);
+    const moving = register?.takeLast(v.id, source);
     if (register !== void 0 && moving !== void 0) {
-      register.takeCut();
-      const move = moveCommit(source, moving.lineIndex, to);
+      const move = moveCommit(source, moving, to);
       if (move !== null) deps.commitLine(v, move);
     } else {
       const text = register?.copyText();
@@ -8382,6 +8414,24 @@ function installGlobalKeys(deps, on = document) {
       }
     });
   }
+}
+function applyEditable(source, index) {
+  const line = (source.split("\n")[index] ?? "").trim();
+  return line !== "" && !/^#{1,6}\s/.test(line);
+}
+function flushMarks(deps) {
+  const register = deps.register;
+  if (register === void 0) return Promise.resolve();
+  const sent = [];
+  for (const viewId of register.markedViews()) {
+    const v = deps.viewOf(viewId);
+    if (v === void 0) continue;
+    const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
+    const removal = deleteLinesCommit(source, register.takeAll(v.id, source));
+    if (removal !== null) sent.push(deps.commitLine(v, removal));
+  }
+  deps.repaintCurrentView();
+  return Promise.all(sent).then(() => void 0);
 }
 
 // app/present/tagcomplete.ts
@@ -8532,8 +8582,11 @@ function installCompleter(deps) {
       } else if (key === "ArrowUp") {
         selected = (selected - 1 + count) % count;
         render();
-      } else if (key === "Tab" || key === "Enter") {
+      } else if (key === "Tab") {
         accept(selected);
+      } else if (key === "Enter") {
+        accept(selected);
+        return;
       } else if (key === "Escape") {
         close();
       } else {
@@ -8572,12 +8625,12 @@ var KEY_HELP = [
       { keys: ["click twice"], does: "Edit the line you clicked" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
-      { keys: ["x"], does: "Tick / untick (adds or removes \u2705 today)" },
-      { keys: ["dd"], does: "Cut the line (p puts it back elsewhere; any other edit deletes it)" },
+      { keys: ["x", "Space"], does: "Tick / untick (adds or removes \u2705 today)" },
+      { keys: ["dd"], does: "Mark the line for deletion (again to unmark). Marked lines are deleted on Cycle" },
       { keys: ["yy"], does: "Copy the line" },
       { keys: ["u", "\u2318Z"], does: "Undo this view's last change" },
       { keys: ["Ctrl-r", "\u21E7\u2318Z"], does: "Redo" },
-      { keys: ["p", "P"], does: "Put the cut or copied line below / above" },
+      { keys: ["p", "P"], does: "Move the last marked line (or put a copy) below / above" },
       { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" }
     ]
   },
@@ -8668,6 +8721,13 @@ function installKeyHelp(doc = document) {
 
 // app/present/search.ts
 var ID = /\[\[qntm:(\d+)\]\]/;
+function folderWords(path) {
+  const parts = String(path ?? "").split("/").slice(0, -1);
+  return parts.join(" ").replace(/[-_]/g, " ");
+}
+function folderLabel(path) {
+  return String(path ?? "").split("/").slice(0, -1).join(" / ");
+}
 function searchViews(views, query, preferViewId, limit = 30) {
   const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
   if (words2.length === 0) return [];
@@ -8680,8 +8740,10 @@ function searchViews(views, query, preferViewId, limit = 30) {
   };
   for (const view of ordered) {
     const title = view.title ?? view.id;
-    if (matches(title)) {
-      hits.push({ kind: "view", qntmId: "", text: title, viewId: view.id, viewTitle: title, lineIndex: 0 });
+    const folders = folderWords(view.path);
+    if (matches(`${title} ${folders}`)) {
+      const where = folderLabel(view.path);
+      hits.push({ kind: "view", qntmId: "", text: where === "" ? title : `${where} \u203A ${title}`, viewId: view.id, viewTitle: title, lineIndex: 0 });
     }
   }
   const sections = /* @__PURE__ */ new Set();
@@ -8988,6 +9050,7 @@ export {
   defaultOrderingFor,
   defaultOrderingPlacementFor,
   defineResolver,
+  deleteLinesCommit,
   diagnosticOf,
   drawerIsOpen,
   drawerStops,
@@ -8997,6 +9060,7 @@ export {
   existingLineCommit,
   extendsLine,
   findLine,
+  flushMarks,
   folderOf,
   foldersOf,
   globalKey,
@@ -9061,6 +9125,7 @@ export {
   resolveRelativeAnchor,
   resolveWeekEnd,
   resolvedQntmId,
+  revealSelection,
   rulesSpec,
   runResolvers,
   searchViews,

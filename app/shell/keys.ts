@@ -45,18 +45,14 @@ import { indentedLine } from "../present/indent.js";
 import type { ModeSurface } from "../present/motions.js";
 import type { GlobalRegistration } from "../present/newline.js";
 import { openLine } from "../present/newline.js";
-import { existingLineCommit, visualLineOrder } from "../present/paint.js";
+import { existingLineCommit, revealSelection, visualLineOrder } from "../present/paint.js";
 import type { LineCommit } from "../present/paint.js";
 import { classifyLine } from "../present/express/rendition.js";
-import { deleteCommit, insertCommit, moveCommit } from "../present/register.js";
+import { deleteLinesCommit, insertCommit, moveCommit } from "../present/register.js";
 import type { LineRegister } from "../present/register.js";
 import { applyEdit } from "../present/source.js";
 import { wordCaret } from "../present/word.js";
 
-/** The edits that delete a cut still waiting for `p` (app/present/register.ts). */
-const CUT_ENDING_EDITS: ReadonlySet<string> = new Set([
-  "toggle-done", "delete-line", "indent", "open", "enter-insert", "capture",
-]);
 
 /** The view the handler is acting on — the wire payload's own shape, narrowed to what is read. */
 export interface GlobalKeyView {
@@ -98,7 +94,7 @@ export interface GlobalKeyDeps {
   readonly currentViewId: () => string | null;
   readonly drawerIsOpen: () => boolean;
   readonly globalRegistrationFor: (viewId: string) => GlobalRegistration | undefined;
-  readonly commitLine: (view: GlobalKeyView, commit: LineCommit) => void;
+  readonly commitLine: (view: GlobalKeyView, commit: LineCommit) => void | Promise<void>;
   /** Undo / redo this view's last change, against the file on screen (app/present/undo.ts). Each
    *  posts its own edit and answers whether there was one. */
   readonly undo?: (view: GlobalKeyView, source: string) => boolean;
@@ -227,26 +223,9 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   // `repaintCurrentView`, not `paintView`: the latter forces NORMAL on the way in, which would
   // undo an `i`/`a`/`o`/`O` before its <input> ever drew.
   const effect = outcome.effect;
-  // ── A CUT WAITING FOR `p` IS DELETED BY ANY OTHER EDIT (app/present/register.ts) ──
-  // `x` and `>`/`<` then go on, against the file without the cut line. Every other edit stops
-  // here: it would open or seed a line against a screen that still shows the cut line, so the
-  // operator presses it again once the delete lands.
+  // Lines `dd` marked stay marked through other edits; they are deleted when Cycle is pressed
+  // (`flushMarks`, below — 2026-10-08, operator-directed: nothing reaches the engine until Cycle).
   const register = deps.register;
-  const cut = register?.pendingCut(v.id, source);
-  if (register !== undefined && cut !== undefined && CUT_ENDING_EDITS.has(effect.kind) &&
-      !(effect.kind === "delete-line" && current !== cut.lineIndex)) {
-    register.takeCut();
-    const removal = deleteCommit(source, cut.lineIndex);
-    if (removal !== null && removal.markdown !== null) {
-      deps.commitLine(v, removal);
-      if (effect.kind !== "toggle-done" && effect.kind !== "indent") {
-        deps.repaintCurrentView();
-        return;
-      }
-      source = removal.markdown;
-      if (current > cut.lineIndex) current -= 1;
-    }
-  }
   if (effect.kind === "move") {
     // `effect.lineIndex` IS A POSITION WITHIN `visualOrder` HERE, NOT A FILE LINE INDEX —
     // `mode.handleKey` clamped it against `visualLastIndex`, above, so it has to be translated
@@ -264,6 +243,7 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     // someone can find rather than a number they have to interpret.
     deps.focus.place(visualOrder[effect.lineIndex] ?? current, { kind: "line-start" }, source, v.id);
     deps.repaintCurrentView();
+    revealSelection(deps.viewBody);
   } else if (effect.kind === "boundary") {
     // `{`/`}` — motions.ts decided direction and count; `boundaryLine` (app/present/boundary.ts)
     // is the one place "which line is that" is answered, from the SAME source string, never a
@@ -277,6 +257,7 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
       v.id,
     );
     deps.repaintCurrentView();
+    revealSelection(deps.viewBody);
   } else if (effect.kind === "open") {
     // `o`/`O` — `openLine` is the SAME function Enter's mid-edit "open a line below" already
     // calls (app/present/paint.ts's `openLineAt`), not a parallel implementation. It opens
@@ -373,19 +354,15 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
       }
     }
   } else if (effect.kind === "delete-line" && register !== undefined) {
-    // `dd` CUTS. The line is marked and held; `p`/`P` moves it in one write, any other edit
-    // deletes it (above). A second `dd` on another line deletes the first cut and cuts this one.
-    if (cut !== undefined && current !== cut.lineIndex) {
-      register.takeCut();
-      const removal = deleteCommit(source, cut.lineIndex);
-      if (removal !== null) deps.commitLine(v, removal);
-    } else if (deleteCommit(source, current) !== null) {
-      register.cut({ view: v.id, source, lineIndex: current }, source.split("\n")[current] ?? "");
-    }
+    // `dd` MARKS the line (or unmarks a marked one). Nothing is posted until the marks are
+    // deleted together — see the block above and `flushMarks` below.
+    const line = source.split("\n")[current] ?? "";
+    if (applyEditable(source, current)) register.toggleMark(v.id, line);
     deps.repaintCurrentView();
   } else if (effect.kind === "undo" || effect.kind === "redo") {
-    // A pending cut is simply forgotten: it was never posted, so there is nothing to undo.
-    if (register?.takeCut() !== undefined) {
+    // `u` with marks pending takes the last mark off: it was never posted, so there is nothing
+    // to undo on the server.
+    if (effect.kind === "undo" && register?.unmarkLast(v.id) === true) {
       deps.repaintCurrentView();
       return;
     }
@@ -397,10 +374,9 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   } else if (effect.kind === "paste") {
     // `p` below, `P` above. A pending cut MOVES; otherwise the copied text becomes a NEW line.
     const to = effect.where === "below" ? current + 1 : current;
-    const moving = register?.pendingCut(v.id, source);
+    const moving = register?.takeLast(v.id, source);
     if (register !== undefined && moving !== undefined) {
-      register.takeCut();
-      const move = moveCommit(source, moving.lineIndex, to);
+      const move = moveCommit(source, moving, to);
       if (move !== null) deps.commitLine(v, move);
     } else {
       const text = register?.copyText();
@@ -507,4 +483,29 @@ export function installGlobalKeys(deps: GlobalKeyDeps, on: Document = document):
       }
     });
   }
+}
+
+/** Whether `dd` may mark line `index`: a line with content that is not a heading. */
+function applyEditable(source: string, index: number): boolean {
+  const line = (source.split("\n")[index] ?? "").trim();
+  return line !== "" && !/^#{1,6}\s/.test(line);
+}
+
+/**
+ * Delete every marked line, in every view that has some — one write per view — called by the page
+ * when Cycle is pressed, before the cycle runs (app/present/register.ts). Answers the writes.
+ */
+export function flushMarks(deps: GlobalKeyDeps): Promise<void> {
+  const register = deps.register;
+  if (register === undefined) return Promise.resolve();
+  const sent: Array<void | Promise<void>> = [];
+  for (const viewId of register.markedViews()) {
+    const v = deps.viewOf(viewId);
+    if (v === undefined) continue;
+    const source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
+    const removal = deleteLinesCommit(source, register.takeAll(v.id, source));
+    if (removal !== null) sent.push(deps.commitLine(v, removal));
+  }
+  deps.repaintCurrentView();
+  return Promise.all(sent).then(() => undefined);
 }

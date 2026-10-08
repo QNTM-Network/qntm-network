@@ -1,74 +1,122 @@
 /**
- * The line register — what `dd` cut and `yy` copied, for `p`/`P` to put down (2026-10-08,
- * operator-asked: "I use [dd] to move items").
+ * The line register — the lines `dd` marked for deletion, and what `yy` copied (2026-10-08,
+ * operator-asked: "dd should remove line (cross out is fine) but the delete should happen from
+ * the cycle"; "I don't seem to be able to delete more than one line at a time").
  *
- * PURE: no DOM, no fetch. The page holds one.
+ * PURE. The page holds one.
  *
- * WHY A CUT WAITS. The engine reads a removed line as "delete this node". If `dd` posted at once,
- * the cycle could delete the node before `p` put the line back, and the move would become a delete
- * and a new node. So `dd` only marks the line. Then:
- *   - `p`/`P` moves it, in ONE write (`move-line`, app/present/source.ts);
- *   - any other edit first deletes it (`takeCut` hands the cut back for the page to post).
- * A cut is only valid against the SAME file it was taken from: if the file changed underneath,
- * the cut is dropped and nothing is deleted — refused, never guessed.
+ * `dd` MARKS. A marked line is drawn crossed out and nothing is posted. Any number of lines can be
+ * marked; `dd` on a marked line unmarks it, and so does `u`. Every mark is deleted when Cycle is
+ * pressed, in ONE write per view (`deleteLinesCommit`), before the cycle runs. `p`/`P` instead MOVES the last marked line, in one
+ * write, so the engine sees a move rather than a delete and a new node.
+ *
+ * A MARK IS ITS LINE'S TEXT, NOT AN INDEX. Saves and cycles change the file under a mark — a stamp
+ * arrives, the view re-sorts — so a mark is found again in the file as it is now
+ * (`findLine`, app/present/undo.ts), and a mark that cannot be found for certain is dropped:
+ * nothing is deleted on a guess.
  */
 
 import type { LineCommit } from "./paint.js";
 import { applyEdit } from "./source.js";
-
-export interface Cut {
-  readonly view: string;
-  readonly source: string;
-  readonly lineIndex: number;
-}
+import { findLine } from "./undo.js";
 
 /** A qntm identity stamp, `[[qntm:42]]`, with the space before it. */
 const STAMP = /\s*\[\[qntm:[^\]]+\]\]/g;
 
 export class LineRegister {
   #text: string | undefined = undefined;
-  #cut: Cut | undefined = undefined;
+  /** view -> the marked lines' text, oldest first. */
+  readonly #marks = new Map<string, string[]>();
 
-  /** `yy` — the line's text, as a copy: no cut is pending afterwards. */
+  /** `yy` — the line's text, as a copy. */
   yank(text: string): void {
     this.#text = text;
   }
 
-  /** `dd` — mark the line; nothing is posted yet. A second `dd` replaces the first. */
-  cut(cut: Cut, text: string): void {
-    this.#cut = cut;
-    this.#text = text;
-  }
-
-  /** The cut still waiting for `p`, when it was taken from exactly this file; else `undefined`. */
-  pendingCut(view: string, source: string): Cut | undefined {
-    const cut = this.#cut;
-    if (cut === undefined) return undefined;
-    if (cut.view !== view || cut.source !== source) {
-      this.#cut = undefined;
-      return undefined;
+  /** `dd` — mark `text` in `view`, or unmark it if it is marked. Answers whether it is now marked. */
+  toggleMark(view: string, text: string): boolean {
+    const marks = this.#marks.get(view) ?? [];
+    const at = marks.indexOf(text);
+    if (at !== -1) {
+      marks.splice(at, 1);
+      this.#marks.set(view, marks);
+      return false;
     }
-    return cut;
+    marks.push(text);
+    this.#marks.set(view, marks);
+    this.#text = text;
+    return true;
   }
 
-  /** The pending cut's line, for the painter's mark — a read only, never clears anything. */
-  cutLineIn(view: string, source: string): number | undefined {
-    const cut = this.#cut;
-    return cut !== undefined && cut.view === view && cut.source === source ? cut.lineIndex : undefined;
+  /** Where the marks in `view` are in `source` now; a mark that cannot be found is dropped. */
+  markedLines(view: string, source: string): readonly number[] {
+    const marks = this.#marks.get(view) ?? [];
+    const kept: string[] = [];
+    const found: number[] = [];
+    for (const text of marks) {
+      const at = findLine(source, text);
+      if (at < 0) continue;
+      kept.push(text);
+      found.push(at);
+    }
+    this.#marks.set(view, kept);
+    return found;
   }
 
-  /** Forget the pending cut and hand it back (the page posts its delete, or has moved it). */
-  takeCut(): Cut | undefined {
-    const cut = this.#cut;
-    this.#cut = undefined;
-    return cut;
+  /** The same lines, read only — for the painter's cross. Drops nothing. */
+  markedLinesIn(view: string, source: string): ReadonlySet<number> {
+    const out = new Set<number>();
+    for (const text of this.#marks.get(view) ?? []) {
+      const at = findLine(source, text);
+      if (at >= 0) out.add(at);
+    }
+    return out;
   }
 
-  /** What `p` puts down when no cut is pending: the text, as a NEW line — its identity stamp
+  /** The views that have a mark. */
+  markedViews(): readonly string[] {
+    return [...this.#marks].filter(([, marks]) => marks.length > 0).map(([view]) => view);
+  }
+
+  /** `u` with marks pending: unmark the last one. Answers whether there was one. */
+  unmarkLast(view: string): boolean {
+    const marks = this.#marks.get(view) ?? [];
+    if (marks.length === 0) return false;
+    marks.pop();
+    return true;
+  }
+
+  /** `p`: the last mark's line in `source`, taken off the marks; `undefined` if none is found. */
+  takeLast(view: string, source: string): number | undefined {
+    const marks = this.#marks.get(view) ?? [];
+    while (marks.length > 0) {
+      const text = marks.pop() as string;
+      const at = findLine(source, text);
+      if (at >= 0) return at;
+    }
+    return undefined;
+  }
+
+  /** Every mark in `view`, found in `source` and taken off; the page deletes them in one write. */
+  takeAll(view: string, source: string): readonly number[] {
+    const found = this.markedLines(view, source);
+    this.#marks.set(view, []);
+    return found;
+  }
+
+  /** What `p` puts down when no line is marked: the text as a NEW line — its identity stamp
    *  removed, so the engine mints a new node rather than seeing one node on two lines. */
   copyText(): string | undefined {
     return this.#text?.replace(STAMP, "");
   }
+}
+
+/** The ONE write that deletes every line in `lineIndexes`, or `null` (none can be deleted). */
+export function deleteLinesCommit(source: string, lineIndexes: readonly number[]): LineCommit | null {
+  if (lineIndexes.length === 0) return null;
+  const markdown = applyEdit(source, { kind: "delete-lines", lineIndexes });
+  const first = Math.min(...lineIndexes);
+  return markdown === null ? null : { lineIndex: first, text: "", markdown, source, kind: "delete-lines" };
 }
 
 /** The write that deletes line `lineIndex`, or `null` (a blank or a heading is not deleted). Its

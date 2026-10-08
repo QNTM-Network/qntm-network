@@ -11,6 +11,8 @@
 export interface SearchView {
   readonly id: string;
   readonly title?: string | undefined;
+  /** The view's file path, e.g. `work/outcomes/all.md` — its folders are searched too, at any depth. */
+  readonly path?: string | undefined;
   readonly markdown: string;
 }
 
@@ -29,6 +31,17 @@ export interface SearchHit {
 }
 
 const ID = /\[\[qntm:(\d+)\]\]/;
+
+/** The folders of `path` as words: `work/outcomes-career/all.md` -> "work outcomes career". */
+function folderWords(path: string | undefined): string {
+  const parts = String(path ?? "").split("/").slice(0, -1);
+  return parts.join(" ").replace(/[-_]/g, " ");
+}
+
+/** The folders of `path` for display: `work/outcomes/all.md` -> "work / outcomes". */
+function folderLabel(path: string | undefined): string {
+  return String(path ?? "").split("/").slice(0, -1).join(" / ");
+}
 
 export function searchViews(
   views: readonly SearchView[],
@@ -49,8 +62,12 @@ export function searchViews(
   // VIEWS FIRST, then SECTIONS, then TASKS — the broader the place, the higher it sits.
   for (const view of ordered) {
     const title = view.title ?? view.id;
-    if (matches(title)) {
-      hits.push({ kind: "view", qntmId: "", text: title, viewId: view.id, viewTitle: title, lineIndex: 0 });
+    // EVERY FOLDER ON THE PATH, NOT A FIXED DEPTH (2026-10-08, operator report: "work outcomes"
+    // found nothing). `work/outcomes/all.md` is searched as "work outcomes all".
+    const folders = folderWords(view.path);
+    if (matches(`${title} ${folders}`)) {
+      const where = folderLabel(view.path);
+      hits.push({ kind: "view", qntmId: "", text: where === "" ? title : `${where} › ${title}`, viewId: view.id, viewTitle: title, lineIndex: 0 });
     }
   }
   const sections = new Set<string>();

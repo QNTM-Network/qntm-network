@@ -150,7 +150,13 @@ export interface MoveLine {
   readonly to: number;
 }
 
-export type SourceEdit = SetCheckbox | SetLine | InsertLine | DeleteLine | MoveLine;
+/** Several lines at once — every line `dd` marked, in one write (2026-10-08). */
+export interface DeleteLines {
+  readonly kind: "delete-lines";
+  readonly lineIndexes: readonly number[];
+}
+
+export type SourceEdit = SetCheckbox | SetLine | InsertLine | DeleteLine | MoveLine | DeleteLines;
 
 // VERBATIM from app.html:275 as it stood at 64c3a87. The capture groups are what make this an
 // edit and not a rewrite: group 1 is everything up to the glyph, group 2 is everything after it,
@@ -194,6 +200,20 @@ export function applyEdit(source: string, edit: SourceEdit): string | null {
     }
     lines.splice(edit.lineIndex, 0, edit.text);
     return lines.join("\n");
+  }
+
+  if (edit.kind === "delete-lines") {
+    // Highest first, so each removal leaves the indexes still to go untouched. A blank or a
+    // heading is refused for the whole write, exactly as `delete-line` refuses it alone.
+    const unique = [...new Set(edit.lineIndexes)].sort((a, b) => b - a);
+    for (const index of unique) {
+      const target = lines[index];
+      if (target === undefined) return null;
+      const trimmed = target.trim();
+      if (trimmed === "" || /^#{1,6}\s/.test(trimmed)) return null;
+      lines.splice(index, 1);
+    }
+    return unique.length === 0 ? null : lines.join("\n");
   }
 
   const line = lines[edit.lineIndex];
@@ -343,7 +363,7 @@ export function lineOps(
   if (kind === "delete-line") return [[lineIndex, lineIndex + 1, []] as const];
   // A MOVE TOUCHES TWO PLACES. No single op names it, so the whole file goes, which the server
   // has always accepted (the `null` contract above).
-  if (kind === "move-line") return null;
+  if (kind === "move-line" || kind === "delete-lines") return null;
   if (lineIndex >= lines.length) return null;
   const replacement = [lines[lineIndex] as string];
   // set-line and set-checkbox both REPLACE the row at lineIndex; insert-line OPENS a new row there

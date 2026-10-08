@@ -673,7 +673,7 @@
   .viewbody .task.syncing { opacity: .5; }
   /* Saved but not yet confirmed by the server's cycle (2026-10-07). Colour and underline only. */
   /* A line `dd` cut and `p` has not put down yet. Colour only. */
-  .viewbody .cut { opacity: .4; text-decoration: line-through; }
+  .viewbody .cut { opacity: .45; text-decoration: line-through; text-decoration-color: #ff9b9b; }
   .viewbody .task.unconfirmed span { text-decoration: underline dotted var(--glow); text-underline-offset: 3px; }
   /* Declared states other than open/done (2026-10-07): still a real checkbox, marked by its status. */
   .viewbody .task.status-scheduled input,
@@ -1167,6 +1167,8 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
+  flushMarks,
+  revealSelection,
   installCompleter,
   installKeyHelp,
   installSearch,
@@ -1180,7 +1182,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=5428b65e3c";
+} from "/dist/present.js?v=f39508b57e";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1826,7 +1828,7 @@ function arrive(path, data, write = null) {
     // AND ONLY WHEN THIS PAGE KNOWS WHAT IT POSTED. `write.markdown` is the string that went on the
     // wire; without it there is nothing the server's acceptance could be an acceptance OF.
     if (data?.accepted === true && typeof write?.markdown === "string") {
-      return accept(path, write);
+      return accept(path, write, data?.deferred === true);
     }
     return "ignored";
   }
@@ -1867,7 +1869,14 @@ function arrive(path, data, write = null) {
  * this is where it comes from — the same optimistic re-walk `paint.ts`'s own `settle` already does
  * for a line commit, extended to the affordance that never had one.
  */
-function accept(path, write) {
+/** Every view of `path` that this page holds now reads `text` — the file as it was just saved. */
+function adoptSaved(path, text) {
+  const snapshot = graphData?.snapshot;
+  if (!snapshot || !Array.isArray(snapshot.views)) return;
+  snapshot.views = snapshot.views.map((view) => (view.path === path ? { ...view, markdown: text } : view));
+}
+
+function accept(path, write, deferred = false) {
   // PLACED FIRST AND UNCONDITIONALLY, because the answer is owed whatever the screen is doing. The
   // two refusals below are about what may be SHOWN and MEASURED now; neither is a reason to stop
   // collecting the cycle's answer.
@@ -1882,7 +1891,14 @@ function accept(path, write) {
   // WITH NO SOURCE, NOTHING IS OWED, AND THAT IS THE FAIL-SAFE DIRECTION. An empty owed set is the
   // stopping condition this page had before the stamp entered it, which is a screen that may be one
   // cycle stale — never a screen that hangs.
-  startPickup(path, write.token ?? null, stampsOwed(write.source ?? null, write.markdown));
+  // NO CYCLE WAS RUN, SO THERE IS NO ANSWER TO COLLECT (2026-10-08). Instead the file this page
+  // holds for every view of this path becomes what was saved, so leaving the view and coming back
+  // shows the saved text, not the text the page loaded with. The next Cycle replaces it all.
+  if (deferred) {
+    adoptSaved(path, write.markdown);
+  } else {
+    startPickup(path, write.token ?? null, stampsOwed(write.source ?? null, write.markdown));
+  }
   if (queued.pending(path) !== null || aLineIsOpen()) {
     return "accepted";
   }
@@ -2595,7 +2611,7 @@ function repaintCurrentView() {
     // SAVED, NOT YET BACK (2026-10-07): lines on screen that the server's last projection of this
     // view does not hold — marked until the cycle's answer arrives. See `unconfirmedLines`.
     unconfirmed: unconfirmedLines(source, sourceOfView(v)),
-    cutLine: lineRegister.cutLineIn(v.id, source),
+    cutLines: lineRegister.markedLinesIn(v.id, source),
     // EVERY DECLARED CHECKBOX STATE, AND THE STAMP A TICK ADDS — both read from the published
     // config, never typed here. See `checkboxStatuses()` / `completionStamp()`.
     checkboxStatuses: checkboxStatuses(),
@@ -2900,7 +2916,9 @@ async function writeFile(view, markdown, source, token = null, ops = null) {
   // an answer that says `accepted: true`, which only a Worker that read this field can say. A Worker
   // that DID read it but was handed no `ctx` also answers synchronously. There is no combination in
   // which this field makes a write fail, and none in which it makes one silently do less.
-  const body = { path: view.path, markdown, base: baseOf(source), ack: true };
+  // `cycle: false` (2026-10-08, operator-directed): the save is written and answered; the engine
+  // runs only when Cycle is pressed. See the Worker's `editFile`.
+  const body = { path: view.path, markdown, base: baseOf(source), ack: true, cycle: false };
   // ── THE SEVENTH THING: THE WRITE SAYS WHAT IT DID, NOT ONLY WHAT IT WANTS ──
   //
   // `ops` is the edit this write IS — `[start, end, [line]]`, derived from the commit by `lineOps`
@@ -3540,6 +3558,8 @@ function showCycleNote(title, body) {
 async function runCycle() {
   if (cycling || !token) return;
   cycling = true;
+  // Lines `dd` marked are deleted first, in one write, so this cycle takes them in.
+  try { await flushMarks(globalKeyDeps); } catch { /* the write path reports its own failure */ }
   const button = $("cycleBtn");
   button.setAttribute("aria-busy", "true");
   showCycleNote("Cycling…", "Running on the server — this usually takes under a minute.");
@@ -3784,6 +3804,7 @@ const globalKeyDeps = {
       const source = rows.showing(view.id, accepted.sourceFor(view.path) ?? view.markdown);
       focus.place(lineIndex, { kind: "line-start" }, source, view.id);
       repaintCurrentView();
+      revealSelection($("viewBody"), "center");
     },
   }),
   // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch

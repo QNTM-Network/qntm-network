@@ -78,7 +78,8 @@ export function changeOf(view: string, commit: LineCommit): LineChange | null {
     case "delete-line":
       return { view, before: before[i] ?? null, after: null, neighbour: i > 0 ? (before[i - 1] ?? null) : null };
     case "move-line":
-      // A move is not undone line by line: it is two places at once. Not recorded.
+    case "delete-lines":
+      // Two or more places at once; not undone line by line. Not recorded.
       return null;
   }
 }
