@@ -99,6 +99,10 @@ export interface GlobalKeyDeps {
   readonly drawerIsOpen: () => boolean;
   readonly globalRegistrationFor: (viewId: string) => GlobalRegistration | undefined;
   readonly commitLine: (view: GlobalKeyView, commit: LineCommit) => void;
+  /** Undo / redo this view's last change, against the file on screen (app/present/undo.ts). Each
+   *  posts its own edit and answers whether there was one. */
+  readonly undo?: (view: GlobalKeyView, source: string) => boolean;
+  readonly redo?: (view: GlobalKeyView, source: string) => boolean;
   /** What `dd`/`yy` hold for `p`/`P` (app/present/register.ts). Absent: `dd` deletes at once. */
   readonly register?: LineRegister;
   readonly repaintCurrentView: () => void;
@@ -201,7 +205,20 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   // at all — `a` placed a caret the surface never learned about (measured 2026-08-12). `handleKey`
   // now reports what the gesture MEANT and `column.ts` resolves it against the line, so there is
   // no column for this call to hand over.
-  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
+  // THE EDITOR SHORTCUTS FOR UNDO AND REDO, beside vim's `u` / Ctrl-r. Cmd-r is left to the browser.
+  const command = e.metaKey || e.ctrlKey;
+  const historyKey =
+    command && (e.key === "z" || e.key === "Z")
+      ? (e.shiftKey ? "redo" : "undo")
+      : e.ctrlKey && !e.metaKey && e.key === "r"
+        ? "redo"
+        : null;
+  const outcome =
+    historyKey !== null
+      ? { handled: true as const, effect: { kind: historyKey } as const }
+      : command
+        ? { handled: false as const, effect: { kind: "none" } as const }
+        : deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
   if (!outcome.handled) return;
   e.preventDefault();
   // THE PAINTER STILL DOES NOT DECIDE. `mode.handleKey` is the one place a keystroke becomes a
@@ -365,6 +382,14 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     } else if (deleteCommit(source, current) !== null) {
       register.cut({ view: v.id, source, lineIndex: current }, source.split("\n")[current] ?? "");
     }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "undo" || effect.kind === "redo") {
+    // A pending cut is simply forgotten: it was never posted, so there is nothing to undo.
+    if (register?.takeCut() !== undefined) {
+      deps.repaintCurrentView();
+      return;
+    }
+    (effect.kind === "undo" ? deps.undo : deps.redo)?.(v, source);
     deps.repaintCurrentView();
   } else if (effect.kind === "yank") {
     const line = source.split("\n")[current] ?? "";

@@ -4357,6 +4357,10 @@ var ModeSurface = class {
       this.#pendingY = true;
       return { handled: true, effect: { kind: "none" } };
     }
+    if (key === "u") {
+      this.#count = "";
+      return { handled: true, effect: { kind: "undo" } };
+    }
     if (key === "p" || key === "P") {
       this.#count = "";
       return { handled: true, effect: { kind: "paste", where: key === "p" ? "below" : "above" } };
@@ -5589,7 +5593,8 @@ function seedFor(source, lineIndex, declared) {
   if (chrome === null) {
     return null;
   }
-  const tokens = sectionId === null || declared === void 0 ? [] : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
+  const implied = new Set(declared?.impliedTokens ?? []);
+  const tokens = (sectionId === null || declared === void 0 ? [] : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? []).filter((token) => !implied.has(token));
   if (declared?.composition !== void 0) {
     const indentMatch = /^\s*/.exec(chrome.text);
     const indent3 = indentMatch === null ? "" : indentMatch[0];
@@ -5872,6 +5877,113 @@ function insertCommit(source, at, text) {
   return markdown === null ? null : { lineIndex: at, text, markdown, source, kind: "insert-line" };
 }
 
+// app/present/undo.ts
+var STAMP2 = /\[\[qntm:([^\]]+)\]\]/;
+var CYCLE_ADDED = /\s*\[\[qntm:[^\]]+\]\]|\s*🆕\s*\d{4}-\d{2}-\d{2}/gu;
+var plain = (line) => line.replace(CYCLE_ADDED, "").replace(/\s+/g, " ").trim();
+function findLine(source, line) {
+  const lines = source.split("\n");
+  const unique = (test) => {
+    let found = -1;
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!test(lines[i] ?? "")) continue;
+      if (found !== -1) return -2;
+      found = i;
+    }
+    return found;
+  };
+  const exact = unique((candidate) => candidate === line);
+  if (exact >= 0) return exact;
+  const stamp = STAMP2.exec(line)?.[1];
+  if (stamp !== void 0) {
+    const byStamp = unique((candidate) => STAMP2.exec(candidate)?.[1] === stamp);
+    if (byStamp >= 0) return byStamp;
+  }
+  const wanted = plain(line);
+  if (wanted === "") return -1;
+  const byText = unique((candidate) => plain(candidate) === wanted);
+  return byText >= 0 ? byText : -1;
+}
+function changeOf(view, commit) {
+  if (commit.markdown === null) return null;
+  const before = commit.source.split("\n");
+  const after = commit.markdown.split("\n");
+  const i = commit.lineIndex;
+  switch (commit.kind) {
+    case "set-line":
+      return before[i] === after[i] ? null : { view, before: before[i] ?? null, after: after[i] ?? null, neighbour: null };
+    case "insert-line":
+      return { view, before: null, after: after[i] ?? null, neighbour: i > 0 ? after[i - 1] ?? null : null };
+    case "delete-line":
+      return { view, before: before[i] ?? null, after: null, neighbour: i > 0 ? before[i - 1] ?? null : null };
+    case "move-line":
+      return null;
+  }
+}
+function apply(source, from, to, neighbour) {
+  if (from !== null && to !== null) {
+    const at = findLine(source, from);
+    if (at < 0) return null;
+    const markdown = applyEdit(source, { kind: "set-line", lineIndex: at, text: to });
+    return markdown === null ? null : { lineIndex: at, text: to, markdown, source, kind: "set-line" };
+  }
+  if (from !== null) {
+    const at = findLine(source, from);
+    if (at < 0) return null;
+    const markdown = applyEdit(source, { kind: "delete-line", lineIndex: at });
+    return markdown === null ? null : { lineIndex: at, text: "", markdown, source, kind: "delete-line" };
+  }
+  if (to !== null) {
+    const text = to.replace(/\s*\[\[qntm:[^\]]+\]\]/g, "");
+    const above = neighbour === null ? -1 : findLine(source, neighbour);
+    const at = above >= 0 ? above + 1 : 0;
+    const markdown = applyEdit(source, { kind: "insert-line", lineIndex: at, text });
+    return markdown === null ? null : { lineIndex: at, text, markdown, source, kind: "insert-line" };
+  }
+  return null;
+}
+var LIMIT = 100;
+var UndoHistory = class {
+  #done = /* @__PURE__ */ new Map();
+  #undone = /* @__PURE__ */ new Map();
+  /** A new change in `change.view`. It clears that view's redo list, as every editor does. */
+  record(change) {
+    const done = this.#done.get(change.view) ?? [];
+    done.push(change);
+    if (done.length > LIMIT) done.shift();
+    this.#done.set(change.view, done);
+    this.#undone.set(change.view, []);
+  }
+  /** The edit that undoes the last change in `view`, against `source` as it is now — or `null`
+   *  when there is nothing to undo, or the line cannot be found for certain (the change is then
+   *  kept, so a later `u` can try again). Taking it moves the change to the redo list. */
+  undo(view, source) {
+    const done = this.#done.get(view) ?? [];
+    const change = done[done.length - 1];
+    if (change === void 0) return null;
+    const edit = apply(source, change.after, change.before, change.neighbour);
+    if (edit === null) return null;
+    done.pop();
+    const undone = this.#undone.get(view) ?? [];
+    undone.push(change);
+    this.#undone.set(view, undone);
+    return edit;
+  }
+  /** The edit that redoes the last undone change in `view`, the same way. */
+  redo(view, source) {
+    const undone = this.#undone.get(view) ?? [];
+    const change = undone[undone.length - 1];
+    if (change === void 0) return null;
+    const edit = apply(source, change.before, change.after, change.neighbour);
+    if (edit === null) return null;
+    undone.pop();
+    const done = this.#done.get(view) ?? [];
+    done.push(change);
+    this.#done.set(view, done);
+    return edit;
+  }
+};
+
 // app/present/caret.ts
 function placeCaret(element, at) {
   element.setSelectionRange?.(at, at);
@@ -5963,7 +6075,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
     const key = event?.key;
     if (key === "Enter") {
       event?.preventDefault?.();
-      settle(true);
+      settle(event?.shiftKey === true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
       settle();
@@ -8101,7 +8213,9 @@ function globalKey(deps, e) {
   const visualPos = visualOrder.indexOf(current);
   const visualCurrent = visualPos === -1 ? 0 : visualPos;
   const visualLastIndex = Math.max(0, visualOrder.length - 1);
-  const outcome = deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
+  const command = e.metaKey || e.ctrlKey;
+  const historyKey = command && (e.key === "z" || e.key === "Z") ? e.shiftKey ? "redo" : "undo" : e.ctrlKey && !e.metaKey && e.key === "r" ? "redo" : null;
+  const outcome = historyKey !== null ? { handled: true, effect: { kind: historyKey } } : command ? { handled: false, effect: { kind: "none" } } : deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
   if (!outcome.handled) return;
   e.preventDefault();
   const effect = outcome.effect;
@@ -8203,6 +8317,13 @@ function globalKey(deps, e) {
     } else if (deleteCommit(source, current) !== null) {
       register.cut({ view: v.id, source, lineIndex: current }, source.split("\n")[current] ?? "");
     }
+    deps.repaintCurrentView();
+  } else if (effect.kind === "undo" || effect.kind === "redo") {
+    if (register?.takeCut() !== void 0) {
+      deps.repaintCurrentView();
+      return;
+    }
+    (effect.kind === "undo" ? deps.undo : deps.redo)?.(v, source);
     deps.repaintCurrentView();
   } else if (effect.kind === "yank") {
     const line = source.split("\n")[current] ?? "";
@@ -8454,6 +8575,8 @@ var KEY_HELP = [
       { keys: ["x"], does: "Tick / untick (adds or removes \u2705 today)" },
       { keys: ["dd"], does: "Cut the line (p puts it back elsewhere; any other edit deletes it)" },
       { keys: ["yy"], does: "Copy the line" },
+      { keys: ["u", "\u2318Z"], does: "Undo this view's last change" },
+      { keys: ["Ctrl-r", "\u21E7\u2318Z"], does: "Redo" },
       { keys: ["p", "P"], does: "Put the cut or copied line below / above" },
       { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" }
     ]
@@ -8461,7 +8584,8 @@ var KEY_HELP = [
   {
     title: "While editing a line",
     rows: [
-      { keys: ["Enter"], does: "Save the line" },
+      { keys: ["Enter"], does: "Save the line and stop editing" },
+      { keys: ["Shift+Enter"], does: "Save the line and start a new one below" },
       { keys: ["Escape"], does: "Stop editing (keeps what you typed)" },
       { keys: ["#"], does: "Suggest tags from your config" },
       { keys: [":"], does: "Suggest markers by name (:sched \u2192 \u23F3)" },
@@ -8819,6 +8943,7 @@ export {
   SPECIFICITY,
   STRUCTURAL_KEY,
   SettleSurface,
+  UndoHistory,
   WAITING_FOR_TAG_BINDING,
   WRITE_ECHO_KEY,
   WriteRegister,
@@ -8836,6 +8961,7 @@ export {
   boundaryLine,
   buildDrawer,
   carriesContent,
+  changeOf,
   chromeOf,
   clampColumn,
   clampLine,
@@ -8870,6 +8996,7 @@ export {
   evaluateWhen,
   existingLineCommit,
   extendsLine,
+  findLine,
   folderOf,
   foldersOf,
   globalKey,

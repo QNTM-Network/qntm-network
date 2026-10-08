@@ -271,6 +271,8 @@ export type { Resolved } from "./express/cascade.js";
 
 export { applyEdit, lineOps } from "./source.js";
 export { LineRegister } from "./register.js";
+export { UndoHistory, changeOf, findLine } from "./undo.js";
+export type { LineChange } from "./undo.js";
 export type { Cut } from "./register.js";
 export type { LineOp } from "./source.js";
 export type { InsertLine, MoveLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";

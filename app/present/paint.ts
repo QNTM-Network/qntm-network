@@ -730,7 +730,10 @@ function rawInput(
       // minting a second node from the other fragment. Which half keeps the node is a graph
       // decision, and a keystroke with no undo is not where a graph decision belongs. So Enter
       // means one thing everywhere in a line, which is also the simpler thing to learn.
-      settle(true);
+      //
+      // 2026-10-08 (operator-asked): Enter SAVES AND RETURNS TO NORMAL, like Escape. Shift+Enter
+      // saves and opens a line below, which is what Enter used to do; `o` does that from NORMAL.
+      settle((event as KeyboardEvent | undefined)?.shiftKey === true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
       // ESCAPE KEEPS WHAT WAS TYPED (2026-10-08, operator-asked: "I'm used to escape out of edit

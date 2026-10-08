@@ -1172,13 +1172,15 @@ import {
   installSearch,
   unconfirmedLines,
   LineRegister,
+  UndoHistory,
+  changeOf,
   tagVocabulary,
   tagSource,
   dateMarkers,
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=d139d23acc";
+} from "/dist/present.js?v=f92603d875";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1284,6 +1286,11 @@ function globalRegistrationFor(viewId) {
     // `NewLine.cursorOffset` header — so a stale `presentation.json` predating this key degrades to
     // exactly what shipped before it existed, never a guess.
     composition: resolution.composition,
+    // NOT SEEDED (2026-10-08): the default node type's own tag. The engine makes an untagged line
+    // that type anyway, so seeding `#task` only meant deleting it from every line that is not one.
+    impliedTokens: Object.entries(qualification.tokens?.node_type ?? {})
+      .filter(([, type]) => type === qualification.defaultNodeType)
+      .map(([token]) => token),
   };
 }
 /**
@@ -3148,7 +3155,27 @@ const commitLine = createCommitLine({
 // down. It arms `graphRefreshRetry` UNCONDITIONALLY, on every commit — no resolver is named or
 // consulted here, only the etag the graph blob cache holds right now. `commitLine` (`commit.ts`)
 // is deliberately unchanged and still names no resolver.
+// UNDO AND REDO (2026-10-08) — every line commit, from every gesture, passes here, so this is the
+// one place a change is recorded. An undo or redo is itself posted through here and is NOT
+// recorded as a new change (`replayingHistory`), so redo still has something to redo.
+const undoHistory = new UndoHistory();
+let replayingHistory = false;
+function replayHistory(view, edit) {
+  if (edit === null) return false;
+  replayingHistory = true;
+  try {
+    commitLineAndArmGraphRefreshRetry(view, edit);
+  } finally {
+    replayingHistory = false;
+  }
+  return true;
+}
+
 function commitLineAndArmGraphRefreshRetry(view, commit) {
+  if (!replayingHistory) {
+    const change = changeOf(view.id, commit);
+    if (change !== null) undoHistory.record(change);
+  }
   if (commit.markdown !== null) {
     graphRefreshRetry.arm(commit.markdown, view.id, commit, graphCache.etag());
   }
@@ -3775,6 +3802,8 @@ const globalKeyDeps = {
   // existing line — would silently miss it while `o`/Enter did not.
   commitLine: commitLineAndArmGraphRefreshRetry,
   register: lineRegister,
+  undo: (view, source) => replayHistory(view, undoHistory.undo(view.id, source)),
+  redo: (view, source) => replayHistory(view, undoHistory.redo(view.id, source)),
   repaintCurrentView,
   drainPainted,
   openDrawer,

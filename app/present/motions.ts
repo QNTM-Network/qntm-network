@@ -286,6 +286,10 @@ export type NormalEffect =
   | { readonly kind: "paste"; readonly where: "below" | "above" }
   /** `yy` — copy the selected line into the register. */
   | { readonly kind: "yank" }
+  /** `u` / Ctrl-r (and Cmd/Ctrl-Z, Shift-Cmd/Ctrl-Z) — undo / redo this view's last change
+   *  (app/present/undo.ts). */
+  | { readonly kind: "undo" }
+  | { readonly kind: "redo" }
   /**
    * `{`/`}` asked for the boundary `count` jumps away, in `direction`. This module cannot compute
    * WHICH LINE that is — that needs `classifyLine` (resolution.ts) over the actual source lines,
@@ -472,6 +476,10 @@ export class ModeSurface {
     if (key === "y") {
       this.#pendingY = true;
       return { handled: true, effect: { kind: "none" } };
+    }
+    if (key === "u") {
+      this.#count = "";
+      return { handled: true, effect: { kind: "undo" } };
     }
     if (key === "p" || key === "P") {
       this.#count = "";

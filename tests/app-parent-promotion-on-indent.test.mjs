@@ -490,6 +490,8 @@ const PROMOTION_COVERAGE = {
   "search": "opens search; writes nothing (2026-10-07)",
   "paste": "p/P: moves or copies a line; no indentation change of its own (2026-10-08)",
   "yank": "yy: copies; writes nothing (2026-10-08)",
+  "undo": "u / Cmd-Z: posts the inverse of this view's last change through the one write path (app/present/undo.ts, 2026-10-08)",
+  "redo": "Ctrl-r / Shift-Cmd-Z: posts the change again, the same way (2026-10-08)",
   "delete-line": "removes the line; there is no relationship left to promote (2026-10-07, `dd`)",
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine as set-line; promotion reached on `>` (section 1 — THE HEADLINE FIX), abstains on `<` (section 3)",
