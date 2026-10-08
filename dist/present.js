@@ -2083,7 +2083,7 @@ function composeSeed(shape, known, composition, depth = 0) {
 }
 
 // app/present/select/membership.ts
-var RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"];
+var RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "layer", "lead_state", "node_type", "package_state", "principle_state", "priority", "program_role", "recheck", "reviewed", "status", "tier", "title"];
 var abstains = (because) => ({ kind: "abstains", because });
 function titleCaseFromId(id) {
   return id.split("-").filter((part) => part.length > 0).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");

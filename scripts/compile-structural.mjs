@@ -308,21 +308,11 @@ export function compile(files, ledger = new Ledger()) {
     ledger,
   );
 
-  // Only sections declaring exactly one edge type produce an ingest-usable override — a
-  // multi-type declaration is interpret-ambiguous for authoring (applier.py's own
-  // _section_indent_binding resolves it to (True, None), i.e. "structural ingest stays silent
-  // there"). None exist in the operator's live config today; this is a shape guard, not dead
-  // code, so a future multi-type section is REPORTED by refusal rather than mis-published as a
-  // single-type override.
+  // A section may declare more than one edge type (2026-10-08: the outcomes views nest by
+  // PART_OF and WAITING_FOR). The engine's section edge language (qntm_md.resolution.
+  // edge_language) resolves every declared type, so every one is published as declared.
   for (const [viewId, viewSections] of Object.entries(sections)) {
     for (const [sectionId, lang] of Object.entries(viewSections)) {
-      if (lang.edgeTypes.length !== 1) {
-        throw new GenerationError(
-          `${viewId}.${sectionId} declares ${lang.edgeTypes.length} structural_edge_types ` +
-            `(${lang.edgeTypes.join(", ")}) — ambiguous for ingest per applier.py's own rule; ` +
-            "this generator does not know how to publish it and refuses rather than guess.",
-        );
-      }
       if (lang.edgeDirection !== "incoming" && lang.edgeDirection !== "outgoing") {
         throw new GenerationError(
           `${viewId}.${sectionId}.structural_edge_direction='${lang.edgeDirection}' is not ` +

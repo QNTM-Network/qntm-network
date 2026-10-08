@@ -111,7 +111,7 @@ import type { TodayAnswer } from "../today.js";
  * config changes, and commit the result. Do not hand-edit the array below; `tests/operator-set-
  * agreement.test.mjs` fails loudly if this file and the compiler's own compile ever disagree.
  */
-export const RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "lead_state", "node_type", "package_state", "principle_state", "priority", "status", "tier", "title"] as const;
+export const RESOLVABLE_FIELDS = ["asserted_state", "blocked_state", "cadence", "cap_state", "change_type", "class_state", "domain", "genre", "god_box", "instantiate", "layer", "lead_state", "node_type", "package_state", "principle_state", "priority", "program_role", "recheck", "reviewed", "status", "tier", "title"] as const;
 
 /** A line's resolved fields — what the engine would mint from it, for these resolvable fields only. */
 export type ResolvedFields = Readonly<Record<string, FieldValue>>;
