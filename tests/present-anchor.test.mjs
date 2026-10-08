@@ -133,7 +133,7 @@ const PRINTED_TWICE = [
   "",
 ].join("\n");
 
-const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = (body) => walk(body).filter((el) => el.tagName === "textarea");
 
 /** Paint with a focus surface and a view id, the way the page does. */
 function view(source, focus, reports = []) {

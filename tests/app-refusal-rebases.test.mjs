@@ -201,7 +201,7 @@ async function driveEdit(d, current) {
   page.paintView("this-week");
   page.__setFocus(3, BASE);
   const row = () => walk(browser.elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
-  const input = () => walk(browser.elements.get("viewBody")).find((el) => el.type === "text");
+  const input = () => walk(browser.elements.get("viewBody")).find((el) => el.tagName === "textarea");
   row().dispatch("click", makeEvent());
   page.__enterInsert();
   input().value = TYPED;
@@ -286,7 +286,7 @@ describe("3. the SAME line changed server-side — the rebase refuses, nothing r
     // STILL EDITABLE — re-enter the row through the same focus/insert path a real keystroke uses.
     d.page.__setFocus(3, d.page.__rows().source);
     d.page.__enterInsert();
-    const reopened = walk(d.browser.elements.get("viewBody")).find((el) => el.type === "text");
+    const reopened = walk(d.browser.elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.ok(reopened, "the row could not be re-entered — it is no longer editable");
     assert.equal(reopened.value, TYPED, "re-entering the row did not start from the operator's own characters");
   });

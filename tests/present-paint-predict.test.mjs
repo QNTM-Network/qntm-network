@@ -149,7 +149,7 @@ describe("5. AN <input> HAS NOWHERE TO SHOW A CLAIM", () => {
     predict.arm(SOURCE, "demo", [{ lineIndex: 0, text: "🆕 2026-08-04" }]);
     // No throw — the whole assertion for this test.
     const body = paintOnce(SOURCE, { predict, focus });
-    const inputs = walk(body).filter((el) => el.tagName === "input");
+    const inputs = walk(body).filter((el) => el.tagName === "textarea");
     assert.equal(inputs.length, 1, "precondition: the row really is an <input>");
     assert.equal(chips(body).length, 0, "nothing was appended to an element that cannot show it");
   });

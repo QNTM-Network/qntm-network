@@ -95,7 +95,7 @@ before(async () => {
 });
 
 const inputs = () =>
-  walk(elements.get("viewBody")).filter((el) => el.tagName === "input" && el.type === "text");
+  walk(elements.get("viewBody")).filter((el) => el.tagName === "textarea");
 const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
 
 /**

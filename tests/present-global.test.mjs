@@ -410,7 +410,7 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     // `i` that arms it for typing.
     walkPage(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
     page.__enterInsert();
-    const editable = walkPage(body).filter((el) => el.type === "text");
+    const editable = walkPage(body).filter((el) => el.tagName === "textarea");
     assert.equal(editable.length, 1, "clicking a chipped line did not reach its source");
     assert.equal(editable[0].value, VIEW.markdown.split("\n")[1]);
     assert.ok(editable[0].value.includes("#task"), "the source the cursor reached lost its tag");
@@ -425,7 +425,7 @@ describe("4. the page itself reads it — the half that catches an unwired reade
     // the cursor's line shows its SOURCE — so the chipped line would still not be a chipped line
     // for whatever ran next. Parking is the restore now.
     editable[0].dispatch("blur");
-    assert.equal(walkPage(body).filter((el) => el.type === "text").length, 0);
+    assert.equal(walkPage(body).filter((el) => el.tagName === "textarea").length, 0);
     page.__setFocus(2, VIEW.markdown);
   });
 

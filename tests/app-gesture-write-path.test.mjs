@@ -283,7 +283,7 @@ describe("2. no exception escapes commitLine, or the page, for any of the nine e
       .flatMap(function collect(el) {
         return [el, ...((el.children ?? []).flatMap(collect))];
       })
-      .find((el) => el.type === "text");
+      .find((el) => el.tagName === "textarea");
     assert.ok(input, "i did not open an editable line");
     input.value = "- [ ] a renamed [[qntm:1]] 🔢 1";
     assert.doesNotThrow(() => input.dispatch("blur"));
@@ -300,7 +300,7 @@ describe("2. no exception escapes commitLine, or the page, for any of the nine e
       .flatMap(function collect(el) {
         return [el, ...((el.children ?? []).flatMap(collect))];
       })
-      .find((el) => el.type === "text");
+      .find((el) => el.tagName === "textarea");
     assert.ok(input, "o did not open a draft line");
     input.value = "- [ ] a brand new row";
     assert.doesNotThrow(() => input.dispatch("blur"));

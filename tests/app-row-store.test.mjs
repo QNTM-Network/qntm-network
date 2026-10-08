@@ -136,7 +136,7 @@ beforeEach(() => {
 });
 
 const body = () => elements.get("viewBody");
-const inputs = () => walk(body()).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = () => walk(body()).filter((el) => el.tagName === "textarea");
 const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
 const rows = () => page.__rows();
 
@@ -548,7 +548,7 @@ describe("6. break the store's readers and the acceptance test goes red", () => 
 
   test("WITHOUT the store's answer, the typed row vanishes on the very next keystroke", () => {
     const mBody = () => mutantElements.get("viewBody");
-    const mInputs = () => walk(mBody()).filter((el) => el.tagName === "input" && el.type === "text");
+    const mInputs = () => walk(mBody()).filter((el) => el.tagName === "textarea");
     const mPress = (key) => mutantDoc.dispatch("keydown", makeEvent({ key }));
     const mOnScreen = (text) =>
       walk(mBody())

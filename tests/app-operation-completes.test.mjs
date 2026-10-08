@@ -171,7 +171,7 @@ async function drive409GiveUp(d) {
   page.paintView("this-week");
   page.__setFocus(3, BARE);
   const row = () => walk(browser.elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
-  const input = () => walk(browser.elements.get("viewBody")).find((el) => el.type === "text");
+  const input = () => walk(browser.elements.get("viewBody")).find((el) => el.tagName === "textarea");
   row().dispatch("click", makeEvent());
   page.__enterInsert();
   input().value = TYPED;
@@ -200,7 +200,7 @@ describe("2. ITEM 11 — a 409 with real text at stake reaches 'return-to-row'",
     // STILL SETTLED, NOT LEFT OPEN: not repainting on a 409 means the optimistic settle already
     // took the row back to NORMAL (paint.ts's own settle() always repaints before commitLine's
     // write is even sent) — there is no leftover `<input>` from the write that failed.
-    const openInputs = walk(d.browser.elements.get("viewBody")).filter((el) => el.type === "text");
+    const openInputs = walk(d.browser.elements.get("viewBody")).filter((el) => el.tagName === "textarea");
     assert.equal(openInputs.length, 0, "a 409 left the row's <input> open — it did not settle");
 
     // STILL EDITABLE: re-enter the row (through the same focus/insert path every real keystroke
@@ -209,7 +209,7 @@ describe("2. ITEM 11 — a 409 with real text at stake reaches 'return-to-row'",
     // preserved text, not BARE's.
     d.page.__setFocus(3, d.page.__rows().source);
     d.page.__enterInsert();
-    const reopened = walk(d.browser.elements.get("viewBody")).find((el) => el.type === "text");
+    const reopened = walk(d.browser.elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.ok(reopened, "the row could not be re-entered — it is no longer editable");
     assert.equal(reopened.value, TYPED, "re-entering the row did not start from the operator's own characters");
   });

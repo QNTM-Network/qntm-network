@@ -75,5 +75,5 @@
  * arrive as a different function, not as a second optional parameter that most callers pass twice.
  */
 export function placeCaret(element: HTMLElement, at: number): void {
-  (element as HTMLInputElement).setSelectionRange?.(at, at);
+  (element as HTMLInputElement | HTMLTextAreaElement).setSelectionRange?.(at, at);
 }

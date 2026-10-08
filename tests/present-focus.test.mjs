@@ -75,7 +75,7 @@ function view(source = SOURCE, context = new PresentationContext()) {
   return { body, focus, commits };
 }
 
-const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = (body) => walk(body).filter((el) => el.tagName === "textarea");
 const boxes = (body) => walk(body).filter((el) => el.type === "checkbox");
 /** The clickable text of the first task line — the cursor target app.html paints. */
 const taskText = (body) => walk(body).find((el) => el.tagName === "span");

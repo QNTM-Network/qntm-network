@@ -331,7 +331,7 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.equal(input.value, V1.split("\n")[3], "the cursor did not reach the source");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
 
@@ -358,7 +358,7 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     land(V2);
     posted = null;
@@ -378,7 +378,7 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     land(V2);
     posted = null;
@@ -402,7 +402,7 @@ describe("THE FALSIFIER — a projection arrives while a line is open, through a
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     input.value = "- [ ] Draft the launch note today [[qntm:121]] #task";
     posted = null;
     // READ BEFORE THE GESTURE LEAVES — the freshness-line sentence this arm used to check is

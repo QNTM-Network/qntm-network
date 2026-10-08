@@ -179,7 +179,7 @@ describe("2. THE OPERATOR'S GESTURE — o, type a title, Enter — through the r
   });
 
   const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
-  const inputs = () => walk(elements.get("viewBody")).filter((el) => el.tagName === "input" && el.type === "text");
+  const inputs = () => walk(elements.get("viewBody")).filter((el) => el.tagName === "textarea");
 
   test("THIS SUITE MUST FAIL AGAINST unmodified main: ordering's own placement refusal for this insert reaches console.debug", async () => {
     await withDebugCapture(async (said) => {

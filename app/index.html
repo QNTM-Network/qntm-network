@@ -512,7 +512,7 @@
   .vim-badge-insert { color: var(--green); }
 
   /* THE VIM SELECTION MARK — NORMAL mode's selected line, and deliberately not the caret's own
-     device. `.viewbody input.rawline` already marks INSERT with `caret-color` and a bottom
+     device. `.viewbody textarea.rawline` already marks INSERT with `caret-color` and a bottom
      hairline in the identity green; the brief is explicit that NORMAL's mark must "be clearly not
      a text caret", so this reaches for a DIFFERENT part of the row — a left edge bar, the shape a
      selected line in Obsidian's own vim-mode gutter reads as — plus a faint fill so the row is
@@ -701,27 +701,35 @@
      the "glowing point" brand/BRAND.md names as the brand device — and a hairline under the row.
      Neither costs a pixel of layout, which is the point. No `margin` is set here: the row rhythm
      above already owns it, and re-stating it would out-specify the gap and reintroduce the jump. */
-  .viewbody input.rawline {
-    display: block; width: 100%; height: var(--row); padding: 0;
+  /* THE LINE WRAPS AND GROWS, IT DOES NOT SCROLL SIDEWAYS (2026-10-08, operator report: a long
+     line being edited in a narrow window cut off, with the caret at the right edge). The editor is
+     a <textarea> one row tall that grows to fit what it holds — `field-sizing: content` where the
+     browser has it, a height set from `scrollHeight` where it does not (`lineEditor` in
+     app/present/paint.ts). `min-height` keeps a short line exactly one row. */
+  .viewbody textarea.rawline {
+    display: block; width: 100%; min-height: var(--row); padding: 0;
     background: transparent; border: 0; border-radius: 0;
     font: inherit; line-height: var(--row); color: var(--ink);
     caret-color: var(--green);
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    resize: none; overflow: hidden; field-sizing: content;
   }
-  .viewbody input.rawline:focus { outline: none; box-shadow: inset 0 -1px 0 var(--green-hairline); }
+  .viewbody textarea.rawline:focus { outline: none; box-shadow: inset 0 -1px 0 var(--green-hairline); }
 
-  /* THE SAME ROW, IN NORMAL — the same source characters, in a <div> rather than an <input>.
+  /* THE SAME ROW, IN NORMAL — the same source characters, in a <div> rather than the <textarea>.
      It carries `rawline` too, deliberately: NORMAL and INSERT are two embodiments of ONE raw
      rendition (app/present/paint.ts), so they must occupy the SAME box or `i` becomes the jump
-     ".viewbody"'s own comment block above exists to refuse. Everything the input rule sets that a
+     ".viewbody"'s own comment block above exists to refuse. Everything the editor rule sets that a
      div does not already get is restated here and nothing else is.
 
-     `white-space: pre` IS THE ONE THING AN INPUT GAVE FOR FREE AND A DIV DOES NOT. The engine
-     indents a nested line by four spaces and prints double spaces inside chrome cells; a div
-     collapses both, so the raw rendition would silently show different characters from the source
-     it claims to be. `pre` is what makes "its exact source text" true rather than approximate. */
+     `white-space: pre-wrap` IS WHAT A DIV DOES NOT DO BY ITSELF. The engine indents a nested line
+     by four spaces and prints double spaces inside chrome cells; a div collapses both, so the raw
+     rendition would silently show different characters from the source it claims to be.
+     `pre-wrap` keeps every space AND wraps a long line exactly where the editor wraps it, so `i`
+     on a long line moves nothing. */
   .viewbody div.rawline {
-    height: var(--row); line-height: var(--row); color: var(--ink);
-    white-space: pre;
+    min-height: var(--row); line-height: var(--row); color: var(--ink);
+    white-space: pre-wrap; overflow-wrap: anywhere;
   }
 
   /* THE BLOCK CURSOR — NORMAL mode's caret, and a terminal's own device rather than a browser's.
@@ -1193,7 +1201,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=8f5e43598c";
+} from "/dist/present.js?v=b44309ca08";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");

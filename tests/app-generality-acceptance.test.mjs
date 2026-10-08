@@ -414,7 +414,7 @@ describe("1. REGISTRATION + DEFAULTS — `o` on a line under a section declared 
     generated_at: "2026-08-03T12:00:00Z",
     views: [view(VIEW.id, VIEW.path, "Gentest Widgets", SOURCE)],
   });
-  const inputs = () => walk(elements.get("viewBody")).filter((el) => el.tagName === "input" && el.type === "text");
+  const inputs = () => walk(elements.get("viewBody")).filter((el) => el.tagName === "textarea");
   const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
 
   const openAt = (lineIndex) => {

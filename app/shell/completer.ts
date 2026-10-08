@@ -9,7 +9,7 @@
  * list and routes keys to it.
  *
  * IT TOUCHES NO EDITOR. It listens on the view body for `input` and `keydown` from any
- * `input.rawline` — the existing-line editor and the new-line editor alike — so neither knows it
+ * `textarea.rawline` — the existing-line editor and the new-line editor alike — so neither knows it
  * exists. Its key listener runs in the CAPTURE phase, before the input's own Enter/Escape handling,
  * and swallows only the keys it used, only while its list is open. The list element is made on
  * first use, so installing touches nothing.
@@ -24,9 +24,9 @@ export interface CompleterDeps {
   readonly sources: () => readonly CompletionSource[];
 }
 
-const isLineEditor = (target: EventTarget | null): target is HTMLInputElement =>
-  typeof HTMLInputElement !== "undefined" &&
-  target instanceof HTMLInputElement &&
+const isLineEditor = (target: EventTarget | null): target is HTMLTextAreaElement =>
+  typeof HTMLTextAreaElement !== "undefined" &&
+  target instanceof HTMLTextAreaElement &&
   target.classList.contains("rawline");
 
 export function installCompleter(deps: CompleterDeps): void {
@@ -43,7 +43,7 @@ export function installCompleter(deps: CompleterDeps): void {
   };
   const isOpen = (): boolean => made !== null && !made.hidden;
 
-  let active: HTMLInputElement | null = null;
+  let active: HTMLTextAreaElement | null = null;
   let offer: Completion | null = null;
   let selected = 0;
 
@@ -86,7 +86,7 @@ export function installCompleter(deps: CompleterDeps): void {
     list.hidden = false;
   };
 
-  const refresh = (input: HTMLInputElement): void => {
+  const refresh = (input: HTMLTextAreaElement): void => {
     active = input;
     offer = completeWith(deps.sources(), input.value, input.selectionStart ?? input.value.length);
     if (offer === null) {

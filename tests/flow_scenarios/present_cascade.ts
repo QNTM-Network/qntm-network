@@ -323,7 +323,7 @@ export function run(): void {
     throw new Error("no task line text to put the cursor on");
   }
   target.dispatch("click");
-  const line = focused.descendants().find((el) => el.type === "text");
+  const line = focused.descendants().find((el) => el.tagName === "textarea");
   if (line === undefined) {
     throw new Error("clicking a line's text produced no editable line");
   }
@@ -371,7 +371,7 @@ export function run(): void {
     throw new Error("the painter offered no space below the last line");
   }
   below.dispatch("click");
-  const opened = made.descendants().find((el) => el.type === "text");
+  const opened = made.descendants().find((el) => el.tagName === "textarea");
   if (opened === undefined) {
     throw new Error("clicking below the last line opened no line");
   }

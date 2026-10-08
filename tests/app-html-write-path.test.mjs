@@ -327,7 +327,7 @@ describe("the tag chip, through the page (migration stage 8)", () => {
     // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
     page.__enterInsert();
-    const editable = walk(body).find((el) => el.type === "text");
+    const editable = walk(body).find((el) => el.tagName === "textarea");
     assert.equal(editable.value, VIEW.markdown.split("\n")[3], "the cursor did not reach the source");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #home 🆕 2026-07-29";
     editable.dispatch("blur");
@@ -360,7 +360,7 @@ describe("the tag chip, through the page (migration stage 8)", () => {
         el.innerHTML = '<span class="tagchip">#WRECKED</span>';
       }
     }
-    const editable = walk(body).find((el) => el.type === "text");
+    const editable = walk(body).find((el) => el.tagName === "textarea");
     editable.value = "- [x] Draft the launch note [[qntm:121]] #task #work ✅ 2026-08-04";
     editable.dispatch("blur");
     await new Promise((r) => setImmediate(r));
@@ -398,7 +398,7 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     taskText(body).dispatch("click", makeEvent());
     page.__enterInsert();
 
-    const editable = walk(body).filter((el) => el.type === "text");
+    const editable = walk(body).filter((el) => el.tagName === "textarea");
     assert.equal(editable.length, 1, "the page has no focus surface — clicking a line did nothing");
     assert.equal(editable[0].value, line(3));
     assert.equal(
@@ -417,11 +417,11 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
     page.__enterInsert();
-    walk(body).find((el) => el.type === "text").dispatch("blur");
+    walk(body).find((el) => el.tagName === "textarea").dispatch("blur");
     await new Promise((r) => setImmediate(r));
 
     // THE INPUT IS GONE AND NOTHING WAS POSTED — the two facts this test has always been for.
-    assert.equal(walk(body).filter((el) => el.type === "text").length, 0);
+    assert.equal(walk(body).filter((el) => el.tagName === "textarea").length, 0);
     assert.equal(posted, null, "leaving a line untouched posted the whole view");
 
     // IT USED TO ASSERT FOUR CHECKBOXES HERE, i.e. that the line went all the way back to its
@@ -448,7 +448,7 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
     // `i` that arms it for typing.
     taskText(body).dispatch("click", makeEvent());
     page.__enterInsert();
-    const editable = walk(body).find((el) => el.type === "text");
+    const editable = walk(body).find((el) => el.tagName === "textarea");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #work 🛫 2026-08-04";
     editable.dispatch("blur");
     await new Promise((r) => setImmediate(r));
@@ -483,7 +483,7 @@ describe("the cursor rule, through the page (migration stage 3)", () => {
       if (el.tagName === "span") el.innerHTML = "<b>WRECKED</b>";
       if (el.tagName === "h2" || el.tagName === "div") el.innerHTML = "WRECKED";
     }
-    const editable = walk(body).find((el) => el.type === "text");
+    const editable = walk(body).find((el) => el.tagName === "textarea");
     editable.value = "- [x] Draft the launch note [[qntm:121]] #task #work ✅ 2026-08-04";
     editable.dispatch("blur");
     await new Promise((r) => setImmediate(r));

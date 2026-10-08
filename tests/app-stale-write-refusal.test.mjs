@@ -379,7 +379,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
       taskText().dispatch("click", makeEvent());
     }
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.ok(input, "clicking the line, then arming INSERT, did not open it for typing");
     return input;
   }
@@ -433,7 +433,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     open(V1);
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.equal(input.value, V1.split("\n")[3], "the cursor did not reach the source");
     input.value = TYPED;
     input.dispatch("blur");
@@ -602,7 +602,7 @@ describe("A REFUSED SAVE DOES NOT LOSE THE OPERATOR'S CHARACTERS — through app
     // THE OPERATOR, BELIEVING THE CURSOR IS STILL WHERE HE LEFT IT, KEEPS TYPING. `__enterInsert`
     // arms whatever line the (possibly wrongly re-anchored) cursor is on now.
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.ok(input, "the heal left no line open for typing");
     input.value = "- [ ] zzTEST typed after the heal";
     input.dispatch("blur");
