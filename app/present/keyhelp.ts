@@ -33,6 +33,7 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
     rows: [
       { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
       { keys: ["a"], does: "Edit the line, after the cursor" },
+      { keys: ["A"], does: "Edit the line, at the end" },
       { keys: ["click twice"], does: "Edit the line you clicked" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },

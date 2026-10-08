@@ -4378,6 +4378,9 @@ var ModeSurface = class {
       case "a":
         this.enterInsert("append");
         return { handled: true, effect: { kind: "enter-insert", caret: "append" } };
+      case "A":
+        this.enterInsert("append-end");
+        return { handled: true, effect: { kind: "enter-insert", caret: "append-end" } };
       case "$":
         return { handled: true, effect: { kind: "column", to: "end" } };
       case "o":
@@ -4449,7 +4452,7 @@ function wordCaret(line, motion, count, from) {
 
 // app/present/column.ts
 function isInsertSpace(instruction) {
-  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "at";
+  return instruction.kind === "insert" || instruction.kind === "append" || instruction.kind === "append-end" || instruction.kind === "at";
 }
 function columnFor(instruction, lineText, from) {
   const raw = rawColumnFor(instruction, lineText, from);
@@ -4476,6 +4479,8 @@ function rawColumnFor(instruction, lineText, from) {
       return from;
     case "append":
       return from + 1;
+    case "append-end":
+      return lineText === null ? from : lineText.length;
     case "word":
       return lineText === null ? from : wordCaret(lineText, instruction.motion, instruction.count, from);
     case "at":
@@ -8214,6 +8219,7 @@ var KEY_HELP = [
     rows: [
       { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
       { keys: ["a"], does: "Edit the line, after the cursor" },
+      { keys: ["A"], does: "Edit the line, at the end" },
       { keys: ["click twice"], does: "Edit the line you clicked" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },

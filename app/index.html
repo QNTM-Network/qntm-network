@@ -21,12 +21,18 @@
      (Do not write the opening style tag in prose anywhere above that sheet. That reader finds it
      with a regex over the whole document and does not skip comments, so a mention of it in one
      becomes the start of the stylesheet as far as CI is concerned. Learned the hard way.) -->
+<!-- The home page's type (2026-10-08): Inter for words, JetBrains Mono for labels and tokens. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/app/mark/qmark.css" />
 <style>
   :root {
     /* Dark native controls — scrollbars, checkboxes, date pickers — on every platform. Without it
        Windows draws a white scrollbar and white checkboxes on this black page (2026-10-08). */
     color-scheme: dark;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     --bg: #07080a; --ink: #eef1f4; --dim: #8b93a1; --line: #1b1f26;
     --glow: #7cc7ff; --accent: #cfe8ff;
     /* THE DECLARED GREEN. brand/BRAND.md section 2: "Colour system: green #3ff07f · black #0a0b0a
@@ -137,7 +143,8 @@
     min-height: 100%;
     background: radial-gradient(1200px 800px at 50% -10%, #0e1420 0%, var(--bg) 60%);
     color: var(--ink);
-    font: var(--t4)/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+    font: var(--t4)/1.5 var(--sans);
+    font-feature-settings: "cv11", "ss03";
     -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
     display: flex; align-items: flex-start; justify-content: center;
     /* The menu bar is FIXED, so the column starts below it — the one place that arithmetic is
@@ -283,13 +290,13 @@
      disagree the bar would be the one nobody thought to look in. Below 20px the mark's own sheet
      settles the electron rather than orbiting it, so a bar that ever wants a smaller mark gets a
      still one, which is the right trade and is the component's decision, not this page's. */
-  .bar-word { letter-spacing: var(--track); font-size: var(--t2); color: var(--ink); }
+  .bar-word { font-family: var(--mono); font-weight: 500; font-size: var(--t3); color: var(--ink); }
   /* WHERE YOU ARE. Takes the slack, and gives it back first: `min-width: 0` is what lets the
      view's title ellipse instead of shoving the controls off a 320px screen. */
   .bar-where { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s2); overflow: hidden; }
   .bar-folder { flex: none; font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); white-space: nowrap; }
   .bar-view { font-size: var(--t3); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar-who { flex: none; font-size: var(--t2); color: var(--dim); font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; }
+  .bar-who { flex: none; font-size: var(--t2); color: var(--dim); font-family: var(--mono); }
   /* Every control in the bar is at least --touch tall AND --touch wide. `.barbtn` is now worn by
      the drawer's own close button alone; the rail's controls wear `.railbtn`, which takes the
      same minimum from the same token. */
@@ -302,7 +309,7 @@
   }
   .barbtn:hover { color: var(--ink); border-color: var(--glow); box-shadow: none; }
   .kbd {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--mono);
     font-size: var(--t1); opacity: .55;
   }
 
@@ -356,7 +363,7 @@
     min-height: var(--touch); min-width: var(--touch); padding: 0 var(--s3);
     background: transparent; color: var(--dim);
     border: 1px solid transparent; border-radius: var(--radius); box-shadow: none;
-    font-size: var(--t2); font-weight: 500; white-space: nowrap;
+    font-family: var(--mono); font-size: var(--t2); font-weight: 500; white-space: nowrap;
   }
   .railbtn:hover { color: var(--ink); background: rgba(255,255,255,.05); box-shadow: none; }
   .railbtn[aria-busy="true"] { color: var(--green); border-color: var(--green-hairline); }
@@ -385,7 +392,7 @@
   .key-help-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0; font-size: .85rem; }
   .key-help-panel dt { display: flex; gap: .25rem; flex-wrap: wrap; }
   .key-help-panel dd { margin: 0; color: var(--ink); }
-  .key-help-panel kbd { padding: 0 .35rem; border: 1px solid var(--green-hairline); border-radius: 4px; font-family: ui-monospace, monospace; font-size: .8rem; color: var(--green); }
+  .key-help-panel kbd { padding: 0 .35rem; border: 1px solid var(--green-hairline); border-radius: 4px; font-family: var(--mono); font-size: .8rem; color: var(--green); }
   .tag-picker li { padding: .2rem .75rem; color: var(--ink); cursor: pointer; }
   .tag-picker li[aria-selected="true"] { background: var(--green-hairline); color: var(--green); }
   .cycle-note-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem .75rem; }
@@ -440,7 +447,7 @@
     padding: var(--s2) var(--s2) var(--s2) var(--s4);
     border-bottom: 1px solid var(--line);
   }
-  .drawer-title { font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); }
+  .drawer-title { font-family: var(--mono); font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); }
   .tree {
     order: 2; flex: 1; min-height: 0;
     overflow-y: auto; overscroll-behavior: contain;
@@ -490,7 +497,7 @@
      narrated what the app had just done or could not tell; this states what mode the operator is
      in right now, the same kind of fact a caret's own colour already carries. */
   .vim-badge {
-    margin: 0 0 var(--s2);
+    margin: 0 0 var(--s2); font-family: var(--mono);
     font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; font-weight: 600;
   }
   .vim-badge-normal { color: var(--dim); }
@@ -763,7 +770,7 @@
     background: rgba(63,240,127,.10);
     border: 1px solid rgba(63,240,127,.30);
     color: var(--green);
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--mono);
     font-size: .82em;
     line-height: 1;
     white-space: nowrap;
@@ -1160,7 +1167,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=e32b624120";
+} from "/dist/present.js?v=eb0a051f4f";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
