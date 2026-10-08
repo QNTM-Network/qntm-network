@@ -47,3 +47,11 @@ test("a view's title is a VIEW result, and views come before sections and tasks"
 test("/ asks for the search box", () => {
   assert.equal(new ModeSurface().handleKey("/", 0, 3).effect.kind, "search");
 });
+
+test("a view is found by any folder on its path, at any depth (2026-10-08)", () => {
+  const views = [{ id: "work-outcomes-all", title: "All", path: "work/outcomes/all.md", markdown: "# All" }];
+  const hits = searchViews(views, "work outcomes");
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].kind, "view");
+  assert.equal(hits[0].text, "work / outcomes › All");
+});

@@ -115,8 +115,14 @@ export function installCompleter(deps: CompleterDeps): void {
       } else if (key === "ArrowUp") {
         selected = (selected - 1 + count) % count;
         render();
-      } else if (key === "Tab" || key === "Enter") {
+      } else if (key === "Tab") {
         accept(selected);
+      } else if (key === "Enter") {
+        // THE HIGHLIGHTED OPTION IS ALREADY THE CHOICE (2026-10-08, operator-asked: "enter twice
+        // ... doesn't feel natural"). Enter takes it AND goes on to the editor's own Enter, which
+        // saves the line — so a tag or a date typed last costs one Enter, not two.
+        accept(selected);
+        return;
       } else if (key === "Escape") {
         close();
       } else {

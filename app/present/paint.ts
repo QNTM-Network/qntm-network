@@ -165,7 +165,7 @@ export interface LineCommit {
    * line's own before" would compare two different lines and call it one line's history. A caller
    * that cannot tell the two apart has no honest way to ask "did this line's own answer change".
    */
-  readonly kind: "set-line" | "insert-line" | "delete-line" | "move-line";
+  readonly kind: "set-line" | "insert-line" | "delete-line" | "move-line" | "delete-lines";
   /**
    * THE STRING THE EDIT WAS APPLIED TO — `applyEdit`'s own input, verbatim.
    *
@@ -288,8 +288,8 @@ export interface PaintDeps {
    * is marked `unconfirmed`; the mark is colour and underline only, never a box property.
    */
   readonly unconfirmed?: ReadonlySet<number> | undefined;
-  /** The line `dd` cut and `p` has not put down yet (app/present/register.ts). Marked `cut`. */
-  readonly cutLine?: number | undefined;
+  /** The lines `dd` marked for deletion (app/present/register.ts). Each is drawn `cut`. */
+  readonly cutLines?: ReadonlySet<number> | undefined;
   /**
    * The operator's declared checkbox glyphs (`qualification.tokens.status`). With it every
    * declared state — `[>]` scheduled, `[~]` waiting, `[/]` in progress, `[-]` cancelled — paints
@@ -1434,7 +1434,7 @@ export function paint(
    */
   const markLineIndex = (element: HTMLElement, lineIndex: number): void => {
     element.dataset.lineIndex = String(lineIndex);
-    if (deps.cutLine === lineIndex) element.classList.add("cut");
+    if (deps.cutLines?.has(lineIndex) === true) element.classList.add("cut");
   };
 
   /**
@@ -2122,4 +2122,17 @@ export function visualLineOrder(body: HTMLElement): readonly number[] {
     }
   }
   return order;
+}
+
+/**
+ * SCROLL THE CURSOR'S LINE INTO VIEW (2026-10-08, operator report: moving with `j`/`k` or jumping
+ * to a search result left the line off screen). `nearest` moves the page only as far as needed, so
+ * a line already visible does not move; `center` is for a jump, which should land mid-screen.
+ * Reads the painted DOM, so it belongs to the painter, not the page.
+ */
+export function revealSelection(body: HTMLElement, block: "nearest" | "center" = "nearest"): void {
+  const row =
+    (body.querySelector?.(`.${VIM_SELECTED_CLASS}`) as HTMLElement | null) ??
+    (body.querySelector?.("input.rawline") as HTMLElement | null);
+  row?.scrollIntoView?.({ block, inline: "nearest" });
 }

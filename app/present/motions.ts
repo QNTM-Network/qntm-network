@@ -591,6 +591,8 @@ export class ModeSurface {
       case "/":
         return { handled: true, effect: { kind: "search" } };
       case "x":
+      case " ":
+        // Space ticks too (2026-10-08, operator-asked), the same way `x` does.
         if (pending !== null) {
           // Same refusal as `o`/`O`: "toggle done three times" has no well-defined meaning, so a
           // count in front of `x` is consumed and does nothing rather than toggling once anyway.

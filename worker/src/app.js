@@ -668,6 +668,25 @@ async function editFile(request, env, origin, session, ctx) {
   // cannot overlap a cycle already running). `deferred` still holds exactly one promise; the rerun
   // is a second `fetch` INSIDE that same promise chain, not a second registration with `waitUntil`,
   // so the Worker is kept alive for the whole chain and not a token more.
+  // ── SAVE ONLY, NO CYCLE (2026-10-08, operator-directed) ──
+  // "All are stored in front end / edits / files until you run [Cycle]. Otherwise things are just
+  // moving unreliably in the background." A write that says `cycle: false` is written to the vault
+  // and answered at once; the engine runs only when the Cycle button asks (`cyclePost`).
+  if (body?.cycle === false) {
+    return json(
+      {
+        ok: true,
+        handle: session.handle,
+        source: "server",
+        accepted: true,
+        deferred: true,
+        path,
+        pending_edits: await pendingCount(env, session.user_id),
+      },
+      200,
+      origin
+    );
+  }
   if (body?.ack === true && typeof ctx?.waitUntil === "function") {
     ctx.waitUntil(
       (async () => {

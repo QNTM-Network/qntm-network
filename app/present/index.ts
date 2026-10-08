@@ -270,14 +270,13 @@ export { PresentationCascade } from "./express/cascade.js";
 export type { Resolved } from "./express/cascade.js";
 
 export { applyEdit, lineOps } from "./source.js";
-export { LineRegister } from "./register.js";
+export { LineRegister, deleteLinesCommit } from "./register.js";
 export { UndoHistory, changeOf, findLine } from "./undo.js";
 export type { LineChange } from "./undo.js";
-export type { Cut } from "./register.js";
 export type { LineOp } from "./source.js";
 export type { InsertLine, MoveLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
-export { paint, existingLineCommit, visualLineOrder } from "./paint.js";
+export { paint, existingLineCommit, revealSelection, visualLineOrder } from "./paint.js";
 export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";
 
 export { SettleSurface } from "./settle.js";
@@ -424,7 +423,7 @@ export type { DrawerDeps, DrawerView, FolderNode } from "../shell/drawer.js";
 // `tsconfig.json` cannot read and flow-trace's node module-load hook cannot import. It is now
 // compiled and observable, which is what lets `classes.yaml`'s `movement` class be asked anything
 // at all. See keys.ts's own header for the two defects that lived in that blind spot.
-export { globalKey, installGlobalKeys } from "../shell/keys.js";
+export { flushMarks, globalKey, installGlobalKeys } from "../shell/keys.js";
 export { installCompleter } from "../shell/completer.js";
 export { installKeyHelp } from "../shell/help.js";
 export { installSearch } from "../shell/search.js";

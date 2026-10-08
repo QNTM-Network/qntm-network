@@ -581,7 +581,7 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
       // `markdown` rather than replacing it precisely so that an old Worker still has the whole
       // file to write. Conditional like `base`/`token`, not unconditional like `ack`: an edit that
       // is not expressible as one line op sends no field at all.
-      ["ack", "base", "markdown", "ops", "path", "token"],
+      ["ack", "base", "cycle", "markdown", "ops", "path", "token"],
       "the write path gained or lost a field",
     );
   });
@@ -609,7 +609,7 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
     // there is none, the other is a request about the SERVER'S sequencing and is true either way.
     // `ops` survives the missing CSPRNG for the same reason `ack` does: it is a statement about
     // THIS EDIT, not a claim about this browser's randomness. Only `token` is dropped.
-    assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "markdown", "ops", "path"]);
+    assert.deepEqual(Object.keys(posted).sort(), ["ack", "base", "cycle", "markdown", "ops", "path"]);
     assert.equal("token" in posted, false, "an empty token reached the wire");
   });
 });
