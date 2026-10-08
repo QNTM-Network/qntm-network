@@ -173,6 +173,10 @@ import type { KnownCells } from "./express/composition.js";
 export interface GlobalRegistration {
   /** The view this new line is being opened in — `PaintDeps.view` / the page's `currentViewId`. */
   readonly view: string;
+  /** Tokens the engine assumes when a line has none — the default node type's own tag, `#task`
+   *  (2026-10-08, operator-asked: "the system should make things a task if nothing else stated").
+   *  They are never seeded, so a line that is not a task needs nothing deleted. */
+  readonly impliedTokens?: readonly string[];
   /** `QualificationLanguage.sectionOrder` — the FULL declared order. NEVER `.sections`' proper
    * subset; see `address.ts`'s own header for why passing the subset here is the exact mistake
    * that module's type signature is built to make unrepresentable. */
@@ -305,10 +309,12 @@ export function seedFor(
   // about the section, and the section is the same section whichever line the chrome was copied
   // from. Joining them by rung would let the VIEW rung's cross-heading answer drag another
   // section's meaning onto this line.
-  const tokens =
+  const implied = new Set(declared?.impliedTokens ?? []);
+  const tokens = (
     sectionId === null || declared === undefined
       ? []
-      : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? [];
+      : declared.sectionRegistration?.[declared.view]?.[sectionId]?.tokens ?? []
+  ).filter((token) => !implied.has(token));
 
   // THE `o` SEED. See `NewLine.cursorOffset`'s own header for the defect this fixes. When a
   // `composition` declaration was supplied, the SEED — its text AND its cursor — is composed by

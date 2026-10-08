@@ -97,6 +97,8 @@ const COVERED_KINDS = {
   "search": "opens the search box; never reaches commitLine (2026-10-07)",
   "paste": "p/P: moves a cut line (one move-line write) or puts a copy in (insert-line) — app/present/register.ts (2026-10-08)",
   "yank": "yy: copies the line into the register; writes nothing (2026-10-08)",
+  "undo": "u / Cmd-Z: posts the inverse of this view's last change through the one write path (app/present/undo.ts, 2026-10-08)",
+  "redo": "Ctrl-r / Shift-Cmd-Z: posts the change again, the same way (2026-10-08)",
   "delete-line": "reaches commitLine as a delete-line commit with empty text (2026-10-07, `dd`)",
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine directly from app/index.html — THE OTHER FIX under test",

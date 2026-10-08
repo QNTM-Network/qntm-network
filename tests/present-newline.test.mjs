@@ -101,89 +101,22 @@ const taskText = (body) => walk(body).find((el) => el.tagName === "span");
 const posted = (v) => v.commits.filter((c) => c.markdown !== null);
 
 /** Click a line's text, press Enter in the input that appears. Returns the draft input. */
-function enterAtEndOfFirstTask(v) {
+function enterAtEndOfFirstTask(v, shiftKey = true) {
+  // Shift+Enter saves the line and opens one below (2026-10-08: plain Enter only saves).
   taskText(v.body).dispatch("click");
   const line = inputs(v.body).find((el) => el.className === "rawline");
-  line.dispatch("keydown", makeEvent({ key: "Enter" }));
+  line.dispatch("keydown", makeEvent({ key: "Enter", shiftKey }));
   return inputs(v.body)[0];
 }
 
-describe("1. Enter makes a line below, and the cursor lands in it", () => {
-  test("the operator's complaint, reproduced and then answered", () => {
-    // "at the end of the line if I press return it just exits out of the line back to normal mode."
-    // Without a draft surface that is still exactly what happens — which is what makes this a
-    // falsifier and not a description.
-    globalThis.document = makeDocument();
-    const before = makeBody();
-    const focus = new FocusSurface();
-    paint(before, CHECKBOX_VIEW, new PresentationContext(), { markdown: md, focus });
-    taskText(before).dispatch("click");
-    inputs(before)[0].dispatch("keydown", makeEvent({ key: "Enter" }));
-    assert.equal(inputs(before).length, 0, "the old surface unexpectedly kept a cursor somewhere");
-
+describe("1. Enter saves the line and opens nothing (2026-10-08, operator-asked)", () => {
+  // REVERSED 2026-10-08: "when I press enter after creating a new line it goes to next line which
+  // I normally am not needing. It should prob go back to normal mode." `o` opens a line.
+  test("Enter on an open line opens no new line", () => {
     const v = view(CHECKBOX_VIEW);
-    const draft = enterAtEndOfFirstTask(v);
-    assert.ok(draft, "Enter produced no new line — THE COMPLAINT IS UNANSWERED");
-    assert.equal(inputs(v.body).length, 1, "more than one row is editable");
-    assert.equal(draft.focused, true, "the cursor did not land in the new line");
-  });
-
-  test("the new line sits directly below the one Enter was pressed in", () => {
-    const v = view(CHECKBOX_VIEW);
-    enterAtEndOfFirstTask(v);
-    assert.equal(v.draft.draft.lineIndex, 4, "the line did not open below line 3");
-    // Row order on the page, not merely the index: heading, task, NEW LINE, task, heading, prose.
-    const order = rows(v.body).map((el) => (el.className === "rawline" ? "NEW" : el.tagName));
-    assert.deepEqual(order, ["h2", "h3", "label", "NEW", "label", "h3", "div", "div"]);
-  });
-
-  test("the source is NOT touched while the line is being made", () => {
-    // The whole arrangement. Nothing is written until the row settles with characters in it, so an
-    // abandoned line needs no deletion to undo and no intermediate file ever exists.
-    const v = view(CHECKBOX_VIEW);
-    enterAtEndOfFirstTask(v);
-    assert.deepEqual(posted(v), [], "opening a line posted something");
-    assert.equal(v.source, CHECKBOX_VIEW);
-  });
-
-  test("Enter still commits the line it was pressed in", () => {
-    const v = view(CHECKBOX_VIEW);
-    taskText(v.body).dispatch("click");
-    const line = inputs(v.body)[0];
-    line.value = "- [x] Draft the launch note [[qntm:121]] #task #work";
-    line.dispatch("keydown", makeEvent({ key: "Enter" }));
-    assert.equal(posted(v).length, 1, "Enter stopped committing the line it was in");
-    assert.equal(posted(v)[0].markdown.split("\n")[3], "- [x] Draft the launch note [[qntm:121]] #task #work");
-    assert.ok(v.draft.draft, "Enter committed but opened no line");
-  });
-
-  test("it costs ONE repaint, the same as Enter has always cost", () => {
-    // A cursor move costs two repaints (research-state-and-speed.md §3.3) and at 670 lines that is
-    // ~98 ms. Enter costs one, and opening a line did not make it two: the commit and the opening
-    // are both decided before anything is drawn. Counted by how many times the painter cleared the
-    // column, which is once per paint.
-    let paints = 0;
-    globalThis.document = makeDocument();
-    const body = makeBody();
-    const realBody = body;
-    Object.defineProperty(realBody, "innerHTML", {
-      get: () => "",
-      set: () => {
-        paints += 1;
-        realBody.children = [];
-      },
-      configurable: true,
-    });
-    paint(body, CHECKBOX_VIEW, new PresentationContext(), {
-      markdown: md,
-      focus: new FocusSurface(),
-      draft: new DraftSurface(),
-    });
-    const opening = paints;
-    taskText(body).dispatch("click");
-    const afterClick = paints - opening;
-    inputs(body)[0].dispatch("keydown", makeEvent({ key: "Enter" }));
-    assert.equal(paints - opening - afterClick, 1, "Enter repainted more than once");
+    const draft = enterAtEndOfFirstTask(v, false);
+    assert.equal(draft, undefined, "Enter opened a new line");
+    assert.equal(inputs(v.body).length, 0, "a row is still editable after Enter");
   });
 });
 
@@ -241,7 +174,7 @@ describe("3. the new line is what the cascade says, and the cascade says which r
 
     const plain = view(PLAIN_VIEW);
     walk(plain.body).find((el) => el.tagName === "div").dispatch("click");
-    inputs(plain.body)[0].dispatch("keydown", makeEvent({ key: "Enter" }));
+    inputs(plain.body)[0].dispatch("keydown", makeEvent({ key: "Enter", shiftKey: true }));
     assert.equal(inputs(plain.body)[0].value, "- ", "a new line in a plain-line view got a checkbox");
   });
 
@@ -472,7 +405,7 @@ describe("6. what was deliberately NOT shipped", () => {
     taskText(v.body).dispatch("click");
     const line = inputs(v.body)[0];
     line.selectionStart = 8;
-    line.dispatch("keydown", makeEvent({ key: "Enter" }));
+    line.dispatch("keydown", makeEvent({ key: "Enter", shiftKey: true }));
     assert.deepEqual(posted(v), [], "Enter mid-line changed the line it was in");
     assert.equal(inputs(v.body)[0].value, "- [ ] ", "Enter mid-line carried characters into the new line");
   });

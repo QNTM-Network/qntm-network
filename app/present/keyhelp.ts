@@ -40,6 +40,8 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
       { keys: ["x"], does: "Tick / untick (adds or removes ✅ today)" },
       { keys: ["dd"], does: "Cut the line (p puts it back elsewhere; any other edit deletes it)" },
       { keys: ["yy"], does: "Copy the line" },
+      { keys: ["u", "⌘Z"], does: "Undo this view's last change" },
+      { keys: ["Ctrl-r", "⇧⌘Z"], does: "Redo" },
       { keys: ["p", "P"], does: "Put the cut or copied line below / above" },
       { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" },
     ],
@@ -47,7 +49,8 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
   {
     title: "While editing a line",
     rows: [
-      { keys: ["Enter"], does: "Save the line" },
+      { keys: ["Enter"], does: "Save the line and stop editing" },
+      { keys: ["Shift+Enter"], does: "Save the line and start a new one below" },
       { keys: ["Escape"], does: "Stop editing (keeps what you typed)" },
       { keys: ["#"], does: "Suggest tags from your config" },
       { keys: [":"], does: "Suggest markers by name (:sched → ⏳)" },
