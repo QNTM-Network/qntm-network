@@ -116,56 +116,27 @@ describe("2. sectionAt — the join, against the REAL declaration and REAL vault
   });
 
   describe("THE TRAP CASES — every declared ordinal addresses, not only the published one", () => {
-    // `~/qntm/work/daily.md`, headings verbatim (read-only, 2026-08-01). Only "In Progress" (ordinal
-    // 0) is in `SERVED.qualification.sections['daily-work']` — 4 of these 5 headings sit under a
-    // section this instance publishes NO predicate for. `sectionAt` must still name all five,
-    // because it indexes `sectionOrder`, never `sections`.
-    const DAILY_WORK = [
-      "## In Progress",
-      "## Urgent",
-      "## Due Today",
-      "## Work Waiting",
-      "- [~] Andrew to come back having spoken to them",
-      "## Work Capture",
-    ].join("\n");
-
-    test("daily-work: published subset is 5 of 5 today — the real config's own gap closed", () => {
-      // RESTATED 2026-08-04: `waiting` (ordinal 3) joined `in-progress` (ordinal 0) —
-      // `compile-qualification.mjs`'s one-hop `children:`/`parents:` widening resolved its
-      // qualification, which used to be refused for "traverses an edge".
-      //
-      // RESTATED AGAIN 2026-08-06: `urgent` (ordinal 1) joined too — `deriveResolvableFields`
-      // (`compile-qualification.mjs`'s header) admits `priority`, which `urgent`'s own
-      // qualification predicate ranges over.
-      //
-      // RESTATED A THIRD TIME 2026-08-06 (job 1, "the last fourteen"): `due-today` (ordinal 2)
-      // joined too — `due-soon-tasks` compares `due_date` against `$cycle_today`, closed by the
-      // widened operator/cycle-variable/extraction-hint grammar. ALL FIVE of this view's declared
-      // sections now publish — measured across the WHOLE real config, not just this view: 0 of 83
-      // published views have a published subset smaller than their declared order today. The trap
-      // this describe block exists to prove `sectionAt` closes is real regardless — see the
-      // synthetic fixture below, which keeps it concrete without depending on a gap this real
-      // config no longer has.
-      const published = Object.keys(SERVED.qualification.sections["daily-work"] ?? {});
-      assert.deepEqual(
-        published,
-        ["in-progress", "urgent", "due-today", "waiting", "capture"],
-        "the trap's own precondition changed underfoot",
-      );
-      assert.equal(SECTION_ORDER["daily-work"].length, 5);
+    // CONFIG-DERIVED (2026-10-08). This used to pin two real views' headings and counts, which
+    // broke on every config change. The claim is about the FUNCTION, so it is checked for every
+    // view the published config declares, whatever those views are today.
+    test("every declared ordinal of every published view addresses its own section", () => {
+      const views = Object.entries(SECTION_ORDER);
+      assert.ok(views.length > 0, "the published config declares no section order at all");
+      for (const [view, order] of views) {
+        const source = order.flatMap((_, i) => [`## Heading ${i}`, `- [ ] a line under heading ${i}`]).join("\n");
+        order.forEach((section, i) => {
+          assert.equal(sectionAt(source, 2 * i, view, SECTION_ORDER), section, `${view} heading ${i}`);
+          assert.equal(sectionAt(source, 2 * i + 1, view, SECTION_ORDER), section, `${view} body line ${i}`);
+        });
+      }
     });
 
-    test("all five ordinals address correctly, including via SECTION_ORDER rather than the published subset", () => {
-      assert.equal(sectionAt(DAILY_WORK, 0, "daily-work", SECTION_ORDER), "in-progress");
-      assert.equal(sectionAt(DAILY_WORK, 1, "daily-work", SECTION_ORDER), "urgent");
-      assert.equal(sectionAt(DAILY_WORK, 2, "daily-work", SECTION_ORDER), "due-today");
-      assert.equal(sectionAt(DAILY_WORK, 3, "daily-work", SECTION_ORDER), "waiting");
-      assert.equal(
-        sectionAt(DAILY_WORK, 4, "daily-work", SECTION_ORDER),
-        "waiting",
-        "a body line under an unpublished section still addresses",
-      );
-      assert.equal(sectionAt(DAILY_WORK, 5, "daily-work", SECTION_ORDER), "capture");
+    test("every published section is one its view declares", () => {
+      for (const [view, sections] of Object.entries(SERVED.qualification.sections ?? {})) {
+        for (const section of Object.keys(sections ?? {})) {
+          assert.ok((SECTION_ORDER[view] ?? []).includes(section), `${view}.${section} is published but not declared`);
+        }
+      }
     });
 
     test("THE FAILING VERSION OF THIS TEST — indexing the published subset gets it wrong, SYNTHETIC fixture", () => {
@@ -199,53 +170,6 @@ describe("2. sectionAt — the join, against the REAL declaration and REAL vault
       assert.equal(sectionAt(GAP_SOURCE, 1, "synthetic-view", GAP_ORDER), "beta");
       assert.equal(sectionAt(GAP_SOURCE, 2, "synthetic-view", GAP_ORDER), "gamma");
       assert.equal(sectionAt(GAP_SOURCE, 3, "synthetic-view", GAP_ORDER), "delta");
-    });
-
-    // `~/qntm/personal/daily.md`, headings verbatim (read-only, 2026-08-01). 8 of 8 published today.
-    const DAILY_PERSONAL = [
-      "## High Priority",
-      "## Due Soon",
-      "## Personal Waiting",
-      "- [~] Kev to let me know",
-      "## Routine Drift",
-      "## Personal Capture",
-      "## Orphans",
-      "## Backlog",
-      "## Done",
-    ].join("\n");
-
-    test("daily-personal: published subset is 8 of 8 today — the real config's own gap closed", () => {
-      // RESTATED 2026-08-04: `waiting` and `orphans` joined the previously-published three — the
-      // same one-hop widening noted on `daily-work` above.
-      //
-      // RESTATED AGAIN 2026-08-06: `high-priority` joined too — the same `priority` widening
-      // `daily-work`'s own restated comment names.
-      //
-      // RESTATED A THIRD TIME 2026-08-06 (job 1, "the last fourteen"): `due-soon` and `capture`
-      // joined too — `due-soon-tasks`/`captured-today`, both cycle-variable-bound, closed by the
-      // same widening `daily-work`'s own third restatement names. ALL EIGHT now publish.
-      const published = Object.keys(SERVED.qualification.sections["daily-personal"] ?? {}).sort();
-      assert.deepEqual(
-        published,
-        ["backlog", "capture", "done", "due-soon", "high-priority", "orphans", "routine-drift", "waiting"],
-      );
-      assert.equal(SECTION_ORDER["daily-personal"].length, 8);
-    });
-
-    test("all eight ordinals address correctly via SECTION_ORDER", () => {
-      assert.equal(sectionAt(DAILY_PERSONAL, 0, "daily-personal", SECTION_ORDER), "high-priority");
-      assert.equal(sectionAt(DAILY_PERSONAL, 1, "daily-personal", SECTION_ORDER), "due-soon");
-      assert.equal(sectionAt(DAILY_PERSONAL, 2, "daily-personal", SECTION_ORDER), "waiting");
-      assert.equal(
-        sectionAt(DAILY_PERSONAL, 3, "daily-personal", SECTION_ORDER),
-        "waiting",
-        "a body line under an unpublished section still addresses",
-      );
-      assert.equal(sectionAt(DAILY_PERSONAL, 4, "daily-personal", SECTION_ORDER), "routine-drift");
-      assert.equal(sectionAt(DAILY_PERSONAL, 5, "daily-personal", SECTION_ORDER), "capture");
-      assert.equal(sectionAt(DAILY_PERSONAL, 6, "daily-personal", SECTION_ORDER), "orphans");
-      assert.equal(sectionAt(DAILY_PERSONAL, 7, "daily-personal", SECTION_ORDER), "backlog");
-      assert.equal(sectionAt(DAILY_PERSONAL, 8, "daily-personal", SECTION_ORDER), "done");
     });
   });
 });

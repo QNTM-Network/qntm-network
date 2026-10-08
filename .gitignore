@@ -30,3 +30,4 @@ uv.lock
 # anything. A venv made any other way (`python -m venv .venv`) shows up as untracked. Stating it
 # here stops that depending on which tool happened to create the directory.
 .venv/
+presentation-dropped.json
