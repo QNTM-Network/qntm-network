@@ -468,6 +468,10 @@ export function installGlobalKeys(deps: GlobalKeyDeps, on: Document = document):
   // phone's tap, a slow second click and a click after reading the line all missed that window;
   // "is this line already selected" is the fact the timer was standing in for.
   //
+  // IN THE CAPTURE PHASE (fixed 2026-10-08, measured live): the selected row has its own click
+  // handler, which stops the click from bubbling, so a listener on the way UP never heard it.
+  // Capture runs on the way DOWN, before the row's handler, while the row is still the selected one.
+  //
   // `i` IS SENT WHILE THE CLICK IS STILL BEING HANDLED, which is what lets a phone open its
   // keyboard: a phone shows the keyboard only for a focus made during the person's own tap.
   if (typeof KeyboardEvent === "function") {
@@ -480,8 +484,12 @@ export function installGlobalKeys(deps: GlobalKeyDeps, on: Document = document):
       // under the pointer is the column.
       const column = columnAtPoint(row, event.clientX, event.clientY);
       if (column !== null) deps.focus.moveTo({ kind: "at", column }, row.textContent ?? "");
+      // THE CLICK ENDS HERE. The row's own click handler would otherwise run next and put the
+      // cursor back at the line start, repainting away the editor `i` just opened.
+      event.preventDefault();
+      event.stopPropagation();
       globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
-    });
+    }, true);
   }
 }
 

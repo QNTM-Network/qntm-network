@@ -181,7 +181,7 @@
     }
     .touchbar.hidden { display: none; }
     .touchkey {
-      flex: none; min-width: var(--touch); height: calc(var(--touch) - var(--s2)); padding: 0 var(--s3);
+      flex: 1 0 auto; min-width: 2.5rem; height: calc(var(--touch) - var(--s2)); padding: 0 var(--s2);
       background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
       font: inherit; font-family: var(--mono); font-size: .875rem;
       touch-action: manipulation;
@@ -1236,7 +1236,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=9cfda90779";
+} from "/dist/present.js?v=414ed42288";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");

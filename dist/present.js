@@ -8426,8 +8426,10 @@ function installGlobalKeys(deps, on = document) {
       if (row == null) return;
       const column = columnAtPoint(row, event.clientX, event.clientY);
       if (column !== null) deps.focus.moveTo({ kind: "at", column }, row.textContent ?? "");
+      event.preventDefault();
+      event.stopPropagation();
       globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
-    });
+    }, true);
   }
 }
 function columnAtPoint(row, x, y) {
@@ -8893,7 +8895,7 @@ function installSearch(deps, doc = document) {
 // app/shell/touchbar.ts
 var TOUCH_KEYS = [
   { label: "Edit", name: "Edit the line, at the end (A)", modes: ["NORMAL"], keys: ["A"] },
-  { label: "+ Line", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
+  { label: "New", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
   { label: "\u2713", name: "Tick or untick (x)", modes: ["NORMAL"], keys: ["x"] },
   { label: "\u2192", name: "Indent (>)", modes: ["NORMAL"], keys: [">"] },
   { label: "\u2190", name: "Outdent (<)", modes: ["NORMAL"], keys: ["<"] },
@@ -8901,7 +8903,7 @@ var TOUCH_KEYS = [
   { label: "Undo", name: "Undo (u)", modes: ["NORMAL"], keys: ["u"] },
   { label: "Find", name: "Search (/)", modes: ["NORMAL"], keys: ["/"] },
   { label: "Done", name: "Save the line and stop editing (Escape)", modes: ["INSERT"], keys: ["Escape"] },
-  { label: "+ Line", name: "Save and start a new line below (Shift+Enter)", modes: ["INSERT"], keys: ["Enter"], shift: true },
+  { label: "New", name: "Save and start a new line below (Shift+Enter)", modes: ["INSERT"], keys: ["Enter"], shift: true },
   { label: "#", name: "Tag", modes: ["INSERT"], text: "#" },
   { label: ":", name: "Marker by name", modes: ["INSERT"], text: ":" },
   { label: "[[", name: "Link", modes: ["INSERT"], text: "[[" }

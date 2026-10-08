@@ -37,7 +37,7 @@ export interface TouchKey {
 /** The buttons, in order. Each one is a key from the key help (app/present/keyhelp.ts). */
 export const TOUCH_KEYS: readonly TouchKey[] = [
   { label: "Edit", name: "Edit the line, at the end (A)", modes: ["NORMAL"], keys: ["A"] },
-  { label: "+ Line", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
+  { label: "New", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
   { label: "✓", name: "Tick or untick (x)", modes: ["NORMAL"], keys: ["x"] },
   { label: "→", name: "Indent (>)", modes: ["NORMAL"], keys: [">"] },
   { label: "←", name: "Outdent (<)", modes: ["NORMAL"], keys: ["<"] },
@@ -45,7 +45,7 @@ export const TOUCH_KEYS: readonly TouchKey[] = [
   { label: "Undo", name: "Undo (u)", modes: ["NORMAL"], keys: ["u"] },
   { label: "Find", name: "Search (/)", modes: ["NORMAL"], keys: ["/"] },
   { label: "Done", name: "Save the line and stop editing (Escape)", modes: ["INSERT"], keys: ["Escape"] },
-  { label: "+ Line", name: "Save and start a new line below (Shift+Enter)", modes: ["INSERT"], keys: ["Enter"], shift: true },
+  { label: "New", name: "Save and start a new line below (Shift+Enter)", modes: ["INSERT"], keys: ["Enter"], shift: true },
   { label: "#", name: "Tag", modes: ["INSERT"], text: "#" },
   { label: ":", name: "Marker by name", modes: ["INSERT"], text: ":" },
   { label: "[[", name: "Link", modes: ["INSERT"], text: "[[" },
