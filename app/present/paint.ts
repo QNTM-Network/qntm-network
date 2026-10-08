@@ -636,44 +636,6 @@ function rawInput(
   // `DraftSurface.generation` below, and `draftInput`'s own `stale()`.
   let settlement: Settlement = "open";
 
-  /**
-   * ESCAPE — THE CURSOR LEAVES AND THE CHARACTERS IT WAS HOLDING ARE DROPPED.
-   *
-   * ── IT IS A SEPARATE FUNCTION, AND THAT IS THE WHOLE OF THE GUARANTEE ──
-   *
-   * This used to be `settle(false)`: the same function, a boolean apart, sharing the statements that
-   * read `input.value`, call `applyEdit` and call `onLineCommit`. "Escape posts nothing" was then a
-   * property of one `if` inside a function that CAN post — true, unenforced, and one reordering away
-   * from being false. It is now a property of the FUNCTION GRAPH: nothing reachable from here reads
-   * the element's value, constructs a `SourceEdit`, or reaches `deps.onLineCommit`. `settle` below
-   * lost its `commit` parameter in the same change, so there is no longer an argument that makes a
-   * write path into a discard path.
-   *
-   * ── IT DOES NOT ASK WHETHER THIS LINE STILL HAS THE CURSOR ──
-   *
-   * The old branch did (`if (wasFocused)`), and that was the one way Escape could leave the operator
-   * worse off than not pressing it: the element was latched shut FIRST and the mode left in INSERT,
-   * so an `<input>` stayed on screen holding his characters with every later settlement — Enter
-   * included — refused in silence. Whether some other line has since taken the cursor is not a fact
-   * about what THIS gesture means. Escape means "leave INSERT and show me the source", and it now
-   * means that unconditionally.
-   */
-  const discard = (): void => {
-    if (settlement !== "open") {
-      return;
-    }
-    settlement = "discarded";
-    // MOMENT 2 — LEAVING INSERT IS A CURSOR MOVE AND IT NOW SAYS SO. This function repainted and
-    // touched the focus surface not at all, so the cursor stayed wherever the INSERT caret had been
-    // — between characters, which is not a place a NORMAL cursor can be. `leave-insert` is the
-    // instruction; app/present/column.ts owns which way it points.
-    focus.moveTo({ kind: "leave-insert" }, lineSource);
-    leaveInsert();
-    // THE SOURCE THIS PAINT WAS HANDED, VERBATIM — not `input.value`, which is the one string in
-    // scope that the operator's typing can have changed. The line returns to whatever the cascade
-    // resolves it to, out of the file as it stood.
-    repaint(fileSource);
-  };
 
   const settle = (openBelow = false): void => {
     if (settlement !== "open") {
@@ -727,6 +689,8 @@ function rawInput(
         // instant in which a line really is open for text.
         mode.enterInsert();
       } else {
+        // Leaving INSERT lands the cursor ON a character, vim's rule (app/present/column.ts).
+        focus.moveTo({ kind: "leave-insert" }, markdown === null ? lineSource : text);
         leaveInsert();
       }
     }
@@ -769,8 +733,10 @@ function rawInput(
       settle(true);
     } else if (key === "Escape") {
       event?.preventDefault?.();
-      // THE ONE CALL IN THIS FILE THAT CANNOT REACH A WRITE. See `discard` above.
-      discard();
+      // ESCAPE KEEPS WHAT WAS TYPED (2026-10-08, operator-asked: "I'm used to escape out of edit
+      // mode in vim so leaves it as it is"). It saves the line, like leaving it, and opens nothing.
+      // A line the operator does not want is `dd`; a change he regrets is `u`.
+      settle();
     }
   });
   return input;
@@ -915,7 +881,8 @@ function draftInput(
       settle();
     } else if (key === "Escape") {
       event?.preventDefault?.();
-      abandon();
+      // Escape keeps a new line too: saved if it holds anything, gone if it holds only its seed.
+      settle();
     } else if (key === "Backspace" && input.value === seed) {
       // BACKSPACE AT THE START OF AN EMPTY NEW LINE CANCELS IT — the conventional gesture, and the
       // only one of the three that had to be given a condition. It fires only while the row still

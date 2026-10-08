@@ -30,9 +30,18 @@ test("the shown text drops the checkbox and the id", () => {
   assert.equal(searchViews(VIEWS, "flights")[0].text, "Book flights #task");
 });
 
-test("headings and an empty query are not results", () => {
-  assert.deepEqual(searchViews(VIEWS, "today"), []);
+test("a heading is a SECTION result, marked as one; an empty query finds nothing (2026-10-08)", () => {
+  const hits = searchViews(VIEWS, "today");
+  assert.ok(hits.length > 0 && hits.every((h) => h.kind === "section" || h.kind === "view"));
   assert.deepEqual(searchViews(VIEWS, "   "), []);
+});
+
+test("a view's title is a VIEW result, and views come before sections and tasks", () => {
+  const views = [
+    { id: "work-daily", title: "Work Daily", markdown: "# Work\n## Work Capture\n- [ ] Work out plan [[qntm:9]] #task" },
+  ];
+  const hits = searchViews(views, "work");
+  assert.deepEqual(hits.map((h) => h.kind), ["view", "section", "task"]);
 });
 
 test("/ asks for the search box", () => {

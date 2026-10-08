@@ -181,6 +181,8 @@ export interface DrawerDeps {
   readonly barFolder: HTMLElement;
   readonly barView: HTMLElement;
   readonly onChoose: (viewId: string) => void;
+  /** Type-to-filter box above the tree (2026-10-08). Absent: the drawer is the tree alone. */
+  readonly filter?: HTMLInputElement | undefined;
 }
 
 export const folderOf = (path: string | undefined | null): string => {
@@ -280,7 +282,93 @@ function paintFolder(deps: DrawerDeps, node: FolderNode, into: HTMLElement, curr
   }
 }
 
+// ── TYPE TO FILTER (2026-10-08, operator-asked: "could type and it searched as well as move
+// around with keys") ── Every word typed must appear in a view's title or folder. With text in the
+// box the tree is replaced by a flat list of matches; ↓ moves into it, Enter opens the first.
+let shownViews: readonly DrawerView[] = [];
+let shownCurrent: string | null = null;
+
+/** The views whose title or folder holds every word of `query`, titles that start with it first. */
+export function filterViews(views: readonly DrawerView[], query: string): readonly DrawerView[] {
+  const words = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+  if (words.length === 0) return views;
+  const q = query.trim().toLowerCase();
+  return views
+    .filter((v) => {
+      const hay = `${v.title} ${folderOf(v.path)}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    })
+    .sort((a, b) => {
+      const sa = a.title.toLowerCase().startsWith(q) ? 0 : 1;
+      const sb = b.title.toLowerCase().startsWith(q) ? 0 : 1;
+      return sa - sb || a.title.localeCompare(b.title);
+    });
+}
+
+function paintMatches(deps: DrawerDeps, query: string): void {
+  drawerStops.length = 0;
+  viewButtons.clear();
+  drawerStops.push(deps.closeButton);
+  deps.tree.innerHTML = "";
+  const matches = filterViews(shownViews, query);
+  for (const v of matches) {
+    const button = treeRow("viewbtn", null, v.title, null);
+    const where = document.createElement("span");
+    where.className = "count";
+    where.textContent = folderOf(v.path);
+    button.append(where);
+    if (v.id === shownCurrent) button.classList.add("current");
+    button.addEventListener("click", () => {
+      deps.onChoose(v.id);
+      closeDrawer(deps);
+    });
+    deps.tree.append(button);
+    drawerStops.push(button);
+    viewButtons.set(v.id, button);
+  }
+  if (matches.length === 0) {
+    const note = document.createElement("p");
+    note.className = "treenote";
+    note.textContent = "No view matches.";
+    deps.tree.append(note);
+  }
+  drawerStops.forEach((stop, index) => stop.addEventListener("keydown", (e) => drawerKey(deps, e as KeyboardEvent, index)));
+}
+
+const wiredFilters = new WeakSet<HTMLInputElement>();
+
+function wireFilter(deps: DrawerDeps): void {
+  const filter = deps.filter;
+  if (filter === undefined || wiredFilters.has(filter)) return;
+  wiredFilters.add(filter);
+  filter.addEventListener("input", () => {
+    if (filter.value.trim() === "") buildDrawer(deps, shownViews, shownCurrent);
+    else paintMatches(deps, filter.value);
+  });
+  filter.addEventListener("keydown", (e) => {
+    const key = (e as KeyboardEvent).key;
+    if (key === "ArrowDown") drawerStops[1]?.focus();
+    else if (key === "Enter") drawerStops[1]?.click();
+    else if (key === "Escape") {
+      if (filter.value !== "") {
+        filter.value = "";
+        buildDrawer(deps, shownViews, shownCurrent);
+      } else closeDrawer(deps);
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  });
+}
+
 export function buildDrawer(deps: DrawerDeps, views: readonly DrawerView[], currentViewId: string | null): void {
+  shownViews = views;
+  shownCurrent = currentViewId;
+  wireFilter(deps);
+  if (deps.filter !== undefined && deps.filter.value.trim() !== "") {
+    paintMatches(deps, deps.filter.value);
+    markWhereWeAre(deps, views, currentViewId);
+    return;
+  }
   drawerStops.length = 0;
   viewButtons.clear();
   drawerStops.push(deps.closeButton);
@@ -371,7 +459,17 @@ function drawerKey(deps: DrawerDeps, e: KeyboardEvent, index: number): void {
   // already exactly what `paintFolder`'s own click listener on this element does, so asking the
   // element to click itself is the one true way to activate a row rather than a second switch
   // here that has to be kept in step with the first one forever.
-  if (e.key === "Enter") { e.preventDefault(); drawerStops[index]?.click(); return; }
+  // `stopPropagation`: the click below closes the drawer and paints the chosen view, so the same
+  // Enter must not then reach the page's own handler and open line 0 for editing (2026-10-08).
+  if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); drawerStops[index]?.click(); return; }
+  // Any other letter goes to the filter box, so typing a view's name works from anywhere in the list.
+  if (deps.filter !== undefined && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    deps.filter.focus();
+    deps.filter.value += e.key;
+    paintMatches(deps, deps.filter.value);
+    return;
+  }
   if (e.key !== "Tab" || drawerStops.length === 0) return;
   const last = drawerStops.length - 1;
   if (e.shiftKey && index === 0) { e.preventDefault(); drawerStops[last]?.focus(); }
@@ -387,6 +485,15 @@ export function openDrawer(deps: DrawerDeps, currentViewId: string | null): void
   document.body.classList.add("noscroll");
   // The current view if it is on screen, else the close button. Landing the cursor on where you
   // already are means the first arrow key moves from here rather than from the top of a list.
+  if (deps.filter !== undefined) {
+    // Opens on the filter box, empty, with the full tree below it: type to narrow, ↓ to walk.
+    if (deps.filter.value !== "") {
+      deps.filter.value = "";
+      buildDrawer(deps, shownViews, currentViewId);
+    }
+    deps.filter.focus();
+    return;
+  }
   const target = (currentViewId === null ? undefined : viewButtons.get(currentViewId)) ?? drawerStops[0] ?? deps.panel;
   target.focus();
 }

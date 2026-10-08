@@ -48,7 +48,7 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
     title: "While editing a line",
     rows: [
       { keys: ["Enter"], does: "Save the line" },
-      { keys: ["Escape"], does: "Leave without saving" },
+      { keys: ["Escape"], does: "Stop editing (keeps what you typed)" },
       { keys: ["#"], does: "Suggest tags from your config" },
       { keys: [":"], does: "Suggest markers by name (:sched → ⏳)" },
       { keys: ["📅 ⏳ 🛫 + space"], does: "Suggest dates" },

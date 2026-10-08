@@ -317,10 +317,11 @@ describe("3. the drawer opens, closes, and hands the cursor back", () => {
     assert.ok(!typed.defaultPrevented, "and it must not swallow the keystroke either");
   });
 
-  test("the cursor goes to where you already are, and comes back to the button", () => {
-    const current = buttonsOfClass("viewbtn").find((b) => b.classList.contains("current"));
+  test("the cursor goes to the filter box, and comes back to the button", () => {
+    // 2026-10-08: the drawer opens on its type-to-filter box (operator-asked: "could type and it
+    // searched"); ↓ walks into the tree from there.
     el("viewsBtn").dispatch("click");
-    assert.ok(current.focused, "the drawer opened with the cursor on the current view");
+    assert.ok(el("viewFilter").focused, "the drawer opened without the cursor in the filter box");
     el("drawerClose").dispatch("click");
     assert.ok(el("viewsBtn").focused, "closing gave the cursor back to what opened it");
   });

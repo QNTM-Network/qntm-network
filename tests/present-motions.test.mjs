@@ -836,7 +836,7 @@ describe("10. i / Enter open INSERT, and the cascade still shows the source char
 });
 
 describe("11. Escape returns to NORMAL without posting, and keeps the selection", () => {
-  test("Escape on the open input posts nothing and drops what was typed", () => {
+  test("Escape on the open input KEEPS what was typed and returns to NORMAL (2026-10-08)", () => {
     const v = view();
     v.focus.focus(1);
     v.repaint();
@@ -845,7 +845,9 @@ describe("11. Escape returns to NORMAL without posting, and keeps the selection"
     line.value = "- [x] something else entirely";
     line.dispatch("keydown", makeEvent({ key: "Escape" }));
 
-    assert.deepEqual(v.commits, [], "Escape posted an edit");
+    const posted = v.commits.filter((c) => c.markdown !== null);
+    assert.equal(posted.length, 1, "Escape dropped the edit");
+    assert.equal(posted[0].text, "- [x] something else entirely");
     assert.equal(v.mode.mode, "NORMAL", "Escape did not return to NORMAL");
   });
 
@@ -1004,7 +1006,7 @@ describe("14. o / O open a new line below/above and enter INSERT on it", () => {
     draft.dispatch("keydown", makeEvent({ key: "Escape" }));
     assert.equal(v.mode.mode, "NORMAL");
     assert.equal(v.focus.lineIndex, 2, "focus should land where the abandoned line would have been");
-    assert.deepEqual(v.commits, [], "an abandoned draft must not post anything");
+    assert.deepEqual(v.commits.filter((c) => c.markdown !== null), [], "an empty new line must not post anything");
   });
 });
 
@@ -1514,7 +1516,7 @@ describe("22. w / b / e through the painter — the column moves, the mode does 
     const line = inputs(v.body)[0];
     assert.equal(line.value, SOURCE.split("\n")[2], "the input did not hold the exact source line");
     line.dispatch("keydown", makeEvent({ key: "Escape" }));
-    assert.deepEqual(v.commits, [], "Escape posted an edit");
+    assert.deepEqual(v.commits.filter((c) => c.markdown !== null), [], "an unchanged line posted an edit");
     assert.equal(v.mode.mode, "NORMAL");
     assert.equal(inputs(v.body).length, 0);
     assert.equal(v.source, SOURCE);

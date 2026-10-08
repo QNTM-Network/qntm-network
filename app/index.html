@@ -384,6 +384,11 @@
   .search-box ul { list-style: none; margin: 0; padding: .25rem 0; max-height: 60vh; overflow: auto; }
   .search-box li { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem .75rem; cursor: pointer; color: var(--ink); font-size: .85rem; }
   .search-box li small { color: var(--dim); white-space: nowrap; }
+  .search-box li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .search-kind { flex: none; width: 4.5rem; font-style: normal; font-family: var(--mono); font-size: var(--t1); letter-spacing: .06em; text-transform: uppercase; }
+  .search-kind-view { color: var(--green); }
+  .search-kind-section { color: var(--accent); }
+  .search-kind-task { color: var(--dim); }
   .search-box li[aria-selected="true"] { background: var(--green-hairline); color: var(--green); }
   .key-help-panel { width: min(40rem, calc(100vw - 2rem)); max-height: 85vh; overflow: auto; padding: 1rem 1.25rem;
     background: var(--bg, #0b0d10); border: 1px solid var(--green-hairline); border-radius: 8px; }
@@ -447,6 +452,7 @@
     padding: var(--s2) var(--s2) var(--s2) var(--s4);
     border-bottom: 1px solid var(--line);
   }
+  .drawer-filter { order: 2; flex: none; margin: var(--s2) var(--s2) 0 var(--s4); width: auto; padding: var(--s2) var(--s3); font-size: var(--t3); }
   .drawer-title { font-family: var(--mono); font-size: var(--t1); letter-spacing: var(--track); text-transform: uppercase; color: var(--dim); }
   .tree {
     order: 2; flex: 1; min-height: 0;
@@ -557,6 +563,7 @@
     }
     .drawer-head { order: 3; border-bottom: 0; border-top: 1px solid var(--line); }
     .tree { order: 1; }
+    .drawer-filter { order: 0; }
     .drawer-note { order: 2; }
   }
 
@@ -962,6 +969,7 @@
     <span class="drawer-title">Views</span>
     <button id="drawerClose" class="barbtn" aria-label="Close views">Close</button>
   </div>
+  <input id="viewFilter" class="drawer-filter" type="search" placeholder="Type to find a view…" aria-label="Find a view" autocomplete="off" spellcheck="false" />
   <nav id="viewTree" class="tree" aria-label="Views by folder"></nav>
   <p id="drawerNote" class="drawer-note"></p>
 </aside>
@@ -1170,7 +1178,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=5b294faf53";
+} from "/dist/present.js?v=d139d23acc";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1595,6 +1603,7 @@ const drawerDeps = {
   openButton: $("viewsBtn"),
   barFolder: $("barFolder"),
   barView: $("barView"),
+  filter: $("viewFilter"),
   // A CHOICE, SAID OUT LOUD, REPORTED RATHER THAN ACTED ON — `drawer.ts` does not call `paintView`
   // itself; see its own header for why. This is the one caller the drop was written for: a row
   // opened in the view being left must not follow the operator into the view being entered.
