@@ -104,3 +104,57 @@ export function searchViews(
   }
   return hits;
 }
+
+/**
+ * A task's title, as a `[[Title]]` link names it (2026-10-08, operator-asked: `[[` should find and
+ * open nodes). The engine resolves a title-form wiki-link BY TITLE (config/vocabulary/
+ * structural_tokens.yaml, `existing_line_title`), so the title is the line's own words: everything
+ * before its first tag, marker or link. `text` is a hit's `text` — checkbox and id already off.
+ */
+export function taskTitle(text: string): string {
+  const cut = text.search(/\s#[^\s#]|\s\[\[|\s\p{Extended_Pictographic}/u);
+  return (cut === -1 ? text : text.slice(0, cut)).trim();
+}
+
+/**
+ * The tasks a `[[` link could name, best first — the same search `/` runs, so a link and a search
+ * find the same things in the same order. Each title once.
+ */
+export function linkTargets(
+  views: readonly SearchView[],
+  query: string,
+  preferViewId?: string | null,
+  limit = 8,
+): readonly (SearchHit & { readonly title: string })[] {
+  const seen = new Set<string>();
+  const out: (SearchHit & { readonly title: string })[] = [];
+  for (const hit of searchViews(views, query, preferViewId, 200)) {
+    if (hit.kind !== "task") continue;
+    const title = taskTitle(hit.text);
+    const key = title.toLowerCase();
+    if (title === "" || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...hit, title });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * Where a link points: the first task whose title is exactly `title` (case-insensitive), or a
+ * `[[qntm:N]]` id's own line. `null` when no view the server sent has it.
+ */
+export function findLinkTarget(
+  views: readonly SearchView[],
+  target: string,
+  preferViewId?: string | null,
+): SearchHit | null {
+  const id = /^qntm:(\d+)$/i.exec(target.trim())?.[1];
+  const want = target.trim().toLowerCase();
+  const hits = searchViews(views, id === undefined ? target : `qntm:${id}`, preferViewId, 500);
+  for (const hit of hits) {
+    if (hit.kind !== "task") continue;
+    if (id !== undefined ? hit.qntmId === id : taskTitle(hit.text).toLowerCase() === want) return hit;
+  }
+  return null;
+}

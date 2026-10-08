@@ -181,7 +181,7 @@
     }
     .touchbar.hidden { display: none; }
     .touchkey {
-      flex: 1 0 auto; min-width: 2.5rem; height: calc(var(--touch) - var(--s2)); padding: 0 var(--s2);
+      flex: 1 0 auto; min-width: 2.25rem; height: calc(var(--touch) - var(--s2)); padding: 0 var(--s2);
       background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
       font: inherit; font-family: var(--mono); font-size: .875rem;
       touch-action: manipulation;
@@ -836,6 +836,12 @@
   /* A completed line strikes its text through. The chip is not the text — it is a token beside it,
      and a struck-through pill reads as a rendering fault rather than as "this is done". */
   .viewbody .task.done span .tagchip { text-decoration: none; }
+  /* A `[[Title]]` LINK (app/present/paint.ts, app/shell/links.ts): in the link colour, and a click
+     opens the node. Inline text, so it costs the row nothing. */
+  .viewbody .linkchip {
+    color: var(--green); cursor: pointer;
+    text-decoration: underline; text-decoration-color: var(--green-hairline); text-underline-offset: .2em;
+  }
 
   /* THE IDENTITY MARK — the `wired` rendition of the presentation cascade's `stamp` key. Where the
      engine printed `[[qntm:3]]`, the app draws one dot, and the id is on the element's `title` for
@@ -1226,6 +1232,8 @@ import {
   installSearch,
   installTouchBar,
   showTouchMode,
+  installLinks,
+  linkSource,
   unconfirmedLines,
   LineRegister,
   UndoHistory,
@@ -1236,7 +1244,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=414ed42288";
+} from "/dist/present.js?v=f1470beaa5";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1542,6 +1550,7 @@ const draftLine = new DraftSurface();
 // selects one with `j`/`k` and presses `i`/Enter. Read motions.ts's own header before assuming
 // this is "the MODE level, stage 4" (reading vs authoring) — it is a deliberately different rung.
 const mode = new ModeSurface();
+mode.onChange(() => updateVimBadge());
 
 // AN ARMED PLACEMENT — "the browser predicts this row belongs somewhere else now" — app/present/
 // settle.ts, roadmap-the-road-ahead.md step 3. One surface for the page, same reason as the three
@@ -3837,6 +3846,18 @@ $("scrim").addEventListener("click", closeDrawer);
 // once at wiring time would freeze the world the handler decides against. Same technique, same
 // reason, as `createCommitLine(deps)` and `drawerDeps` above.
 const CAPTURE_VIEW_ID = "inbox";
+/** Show `viewId` with the cursor on `lineIndex`, mid-screen — a search result's jump, and a link's. */
+function goToLine(viewId, lineIndex) {
+  paintView(viewId, "chosen");
+  const view = graphData?.snapshot?.views.find((x) => x.id === viewId);
+  if (view === undefined) return;
+  const source = rows.showing(view.id, accepted.sourceFor(view.path) ?? view.markdown);
+  focus.place(lineIndex, { kind: "line-start" }, source, view.id);
+  repaintCurrentView();
+  revealSelection($("viewBody"), "center");
+}
+/** The views the server sent that have markdown — what `/` searches and a `[[` link looks in. */
+const searchableViews = () => (graphData?.snapshot?.views ?? []).filter((x) => typeof x.markdown === "string");
 const globalKeyDeps = {
   viewBody: $("viewBody"),
   focus,
@@ -3851,17 +3872,9 @@ const globalKeyDeps = {
   // `/` (2026-10-07): search every view the server sent; choosing a hit shows its view with the
   // cursor on its line, the same view switch the drawer makes.
   openSearch: installSearch({
-    views: () => (graphData?.snapshot?.views ?? []).filter((x) => typeof x.markdown === "string"),
+    views: searchableViews,
     currentViewId: () => currentViewId,
-    go: (viewId, lineIndex) => {
-      paintView(viewId, "chosen");
-      const view = graphData?.snapshot?.views.find((x) => x.id === viewId);
-      if (view === undefined) return;
-      const source = rows.showing(view.id, accepted.sourceFor(view.path) ?? view.markdown);
-      focus.place(lineIndex, { kind: "line-start" }, source, view.id);
-      repaintCurrentView();
-      revealSelection($("viewBody"), "center");
-    },
+    go: goToLine,
   }),
   // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch
   // the drawer makes. `inbox` is the operator's inbox view id; a view that is absent from the
@@ -3887,6 +3900,8 @@ const globalKeyDeps = {
   closeDrawer,
 };
 installGlobalKeys(globalKeyDeps);
+// `[[Title]]` LINKS (2026-10-08): a click opens the node, with the same jump a search result makes.
+installLinks({ viewBody: $("viewBody"), views: searchableViews, currentViewId: () => currentViewId, go: goToLine });
 // THE TOUCH BAR (2026-10-08): each button presses a key through the handler the keyboard reaches.
 installTouchBar({
   bar: $("touchBar"),
@@ -3908,6 +3923,8 @@ installCompleter({
       return reading.kind === "answer" ? reading.answer.logicalDate : undefined;
     };
     return [
+      // An open `[[` first: inside a link, a `#` or `:` is part of the title being searched.
+      linkSource(searchableViews, () => currentViewId),
       tagSource(tagVocabulary(declaration)),
       dateSource(dateMarkers(declaration), today, boundary?.weekStartsOn ?? "monday"),
       markerSource(markerVocabulary(declaration)),

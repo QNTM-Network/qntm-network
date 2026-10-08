@@ -427,6 +427,8 @@ export { flushMarks, globalKey, installGlobalKeys } from "../shell/keys.js";
 export { installCompleter } from "../shell/completer.js";
 export { installKeyHelp } from "../shell/help.js";
 export { installSearch } from "../shell/search.js";
+export { linkQueryAt, linkSource } from "./linkcomplete.js";
+export { installLinks } from "../shell/links.js";
 export { installTouchBar, showTouchMode, TOUCH_KEYS } from "../shell/touchbar.js";
 export type { SearchDeps } from "../shell/search.js";
 export type { CompleterDeps } from "../shell/completer.js";
@@ -474,7 +476,7 @@ export type { TagQuery, TagSources } from "./tagcomplete.js";
 // ── KEY HELP (2026-10-07) — the data behind `?`; the overlay is app/shell/help.ts ──
 export { KEY_HELP } from "./keyhelp.js";
 export type { KeyHelpGroup, KeyHelpRow } from "./keyhelp.js";
-export { searchViews } from "./search.js";
+export { findLinkTarget, linkTargets, searchViews, taskTitle } from "./search.js";
 export type { SearchHit, SearchView } from "./search.js";
 // ── UNCONFIRMED LINES (2026-10-07) — what the painter marks "saved, not yet back from the server" ──
 export { unconfirmedLines } from "./unconfirmed.js";

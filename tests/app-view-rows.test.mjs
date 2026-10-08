@@ -677,7 +677,7 @@ describe("one row geometry, two renditions", () => {
       "cut",
     ];
     const TRAILING = TRAILING_CHILDREN.flatMap((el) => el.classes ?? []);
-    const TOKENS = ["tagchip", "vim-block", "stampmark", "row-prediction", "row-prediction-withdrawn"];
+    const TOKENS = ["tagchip", "linkchip", "vim-block", "stampmark", "row-prediction", "row-prediction-withdrawn"];
     const known = new Set([...LINES, ...TRAILING, ...TOKENS]);
 
     const strays = new Set();
