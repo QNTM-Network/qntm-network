@@ -680,9 +680,16 @@
   .viewbody .cut { opacity: .45; text-decoration: line-through; text-decoration-color: #ff9b9b; }
   .viewbody .task.unconfirmed span { text-decoration: underline dotted var(--glow); text-underline-offset: 3px; }
   /* Declared states other than open/done (2026-10-07): still a real checkbox, marked by its status. */
-  .viewbody .task.status-scheduled input,
-  .viewbody .task.status-waiting input,
-  .viewbody .task.status-in_progress input { opacity: .5; }
+  /* EVERY DECLARED STATE HAS ITS OWN BOX (2026-10-08, operator report: a scheduled `[>]` line
+     looked open and was ticked by mistake). Like Obsidian's: scheduled is a glowing green box
+     with an arrow; waiting an amber box with a tilde; in progress half filled; cancelled a dash. */
+  .viewbody .task.status-scheduled input {
+    border-color: var(--green); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M4.5 3 7.5 6 4.5 9' fill='none' stroke='%233ff07f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    box-shadow: 0 0 6px rgba(63,240,127,.55);
+  }
+  .viewbody .task.status-waiting input { border-color: #f2c14e; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.6c1-1.4 2-1.4 3.5-.4s2.5 1 3.5-.4' fill='none' stroke='%23f2c14e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); }
+  .viewbody .task.status-in_progress input { border-color: var(--green); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 10 10 2 10 10Z' fill='%233ff07f'/%3E%3C/svg%3E"); }
+  .viewbody .task.status-cancelled input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='%238b93a1' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"); }
   .viewbody .task.status-cancelled span { color: var(--dim); text-decoration: line-through; }
   .viewbody .task span { flex: 1; cursor: text; }
 
