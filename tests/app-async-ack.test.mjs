@@ -664,7 +664,7 @@ async function standUpPage(label, mutate) {
     },
     boxes: () => body().filter((el) => el.type === "checkbox"),
     rows: () => body().filter((el) => el.tagName === "span" && el.innerHTML !== ""),
-    inputs: () => body().filter((el) => el.tagName === "input" && el.type === "text"),
+    inputs: () => body().filter((el) => el.tagName === "textarea"),
     onScreen: () =>
       body()
         .map((el) => `${el.textContent || ""}${el.innerHTML || ""}${el.value || ""}`)

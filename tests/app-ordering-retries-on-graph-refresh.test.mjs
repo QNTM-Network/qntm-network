@@ -186,7 +186,7 @@ function typeMangoAtTheEnd(page, elements, press) {
   press("j"); // line 1: Apple
   press("j"); // line 2: Zulu — the true last row
   press("o"); // open a draft below it
-  const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+  const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
   assert.ok(input, "o did not open a draft line");
   input.value = "- [ ] Mango";
   input.dispatch("blur"); // commits synchronously through the real, retry-arming commitLine wrapper

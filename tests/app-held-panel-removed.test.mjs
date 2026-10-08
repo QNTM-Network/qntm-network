@@ -161,7 +161,7 @@ describe("the panel does not render for any of the three conditions that used to
     page.paintView("this-week");
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     input.value = "- [ ] Draft the launch note BY FRIDAY [[qntm:121]] #task";
 
     refuseWith = {
@@ -192,7 +192,7 @@ describe("the panel does not render for any of the three conditions that used to
     const before = walk(elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
     before.dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     input.value = TYPED;
 
     land(STAMPED_ELSEWHERE_UNPLACEABLE);

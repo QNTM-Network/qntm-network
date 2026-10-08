@@ -731,7 +731,7 @@ function press(v, key) {
   return outcome;
 }
 
-const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = (body) => walk(body).filter((el) => el.tagName === "textarea");
 const selectedRows = (body) =>
   walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("vim-selected"));
 

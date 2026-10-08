@@ -353,7 +353,7 @@ function makeDriver(page, browser, control) {
 
   const taskText = () =>
     walk(elements.get("viewBody")).find((el) => el.tagName === "span" && el.innerHTML !== "");
-  const openInput = () => walk(elements.get("viewBody")).find((el) => el.type === "text");
+  const openInput = () => walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
 
   const open = (markdown) => {
     land(markdown);

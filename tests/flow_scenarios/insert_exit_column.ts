@@ -168,7 +168,7 @@ function stubBody(): HTMLElement {
 /** The first text `<input>` the paint produced — the row `a` opened. */
 function firstInput(node: unknown): { selectionStart: number; value: string; dispatch: (t: string, e?: unknown) => void } | null {
   const el = node as { tagName?: string; type?: string; children?: unknown[] };
-  if (el.tagName === "input" && el.type === "text") {
+  if (el.tagName === "textarea") {
     return el as unknown as { selectionStart: number; value: string; dispatch: (t: string, e?: unknown) => void };
   }
   for (const kid of el.children ?? []) {

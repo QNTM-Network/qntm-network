@@ -515,7 +515,7 @@ describe("6. the chip changes the DOM and does not change the source", () => {
     const body = view(SOURCE, WIRED, { focus, onLineCommit: (commit) => commits.push(commit) });
     walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
 
-    const editable = walk(body).find((el) => el.tagName === "input" && el.type === "text");
+    const editable = walk(body).find((el) => el.tagName === "textarea");
     assert.ok(editable, "clicking a chipped line reached no source");
     editable.value = "- [ ] Draft the launch note [[qntm:121]] #task #home 🆕 2026-07-31";
     editable.dispatch("blur");
@@ -541,7 +541,7 @@ describe("7. the cursor still reaches every character, chips or not", () => {
     assert.ok(serialize(body).includes("tagchip"), "the fixture painted no chip to begin with");
 
     walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
-    const editable = walk(body).find((el) => el.tagName === "input" && el.type === "text");
+    const editable = walk(body).find((el) => el.tagName === "textarea");
     assert.equal(editable.value, SOURCE.split("\n")[1]);
     for (const substring of ["#task", "#work", "[[qntm:121]]", "🆕 2026-07-29"]) {
       assert.ok(editable.value.includes(substring), `the focused line lost ${substring}`);
@@ -562,7 +562,7 @@ describe("7. the cursor still reaches every character, chips or not", () => {
     const body = view(SOURCE, WIRED, { focus, onLineCommit: () => {} });
     const before = serialize(body);
     walk(body).find((el) => el.tagName === "span").dispatch("click", makeEvent());
-    walk(body).find((el) => el.tagName === "input" && el.type === "text").dispatch("blur");
+    walk(body).find((el) => el.tagName === "textarea").dispatch("blur");
     assert.equal(serialize(body), before, "the view did not return to what it was");
     assert.ok(serialize(body).includes("tagchip"));
   });

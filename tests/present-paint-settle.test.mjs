@@ -207,7 +207,7 @@ describe("4. THE CARET SURVIVES A DOM-ONLY REORDER", () => {
     settle.arm(SOURCE, "demo", { lineIndex: 3, beforeLineIndex: 1 });
     const body = paintOnce(SOURCE, { settle, focus });
 
-    const inputs = walk(body).filter((el) => el.tagName === "input" && el.type === "text");
+    const inputs = walk(body).filter((el) => el.tagName === "textarea");
     assert.equal(inputs.length, 1, "the focused row must still be the one editable row");
     assert.equal(inputs[0].focused, true, "the SAME element that moved must still hold the caret");
     assert.equal(inputs[0].value, "row c", "the caret is on the row that moved, not a different one");

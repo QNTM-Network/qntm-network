@@ -11,7 +11,7 @@
  *   THE JUMP. The painter repaints the WHOLE view on every focus change (app/present/paint.ts) —
  *   deliberately, because a patch-one-element painter would need a second copy of the precedence
  *   order inside it. So the focused line is not mutated, it is REPLACED: `label.task` becomes
- *   `input.rawline`, `h3` becomes `input.rawline`. Everything below moves by exactly the
+ *   `textarea.rawline`, `h3` becomes `textarea.rawline`. Everything below moves by exactly the
  *   difference between the two boxes. Zero movement therefore means one thing and only one thing:
  *   every rendition of a line occupies the same box.
  *
@@ -224,7 +224,7 @@ const PAINTED_LINES = [
   { tag: "label", classes: ["task"] },
   { tag: "label", classes: ["task", "done"] },
   { tag: "div" },
-  { tag: "input", classes: ["rawline"] },
+  { tag: "textarea", classes: ["rawline"] },
 ];
 
 /**
@@ -234,7 +234,7 @@ const PAINTED_LINES = [
  * 2026-07-31. It is exempt for a reason that is narrow and checkable rather than a shrug:
  *
  *   * THE INVARIANT IS ABOUT SWAPPING. Every rule above exists because the painter REPLACES a
- *     line's element when the cursor lands on it, so `label.task` and `input.rawline` must occupy
+ *     line's element when the cursor lands on it, so `label.task` and `textarea.rawline` must occupy
  *     the same box or every row below jumps. This element is never a rendition of a line and is
  *     never swapped for another element — it is the same `div` in every paint.
  *   * IT IS ALWAYS LAST, so there is nothing below it for a taller box to move. That is a fact
@@ -256,7 +256,7 @@ const ANCESTORS = [
   { tag: "article", id: "viewBody", classes: ["viewbody"] },
 ];
 
-/** One compound selector (`input.rawline:focus`, `*`, `.task`, `#freshness`), taken apart. */
+/** One compound selector (`textarea.rawline:focus`, `*`, `.task`, `#freshness`), taken apart. */
 function readCompound(compound) {
   const bare = compound.replace(/::?[a-z-]+(\([^)]*\))?/g, "");
   assert.ok(!bare.includes("["), `this reader does not understand attribute selectors: ${compound}`);
@@ -279,7 +279,7 @@ function compoundMatches(compound, element) {
  * Can this selector reach a painted line?
  *
  * Its LAST compound has to match one of them, and every compound to its left has to match
- * something the line actually sits inside. That is what separates `.viewbody input.rawline`
+ * something the line actually sits inside. That is what separates `.viewbody textarea.rawline`
  * (a line) from `.viewbody .task input` (the checkbox inside one), `.rest h3` (a heading on a
  * different screen entirely) and `#freshness` (the line above the column).
  *
@@ -398,7 +398,7 @@ describe("one row geometry, two renditions", () => {
 
   test("nothing outside the reading column reaches a line's box unanswered", () => {
     // The invariant above is about the column's own rules. This page also has page-wide rules —
-    // `input { padding: .75rem .9rem }` is written for the sign-in box and reaches `input.rawline`
+    // `input { padding: .75rem .9rem }` is written for the sign-in box and reaches `textarea.rawline`
     // as well — and one of those left unanswered would give the raw rendition a box the wired one
     // does not have, from outside the column, where nobody would look for it.
     const answered = (lineIndex, property) =>
@@ -436,7 +436,7 @@ describe("one row geometry, two renditions", () => {
   });
 
   test("the raw rendition wears the row it replaced, not a form control's", () => {
-    const RAW = ".viewbody input.rawline";
+    const RAW = ".viewbody textarea.rawline";
     // ONE. The same metrics as the rendered line. `ui-monospace` at `.92em` was a different
     // typeface at a different size, so the line changed width AND height the moment it focused.
     assert.equal(declared(RAW, "font"), "inherit");
@@ -446,9 +446,11 @@ describe("one row geometry, two renditions", () => {
         `${RAW} sets ${property} after \`font: inherit\`, which is how the metrics diverge again`,
       );
     }
-    // TWO. The row's height, exactly — an <input> cannot grow, so it is told the row rather than
-    // left to a user agent's idea of a text field.
-    assert.equal(declared(RAW, "height"), "var(--row)");
+    // TWO. At least the row's height, and one row exactly for a line that fits — the editor grows
+    // only to wrap a long line (2026-10-08), so it is told the row as a floor rather than left to a
+    // user agent's idea of a text field. A fixed `height` would cut a wrapped line off again.
+    assert.equal(declared(RAW, "min-height"), "var(--row)");
+    assert.equal(declared(RAW, "height"), undefined, `${RAW} has a fixed height, which cuts a wrapped line off`);
     assert.equal(declared(RAW, "line-height"), "var(--row)");
     // …and no padding of its own, which also answers the page-wide `input` rule written for the
     // sign-in box. Without this the raw rendition would wear a form control's .75rem of padding.
@@ -596,19 +598,19 @@ describe("one row geometry, two renditions", () => {
     // in INSERT, both holding the SAME source characters. `i` swaps one for the other in place, so
     // any metric they disagree about is a jump on every keystroke that enters INSERT.
     const NORMAL = ".viewbody div.rawline";
-    const INSERT = ".viewbody input.rawline";
+    const INSERT = ".viewbody textarea.rawline";
     assert.ok(rulesFor(NORMAL).length > 0, "NORMAL's raw line has no rule at all");
-    for (const property of ["height", "line-height", "color"]) {
+    for (const property of ["min-height", "height", "line-height", "color", "white-space"]) {
       assert.equal(
         declared(NORMAL, property), declared(INSERT, property),
         `the two renditions of a raw line disagree about ${property}, which is the jump on \`i\``,
       );
     }
-    // AND THE ONE THING AN <input> GAVE FOR FREE THAT A <div> DOES NOT. Without it the engine's
-    // four-space indent and every double space inside a chrome cell collapse, and "its exact source
-    // text" becomes approximately its source text.
+    // AND WHAT A <div> DOES NOT DO BY ITSELF. Without it the engine's four-space indent and every
+    // double space inside a chrome cell collapse, and "its exact source text" becomes approximately
+    // its source text. `pre-wrap`, not `pre`: the line wraps where the editor wraps it.
     assert.equal(
-      declared(NORMAL, "white-space"), "pre",
+      declared(NORMAL, "white-space"), "pre-wrap",
       `${NORMAL} must not collapse whitespace — the raw rendition claims to be the source`,
     );
   });
@@ -705,7 +707,7 @@ describe("one row geometry, two renditions", () => {
   });
 
   test("the cursor is marked without a slab of background", () => {
-    const FOCUSED = ".viewbody input.rawline:focus";
+    const FOCUSED = ".viewbody textarea.rawline:focus";
     assert.ok(rulesFor(FOCUSED).length > 0, "the focused line has no rule at all");
     for (const property of ["background", "background-color", "background-image"]) {
       assert.equal(
@@ -714,7 +716,7 @@ describe("one row geometry, two renditions", () => {
       );
     }
     // What marks it instead costs no layout: a caret and an inset hairline.
-    assert.equal(declared(".viewbody input.rawline", "caret-color"), "var(--green)");
+    assert.equal(declared(".viewbody textarea.rawline", "caret-color"), "var(--green)");
     assert.ok(
       String(declared(FOCUSED, "box-shadow")).startsWith("inset "),
       "an outer shadow is drawn outside the row, which is the band again by another name",

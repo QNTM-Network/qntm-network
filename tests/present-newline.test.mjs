@@ -85,7 +85,7 @@ function view(source, context = new PresentationContext()) {
   return { body, focus, draft, commits, declined, source };
 }
 
-const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = (body) => walk(body).filter((el) => el.tagName === "textarea");
 const rows = (body) => body.children;
 const trailing = (body) => body.children.filter((el) => el.className === "newline");
 const taskText = (body) => walk(body).find((el) => el.tagName === "span");

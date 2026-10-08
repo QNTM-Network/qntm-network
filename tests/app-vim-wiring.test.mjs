@@ -59,7 +59,7 @@ before(async () => {
   page.__setGraphData({ snapshot: { generated_at: "2026-07-31T00:00:00Z", views: [VIEW] } });
 });
 
-const inputs = (body) => walk(body).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = (body) => walk(body).filter((el) => el.tagName === "textarea");
 const selected = (body) =>
   walk(body).filter((el) => String(el.className ?? "").split(/\s+/).includes("vim-selected"));
 const press = (key) => doc.dispatch("keydown", makeEvent({ key }));

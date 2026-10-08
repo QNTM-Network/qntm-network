@@ -406,7 +406,7 @@ describe("2. THE ACCEPTANCE TEST — hiding the stamp changes nothing a write ca
     const index = REAL_VIEW.split("\n").findIndex((line) => line.includes("[[qntm:2603]]"));
     focus.focus(index, REAL_VIEW, 0);
     const repainted = view(REAL_VIEW, WIRED, { focus, onLineCommit: (c) => commits.push(c) });
-    const input = walk(repainted).find((el) => el.tagName === "input" && el.type === "text");
+    const input = walk(repainted).find((el) => el.tagName === "textarea");
     assert.equal(input.value, REAL_VIEW.split("\n")[index], "the cursor's line is not its source");
 
     input.value = input.value.replace("Lesley pay tenner", "Lesley pay twenty");
@@ -597,7 +597,7 @@ describe("3. the stamp is RAW under the cursor", () => {
       .find((el) => String(el.innerHTML).includes("Lesley"))
       .dispatch("click", makeEvent());
 
-    const input = walk(body).find((el) => el.tagName === "input" && el.type === "text");
+    const input = walk(body).find((el) => el.tagName === "textarea");
     assert.equal(input.value, REAL_VIEW.split("\n")[index]);
     for (const substring of ["[[qntm:2603]]", "#task", "🆕 2026-07-31"]) {
       assert.ok(input.value.includes(substring), `the focused line lost ${substring}`);
@@ -611,7 +611,7 @@ describe("3. the stamp is RAW under the cursor", () => {
     walk(body).filter((el) => el.tagName === "span")
       .find((el) => String(el.innerHTML).includes("Lesley"))
       .dispatch("click", makeEvent());
-    walk(body).find((el) => el.tagName === "input" && el.type === "text").dispatch("blur");
+    walk(body).find((el) => el.tagName === "textarea").dispatch("blur");
     assert.equal(serialize(body), before, "the view did not return to what it was");
     assert.ok(marks(body) > 0);
   });

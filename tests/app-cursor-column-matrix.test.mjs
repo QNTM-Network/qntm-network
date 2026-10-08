@@ -68,7 +68,7 @@ before(async () => {
 });
 
 const body = () => elements.get("viewBody");
-const inputs = () => walk(body()).filter((el) => el.tagName === "input" && el.type === "text");
+const inputs = () => walk(body()).filter((el) => el.tagName === "textarea");
 const openRow = () => inputs()[0] ?? null;
 const press = (key) => doc.dispatch("keydown", makeEvent({ key }));
 const pressIn = (el, key) => el.dispatch("keydown", makeEvent({ key }));

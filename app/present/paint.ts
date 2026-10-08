@@ -333,7 +333,7 @@ export interface PaintDeps {
    *
    * WITH IT, THE FOCUSED LINE IS STILL ALWAYS RAW — the mode decides only WHICH ELEMENT holds the
    * characters. `NORMAL` builds `normalLine` (spans, a block cursor, not typeable) and `INSERT`
-   * builds `rawInput` (an `<input>`). The raw-on-focus contribution is NOT gated on the mode; it
+   * builds `rawInput` (the line editor). The raw-on-focus contribution is NOT gated on the mode; it
    * was for one release and that was the defect this field's own note used to describe as the
    * design. See motions.ts for why the mode is still not a fifth `Contribution` key: NORMAL/INSERT
    * is a fact about which line may be EDITED and which keys are live, never a `Rendition` shift, so
@@ -566,27 +566,62 @@ function normalLine(lineSource: string, column: number): HTMLElement {
 }
 
 /**
- * The `raw` rendition when there IS somewhere for a cursor to go: an `<input>` holding the
- * verbatim source, and the whole of migration stage 3's surface.
+ * THE LINE EDITOR — one element for every line being typed, the existing line and the new one alike.
  *
- * ── WHY AN `<input>` AND NOT A `contenteditable` ──
+ * ── WHY A `<textarea>` AND NOT AN `<input>` (2026-10-08, operator report) ──
  *
- * The governing constraint: a resolution is admissible only when every affordance it offers can
- * be expressed as an edit to the SOURCE STRING, and the app never reconstructs markdown from the
- * DOM. An input holding source text satisfies it exactly — what comes back out is the characters
- * a person typed, and the edit is "line N becomes this string", one sentence, no inversion. A
- * contenteditable region holding a RENDITION satisfies nothing: getting markdown back out of it
- * means un-rendering HTML, which is the one shape the design forbids, and the app posts the WHOLE
- * FILE, so a lossy inversion does not corrupt one line — it rewrites a view.
+ * "it wraps the text but then it all cuts it off so i don't really know what i'm writing". An
+ * `<input>` cannot wrap: a line longer than the column scrolls sideways under the caret, so in a
+ * narrow window the operator typed at the right edge with the start of his own line out of sight. A
+ * `<textarea>` wraps, and this one grows to the height of what it holds.
  *
- * `<input>` rather than `<textarea>` is also load-bearing rather than aesthetic: an input cannot
- * contain a newline, so "exactly one line replaced and every other line byte for byte" is a
- * property of the ELEMENT and not merely of the code around it. `applyEdit` refuses a multi-line
- * text as well, and the two guards are deliberately not one.
+ * ── IT STILL HOLDS ONE LINE, AND THIS FUNCTION IS NOW WHERE THAT IS TRUE ──
+ *
+ * An `<input>` could not contain a newline, so "exactly one line replaced" was a property of the
+ * element. A `<textarea>` can, so the property moves here: Enter never reaches the element (each
+ * editor's own keydown handler takes it), and a newline that arrives another way — a paste, a
+ * phone keyboard — becomes a space. `applyEdit` still refuses a multi-line text; the two guards are
+ * still deliberately not one.
+ *
+ * ── WHY NOT A `contenteditable` ──
+ *
+ * The governing constraint: every affordance is an edit to the SOURCE STRING, and the app never
+ * reconstructs markdown from the DOM. A text control holding source text satisfies it exactly — what
+ * comes back out is the characters a person typed. A contenteditable region holding a RENDITION
+ * would mean un-rendering HTML, and the app posts the WHOLE FILE, so a lossy inversion rewrites a
+ * view.
+ */
+export function lineEditor(text: string): HTMLTextAreaElement {
+  const box = document.createElement("textarea") as HTMLTextAreaElement;
+  box.className = "rawline";
+  box.rows = 1;
+  box.value = text;
+  // GROW TO FIT. `field-sizing: content` (app/index.html) does this where the browser has it; this
+  // is the same thing for one that does not. Height is read back only from a laid-out element.
+  const fit = (): void => {
+    if (typeof box.scrollHeight !== "number" || box.style === undefined) return;
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  };
+  box.addEventListener("input", () => {
+    if (box.value.includes("\n")) {
+      const at = box.selectionStart ?? box.value.length;
+      box.value = box.value.replace(/\r?\n/g, " ");
+      placeCaret(box, at);
+    }
+    fit();
+  });
+  box.addEventListener("focus", fit);
+  return box;
+}
+
+/**
+ * The `raw` rendition when there IS somewhere for a cursor to go: the line editor (`lineEditor`,
+ * above) holding the verbatim source, and the whole of migration stage 3's surface.
  *
  * ── WHY THIS EMBODIMENT DEPENDS ON `deps.focus` RATHER THAN ON THE CASCADE ──
  *
- * Raw is raw either way; what differs is whether the characters can be REACHED. An input in an
+ * Raw is raw either way; what differs is whether the characters can be REACHED. An editor in an
  * app with no focus surface would be a control nobody can leave and nothing repaints — worse than
  * the inert text it replaced. So the rendition is the cascade's decision and its embodiment is
  * the painter's, which is the split the presentation-painting class already draws: paint may
@@ -601,10 +636,7 @@ function rawInput(
   repaint: (nextSource: string) => void,
   openLineAt: (lineIndex: number, from: string) => boolean,
 ): HTMLElement {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "rawline";
-  input.value = lineSource;
+  const input = lineEditor(lineSource);
   const mode = deps.mode;
 
   // LEAVING THE LINE, AND THE TWO THINGS IT CAN MEAN. `deps.mode` absent: this is the app as it
@@ -661,7 +693,7 @@ function rawInput(
       //
       // A draft is not a line `FocusSurface` can point at while it exists: `paintDraft` focuses the
       // row's `<input>` DIRECTLY, with no cascade and no mode check. So a draft and a focused line
-      // are two cursors, and the next paint honours BOTH — it builds an `<input>` for the focused
+      // are two cursors, and the next paint honours BOTH — it builds a line editor for the focused
       // line and focuses it, then builds the draft and focuses that.
       //
       // FOCUSING THE SECOND BLURS THE FIRST, and `blur` is wired to the settlement above. Measured,
@@ -712,7 +744,7 @@ function rawInput(
   // fact only the element knows — where the browser put the caret — and the resolver clamps it like
   // every other instruction.
   input.addEventListener("input", () => {
-    focus.moveTo({ kind: "at", column: (input as HTMLInputElement).selectionStart ?? 0 }, input.value);
+    focus.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
   });
   input.addEventListener("blur", () => settle());
   input.addEventListener("keydown", (event) => {
@@ -746,7 +778,7 @@ function rawInput(
 }
 
 /**
- * THE LINE BEING MADE — an `<input>` for a row that is not in the file yet.
+ * THE LINE BEING MADE — the line editor for a row that is not in the file yet.
  *
  * The same element and the same class as `rawInput`, deliberately: a new line is a raw line whose
  * source happens to be characters nobody has committed, and giving it a box of its own would be the
@@ -771,14 +803,11 @@ function draftInput(
   deps: PaintDeps,
   repaint: (nextSource: string) => void,
 ): HTMLElement {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "rawline";
   // THE CHARACTERS THE ROW HOLDS, WHICH IS THE SEED UNTIL SOMEBODY TYPES. They differ only for a
-  // row that has survived a projection (draft.ts's `typed`) — an `<input>` is destroyed by every
+  // row that has survived a projection (draft.ts's `typed`) — the line editor is destroyed by every
   // repaint, so a surviving row that came back holding its seed would have survived nothing the
   // operator can see.
-  input.value = typed;
+  const input = lineEditor(typed);
 
   // One settlement per row, for the same reason `rawInput` has one: the repaint that follows a
   // commit removes this element, and removing a focused element fires blur.
@@ -801,7 +830,7 @@ function draftInput(
    * `FocusSurface` can point at while it exists — `paintDraft()` focuses this `<input>` directly,
    * with no cascade or mode check at all — so whichever key opened this row (Enter, mid-edit, or
    * `o`/`O` from NORMAL) leaves `focus` blurred while it is open, which is what stops the line the
-   * draft opened FROM also turning into an `<input>` the instant `mode.enterInsert()` makes every
+   * draft opened FROM also turning into a line editor the instant `mode.enterInsert()` makes every
    * FOCUSED line raw. Once this row is gone — committed or abandoned — that gap has to close, or
    * `mode` is left INSERT with no `<input>` anywhere and NORMAL's own keydown handler never
    * re-engages (it is gated on `mode.mode === "NORMAL"`).
@@ -868,7 +897,7 @@ function draftInput(
     // caret here and never tell the focus surface, so the caret sat past the `- [ ] ` seed while
     // the column reported 0 — from any starting column, measured 2026-08-12. A draft is NOT a
     // special case: it is the resolver answering the question it answers everywhere else.
-    deps.focus?.moveTo({ kind: "at", column: (input as HTMLInputElement).selectionStart ?? 0 }, input.value);
+    deps.focus?.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
   });
   input.addEventListener("blur", settle);
   input.addEventListener("keydown", (event) => {
@@ -968,7 +997,7 @@ const stampMark = (id: string): string =>
 
 /**
  * NORMAL MODE'S SELECTION MARK — one class, on whichever element a WIRED line rendered as, when
- * that line is the vim cursor. Deliberately not the caret's own green: `.viewbody input.rawline`
+ * that line is the vim cursor. Deliberately not the caret's own green: `.viewbody textarea.rawline`
  * marks INSERT with `caret-color` and a bottom hairline, and the brief is explicit that NORMAL's
  * mark must "be clearly not a text caret" — reusing the caret's own visual vocabulary for a
  * DIFFERENT fact would be exactly the confusion that line exists to prevent. See app/index.html
@@ -1200,17 +1229,17 @@ const PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
  * that could ever be mistaken for settled content is the exact failure this whole feature exists to
  * avoid.
  *
- * ── WHY AN `<input>` IS SKIPPED RATHER THAN DECORATED ──
+ * ── WHY THE LINE EDITOR IS SKIPPED RATHER THAN DECORATED ──
  *
  * The row currently being typed, or one the cursor just landed back on in INSERT, is rendered as a
- * real `<input>` (`rawInput`/`draftInput`, above) — an element with nowhere to usefully show a
- * child: a void/replaced element accepts an appended node without error and never renders it. There
+ * line editor (`rawInput`/`draftInput`, above) — an element with nowhere to usefully show a
+ * child: a `<textarea>` never renders a child, and an appended text node would silently become part of its value. There
  * is also nothing useful to say: the operator is either mid-keystroke on this exact line (he does
  * not need a claim about characters he is choosing himself) or has just landed the cursor back on it
  * (same reason). Skipping is a choice made for clarity, not a workaround for a crash.
  */
 export function appendPrediction(row: HTMLElement, text: string, kind: "pending" | "withdrawn", animate: boolean): void {
-  if (row.tagName.toLowerCase() === "input") {
+  if (row.tagName.toLowerCase() === "textarea") {
     return;
   }
   const span = document.createElement("span");
@@ -1528,7 +1557,7 @@ export function paint(
    *   no focus surface — inert text. Stage 1's painter, and the golden master's.
    *   NORMAL          — the characters, with a block cursor on one of them. Not typeable.
    *   INSERT (or no
-   *   mode surface)   — an `<input>`. Typeable, and the only place the file can change.
+   *   mode surface)   — the line editor. Typeable, and the only place the file can change.
    *
    * The middle one is new and the other two are not touched. That ordering is why widening
    * `focusLive` below could not change what a pre-vim caller paints: without a `ModeSurface` there
@@ -1585,7 +1614,7 @@ export function paint(
     body.append(input);
     rowsByLineIndex.set(lineIndex, input);
     if (focus.isFocused(lineIndex)) {
-      (input as HTMLInputElement).focus?.();
+      input.focus?.();
       // FOCUSING BLURS WHATEVER HAD FOCUS, AND A BLUR SETTLES. So this call is one of the three
       // places in this file where control can leave the frame — see `paintGeneration`. If it did,
       // the element just appended is already gone from the column a nested paint emptied, and
@@ -1651,7 +1680,7 @@ export function paint(
       repaint,
     );
     body.append(input);
-    (input as HTMLInputElement).focus?.();
+    input.focus?.();
     // THE SECOND OF THE THREE PLACES CONTROL CAN LEAVE THE FRAME — see `paintGeneration`, and see
     // `rawInput`'s `settle` for the `focus.blur()` that stops this transfer from happening at all
     // on the gesture that used to cause it.
@@ -2133,6 +2162,6 @@ export function visualLineOrder(body: HTMLElement): readonly number[] {
 export function revealSelection(body: HTMLElement, block: "nearest" | "center" = "nearest"): void {
   const row =
     (body.querySelector?.(`.${VIM_SELECTED_CLASS}`) as HTMLElement | null) ??
-    (body.querySelector?.("input.rawline") as HTMLElement | null);
+    (body.querySelector?.("textarea.rawline") as HTMLElement | null);
   row?.scrollIntoView?.({ block, inline: "nearest" });
 }

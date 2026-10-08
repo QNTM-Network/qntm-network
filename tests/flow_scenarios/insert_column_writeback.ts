@@ -234,7 +234,7 @@ function stubBody(): HTMLElement {
 /** The first text `<input>` the paint produced, depth-first — the row `a` opened. */
 function firstInput(node: unknown): { selectionStart: number } | null {
   const el = node as { tagName?: string; type?: string; children?: unknown[]; selectionStart?: number };
-  if (el.tagName === "input" && el.type === "text") {
+  if (el.tagName === "textarea") {
     return { selectionStart: el.selectionStart ?? -1 };
   }
   for (const kid of el.children ?? []) {

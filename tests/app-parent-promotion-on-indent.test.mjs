@@ -554,7 +554,7 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
       .flatMap(function collect(el) {
         return [el, ...((el.children ?? []).flatMap(collect))];
       })
-      .find((el) => el.type === "text");
+      .find((el) => el.tagName === "textarea");
     assert.ok(input, "i did not open an editable line");
     input.value = "    - [ ] Draft the copy #task";
     input.dispatch("blur");
@@ -573,7 +573,7 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
       .flatMap(function collect(el) {
         return [el, ...((el.children ?? []).flatMap(collect))];
       })
-      .find((el) => el.type === "text");
+      .find((el) => el.tagName === "textarea");
     assert.ok(input, "i did not open an editable line");
     input.value = "- [ ] Draft the copy, retyped #task";
     input.dispatch("blur");
@@ -591,7 +591,7 @@ describe("6.1 the four commit-producing kinds, driven through the real page, whe
       .flatMap(function collect(el) {
         return [el, ...((el.children ?? []).flatMap(collect))];
       })
-      .find((el) => el.type === "text");
+      .find((el) => el.tagName === "textarea");
     assert.ok(input, "o did not open a draft line");
     input.value = "    - [ ] Draft the copy #task";
     input.dispatch("blur");

@@ -128,7 +128,7 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     assert.equal(input.value, "- [ ] Ring the dentist", "the cursor did not reach the real capture");
     const text = "- [ ] Ring the dentist today";
     input.value = text;
@@ -153,7 +153,7 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     const text = "- [ ] Ring the dentist #work";
     input.value = text;
     posted = null;
@@ -180,7 +180,7 @@ describe("HIS OWN TWO CASES, end to end, through app/index.html's own lifted scr
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     const text = "- [ ] Ring the dentist tomorrow";
     input.value = text;
     posted = null;
@@ -465,7 +465,7 @@ describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", (
     // `i` that arms it for typing.
     taskText().dispatch("click", makeEvent());
     page.__enterInsert();
-    const input = walk(elements.get("viewBody")).find((el) => el.type === "text");
+    const input = walk(elements.get("viewBody")).find((el) => el.tagName === "textarea");
     input.value = "- [ ] Ring the dentist #work";
     input.dispatch("blur");
 

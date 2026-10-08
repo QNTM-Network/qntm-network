@@ -44,7 +44,7 @@ const ALLOWED = {
   "apple-touch-icon.png": null,
   "favicon.ico": null,
   "og.png": null,
-  "tests/present-stamp.test.mjs": [45161],
+  "tests/present-stamp.test.mjs": [45104],
 };
 
 function trackedFiles() {

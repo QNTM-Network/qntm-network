@@ -281,7 +281,7 @@ const onScreen = () =>
     .join("\n");
 
 const openInputs = () =>
-  walk(elements.get("viewBody")).filter((el) => el.tagName === "input" && el.type === "text");
+  walk(elements.get("viewBody")).filter((el) => el.tagName === "textarea");
 const boxes = () => walk(elements.get("viewBody")).filter((el) => el.type === "checkbox");
 
 /**
@@ -325,7 +325,7 @@ function clickLine(els, source, lineIndex) {
   assert.ok(target, `source line ${lineIndex} is painted with nothing a cursor can reach`);
   target.dispatch("click", makeEvent());
   page.__enterInsert();
-  const input = walk(els.get("viewBody")).find((el) => el.tagName === "input" && el.type === "text");
+  const input = walk(els.get("viewBody")).find((el) => el.tagName === "textarea");
   assert.ok(input, "clicking the line, then arming INSERT, did not open it for typing");
   return input;
 }
@@ -864,7 +864,7 @@ describe("6. THE GUARDS GO RED WHEN THE THING THEY GUARD IS BROKEN", () => {
           .map((el) => `${el.textContent || ""}${el.innerHTML || ""}${el.value || ""}`)
           .join("\n"),
       boxes: () => body().filter((el) => el.type === "checkbox"),
-      inputs: () => body().filter((el) => el.tagName === "input" && el.type === "text"),
+      inputs: () => body().filter((el) => el.tagName === "textarea"),
       rows: () => body().filter((el) => el.tagName === "span" && el.innerHTML !== ""),
       // A CLICK NO LONGER ARMS INSERT — see `clickLine`'s header above. Opening a row for typing
       // now takes the click AND an arm; `__enterInsert()`, not a real `i` keystroke, for the same

@@ -6081,11 +6081,29 @@ function normalLine(lineSource, column) {
   div.append(head, cell, tail);
   return div;
 }
+function lineEditor(text) {
+  const box = document.createElement("textarea");
+  box.className = "rawline";
+  box.rows = 1;
+  box.value = text;
+  const fit = () => {
+    if (typeof box.scrollHeight !== "number" || box.style === void 0) return;
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  };
+  box.addEventListener("input", () => {
+    if (box.value.includes("\n")) {
+      const at = box.selectionStart ?? box.value.length;
+      box.value = box.value.replace(/\r?\n/g, " ");
+      placeCaret(box, at);
+    }
+    fit();
+  });
+  box.addEventListener("focus", fit);
+  return box;
+}
 function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openLineAt) {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "rawline";
-  input.value = lineSource;
+  const input = lineEditor(lineSource);
   const mode = deps.mode;
   const leaveInsert = () => {
     if (mode !== void 0) {
@@ -6138,10 +6156,7 @@ function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openL
   return input;
 }
 function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "rawline";
-  input.value = typed;
+  const input = lineEditor(typed);
   let settled = false;
   const generation = draft.generation;
   const stale = () => draft.generation !== generation;
@@ -6272,7 +6287,7 @@ function settleRow(moving, before, body, animate) {
 var PREDICT_CLASS = "row-prediction";
 var PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
 function appendPrediction(row, text, kind, animate) {
-  if (row.tagName.toLowerCase() === "input") {
+  if (row.tagName.toLowerCase() === "textarea") {
     return;
   }
   const span = document.createElement("span");
@@ -6642,7 +6657,7 @@ function visualLineOrder(body) {
   return order;
 }
 function revealSelection(body, block = "nearest") {
-  const row = body.querySelector?.(`.${VIM_SELECTED_CLASS}`) ?? body.querySelector?.("input.rawline");
+  const row = body.querySelector?.(`.${VIM_SELECTED_CLASS}`) ?? body.querySelector?.("textarea.rawline");
   row?.scrollIntoView?.({ block, inline: "nearest" });
 }
 
@@ -8508,7 +8523,7 @@ function tagSource(vocabulary) {
 }
 
 // app/shell/completer.ts
-var isLineEditor = (target) => typeof HTMLInputElement !== "undefined" && target instanceof HTMLInputElement && target.classList.contains("rawline");
+var isLineEditor = (target) => typeof HTMLTextAreaElement !== "undefined" && target instanceof HTMLTextAreaElement && target.classList.contains("rawline");
 function installCompleter(deps) {
   let made = null;
   const listEl = (doc) => {
