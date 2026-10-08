@@ -456,33 +456,52 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
  * reachable without it, which is what lets a test or a probe drive `globalKey` directly instead of
  * synthesising DOM events at a document that wired itself on import.
  */
-/** Two clicks on the view this close together are a double-click. */
-const DOUBLE_CLICK_MS = 450;
-
 export function installGlobalKeys(deps: GlobalKeyDeps, on: Document = document): void {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
-  // DOUBLE-CLICK TO EDIT (2026-10-07, operator-directed: "plain click-to-edit alongside the vim
-  // keys"). The first click of the pair already selects the line, exactly as a single click does;
-  // the second is then the same `i` a keyboard would send, through the same handler — so there is
-  // no second way into INSERT, only a second key that reaches the one there is.
+  // A CLICK ON THE LINE THE CURSOR IS ALREADY ON EDITS IT (2026-10-08, operator report: on a phone
+  // there was no way into INSERT at all). The first click on a line selects it, exactly as before;
+  // a click on the SELECTED line is then the same `i` a keyboard would send, through the same
+  // handler — so there is no second way into INSERT, only a second key that reaches the one there
+  // is. A double-click is this too: its second click lands on the line the first one selected.
   //
-  // TWO CLICKS, NOT `dblclick` (fixed 2026-10-07, measured in the live app): the first click
-  // selects the line and the view repaints, so the second click lands on a NEW element and the
-  // browser never fires `dblclick`. Two clicks on the view within DOUBLE_CLICK_MS are counted here
-  // instead; the second one's own click handler has already selected the line it landed on.
+  // IT REPLACES A TIMER. Until today two clicks within 450 ms were counted as a double-click. A
+  // phone's tap, a slow second click and a click after reading the line all missed that window;
+  // "is this line already selected" is the fact the timer was standing in for.
+  //
+  // `i` IS SENT WHILE THE CLICK IS STILL BEING HANDLED, which is what lets a phone open its
+  // keyboard: a phone shows the keyboard only for a focus made during the person's own tap.
   if (typeof KeyboardEvent === "function") {
-    let lastClick = -Infinity;
     deps.viewBody.addEventListener("click", (event) => {
       if (typingIn(event.target)) return;
-      const now = event.timeStamp;
-      if (now - lastClick <= DOUBLE_CLICK_MS) {
-        lastClick = -Infinity;
-        globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
-      } else {
-        lastClick = now;
-      }
+      const row = (event.target as Element | null)?.closest?.(".vim-selected");
+      if (row == null) return;
+      // THE CARET GOES WHERE THE CLICK WAS, through the same `at` instruction the editor reports
+      // as the caret moves. The NORMAL line is its exact source text, so the character offset
+      // under the pointer is the column.
+      const column = columnAtPoint(row, event.clientX, event.clientY);
+      if (column !== null) deps.focus.moveTo({ kind: "at", column }, row.textContent ?? "");
+      globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
     });
   }
+}
+
+/** The character offset within `row`'s text under the point, or `null` when the browser cannot say. */
+function columnAtPoint(row: Element, x: number, y: number): number | null {
+  const doc = row.ownerDocument as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  const position = doc.caretPositionFromPoint?.(x, y);
+  const range = position == null ? doc.caretRangeFromPoint?.(x, y) : null;
+  const node = position?.offsetNode ?? range?.startContainer;
+  const offset = position?.offset ?? range?.startOffset;
+  if (node == null || offset == null || !row.contains(node)) return null;
+  let column = 0;
+  const walker = doc.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
+    if (text === node) return column + offset;
+    column += text.textContent?.length ?? 0;
+  }
+  return null;
 }
 
 /** Whether `dd` may mark line `index`: a line with content that is not a heading. */

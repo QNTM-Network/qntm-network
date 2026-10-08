@@ -8417,22 +8417,33 @@ function globalKey(deps, e) {
     deps.repaintCurrentView();
   }
 }
-var DOUBLE_CLICK_MS = 450;
 function installGlobalKeys(deps, on = document) {
   on.addEventListener("keydown", (e) => globalKey(deps, e));
   if (typeof KeyboardEvent === "function") {
-    let lastClick = -Infinity;
     deps.viewBody.addEventListener("click", (event) => {
       if (typingIn(event.target)) return;
-      const now = event.timeStamp;
-      if (now - lastClick <= DOUBLE_CLICK_MS) {
-        lastClick = -Infinity;
-        globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
-      } else {
-        lastClick = now;
-      }
+      const row = event.target?.closest?.(".vim-selected");
+      if (row == null) return;
+      const column = columnAtPoint(row, event.clientX, event.clientY);
+      if (column !== null) deps.focus.moveTo({ kind: "at", column }, row.textContent ?? "");
+      globalKey(deps, new KeyboardEvent("keydown", { key: "i", cancelable: true }));
     });
   }
+}
+function columnAtPoint(row, x, y) {
+  const doc = row.ownerDocument;
+  const position = doc.caretPositionFromPoint?.(x, y);
+  const range = position == null ? doc.caretRangeFromPoint?.(x, y) : null;
+  const node = position?.offsetNode ?? range?.startContainer;
+  const offset = position?.offset ?? range?.startOffset;
+  if (node == null || offset == null || !row.contains(node)) return null;
+  let column = 0;
+  const walker = doc.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
+    if (text === node) return column + offset;
+    column += text.textContent?.length ?? 0;
+  }
+  return null;
 }
 function applyEditable(source, index) {
   const line = (source.split("\n")[index] ?? "").trim();
@@ -8641,7 +8652,7 @@ var KEY_HELP = [
       { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
       { keys: ["a"], does: "Edit the line, after the cursor" },
       { keys: ["A"], does: "Edit the line, at the end" },
-      { keys: ["click twice"], does: "Edit the line you clicked" },
+      { keys: ["click the selected line"], does: "Edit it (on a phone: tap it)" },
       { keys: ["o", "O"], does: "New line below / above" },
       { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
       { keys: ["x", "Space"], does: "Tick / untick (adds or removes \u2705 today)" },
@@ -8879,6 +8890,72 @@ function installSearch(deps, doc = document) {
   };
 }
 
+// app/shell/touchbar.ts
+var TOUCH_KEYS = [
+  { label: "Edit", name: "Edit the line, at the end (A)", modes: ["NORMAL"], keys: ["A"] },
+  { label: "+ Line", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
+  { label: "\u2713", name: "Tick or untick (x)", modes: ["NORMAL"], keys: ["x"] },
+  { label: "\u2192", name: "Indent (>)", modes: ["NORMAL"], keys: [">"] },
+  { label: "\u2190", name: "Outdent (<)", modes: ["NORMAL"], keys: ["<"] },
+  { label: "Del", name: "Mark for deletion on Cycle (dd)", modes: ["NORMAL"], keys: ["d", "d"] },
+  { label: "Undo", name: "Undo (u)", modes: ["NORMAL"], keys: ["u"] },
+  { label: "Find", name: "Search (/)", modes: ["NORMAL"], keys: ["/"] },
+  { label: "Done", name: "Save the line and stop editing (Escape)", modes: ["INSERT"], keys: ["Escape"] },
+  { label: "+ Line", name: "Save and start a new line below (Shift+Enter)", modes: ["INSERT"], keys: ["Enter"], shift: true },
+  { label: "#", name: "Tag", modes: ["INSERT"], text: "#" },
+  { label: ":", name: "Marker by name", modes: ["INSERT"], text: ":" },
+  { label: "[[", name: "Link", modes: ["INSERT"], text: "[[" }
+];
+var lineEditorIn = (body) => body.querySelector("textarea.rawline");
+function installTouchBar(deps) {
+  const doc = deps.bar.ownerDocument ?? document;
+  for (const key of TOUCH_KEYS) {
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.className = "touchkey";
+    button.textContent = key.label;
+    button.setAttribute("aria-label", key.name);
+    button.setAttribute("data-modes", key.modes.join(" "));
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", () => press(key));
+    deps.bar.append(button);
+  }
+  const press = (key) => {
+    const editor = lineEditorIn(deps.viewBody);
+    if (deps.mode() === "INSERT" && editor !== null) {
+      if (key.text !== void 0) {
+        const start = editor.selectionStart ?? editor.value.length;
+        const end = editor.selectionEnd ?? start;
+        editor.setRangeText(key.text, start, end, "end");
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+      for (const name of key.keys ?? []) {
+        editor.dispatchEvent(
+          new KeyboardEvent("keydown", { key: name, shiftKey: key.shift === true, bubbles: true, cancelable: true })
+        );
+      }
+      return;
+    }
+    for (const name of key.keys ?? []) {
+      deps.pressNormal(new KeyboardEvent("keydown", { key: name, shiftKey: key.shift === true, cancelable: true }));
+    }
+  };
+  const viewport = doc.defaultView?.visualViewport;
+  if (viewport != null) {
+    const place = () => {
+      const covered = (doc.defaultView?.innerHeight ?? 0) - viewport.height - viewport.offsetTop;
+      deps.bar.style?.setProperty?.("--kb", `${Math.max(0, Math.round(covered))}px`);
+    };
+    viewport.addEventListener("resize", place);
+    viewport.addEventListener("scroll", place);
+    place();
+  }
+}
+function showTouchMode(bar, mode) {
+  bar.setAttribute?.("data-mode", mode);
+}
+
 // app/present/datecomplete.ts
 function dateMarkers(sources) {
   const out = [];
@@ -9024,6 +9101,7 @@ export {
   SPECIFICITY,
   STRUCTURAL_KEY,
   SettleSurface,
+  TOUCH_KEYS,
   UndoHistory,
   WAITING_FOR_TAG_BINDING,
   WRITE_ECHO_KEY,
@@ -9089,6 +9167,7 @@ export {
   installGlobalKeys,
   installKeyHelp,
   installSearch,
+  installTouchBar,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
@@ -9153,6 +9232,7 @@ export {
   sectionOrderFor,
   sectionOrdinalAt,
   seedFor,
+  showTouchMode,
   stampSpans,
   stampsLanded,
   stampsOwed,
