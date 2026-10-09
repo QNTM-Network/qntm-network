@@ -65,11 +65,14 @@ test("search: views, then sections, then tasks — unchanged", () => {
   assert.deepEqual([...new Set(hits.map((h) => h.kind))], ["view", "section", "task"]);
 });
 
-test("a demoted view's hits sort last but stay listed", () => {
+test("open work first; within one status, a demoted view's hits sort last but stay listed", () => {
+  const views = [...VIEWS, { id: "done", title: "Done", path: "work/done.md", markdown: "- [x] Jason invoice [[qntm:6]] #task" }];
   const policy = { ...DEFAULT_RANK_POLICIES.search, demote: ["*/everything*"] };
-  const hits = searchViews(VIEWS, "jason", { statuses: STATUSES, policy });
-  assert.equal(hits[0].title, "Jason contract", "the one task outside Everything comes first");
-  assert.equal(hits.length, 5, "nothing is hidden");
+  const tasks = searchViews(views, "jason", { statuses: STATUSES, policy }).filter((h) => h.kind === "task");
+  assert.equal(tasks[0].title, "Chris to talk to Jason", "the one open task comes first, even from Everything");
+  const done = tasks.filter((h) => h.status === "done").map((h) => h.title);
+  assert.equal(done[0], "Jason invoice", "among done tasks, the one outside Everything comes first");
+  assert.equal(tasks.length, 6, "nothing is hidden");
 });
 
 test("[[: title matches only, open first", () => {

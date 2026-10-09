@@ -23863,10 +23863,6 @@
             ]
           },
           {
-            "field": "demoted",
-            "direction": "asc"
-          },
-          {
             "field": "status",
             "order": [
               "open",
@@ -23877,6 +23873,10 @@
               "done",
               "cancelled"
             ]
+          },
+          {
+            "field": "demoted",
+            "direction": "asc"
           },
           {
             "field": "match",
@@ -23894,10 +23894,6 @@
       "link": {
         "keys": [
           {
-            "field": "demoted",
-            "direction": "asc"
-          },
-          {
             "field": "status",
             "order": [
               "open",
@@ -23908,6 +23904,10 @@
               "done",
               "cancelled"
             ]
+          },
+          {
+            "field": "demoted",
+            "direction": "asc"
           },
           {
             "field": "match",
