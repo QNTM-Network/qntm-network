@@ -3,6 +3,7 @@
 # described that is still real will be found again and filed again in today's terms.
 backlog:
 - id: search-reads-lines-through-the-shared-readers
+  project: engine-and-clients
   captured: '2026-10-09'
   title: >
     app/present/search.ts parses lines with its own regexes (the [[qntm:N]] stamp, headings, the
@@ -22,6 +23,7 @@ backlog:
     Enforced by state-search-reads-lines-through-the-shared-readers and
     tests/present-search.test.mjs, tests/present-links.test.mjs.
 - id: one-ranking-for-every-list
+  project: engine-and-clients
   captured: '2026-10-09'
   title: >
     Five lists rank by five rules, each written inside the list: `searchViews` (search.ts),
@@ -45,27 +47,33 @@ backlog:
     Views tree (found by the new check — it sorted A–Z by its own rule). Built-in policies in
     `DEFAULT_RANK_POLICIES`: today's order plus open before done. Enforced by
     state-every-list-ranks-through-one-ranking and tests/present-rank.test.mjs.
-- id: list-ordering-declared-in-global-defaults
+- id: client-settings-in-config
+  project: engine-and-clients
+  lead: true
   captured: '2026-10-09'
   title: >
-    The ranking policy is declared in apps/qntm-md/config/global_defaults.yaml as `list_ordering:`
-    (a default key list, optional per-list overrides for search, link, views, tags, markers, and a
-    `demote:` list of view path globs whose hits sort last but stay listed — e.g. Everything Work).
-    scripts/compile-resolution.mjs compiles it into presentation.json the way it already compiles
-    `default_ordering:`, with a `source` field saying config or built-in. The engine never reads it.
-    Needs one-ranking-for-every-list.
+    A client section in the config, with list ordering as its first key. Declared in a new
+    apps/qntm-md/config/client.yaml (`lists:` — a default key list, per-list overrides for search,
+    link, views, tags and markers, and `demote:` view path globs whose hits sort last but stay
+    listed, e.g. Everything Work). Compiled by scripts/compile-resolution.mjs into the declaration
+    with a `source` field; read by app/present/rank.ts. The engine never reads it. NOT
+    global_defaults.yaml, which holds the engine's own field defaults (architecture checkpoint
+    2026-10-09, decided). Replaces row list-ordering-declared-in-global-defaults.
   kind: capability
   state: unscoped
 - id: recently-used-recorded-on-the-server
+  project: engine-and-clients
   captured: '2026-10-09'
   title: >
-    A `recent` ranking key needs a record of what was used. The worker records the views opened and
-    the nodes edited (time stamped), so the Mac and the phone agree; the app reads it with the
-    snapshot. Operator choice 2026-10-09: shared on the server, not per device, not graph dates.
-    Needs list-ordering-declared-in-global-defaults.
+    A blank `/` shows recent views and items (operator-asked 2026-10-09: "even when blank … switch
+    back to prev file"), then filters as you type with the same ranking. The Worker records the
+    views opened and the nodes edited, time stamped, KEYED BY USER ID from the first line, so the
+    Mac and the phone agree; a `recent` ranking key reads it. Operator choice: shared on the server,
+    not per device. After config-publish-in-the-api.
   kind: capability
   state: unscoped
 - id: one-ordering-vocabulary-for-lists-and-children
+  project: engine-and-clients
   captured: '2026-10-09'
   title: >
     Child order inside a view is the same problem as list order, and must use the same declared
@@ -82,5 +90,82 @@ backlog:
     browser), held together by one compiled declaration and agreement tests, as default ordering
     already is. The engine half is filed in the monorepo backlog as
     children-order-by-declared-keys.
+  kind: capability
+  state: unscoped
+- id: close-registration-until-a-user-has-their-own-graph
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Registration is open, and a new account gets a safe but empty app with nothing it can use.
+    Close it, or require an invite, until each-user-has-their-own-graph lands. Stage 1 of
+    docs/implementation-artifacts/design-a-user-owns-their-graph.md (operator agreed 2026-10-09).
+  kind: capability
+  state: unscoped
+- id: config-publish-in-the-api
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Config is each user's content, published by the API, never by CI. One Worker route takes a set of
+    config files, compiles them once, asks the engine to check them (design-gate-two.md), stores
+    config and declaration as one numbered version keyed by user, and pushes that version to the
+    engine. The app reads its declaration from /config/declaration/*/current; presentation.json is
+    no longer committed. Removes the two delivery paths seen 2026-10-08 (deployed, not live until a
+    hand push). Builds on design-config-is-content.md. Was a-config-write-lands-on-both-consumers-
+    or-neither before the backlog reset.
+  kind: capability
+  state: unscoped
+- id: client-core-package
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Move app/present/ (already free of the DOM) into its own package — the client core that the web
+    app, a phone app and an API/MCP server would share — with a check that it never imports page
+    code. app/shell/ stays the web shell.
+  kind: capability
+  state: unscoped
+- id: shared-test-cases-for-twice-run-rules
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    A rule that must run in both the Python engine and the TypeScript client core (ordering first) is
+    held in step by ONE set of test cases — (config, lines) → expected answer — run by the engine's
+    pytest and by the client core's tests. Replaces the per-key agreement tests. First user: the
+    engine row chain-edge-types-hardcoded-in-applier-and-section-builder (child ordering).
+  kind: capability
+  state: unscoped
+- id: retire-switched-off-predictions
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Delete the browser's prediction code that no longer runs since saves stopped running the engine
+    (2026-10-08) — part of the ~4,600 lines in app/present/arrange, select and resolvers that mirror
+    engine rules.
+  kind: capability
+  state: unscoped
+- id: config-sync-tool
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    A local-folder sync tool: edit config as YAML files (by hand or by an agent), and the tool
+    publishes them through config-publish-in-the-api — no GitHub access. The first way of editing
+    config after the publish route (operator agreed 2026-10-09).
+  kind: capability
+  state: unscoped
+- id: yaml-editor-in-the-app
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Edit config in the web app as YAML that stays valid: underlined errors from the same compile the
+    publish route runs, indent help, suggestions for keys and values. Publishes through
+    config-publish-in-the-api.
+  kind: capability
+  state: unscoped
+- id: each-user-has-their-own-graph
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Each user's graph, files, config and server records are their own: one folder per user on the
+    engine (/data/users/<id>/{config, state.db, vault}), the Worker sending the id it authenticated,
+    provisioning, a per-tenant cycle queue. Stages 2–7 of design-a-user-owns-their-graph.md.
   kind: capability
   state: unscoped

@@ -158,6 +158,22 @@ principles:
         # `flag-one-markdown-implementation-is-now-three`. Both enforcers are left in place:
         # they are the right enforcers, aimed at the wrong file.
 
+  - id: one-home-per-kind-of-rule
+    rule: >
+      The engine is the core service and the web app is one client of several (phone app,
+      markdown, API/MCP). Every rule has exactly one home, by kind. MODEL rules — what is true in
+      the graph: membership, child order, status, rule effects — live in the engine; a client may
+      show a prediction and always takes the engine's answer. CLIENT rules — how a client lists,
+      searches, ranks, picks and shows — are declared in the config and evaluated by one shared
+      client core, never re-written per client. PREFERENCES layer in one cascade: config default →
+      user → client → device. Config is each user's content, compiled and published once by the API
+      (never by CI) and pushed to the engine in the same step. Where one rule must run in two
+      languages, one set of shared test cases holds the two in step. Decided 2026-10-09 in the
+      architecture checkpoint https://claude.ai/artifact/XhRjRZx7zWeWhKxAJEE8iA; extends
+      one-implementation-per-concern from one repo to the whole system.
+    enforced_by: []   # UNENFORCED today, stated honestly. Partial: state.yaml#state-every-list-ranks-through-one-ranking
+                      # holds client rules to rank.ts. The rows under project engine-and-clients add the rest.
+
   - id: presentation-is-resolved-not-chosen
     rule: >
       HOW A LINE IS SHOWN IS RESOLVED, NEVER CHOSEN AT THE CALL SITE. The engine emits `-`, `#`
