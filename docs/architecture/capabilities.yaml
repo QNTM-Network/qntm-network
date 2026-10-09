@@ -4526,3 +4526,18 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+- id: client-settings-in-config
+  intent: >-
+    The operator declares how every list ranks — search, links, views, tags, markers, and which
+    views sort last — in config/client.yaml, as YAML an agent can edit, and the app follows it.
+    The engine carries the file and never reads it.
+  tier: functional
+  rooting: >-
+    scripts/compile-client.mjs is the one validity owner; app/present/rank.ts reads and runs it.
+  status: working
+  enforced_by:
+  - declared_state: state-every-list-ranks-by-the-declared-client-settings
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin

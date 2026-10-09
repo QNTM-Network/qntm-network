@@ -1234,6 +1234,7 @@ import {
   installSearch,
   installTouchBar,
   showTouchMode,
+  policyFor,
   installLinks,
   linkSource,
   unconfirmedLines,
@@ -1246,7 +1247,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=8f764ea596";
+} from "/dist/present.js?v=464bd5f6f7";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1679,6 +1680,8 @@ const drawerDeps = {
   barFolder: $("barFolder"),
   barView: $("barView"),
   filter: $("viewFilter"),
+  // CLIENT SETTINGS (config/client.yaml): how the Views list ranks, read fresh on every paint.
+  policy: () => policyFor("views", declaration.lists),
   // A CHOICE, SAID OUT LOUD, REPORTED RATHER THAN ACTED ON — `drawer.ts` does not call `paintView`
   // itself; see its own header for why. This is the one caller the drop was written for: a row
   // opened in the view being left must not follow the operator into the view being entered.
@@ -3877,6 +3880,7 @@ const globalKeyDeps = {
     views: searchableViews,
     currentViewId: () => currentViewId,
     statuses: checkboxStatuses,
+    policy: () => policyFor("search", declaration.lists),
     go: goToLine,
   }),
   // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch
@@ -3927,10 +3931,10 @@ installCompleter({
     };
     return [
       // An open `[[` first: inside a link, a `#` or `:` is part of the title being searched.
-      linkSource(searchableViews, () => currentViewId, checkboxStatuses),
-      tagSource(tagVocabulary(declaration)),
+      linkSource(searchableViews, () => currentViewId, checkboxStatuses, () => policyFor("link", declaration.lists)),
+      tagSource(tagVocabulary(declaration), policyFor("tags", declaration.lists)),
       dateSource(dateMarkers(declaration), today, boundary?.weekStartsOn ?? "monday"),
-      markerSource(markerVocabulary(declaration)),
+      markerSource(markerVocabulary(declaration), policyFor("markers", declaration.lists)),
     ];
   },
 });

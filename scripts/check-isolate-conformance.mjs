@@ -88,6 +88,7 @@ import {
   RULES_PREFIX as RULES_CATEGORY_PREFIX,
   PATTERNS_PREFIX as RULES_PATTERNS_PREFIX,
 } from "./compile-rules.mjs";
+import { compile as compileClient, CLIENT_KEY } from "./compile-client.mjs";
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
 const FIXTURE_CONFIG = join(REPO_ROOT, "tests", "fixtures", "config");
@@ -235,6 +236,26 @@ const GENERATORS = [
         throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
       }
       files["rules/secondary.yaml"] = files["rules/secondary.yaml"].replace(anchor, "id: mark-in-progress");
+    },
+  },
+  {
+    name: "client",
+    routePath: "/config/compile/client",
+    compile: compileClient,
+    // Client settings are one file, config/client.yaml (2026-10-09). The refusal: a key naming a
+    // field the client core cannot read.
+    readConfigTree(configDir) {
+      const files = {};
+      const path = join(configDir, CLIENT_KEY);
+      if (existsSync(path)) files[CLIENT_KEY] = readFileSync(path, "utf8");
+      return files;
+    },
+    mutate(files) {
+      const anchor = "field: kind";
+      if (!files[CLIENT_KEY] || !files[CLIENT_KEY].includes(anchor)) {
+        throw new Error(`mutation anchor "${anchor}" not found in the fixture — fixture changed under this script.`);
+      }
+      files[CLIENT_KEY] = files[CLIENT_KEY].replace(anchor, "field: colour");
     },
   },
 ];

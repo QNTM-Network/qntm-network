@@ -200,6 +200,11 @@ export function readDeclaration(document: unknown): DeclarationReading {
       // an unrecognised key while its consumer does not exist.
       continue;
     }
+    // CLIENT SETTINGS (2026-10-09) — read and checked by app/present/rank.ts's
+    // `readClientDeclaration`, not here.
+    if (key === "client") {
+      continue;
+    }
     if (key === INDENT_UNIT_KEY) {
       if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
         problems.push(

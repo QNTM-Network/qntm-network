@@ -42,12 +42,14 @@ import { compile as compileStructural } from "../../scripts/compile-structural.m
 import { compile as compileQualification } from "../../scripts/compile-qualification.mjs";
 import { compile as compileResolution } from "../../scripts/compile-resolution.mjs";
 import { compile as compileRules } from "../../scripts/compile-rules.mjs";
+import { compile as compileClient } from "../../scripts/compile-client.mjs";
 
 const COMPILERS = new Map([
   ["structural", compileStructural],
   ["qualification", compileQualification],
   ["resolution", compileResolution],
   ["rules", compileRules],
+  ["client", compileClient],
 ]);
 
 // Same shape `design-the-runtime-compile.md` §4.2 point 2 specifies for the immutable body — a

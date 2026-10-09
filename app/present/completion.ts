@@ -9,6 +9,7 @@
  * else changes.
  */
 
+import type { RankPolicy } from "./rank.js";
 import { matchingTags, tagQueryAt } from "./tagcomplete.js";
 
 export interface CompletionItem {
@@ -51,11 +52,11 @@ export function applyCompletion(
 }
 
 /** Tags, from the vocabulary `tagVocabulary` read off the published config. */
-export function tagSource(vocabulary: readonly string[]): CompletionSource {
+export function tagSource(vocabulary: readonly string[], policy?: RankPolicy): CompletionSource {
   return (text, caret) => {
     const query = tagQueryAt(text, caret);
     if (query === null) return null;
-    const items = matchingTags(vocabulary, query).map((tag) => ({ label: tag, insert: tag }));
+    const items = matchingTags(vocabulary, query, 8, policy).map((tag) => ({ label: tag, insert: tag }));
     return { start: query.start, end: query.end, items };
   };
 }

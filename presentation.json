@@ -23849,5 +23849,127 @@
       }
     }
   },
-  "landingView": "daily"
+  "landingView": "daily",
+  "client": {
+    "lists": {
+      "search": {
+        "keys": [
+          {
+            "field": "kind",
+            "order": [
+              "view",
+              "section",
+              "task"
+            ]
+          },
+          {
+            "field": "demoted",
+            "direction": "asc"
+          },
+          {
+            "field": "status",
+            "order": [
+              "open",
+              "in_progress",
+              "*",
+              "scheduled",
+              "waiting",
+              "done",
+              "cancelled"
+            ]
+          },
+          {
+            "field": "match",
+            "direction": "desc"
+          },
+          {
+            "field": "position",
+            "direction": "asc"
+          }
+        ],
+        "demote": [
+          "*/everything.md"
+        ]
+      },
+      "link": {
+        "keys": [
+          {
+            "field": "demoted",
+            "direction": "asc"
+          },
+          {
+            "field": "status",
+            "order": [
+              "open",
+              "in_progress",
+              "*",
+              "scheduled",
+              "waiting",
+              "done",
+              "cancelled"
+            ]
+          },
+          {
+            "field": "match",
+            "direction": "desc"
+          },
+          {
+            "field": "position",
+            "direction": "asc"
+          }
+        ],
+        "minMatch": 1,
+        "demote": [
+          "*/everything.md"
+        ]
+      },
+      "views": {
+        "keys": [
+          {
+            "field": "match",
+            "direction": "desc"
+          },
+          {
+            "field": "title",
+            "direction": "asc"
+          }
+        ],
+        "demote": [
+          "*/everything.md"
+        ]
+      },
+      "tags": {
+        "keys": [
+          {
+            "field": "match",
+            "direction": "desc"
+          },
+          {
+            "field": "position",
+            "direction": "asc"
+          }
+        ],
+        "minMatch": 1,
+        "demote": [
+          "*/everything.md"
+        ]
+      },
+      "markers": {
+        "keys": [
+          {
+            "field": "match",
+            "direction": "desc"
+          },
+          {
+            "field": "position",
+            "direction": "asc"
+          }
+        ],
+        "minMatch": 2,
+        "demote": [
+          "*/everything.md"
+        ]
+      }
+    }
+  }
 }

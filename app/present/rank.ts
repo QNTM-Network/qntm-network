@@ -62,8 +62,20 @@ export interface RankPolicy {
   readonly demote?: readonly string[] | undefined;
 }
 
-/** The lists the app has. */
-export type ListName = "search" | "link" | "views" | "tags" | "markers";
+/** The lists the app has. scripts/compile-client.mjs `LIST_NAMES` restates this list. */
+export const LIST_NAMES = ["search", "link", "views", "tags", "markers"] as const;
+export type ListName = (typeof LIST_NAMES)[number];
+
+/** The fields a key may name — what `fieldValue` below reads. scripts/compile-client.mjs
+ *  `RANK_FIELDS` restates this list; tests/client-settings.test.mjs holds the two equal. */
+export const RANK_FIELDS = ["kind", "match", "status", "demoted", "title", "position"] as const;
+
+/** The declared policies, by list — the declaration's `client.lists`. A list not named keeps its
+ *  built-in policy. */
+export type ListPolicies = Partial<Readonly<Record<ListName, RankPolicy>>>;
+
+/** The key the compiled declaration publishes client settings under (scripts/compile-client.mjs). */
+export const CLIENT_KEY = "client";
 
 /** Open work before finished work; a status not named here sits at `*`. */
 const STATUS_ORDER = ["open", "in_progress", "*", "scheduled", "waiting", "done", "cancelled"];
@@ -187,4 +199,51 @@ export function rank<T>(
   return scored
     .sort((a, b) => compareByKeys(tuples.get(a) ?? [], tuples.get(b) ?? [], keys))
     .map((s) => s.value);
+}
+
+/** The policy a list ranks by: the declared one (config/client.yaml) when there is one, else its
+ *  built-in policy. */
+export function policyFor(list: ListName, declared: ListPolicies | undefined): RankPolicy {
+  return declared?.[list] ?? DEFAULT_RANK_POLICIES[list];
+}
+
+/**
+ * Read the declaration's `client` key. The client compile (scripts/compile-client.mjs) is the
+ * validity owner and refuses a bad config before it is published; this reader only checks the
+ * SHAPE it was handed, and drops (with a problem) anything it cannot use, so a list falls back to
+ * its built-in order rather than ranking by half a policy.
+ */
+export function readClientDeclaration(document: unknown): { lists: ListPolicies; problems: string[] } {
+  const problems: string[] = [];
+  const lists: Partial<Record<ListName, RankPolicy>> = {};
+  const client = (document as Record<string, unknown> | null)?.[CLIENT_KEY];
+  if (client === undefined) return { lists, problems };
+  const declared = (client as { lists?: unknown } | null)?.lists;
+  if (declared === null || typeof declared !== "object" || Array.isArray(declared)) {
+    problems.push(`'${CLIENT_KEY}.lists' is not an object — every list keeps its built-in order`);
+    return { lists, problems };
+  }
+  for (const [name, value] of Object.entries(declared as Record<string, unknown>)) {
+    if (!(LIST_NAMES as readonly string[]).includes(name)) {
+      problems.push(`'${CLIENT_KEY}.lists.${name}' is not a list this app has — ignored`);
+      continue;
+    }
+    const keys = (value as { keys?: unknown } | null)?.keys;
+    const usable =
+      Array.isArray(keys) &&
+      keys.length > 0 &&
+      keys.every(
+        (k) =>
+          k !== null &&
+          typeof k === "object" &&
+          (RANK_FIELDS as readonly string[]).includes((k as RankKey).field) &&
+          ((k as RankKey).order === undefined || Array.isArray((k as RankKey).order)),
+      );
+    if (!usable) {
+      problems.push(`'${CLIENT_KEY}.lists.${name}' has no usable keys — it keeps its built-in order`);
+      continue;
+    }
+    lists[name as ListName] = value as RankPolicy;
+  }
+  return { lists, problems };
 }
