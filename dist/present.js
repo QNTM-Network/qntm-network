@@ -695,13 +695,13 @@ function readSections2(value, predicates, problems) {
         }
         defaults = {};
         let ok = true;
-        for (const [field, fieldValue] of Object.entries(raw.defaults)) {
-          if (!isFieldValue(fieldValue)) {
-            problems.push(`'${path}.defaults.${field}' is ${shapeOf(fieldValue)}, not a scalar`);
+        for (const [field, fieldValue2] of Object.entries(raw.defaults)) {
+          if (!isFieldValue(fieldValue2)) {
+            problems.push(`'${path}.defaults.${field}' is ${shapeOf(fieldValue2)}, not a scalar`);
             ok = false;
             break;
           }
-          defaults[field] = fieldValue;
+          defaults[field] = fieldValue2;
         }
         if (!ok) continue;
       }
@@ -976,12 +976,12 @@ function readSectionRegistrationEntry(path, value, problems) {
       return void 0;
     }
     read = {};
-    for (const [field, fieldValue] of Object.entries(defaults)) {
-      if (!isScalarOrNull(fieldValue)) {
-        problems.push(`'${path}.defaults.${field}' is ${shapeOf2(fieldValue)}, not a scalar`);
+    for (const [field, fieldValue2] of Object.entries(defaults)) {
+      if (!isScalarOrNull(fieldValue2)) {
+        problems.push(`'${path}.defaults.${field}' is ${shapeOf2(fieldValue2)}, not a scalar`);
         return void 0;
       }
-      read[field] = fieldValue;
+      read[field] = fieldValue2;
     }
   }
   return { nodeType, defaults: read, tokens };
@@ -1639,12 +1639,12 @@ function readPriorityRank(value, problems) {
     return {};
   }
   const out = {};
-  for (const [name, rank] of Object.entries(value)) {
-    if (typeof rank !== "number" || !Number.isInteger(rank) || rank < 1) {
-      problems.push(`'${path}.${name}' is ${JSON.stringify(rank)}, not a positive integer`);
+  for (const [name, rank2] of Object.entries(value)) {
+    if (typeof rank2 !== "number" || !Number.isInteger(rank2) || rank2 < 1) {
+      problems.push(`'${path}.${name}' is ${JSON.stringify(rank2)}, not a positive integer`);
       return {};
     }
-    out[name] = rank;
+    out[name] = rank2;
   }
   return out;
 }
@@ -3006,6 +3006,32 @@ function applyGraphAwareRules(fields, candidateId, language, graph, edgeSourceOf
   return { fields: working, applied, partial, undecidable };
 }
 
+// app/present/arrange/keys.ts
+function compareCodepoints(a, b) {
+  const ac = Array.from(a);
+  const bc = Array.from(b);
+  const len = Math.min(ac.length, bc.length);
+  for (let i = 0; i < len; i += 1) {
+    const ca = ac[i]?.codePointAt(0) ?? 0;
+    const cb = bc[i]?.codePointAt(0) ?? 0;
+    if (ca !== cb) return ca - cb;
+  }
+  return ac.length - bc.length;
+}
+function compareByKeys(a, b, keys) {
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    const av = a[i];
+    const bv = b[i];
+    if (key === void 0 || av === void 0 || bv === void 0) continue;
+    if (av.tier !== bv.tier) return av.tier - bv.tier;
+    if (av.tier === 1) continue;
+    const diff = typeof av.value === "number" && typeof bv.value === "number" ? av.value - bv.value : compareCodepoints(String(av.value), String(bv.value));
+    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
+  }
+  return 0;
+}
+
 // app/present/arrange/ordering.ts
 var abstains2 = (because) => ({ kind: "abstains", because });
 function sectionBounds(lines, lineIndex) {
@@ -3093,11 +3119,11 @@ function compareTuples(a, b, keys, markers) {
   return 0;
 }
 function rankOf(target, siblings, keys, markers) {
-  let rank = 1;
+  let rank2 = 1;
   for (const sibling of siblings) {
-    if (compareTuples(sibling, target, keys, markers) < 0) rank += 1;
+    if (compareTuples(sibling, target, keys, markers) < 0) rank2 += 1;
   }
-  return rank;
+  return rank2;
 }
 function evaluateSection(viewId, sectionId, source, lineIndex, afterText, ordering, orderingFields) {
   const declared = ordering[viewId]?.[sectionId];
@@ -3167,17 +3193,6 @@ function orderingPlacementFor(viewId, sectionId, source, lineIndex, afterText, o
   const beforeLineIndex = next === void 0 ? null : next.lineIndex;
   return { kind: "answer", placement: { moved, beforeLineIndex, currentBeforeLineIndex } };
 }
-function compareCodepoints(a, b) {
-  const ac = Array.from(a);
-  const bc = Array.from(b);
-  const len = Math.min(ac.length, bc.length);
-  for (let i = 0; i < len; i += 1) {
-    const ca = ac[i]?.codePointAt(0) ?? 0;
-    const cb = bc[i]?.codePointAt(0) ?? 0;
-    if (ca !== cb) return ca - cb;
-  }
-  return ac.length - bc.length;
-}
 function defaultFieldKeyFor(line, field, orderingFields, priorityRank, title) {
   if (field === "title") {
     if (title.kind === "abstains") {
@@ -3195,8 +3210,8 @@ function defaultFieldKeyFor(line, field, orderingFields, priorityRank, title) {
       found = spelled;
     }
     if (found === void 0) return { tier: 1, value: 0 };
-    const rank = priorityRank[found];
-    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
+    const rank2 = priorityRank[found];
+    return rank2 === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank2 };
   }
   const raw = markerValue(line, marker);
   if (raw === void 0) return { tier: 1, value: marker.kind === "date" ? "" : 0 };
@@ -3213,27 +3228,14 @@ function defaultTupleFor(line, defaultOrdering, orderingFields, priorityRank) {
   return tuple;
 }
 function compareDefaultTuples(a, b, defaultOrdering) {
-  for (let i = 0; i < defaultOrdering.length; i += 1) {
-    const key = defaultOrdering[i];
-    const av = a[i];
-    const bv = b[i];
-    if (key === void 0 || av === void 0 || bv === void 0) continue;
-    if (av.tier !== bv.tier) return av.tier - bv.tier;
-    if (av.tier === 1) continue;
-    let diff;
-    if (key.field === "title") diff = compareCodepoints(String(av.value), String(bv.value));
-    else if (typeof av.value === "number" && typeof bv.value === "number") diff = av.value - bv.value;
-    else diff = String(av.value) < String(bv.value) ? -1 : String(av.value) > String(bv.value) ? 1 : 0;
-    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
-  }
-  return 0;
+  return compareByKeys(a, b, defaultOrdering);
 }
 function defaultRankOf(target, siblings, defaultOrdering) {
-  let rank = 1;
+  let rank2 = 1;
   for (const sibling of siblings) {
-    if (compareDefaultTuples(sibling, target, defaultOrdering) < 0) rank += 1;
+    if (compareDefaultTuples(sibling, target, defaultOrdering) < 0) rank2 += 1;
   }
-  return rank;
+  return rank2;
 }
 var CONTAINER_ORDER_DIRECTIVE = "#order:";
 function evaluateDefaultSection(viewId, sectionId, source, lineIndex, afterText, ordering, defaultOrdering, orderingFields, priorityRank, classifyQualifying) {
@@ -3406,8 +3408,8 @@ function defaultKeyForField(fields, field, ordering) {
   if (marker === void 0) return { tier: 1, value: "" };
   if (marker.kind === "enum") {
     if (typeof raw !== "string") return { tier: 1, value: 0 };
-    const rank = ordering.priorityRank[raw];
-    return rank === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank };
+    const rank2 = ordering.priorityRank[raw];
+    return rank2 === void 0 ? { tier: 1, value: 0 } : { tier: 0, value: rank2 };
   }
   if (raw === void 0 || raw === null || raw === "") {
     return { tier: 1, value: marker.kind === "date" ? "" : 0 };
@@ -7993,6 +7995,94 @@ function createGraphRefreshRetry(deps) {
   return retryGraphRefresh;
 }
 
+// app/present/rank.ts
+var STATUS_ORDER = ["open", "in_progress", "*", "scheduled", "waiting", "done", "cancelled"];
+var DEFAULT_RANK_POLICIES = {
+  search: {
+    keys: [
+      { field: "kind", order: ["view", "section", "task"] },
+      { field: "demoted", direction: "asc" },
+      { field: "status", order: STATUS_ORDER },
+      { field: "match", direction: "desc" },
+      { field: "position" }
+    ]
+  },
+  link: {
+    minMatch: 1,
+    keys: [
+      { field: "demoted", direction: "asc" },
+      { field: "status", order: STATUS_ORDER },
+      { field: "match", direction: "desc" },
+      { field: "position" }
+    ]
+  },
+  views: { keys: [{ field: "match", direction: "desc" }, { field: "title" }] },
+  tags: { minMatch: 1, keys: [{ field: "match", direction: "desc" }, { field: "position" }] },
+  markers: { minMatch: 2, keys: [{ field: "match", direction: "desc" }, { field: "position" }] }
+};
+function queryWords(query) {
+  return query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+}
+function matchQuality(item, query) {
+  const words2 = queryWords(query);
+  if (words2.length === 0) return 3;
+  const title = item.title.toLowerCase();
+  if (title.startsWith(query.trim().toLowerCase())) return 3;
+  const titleWords = title.split(/[\s·/_\-#]+/).filter((w) => w !== "");
+  if (words2.every((w) => titleWords.some((t) => t.startsWith(w)))) return 2;
+  if (words2.every((w) => title.includes(w))) return 1;
+  const all = `${title} ${String(item.also ?? "").toLowerCase()}`;
+  if (words2.every((w) => all.includes(w))) return 0;
+  return null;
+}
+function globMatches(glob, text) {
+  const pattern = glob.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+  return new RegExp(`^${pattern}$`, "i").test(text);
+}
+var PRESENT = (value) => ({ tier: 0, value });
+var ABSENT = { tier: 1, value: 0 };
+function orderValue(order, value) {
+  if (value === void 0 || value === "") return ABSENT;
+  const at = order.indexOf(value);
+  if (at !== -1) return PRESENT(at);
+  const wild = order.indexOf("*");
+  return wild !== -1 ? PRESENT(wild) : ABSENT;
+}
+function fieldValue(field, key, s, policy) {
+  switch (field) {
+    case "match":
+      return PRESENT(s.match);
+    case "position":
+      return PRESENT(s.position);
+    case "title":
+      return PRESENT(s.item.title.toLowerCase());
+    case "kind":
+      return key.order !== void 0 ? orderValue(key.order, s.item.kind) : s.item.kind ? PRESENT(s.item.kind) : ABSENT;
+    case "status":
+      return key.order !== void 0 ? orderValue(key.order, s.item.status) : s.item.status ? PRESENT(s.item.status) : ABSENT;
+    case "demoted": {
+      const path = s.item.path ?? "";
+      return PRESENT((policy.demote ?? []).some((glob) => globMatches(glob, path)) ? 1 : 0);
+    }
+    default:
+      return ABSENT;
+  }
+}
+function rank(items, describe, query, policy) {
+  const minMatch = policy.minMatch ?? 0;
+  const scored = [];
+  items.forEach((value, position) => {
+    const item = describe(value);
+    const match = matchQuality(item, query);
+    if (match === null || match < minMatch) return;
+    scored.push({ value, item, match, position });
+  });
+  const keys = policy.keys.map((key) => key.order !== void 0 ? { direction: "asc" } : key);
+  const tuple = (s) => policy.keys.map((key) => fieldValue(key.field, key, s, policy));
+  const tuples = new Map(scored.map((s) => [s, tuple(s)]));
+  return scored.sort((a, b) => compareByKeys(tuples.get(a) ?? [], tuples.get(b) ?? [], keys)).map((s) => s.value);
+}
+
 // app/shell/drawer.ts
 var folderOf = (path) => {
   const at = String(path ?? "").lastIndexOf("/");
@@ -8043,7 +8133,7 @@ function treeRow(className, glyph, name, count) {
   return button;
 }
 function paintFolder(deps, node, into, currentViewId) {
-  for (const folder of [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const folder of rank([...node.folders.values()], (f) => ({ title: f.name }), "", DEFAULT_RANK_POLICIES.views)) {
     const box = document.createElement("div");
     const open = holdsView(folder, currentViewId);
     box.className = open ? "fold" : "fold shut";
@@ -8060,7 +8150,7 @@ function paintFolder(deps, node, into, currentViewId) {
     drawerStops.push(head);
     paintFolder(deps, folder, kids, currentViewId);
   }
-  for (const v of [...node.views].sort((a, b) => a.title.localeCompare(b.title))) {
+  for (const v of rank([...node.views], (x) => ({ title: x.title, path: x.path ?? "" }), "", DEFAULT_RANK_POLICIES.views)) {
     const button = treeRow("viewbtn", null, v.title, null);
     button.addEventListener("click", () => {
       deps.onChoose(v.id);
@@ -8073,18 +8163,9 @@ function paintFolder(deps, node, into, currentViewId) {
 }
 var shownViews = [];
 var shownCurrent = null;
-function filterViews(views, query) {
-  const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-  if (words2.length === 0) return views;
-  const q = query.trim().toLowerCase();
-  return views.filter((v) => {
-    const hay = `${v.title} ${folderOf(v.path)}`.toLowerCase();
-    return words2.every((w) => hay.includes(w));
-  }).sort((a, b) => {
-    const sa = a.title.toLowerCase().startsWith(q) ? 0 : 1;
-    const sb = b.title.toLowerCase().startsWith(q) ? 0 : 1;
-    return sa - sb || a.title.localeCompare(b.title);
-  });
+function filterViews(views, query, policy = DEFAULT_RANK_POLICIES.views) {
+  if (query.trim() === "") return views;
+  return rank(views, (v) => ({ title: v.title, also: folderOf(v.path), path: v.path ?? "" }), query, policy);
 }
 function paintMatches(deps, query) {
   drawerStops.length = 0;
@@ -8517,15 +8598,8 @@ function tagQueryAt(text, caret) {
   if (typed.includes("#")) return null;
   return { start, end, prefix: typed.toLowerCase() };
 }
-function matchingTags(vocabulary, query, limit = 8) {
-  const starts = [];
-  const contains = [];
-  for (const tag of vocabulary) {
-    const name = tag.slice(1).toLowerCase();
-    if (name.startsWith(query.prefix)) starts.push(tag);
-    else if (query.prefix !== "" && name.includes(query.prefix)) contains.push(tag);
-  }
-  return [...starts, ...contains].slice(0, limit);
+function matchingTags(vocabulary, query, limit = 8, policy = DEFAULT_RANK_POLICIES.tags) {
+  return rank(vocabulary, (tag) => ({ title: tag.slice(1) }), query.prefix, policy).slice(0, limit);
 }
 
 // app/present/completion.ts
@@ -8777,69 +8851,53 @@ function folderWords(path) {
 function folderLabel(path) {
   return String(path ?? "").split("/").slice(0, -1).join(" / ");
 }
-function queryWords(query) {
-  return query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-}
-function searchViews(views, query, options = {}) {
-  const words2 = queryWords(query);
-  if (words2.length === 0) return [];
-  const limit = options.limit ?? 30;
+function searchCandidates(views, options = {}) {
   const prefer = options.prefer ?? null;
-  const ordered = [...views].sort((a, b) => Number(b.id === prefer) - Number(a.id === prefer));
-  const seen = /* @__PURE__ */ new Set();
+  const ordered = [...views.filter((v) => v.id === prefer), ...views.filter((v) => v.id !== prefer)];
   const hits = [];
-  const matches = (text) => {
-    const lower = text.toLowerCase();
-    return words2.every((w) => lower.includes(w));
-  };
   for (const view of ordered) {
     const title = view.title ?? view.id;
-    const folders = folderWords(view.path);
-    if (matches(`${title} ${folders}`)) {
-      const where = folderLabel(view.path);
-      hits.push({
-        kind: "view",
-        qntmId: "",
-        text: where === "" ? title : `${where} \u203A ${title}`,
-        title: "",
-        status: "",
-        viewId: view.id,
-        viewTitle: title,
-        lineIndex: 0
-      });
-    }
-  }
-  const sections = /* @__PURE__ */ new Set();
-  for (const view of ordered) {
-    view.markdown.split("\n").forEach((line, index) => {
-      const shape = classifyLine(line, options.statuses);
-      if (shape.kind !== "heading" || shape.hashes.length < 2) return;
-      const heading = shape.text.trim();
-      if (heading === "" || !matches(heading)) return;
-      const key = `${view.id}\0${heading}`;
-      if (sections.has(key)) return;
-      sections.add(key);
-      hits.push({
-        kind: "section",
-        qntmId: "",
-        text: heading,
-        title: "",
-        status: "",
-        viewId: view.id,
-        viewTitle: view.title ?? view.id,
-        lineIndex: index
-      });
+    const where = folderLabel(view.path);
+    hits.push({
+      kind: "view",
+      qntmId: "",
+      text: where === "" ? title : `${where} \u203A ${title}`,
+      title,
+      status: "",
+      viewId: view.id,
+      viewTitle: title,
+      viewPath: view.path ?? "",
+      lineIndex: 0
     });
   }
-  if (hits.length >= limit) return hits.slice(0, limit);
+  const sections = /* @__PURE__ */ new Set();
+  const seen = /* @__PURE__ */ new Set();
   for (const view of ordered) {
     const lines = view.markdown.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] ?? "";
-      const stamp = stampSpans(line)[0];
-      if (stamp === void 0 || seen.has(stamp.id) || !matches(line)) continue;
-      seen.add(stamp.id);
       const shape = classifyLine(line, options.statuses);
+      if (shape.kind === "heading") {
+        const heading = shape.text.trim();
+        const key = `${view.id}\0${heading}`;
+        if (shape.hashes.length < 2 || heading === "" || sections.has(key)) continue;
+        sections.add(key);
+        hits.push({
+          kind: "section",
+          qntmId: "",
+          text: heading,
+          title: heading,
+          status: "",
+          viewId: view.id,
+          viewTitle: view.title ?? view.id,
+          viewPath: view.path ?? "",
+          lineIndex: index
+        });
+        continue;
+      }
+      const stamp = stampSpans(line)[0];
+      if (stamp === void 0 || seen.has(stamp.id)) continue;
+      seen.add(stamp.id);
       const content = contentOf(line) ?? "";
       const title = cleanTitleFor(line);
       hits.push({
@@ -8850,33 +8908,40 @@ function searchViews(views, query, options = {}) {
         status: shape.kind === "checkbox" ? shape.status : "",
         viewId: view.id,
         viewTitle: view.title ?? view.id,
+        viewPath: view.path ?? "",
         lineIndex: index
       });
-      if (hits.length >= limit) return hits;
     }
   }
   return hits;
 }
+function describeHit(hit) {
+  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath };
+  if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
+  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
+}
+function searchViews(views, query, options = {}) {
+  if (query.trim() === "") return [];
+  const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
+  return rank(searchCandidates(views, options), describeHit, query, policy).slice(0, options.limit ?? 30);
+}
 function linkTargets(views, query, options = {}) {
-  const limit = options.limit ?? 8;
+  if (query.trim() === "") return [];
   const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  const words2 = queryWords(query);
-  for (const hit of searchViews(views, query, { ...options, limit: 500 })) {
-    if (hit.kind !== "task") continue;
+  const tasks = searchCandidates(views, options).filter((hit) => {
     const key = hit.title.toLowerCase();
-    if (key === "" || seen.has(key) || !words2.every((w) => key.includes(w))) continue;
+    if (hit.kind !== "task" || key === "" || seen.has(key)) return false;
     seen.add(key);
-    out.push(hit);
-    if (out.length >= limit) break;
-  }
-  return out;
+    return true;
+  });
+  const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
+  const describe = (hit) => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
+  return rank(tasks, describe, query, policy).slice(0, options.limit ?? 8);
 }
 function findLinkTarget(views, target, options = {}) {
   const id = stampSpans(`[[${target.trim()}]]`)[0]?.id;
   const want = target.trim().toLowerCase();
-  const hits = searchViews(views, id === void 0 ? target : `qntm:${id}`, { ...options, limit: 500 });
-  for (const hit of hits) {
+  for (const hit of searchCandidates(views, options)) {
     if (hit.kind !== "task") continue;
     if (id !== void 0 ? hit.qntmId === id : hit.title.toLowerCase() === want) return hit;
   }
@@ -9159,15 +9224,13 @@ function markerQueryAt(text, caret) {
   if (query.startsWith(" ")) return null;
   return { start: caret - query.length - 1, query: query.toLowerCase() };
 }
-function markerSource(markers) {
+function markerSource(markers, policy = DEFAULT_RANK_POLICIES.markers) {
   return (text, caret) => {
     const at = markerQueryAt(text, caret);
     if (at === null) return null;
-    const wanted = at.query.split(/[\s_]+/).filter((w) => w !== "");
-    const items = markers.filter((marker) => {
-      const nameWords = marker.name.toLowerCase().split(/[\s·]+/).filter((w) => w !== "");
-      return wanted.every((w) => nameWords.some((n) => n.startsWith(w)));
-    }).map((marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token }));
+    const items = rank(markers, (marker) => ({ title: marker.name }), at.query.replace(/_/g, " "), policy).map(
+      (marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token })
+    );
     return { start: at.start, end: caret, items };
   };
 }
@@ -9189,6 +9252,7 @@ export {
   COMPLETE,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
+  DEFAULT_RANK_POLICIES,
   DEFAULT_TRAVERSAL_DEPTH,
   DraftSurface,
   FocusSurface,
@@ -9243,6 +9307,8 @@ export {
   cleanTitleFor,
   closeDrawer,
   columnFor,
+  compareByKeys,
+  compareCodepoints,
   completeWith,
   composeLine,
   composeNodeLine,
@@ -9302,6 +9368,7 @@ export {
   markerSpans,
   markerValue,
   markerVocabulary,
+  matchQuality,
   matchesFindClause,
   matchesQualifier,
   matchesQualifierGraphAware,
@@ -9326,6 +9393,8 @@ export {
   qntmIdSpans,
   qualifierNeedsGraph,
   qualifyingClassifierFor,
+  queryWords,
+  rank,
   readConfigResolutionDeclaration,
   readDeclaration,
   readQualificationDeclaration,
@@ -9347,6 +9416,7 @@ export {
   revealSelection,
   rulesSpec,
   runResolvers,
+  searchCandidates,
   searchViews,
   sectionAt,
   sectionForInsertAt,

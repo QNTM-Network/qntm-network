@@ -838,3 +838,45 @@ def assert_search_reads_lines_through_the_shared_readers(state: ScenarioState) -
         message="search.ts reads lines only through rendition.ts's readers",
         observed_ref="app/present/search.ts",
     )
+
+
+def assert_every_list_ranks_through_one_ranking(state: ScenarioState) -> PredicateResult:
+    """Every list ranks through app/present/rank.ts, which compares with the one comparator.
+
+    Five lists (`/` search, `[[` suggestions, the Views filter and tree, `#` tags, `:` markers) once
+    matched and ordered five ways, each inside itself (backlog row one-ranking-for-every-list,
+    2026-10-09). Now each calls `rank(` and none sorts by a rule of its own; rank.ts and section
+    ordering (arrange/ordering.ts) both compare with `compareByKeys` (arrange/keys.ts). This refuses
+    a list growing its own `.sort((a, b) => …)` again, and a second comparator. The behaviour is
+    tests/present-rank.test.mjs.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    app = root / "app"
+
+    def code(rel: str) -> str:
+        text = _read(app / rel)
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        return re.sub(r"^\s*//.*$", "", text, flags=re.M)
+
+    problems = []
+    for rel in ("present/search.ts", "shell/drawer.ts", "present/tagcomplete.ts", "present/markercomplete.ts"):
+        source = code(rel)
+        if not source:
+            problems.append(f"{rel} missing")
+            continue
+        if not re.search(r"\brank\(", source):
+            problems.append(f"{rel} does not call rank()")
+        if re.search(r"\.sort\(\s*\(\s*a\s*,\s*b\s*\)", source):
+            problems.append(f"{rel} sorts by a rule of its own")
+    for rel in ("present/rank.ts", "present/arrange/ordering.ts"):
+        if "compareByKeys(" not in code(rel):
+            problems.append(f"{rel} does not compare with compareByKeys")
+    if problems:
+        return PredicateResult(status="FAIL", message="; ".join(problems), observed_ref="app/present/rank.ts")
+    return PredicateResult(
+        status="PASS",
+        message="every list ranks through rank.ts; rank.ts and section ordering share compareByKeys",
+        observed_ref="app/present/rank.ts",
+    )

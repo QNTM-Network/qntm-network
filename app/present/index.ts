@@ -477,7 +477,11 @@ export type { TagQuery, TagSources } from "./tagcomplete.js";
 // ── KEY HELP (2026-10-07) — the data behind `?`; the overlay is app/shell/help.ts ──
 export { KEY_HELP } from "./keyhelp.js";
 export type { KeyHelpGroup, KeyHelpRow } from "./keyhelp.js";
-export { findLinkTarget, linkTargets, searchViews } from "./search.js";
+export { findLinkTarget, linkTargets, searchCandidates, searchViews } from "./search.js";
+export { DEFAULT_RANK_POLICIES, matchQuality, queryWords, rank } from "./rank.js";
+export type { ListName, RankItem, RankKey, RankPolicy } from "./rank.js";
+export { compareByKeys, compareCodepoints } from "./arrange/keys.js";
+export type { SortValue } from "./arrange/keys.js";
 export type { SearchHit, SearchView } from "./search.js";
 // ── UNCONFIRMED LINES (2026-10-07) — what the painter marks "saved, not yet back from the server" ──
 export { unconfirmedLines } from "./unconfirmed.js";

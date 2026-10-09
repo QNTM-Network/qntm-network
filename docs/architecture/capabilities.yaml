@@ -4510,3 +4510,19 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+- id: one-ranking-for-every-list
+  intent: >-
+    Every list the app offers — `/` search, `[[` suggestions, the Views filter and tree, `#` tags,
+    `:` markers — matches a query one way and orders by a declared list of keys, so open work comes
+    before finished work and one policy can change the order of any list.
+  tier: functional
+  rooting: >-
+    app/present/rank.ts owns matching and ranking; app/present/arrange/keys.ts owns comparison,
+    shared with section ordering. Each list keeps only its trigger and its items.
+  status: working
+  enforced_by:
+  - declared_state: state-every-list-ranks-through-one-ranking
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin

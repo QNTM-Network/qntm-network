@@ -149,6 +149,8 @@
  * domain `personal`). So: FOLDERS COME FROM `path`. `domain` is left alone.
  */
 
+import { DEFAULT_RANK_POLICIES, rank, type RankPolicy } from "../present/rank.js";
+
 /** The one shape this module needs off a view — never the whole wire payload. */
 export interface DrawerView {
   readonly id: string;
@@ -248,7 +250,9 @@ function treeRow(className: string, glyph: string | null, name: string, count: n
 
 /** Folders first and alphabetical, then this folder's own views by title — Obsidian's order. */
 function paintFolder(deps: DrawerDeps, node: FolderNode, into: HTMLElement, currentViewId: string | null): void {
-  for (const folder of [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+  // Folders and views in the tree are ranked by the same `views` policy as the filter, with no
+  // query (2026-10-09): A–Z by title today, and configurable with every other list.
+  for (const folder of rank([...node.folders.values()], (f) => ({ title: f.name }), "", DEFAULT_RANK_POLICIES.views)) {
     const box = document.createElement("div");
     // OPEN IF IT HOLDS WHERE YOU ARE, shut otherwise. 76 views in ten folders is a scroll if
     // everything is open, and a drawer that lands showing the view you are in is the one that
@@ -268,7 +272,7 @@ function paintFolder(deps: DrawerDeps, node: FolderNode, into: HTMLElement, curr
     drawerStops.push(head);
     paintFolder(deps, folder, kids, currentViewId);
   }
-  for (const v of [...node.views].sort((a, b) => a.title.localeCompare(b.title))) {
+  for (const v of rank([...node.views], (x) => ({ title: x.title, path: x.path ?? "" }), "", DEFAULT_RANK_POLICIES.views)) {
     const button = treeRow("viewbtn", null, v.title, null);
     button.addEventListener("click", () => {
       // A CHOICE, SAID OUT LOUD — reported to the page, never acted on here. See this file's own
@@ -288,21 +292,17 @@ function paintFolder(deps: DrawerDeps, node: FolderNode, into: HTMLElement, curr
 let shownViews: readonly DrawerView[] = [];
 let shownCurrent: string | null = null;
 
-/** The views whose title or folder holds every word of `query`, titles that start with it first. */
-export function filterViews(views: readonly DrawerView[], query: string): readonly DrawerView[] {
-  const words = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-  if (words.length === 0) return views;
-  const q = query.trim().toLowerCase();
-  return views
-    .filter((v) => {
-      const hay = `${v.title} ${folderOf(v.path)}`.toLowerCase();
-      return words.every((w) => hay.includes(w));
-    })
-    .sort((a, b) => {
-      const sa = a.title.toLowerCase().startsWith(q) ? 0 : 1;
-      const sb = b.title.toLowerCase().startsWith(q) ? 0 : 1;
-      return sa - sb || a.title.localeCompare(b.title);
-    });
+/**
+ * The views whose title or folder holds every word of `query`, best first — ranked by the `views`
+ * policy (app/present/rank.ts), the one ranking every list in the app uses.
+ */
+export function filterViews(
+  views: readonly DrawerView[],
+  query: string,
+  policy: RankPolicy = DEFAULT_RANK_POLICIES.views,
+): readonly DrawerView[] {
+  if (query.trim() === "") return views;
+  return rank(views, (v) => ({ title: v.title, also: folderOf(v.path), path: v.path ?? "" }), query, policy);
 }
 
 function paintMatches(deps: DrawerDeps, query: string): void {

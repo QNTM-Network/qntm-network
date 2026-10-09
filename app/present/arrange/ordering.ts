@@ -164,6 +164,7 @@
  * of answering — see that abstention's own header on `OrderingAbstention`.
  */
 
+import { compareByKeys, type SortValue } from "./keys.js";
 import { classifyLine, cleanTitleFor } from "../express/rendition.js";
 import type { CleanTitleReading } from "../express/rendition.js";
 import type { OrderingFieldMarker, OrderingKey, SectionOrdering } from "../resolutiontable.js";
@@ -733,31 +734,8 @@ export function orderingPlacementFor(
 /** One field's comparison key for the DEFAULT ordering's tiered rule — `tier: 0` (present) always
  * sorts before `tier: 1` (absent), REGARDLESS of `direction`; `value` is compared only within one
  * tier. Mirrors `section_builder.py:400-423`'s own `(tier, value)` tuple exactly. */
-export interface DefaultFieldKey {
-  readonly tier: 0 | 1;
-  readonly value: string | number;
-}
+export type DefaultFieldKey = SortValue;
 
-/**
- * Compare two strings by UNICODE CODE POINT — the same rule Python 3's `str.__lt__` uses (no
- * normalisation, no locale) — rather than JavaScript's native `<`, which compares UTF-16 CODE
- * UNITS and can disagree with true code-point order for a title containing an ASTRAL character
- * (a surrogate pair): `Array.from` iterates a string by code point, so building an array first and
- * comparing element-by-element is the correct comparison, not merely a stylistic one. This is what
- * lets `title`'s own tiebreak agree with the engine's `str < str` for EVERY title, not only the
- * ASCII/BMP-only ones his current inbox happens to show.
- */
-function compareCodepoints(a: string, b: string): number {
-  const ac = Array.from(a);
-  const bc = Array.from(b);
-  const len = Math.min(ac.length, bc.length);
-  for (let i = 0; i < len; i += 1) {
-    const ca = ac[i]?.codePointAt(0) ?? 0;
-    const cb = bc[i]?.codePointAt(0) ?? 0;
-    if (ca !== cb) return ca - cb;
-  }
-  return ac.length - bc.length;
-}
 
 /**
  * One field's key for one line — `undefined` fields (a marker glyph absent, an enum with no
@@ -831,20 +809,10 @@ export function compareDefaultTuples(
   b: readonly DefaultFieldKey[],
   defaultOrdering: readonly OrderingKey[],
 ): number {
-  for (let i = 0; i < defaultOrdering.length; i += 1) {
-    const key = defaultOrdering[i];
-    const av = a[i];
-    const bv = b[i];
-    if (key === undefined || av === undefined || bv === undefined) continue;
-    if (av.tier !== bv.tier) return av.tier - bv.tier; // present ALWAYS before absent, direction-independent
-    if (av.tier === 1) continue; // both absent on this key — tied here, try the next key
-    let diff: number;
-    if (key.field === "title") diff = compareCodepoints(String(av.value), String(bv.value));
-    else if (typeof av.value === "number" && typeof bv.value === "number") diff = av.value - bv.value;
-    else diff = String(av.value) < String(bv.value) ? -1 : String(av.value) > String(bv.value) ? 1 : 0;
-    if (diff !== 0) return key.direction === "desc" ? -diff : diff;
-  }
-  return 0;
+  // THE ONE COMPARATOR (arrange/keys.ts). `title` used to be the only field compared by code
+  // point; `compareByKeys` compares every string that way, which is the same answer for the
+  // ASCII dates the other fields hold and the correct one for anything wider.
+  return compareByKeys(a, b, defaultOrdering);
 }
 
 /** 1-based rank of `target` among itself and every tuple in `siblings` that sorts before it —
