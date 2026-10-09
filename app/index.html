@@ -187,6 +187,10 @@
       touch-action: manipulation;
     }
     .touchkey:active { background: var(--line); }
+    /* NO ZOOM ON FOCUS (2026-10-09, operator report from an iPhone: "go to another view, it lands
+       at the wrong size"). iOS zooms the page in on any field whose text is under 16px when it
+       takes focus, and does not zoom back out. The Views filter and the search box were 13-15px. */
+    input, textarea, select { font-size: max(16px, 1em) !important; }
     .touchbar[data-mode="NORMAL"] .touchkey:not([data-modes~="NORMAL"]),
     .touchbar[data-mode="INSERT"] .touchkey:not([data-modes~="INSERT"]) { display: none; }
   }
@@ -994,11 +998,14 @@
     </svg>
     <span>Views</span><span class="kbd">\</span>
   </button>
-  <button id="refreshBtn" class="railbtn" aria-label="Read the graph again">
+  <!-- FIND replaced Refresh on the rail (2026-10-09, operator request from a phone): search is
+       used every day, and a re-read was not — a view re-reads when it is chosen, after a cycle and
+       on a reload. `refresh()` stays: the tests drive it as the page's re-read. -->
+  <button id="findBtn" class="railbtn" aria-label="Search (/)">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M20 12a8 8 0 1 1-2.3-5.6" /><path d="M20 4.2V9h-4.8" />
+      <circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" />
     </svg>
-    <span>Refresh</span>
+    <span>Find</span><span class="kbd">/</span>
   </button>
   <button id="cycleBtn" class="railbtn" aria-label="Run a cycle now">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -1227,6 +1234,9 @@ import {
   // `installGlobalKeys`, so there is no page-level wrapper to leave room for. The deps object it
   // takes is built at the bottom of this script, next to the call.
   installGlobalKeys,
+  // THE TOUCH BAR'S NORMAL KEYS go through this (2026-10-09 fix: it was called and never imported,
+  // so every NORMAL button threw a ReferenceError on a phone — tests/app-page-imports.test.mjs).
+  globalKey,
   flushMarks,
   revealSelection,
   installCompleter,
@@ -1247,7 +1257,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=33e949cc3c";
+} from "/dist/present.js?v=842e0ec92b";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3595,19 +3605,15 @@ async function refresh() {
   // boot leaves a perfectly good session and no `graphData`, and "try again" was unpressable.
   if (reading || (!token && !graphData)) return;
   reading = true;
-  $("refreshBtn").setAttribute("aria-busy", "true");
   try {
     // AN ARRIVAL. The operator pressed re-read to stay where he is and see what changed — the
     // definition of the world moving under him rather than of him going somewhere else.
     await loadGraph(currentViewId, "arrived");
   } catch {
     // "reading…" and "could not read: <message>" used to be said in the freshness line
-    // (chore/retire-the-status-line). A failed re-read is now silent: `aria-busy` still drops in
-    // the `finally` below, so the button un-busies itself, but nothing tells the operator the read
-    // failed. See the PR body's silent-failure list.
+    // (chore/retire-the-status-line). A failed re-read is silent.
   } finally {
     reading = false;
-    $("refreshBtn").removeAttribute("aria-busy");
   }
 }
 
@@ -3823,7 +3829,6 @@ $("handle").addEventListener("keydown", (e) => { if (e.key === "Enter") register
 $("signOut").addEventListener("click", logout);
 
 // --- the shell ---
-$("refreshBtn").addEventListener("click", refresh);
 $("cycleBtn").addEventListener("click", runCycle);
 $("cycleNoteClose").addEventListener("click", () => $("cycleNote").classList.add("hidden"));
 $("viewsBtn").addEventListener("click", () => (drawerIsOpen ? closeDrawer() : openDrawer()));
@@ -3911,6 +3916,7 @@ const globalKeyDeps = {
   closeDrawer,
 };
 installGlobalKeys(globalKeyDeps);
+$("findBtn").addEventListener("click", () => globalKeyDeps.openSearch());
 // `[[Title]]` LINKS (2026-10-08): a click opens the node, with the same jump a search result makes.
 installLinks({ viewBody: $("viewBody"), views: searchableViews, currentViewId: () => currentViewId, statuses: checkboxStatuses, go: goToLine });
 // THE TOUCH BAR (2026-10-08): each button presses a key through the handler the keyboard reaches.
