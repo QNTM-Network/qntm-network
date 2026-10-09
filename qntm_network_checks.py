@@ -915,3 +915,28 @@ def assert_every_list_ranks_by_the_declared_client_settings(state: ScenarioState
         message="all five lists rank by the declared client settings; compiler and client core agree on the fields",
         observed_ref="app/index.html",
     )
+
+
+def assert_sign_up_is_invite_only_and_fails_closed(state: ScenarioState) -> PredicateResult:
+    """Sign-up is invite-only until each user has their own graph, and fails closed.
+
+    worker/src/registration.js refuses sign-up unless invite codes are configured AND offered;
+    worker/src/auth.js's registerOptions asks it before touching D1 (backlog row
+    close-registration-until-a-user-has-their-own-graph, 2026-10-09). The behaviour is
+    tests/worker-registration.test.mjs.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    gate = _read(root / "worker" / "src" / "registration.js")
+    auth = _read(root / "worker" / "src" / "auth.js")
+    problems = []
+    if "codes.length === 0" not in gate:
+        problems.append("registration.js no longer refuses when no invite codes are configured")
+    body = auth[auth.find("async function registerOptions"):]
+    at_gate, at_db = body.find("registrationAllowed(env, body)"), body.find("env.DB")
+    if at_gate == -1 or (at_db != -1 and at_db < at_gate):
+        problems.append("registerOptions does not ask registrationAllowed before D1")
+    if problems:
+        return PredicateResult(status="FAIL", message="; ".join(problems), observed_ref="worker/src/registration.js")
+    return PredicateResult(status="PASS", message="sign-up is invite-only and fails closed", observed_ref="worker/src/registration.js")

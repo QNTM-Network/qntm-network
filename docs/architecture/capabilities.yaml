@@ -4541,3 +4541,17 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+- id: sign-up-is-invite-only
+  intent: >-
+    No one creates an account that would land in an empty app: sign-up needs an invite link until
+    each user has their own graph (design-a-user-owns-their-graph.md stage 1).
+  tier: functional
+  rooting: >-
+    worker/src/registration.js decides; worker/src/auth.js asks it first; the app passes ?invite=.
+  status: working
+  enforced_by:
+  - declared_state: state-sign-up-is-invite-only-and-fails-closed
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin
