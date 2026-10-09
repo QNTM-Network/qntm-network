@@ -72,9 +72,13 @@ function folderLabel(path: string | undefined): string {
  * `stampSpans`' stamp, the shown text is `contentOf`, the title is `cleanTitleFor`, the status is
  * `classifyLine`'s.
  *
- * EVERYTHING SEARCH COULD FIND, UNRANKED — every view, every section heading, and every stamped
- * line once (the copy in the preferred view, else the first). Which of them match a query, and in
- * what order, is app/present/rank.ts's (backlog row one-ranking-for-every-list).
+ * EVERYTHING SEARCH COULD FIND, UNRANKED — every view, every section heading, and EVERY COPY of
+ * every stamped line (a task is printed in many views). The preferred view's items come first, so
+ * they win ties. Which match a query and in what order is app/present/rank.ts's; a task then keeps
+ * only one copy (`bestCopyOfEachTask`), so a copy in a demoted view (Everything Work)
+ * loses to the same task's copy anywhere else (2026-10-09, measured live: deduplicating BEFORE
+ * ranking kept every task's Everything copy whenever Everything was the open view). The copy is
+ * chosen by `bestCopyOfEachTask`, the order by the list's policy.
  */
 export function searchCandidates(views: readonly SearchView[], options: SearchOptions = {}): readonly SearchHit[] {
   const prefer = options.prefer ?? null;
@@ -91,7 +95,6 @@ export function searchCandidates(views: readonly SearchView[], options: SearchOp
     });
   }
   const sections = new Set<string>();
-  const seen = new Set<string>();
   for (const view of ordered) {
     const lines = view.markdown.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
@@ -111,8 +114,7 @@ export function searchCandidates(views: readonly SearchView[], options: SearchOp
       }
       // A TASK is a line the engine stamped — its first `[[qntm:N]]` is its identity.
       const stamp = stampSpans(line)[0];
-      if (stamp === undefined || seen.has(stamp.id)) continue;
-      seen.add(stamp.id);
+      if (stamp === undefined) continue;
       const content = contentOf(line) ?? "";
       const title = cleanTitleFor(line);
       hits.push({
@@ -139,11 +141,33 @@ function describeHit(hit: SearchHit): RankItem {
   return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
 }
 
+/**
+ * Each task once: the copy NOT in a demoted view, else the first (the preferred view's). Chosen by
+ * the same ranking, with only the `demoted` and `position` keys, so which copy is kept never
+ * depends on a difference between copies — two views can print one task with different
+ * checkboxes — and is decided before the full policy orders the result.
+ */
+function bestCopyOfEachTask(hits: readonly SearchHit[], key: (hit: SearchHit) => string, policy: RankPolicy): SearchHit[] {
+  const choose: RankPolicy = { keys: [{ field: "demoted", direction: "asc" }, { field: "position" }], demote: policy.demote };
+  const seen = new Set<string>();
+  const kept = new Set(
+    rank(hits, (hit) => ({ title: "", path: hit.viewPath }), "", choose).filter((hit) => {
+      if (hit.kind !== "task") return true;
+      const k = key(hit);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }),
+  );
+  return hits.filter((hit) => kept.has(hit));
+}
+
 /** The `/` search: views, sections and tasks matching `query`, ranked by the `search` policy. */
 export function searchViews(views: readonly SearchView[], query: string, options: SearchOptions = {}): readonly SearchHit[] {
   if (query.trim() === "") return [];
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
-  return rank(searchCandidates(views, options), describeHit, query, policy).slice(0, options.limit ?? 30);
+  const copies = bestCopyOfEachTask(searchCandidates(views, options), (hit) => hit.qntmId, policy);
+  return rank(copies, describeHit, query, policy).slice(0, options.limit ?? 30);
 }
 
 /**
@@ -154,16 +178,11 @@ export function searchViews(views: readonly SearchView[], query: string, options
  */
 export function linkTargets(views: readonly SearchView[], query: string, options: SearchOptions = {}): readonly SearchHit[] {
   if (query.trim() === "") return [];
-  const seen = new Set<string>();
-  const tasks = searchCandidates(views, options).filter((hit) => {
-    const key = hit.title.toLowerCase();
-    if (hit.kind !== "task" || key === "" || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const tasks = searchCandidates(views, options).filter((hit) => hit.kind === "task" && hit.title !== "");
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
   const describe = (hit: SearchHit): RankItem => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
-  return rank(tasks, describe, query, policy).slice(0, options.limit ?? 8);
+  const copies = bestCopyOfEachTask(tasks, (hit) => hit.title.toLowerCase(), policy);
+  return rank(copies, describe, query, policy).slice(0, options.limit ?? 8);
 }
 
 /**

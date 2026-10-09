@@ -8913,7 +8913,6 @@ function searchCandidates(views, options = {}) {
     });
   }
   const sections = /* @__PURE__ */ new Set();
-  const seen = /* @__PURE__ */ new Set();
   for (const view of ordered) {
     const lines = view.markdown.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
@@ -8938,8 +8937,7 @@ function searchCandidates(views, options = {}) {
         continue;
       }
       const stamp = stampSpans(line)[0];
-      if (stamp === void 0 || seen.has(stamp.id)) continue;
-      seen.add(stamp.id);
+      if (stamp === void 0) continue;
       const content = contentOf(line) ?? "";
       const title = cleanTitleFor(line);
       hits.push({
@@ -8962,23 +8960,33 @@ function describeHit(hit) {
   if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
   return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
 }
+function bestCopyOfEachTask(hits, key, policy) {
+  const choose = { keys: [{ field: "demoted", direction: "asc" }, { field: "position" }], demote: policy.demote };
+  const seen = /* @__PURE__ */ new Set();
+  const kept = new Set(
+    rank(hits, (hit) => ({ title: "", path: hit.viewPath }), "", choose).filter((hit) => {
+      if (hit.kind !== "task") return true;
+      const k = key(hit);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+  );
+  return hits.filter((hit) => kept.has(hit));
+}
 function searchViews(views, query, options = {}) {
   if (query.trim() === "") return [];
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
-  return rank(searchCandidates(views, options), describeHit, query, policy).slice(0, options.limit ?? 30);
+  const copies = bestCopyOfEachTask(searchCandidates(views, options), (hit) => hit.qntmId, policy);
+  return rank(copies, describeHit, query, policy).slice(0, options.limit ?? 30);
 }
 function linkTargets(views, query, options = {}) {
   if (query.trim() === "") return [];
-  const seen = /* @__PURE__ */ new Set();
-  const tasks = searchCandidates(views, options).filter((hit) => {
-    const key = hit.title.toLowerCase();
-    if (hit.kind !== "task" || key === "" || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const tasks = searchCandidates(views, options).filter((hit) => hit.kind === "task" && hit.title !== "");
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
   const describe = (hit) => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
-  return rank(tasks, describe, query, policy).slice(0, options.limit ?? 8);
+  const copies = bestCopyOfEachTask(tasks, (hit) => hit.title.toLowerCase(), policy);
+  return rank(copies, describe, query, policy).slice(0, options.limit ?? 8);
 }
 function findLinkTarget(views, target, options = {}) {
   const id = stampSpans(`[[${target.trim()}]]`)[0]?.id;
