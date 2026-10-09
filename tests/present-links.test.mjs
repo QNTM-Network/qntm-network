@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { findLinkTarget, linkQueryAt, linkSource, linkTargets, ModeSurface, taskTitle } from "../dist/present.js";
+import { cleanTitleFor, findLinkTarget, linkQueryAt, linkSource, linkTargets, ModeSurface } from "../dist/present.js";
 
 const VIEWS = [
   {
@@ -31,10 +31,17 @@ test("an open [[ before the caret is a query; a closed one is not", () => {
   assert.equal(linkQueryAt("no link here", 5), null);
 });
 
-test("a title is the words before the first tag, marker or link", () => {
-  assert.equal(taskTitle("Become an early riser #habit #structure"), "Become an early riser");
-  assert.equal(taskTitle("Send the risk note to Christen #task #work 📅 2026-10-09"), "Send the risk note to Christen");
-  assert.equal(taskTitle("Wake at 7:30 #habit ⏳ 2026-10-09"), "Wake at 7:30");
+test("a link's title is the engine's title — cleanTitleFor, not a reader of search's own", () => {
+  const title = (line) => linkTargets([{ id: "v", markdown: line }], "a")[0]?.title;
+  for (const line of [
+    "- [ ] Become an early riser [[qntm:1]] #habit #structure",
+    "- [ ] Send a note #task #work 📅 2026-10-09 [[qntm:2]]",
+    "- [ ] Wake at 7:30 [[qntm:3]] #habit ⏳ 2026-10-09",
+  ]) {
+    assert.equal(title(line), cleanTitleFor(line).text, line);
+  }
+  // A tag in the middle of a title is cut out, as the engine cuts it — the old reader stopped there.
+  assert.equal(title("- [ ] Call #work Alan back [[qntm:4]]"), "Call Alan back");
 });
 
 test("[[ suggests tasks from every view, and choosing one writes [[Title]]", () => {

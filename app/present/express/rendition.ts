@@ -782,6 +782,27 @@ export function titleSpans(line: string): readonly WordSpan[] {
   return words;
 }
 
+/**
+ * A line with its chrome taken off — the checkbox, the bullet, a heading's hashes — and nothing
+ * else: tags, markers and links stay. `null` for a blank line, which has no content at all.
+ *
+ * The first step of `cleanTitleFor`, given its own name (2026-10-09) so that search, which shows a
+ * line's content with its tags, reads the chrome the same way the title does rather than with a
+ * regex of its own.
+ */
+export function contentOf(line: string): string | null {
+  const shape = classifyLine(line);
+  if (shape.kind === "blank") return null;
+  if (shape.kind === "heading") return shape.text;
+  if (shape.kind === "checkbox") return shape.tail;
+  // prose — the same "bullet then checkbox glyph" chrome sequence titleSpans/carriesContent use.
+  const bullet = BULLET.exec(line);
+  let rest = bullet !== null ? line.slice(bullet[0].length) : line;
+  const glyph = CHECKBOX_GLYPH.exec(rest);
+  if (glyph !== null) rest = rest.slice(glyph[0].length);
+  return rest;
+}
+
 /** Why `cleanTitleFor` has nothing to say. */
 export type CleanTitleAbstention = "no-title" | "style-ambiguous";
 
@@ -838,22 +859,9 @@ const STYLE_WRAPS = ["~~", "**", "*", "_"];
  * not assumed away.
  */
 export function cleanTitleFor(line: string): CleanTitleReading {
-  const shape = classifyLine(line);
-
-  let content: string;
-  if (shape.kind === "blank") {
+  const content = contentOf(line);
+  if (content === null) {
     return { kind: "abstains", because: "no-title" };
-  } else if (shape.kind === "heading") {
-    content = shape.text;
-  } else if (shape.kind === "checkbox") {
-    content = shape.tail;
-  } else {
-    // prose — the same "bullet then checkbox glyph" chrome sequence titleSpans/carriesContent use.
-    const bullet = BULLET.exec(line);
-    let rest = bullet !== null ? line.slice(bullet[0].length) : line;
-    const glyph = CHECKBOX_GLYPH.exec(rest);
-    if (glyph !== null) rest = rest.slice(glyph[0].length);
-    content = rest;
   }
 
   const claims: WordSpan[] = [];

@@ -13,7 +13,14 @@ backlog:
     (app/present/tagcomplete.ts), which duplicates `applyCompletion` and only a test calls.
     No ranking change in this row.
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: search-reads-lines-through-the-shared-readers
+  resolution: >
+    2026-10-09. search.ts reads lines only through rendition.ts (`classifyLine`, `stampSpans`,
+    `contentOf` — extracted from `cleanTitleFor` — and `cleanTitleFor`); `taskTitle` and `applyTag`
+    deleted; each hit carries `title` and `status`, and a done hit is dimmed in the search box.
+    Enforced by state-search-reads-lines-through-the-shared-readers and
+    tests/present-search.test.mjs, tests/present-links.test.mjs.
 - id: one-ranking-for-every-list
   captured: '2026-10-09'
   title: >

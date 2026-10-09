@@ -78,11 +78,3 @@ export function matchingTags(vocabulary: readonly string[], query: TagQuery, lim
   }
   return [...starts, ...contains].slice(0, limit);
 }
-
-/** The text with the query's word replaced by `tag` and a trailing space, and the new caret. */
-export function applyTag(text: string, query: TagQuery, tag: string): { readonly text: string; readonly caret: number } {
-  const after = text.slice(query.end);
-  const spacer = after.startsWith(" ") ? "" : " ";
-  const next = text.slice(0, query.start) + tag + spacer + after;
-  return { text: next, caret: query.start + tag.length + 1 };
-}

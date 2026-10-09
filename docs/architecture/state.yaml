@@ -345,6 +345,20 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [the-app-has-a-shell-and-views-are-chosen-by-folder]
+  - id: state-search-reads-lines-through-the-shared-readers
+    name: search has no line reader of its own
+    description: |
+      app/present/search.ts reads every line through app/present/express/rendition.ts —
+      `classifyLine`, `stampSpans`, `contentOf`, `cleanTitleFor` — and carries no regex of its own
+      for the stamp, a heading or a checkbox. Its own title regex once disagreed with the
+      engine's title, so a `[[Title]]` link could miss its task (2026-10-09).
+    check: "search.ts imports the four readers from ./express/rendition.js and has no stamp,
+      heading or checkbox regex outside comments"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_search_reads_lines_through_the_shared_readers
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [search-reads-lines-through-the-shared-readers]
 # ── TOMBSTONE: state-every-class-names-a-declared-package — RETRACTED 2026-08-11, the same day it
 #    was wired. It gated `every-declared-class-names-its-package-home`, which was retracted as a
 #    category error (see the tombstone at the foot of capabilities.yaml for the full reasoning and
