@@ -109,3 +109,16 @@ test("no list ranks by itself — every list calls rank()", () => {
   }
   assert.match(read("present/arrange/ordering.ts"), /compareByKeys\(/, "section ordering has its own comparator again");
 });
+
+test("a task keeps its best copy: with Everything open and demoted, the other view's copy wins (2026-10-09)", () => {
+  const views = [
+    { id: "everything", title: "Everything Work", path: "work/everything.md", markdown: "- [ ] Chris to talk to Jason [[qntm:3]] #task" },
+    { id: "tasks", title: "Work Tasks", path: "work/tasks.md", markdown: "- [ ] Chris to talk to Jason [[qntm:3]] #task" },
+  ];
+  const policy = { ...DEFAULT_RANK_POLICIES.search, demote: ["*/everything.md"] };
+  const hits = searchViews(views, "jason", { statuses: STATUSES, policy, prefer: "everything" });
+  assert.deepEqual(hits.filter((h) => h.kind === "task").map((h) => h.viewId), ["tasks"]);
+  // With nothing demoted, the open view's copy still wins — the jump stays where you are.
+  const plain = searchViews(views, "jason", { statuses: STATUSES, prefer: "everything" });
+  assert.deepEqual(plain.filter((h) => h.kind === "task").map((h) => h.viewId), ["everything"]);
+});
