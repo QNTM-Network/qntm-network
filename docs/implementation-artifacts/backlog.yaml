@@ -101,16 +101,22 @@ backlog:
   state: unscoped
 - id: close-registration-until-a-user-has-their-own-graph
   project: engine-and-clients
-  lead: true
   captured: '2026-10-09'
   title: >
     Registration is open, and a new account gets a safe but empty app with nothing it can use.
     Close it, or require an invite, until each-user-has-their-own-graph lands. Stage 1 of
     docs/implementation-artifacts/design-a-user-owns-their-graph.md (operator agreed 2026-10-09).
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: sign-up-is-invite-only
+  resolution: >
+    2026-10-09. worker/src/registration.js: sign-up only with an invite code from the
+    REGISTRATION_INVITES secret (comma-separated), failing closed with none set; auth.js asks it
+    before D1; the app passes ?invite= from the link. Signing in unchanged. Enforced by
+    state-sign-up-is-invite-only-and-fails-closed and tests/worker-registration.test.mjs.
 - id: config-publish-in-the-api
   project: engine-and-clients
+  lead: true
   captured: '2026-10-09'
   title: >
     Config is each user's content, published by the API, never by CI. One Worker route takes a set of

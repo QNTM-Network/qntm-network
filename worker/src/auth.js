@@ -5,6 +5,7 @@
 // Flow state (the challenge) lives in `webauthn_challenges`, keyed by a random flow id
 // the client echoes back — single-use, short-lived. Sessions live in `sessions`.
 
+import { registrationAllowed } from "./registration.js";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -48,6 +49,10 @@ async function newSession(env, userId) {
 
 async function registerOptions(request, env, origin) {
   const body = await readJson(request);
+  // INVITE-ONLY until each user has their own graph — see registration.js. Checked first, so a
+  // closed door costs no D1 read and reveals nothing about which handles exist.
+  const allowed = registrationAllowed(env, body);
+  if (!allowed.ok) return json({ ok: false, error: allowed.error }, allowed.status, origin);
   const handle = String(body?.handle || "").trim();
   if (!HANDLE_RE.test(handle)) {
     return json({ ok: false, error: "handle must be 2–32 chars (letters, digits, - _)" }, 422, origin);

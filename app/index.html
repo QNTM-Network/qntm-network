@@ -3746,7 +3746,11 @@ async function register() {
   if (!handle) { showEntryError("Choose a handle first.", true); return; }
   if (!HANDLE_RE.test(handle)) { showEntryError(HANDLE_RULE, true); return; }
   try {
-    const { flowId, options } = await api("/auth/register/options", { body: { handle } });
+    // INVITE-ONLY (2026-10-09, worker/src/registration.js): an invite arrives as a link,
+    // /app/?invite=CODE, and is passed along. Without one the Worker answers that sign-up is
+    // invite-only, and that sentence is what the person sees.
+    const invite = new URLSearchParams(location.search).get("invite") ?? undefined;
+    const { flowId, options } = await api("/auth/register/options", { body: { handle, invite } });
     const response = await startRegistration({ optionsJSON: options });
     const out = await api("/auth/register/verify", { body: { flowId, response } });
     token = out.token; localStorage.setItem(tokenKey, token);
