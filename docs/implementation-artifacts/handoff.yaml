@@ -57,12 +57,38 @@ handoff:
     next_command: uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map . --full  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
 
   queue:  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
-  - id: list-ordering-declared-in-global-defaults
+  - id: client-settings-in-config
+    lead: true
   - id: recently-used-recorded-on-the-server
   - id: one-ordering-vocabulary-for-lists-and-children
+  - id: close-registration-until-a-user-has-their-own-graph
+  - id: config-publish-in-the-api
+  - id: client-core-package
+  - id: shared-test-cases-for-twice-run-rules
+  - id: retire-switched-off-predictions
+  - id: config-sync-tool
+  - id: yaml-editor-in-the-app
+  - id: each-user-has-their-own-graph
   instance_queue: []  # DERIVED by flow_trace.prioritization.derive_queue(layer='config') — the CONFIG (admin/instance) stratum, partitioned OUT of `queue:` (code); the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
 
   qualitative:
+  - thread: project-engine-and-clients
+    note: >
+      THE PROJECT TO RETURN TO (opened 2026-10-09). Objective: the engine is the core service and
+      every client — web app now; phone app, markdown, API/MCP later — gives a setting the same
+      meaning, stays fast, and keeps each user's config and data their own. Picture and decisions:
+      https://claude.ai/artifact/XhRjRZx7zWeWhKxAJEE8iA (architecture checkpoint, revision 2).
+      Rule: every rule has one home by kind — model rules in the engine, client rules in one shared
+      client core, preferences in one cascade (architecture.yaml one-home-per-kind-of-rule). Config is
+      each user's content, published by the API, never by CI.
+      Rows, in order (all carry `project: engine-and-clients`): search-reads-lines-through-the-shared-
+      readers (done), one-ranking-for-every-list (done), client-settings-in-config (lead),
+      close-registration-until-a-user-has-their-own-graph, config-publish-in-the-api,
+      client-core-package, shared-test-cases-for-twice-run-rules, recently-used-recorded-on-the-server,
+      retire-switched-off-predictions, config-sync-tool, yaml-editor-in-the-app,
+      each-user-has-their-own-graph, one-ordering-vocabulary-for-lists-and-children; engine side:
+      monorepo row chain-edge-types-hardcoded-in-applier-and-section-builder.
+      If other work interrupts (e.g. more real-time editing), come back to the lead row here.
   - thread: the-presentation-cascade-declared-2026-07-30
     note: >
       THE QUEUE READ ZERO THIS MORNING AND IT NOW READS TWELVE, and nothing was built. That is the
