@@ -84,6 +84,9 @@ export interface GlobalKeyDeps {
   readonly toggleHelp?: () => void;
   /** Open the `/` search box. */
   readonly openSearch?: () => void;
+  /** `H` / Ctrl-o and `L` / Ctrl-i: the previous / next view (app/shell/viewhistory.ts). */
+  readonly viewBack?: () => void;
+  readonly viewForward?: () => void;
   /** The view `c` captures into (the inbox), or `undefined` when there is none. */
   readonly captureViewId?: () => string | undefined;
   /** Switch to a view, exactly as choosing it in the drawer does. */
@@ -209,8 +212,13 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
       : e.ctrlKey && !e.metaKey && e.key === "r"
         ? "redo"
         : null;
+  // VIM'S JUMP KEYS, Ctrl-o and Ctrl-i, step back and forward through views — the same as `H`/`L`.
+  const jumpKey =
+    e.ctrlKey && !e.metaKey && e.key === "o" ? "view-back" : e.ctrlKey && !e.metaKey && e.key === "i" ? "view-forward" : null;
   const outcome =
-    historyKey !== null
+    jumpKey !== null
+      ? { handled: true as const, effect: { kind: jumpKey } as const }
+      : historyKey !== null
       ? { handled: true as const, effect: { kind: historyKey } as const }
       : command
         ? { handled: false as const, effect: { kind: "none" } as const }
@@ -317,6 +325,10 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     deps.toggleHelp?.();
   } else if (effect.kind === "search") {
     deps.openSearch?.();
+  } else if (effect.kind === "view-back") {
+    deps.viewBack?.();
+  } else if (effect.kind === "view-forward") {
+    deps.viewForward?.();
   } else if (effect.kind === "toggle-done") {
     // `x` — reuses `applyEdit`'s existing `set-checkbox` case (source.ts). If the selected line
     // has no checkbox, `classifyLine` says so and nothing happens — no repaint, no POST, exactly

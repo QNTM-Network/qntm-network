@@ -164,7 +164,7 @@
 
   /* THE TOUCH BAR — vim's keys as buttons (app/shell/touchbar.ts). Off by default; on where there
      is probably no keyboard. It sits on the rail, or on the phone's keyboard when one is open
-     (`--kb`, set from `visualViewport`), and the column reserves its height like it reserves the
+     (its `top`, set from `visualViewport`), and the column reserves its height like it reserves the
      rail's, so it never covers the last line. Each mode shows its own buttons. */
   :root { --touchbar-h: 0px; }
   .touchbar { display: none; }
@@ -173,13 +173,14 @@
     body { padding-bottom: calc(var(--rail-bottom) + var(--touchbar-h) + var(--s6) + var(--safe-b)); }
     .touchbar {
       position: fixed; z-index: 20; left: 0; right: 0;
-      bottom: max(var(--kb, 0px), calc(var(--rail-bottom) + var(--safe-b)));
+      bottom: calc(var(--rail-bottom) + var(--safe-b));
       display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none;
       height: var(--touchbar-h); align-items: center;
       padding: 0 max(var(--s2), var(--safe-r)) 0 max(calc(var(--rail-side) + var(--s2)), var(--safe-l));
       background: var(--bg); border-top: 1px solid var(--line);
     }
     .touchbar.hidden { display: none; }
+    .touchbar[data-keyboard] { bottom: auto; }
     .touchkey {
       flex: 1 0 auto; min-width: 2.25rem; height: calc(var(--touch) - var(--s2)); padding: 0 var(--s2);
       background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
@@ -1244,6 +1245,8 @@ import {
   installSearch,
   installTouchBar,
   showTouchMode,
+  installViewHistory,
+  viewFromHash,
   policyFor,
   installLinks,
   linkSource,
@@ -1257,7 +1260,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=842e0ec92b";
+} from "/dist/present.js?v=70efcbc747";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1715,6 +1718,9 @@ function markWhereWeAre() { markDrawerCurrent(drawerDeps, graphData?.snapshot?.v
  * `currentViewId` cannot tell them apart at the moment `paintView` needs to know.
  */
 let paintedViewId = null;
+// BACK AND FORWARD THROUGH VIEWS (app/shell/viewhistory.ts) — installed with the keys, at the end of
+// this script; `paintView` records each chosen view in it once it exists.
+let viewHistory = null;
 
 /**
  * THE STRING THE BODY IS CURRENTLY SHOWING — the same kind of fact as `paintedViewId` immediately
@@ -2427,6 +2433,7 @@ function paintView(id, why) {
   const sameView = id === paintedViewId;
   currentViewId = id;
   rememberView(id);
+  if (why === "chosen") viewHistory?.visited(id);
   markWhereWeAre();
   // ── A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN, AND SURVIVES A PROJECTION IN IT ──
   //
@@ -3498,6 +3505,9 @@ async function bootRead(delays = BOOT_READ_DELAYS) {
 const LAST_VIEW_KEY = "qntm_last_view";
 
 function rememberedView() {
+  // The address first (`#view=<id>`, app/shell/viewhistory.ts): a reload stays on the view it showed.
+  const addressed = viewFromHash(location.hash ?? "");
+  if (addressed !== null) return addressed;
   try {
     return localStorage.getItem(LAST_VIEW_KEY);
   } catch {
@@ -3872,6 +3882,12 @@ function goToLine(viewId, lineIndex) {
 }
 /** The views the server sent that have markdown — what `/` searches and a `[[` link looks in. */
 const searchableViews = () => (graphData?.snapshot?.views ?? []).filter((x) => typeof x.markdown === "string");
+viewHistory = installViewHistory({
+  win: globalThis,
+  show: (viewId) => {
+    if (graphData?.snapshot?.views.some((x) => x.id === viewId)) paintView(viewId, "chosen");
+  },
+});
 const globalKeyDeps = {
   viewBody: $("viewBody"),
   focus,
@@ -3900,6 +3916,8 @@ const globalKeyDeps = {
   viewOf: (viewId) => graphData?.snapshot?.views.find((x) => x.id === viewId),
   currentViewId: () => currentViewId,
   drawerIsOpen: () => drawerIsOpen,
+  viewBack: () => viewHistory.back(),
+  viewForward: () => viewHistory.forward(),
   globalRegistrationFor,
   // `commitLineAndArmGraphRefreshRetry`, NOT `commitLine` DIRECTLY — the `x`/`>`/`<` handlers in
   // `app/shell/keys.ts` reach `commitLine` through THIS dep, a separate call site from `paint`'s
