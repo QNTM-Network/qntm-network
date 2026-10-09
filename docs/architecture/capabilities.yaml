@@ -4555,3 +4555,20 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+- id: config-is-published-by-the-api
+  intent: >-
+    Config goes live one way: POST /config/publish compiles it once, the engine test-loads and
+    switches to it, and only then is it stored as a numbered version keyed by user, with the
+    declaration the app reads. No build, no commit, no CI, no second path that skips the engine.
+  tier: functional
+  rooting: >-
+    worker/src/publish.js runs the order (compile-presentation.mjs, then the engine's POST /config,
+    then one D1 batch); worker/src/declarations.js only reads; app/index.html reads
+    /config/declaration/presentation/current first; scripts/publish-config.mjs sends a folder.
+  status: working
+  enforced_by:
+  - declared_state: state-config-reaches-the-app-only-after-the-engine-accepts-it
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin

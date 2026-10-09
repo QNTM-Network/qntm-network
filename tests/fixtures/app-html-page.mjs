@@ -156,7 +156,7 @@ export { applyPresentation as __applyPresentation };
 // THE URL, EXPORTED SO A SUITE CANNOT DISAGREE WITH THE PAGE ABOUT IT. A fetch stub keyed on a
 // hand-written "/presentation.json" would go on passing after the page moved the document — this
 // reads the page's own constant.
-export const __declarationUrl = () => DECLARATION_URL;
+export const __declarationUrl = () => DECLARATION_FALLBACK_URL;
 // THE DECLARATION ITSELF — a getter, the same reason \`__served\`/\`__rows\` below are: a suite
 // reads what the page is holding NOW, not a snapshot from import time, and \`declaration\` is
 // reassigned wholesale by \`applyPresentation\` rather than mutated in place (app/present/
@@ -701,6 +701,9 @@ export const SERVED_DECLARATION = JSON.parse(
  */
 export function withDeclaration(stub, declaration = SERVED_DECLARATION) {
   return async (url, init) => {
+    if (String(url).endsWith(DECLARATION_PATH)) {
+      return { ok: true, status: 200, json: async () => ({ ok: true, declaration }) };
+    }
     if (String(url) === DECLARATION_URL) {
       return { ok: true, status: 200, json: async () => declaration };
     }
@@ -715,12 +718,15 @@ export function withDeclaration(stub, declaration = SERVED_DECLARATION) {
  * keyed on the stale one would answer nothing, the page would fall back to its defaults, and the
  * suites would go quietly wrong rather than red. This refuses to load instead.
  */
-export const DECLARATION_URL = (() => {
+const pageConstant = (name) => {
   const html = readFileSync(join(REPO, "app", "index.html"), "utf8");
-  const match = /const DECLARATION_URL = "([^"]+)";/.exec(html);
-  assert.ok(match, "app/index.html no longer declares DECLARATION_URL");
+  const match = new RegExp(`const ${name} = "([^"]+)";`).exec(html);
+  assert.ok(match, `app/index.html no longer declares ${name}`);
   return match[1];
-})();
+};
+/** The API route the page reads first, and the committed copy it falls back to. */
+export const DECLARATION_PATH = pageConstant("DECLARATION_PATH");
+export const DECLARATION_URL = pageConstant("DECLARATION_FALLBACK_URL");
 
 /**
  * Import the lifted page once, with a fetch stub installed. Returns the module.

@@ -128,6 +128,18 @@ backlog:
     or-neither before the backlog reset.
   kind: capability
   state: unscoped
+  driving_capability: config-is-published-by-the-api
+- id: retire-committed-presentation-json
+  project: engine-and-clients
+  captured: '2026-10-09'
+  title: >
+    Once the app has read its declaration from POST /config/publish's store in production, delete
+    the committed presentation.json, presentation-dropped.json, the seven generate-*-declaration
+    CLIs and their CI staleness step. The 25 tests that read the operator's real presentation.json
+    read a declaration compiled from tests/fixtures/config by compile-presentation.mjs instead, and
+    the app's fallback to /presentation.json goes.
+  kind: capability
+  state: unscoped
 - id: client-core-package
   project: engine-and-clients
   captured: '2026-10-09'

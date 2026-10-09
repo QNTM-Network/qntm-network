@@ -1374,22 +1374,19 @@ function globalRegistrationFor(viewId) {
   };
 }
 /**
- * WHERE THE DECLARATION COMES FROM, AND WHY IT IS THIS ROUTE.
+ * WHERE THE DECLARATION COMES FROM (2026-10-09, backlog row config-publish-in-the-api).
  *
- * `/presentation.json` is served TODAY, at the site root, by the same GitHub Pages origin that
- * serves this page — `access-control-allow-origin: *`, an ETag, `max-age=600` (verified by a
- * read-only GET against qntm.network, 2026-08-03). NO NEW ENDPOINT ANYWHERE: the graph server's
- * routes are `/health`, `/graph`, `/vault`, `/config`, `/vault/file`, `/cycle`, and `/config` is
- * WRITE-ONLY — it accepts a config tarball and never serves one back. The Worker has no
- * declaration route either. So the existing route is this one.
+ * From the API: `POST /config/publish` compiles the config, has the engine accept it, and stores
+ * the declaration; this route serves the newest stored one (`worker/src/declarations.js`), with
+ * `{ok, version, declaration}` around it. A config change reaches the app with no build and no
+ * commit — the next load reads it.
  *
- * WHAT THIS DOES NOT YET REACH, STATED PLAINLY SO NOBODY READS MORE INTO IT. A config change still
- * has to be compiled by this repo's three generators and published to this origin; what it no
- * longer needs is `npm run build` and a re-committed bundle. The declaration coming from a SERVER
- * that compiled it — config-as-content in full — is steps 3 and 4 of
- * design-config-is-content.md, and this line is the seam they will land on: only the URL changes.
+ * `/presentation.json` (the committed copy, served by Pages) is read only when the API cannot
+ * answer — before the first publish, or with the Worker down. It retires with the committed file
+ * (backlog row retire-committed-presentation-json).
  */
-const DECLARATION_URL = "/presentation.json";
+const DECLARATION_PATH = "/config/declaration/presentation/current";
+const DECLARATION_FALLBACK_URL = "/presentation.json";
 
 /**
  * HOW LONG THE PAGE WILL WAIT FOR IT BEFORE PAINTING WITHOUT IT.
@@ -1418,12 +1415,24 @@ const DECLARATION_TIMEOUT_MS = 5000;
 async function loadPresentation() {
   const control = new AbortController();
   const timer = setTimeout(() => control.abort(), DECLARATION_TIMEOUT_MS);
+  const read = async (url, unwrap) => {
+    const response = await fetch(url, { signal: control.signal, cache: "no-cache" });
+    if (!response.ok) throw new Error(url + ": request failed (" + response.status + ")");
+    const body = await response.json();
+    return unwrap ? body?.declaration : body;
+  };
   try {
-    const response = await fetch(DECLARATION_URL, { signal: control.signal, cache: "no-cache" });
-    if (!response.ok) {
-      throw new Error("request failed (" + response.status + ")");
+    let document;
+    try {
+      document = await read(API + DECLARATION_PATH, true);
+      if (document === undefined) throw new Error("the API answered with no declaration");
+    } catch (fromApi) {
+      // Out of time is out of time: the committed copy gets no second five seconds.
+      if (control.signal.aborted) throw fromApi;
+      console.warn("the published declaration could not be read (" + (fromApi?.message ?? fromApi) + ") — reading " + DECLARATION_FALLBACK_URL);
+      document = await read(DECLARATION_FALLBACK_URL, false);
     }
-    applyPresentation(await response.json());
+    applyPresentation(document);
   } catch (e) {
     // THE WARNING IS THE WHOLE RESPONSE, AND THAT IS A DECISION. Nothing on screen says the
     // declaration is missing, so what the reader sees is a page whose tags are characters rather

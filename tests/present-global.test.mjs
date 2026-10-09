@@ -50,6 +50,7 @@ import { makeDocument, makeBody, walk, serialize, VIEW_MARKDOWN } from "./fixtur
 import {
   REPO,
   DECLARATION_URL,
+  DECLARATION_PATH,
   assertMutated,
   importPage,
   installBrowser,
@@ -509,8 +510,8 @@ describe("5. the page runs on a declaration that was never in the bundle", () =>
     const asked = [];
     globalThis.fetch = async (url, init) => {
       asked.push(String(url));
-      if (String(url) !== DECLARATION_URL) throw new Error("unexpected request: " + url);
-      return { ok: true, status: 200, json: async () => declaration };
+      if (!String(url).endsWith(DECLARATION_PATH)) throw new Error("unexpected request: " + url);
+      return { ok: true, status: 200, json: async () => ({ ok: true, declaration }) };
     };
     try {
       await target.loadPresentation();
@@ -532,9 +533,27 @@ describe("5. the page runs on a declaration that was never in the bundle", () =>
     assert.ok(!readFileSync(join(REPO, "presentation.json"), "utf8").includes(MARKER));
   });
 
-  test("the page requests the declaration, at the page's own URL", async () => {
+  test("the page requests the published declaration from the API", async () => {
     const asked = await served(fetched({ checkbox: "wired", heading: "wired", tags: "wired" }));
-    assert.deepEqual(asked, [DECLARATION_URL], "the page did not fetch the declaration");
+    assert.equal(asked.length, 1, "the page did not fetch the declaration once");
+    assert.ok(asked[0].endsWith(DECLARATION_PATH), `the page asked ${asked[0]}`);
+  });
+
+  test("with the API unable to answer, the page reads the committed copy instead", async () => {
+    const saved = globalThis.fetch;
+    const asked = [];
+    globalThis.fetch = async (url) => {
+      asked.push(String(url));
+      if (String(url).endsWith(DECLARATION_PATH)) return { ok: false, status: 404, json: async () => ({ ok: false }) };
+      return { ok: true, status: 200, json: async () => fetched({ checkbox: "raw", heading: "raw", tags: "raw" }) };
+    };
+    try {
+      await page.loadPresentation();
+    } finally {
+      globalThis.fetch = saved;
+    }
+    assert.deepEqual(asked.slice(1), [DECLARATION_URL]);
+    assert.equal(paintedNow().filter((el) => el.type === "checkbox").length, 0, "the fallback document was not applied");
   });
 
   test("the fetched document decides the painted DOM — chips and headings both ways", async () => {
@@ -626,7 +645,7 @@ describe("5. the page runs on a declaration that was never in the bundle", () =>
       globalThis.fetch = saved;
       console.warn = warn;
     }
-    assert.match(said.join(" "), /could not be read \(request failed \(404\)/);
+    assert.match(said.join(" "), /could not be read \([^)]*request failed \(404\)/);
   });
 
   test("a fetch that never answers is ABANDONED, not waited on forever", async () => {
@@ -665,7 +684,7 @@ describe("5. the page runs on a declaration that was never in the bundle", () =>
     // something the page does for another reason.
     const work = makeWorkDir("present-global-mutant");
     const mutant = await importPage(work, (source) =>
-      assertMutated(source, "applyPresentation(await response.json());", "await response.json();\n    applyPresentation({});"),
+      assertMutated(source, "applyPresentation(document);", "applyPresentation({});"),
     );
     mutant.__setGraphData({ snapshot: { generated_at: "x", views: [VIEW] } });
 

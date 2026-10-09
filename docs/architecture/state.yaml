@@ -397,6 +397,20 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [sign-up-is-invite-only]
+  - id: state-config-reaches-the-app-only-after-the-engine-accepts-it
+    name: the app never reads a config the engine refused
+    description: |
+      worker/src/publish.js asks the engine (POST /config, Gate 2) before its one D1 batch stores
+      the declaration and moves the pointer; worker/src/declarations.js has no write route; the app
+      reads the API's current declaration before the committed presentation.json. The behaviour is
+      tests/worker-config-publish.test.mjs.
+    check: "publish.js calls engineCheck before env.DB.batch; declarations.js has no POST and no
+      INSERT; index.html fetches DECLARATION_PATH before DECLARATION_FALLBACK_URL"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_config_reaches_the_app_only_after_the_engine_accepts_it
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [config-is-published-by-the-api]
 # ── TOMBSTONE: state-every-class-names-a-declared-package — RETRACTED 2026-08-11, the same day it
 #    was wired. It gated `every-declared-class-names-its-package-home`, which was retracted as a
 #    category error (see the tombstone at the foot of capabilities.yaml for the full reasoning and
