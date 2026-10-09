@@ -767,7 +767,7 @@ describe("7. the rail is one element, and it holds actions", () => {
     assert.ok(RAIL_MARKUP, "app/index.html has no <nav id=\"rail\">");
     assert.equal((PAGE.match(/<nav id="rail"/g) ?? []).length, 1, "the rail is declared twice");
     // `cycleBtn` (2026-10-07, operator-directed): one engine cycle on demand — see `runCycle`.
-    assert.deepEqual(RAIL_BUTTON_IDS, ["viewsBtn", "refreshBtn", "cycleBtn", "signOut"]);
+    assert.deepEqual(RAIL_BUTTON_IDS, ["viewsBtn", "findBtn", "cycleBtn", "signOut"]);
     // DUPLICATION IS THE MECHANISM OF DRIFT. A control that exists once cannot fall out of step
     // with itself, so the whole "two layouts" objection is answered by counting.
     for (const id of RAIL_BUTTON_IDS) {
@@ -786,7 +786,7 @@ describe("7. the rail is one element, and it holds actions", () => {
     // The drift guard, and the reason a desktop rail does not mean two layouts. Every rule in
     // the sheet is read — INCLUDING the ones inside media queries, which is exactly where a
     // control would be quietly dropped — and none of them may remove the rail or anything in it.
-    const RAIL_SELECTOR = /^\.(rail|railbtn|ico)$|^#(viewsBtn|refreshBtn|signOut)$/;
+    const RAIL_SELECTOR = /^\.(rail|railbtn|ico)$|^#(viewsBtn|findBtn|signOut)$/;
     const removed = [];
     for (const rule of SHEET) {
       const gone =
@@ -1068,19 +1068,6 @@ describe("8. a re-read keeps your place", () => {
     assert.match(calls[0].url, /\/app\/graph(\?|$)/);
   });
 
-  test("it says it is working, and stops saying so when it lands", async () => {
-    globalThis.fetch = async () => ({
-      ok: true,
-      json: async () => ({
-        ok: true, handle: "luke", pending_edits: 0,
-        snapshot: { generated_at: "2026-07-30T10:00:00Z", views: VIEWS },
-      }),
-    });
-    page.__setGraphData({ snapshot: { generated_at: "x", views: VIEWS } });
-    await page.refresh();
-    assert.equal(el("refreshBtn").getAttribute("aria-busy"), null, "it stayed busy after landing");
-  });
-
   test("a failed read leaves the view standing", async () => {
     // "could not read: <message>" — the sentence this arm used to check — is retired
     // (chore/retire-the-status-line); `refresh`'s `catch` is now silent. The functional recovery
@@ -1090,7 +1077,6 @@ describe("8. a re-read keeps your place", () => {
     page.__setCurrentViewId("all-work");
     await page.refresh();
     assert.equal(page.__currentViewId(), "all-work", "a failed read moved the reader anyway");
-    assert.equal(el("refreshBtn").getAttribute("aria-busy"), null, "it stayed busy after failing");
   });
 
   test("with no session there is nothing to re-read", async () => {

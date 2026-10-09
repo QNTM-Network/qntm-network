@@ -16,7 +16,30 @@
  *
  * THE BAR SITS ABOVE THE PHONE'S KEYBOARD. A phone keyboard covers the bottom of the page without
  * resizing it; `visualViewport` says how much is covered, and the bar moves up by that much.
+ *
+ * AND ABOVE iOS's OWN BAR (2026-10-09, operator screenshot): iOS floats its form bar (up, down,
+ * done) over the bottom of `visualViewport`, not below it, so a bar placed exactly on the keyboard
+ * sat under it. On iOS, while the keyboard is open, the bar moves up by that bar's height too.
  */
+
+/** The height of iOS's floating form bar, and the gap above it. */
+export const IOS_FORM_BAR_PX = 56;
+
+/** A keyboard covers at least this much; less is a browser toolbar moving, not a keyboard. */
+const KEYBOARD_MIN_PX = 120;
+
+/** iPhone and iPad (an iPad says "Macintosh" and has touch points). */
+export function isIOS(nav: { userAgent?: string; maxTouchPoints?: number } | undefined): boolean {
+  if (nav === undefined) return false;
+  const ua = nav.userAgent ?? "";
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (nav.maxTouchPoints ?? 0) > 1);
+}
+
+/** How far up the bar sits: the covered height, plus iOS's form bar when a keyboard is open. */
+export function barLift(coveredPx: number, ios: boolean): number {
+  const covered = Math.max(0, Math.round(coveredPx));
+  return ios && covered >= KEYBOARD_MIN_PX ? covered + IOS_FORM_BAR_PX : covered;
+}
 
 export type BarMode = "NORMAL" | "INSERT";
 
@@ -102,10 +125,11 @@ export function installTouchBar(deps: TouchBarDeps): void {
   // ABOVE THE KEYBOARD. `visualViewport` is the part of the page the person can see; whatever of
   // the layout viewport is below it is covered by the keyboard.
   const viewport = doc.defaultView?.visualViewport;
+  const ios = isIOS(doc.defaultView?.navigator);
   if (viewport != null) {
     const place = (): void => {
       const covered = (doc.defaultView?.innerHeight ?? 0) - viewport.height - viewport.offsetTop;
-      deps.bar.style?.setProperty?.("--kb", `${Math.max(0, Math.round(covered))}px`);
+      deps.bar.style?.setProperty?.("--kb", `${barLift(covered, ios)}px`);
     };
     viewport.addEventListener("resize", place);
     viewport.addEventListener("scroll", place);

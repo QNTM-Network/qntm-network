@@ -9122,6 +9122,17 @@ function installLinks(deps) {
 }
 
 // app/shell/touchbar.ts
+var IOS_FORM_BAR_PX = 56;
+var KEYBOARD_MIN_PX = 120;
+function isIOS(nav) {
+  if (nav === void 0) return false;
+  const ua = nav.userAgent ?? "";
+  return /iPhone|iPad|iPod/.test(ua) || /Macintosh/.test(ua) && (nav.maxTouchPoints ?? 0) > 1;
+}
+function barLift(coveredPx, ios) {
+  const covered = Math.max(0, Math.round(coveredPx));
+  return ios && covered >= KEYBOARD_MIN_PX ? covered + IOS_FORM_BAR_PX : covered;
+}
 var TOUCH_KEYS = [
   { label: "Edit", name: "Edit the line, at the end (A)", modes: ["NORMAL"], keys: ["A"] },
   { label: "New", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
@@ -9173,10 +9184,11 @@ function installTouchBar(deps) {
     }
   };
   const viewport = doc.defaultView?.visualViewport;
+  const ios = isIOS(doc.defaultView?.navigator);
   if (viewport != null) {
     const place = () => {
       const covered = (doc.defaultView?.innerHeight ?? 0) - viewport.height - viewport.offsetTop;
-      deps.bar.style?.setProperty?.("--kb", `${Math.max(0, Math.round(covered))}px`);
+      deps.bar.style?.setProperty?.("--kb", `${barLift(covered, ios)}px`);
     };
     viewport.addEventListener("resize", place);
     viewport.addEventListener("scroll", place);
@@ -9309,6 +9321,7 @@ export {
   FocusSurface,
   GraphRefreshRetrySurface,
   INDENT_UNIT,
+  IOS_FORM_BAR_PX,
   KEY_HELP,
   LANDING_VIEW_KEY,
   LIST_NAMES,
@@ -9348,6 +9361,7 @@ export {
   applyRules,
   armPredict,
   armSettle,
+  barLift,
   baseOf,
   boundaryLine,
   buildDrawer,
@@ -9408,6 +9422,7 @@ export {
   instanceAnchorFor,
   instanceOf,
   instancesOf,
+  isIOS,
   isSilent,
   lineBody,
   lineOps,

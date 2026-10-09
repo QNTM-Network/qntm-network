@@ -430,7 +430,7 @@ export { installKeyHelp } from "../shell/help.js";
 export { installSearch } from "../shell/search.js";
 export { linkQueryAt, linkSource } from "./linkcomplete.js";
 export { installLinks } from "../shell/links.js";
-export { installTouchBar, showTouchMode, TOUCH_KEYS } from "../shell/touchbar.js";
+export { installTouchBar, showTouchMode, TOUCH_KEYS, barLift, isIOS, IOS_FORM_BAR_PX } from "../shell/touchbar.js";
 export type { SearchDeps } from "../shell/search.js";
 export type { CompleterDeps } from "../shell/completer.js";
 export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";
