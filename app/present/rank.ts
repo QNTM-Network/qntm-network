@@ -81,15 +81,16 @@ export const CLIENT_KEY = "client";
 const STATUS_ORDER = ["open", "in_progress", "*", "scheduled", "waiting", "done", "cancelled"];
 
 /**
- * THE BUILT-IN POLICIES — today's order for each list, plus open tasks before done ones.
+ * THE BUILT-IN POLICIES — today's order for each list, open tasks before done ones, then items
+ * outside a demoted view before items in one. Kept equal to the operator's config/client.yaml.
  * `position` is the order the list handed its items over in, so it is every list's last word.
  */
 export const DEFAULT_RANK_POLICIES: Readonly<Record<ListName, RankPolicy>> = {
   search: {
     keys: [
       { field: "kind", order: ["view", "section", "task"] },
-      { field: "demoted", direction: "asc" },
       { field: "status", order: STATUS_ORDER },
+      { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
       { field: "position" },
     ],
@@ -97,8 +98,8 @@ export const DEFAULT_RANK_POLICIES: Readonly<Record<ListName, RankPolicy>> = {
   link: {
     minMatch: 1,
     keys: [
-      { field: "demoted", direction: "asc" },
       { field: "status", order: STATUS_ORDER },
+      { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
       { field: "position" },
     ],

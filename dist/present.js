@@ -3832,8 +3832,8 @@ var DEFAULT_RANK_POLICIES = {
   search: {
     keys: [
       { field: "kind", order: ["view", "section", "task"] },
-      { field: "demoted", direction: "asc" },
       { field: "status", order: STATUS_ORDER },
+      { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
       { field: "position" }
     ]
@@ -3841,8 +3841,8 @@ var DEFAULT_RANK_POLICIES = {
   link: {
     minMatch: 1,
     keys: [
-      { field: "demoted", direction: "asc" },
       { field: "status", order: STATUS_ORDER },
+      { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
       { field: "position" }
     ]
