@@ -24,6 +24,7 @@ export {
   chromeOf,
   classifyLine,
   cleanTitleFor,
+  contentOf,
   markerSpans,
   qntmIdSpans,
   stampSpans,
@@ -465,7 +466,7 @@ export type {
 } from "./select/viewmembers.js";
 
 // ── TAG COMPLETION (2026-10-07) — pure; the DOM half is app/shell/tagpicker.ts ──
-export { applyTag, matchingTags, tagQueryAt, tagVocabulary } from "./tagcomplete.js";
+export { matchingTags, tagQueryAt, tagVocabulary } from "./tagcomplete.js";
 export { applyCompletion, completeWith, tagSource } from "./completion.js";
 export type { Completion, CompletionItem, CompletionSource } from "./completion.js";
 export { addDays, dateChoices, dateMarkers, dateSource } from "./datecomplete.js";
@@ -476,7 +477,7 @@ export type { TagQuery, TagSources } from "./tagcomplete.js";
 // ── KEY HELP (2026-10-07) — the data behind `?`; the overlay is app/shell/help.ts ──
 export { KEY_HELP } from "./keyhelp.js";
 export type { KeyHelpGroup, KeyHelpRow } from "./keyhelp.js";
-export { findLinkTarget, linkTargets, searchViews, taskTitle } from "./search.js";
+export { findLinkTarget, linkTargets, searchViews } from "./search.js";
 export type { SearchHit, SearchView } from "./search.js";
 // ── UNCONFIRMED LINES (2026-10-07) — what the painter marks "saved, not yet back from the server" ──
 export { unconfirmedLines } from "./unconfirmed.js";

@@ -4495,3 +4495,18 @@ capabilities:
     `render/compiler.py:209` carries it onto the compiled sheet, and no consumer of
     `compiled_sheet.rendering_contract` exists (grepped live, 2026-08-14). A per-view
     rendering slot that already parses and already decides nothing.
+- id: search-reads-lines-through-the-shared-readers
+  intent: >-
+    Search, `[[` suggestions and a `[[link]]` click read every line the way the rest of the app
+    does — through app/present/express/rendition.ts — so a search hit's title is the engine's
+    title, its status is the declared checkbox status, and a link finds the task it names.
+  tier: functional
+  rooting: >-
+    rendition.ts is the one owner of how a line is read; search.ts is a consumer of it.
+  status: working
+  enforced_by:
+  - declared_state: state-search-reads-lines-through-the-shared-readers
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin

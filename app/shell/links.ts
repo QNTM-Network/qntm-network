@@ -8,12 +8,14 @@
  * makes. A link nothing matches does nothing but say so in the console.
  */
 
+import type { CheckboxStatuses } from "../present/express/rendition.js";
 import { findLinkTarget, type SearchView } from "../present/search.js";
 
 export interface LinkDeps {
   readonly viewBody: HTMLElement;
   readonly views: () => readonly SearchView[];
   readonly currentViewId: () => string | null;
+  readonly statuses?: () => CheckboxStatuses | undefined;
   /** Show `viewId` with the cursor on `lineIndex` — the search box's own `go`. */
   readonly go: (viewId: string, lineIndex: number) => void;
 }
@@ -27,7 +29,7 @@ export function installLinks(deps: LinkDeps): void {
       event.preventDefault();
       event.stopPropagation();
       const target = (chip.textContent ?? "").replace(/^\[\[|\]\]$/g, "");
-      const hit = findLinkTarget(deps.views(), target, deps.currentViewId());
+      const hit = findLinkTarget(deps.views(), target, { prefer: deps.currentViewId(), statuses: deps.statuses?.() });
       if (hit === null) {
         console.info(`[qntm] no view has a task called ${JSON.stringify(target)}`);
         return;

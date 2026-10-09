@@ -414,6 +414,8 @@
   .search-box li { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem .75rem; cursor: pointer; color: var(--ink); font-size: .85rem; }
   .search-box li small { color: var(--dim); white-space: nowrap; }
   .search-box li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* A done task in the results (app/shell/search.ts), dimmed and struck like a done line in a view. */
+  .search-box li.search-done span { color: var(--dim); text-decoration: line-through; }
   .search-kind { flex: none; width: 4.5rem; font-style: normal; font-family: var(--mono); font-size: var(--t1); letter-spacing: .06em; text-transform: uppercase; }
   .search-kind-view { color: var(--green); }
   .search-kind-section { color: var(--accent); }
@@ -1244,7 +1246,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=42313972ee";
+} from "/dist/present.js?v=678639a22a";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3874,6 +3876,7 @@ const globalKeyDeps = {
   openSearch: installSearch({
     views: searchableViews,
     currentViewId: () => currentViewId,
+    statuses: checkboxStatuses,
     go: goToLine,
   }),
   // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch
@@ -3901,7 +3904,7 @@ const globalKeyDeps = {
 };
 installGlobalKeys(globalKeyDeps);
 // `[[Title]]` LINKS (2026-10-08): a click opens the node, with the same jump a search result makes.
-installLinks({ viewBody: $("viewBody"), views: searchableViews, currentViewId: () => currentViewId, go: goToLine });
+installLinks({ viewBody: $("viewBody"), views: searchableViews, currentViewId: () => currentViewId, statuses: checkboxStatuses, go: goToLine });
 // THE TOUCH BAR (2026-10-08): each button presses a key through the handler the keyboard reaches.
 installTouchBar({
   bar: $("touchBar"),
@@ -3924,7 +3927,7 @@ installCompleter({
     };
     return [
       // An open `[[` first: inside a link, a `#` or `:` is part of the title being searched.
-      linkSource(searchableViews, () => currentViewId),
+      linkSource(searchableViews, () => currentViewId, checkboxStatuses),
       tagSource(tagVocabulary(declaration)),
       dateSource(dateMarkers(declaration), today, boundary?.weekStartsOn ?? "monday"),
       markerSource(markerVocabulary(declaration)),

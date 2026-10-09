@@ -9,6 +9,7 @@
  */
 
 import type { CompletionSource } from "./completion.js";
+import type { CheckboxStatuses } from "./express/rendition.js";
 import { linkTargets, type SearchView } from "./search.js";
 
 /** The open `[[` before the caret and what has been typed after it, or `null`. */
@@ -21,13 +22,17 @@ export function linkQueryAt(text: string, caret: number): { start: number; query
   return { start, query };
 }
 
-export function linkSource(views: () => readonly SearchView[], preferViewId: () => string | null): CompletionSource {
+export function linkSource(
+  views: () => readonly SearchView[],
+  preferViewId: () => string | null,
+  statuses: () => CheckboxStatuses | undefined = () => undefined,
+): CompletionSource {
   return (text, caret) => {
     const open = linkQueryAt(text, caret);
     if (open === null || open.query.trim() === "") return null;
     // A `]]` the person already typed (or a phone keyboard paired) is replaced with the link.
     const end = text.startsWith("]]", caret) ? caret + 2 : caret;
-    const items = linkTargets(views(), open.query, preferViewId()).map((hit) => ({
+    const items = linkTargets(views(), open.query, { prefer: preferViewId(), statuses: statuses() }).map((hit) => ({
       label: `${hit.title}  ·  ${hit.viewTitle}`,
       insert: `[[${hit.title}]]`,
     }));

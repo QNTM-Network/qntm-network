@@ -5,7 +5,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { applyTag, matchingTags, tagQueryAt, tagVocabulary } from "../dist/present.js";
+import { applyCompletion, matchingTags, tagQueryAt, tagVocabulary } from "../dist/present.js";
 
 const SOURCES = {
   qualification: { tokens: { node_type: { "#task": "task", "#outcome": "outcome" }, domain: { "#work": "work" }, status: { "[ ]": "open" } } },
@@ -44,17 +44,17 @@ describe("tagQueryAt", () => {
   });
 });
 
-describe("matchingTags and applyTag", () => {
+describe("matchingTags, and taking a tag through applyCompletion (the one applier)", () => {
   const vocab = tagVocabulary(SOURCES);
   test("prefix matches come first, then contains matches", () => {
     assert.deepEqual(matchingTags(vocab, { start: 0, end: 2, prefix: "t" }), ["#task", "#outcome", "#waiting-for"]);
   });
   test("taking a tag replaces the word and leaves the caret after a space", () => {
     const query = tagQueryAt("Call Bob #wo", 12);
-    assert.deepEqual(applyTag("Call Bob #wo", query, "#work"), { text: "Call Bob #work ", caret: 15 });
+    assert.deepEqual(applyCompletion("Call Bob #wo", query, "#work"), { text: "Call Bob #work ", caret: 15 });
   });
   test("taking a tag mid-line keeps the rest of the line", () => {
     const query = tagQueryAt("Call #wo Bob", 8);
-    assert.deepEqual(applyTag("Call #wo Bob", query, "#work"), { text: "Call #work Bob", caret: 11 });
+    assert.deepEqual(applyCompletion("Call #wo Bob", query, "#work"), { text: "Call #work Bob", caret: 11 });
   });
 });

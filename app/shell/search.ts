@@ -5,11 +5,14 @@
  * task in the view it was found in, Escape closes. Made on first open, so installing touches nothing.
  */
 
+import type { CheckboxStatuses } from "../present/express/rendition.js";
 import { searchViews, type SearchHit, type SearchView } from "../present/search.js";
 
 export interface SearchDeps {
   readonly views: () => readonly SearchView[];
   readonly currentViewId: () => string | null;
+  /** The declared checkbox glyphs, read fresh so a config change is picked up. */
+  readonly statuses?: () => CheckboxStatuses | undefined;
   /** Show `viewId` with the cursor on `lineIndex`. */
   readonly go: (viewId: string, lineIndex: number) => void;
 }
@@ -42,6 +45,8 @@ export function installSearch(deps: SearchDeps, doc: Document = document): () =>
         const kind = doc.createElement("em");
         kind.className = `search-kind search-kind-${hit.kind}`;
         kind.textContent = hit.kind === "view" ? "View" : hit.kind === "section" ? "Section" : "Task";
+        // A DONE TASK IS SHOWN DIMMED (2026-10-09): its status comes from the declared glyphs.
+        if (hit.status === "done") row.classList.add("search-done");
         const text = doc.createElement("span");
         text.textContent = hit.text;
         const where = doc.createElement("small");
@@ -69,7 +74,7 @@ export function installSearch(deps: SearchDeps, doc: Document = document): () =>
     list.setAttribute("role", "listbox");
     root.append(input, list);
     input.addEventListener("input", () => {
-      hits = searchViews(deps.views(), input!.value, deps.currentViewId());
+      hits = searchViews(deps.views(), input!.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.() });
       selected = 0;
       render();
     });

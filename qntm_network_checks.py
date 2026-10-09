@@ -797,3 +797,44 @@ def assert_the_view_chooser_is_one_folder_drawer(state: ScenarioState) -> Predic
 # repo's own declaration files, not anything the app does — and was retracted with it. See the
 # tombstone at the foot of docs/architecture/capabilities.yaml. The gap it covered belongs in
 # flow-trace as a declarable package-gate policy mirroring `RollupConfig.horizontal_gate_policy`.
+
+
+def assert_search_reads_lines_through_the_shared_readers(state: ScenarioState) -> PredicateResult:
+    """Search has no line reader of its own; it reads every line through rendition.ts.
+
+    app/present/express/rendition.ts owns how a line is read: `classifyLine` (heading, checkbox,
+    status), `stampSpans` (the `[[qntm:N]]` identity), `contentOf` (chrome off) and `cleanTitleFor`
+    (the engine's title). search.ts once carried a regex for each, and its title regex disagreed
+    with the engine's, so a `[[Title]]` link could miss its own task (backlog row
+    search-reads-lines-through-the-shared-readers, 2026-10-09). This refuses the regexes coming
+    back and requires the readers to be imported. Comments are stripped first so the file may still
+    explain what it retired. The behaviour is tests/present-search.test.mjs and
+    tests/present-links.test.mjs.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    path = root / "app" / "present" / "search.ts"
+    source = _read(path)
+    if not source:
+        return PredicateResult(status="FAIL", message="no app/present/search.ts", observed_ref="app/present/search.ts")
+    code = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
+    problems = []
+    for reader in ("classifyLine", "stampSpans", "contentOf", "cleanTitleFor"):
+        if not re.search(rf"import\s*\{{[^}}]*\b{reader}\b[^}}]*\}}\s*from\s*\"\./express/rendition\.js\"", code):
+            problems.append(f"does not import {reader} from ./express/rendition.js")
+    for label, pattern in (
+        ("a stamp regex", r"qntm:\(\\d"),
+        ("a heading regex", r"#\{\d"),
+        ("a checkbox regex", r"- \\\[\.\\\]"),
+    ):
+        if re.search(pattern, code):
+            problems.append(f"carries {label} of its own")
+    if problems:
+        return PredicateResult(status="FAIL", message="search.ts: " + "; ".join(problems), observed_ref="app/present/search.ts")
+    return PredicateResult(
+        status="PASS",
+        message="search.ts reads lines only through rendition.ts's readers",
+        observed_ref="app/present/search.ts",
+    )

@@ -206,22 +206,22 @@ function titleSpans(line) {
   }
   return words2;
 }
+function contentOf(line) {
+  const shape = classifyLine(line);
+  if (shape.kind === "blank") return null;
+  if (shape.kind === "heading") return shape.text;
+  if (shape.kind === "checkbox") return shape.tail;
+  const bullet = BULLET.exec(line);
+  let rest = bullet !== null ? line.slice(bullet[0].length) : line;
+  const glyph = CHECKBOX_GLYPH.exec(rest);
+  if (glyph !== null) rest = rest.slice(glyph[0].length);
+  return rest;
+}
 var STYLE_WRAPS = ["~~", "**", "*", "_"];
 function cleanTitleFor(line) {
-  const shape = classifyLine(line);
-  let content;
-  if (shape.kind === "blank") {
+  const content = contentOf(line);
+  if (content === null) {
     return { kind: "abstains", because: "no-title" };
-  } else if (shape.kind === "heading") {
-    content = shape.text;
-  } else if (shape.kind === "checkbox") {
-    content = shape.tail;
-  } else {
-    const bullet = BULLET.exec(line);
-    let rest = bullet !== null ? line.slice(bullet[0].length) : line;
-    const glyph = CHECKBOX_GLYPH.exec(rest);
-    if (glyph !== null) rest = rest.slice(glyph[0].length);
-    content = rest;
   }
   const claims = [];
   for (const span of [...wikiLinkSpans(content), ...tagSpans(content), ...markerSpans(content)]) {
@@ -8527,12 +8527,6 @@ function matchingTags(vocabulary, query, limit = 8) {
   }
   return [...starts, ...contains].slice(0, limit);
 }
-function applyTag(text, query, tag) {
-  const after = text.slice(query.end);
-  const spacer = after.startsWith(" ") ? "" : " ";
-  const next = text.slice(0, query.start) + tag + spacer + after;
-  return { text: next, caret: query.start + tag.length + 1 };
-}
 
 // app/present/completion.ts
 function completeWith(sources, text, caret) {
@@ -8776,7 +8770,6 @@ function installKeyHelp(doc = document) {
 }
 
 // app/present/search.ts
-var ID = /\[\[qntm:(\d+)\]\]/;
 function folderWords(path) {
   const parts = String(path ?? "").split("/").slice(0, -1);
   return parts.join(" ").replace(/[-_]/g, " ");
@@ -8784,10 +8777,15 @@ function folderWords(path) {
 function folderLabel(path) {
   return String(path ?? "").split("/").slice(0, -1).join(" / ");
 }
-function searchViews(views, query, preferViewId, limit = 30) {
-  const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+function queryWords(query) {
+  return query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+}
+function searchViews(views, query, options = {}) {
+  const words2 = queryWords(query);
   if (words2.length === 0) return [];
-  const ordered = [...views].sort((a, b) => Number(b.id === preferViewId) - Number(a.id === preferViewId));
+  const limit = options.limit ?? 30;
+  const prefer = options.prefer ?? null;
+  const ordered = [...views].sort((a, b) => Number(b.id === prefer) - Number(a.id === prefer));
   const seen = /* @__PURE__ */ new Set();
   const hits = [];
   const matches = (text) => {
@@ -8799,18 +8797,38 @@ function searchViews(views, query, preferViewId, limit = 30) {
     const folders = folderWords(view.path);
     if (matches(`${title} ${folders}`)) {
       const where = folderLabel(view.path);
-      hits.push({ kind: "view", qntmId: "", text: where === "" ? title : `${where} \u203A ${title}`, viewId: view.id, viewTitle: title, lineIndex: 0 });
+      hits.push({
+        kind: "view",
+        qntmId: "",
+        text: where === "" ? title : `${where} \u203A ${title}`,
+        title: "",
+        status: "",
+        viewId: view.id,
+        viewTitle: title,
+        lineIndex: 0
+      });
     }
   }
   const sections = /* @__PURE__ */ new Set();
   for (const view of ordered) {
     view.markdown.split("\n").forEach((line, index) => {
-      const heading = /^#{2,6}\s+(.*)$/.exec(line)?.[1]?.trim();
-      if (heading === void 0 || heading === "" || !matches(heading)) return;
+      const shape = classifyLine(line, options.statuses);
+      if (shape.kind !== "heading" || shape.hashes.length < 2) return;
+      const heading = shape.text.trim();
+      if (heading === "" || !matches(heading)) return;
       const key = `${view.id}\0${heading}`;
       if (sections.has(key)) return;
       sections.add(key);
-      hits.push({ kind: "section", qntmId: "", text: heading, viewId: view.id, viewTitle: view.title ?? view.id, lineIndex: index });
+      hits.push({
+        kind: "section",
+        qntmId: "",
+        text: heading,
+        title: "",
+        status: "",
+        viewId: view.id,
+        viewTitle: view.title ?? view.id,
+        lineIndex: index
+      });
     });
   }
   if (hits.length >= limit) return hits.slice(0, limit);
@@ -8818,15 +8836,18 @@ function searchViews(views, query, preferViewId, limit = 30) {
     const lines = view.markdown.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] ?? "";
-      const id = ID.exec(line)?.[1];
-      if (id === void 0 || seen.has(id)) continue;
-      const lower = line.toLowerCase();
-      if (!words2.every((w) => lower.includes(w))) continue;
-      seen.add(id);
+      const stamp = stampSpans(line)[0];
+      if (stamp === void 0 || seen.has(stamp.id) || !matches(line)) continue;
+      seen.add(stamp.id);
+      const shape = classifyLine(line, options.statuses);
+      const content = contentOf(line) ?? "";
+      const title = cleanTitleFor(line);
       hits.push({
         kind: "task",
-        qntmId: id,
-        text: line.replace(/^\s*- \[.\]\s*/, "").replace(ID, "").replace(/\s+/g, " ").trim(),
+        qntmId: stamp.id,
+        text: content.split(stamp.text).join("").replace(/\s+/g, " ").trim(),
+        title: title.kind === "title" ? title.text : "",
+        status: shape.kind === "checkbox" ? shape.status : "",
         viewId: view.id,
         viewTitle: view.title ?? view.id,
         lineIndex: index
@@ -8836,32 +8857,28 @@ function searchViews(views, query, preferViewId, limit = 30) {
   }
   return hits;
 }
-function taskTitle(text) {
-  const cut = text.search(/\s#[^\s#]|\s\[\[|\s\p{Extended_Pictographic}/u);
-  return (cut === -1 ? text : text.slice(0, cut)).trim();
-}
-function linkTargets(views, query, preferViewId, limit = 8) {
+function linkTargets(views, query, options = {}) {
+  const limit = options.limit ?? 8;
   const seen = /* @__PURE__ */ new Set();
   const out = [];
-  const words2 = query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-  for (const hit of searchViews(views, query, preferViewId, 500)) {
+  const words2 = queryWords(query);
+  for (const hit of searchViews(views, query, { ...options, limit: 500 })) {
     if (hit.kind !== "task") continue;
-    const title = taskTitle(hit.text);
-    const key = title.toLowerCase();
-    if (title === "" || seen.has(key) || !words2.every((w) => key.includes(w))) continue;
+    const key = hit.title.toLowerCase();
+    if (key === "" || seen.has(key) || !words2.every((w) => key.includes(w))) continue;
     seen.add(key);
-    out.push({ ...hit, title });
+    out.push(hit);
     if (out.length >= limit) break;
   }
   return out;
 }
-function findLinkTarget(views, target, preferViewId) {
-  const id = /^qntm:(\d+)$/i.exec(target.trim())?.[1];
+function findLinkTarget(views, target, options = {}) {
+  const id = stampSpans(`[[${target.trim()}]]`)[0]?.id;
   const want = target.trim().toLowerCase();
-  const hits = searchViews(views, id === void 0 ? target : `qntm:${id}`, preferViewId, 500);
+  const hits = searchViews(views, id === void 0 ? target : `qntm:${id}`, { ...options, limit: 500 });
   for (const hit of hits) {
     if (hit.kind !== "task") continue;
-    if (id !== void 0 ? hit.qntmId === id : taskTitle(hit.text).toLowerCase() === want) return hit;
+    if (id !== void 0 ? hit.qntmId === id : hit.title.toLowerCase() === want) return hit;
   }
   return null;
 }
@@ -8892,6 +8909,7 @@ function installSearch(deps, doc = document) {
         const kind = doc.createElement("em");
         kind.className = `search-kind search-kind-${hit.kind}`;
         kind.textContent = hit.kind === "view" ? "View" : hit.kind === "section" ? "Section" : "Task";
+        if (hit.status === "done") row.classList.add("search-done");
         const text = doc.createElement("span");
         text.textContent = hit.text;
         const where = doc.createElement("small");
@@ -8918,7 +8936,7 @@ function installSearch(deps, doc = document) {
     list.setAttribute("role", "listbox");
     root.append(input, list);
     input.addEventListener("input", () => {
-      hits = searchViews(deps.views(), input.value, deps.currentViewId());
+      hits = searchViews(deps.views(), input.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.() });
       selected = 0;
       render();
     });
@@ -8954,12 +8972,12 @@ function linkQueryAt(text, caret) {
   if (query.includes("]]") || query.includes("[")) return null;
   return { start, query };
 }
-function linkSource(views, preferViewId) {
+function linkSource(views, preferViewId, statuses = () => void 0) {
   return (text, caret) => {
     const open = linkQueryAt(text, caret);
     if (open === null || open.query.trim() === "") return null;
     const end = text.startsWith("]]", caret) ? caret + 2 : caret;
-    const items = linkTargets(views(), open.query, preferViewId()).map((hit) => ({
+    const items = linkTargets(views(), open.query, { prefer: preferViewId(), statuses: statuses() }).map((hit) => ({
       label: `${hit.title}  \xB7  ${hit.viewTitle}`,
       insert: `[[${hit.title}]]`
     }));
@@ -8977,7 +8995,7 @@ function installLinks(deps) {
       event.preventDefault();
       event.stopPropagation();
       const target = (chip.textContent ?? "").replace(/^\[\[|\]\]$/g, "");
-      const hit = findLinkTarget(deps.views(), target, deps.currentViewId());
+      const hit = findLinkTarget(deps.views(), target, { prefer: deps.currentViewId(), statuses: deps.statuses?.() });
       if (hit === null) {
         console.info(`[qntm] no view has a task called ${JSON.stringify(target)}`);
         return;
@@ -9211,7 +9229,6 @@ export {
   applyGraphAwareRules,
   applyRuleActions,
   applyRules,
-  applyTag,
   armPredict,
   armSettle,
   baseOf,
@@ -9234,6 +9251,7 @@ export {
   composeViewMarkdown,
   compositionFor,
   computeViewMembers,
+  contentOf,
   coverageOf,
   createCommitLine,
   createGraphBlobCache,
@@ -9345,7 +9363,6 @@ export {
   tagSource,
   tagSpans,
   tagVocabulary,
-  taskTitle,
   titleSpans,
   titleStyleFor,
   titleStylePredicateHolds,
