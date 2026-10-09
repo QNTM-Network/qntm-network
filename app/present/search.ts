@@ -9,6 +9,7 @@
  */
 
 import { classifyLine, cleanTitleFor, contentOf, stampSpans, type CheckboxStatuses } from "./express/rendition.js";
+import { DEFAULT_RANK_POLICIES, rank, type RankItem, type RankPolicy } from "./rank.js";
 
 export interface SearchView {
   readonly id: string;
@@ -37,6 +38,8 @@ export interface SearchHit {
   readonly status: string;
   readonly viewId: string;
   readonly viewTitle: string;
+  /** The view's file path — what a policy's `demote` globs are matched against. */
+  readonly viewPath: string;
   readonly lineIndex: number;
 }
 
@@ -47,6 +50,8 @@ export interface SearchOptions {
   readonly limit?: number | undefined;
   /** The declared checkbox glyphs (`qualification.tokens.status`), so `[>]` and `[~]` read as tasks. */
   readonly statuses?: CheckboxStatuses | undefined;
+  /** How to order the hits (app/present/rank.ts); the list's built-in policy when absent. */
+  readonly policy?: RankPolicy | undefined;
 }
 
 /** The folders of `path` as words: `work/outcomes-career/all.md` -> "work outcomes career". */
@@ -60,72 +65,54 @@ function folderLabel(path: string | undefined): string {
   return String(path ?? "").split("/").slice(0, -1).join(" / ");
 }
 
-/** The words of `query`, lower case. */
-export function queryWords(query: string): readonly string[] {
-  return query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-}
 
 /**
  * EVERY LINE IS READ THROUGH app/present/express/rendition.ts (2026-10-09, backlog row
  * search-reads-lines-through-the-shared-readers). A heading is `classifyLine`'s heading, an id is
  * `stampSpans`' stamp, the shown text is `contentOf`, the title is `cleanTitleFor`, the status is
- * `classifyLine`'s. This module used to carry a regex for each, and its title regex could disagree
- * with the engine's title — so a `[[Title]]` link could miss its own task.
+ * `classifyLine`'s.
+ *
+ * EVERYTHING SEARCH COULD FIND, UNRANKED — every view, every section heading, and every stamped
+ * line once (the copy in the preferred view, else the first). Which of them match a query, and in
+ * what order, is app/present/rank.ts's (backlog row one-ranking-for-every-list).
  */
-export function searchViews(views: readonly SearchView[], query: string, options: SearchOptions = {}): readonly SearchHit[] {
-  const words = queryWords(query);
-  if (words.length === 0) return [];
-  const limit = options.limit ?? 30;
+export function searchCandidates(views: readonly SearchView[], options: SearchOptions = {}): readonly SearchHit[] {
   const prefer = options.prefer ?? null;
-  // The current view first, so a task visible where the operator already is jumps there.
-  const ordered = [...views].sort((a, b) => Number(b.id === prefer) - Number(a.id === prefer));
-  const seen = new Set<string>();
+  // The preferred view first, so a task in many views is found where the operator already is: its
+  // copy is the one kept, and it is handed to the ranking first (its `position` tie-break).
+  const ordered = [...views.filter((v) => v.id === prefer), ...views.filter((v) => v.id !== prefer)];
   const hits: SearchHit[] = [];
-  const matches = (text: string): boolean => {
-    const lower = text.toLowerCase();
-    return words.every((w) => lower.includes(w));
-  };
-  // VIEWS FIRST, then SECTIONS, then TASKS — the broader the place, the higher it sits.
   for (const view of ordered) {
     const title = view.title ?? view.id;
-    // EVERY FOLDER ON THE PATH, NOT A FIXED DEPTH (2026-10-08, operator report: "work outcomes"
-    // found nothing). `work/outcomes/all.md` is searched as "work outcomes all".
-    const folders = folderWords(view.path);
-    if (matches(`${title} ${folders}`)) {
-      const where = folderLabel(view.path);
-      hits.push({
-        kind: "view", qntmId: "", text: where === "" ? title : `${where} › ${title}`, title: "", status: "",
-        viewId: view.id, viewTitle: title, lineIndex: 0,
-      });
-    }
-  }
-  const sections = new Set<string>();
-  for (const view of ordered) {
-    view.markdown.split("\n").forEach((line, index) => {
-      const shape = classifyLine(line, options.statuses);
-      // A SECTION is a heading below the view's own title (`##` and deeper).
-      if (shape.kind !== "heading" || shape.hashes.length < 2) return;
-      const heading = shape.text.trim();
-      if (heading === "" || !matches(heading)) return;
-      const key = `${view.id}\u0000${heading}`;
-      if (sections.has(key)) return;
-      sections.add(key);
-      hits.push({
-        kind: "section", qntmId: "", text: heading, title: "", status: "",
-        viewId: view.id, viewTitle: view.title ?? view.id, lineIndex: index,
-      });
+    const where = folderLabel(view.path);
+    hits.push({
+      kind: "view", qntmId: "", text: where === "" ? title : `${where} › ${title}`, title, status: "",
+      viewId: view.id, viewTitle: title, viewPath: view.path ?? "", lineIndex: 0,
     });
   }
-  if (hits.length >= limit) return hits.slice(0, limit);
+  const sections = new Set<string>();
+  const seen = new Set<string>();
   for (const view of ordered) {
     const lines = view.markdown.split("\n");
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] ?? "";
+      const shape = classifyLine(line, options.statuses);
+      // A SECTION is a heading below the view's own title (`##` and deeper).
+      if (shape.kind === "heading") {
+        const heading = shape.text.trim();
+        const key = `${view.id}\u0000${heading}`;
+        if (shape.hashes.length < 2 || heading === "" || sections.has(key)) continue;
+        sections.add(key);
+        hits.push({
+          kind: "section", qntmId: "", text: heading, title: heading, status: "",
+          viewId: view.id, viewTitle: view.title ?? view.id, viewPath: view.path ?? "", lineIndex: index,
+        });
+        continue;
+      }
       // A TASK is a line the engine stamped — its first `[[qntm:N]]` is its identity.
       const stamp = stampSpans(line)[0];
-      if (stamp === undefined || seen.has(stamp.id) || !matches(line)) continue;
+      if (stamp === undefined || seen.has(stamp.id)) continue;
       seen.add(stamp.id);
-      const shape = classifyLine(line, options.statuses);
       const content = contentOf(line) ?? "";
       const title = cleanTitleFor(line);
       hits.push({
@@ -136,54 +123,58 @@ export function searchViews(views: readonly SearchView[], query: string, options
         status: shape.kind === "checkbox" ? shape.status : "",
         viewId: view.id,
         viewTitle: view.title ?? view.id,
+        viewPath: view.path ?? "",
         lineIndex: index,
       });
-      if (hits.length >= limit) return hits;
     }
   }
   return hits;
 }
 
+/** What ranking needs to know about a hit. A view is matched on its title and folders, a section on
+ *  its heading, a task on its title first and the rest of its line after. */
+function describeHit(hit: SearchHit): RankItem {
+  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath };
+  if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
+  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
+}
+
+/** The `/` search: views, sections and tasks matching `query`, ranked by the `search` policy. */
+export function searchViews(views: readonly SearchView[], query: string, options: SearchOptions = {}): readonly SearchHit[] {
+  if (query.trim() === "") return [];
+  const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
+  return rank(searchCandidates(views, options), describeHit, query, policy).slice(0, options.limit ?? 30);
+}
+
 /**
- * The tasks a `[[` link could name, best first — the same search `/` runs, so a link and a search
- * find the same things in the same order. Each title once.
+ * The tasks a `[[` link could name, best first, each title once — the same candidates `/` searches,
+ * ranked by the `link` policy. A task is matched on its TITLE only (2026-10-08, measured live:
+ * `[[revert` listed "Compliance to come back" first, because that line carries
+ * `#unlocks [[Revert to George]]`).
  */
-export function linkTargets(
-  views: readonly SearchView[],
-  query: string,
-  options: SearchOptions = {},
-): readonly SearchHit[] {
-  const limit = options.limit ?? 8;
+export function linkTargets(views: readonly SearchView[], query: string, options: SearchOptions = {}): readonly SearchHit[] {
+  if (query.trim() === "") return [];
   const seen = new Set<string>();
-  const out: SearchHit[] = [];
-  // THE TITLE MUST MATCH, NOT THE LINE (2026-10-08, measured live): `[[revert` listed "Compliance
-  // to come back" first, because that line carries `#unlocks [[Revert to George]]`.
-  const words = queryWords(query);
-  for (const hit of searchViews(views, query, { ...options, limit: 500 })) {
-    if (hit.kind !== "task") continue;
+  const tasks = searchCandidates(views, options).filter((hit) => {
     const key = hit.title.toLowerCase();
-    if (key === "" || seen.has(key) || !words.every((w) => key.includes(w))) continue;
+    if (hit.kind !== "task" || key === "" || seen.has(key)) return false;
     seen.add(key);
-    out.push(hit);
-    if (out.length >= limit) break;
-  }
-  return out;
+    return true;
+  });
+  const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
+  const describe = (hit: SearchHit): RankItem => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
+  return rank(tasks, describe, query, policy).slice(0, options.limit ?? 8);
 }
 
 /**
  * Where a link points: the first task whose title is exactly `target` (case-insensitive), or a
- * `[[qntm:N]]` id's own line. `null` when no view the server sent has it.
+ * `[[qntm:N]]` id's own line. `null` when no view the server sent has it. A lookup, not a ranking.
  */
-export function findLinkTarget(
-  views: readonly SearchView[],
-  target: string,
-  options: SearchOptions = {},
-): SearchHit | null {
+export function findLinkTarget(views: readonly SearchView[], target: string, options: SearchOptions = {}): SearchHit | null {
   // A `[[qntm:N]]` link names an id, read by the same stamp reader as every line.
   const id = stampSpans(`[[${target.trim()}]]`)[0]?.id;
   const want = target.trim().toLowerCase();
-  const hits = searchViews(views, id === undefined ? target : `qntm:${id}`, { ...options, limit: 500 });
-  for (const hit of hits) {
+  for (const hit of searchCandidates(views, options)) {
     if (hit.kind !== "task") continue;
     if (id !== undefined ? hit.qntmId === id : hit.title.toLowerCase() === want) return hit;
   }

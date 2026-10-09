@@ -13,6 +13,7 @@
  */
 
 import type { CompletionSource } from "./completion.js";
+import { DEFAULT_RANK_POLICIES, rank, type RankPolicy } from "./rank.js";
 
 export interface MarkerSources {
   readonly qualification?:
@@ -61,19 +62,19 @@ export function markerQueryAt(text: string, caret: number): { start: number; que
   return { start: caret - query.length - 1, query: query.toLowerCase() };
 }
 
-/** The marker source. An empty query offers every marker; otherwise every word of the query must
- *  start a word of the marker's name. */
-export function markerSource(markers: readonly Marker[]): CompletionSource {
+/** The marker source, ranked by the `markers` policy (app/present/rank.ts). An empty query offers
+ *  every marker; otherwise every word typed must start a word of the marker's name (`minMatch: 2`). */
+export function markerSource(
+  markers: readonly Marker[],
+  policy: RankPolicy = DEFAULT_RANK_POLICIES.markers,
+): CompletionSource {
   return (text, caret) => {
     const at = markerQueryAt(text, caret);
     if (at === null) return null;
-    const wanted = at.query.split(/[\s_]+/).filter((w) => w !== "");
-    const items = markers
-      .filter((marker) => {
-        const nameWords = marker.name.toLowerCase().split(/[\s·]+/).filter((w) => w !== "");
-        return wanted.every((w) => nameWords.some((n) => n.startsWith(w)));
-      })
-      .map((marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token }));
+    // `_` is a space here, as it is in the names.
+    const items = rank(markers, (marker) => ({ title: marker.name }), at.query.replace(/_/g, " "), policy).map(
+      (marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token }),
+    );
     return { start: at.start, end: caret, items };
   };
 }

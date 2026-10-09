@@ -64,7 +64,10 @@ test("each task hit carries its status from the declared glyphs, and its engine 
     "- [ ] Book car [[qntm:9]] #task",
   ].join("\n") }];
   const hits = searchViews(views, "book", { statuses });
-  assert.deepEqual(hits.map((h) => [h.title, h.status]), [["Book flights", "done"], ["Book hotel", "scheduled"], ["Book car", "open"]]);
+  assert.deepEqual(
+    Object.fromEntries(hits.map((h) => [h.title, h.status])),
+    { "Book flights": "done", "Book hotel": "scheduled", "Book car": "open" },
+  );
   // Without the table a `[>]` line is still found; it just has no checkbox status.
   assert.equal(searchViews(views, "hotel")[0].qntmId, "8");
 });

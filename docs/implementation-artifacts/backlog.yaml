@@ -35,7 +35,16 @@ backlog:
     built-in policy reproduces today's order, plus open tasks before done ones. Needs
     search-reads-lines-through-the-shared-readers.
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: one-ranking-for-every-list
+  resolution: >
+    2026-10-09. app/present/rank.ts — `rank(items, describe, query, policy)`, one match rule with
+    match quality as a key, key `order` with `*`, and a `demoted` field for view path globs.
+    app/present/arrange/keys.ts — `compareByKeys`, taken out of `compareDefaultTuples`, which now
+    calls it. On rank: searchViews, linkTargets, filterViews, matchingTags, markerSource, and the
+    Views tree (found by the new check — it sorted A–Z by its own rule). Built-in policies in
+    `DEFAULT_RANK_POLICIES`: today's order plus open before done. Enforced by
+    state-every-list-ranks-through-one-ranking and tests/present-rank.test.mjs.
 - id: list-ordering-declared-in-global-defaults
   captured: '2026-10-09'
   title: >

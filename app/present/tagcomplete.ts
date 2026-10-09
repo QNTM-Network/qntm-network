@@ -15,6 +15,8 @@
  * here.
  */
 
+import { DEFAULT_RANK_POLICIES, rank, type RankPolicy } from "./rank.js";
+
 /** The two declaration axes this reads — structurally, so any object of that shape will do. */
 export interface TagSources {
   readonly qualification?: { readonly tokens?: Readonly<Record<string, Readonly<Record<string, unknown>>>> } | undefined;
@@ -65,16 +67,15 @@ export function tagQueryAt(text: string, caret: number): TagQuery | null {
 }
 
 /**
- * The tags matching a query: those whose name starts with the prefix first, then those that
- * merely contain it, each group in vocabulary order. At most `limit`.
+ * The tags matching a query, best first — ranked by the `tags` policy (app/present/rank.ts): a tag
+ * whose name starts with what was typed before one that merely contains it, then config order.
+ * At most `limit`.
  */
-export function matchingTags(vocabulary: readonly string[], query: TagQuery, limit = 8): readonly string[] {
-  const starts: string[] = [];
-  const contains: string[] = [];
-  for (const tag of vocabulary) {
-    const name = tag.slice(1).toLowerCase();
-    if (name.startsWith(query.prefix)) starts.push(tag);
-    else if (query.prefix !== "" && name.includes(query.prefix)) contains.push(tag);
-  }
-  return [...starts, ...contains].slice(0, limit);
+export function matchingTags(
+  vocabulary: readonly string[],
+  query: TagQuery,
+  limit = 8,
+  policy: RankPolicy = DEFAULT_RANK_POLICIES.tags,
+): readonly string[] {
+  return rank(vocabulary, (tag) => ({ title: tag.slice(1) }), query.prefix, policy).slice(0, limit);
 }
