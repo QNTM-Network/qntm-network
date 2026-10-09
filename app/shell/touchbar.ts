@@ -17,28 +17,28 @@
  * THE BAR SITS ABOVE THE PHONE'S KEYBOARD. A phone keyboard covers the bottom of the page without
  * resizing it; `visualViewport` says how much is covered, and the bar moves up by that much.
  *
- * AND ABOVE iOS's OWN BAR (2026-10-09, operator screenshot): iOS floats its form bar (up, down,
- * done) over the bottom of `visualViewport`, not below it, so a bar placed exactly on the keyboard
- * sat under it. On iOS, while the keyboard is open, the bar moves up by that bar's height too.
+ * ON THE VISIBLE EDGE, NOT A COMPUTED HEIGHT (2026-10-09, two iPhone screenshots). Measuring how
+ * much the keyboard covers and lifting the bar by that much left it under iOS's floating form bar
+ * once and 55px above it after a fixed allowance — the keyboard and the form bar settle after the
+ * first `resize`. So while a keyboard is open the bar's TOP is set from where the visible area ends
+ * (`offsetTop + height` of `visualViewport`), on every resize and scroll and once more after focus.
  */
-
-/** The height of iOS's floating form bar, and the gap above it. */
-export const IOS_FORM_BAR_PX = 56;
 
 /** A keyboard covers at least this much; less is a browser toolbar moving, not a keyboard. */
 const KEYBOARD_MIN_PX = 120;
 
-/** iPhone and iPad (an iPad says "Macintosh" and has touch points). */
-export function isIOS(nav: { userAgent?: string; maxTouchPoints?: number } | undefined): boolean {
-  if (nav === undefined) return false;
-  const ua = nav.userAgent ?? "";
-  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (nav.maxTouchPoints ?? 0) > 1);
-}
-
-/** How far up the bar sits: the covered height, plus iOS's form bar when a keyboard is open. */
-export function barLift(coveredPx: number, ios: boolean): number {
-  const covered = Math.max(0, Math.round(coveredPx));
-  return ios && covered >= KEYBOARD_MIN_PX ? covered + IOS_FORM_BAR_PX : covered;
+/**
+ * Where the bar's top goes, in layout-viewport pixels, while a keyboard is open — or null when none
+ * is, and the stylesheet's own place (on the rail) applies.
+ */
+export function keyboardBarTop(
+  viewport: { readonly height: number; readonly offsetTop: number },
+  innerHeight: number,
+  barHeight: number,
+): number | null {
+  const covered = innerHeight - viewport.height - viewport.offsetTop;
+  if (covered < KEYBOARD_MIN_PX) return null;
+  return Math.round(viewport.offsetTop + viewport.height - barHeight);
 }
 
 export type BarMode = "NORMAL" | "INSERT";
@@ -59,6 +59,8 @@ export interface TouchKey {
 
 /** The buttons, in order. Each one is a key from the key help (app/present/keyhelp.ts). */
 export const TOUCH_KEYS: readonly TouchKey[] = [
+  { label: "◀", name: "Back to the previous view (H)", modes: ["NORMAL"], keys: ["H"] },
+  { label: "▶", name: "Forward to the next view (L)", modes: ["NORMAL"], keys: ["L"] },
   { label: "Edit", name: "Edit the line, at the end (A)", modes: ["NORMAL"], keys: ["A"] },
   { label: "New", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
   { label: "✓", name: "Tick or untick (x)", modes: ["NORMAL"], keys: ["x"] },
@@ -122,17 +124,22 @@ export function installTouchBar(deps: TouchBarDeps): void {
     }
   };
 
-  // ABOVE THE KEYBOARD. `visualViewport` is the part of the page the person can see; whatever of
-  // the layout viewport is below it is covered by the keyboard.
-  const viewport = doc.defaultView?.visualViewport;
-  const ios = isIOS(doc.defaultView?.navigator);
+  // ON THE KEYBOARD. `visualViewport` is the part of the page the person can see.
+  const win = doc.defaultView;
+  const viewport = win?.visualViewport;
   if (viewport != null) {
     const place = (): void => {
-      const covered = (doc.defaultView?.innerHeight ?? 0) - viewport.height - viewport.offsetTop;
-      deps.bar.style?.setProperty?.("--kb", `${barLift(covered, ios)}px`);
+      const top = keyboardBarTop(viewport, win?.innerHeight ?? 0, deps.bar.offsetHeight ?? 0);
+      if (top === null) deps.bar.style?.removeProperty?.("top");
+      else deps.bar.style?.setProperty?.("top", `${top}px`);
+      deps.bar.toggleAttribute?.("data-keyboard", top !== null);
     };
     viewport.addEventListener("resize", place);
     viewport.addEventListener("scroll", place);
+    // The keyboard is still opening when focus lands; place again once it has.
+    doc.addEventListener?.("focusin", () => {
+      for (const ms of [50, 300, 600]) setTimeout(place, ms);
+    });
     place();
   }
 }

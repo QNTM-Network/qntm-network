@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { KEY_HELP, TOUCH_KEYS, barLift, isIOS, IOS_FORM_BAR_PX } from "../dist/present.js";
+import { KEY_HELP, TOUCH_KEYS, keyboardBarTop } from "../dist/present.js";
 
 const DOCUMENTED = new Set(KEY_HELP.flatMap((g) => g.rows.flatMap((r) => r.keys)));
 const ALIASES = { d: "dd", Escape: "Escape", Enter: "Shift+Enter" };
@@ -43,12 +43,9 @@ test("a click on the selected line is `i`, through globalKey — no timer, no se
   assert.match(keys, /\}, true\);/);
 });
 
-test("on iOS, with the keyboard open, the bar sits above iOS form bar", () => {
-  assert.equal(isIOS({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" }), true);
-  assert.equal(isIOS({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", maxTouchPoints: 5 }), true);
-  assert.equal(isIOS({ userAgent: "Mozilla/5.0 (Linux; Android 14)" }), false);
-  assert.equal(barLift(300, true), 300 + IOS_FORM_BAR_PX, "the iOS form bar covered the touch bar");
-  assert.equal(barLift(300, false), 300, "a keyboard elsewhere gains no gap");
-  assert.equal(barLift(40, true), 40, "a toolbar moving is not a keyboard");
-  assert.equal(barLift(-5, true), 0);
+test("with a keyboard open the bar sits on the visible area's bottom edge", () => {
+  // An iPhone: 844 tall, keyboard and form bar cover 380, the page scrolled 120 under the keyboard.
+  assert.equal(keyboardBarTop({ height: 464, offsetTop: 120 }, 844, 44), 120 + 464 - 44);
+  assert.equal(keyboardBarTop({ height: 464, offsetTop: 0 }, 844, 44), 420);
+  assert.equal(keyboardBarTop({ height: 800, offsetTop: 0 }, 844, 44), null, "a toolbar moving is not a keyboard");
 });

@@ -496,6 +496,8 @@ const PROMOTION_COVERAGE = {
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine as set-line; promotion reached on `>` (section 1 — THE HEADLINE FIX), abstains on `<` (section 3)",
   word: "no commit — w/b/e move the column only",
+  "view-back": "shows the previous view; writes nothing (2026-10-09)",
+  "view-forward": "shows the next view; writes nothing (2026-10-09)",
 };
 
 test("6.0 every NormalEffect kind motions.ts declares is accounted for in the promotion coverage table", () => {

@@ -278,6 +278,9 @@ export type NormalEffect =
   | { readonly kind: "help" }
   /** `/` asked for the search box. */
   | { readonly kind: "search" }
+  /** `H` / `L` (and Ctrl-o / Ctrl-i) asked for the previous / next view in the browser's history. */
+  | { readonly kind: "view-back" }
+  | { readonly kind: "view-forward" }
   /** `c` asked to capture a new line into the capture view (the inbox), from wherever the cursor is. */
   | { readonly kind: "capture" }
   /** `dd` asked to delete the selected line. Whether it MAY be deleted is the caller's to decide. */
@@ -608,6 +611,12 @@ export class ModeSurface {
         return { handled: true, effect: { kind: "help" } };
       case "/":
         return { handled: true, effect: { kind: "search" } };
+      // BACK AND FORWARD THROUGH VIEWS (2026-10-09, operator request): Vimium's keys. The history is
+      // the browser's own (app/shell/viewhistory.ts), so a phone's swipe and ⌘[ / ⌘] agree with them.
+      case "H":
+        return { handled: true, effect: { kind: "view-back" } };
+      case "L":
+        return { handled: true, effect: { kind: "view-forward" } };
       case "x":
       case " ":
         // Space ticks too (2026-10-08, operator-asked), the same way `x` does.

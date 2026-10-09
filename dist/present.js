@@ -4573,6 +4573,12 @@ var ModeSurface = class {
         return { handled: true, effect: { kind: "help" } };
       case "/":
         return { handled: true, effect: { kind: "search" } };
+      // BACK AND FORWARD THROUGH VIEWS (2026-10-09, operator request): Vimium's keys. The history is
+      // the browser's own (app/shell/viewhistory.ts), so a phone's swipe and ⌘[ / ⌘] agree with them.
+      case "H":
+        return { handled: true, effect: { kind: "view-back" } };
+      case "L":
+        return { handled: true, effect: { kind: "view-forward" } };
       case "x":
       case " ":
         if (pending !== null) {
@@ -8431,7 +8437,8 @@ function globalKey(deps, e) {
   const visualLastIndex = Math.max(0, visualOrder.length - 1);
   const command = e.metaKey || e.ctrlKey;
   const historyKey = command && (e.key === "z" || e.key === "Z") ? e.shiftKey ? "redo" : "undo" : e.ctrlKey && !e.metaKey && e.key === "r" ? "redo" : null;
-  const outcome = historyKey !== null ? { handled: true, effect: { kind: historyKey } } : command ? { handled: false, effect: { kind: "none" } } : deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
+  const jumpKey = e.ctrlKey && !e.metaKey && e.key === "o" ? "view-back" : e.ctrlKey && !e.metaKey && e.key === "i" ? "view-forward" : null;
+  const outcome = jumpKey !== null ? { handled: true, effect: { kind: jumpKey } } : historyKey !== null ? { handled: true, effect: { kind: historyKey } } : command ? { handled: false, effect: { kind: "none" } } : deps.mode.handleKey(e.key, visualCurrent, visualLastIndex);
   if (!outcome.handled) return;
   e.preventDefault();
   const effect = outcome.effect;
@@ -8496,6 +8503,10 @@ function globalKey(deps, e) {
     deps.toggleHelp?.();
   } else if (effect.kind === "search") {
     deps.openSearch?.();
+  } else if (effect.kind === "view-back") {
+    deps.viewBack?.();
+  } else if (effect.kind === "view-forward") {
+    deps.viewForward?.();
   } else if (effect.kind === "toggle-done") {
     const line = source.split("\n")[current] ?? "";
     const statuses = deps.declaration().qualification?.tokens["status"];
@@ -8816,6 +8827,8 @@ var KEY_HELP = [
     title: "App",
     rows: [
       { keys: ["\\"], does: "Open the views list" },
+      { keys: ["H", "Ctrl-o", "\u2318["], does: "Back to the previous view" },
+      { keys: ["L", "Ctrl-i", "\u2318]"], does: "Forward to the next view" },
       { keys: ["/"], does: "Search tasks across all views" },
       { keys: ["?"], does: "This help" },
       { keys: ["Escape"], does: "Close a panel, or get out of a stuck edit" }
@@ -9121,19 +9134,65 @@ function installLinks(deps) {
   );
 }
 
-// app/shell/touchbar.ts
-var IOS_FORM_BAR_PX = 56;
-var KEYBOARD_MIN_PX = 120;
-function isIOS(nav) {
-  if (nav === void 0) return false;
-  const ua = nav.userAgent ?? "";
-  return /iPhone|iPad|iPod/.test(ua) || /Macintosh/.test(ua) && (nav.maxTouchPoints ?? 0) > 1;
+// app/shell/viewhistory.ts
+var PREFIX = "#view=";
+var entryOf = (state) => state !== null && typeof state === "object" && typeof state.qntmView === "string" ? state : null;
+function viewFromHash(hash) {
+  if (!hash.startsWith(PREFIX)) return null;
+  try {
+    const id = decodeURIComponent(hash.slice(PREFIX.length));
+    return id === "" ? null : id;
+  } catch {
+    return null;
+  }
 }
-function barLift(coveredPx, ios) {
-  const covered = Math.max(0, Math.round(coveredPx));
-  return ios && covered >= KEYBOARD_MIN_PX ? covered + IOS_FORM_BAR_PX : covered;
+function installViewHistory(deps) {
+  const { history, location } = deps.win;
+  if (history === void 0 || location === void 0 || deps.win.addEventListener === void 0) {
+    return { visited() {
+    }, back() {
+    }, forward() {
+    } };
+  }
+  let restoring = false;
+  deps.win.addEventListener("popstate", (event) => {
+    const entry = entryOf(event.state);
+    if (entry === null) return;
+    restoring = true;
+    try {
+      deps.show(entry.qntmView);
+    } finally {
+      restoring = false;
+    }
+  });
+  return {
+    visited(viewId) {
+      if (restoring) return;
+      const current = entryOf(history.state);
+      if (current?.qntmView === viewId) return;
+      const url = `${location.pathname}${location.search}${PREFIX}${encodeURIComponent(viewId)}`;
+      if (current === null) history.replaceState({ qntmView: viewId, depth: 0 }, "", url);
+      else history.pushState({ qntmView: viewId, depth: current.depth + 1 }, "", url);
+    },
+    back() {
+      if ((entryOf(history.state)?.depth ?? 0) > 0) history.back();
+    },
+    forward() {
+      history.forward();
+    }
+  };
+}
+
+// app/shell/touchbar.ts
+var KEYBOARD_MIN_PX = 120;
+function keyboardBarTop(viewport, innerHeight, barHeight) {
+  const covered = innerHeight - viewport.height - viewport.offsetTop;
+  if (covered < KEYBOARD_MIN_PX) return null;
+  return Math.round(viewport.offsetTop + viewport.height - barHeight);
 }
 var TOUCH_KEYS = [
+  { label: "\u25C0", name: "Back to the previous view (H)", modes: ["NORMAL"], keys: ["H"] },
+  { label: "\u25B6", name: "Forward to the next view (L)", modes: ["NORMAL"], keys: ["L"] },
   { label: "Edit", name: "Edit the line, at the end (A)", modes: ["NORMAL"], keys: ["A"] },
   { label: "New", name: "New line below (o)", modes: ["NORMAL"], keys: ["o"] },
   { label: "\u2713", name: "Tick or untick (x)", modes: ["NORMAL"], keys: ["x"] },
@@ -9183,15 +9242,20 @@ function installTouchBar(deps) {
       deps.pressNormal(new KeyboardEvent("keydown", { key: name, shiftKey: key.shift === true, cancelable: true }));
     }
   };
-  const viewport = doc.defaultView?.visualViewport;
-  const ios = isIOS(doc.defaultView?.navigator);
+  const win = doc.defaultView;
+  const viewport = win?.visualViewport;
   if (viewport != null) {
     const place = () => {
-      const covered = (doc.defaultView?.innerHeight ?? 0) - viewport.height - viewport.offsetTop;
-      deps.bar.style?.setProperty?.("--kb", `${barLift(covered, ios)}px`);
+      const top = keyboardBarTop(viewport, win?.innerHeight ?? 0, deps.bar.offsetHeight ?? 0);
+      if (top === null) deps.bar.style?.removeProperty?.("top");
+      else deps.bar.style?.setProperty?.("top", `${top}px`);
+      deps.bar.toggleAttribute?.("data-keyboard", top !== null);
     };
     viewport.addEventListener("resize", place);
     viewport.addEventListener("scroll", place);
+    doc.addEventListener?.("focusin", () => {
+      for (const ms of [50, 300, 600]) setTimeout(place, ms);
+    });
     place();
   }
 }
@@ -9321,7 +9385,6 @@ export {
   FocusSurface,
   GraphRefreshRetrySurface,
   INDENT_UNIT,
-  IOS_FORM_BAR_PX,
   KEY_HELP,
   LANDING_VIEW_KEY,
   LIST_NAMES,
@@ -9361,7 +9424,6 @@ export {
   applyRules,
   armPredict,
   armSettle,
-  barLift,
   baseOf,
   boundaryLine,
   buildDrawer,
@@ -9419,11 +9481,12 @@ export {
   installLinks,
   installSearch,
   installTouchBar,
+  installViewHistory,
   instanceAnchorFor,
   instanceOf,
   instancesOf,
-  isIOS,
   isSilent,
+  keyboardBarTop,
   lineBody,
   lineOps,
   linkQueryAt,
@@ -9509,6 +9572,7 @@ export {
   todayFor,
   unconfirmedLines,
   viewButtons,
+  viewFromHash,
   visualLineOrder,
   wikiLinkSpans,
   wordCaret

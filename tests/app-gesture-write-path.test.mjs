@@ -103,6 +103,8 @@ const COVERED_KINDS = {
   boundary: "no commit — {/} move the selection only",
   indent: "reaches commitLine directly from app/index.html — THE OTHER FIX under test",
   word: "no commit — w/b/e move the column only",
+  "view-back": "no commit — H / Ctrl-o show the previous view (app/shell/viewhistory.ts, 2026-10-09)",
+  "view-forward": "no commit — L / Ctrl-i show the next view (2026-10-09)",
 };
 
 test("every NormalEffect kind motions.ts declares is accounted for below", () => {

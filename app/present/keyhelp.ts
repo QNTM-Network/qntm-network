@@ -62,6 +62,8 @@ export const KEY_HELP: readonly KeyHelpGroup[] = [
     title: "App",
     rows: [
       { keys: ["\\"], does: "Open the views list" },
+      { keys: ["H", "Ctrl-o", "⌘["], does: "Back to the previous view" },
+      { keys: ["L", "Ctrl-i", "⌘]"], does: "Forward to the next view" },
       { keys: ["/"], does: "Search tasks across all views" },
       { keys: ["?"], does: "This help" },
       { keys: ["Escape"], does: "Close a panel, or get out of a stuck edit" },
