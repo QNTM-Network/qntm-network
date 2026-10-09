@@ -880,3 +880,38 @@ def assert_every_list_ranks_through_one_ranking(state: ScenarioState) -> Predica
         message="every list ranks through rank.ts; rank.ts and section ordering share compareByKeys",
         observed_ref="app/present/rank.ts",
     )
+
+
+def assert_every_list_ranks_by_the_declared_client_settings(state: ScenarioState) -> PredicateResult:
+    """Every list takes its ranking policy from the declared client settings (config/client.yaml).
+
+    The client compile (scripts/compile-client.mjs) publishes `client.lists`; app/present/rank.ts
+    reads it; the page hands each list `policyFor(<list>, declaration.lists)`. A list wired to the
+    built-in policy directly would ignore the operator's config silently — this refuses that, and
+    refuses the compiler's field list drifting from rank.ts's (backlog row client-settings-in-config,
+    2026-10-09). The behaviour is tests/client-settings.test.mjs.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    page = _read(root / "app" / "index.html")
+    rank = _read(root / "app" / "present" / "rank.ts")
+    compiler = _read(root / "scripts" / "compile-client.mjs")
+    problems = []
+    for name in ("search", "link", "views", "tags", "markers"):
+        if f'policyFor("{name}", declaration.lists)' not in page:
+            problems.append(f"the page does not give the {name} list its declared policy")
+    def fields(text: str, pattern: str) -> list[str]:
+        m = re.search(pattern, text)
+        return re.findall(r'"([a-z_]+)"', m.group(1)) if m else []
+    rank_fields = fields(rank, r"RANK_FIELDS\s*=\s*\[([^\]]*)\]")
+    script_fields = fields(compiler, r"RANK_FIELDS\s*=\s*\[([^\]]*)\]")
+    if not rank_fields or rank_fields != script_fields:
+        problems.append(f"compile-client.mjs RANK_FIELDS {script_fields} differ from rank.ts {rank_fields}")
+    if problems:
+        return PredicateResult(status="FAIL", message="; ".join(problems), observed_ref="app/index.html")
+    return PredicateResult(
+        status="PASS",
+        message="all five lists rank by the declared client settings; compiler and client core agree on the fields",
+        observed_ref="app/index.html",
+    )

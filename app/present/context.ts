@@ -36,6 +36,7 @@
  * and stay silent on the rest without spelling silence a second way.
  */
 
+import { readClientDeclaration, type ListPolicies } from "./rank.js";
 import type { PresentationLevel } from "./express/levels.js";
 import { readDeclaration, DEFAULT_INDENT_UNIT } from "./express/declaration.js";
 import { readStructuralDeclaration } from "./arrange/structural.js";
@@ -135,6 +136,9 @@ export interface DeclaredPresentation {
    * APPLY it to a fresh capture's own resolved fields. See `rules.ts`'s header for what reads it
    * (`app/index.html`'s `rulesReadingFor`) and what it deliberately never does on its own. */
   readonly rules: RulesLanguage;
+  /** CLIENT SETTINGS — how each list ranks (config/client.yaml, compiled by
+   *  scripts/compile-client.mjs, read by app/present/rank.ts). Empty when none are declared. */
+  readonly lists: ListPolicies;
   readonly problems: readonly string[];
 }
 
@@ -177,6 +181,7 @@ export function presentationFromDeclaration(document: unknown): DeclaredPresenta
   const qualificationReading = readQualificationDeclaration(document);
   const resolutionReading = readConfigResolutionDeclaration(document);
   const rulesReading = readRulesDeclaration(document);
+  const clientReading = readClientDeclaration(document);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
@@ -185,12 +190,14 @@ export function presentationFromDeclaration(document: unknown): DeclaredPresenta
     qualification: qualificationReading.qualification,
     resolution: resolutionReading.resolution,
     rules: rulesReading.rules,
+    lists: clientReading.lists,
     problems: [
       ...reading.problems,
       ...structuralReading.problems,
       ...qualificationReading.problems,
       ...resolutionReading.problems,
       ...rulesReading.problems,
+      ...clientReading.problems,
     ],
   };
 }
@@ -269,6 +276,7 @@ export interface Declaration {
   readonly qualification: QualificationLanguage | undefined;
   readonly resolution: ConfigResolutionTable | undefined;
   readonly rules: RulesLanguage | undefined;
+  readonly lists: ListPolicies;
 }
 
 /**
@@ -286,6 +294,7 @@ export const NOT_YET_DECLARED: Declaration = {
   qualification: undefined,
   resolution: undefined,
   rules: undefined,
+  lists: {},
 };
 
 /**
@@ -303,5 +312,6 @@ export function declarationFrom(declared: DeclaredPresentation): Declaration {
     qualification: declared.qualification,
     resolution: declared.resolution,
     rules: declared.rules,
+    lists: declared.lists,
   };
 }

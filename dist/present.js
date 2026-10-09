@@ -1954,6 +1954,9 @@ function readDeclaration(document2) {
     if (key === RULES_KEY) {
       continue;
     }
+    if (key === "client") {
+      continue;
+    }
     if (key === INDENT_UNIT_KEY) {
       if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
         problems.push(
@@ -3820,6 +3823,127 @@ function todayFor(nowUtcMs, boundary) {
   return { kind: "answer", answer: { logicalDate, weekEnd } };
 }
 
+// app/present/rank.ts
+var LIST_NAMES = ["search", "link", "views", "tags", "markers"];
+var RANK_FIELDS = ["kind", "match", "status", "demoted", "title", "position"];
+var CLIENT_KEY = "client";
+var STATUS_ORDER = ["open", "in_progress", "*", "scheduled", "waiting", "done", "cancelled"];
+var DEFAULT_RANK_POLICIES = {
+  search: {
+    keys: [
+      { field: "kind", order: ["view", "section", "task"] },
+      { field: "demoted", direction: "asc" },
+      { field: "status", order: STATUS_ORDER },
+      { field: "match", direction: "desc" },
+      { field: "position" }
+    ]
+  },
+  link: {
+    minMatch: 1,
+    keys: [
+      { field: "demoted", direction: "asc" },
+      { field: "status", order: STATUS_ORDER },
+      { field: "match", direction: "desc" },
+      { field: "position" }
+    ]
+  },
+  views: { keys: [{ field: "match", direction: "desc" }, { field: "title" }] },
+  tags: { minMatch: 1, keys: [{ field: "match", direction: "desc" }, { field: "position" }] },
+  markers: { minMatch: 2, keys: [{ field: "match", direction: "desc" }, { field: "position" }] }
+};
+function queryWords(query) {
+  return query.toLowerCase().split(/\s+/).filter((w) => w !== "");
+}
+function matchQuality(item, query) {
+  const words2 = queryWords(query);
+  if (words2.length === 0) return 3;
+  const title = item.title.toLowerCase();
+  if (title.startsWith(query.trim().toLowerCase())) return 3;
+  const titleWords = title.split(/[\s·/_\-#]+/).filter((w) => w !== "");
+  if (words2.every((w) => titleWords.some((t) => t.startsWith(w)))) return 2;
+  if (words2.every((w) => title.includes(w))) return 1;
+  const all = `${title} ${String(item.also ?? "").toLowerCase()}`;
+  if (words2.every((w) => all.includes(w))) return 0;
+  return null;
+}
+function globMatches(glob, text) {
+  const pattern = glob.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
+  return new RegExp(`^${pattern}$`, "i").test(text);
+}
+var PRESENT = (value) => ({ tier: 0, value });
+var ABSENT = { tier: 1, value: 0 };
+function orderValue(order, value) {
+  if (value === void 0 || value === "") return ABSENT;
+  const at = order.indexOf(value);
+  if (at !== -1) return PRESENT(at);
+  const wild = order.indexOf("*");
+  return wild !== -1 ? PRESENT(wild) : ABSENT;
+}
+function fieldValue(field, key, s, policy) {
+  switch (field) {
+    case "match":
+      return PRESENT(s.match);
+    case "position":
+      return PRESENT(s.position);
+    case "title":
+      return PRESENT(s.item.title.toLowerCase());
+    case "kind":
+      return key.order !== void 0 ? orderValue(key.order, s.item.kind) : s.item.kind ? PRESENT(s.item.kind) : ABSENT;
+    case "status":
+      return key.order !== void 0 ? orderValue(key.order, s.item.status) : s.item.status ? PRESENT(s.item.status) : ABSENT;
+    case "demoted": {
+      const path = s.item.path ?? "";
+      return PRESENT((policy.demote ?? []).some((glob) => globMatches(glob, path)) ? 1 : 0);
+    }
+    default:
+      return ABSENT;
+  }
+}
+function rank(items, describe, query, policy) {
+  const minMatch = policy.minMatch ?? 0;
+  const scored = [];
+  items.forEach((value, position) => {
+    const item = describe(value);
+    const match = matchQuality(item, query);
+    if (match === null || match < minMatch) return;
+    scored.push({ value, item, match, position });
+  });
+  const keys = policy.keys.map((key) => key.order !== void 0 ? { direction: "asc" } : key);
+  const tuple = (s) => policy.keys.map((key) => fieldValue(key.field, key, s, policy));
+  const tuples = new Map(scored.map((s) => [s, tuple(s)]));
+  return scored.sort((a, b) => compareByKeys(tuples.get(a) ?? [], tuples.get(b) ?? [], keys)).map((s) => s.value);
+}
+function policyFor(list, declared) {
+  return declared?.[list] ?? DEFAULT_RANK_POLICIES[list];
+}
+function readClientDeclaration(document2) {
+  const problems = [];
+  const lists = {};
+  const client = document2?.[CLIENT_KEY];
+  if (client === void 0) return { lists, problems };
+  const declared = client?.lists;
+  if (declared === null || typeof declared !== "object" || Array.isArray(declared)) {
+    problems.push(`'${CLIENT_KEY}.lists' is not an object \u2014 every list keeps its built-in order`);
+    return { lists, problems };
+  }
+  for (const [name, value] of Object.entries(declared)) {
+    if (!LIST_NAMES.includes(name)) {
+      problems.push(`'${CLIENT_KEY}.lists.${name}' is not a list this app has \u2014 ignored`);
+      continue;
+    }
+    const keys = value?.keys;
+    const usable = Array.isArray(keys) && keys.length > 0 && keys.every(
+      (k) => k !== null && typeof k === "object" && RANK_FIELDS.includes(k.field) && (k.order === void 0 || Array.isArray(k.order))
+    );
+    if (!usable) {
+      problems.push(`'${CLIENT_KEY}.lists.${name}' has no usable keys \u2014 it keeps its built-in order`);
+      continue;
+    }
+    lists[name] = value;
+  }
+  return { lists, problems };
+}
+
 // app/present/context.ts
 var PresentationContext = class _PresentationContext {
   #contributions;
@@ -3872,6 +3996,7 @@ function presentationFromDeclaration(document2) {
   const qualificationReading = readQualificationDeclaration(document2);
   const resolutionReading = readConfigResolutionDeclaration(document2);
   const rulesReading = readRulesDeclaration(document2);
+  const clientReading = readClientDeclaration(document2);
   return {
     context: new PresentationContext({ GLOBAL: reading.contribution }),
     indentUnit: reading.indentUnit,
@@ -3880,12 +4005,14 @@ function presentationFromDeclaration(document2) {
     qualification: qualificationReading.qualification,
     resolution: resolutionReading.resolution,
     rules: rulesReading.rules,
+    lists: clientReading.lists,
     problems: [
       ...reading.problems,
       ...structuralReading.problems,
       ...qualificationReading.problems,
       ...resolutionReading.problems,
-      ...rulesReading.problems
+      ...rulesReading.problems,
+      ...clientReading.problems
     ]
   };
 }
@@ -3896,7 +4023,8 @@ var NOT_YET_DECLARED = {
   structural: void 0,
   qualification: void 0,
   resolution: void 0,
-  rules: void 0
+  rules: void 0,
+  lists: {}
 };
 function declarationFrom(declared) {
   return {
@@ -3906,7 +4034,8 @@ function declarationFrom(declared) {
     structural: declared.structural,
     qualification: declared.qualification,
     resolution: declared.resolution,
-    rules: declared.rules
+    rules: declared.rules,
+    lists: declared.lists
   };
 }
 
@@ -7995,95 +8124,8 @@ function createGraphRefreshRetry(deps) {
   return retryGraphRefresh;
 }
 
-// app/present/rank.ts
-var STATUS_ORDER = ["open", "in_progress", "*", "scheduled", "waiting", "done", "cancelled"];
-var DEFAULT_RANK_POLICIES = {
-  search: {
-    keys: [
-      { field: "kind", order: ["view", "section", "task"] },
-      { field: "demoted", direction: "asc" },
-      { field: "status", order: STATUS_ORDER },
-      { field: "match", direction: "desc" },
-      { field: "position" }
-    ]
-  },
-  link: {
-    minMatch: 1,
-    keys: [
-      { field: "demoted", direction: "asc" },
-      { field: "status", order: STATUS_ORDER },
-      { field: "match", direction: "desc" },
-      { field: "position" }
-    ]
-  },
-  views: { keys: [{ field: "match", direction: "desc" }, { field: "title" }] },
-  tags: { minMatch: 1, keys: [{ field: "match", direction: "desc" }, { field: "position" }] },
-  markers: { minMatch: 2, keys: [{ field: "match", direction: "desc" }, { field: "position" }] }
-};
-function queryWords(query) {
-  return query.toLowerCase().split(/\s+/).filter((w) => w !== "");
-}
-function matchQuality(item, query) {
-  const words2 = queryWords(query);
-  if (words2.length === 0) return 3;
-  const title = item.title.toLowerCase();
-  if (title.startsWith(query.trim().toLowerCase())) return 3;
-  const titleWords = title.split(/[\s·/_\-#]+/).filter((w) => w !== "");
-  if (words2.every((w) => titleWords.some((t) => t.startsWith(w)))) return 2;
-  if (words2.every((w) => title.includes(w))) return 1;
-  const all = `${title} ${String(item.also ?? "").toLowerCase()}`;
-  if (words2.every((w) => all.includes(w))) return 0;
-  return null;
-}
-function globMatches(glob, text) {
-  const pattern = glob.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*");
-  return new RegExp(`^${pattern}$`, "i").test(text);
-}
-var PRESENT = (value) => ({ tier: 0, value });
-var ABSENT = { tier: 1, value: 0 };
-function orderValue(order, value) {
-  if (value === void 0 || value === "") return ABSENT;
-  const at = order.indexOf(value);
-  if (at !== -1) return PRESENT(at);
-  const wild = order.indexOf("*");
-  return wild !== -1 ? PRESENT(wild) : ABSENT;
-}
-function fieldValue(field, key, s, policy) {
-  switch (field) {
-    case "match":
-      return PRESENT(s.match);
-    case "position":
-      return PRESENT(s.position);
-    case "title":
-      return PRESENT(s.item.title.toLowerCase());
-    case "kind":
-      return key.order !== void 0 ? orderValue(key.order, s.item.kind) : s.item.kind ? PRESENT(s.item.kind) : ABSENT;
-    case "status":
-      return key.order !== void 0 ? orderValue(key.order, s.item.status) : s.item.status ? PRESENT(s.item.status) : ABSENT;
-    case "demoted": {
-      const path = s.item.path ?? "";
-      return PRESENT((policy.demote ?? []).some((glob) => globMatches(glob, path)) ? 1 : 0);
-    }
-    default:
-      return ABSENT;
-  }
-}
-function rank(items, describe, query, policy) {
-  const minMatch = policy.minMatch ?? 0;
-  const scored = [];
-  items.forEach((value, position) => {
-    const item = describe(value);
-    const match = matchQuality(item, query);
-    if (match === null || match < minMatch) return;
-    scored.push({ value, item, match, position });
-  });
-  const keys = policy.keys.map((key) => key.order !== void 0 ? { direction: "asc" } : key);
-  const tuple = (s) => policy.keys.map((key) => fieldValue(key.field, key, s, policy));
-  const tuples = new Map(scored.map((s) => [s, tuple(s)]));
-  return scored.sort((a, b) => compareByKeys(tuples.get(a) ?? [], tuples.get(b) ?? [], keys)).map((s) => s.value);
-}
-
 // app/shell/drawer.ts
+var viewsPolicy = (deps) => deps.policy?.() ?? DEFAULT_RANK_POLICIES.views;
 var folderOf = (path) => {
   const at = String(path ?? "").lastIndexOf("/");
   return at === -1 ? "" : String(path).slice(0, at);
@@ -8133,7 +8175,7 @@ function treeRow(className, glyph, name, count) {
   return button;
 }
 function paintFolder(deps, node, into, currentViewId) {
-  for (const folder of rank([...node.folders.values()], (f) => ({ title: f.name }), "", DEFAULT_RANK_POLICIES.views)) {
+  for (const folder of rank([...node.folders.values()], (f) => ({ title: f.name }), "", viewsPolicy(deps))) {
     const box = document.createElement("div");
     const open = holdsView(folder, currentViewId);
     box.className = open ? "fold" : "fold shut";
@@ -8150,7 +8192,7 @@ function paintFolder(deps, node, into, currentViewId) {
     drawerStops.push(head);
     paintFolder(deps, folder, kids, currentViewId);
   }
-  for (const v of rank([...node.views], (x) => ({ title: x.title, path: x.path ?? "" }), "", DEFAULT_RANK_POLICIES.views)) {
+  for (const v of rank([...node.views], (x) => ({ title: x.title, path: x.path ?? "" }), "", viewsPolicy(deps))) {
     const button = treeRow("viewbtn", null, v.title, null);
     button.addEventListener("click", () => {
       deps.onChoose(v.id);
@@ -8172,7 +8214,7 @@ function paintMatches(deps, query) {
   viewButtons.clear();
   drawerStops.push(deps.closeButton);
   deps.tree.innerHTML = "";
-  const matches = filterViews(shownViews, query);
+  const matches = filterViews(shownViews, query, viewsPolicy(deps));
   for (const v of matches) {
     const button = treeRow("viewbtn", null, v.title, null);
     const where = document.createElement("span");
@@ -8618,11 +8660,11 @@ function applyCompletion(text, completion, insert) {
     caret: completion.start + insert.length + 1
   };
 }
-function tagSource(vocabulary) {
+function tagSource(vocabulary, policy) {
   return (text, caret) => {
     const query = tagQueryAt(text, caret);
     if (query === null) return null;
-    const items = matchingTags(vocabulary, query).map((tag) => ({ label: tag, insert: tag }));
+    const items = matchingTags(vocabulary, query, 8, policy).map((tag) => ({ label: tag, insert: tag }));
     return { start: query.start, end: query.end, items };
   };
 }
@@ -9001,7 +9043,7 @@ function installSearch(deps, doc = document) {
     list.setAttribute("role", "listbox");
     root.append(input, list);
     input.addEventListener("input", () => {
-      hits = searchViews(deps.views(), input.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.() });
+      hits = searchViews(deps.views(), input.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.(), policy: deps.policy?.() });
       selected = 0;
       render();
     });
@@ -9037,12 +9079,12 @@ function linkQueryAt(text, caret) {
   if (query.includes("]]") || query.includes("[")) return null;
   return { start, query };
 }
-function linkSource(views, preferViewId, statuses = () => void 0) {
+function linkSource(views, preferViewId, statuses = () => void 0, policy = () => void 0) {
   return (text, caret) => {
     const open = linkQueryAt(text, caret);
     if (open === null || open.query.trim() === "") return null;
     const end = text.startsWith("]]", caret) ? caret + 2 : caret;
-    const items = linkTargets(views(), open.query, { prefer: preferViewId(), statuses: statuses() }).map((hit) => ({
+    const items = linkTargets(views(), open.query, { prefer: preferViewId(), statuses: statuses(), policy: policy() }).map((hit) => ({
       label: `${hit.title}  \xB7  ${hit.viewTitle}`,
       insert: `[[${hit.title}]]`
     }));
@@ -9249,6 +9291,7 @@ export {
   ANCHOR_TRUST,
   AcceptedSource,
   BaseSurface,
+  CLIENT_KEY,
   COMPLETE,
   DEFAULT,
   DEFAULT_INDENT_UNIT,
@@ -9260,6 +9303,7 @@ export {
   INDENT_UNIT,
   KEY_HELP,
   LANDING_VIEW_KEY,
+  LIST_NAMES,
   LineRegister,
   ModeSurface,
   NOT_EVALUATED,
@@ -9272,6 +9316,7 @@ export {
   PresentationContext,
   ProjectionQueue,
   QUALIFICATION_KEY,
+  RANK_FIELDS,
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,
   RESOLVABLE_FIELDS,
@@ -9386,6 +9431,7 @@ export {
   parentCandidateFor,
   placeDraft,
   placeFor,
+  policyFor,
   presentationFromDeclaration,
   promotionSpec,
   prospectiveEdgeBinding,
@@ -9395,6 +9441,7 @@ export {
   qualifyingClassifierFor,
   queryWords,
   rank,
+  readClientDeclaration,
   readConfigResolutionDeclaration,
   readDeclaration,
   readQualificationDeclaration,

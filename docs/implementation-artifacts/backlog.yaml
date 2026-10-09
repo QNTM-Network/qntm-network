@@ -49,7 +49,6 @@ backlog:
     state-every-list-ranks-through-one-ranking and tests/present-rank.test.mjs.
 - id: client-settings-in-config
   project: engine-and-clients
-  lead: true
   captured: '2026-10-09'
   title: >
     A client section in the config, with list ordering as its first key. Declared in a new
@@ -60,7 +59,15 @@ backlog:
     global_defaults.yaml, which holds the engine's own field defaults (architecture checkpoint
     2026-10-09, decided). Replaces row list-ordering-declared-in-global-defaults.
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: client-settings-in-config
+  resolution: >
+    2026-10-09. Monorepo: SupportedContentType.CLIENT for config/client.yaml (carried, never read)
+    and the file itself, with Everything views demoted. This repo: scripts/compile-client.mjs and
+    generate-client-declaration.mjs (presentation.json `client` key), Worker compile routes and the
+    isolate check entry, rank.ts `readClientDeclaration`/`policyFor`, and all five lists wired.
+    Enforced by state-every-list-ranks-by-the-declared-client-settings and
+    tests/client-settings.test.mjs.
 - id: recently-used-recorded-on-the-server
   project: engine-and-clients
   captured: '2026-10-09'
@@ -94,6 +101,7 @@ backlog:
   state: unscoped
 - id: close-registration-until-a-user-has-their-own-graph
   project: engine-and-clients
+  lead: true
   captured: '2026-10-09'
   title: >
     Registration is open, and a new account gets a safe but empty app with nothing it can use.

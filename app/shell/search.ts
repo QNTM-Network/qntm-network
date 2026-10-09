@@ -6,6 +6,7 @@
  */
 
 import type { CheckboxStatuses } from "../present/express/rendition.js";
+import type { RankPolicy } from "../present/rank.js";
 import { searchViews, type SearchHit, type SearchView } from "../present/search.js";
 
 export interface SearchDeps {
@@ -13,6 +14,8 @@ export interface SearchDeps {
   readonly currentViewId: () => string | null;
   /** The declared checkbox glyphs, read fresh so a config change is picked up. */
   readonly statuses?: () => CheckboxStatuses | undefined;
+  /** The `search` ranking policy, read fresh (config/client.yaml). */
+  readonly policy?: () => RankPolicy | undefined;
   /** Show `viewId` with the cursor on `lineIndex`. */
   readonly go: (viewId: string, lineIndex: number) => void;
 }
@@ -74,7 +77,7 @@ export function installSearch(deps: SearchDeps, doc: Document = document): () =>
     list.setAttribute("role", "listbox");
     root.append(input, list);
     input.addEventListener("input", () => {
-      hits = searchViews(deps.views(), input!.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.() });
+      hits = searchViews(deps.views(), input!.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.(), policy: deps.policy?.() });
       selected = 0;
       render();
     });

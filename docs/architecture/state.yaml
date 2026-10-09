@@ -372,6 +372,19 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [one-ranking-for-every-list]
+  - id: state-every-list-ranks-by-the-declared-client-settings
+    name: the operator's client settings reach every list
+    description: |
+      config/client.yaml is compiled by scripts/compile-client.mjs into the declaration's `client`
+      key, read by app/present/rank.ts, and the page hands each of the five lists
+      `policyFor(<list>, declaration.lists)`. The compiler's field list equals rank.ts's.
+    check: "index.html calls policyFor for search, link, views, tags and markers; RANK_FIELDS match
+      between compile-client.mjs and rank.ts"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_every_list_ranks_by_the_declared_client_settings
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [client-settings-in-config]
 # ── TOMBSTONE: state-every-class-names-a-declared-package — RETRACTED 2026-08-11, the same day it
 #    was wired. It gated `every-declared-class-names-its-package-home`, which was retracted as a
 #    category error (see the tombstone at the foot of capabilities.yaml for the full reasoning and

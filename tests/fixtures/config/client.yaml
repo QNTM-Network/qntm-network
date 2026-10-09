@@ -1,0 +1,8 @@
+# Fixture client settings — read by scripts/compile-client.mjs (tests and the Worker isolate check).
+lists:
+  demote: ["*/everything.md"]
+  search:
+    keys:
+      - { field: kind, order: [view, section, task] }
+      - { field: status, order: [open, "*", done] }
+      - { field: match, direction: desc }

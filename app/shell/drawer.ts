@@ -185,7 +185,11 @@ export interface DrawerDeps {
   readonly onChoose: (viewId: string) => void;
   /** Type-to-filter box above the tree (2026-10-08). Absent: the drawer is the tree alone. */
   readonly filter?: HTMLInputElement | undefined;
+  /** The `views` ranking policy (config/client.yaml), read fresh; the built-in one when absent. */
+  readonly policy?: (() => RankPolicy | undefined) | undefined;
 }
+
+const viewsPolicy = (deps: DrawerDeps): RankPolicy => deps.policy?.() ?? DEFAULT_RANK_POLICIES.views;
 
 export const folderOf = (path: string | undefined | null): string => {
   const at = String(path ?? "").lastIndexOf("/");
@@ -252,7 +256,7 @@ function treeRow(className: string, glyph: string | null, name: string, count: n
 function paintFolder(deps: DrawerDeps, node: FolderNode, into: HTMLElement, currentViewId: string | null): void {
   // Folders and views in the tree are ranked by the same `views` policy as the filter, with no
   // query (2026-10-09): A–Z by title today, and configurable with every other list.
-  for (const folder of rank([...node.folders.values()], (f) => ({ title: f.name }), "", DEFAULT_RANK_POLICIES.views)) {
+  for (const folder of rank([...node.folders.values()], (f) => ({ title: f.name }), "", viewsPolicy(deps))) {
     const box = document.createElement("div");
     // OPEN IF IT HOLDS WHERE YOU ARE, shut otherwise. 76 views in ten folders is a scroll if
     // everything is open, and a drawer that lands showing the view you are in is the one that
@@ -272,7 +276,7 @@ function paintFolder(deps: DrawerDeps, node: FolderNode, into: HTMLElement, curr
     drawerStops.push(head);
     paintFolder(deps, folder, kids, currentViewId);
   }
-  for (const v of rank([...node.views], (x) => ({ title: x.title, path: x.path ?? "" }), "", DEFAULT_RANK_POLICIES.views)) {
+  for (const v of rank([...node.views], (x) => ({ title: x.title, path: x.path ?? "" }), "", viewsPolicy(deps))) {
     const button = treeRow("viewbtn", null, v.title, null);
     button.addEventListener("click", () => {
       // A CHOICE, SAID OUT LOUD — reported to the page, never acted on here. See this file's own
@@ -310,7 +314,7 @@ function paintMatches(deps: DrawerDeps, query: string): void {
   viewButtons.clear();
   drawerStops.push(deps.closeButton);
   deps.tree.innerHTML = "";
-  const matches = filterViews(shownViews, query);
+  const matches = filterViews(shownViews, query, viewsPolicy(deps));
   for (const v of matches) {
     const button = treeRow("viewbtn", null, v.title, null);
     const where = document.createElement("span");
