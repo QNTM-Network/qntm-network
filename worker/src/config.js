@@ -35,7 +35,7 @@ import { compile as compileStructural } from "../../scripts/compile-structural.m
 import { compile as compileQualification } from "../../scripts/compile-qualification.mjs";
 import { compile as compileResolution } from "../../scripts/compile-resolution.mjs";
 import { compile as compileRules } from "../../scripts/compile-rules.mjs";
-import { compile as compileClient } from "../../scripts/compile-client.mjs";
+import { compile as compilePresentation } from "../../scripts/compile-presentation.mjs";
 
 // One route entry per generator: the URL suffix, and the pure `compile` it calls. Adding the
 // third generator (resolution) and now the fourth (rules) was one more entry here each time, not
@@ -45,8 +45,8 @@ const ROUTES = new Map([
   ["POST /config/compile/qualification", compileQualification],
   ["POST /config/compile/resolution", compileResolution],
   ["POST /config/compile/rules", compileRules],
-  // CLIENT SETTINGS (2026-10-09): config/client.yaml — one more entry, as predicted above.
-  ["POST /config/compile/client", compileClient],
+  // THE WHOLE DECLARATION (2026-10-09): what `POST /config/publish` compiles, previewed.
+  ["POST /config/compile/presentation", compilePresentation],
 ]);
 
 /**

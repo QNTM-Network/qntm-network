@@ -16,7 +16,7 @@
 -- the SQL layer, and it is descriptive, not enforced.
 CREATE TABLE IF NOT EXISTS declarations (
   user_id          TEXT NOT NULL REFERENCES users(id),
-  kind             TEXT NOT NULL,               -- structural | qualification | resolution | rules
+  kind             TEXT NOT NULL,               -- structural | qualification | resolution | rules | presentation
   version          TEXT NOT NULL,               -- sha256-<hex>, from declaration-version.mjs
   declaration_json TEXT NOT NULL,
   dropped_json     TEXT NOT NULL,
@@ -34,4 +34,18 @@ CREATE TABLE IF NOT EXISTS declaration_current (
   version    TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, kind)
+);
+
+-- One row per PUBLISHED config (`worker/src/publish.js`, 2026-10-09): numbered per user, holding
+-- the exact gzipped tar the engine accepted, the identity of its files, and the declaration it
+-- compiled to. Written only after the engine accepted it. Publishing the same files again keeps
+-- the number; publishing an older set of files again is a new number (a rollback is a publish).
+CREATE TABLE IF NOT EXISTS config_versions (
+  user_id             TEXT NOT NULL REFERENCES users(id),
+  number              INTEGER NOT NULL,
+  files_version       TEXT NOT NULL,               -- sha256-<hex> of the files (config-archive.mjs)
+  declaration_version TEXT NOT NULL,               -- the `presentation` row in `declarations`
+  archive             BLOB NOT NULL,               -- the gzipped tar POSTed to the engine
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, number)
 );

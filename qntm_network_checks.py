@@ -940,3 +940,34 @@ def assert_sign_up_is_invite_only_and_fails_closed(state: ScenarioState) -> Pred
     if problems:
         return PredicateResult(status="FAIL", message="; ".join(problems), observed_ref="worker/src/registration.js")
     return PredicateResult(status="PASS", message="sign-up is invite-only and fails closed", observed_ref="worker/src/registration.js")
+
+
+def assert_config_reaches_the_app_only_after_the_engine_accepts_it(state: ScenarioState) -> PredicateResult:
+    """The app never reads a config the engine refused.
+
+    worker/src/publish.js asks the engine before it stores anything; worker/src/declarations.js only
+    reads; the page reads the API's declaration first (backlog row config-publish-in-the-api,
+    2026-10-09). The behaviour is tests/worker-config-publish.test.mjs.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    publish = _read(root / "worker" / "src" / "publish.js")
+    reads = _read(root / "worker" / "src" / "declarations.js")
+    page = _read(root / "app" / "index.html")
+    problems = []
+    body = publish[publish.find("async function publish("):]
+    at_engine, at_store = body.find("await engineCheck("), body.find("env.DB.batch(")
+    if at_engine == -1 or at_store == -1 or at_store < at_engine:
+        problems.append("publish.js does not ask the engine before its D1 batch")
+    if "INSERT" in reads or '"POST"' in reads:
+        problems.append("declarations.js writes again — a second way in that skips the engine")
+    loader = page[page.find("async function loadPresentation()"):]
+    at_api, at_copy = loader.find("API + DECLARATION_PATH"), loader.find("DECLARATION_FALLBACK_URL")
+    if at_api == -1 or at_copy == -1 or at_copy < at_api:
+        problems.append("the page does not read the published declaration before the committed copy")
+    if problems:
+        return PredicateResult(status="FAIL", message="; ".join(problems), observed_ref="worker/src/publish.js")
+    return PredicateResult(
+        status="PASS", message="config reaches the app only after the engine accepts it", observed_ref="worker/src/publish.js"
+    )

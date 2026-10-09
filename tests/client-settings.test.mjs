@@ -33,7 +33,7 @@ test("a declared list compiles to its keys, with the shared demote handed down",
 });
 
 test("no client.yaml is silence: every list keeps its built-in order", () => {
-  assert.deepEqual(compile({}), { lists: undefined });
+  assert.deepEqual(compile({}), { lists: undefined, renditions: {} });
   assert.deepEqual(policyFor("search", undefined), DEFAULT_RANK_POLICIES.search);
 });
 
@@ -66,4 +66,17 @@ test("a malformed client key is reported and ignored, never half-applied", () =>
   const { lists, problems } = readClientDeclaration({ client: { lists: { search: { keys: [{ field: "nope" }] } } } });
   assert.deepEqual(lists, {});
   assert.equal(problems.length, 1);
+});
+
+test("renditions: each family is wired or raw, and anything else is refused by name", () => {
+  const { renditions } = compile({ "client.yaml": "renditions:\n  tags: wired\n  stamp: raw\n" });
+  assert.deepEqual(renditions, { tags: "wired", stamp: "raw" });
+  assert.throws(() => compile({ "client.yaml": "renditions:\n  tag: wired\n" }), /renditions.tag is not a token family/);
+  assert.throws(() => compile({ "client.yaml": "renditions:\n  tags: chip\n" }), /renditions.tags is "chip", not raw or wired/);
+});
+
+test("the rendition families are the client core's", async () => {
+  const { RENDITION_FAMILIES } = await import("../scripts/compile-client.mjs");
+  const { RESOLUTION_KEYS } = await import("../dist/present.js");
+  assert.deepEqual([...RENDITION_FAMILIES], [...RESOLUTION_KEYS]);
 });

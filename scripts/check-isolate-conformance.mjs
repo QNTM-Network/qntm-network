@@ -55,8 +55,8 @@
  *                                                                # without moving the real thing.
  */
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { REPO_ROOT, DEFAULT_CONFIG_DIR } from "./monorepo-config.mjs";
 import { receipt } from "../worker/src/config.js";
@@ -88,7 +88,18 @@ import {
   RULES_PREFIX as RULES_CATEGORY_PREFIX,
   PATTERNS_PREFIX as RULES_PATTERNS_PREFIX,
 } from "./compile-rules.mjs";
-import { compile as compileClient, CLIENT_KEY } from "./compile-client.mjs";
+import { CLIENT_KEY } from "./compile-client.mjs";
+import { compile as compilePresentation } from "./compile-presentation.mjs";
+
+/** Every file under `dir`, keyed by its path relative to `dir` — the whole tree a publish sends. */
+function readWholeTree(dir, root = dir, files = {}) {
+  for (const name of readdirSync(dir).sort()) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) readWholeTree(path, root, files);
+    else files[relative(root, path)] = readFileSync(path, "utf8");
+  }
+  return files;
+}
 
 const WORKER_DIR = join(REPO_ROOT, "worker");
 const FIXTURE_CONFIG = join(REPO_ROOT, "tests", "fixtures", "config");
@@ -239,16 +250,14 @@ const GENERATORS = [
     },
   },
   {
-    name: "client",
-    routePath: "/config/compile/client",
-    compile: compileClient,
-    // Client settings are one file, config/client.yaml (2026-10-09). The refusal: a key naming a
-    // field the client core cannot read.
+    name: "presentation",
+    routePath: "/config/compile/presentation",
+    compile: compilePresentation,
+    // The WHOLE declaration a client reads (compile-presentation.mjs, 2026-10-09), from the whole
+    // config tree — what `POST /config/publish` compiles. The refusal: client.yaml naming a field
+    // the client core cannot read.
     readConfigTree(configDir) {
-      const files = {};
-      const path = join(configDir, CLIENT_KEY);
-      if (existsSync(path)) files[CLIENT_KEY] = readFileSync(path, "utf8");
-      return files;
+      return readWholeTree(configDir);
     },
     mutate(files) {
       const anchor = "field: kind";

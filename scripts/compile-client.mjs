@@ -29,6 +29,13 @@ export const LIST_NAMES = ["search", "link", "views", "tags", "markers"];
 /** The fields a key may name — what `fieldValue` in app/present/rank.ts reads. */
 export const RANK_FIELDS = ["kind", "match", "status", "demoted", "title", "position"];
 
+/** The token families a client shows one of two ways — `RESOLUTION_KEYS` in
+ * app/present/express/rendition.ts, restated for the same reason as `RANK_FIELDS`. */
+export const RENDITION_FAMILIES = ["checkbox", "heading", "prose", "tags", "stamp"];
+
+/** `wired` is the client's rendition (a checkbox, a heading, a chip); `raw` is the characters. */
+export const RENDITIONS = ["raw", "wired"];
+
 const DIRECTIONS = new Set(["asc", "desc"]);
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -79,20 +86,25 @@ function readList(name, value, sharedDemote) {
 
 /**
  * @param {Record<string, string> | Map<string, string>} files path -> contents; only `client.yaml`.
- * @returns {{ lists: Record<string, object> | undefined }} the declared list policies, or
- *   `undefined` when the file or its `lists:` is absent — SILENCE: every list keeps its built-in order.
+ * @returns {{ lists: Record<string, object> | undefined, renditions: Record<string, string> }} the
+ *   declared list policies (`undefined` when the file or its `lists:` is absent — SILENCE: every list
+ *   keeps its built-in order) and the declared renditions (empty when absent — every family keeps
+ *   its built-in default).
  */
 export function compile(files) {
   const isMap = files instanceof Map;
   const has = (key) => (isMap ? files.has(key) : Object.prototype.hasOwnProperty.call(files, key));
   const get = (key) => (isMap ? files.get(key) : files[key]);
-  if (!has(CLIENT_KEY)) return { lists: undefined };
+  if (!has(CLIENT_KEY)) return { lists: undefined, renditions: {} };
   const document = parseYamlSubset(get(CLIENT_KEY), CLIENT_KEY);
   if (!isObject(document)) throw new GenerationError(`${CLIENT_KEY} is not a mapping`);
   for (const k of Object.keys(document)) {
-    if (k !== "lists") throw new GenerationError(`${CLIENT_KEY}: '${k}' is not a client setting (lists)`);
+    if (k !== "lists" && k !== "renditions") {
+      throw new GenerationError(`${CLIENT_KEY}: '${k}' is not a client setting (lists, renditions)`);
+    }
   }
-  if (document.lists === undefined) return { lists: undefined };
+  const renditions = readRenditions(document.renditions);
+  if (document.lists === undefined) return { lists: undefined, renditions };
   if (!isObject(document.lists)) throw new GenerationError(`${CLIENT_KEY}: 'lists' is not a mapping`);
   const { demote: sharedDemote, ...named } = document.lists;
   if (sharedDemote !== undefined && !isStringList(sharedDemote)) {
@@ -103,5 +115,22 @@ export function compile(files) {
     if (!LIST_NAMES.includes(name)) throw new GenerationError(`${CLIENT_KEY}: lists.${name} is not a list (${LIST_NAMES.join(", ")})`);
     lists[name] = readList(name, value, sharedDemote);
   }
-  return { lists };
+  return { lists, renditions };
+}
+
+/** `renditions:` — family -> wired | raw. A family left out keeps its built-in default. */
+function readRenditions(value) {
+  if (value === undefined) return {};
+  if (!isObject(value)) throw new GenerationError(`${CLIENT_KEY}: 'renditions' is not a mapping`);
+  const out = {};
+  for (const [family, rendition] of Object.entries(value)) {
+    if (!RENDITION_FAMILIES.includes(family)) {
+      throw new GenerationError(`${CLIENT_KEY}: renditions.${family} is not a token family (${RENDITION_FAMILIES.join(", ")})`);
+    }
+    if (!RENDITIONS.includes(rendition)) {
+      throw new GenerationError(`${CLIENT_KEY}: renditions.${family} is ${JSON.stringify(rendition)}, not ${RENDITIONS.join(" or ")}`);
+    }
+    out[family] = rendition;
+  }
+  return out;
 }

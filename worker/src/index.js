@@ -16,6 +16,7 @@ import { handleAuth } from "./auth.js";
 import { handleApp } from "./app.js";
 import { handleConfig } from "./config.js";
 import { handleDeclarations } from "./declarations.js";
+import { handlePublish } from "./publish.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -51,6 +52,8 @@ export default {
       if (res) return res;
       const res2 = await handleDeclarations(request, env, url, origin);
       if (res2) return res2;
+      const res3 = await handlePublish(request, env, url, origin);
+      if (res3) return res3;
     }
 
     // --- operator export: GET /export?key=SECRET ---
