@@ -523,8 +523,12 @@ function normalLine(lineSource: string, column: number): HTMLElement {
  * would mean un-rendering HTML, and the app posts the WHOLE FILE, so a lossy inversion rewrites a
  * view.
  */
-/** Keep `body` at least as tall as it is now until the current task ends. See its call site. */
-function holdHeight(body: HTMLElement): void {
+/**
+ * Keep `body` at least as tall as it is now until the current task ends — so emptying and
+ * rebuilding a view does not let the browser pull the scroll position up. Called wherever the view
+ * is emptied: here, and `repaintCurrentView` in app/index.html.
+ */
+export function holdHeight(body: HTMLElement): void {
   const height = (body as { offsetHeight?: unknown }).offsetHeight;
   if (typeof height !== "number" || height <= 0 || body.style === undefined) return;
   body.style.minHeight = `${height}px`;

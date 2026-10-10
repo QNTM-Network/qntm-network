@@ -9512,6 +9512,7 @@ export {
   foldersOf,
   globalKey,
   graphSnapshotOf,
+  holdHeight,
   indentedLine,
   installCompleter,
   installGlobalKeys,
