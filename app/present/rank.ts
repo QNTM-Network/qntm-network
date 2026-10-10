@@ -45,6 +45,9 @@ export interface RankItem {
   readonly status?: string | undefined;
   /** The file the item lives in, matched against the policy's `demote` globs. */
   readonly path?: string | undefined;
+  /** How recently it was used: 0 the most recent, 1 the one before… Absent when it never was.
+   *  Read from the user's recent list on the server (app/present/recent.ts). */
+  readonly recent?: number | undefined;
 }
 
 /** One sort key. `order` and `direction` are alternatives; `order` wins when both are given. */
@@ -63,12 +66,12 @@ export interface RankPolicy {
 }
 
 /** The lists the app has. scripts/compile-client.mjs `LIST_NAMES` restates this list. */
-export const LIST_NAMES = ["search", "link", "views", "tags", "markers"] as const;
+export const LIST_NAMES = ["search", "recent", "link", "views", "tags", "markers"] as const;
 export type ListName = (typeof LIST_NAMES)[number];
 
 /** The fields a key may name — what `fieldValue` below reads. scripts/compile-client.mjs
  *  `RANK_FIELDS` restates this list; tests/client-settings.test.mjs holds the two equal. */
-export const RANK_FIELDS = ["kind", "match", "status", "demoted", "title", "position"] as const;
+export const RANK_FIELDS = ["kind", "match", "status", "demoted", "recent", "title", "position"] as const;
 
 /** The declared policies, by list — the declaration's `client.lists`. A list not named keeps its
  *  built-in policy. */
@@ -92,15 +95,20 @@ export const DEFAULT_RANK_POLICIES: Readonly<Record<ListName, RankPolicy>> = {
       { field: "status", order: STATUS_ORDER },
       { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
+      { field: "recent" },
       { field: "position" },
     ],
   },
+  // A BLANK `/` (2026-10-10, operator-asked: "even when blank … switch back to prev file"): what
+  // was used most recently first, views before tasks on a tie. Only used items are listed.
+  recent: { keys: [{ field: "recent" }, { field: "kind", order: ["view", "section", "task"] }] },
   link: {
     minMatch: 1,
     keys: [
       { field: "status", order: STATUS_ORDER },
       { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
+      { field: "recent" },
       { field: "position" },
     ],
   },
@@ -169,6 +177,8 @@ function fieldValue(field: string, key: RankKey, s: Scored<unknown>, policy: Ran
       return key.order !== undefined ? orderValue(key.order, s.item.kind) : s.item.kind ? PRESENT(s.item.kind) : ABSENT;
     case "status":
       return key.order !== undefined ? orderValue(key.order, s.item.status) : s.item.status ? PRESENT(s.item.status) : ABSENT;
+    case "recent":
+      return s.item.recent !== undefined ? PRESENT(s.item.recent) : ABSENT;
     case "demoted": {
       const path = s.item.path ?? "";
       return PRESENT((policy.demote ?? []).some((glob) => globMatches(glob, path)) ? 1 : 0);

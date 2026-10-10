@@ -3824,8 +3824,8 @@ function todayFor(nowUtcMs, boundary) {
 }
 
 // app/present/rank.ts
-var LIST_NAMES = ["search", "link", "views", "tags", "markers"];
-var RANK_FIELDS = ["kind", "match", "status", "demoted", "title", "position"];
+var LIST_NAMES = ["search", "recent", "link", "views", "tags", "markers"];
+var RANK_FIELDS = ["kind", "match", "status", "demoted", "recent", "title", "position"];
 var CLIENT_KEY = "client";
 var STATUS_ORDER = ["open", "in_progress", "*", "scheduled", "waiting", "done", "cancelled"];
 var DEFAULT_RANK_POLICIES = {
@@ -3835,15 +3835,20 @@ var DEFAULT_RANK_POLICIES = {
       { field: "status", order: STATUS_ORDER },
       { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
+      { field: "recent" },
       { field: "position" }
     ]
   },
+  // A BLANK `/` (2026-10-10, operator-asked: "even when blank … switch back to prev file"): what
+  // was used most recently first, views before tasks on a tie. Only used items are listed.
+  recent: { keys: [{ field: "recent" }, { field: "kind", order: ["view", "section", "task"] }] },
   link: {
     minMatch: 1,
     keys: [
       { field: "status", order: STATUS_ORDER },
       { field: "demoted", direction: "asc" },
       { field: "match", direction: "desc" },
+      { field: "recent" },
       { field: "position" }
     ]
   },
@@ -3891,6 +3896,8 @@ function fieldValue(field, key, s, policy) {
       return key.order !== void 0 ? orderValue(key.order, s.item.kind) : s.item.kind ? PRESENT(s.item.kind) : ABSENT;
     case "status":
       return key.order !== void 0 ? orderValue(key.order, s.item.status) : s.item.status ? PRESENT(s.item.status) : ABSENT;
+    case "recent":
+      return s.item.recent !== void 0 ? PRESENT(s.item.recent) : ABSENT;
     case "demoted": {
       const path = s.item.path ?? "";
       return PRESENT((policy.demote ?? []).some((glob) => globMatches(glob, path)) ? 1 : 0);
@@ -7499,7 +7506,27 @@ function createGraphRefreshRetry(deps) {
   return retryGraphRefresh;
 }
 
+// app/present/recent.ts
+var RECENT_LIMIT = 50;
+var viewKey = (viewId) => `view:${viewId}`;
+var taskKey = (qntmId) => `task:${qntmId}`;
+function lineKey(line) {
+  const stamp = stampSpans(line)[0];
+  return stamp === void 0 ? null : taskKey(stamp.id);
+}
+function noteUse(list, key) {
+  return [key, ...list.filter((k) => k !== key)].slice(0, RECENT_LIMIT);
+}
+function recentIndex(list) {
+  return new Map(list.map((key, index) => [key, index]));
+}
+
 // app/present/search.ts
+function hitKey(hit) {
+  if (hit.kind === "view") return viewKey(hit.viewId);
+  if (hit.kind === "task") return taskKey(hit.qntmId);
+  return null;
+}
 function folderWords(path) {
   const parts = String(path ?? "").split("/").slice(0, -1);
   return parts.join(" ").replace(/[-_]/g, " ");
@@ -7569,10 +7596,12 @@ function searchCandidates(views, options = {}) {
   }
   return hits;
 }
-function describeHit(hit) {
-  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath };
+function describeHit(hit, recent = /* @__PURE__ */ new Map()) {
+  const key = hitKey(hit);
+  const used = key === null ? void 0 : recent.get(key);
+  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath, recent: used };
   if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
-  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
+  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath, recent: used };
 }
 function bestCopyOfEachTask(hits, key, policy) {
   const choose = { keys: [{ field: "demoted", direction: "asc" }, { field: "position" }], demote: policy.demote };
@@ -7589,16 +7618,33 @@ function bestCopyOfEachTask(hits, key, policy) {
   return hits.filter((hit) => kept.has(hit));
 }
 function searchViews(views, query, options = {}) {
-  if (query.trim() === "") return [];
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
+  const recent = recentIndex(options.recent ?? []);
   const copies = bestCopyOfEachTask(searchCandidates(views, options), (hit) => hit.qntmId, policy);
-  return rank(copies, describeHit, query, policy).slice(0, options.limit ?? 30);
+  if (query.trim() === "") return recentHits(copies, recent, options);
+  return rank(copies, (hit) => describeHit(hit, recent), query, policy).slice(0, options.limit ?? 30);
+}
+function recentHits(copies, recent, options) {
+  const used = copies.filter((hit) => {
+    const key = hitKey(hit);
+    if (key === null || !recent.has(key)) return false;
+    return !(hit.kind === "view" && hit.viewId === options.prefer);
+  });
+  const policy = options.recentPolicy ?? DEFAULT_RANK_POLICIES.recent;
+  return rank(used, (hit) => describeHit(hit, recent), "", policy).slice(0, options.limit ?? 12);
 }
 function linkTargets(views, query, options = {}) {
   if (query.trim() === "") return [];
   const tasks = searchCandidates(views, options).filter((hit) => hit.kind === "task" && hit.title !== "");
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
-  const describe = (hit) => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
+  const recent = recentIndex(options.recent ?? []);
+  const describe = (hit) => ({
+    title: hit.title,
+    kind: "task",
+    status: hit.status,
+    path: hit.viewPath,
+    recent: recent.get(taskKey(hit.qntmId))
+  });
   const copies = bestCopyOfEachTask(tasks, (hit) => hit.title.toLowerCase(), policy);
   return rank(copies, describe, query, policy).slice(0, options.limit ?? 8);
 }
@@ -7838,7 +7884,8 @@ var KEY_HELP = [
       { keys: ["\\"], does: "Open the views list" },
       { keys: ["H", "Ctrl-o", "\u2318["], does: "Back to the previous view" },
       { keys: ["L", "Ctrl-i", "\u2318]"], does: "Forward to the next view" },
-      { keys: ["/"], does: "Search tasks across all views" },
+      { keys: ["/"], does: "Search; blank, it lists what you used recently \u2014 Enter goes back" },
+      { keys: ["\u2318S", "Ctrl+S"], does: "Cycle (saves an open line first)" },
       { keys: ["?"], does: "This help" },
       { keys: ["Escape"], does: "Close a panel, or get out of a stuck edit" }
     ]
@@ -8774,6 +8821,14 @@ var typingIn = (target) => {
 };
 function globalKey(deps, e) {
   if (e.defaultPrevented) return;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+    e.preventDefault();
+    if (typingIn(e.target)) {
+      e.target.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    }
+    deps.cycle?.();
+    return;
+  }
   if (e.key === "Escape" && deps.drawerIsOpen()) {
     e.preventDefault();
     deps.closeDrawer();
@@ -9194,6 +9249,7 @@ function installSearch(deps, doc = document) {
     const hit = hits[index];
     if (hit === void 0) return;
     close();
+    deps.used?.(hit);
     deps.go(hit.viewId, hit.lineIndex);
   };
   const render = () => {
@@ -9206,6 +9262,7 @@ function installSearch(deps, doc = document) {
         const kind = doc.createElement("em");
         kind.className = `search-kind search-kind-${hit.kind}`;
         kind.textContent = hit.kind === "view" ? "View" : hit.kind === "section" ? "Section" : "Task";
+        if (index === 0 && hit.kind === "view" && input?.value.trim() === "") kind.textContent = "Back to";
         if (hit.status === "done") row.classList.add("search-done");
         const text = doc.createElement("span");
         text.textContent = hit.text;
@@ -9220,6 +9277,17 @@ function installSearch(deps, doc = document) {
       })
     );
   };
+  const search = () => {
+    hits = searchViews(deps.views(), input?.value ?? "", {
+      prefer: deps.currentViewId(),
+      statuses: deps.statuses?.(),
+      policy: deps.policy?.(),
+      recent: deps.recent?.(),
+      recentPolicy: deps.recentPolicy?.()
+    });
+    selected = 0;
+    render();
+  };
   const make = () => {
     root = doc.createElement("div");
     root.className = "search-box";
@@ -9227,16 +9295,12 @@ function installSearch(deps, doc = document) {
     root.setAttribute("aria-label", "Search");
     input = doc.createElement("input");
     input.type = "search";
-    input.placeholder = "Search views, sections and tasks\u2026";
+    input.placeholder = "Recent \u2014 type to search views, sections and tasks\u2026";
     input.setAttribute("aria-label", "Search views, sections and tasks");
     list = doc.createElement("ul");
     list.setAttribute("role", "listbox");
     root.append(input, list);
-    input.addEventListener("input", () => {
-      hits = searchViews(deps.views(), input.value, { prefer: deps.currentViewId(), statuses: deps.statuses?.(), policy: deps.policy?.() });
-      selected = 0;
-      render();
-    });
+    input.addEventListener("input", () => search());
     input.addEventListener("keydown", (event) => {
       if (event.key === "ArrowDown" && hits.length > 0) selected = (selected + 1) % hits.length;
       else if (event.key === "ArrowUp" && hits.length > 0) selected = (selected - 1 + hits.length) % hits.length;
@@ -9254,8 +9318,7 @@ function installSearch(deps, doc = document) {
     if (root === null) make();
     root.hidden = false;
     input.value = "";
-    hits = [];
-    render();
+    search();
     input.focus();
   };
 }
@@ -9439,6 +9502,7 @@ export {
   ProjectionQueue,
   QUALIFICATION_KEY,
   RANK_FIELDS,
+  RECENT_LIMIT,
   RESOLUTION_KEYS,
   RESOLUTION_TABLE_KEY,
   RESOLVABLE_FIELDS,
@@ -9512,6 +9576,7 @@ export {
   foldersOf,
   globalKey,
   graphSnapshotOf,
+  hitKey,
   holdHeight,
   indentedLine,
   installCompleter,
@@ -9527,6 +9592,7 @@ export {
   isSilent,
   keyboardBarTop,
   lineBody,
+  lineKey,
   lineOps,
   linkQueryAt,
   linkSource,
@@ -9547,6 +9613,7 @@ export {
   membershipSpec,
   mintWriteToken,
   nodeLocalContext,
+  noteUse,
   openDrawer,
   openLine,
   orderingFor,
@@ -9575,6 +9642,7 @@ export {
   readStructuralDeclaration,
   readWriteEcho,
   rebaseLineEdit,
+  recentIndex,
   relativeAnchorFor,
   renderRuleEffects,
   resolveAndArm,
@@ -9606,6 +9674,7 @@ export {
   tagSource,
   tagSpans,
   tagVocabulary,
+  taskKey,
   titleSpans,
   titleStyleFor,
   titleStylePredicateHolds,
@@ -9613,6 +9682,7 @@ export {
   unconfirmedLines,
   viewButtons,
   viewFromHash,
+  viewKey,
   visualLineOrder,
   wikiLinkSpans,
   wordCaret

@@ -608,6 +608,8 @@ async function standUpPage(label, mutate) {
   globalThis.fetch = async (url, init = {}) => {
     const route = new URL(String(url)).pathname;
     const method = init.method || "POST";
+    // RECENTLY USED (2026-10-10) is not this suite's concern: answered, and not counted as a call.
+    if (route === "/app/recent") return { ok: true, status: 200, json: async () => ({ ok: true, recent: [] }) };
     control.calls.push(`${method} ${route}`);
     if (route === "/app/edit-file") {
       const body = JSON.parse(init.body);

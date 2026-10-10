@@ -3,6 +3,7 @@
 // v1 = the oldest still-open capture — the thing you've known needed doing the longest.
 // (prioritization-is-derived — sharpen the heuristic later without a data migration.)
 
+import { recentGet, recentPost } from "./recent.js";
 import { json, notModified, getSession, uuid, isoIn, bearer } from "./util.js";
 
 async function loadState(env, userId, handle) {
@@ -888,6 +889,8 @@ export async function handleApp(request, env, url, origin, ctx) {
     "POST /app/edit": editPost,
     "POST /app/edit-file": editFile,
     "POST /app/cycle": cyclePost,
+    "GET /app/recent": recentGet,
+    "POST /app/recent": recentPost,
   };
   const fn = sessionRoutes[key];
   if (!fn) return null;

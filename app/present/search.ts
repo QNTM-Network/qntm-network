@@ -10,6 +10,7 @@
 
 import { classifyLine, cleanTitleFor, contentOf, stampSpans, type CheckboxStatuses } from "./express/rendition.js";
 import { DEFAULT_RANK_POLICIES, rank, type RankItem, type RankPolicy } from "./rank.js";
+import { recentIndex, taskKey, viewKey } from "./recent.js";
 
 export interface SearchView {
   readonly id: string;
@@ -52,6 +53,17 @@ export interface SearchOptions {
   readonly statuses?: CheckboxStatuses | undefined;
   /** How to order the hits (app/present/rank.ts); the list's built-in policy when absent. */
   readonly policy?: RankPolicy | undefined;
+  /** The user's recently used keys, newest first (app/present/recent.ts) — the `recent` field. */
+  readonly recent?: readonly string[] | undefined;
+  /** How to order a BLANK search — the `recent` list's policy; its built-in policy when absent. */
+  readonly recentPolicy?: RankPolicy | undefined;
+}
+
+/** A hit's recent key: its view, or its task. A section is not recorded on its own. */
+export function hitKey(hit: SearchHit): string | null {
+  if (hit.kind === "view") return viewKey(hit.viewId);
+  if (hit.kind === "task") return taskKey(hit.qntmId);
+  return null;
 }
 
 /** The folders of `path` as words: `work/outcomes-career/all.md` -> "work outcomes career". */
@@ -135,10 +147,12 @@ export function searchCandidates(views: readonly SearchView[], options: SearchOp
 
 /** What ranking needs to know about a hit. A view is matched on its title and folders, a section on
  *  its heading, a task on its title first and the rest of its line after. */
-function describeHit(hit: SearchHit): RankItem {
-  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath };
+function describeHit(hit: SearchHit, recent: ReadonlyMap<string, number> = new Map()): RankItem {
+  const key = hitKey(hit);
+  const used = key === null ? undefined : recent.get(key);
+  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath, recent: used };
   if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
-  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
+  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath, recent: used };
 }
 
 /**
@@ -164,10 +178,25 @@ function bestCopyOfEachTask(hits: readonly SearchHit[], key: (hit: SearchHit) =>
 
 /** The `/` search: views, sections and tasks matching `query`, ranked by the `search` policy. */
 export function searchViews(views: readonly SearchView[], query: string, options: SearchOptions = {}): readonly SearchHit[] {
-  if (query.trim() === "") return [];
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
+  const recent = recentIndex(options.recent ?? []);
   const copies = bestCopyOfEachTask(searchCandidates(views, options), (hit) => hit.qntmId, policy);
-  return rank(copies, describeHit, query, policy).slice(0, options.limit ?? 30);
+  if (query.trim() === "") return recentHits(copies, recent, options);
+  return rank(copies, (hit) => describeHit(hit, recent), query, policy).slice(0, options.limit ?? 30);
+}
+
+/**
+ * A BLANK `/`: the items used most recently, ranked by the `recent` policy — without the view the
+ * operator is already in, so the first item is the one to switch back to.
+ */
+function recentHits(copies: readonly SearchHit[], recent: ReadonlyMap<string, number>, options: SearchOptions): SearchHit[] {
+  const used = copies.filter((hit) => {
+    const key = hitKey(hit);
+    if (key === null || !recent.has(key)) return false;
+    return !(hit.kind === "view" && hit.viewId === options.prefer);
+  });
+  const policy = options.recentPolicy ?? DEFAULT_RANK_POLICIES.recent;
+  return rank(used, (hit) => describeHit(hit, recent), "", policy).slice(0, options.limit ?? 12);
 }
 
 /**
@@ -180,7 +209,10 @@ export function linkTargets(views: readonly SearchView[], query: string, options
   if (query.trim() === "") return [];
   const tasks = searchCandidates(views, options).filter((hit) => hit.kind === "task" && hit.title !== "");
   const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
-  const describe = (hit: SearchHit): RankItem => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
+  const recent = recentIndex(options.recent ?? []);
+  const describe = (hit: SearchHit): RankItem => ({
+    title: hit.title, kind: "task", status: hit.status, path: hit.viewPath, recent: recent.get(taskKey(hit.qntmId)),
+  });
   const copies = bestCopyOfEachTask(tasks, (hit) => hit.title.toLowerCase(), policy);
   return rank(copies, describe, query, policy).slice(0, options.limit ?? 8);
 }

@@ -87,6 +87,8 @@ export interface GlobalKeyDeps {
   /** `H` / Ctrl-o and `L` / Ctrl-i: the previous / next view (app/shell/viewhistory.ts). */
   readonly viewBack?: () => void;
   readonly viewForward?: () => void;
+  /** ⌘S / Ctrl+S: run a cycle (the page's `runCycle`). */
+  readonly cycle?: () => void;
   /** The view `c` captures into (the inbox), or `undefined` when there is none. */
   readonly captureViewId?: () => string | undefined;
   /** Switch to a view, exactly as choosing it in the drawer does. */
@@ -132,6 +134,16 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   // view with Enter opened its first line for editing). The drawer, the search box and the
   // suggestion list each `preventDefault` the keys they act on.
   if (e.defaultPrevented) return;
+  // ⌘S / CTRL+S IS CYCLE (2026-10-10, operator-asked: "a command on mac for cycle"). Anywhere,
+  // in either mode: an open line is saved first (its own Enter), and Cycle waits for that save.
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+    e.preventDefault();
+    if (typingIn(e.target)) {
+      (e.target as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    }
+    deps.cycle?.();
+    return;
+  }
   if (e.key === "Escape" && deps.drawerIsOpen()) { e.preventDefault(); deps.closeDrawer(); return; }
   if (e.key === "\\" && !deps.drawerIsOpen() && !typingIn(e.target)) { e.preventDefault(); deps.openDrawer(); return; }
   // THE THIRD DRAIN POINT — the world catches up the moment he is not typing into it.
