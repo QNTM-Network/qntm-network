@@ -37,3 +37,4 @@ export { installTouchBar, showTouchMode, TOUCH_KEYS, keyboardBarTop } from "./sh
 export type { SearchDeps } from "./shell/search.js";
 export type { CompleterDeps } from "./shell/completer.js";
 export type { GlobalKeyDeps, GlobalKeyView } from "./shell/keys.js";
+export { holdHeight } from "./shell/paint.js";

@@ -1247,6 +1247,7 @@ import {
   flushMarks,
   revealSelection,
   installCompleter,
+  holdHeight,
   installKeyHelp,
   installSearch,
   installTouchBar,
@@ -1266,7 +1267,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=cd1656ccce";
+} from "/dist/present.js?v=bfe2f263d1";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -2645,6 +2646,10 @@ function paintView(id, why) {
 function repaintCurrentView() {
   const v = graphData?.snapshot?.views.find((x) => x.id === currentViewId);
   const body = $("viewBody");
+  // KEEP THE PAGE'S HEIGHT (2026-10-10, measured live): emptying the view here and then updating
+  // the mode badge laid out an empty page, the scroll fell to 0, and focusing the editor scrolled it
+  // to the bottom edge — the "`a` jumps to the bottom" report.
+  holdHeight(body);
   body.innerHTML = "";
   updateVimBadge();
   if (!v) return;
