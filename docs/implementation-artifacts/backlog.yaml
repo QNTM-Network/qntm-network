@@ -112,6 +112,12 @@ backlog:
     test cases (siblings, fields, edges, key list, expected order) run by the engine's pytest and by
     node --test; the chain key in arrange/keys.ts; children orderings in the compiled declaration;
     retire the constants-only fixture behind tests/resolution-default-ordering-agreement.test.mjs.
+
+    DECIDED 2026-10-10: the substrate knows no declarations. The app's ENGINE_DEFAULT_ORDERING and
+    ENGINE_PRIORITY_RANK (scripts/compile-resolution.mjs) go, because the defaults move into the
+    instance's global_defaults.yaml and reach the app through the compiled declaration. The shared
+    test cases use made-up field and edge names. rank.ts RANK_FIELDS names `status`, a declared
+    field: tracked with the monorepo row substrate-names-no-declared-field-or-type.
   kind: capability
   state: unscoped
 - id: close-registration-until-a-user-has-their-own-graph
