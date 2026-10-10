@@ -29,6 +29,29 @@ const isLineEditor = (target: EventTarget | null): target is HTMLTextAreaElement
   target instanceof HTMLTextAreaElement &&
   target.classList.contains("rawline");
 
+/**
+ * Put `list` under `editor`, or above it when the visible area has no room below — the visible
+ * area, not the window: on a phone the keyboard covers the bottom of the window, and
+ * `visualViewport` says where the part a person can see ends. Kept inside the screen sideways.
+ */
+export function placeSuggestionList(list: HTMLElement, editor: HTMLElement): void {
+  const view = editor.ownerDocument.defaultView;
+  const box = editor.getBoundingClientRect();
+  const visual = view?.visualViewport;
+  const visibleTop = visual ? visual.offsetTop : 0;
+  const visibleBottom = visual ? visual.offsetTop + visual.height : (view?.innerHeight ?? 0);
+  const visibleRight = visual ? visual.offsetLeft + visual.width : (view?.innerWidth ?? 0);
+  const gap = 6;
+  const height = list.offsetHeight;
+  const below = visibleBottom - box.bottom - gap;
+  const above = box.top - visibleTop - gap;
+  const top = height <= below || below >= above ? box.bottom + gap : box.top - gap - Math.min(height, above);
+  const left = Math.max(8, Math.min(box.left, visibleRight - list.offsetWidth - 8));
+  list.style.top = `${Math.round(top)}px`;
+  list.style.left = `${Math.round(left)}px`;
+  list.style.maxHeight = `${Math.max(96, Math.round(Math.min(256, top >= box.bottom ? below : above)))}px`;
+}
+
 export function installCompleter(deps: CompleterDeps): void {
   let made: HTMLUListElement | null = null;
   const listEl = (doc: Document): HTMLUListElement => {
@@ -50,6 +73,26 @@ export function installCompleter(deps: CompleterDeps): void {
   const close = (): void => {
     if (made !== null) made.hidden = true;
     offer = null;
+    if (following !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(following);
+    following = null;
+  };
+
+  // THE LIST FOLLOWS ITS LINE (2026-10-10, operator screenshots from an iPhone and a Mac: the list
+  // sat where the line USED to be, or ran off the bottom of the screen). It was placed once, when it
+  // opened. Now, every frame while it is open, it is placed again from where the editor is — so a
+  // scroll, the phone keyboard opening, or the editor growing a line moves it with the line — and it
+  // closes the moment its editor is gone or no longer focused (leaving INSERT by a repaint removes
+  // the editor without a `focusout` the browser always reports).
+  let following: number | null = null;
+  const follow = (): void => {
+    following = null;
+    if (!isOpen() || active === null) return;
+    if (!active.isConnected || active.ownerDocument.activeElement !== active) {
+      close();
+      return;
+    }
+    placeSuggestionList(made!, active);
+    following = requestAnimationFrame(follow);
   };
 
   const accept = (index: number): void => {
@@ -80,10 +123,9 @@ export function installCompleter(deps: CompleterDeps): void {
         return row;
       }),
     );
-    const box = active.getBoundingClientRect();
-    list.style.left = `${Math.round(box.left)}px`;
-    list.style.top = `${Math.round(box.bottom + 4)}px`;
     list.hidden = false;
+    placeSuggestionList(list, active);
+    if (following === null && typeof requestAnimationFrame === "function") following = requestAnimationFrame(follow);
   };
 
   const refresh = (input: HTMLTextAreaElement): void => {

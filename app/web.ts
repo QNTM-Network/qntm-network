@@ -28,7 +28,7 @@ export {
 } from "./shell/drawer.js";
 export type { DrawerDeps, DrawerView, FolderNode } from "./shell/drawer.js";
 export { flushMarks, globalKey, installGlobalKeys } from "./shell/keys.js";
-export { installCompleter } from "./shell/completer.js";
+export { installCompleter, placeSuggestionList as placeSuggestions } from "./shell/completer.js";
 export { installKeyHelp } from "./shell/help.js";
 export { installSearch } from "./shell/search.js";
 export { installLinks } from "./shell/links.js";

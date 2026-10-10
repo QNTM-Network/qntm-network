@@ -523,6 +523,16 @@ function normalLine(lineSource: string, column: number): HTMLElement {
  * would mean un-rendering HTML, and the app posts the WHOLE FILE, so a lossy inversion rewrites a
  * view.
  */
+/** Keep `body` at least as tall as it is now until the current task ends. See its call site. */
+function holdHeight(body: HTMLElement): void {
+  const height = (body as { offsetHeight?: unknown }).offsetHeight;
+  if (typeof height !== "number" || height <= 0 || body.style === undefined) return;
+  body.style.minHeight = `${height}px`;
+  queueMicrotask(() => {
+    body.style.minHeight = "";
+  });
+}
+
 export function lineEditor(text: string): HTMLTextAreaElement {
   const box = document.createElement("textarea") as HTMLTextAreaElement;
   box.className = "rawline";
@@ -1600,9 +1610,14 @@ export function paint(
     }
   };
 
-  // EMPTYING THE COLUMN REMOVES THE FOCUSED `<input>`, AND REMOVING IT FIRES `blur`. That listener
-  // can settle a row, and a settlement repaints — so this one statement can run a whole paint
-  // before it returns. Everything below it belongs to a frame that may already have been replaced.
+  // THE PAGE KEEPS ITS HEIGHT WHILE THE VIEW IS REBUILT (2026-10-10, operator report: pressing `a`
+  // mid-screen jumped the line to the bottom of the screen). The editor is focused the moment its
+  // row is appended, before the rows below it exist; focusing lays the page out, the half-built
+  // page is shorter than the scroll position, the browser pulls the scroll up, and focus then
+  // scrolls the editor back to the NEAREST edge — the bottom. Holding the column's height until
+  // this task ends keeps the scroll where it was, so focus only scrolls when the line is
+  // genuinely off screen.
+  holdHeight(body);
   body.innerHTML = "";
   if (superseded()) {
     return;
