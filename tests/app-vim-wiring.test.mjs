@@ -631,7 +631,7 @@ describe("a projection arriving does not take the column away", () => {
 // MUTATION PROOF — put `mode.enterInsert()` back on click, and the new NORMAL assertion goes red.
 //
 // THE SEAM IS THE BUNDLE, NOT THE PAGE — the same seam tests/app-enter-opens-a-line.test.mjs cuts
-// and its header explains why: the gesture under test lives in `app/present/paint.ts`, which the
+// and its header explains why: the gesture under test lives in `app/shell/paint.ts`, which the
 // page imports as `/dist/present.js`. A mutated COPY of the bundle is written beside the lifted
 // page and the page's own import is pointed at it, so the code under test is still the real
 // `focusable`, plus exactly the one line this suite is proving is load-bearing.

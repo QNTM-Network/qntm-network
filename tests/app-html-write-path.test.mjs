@@ -62,7 +62,7 @@ let posted;
  * The clickable TEXT of the first TASK line.
  *
  * `walk(body).find((el) => el.tagName === "span")` used to be exactly this, and stopped being it
- * when the vim cursor's own line started rendering its source characters (app/present/paint.ts's
+ * when the vim cursor's own line started rendering its source characters (app/shell/paint.ts's
  * `normalLine`, three spans). `paintView` seeds the cursor to line 0, so the first span on the page
  * now belongs to the heading. A task's text span is the one carrying RENDERED markdown; the cursor
  * line's spans carry `textContent`. Selecting by that selects the thing these tests are about.
@@ -73,7 +73,7 @@ const taskText = (body) => walk(body).find((el) => el.tagName === "span" && el.i
  * Paint with the cursor parked on line 0 — the heading — so all four task lines paint as tasks.
  *
  * NOT COSMETIC, AND NOT A WORKAROUND. The cursor's own line renders its SOURCE in NORMAL as well as
- * INSERT (app/present/paint.ts), so WHICH line it is on decides which lines are widgets. `page`
+ * INSERT (app/shell/paint.ts), so WHICH line it is on decides which lines are widgets. `page`
  * holds one `FocusSurface` for the whole file, exactly as the real app holds one for the session,
  * so a test that just called `paintView` would be asserting against wherever the previous test left
  * the cursor. These tests are about clicking a TASK; this is them saying so.

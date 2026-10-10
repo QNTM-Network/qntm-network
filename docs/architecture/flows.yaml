@@ -95,7 +95,7 @@ expected_flows:
   # `presentation-is-resolved-not-chosen` falsifiable at all — a painter with the decision back
   # at the call site stops producing it.
   - id: paint-resolves-through-the-cascade
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/express/cascade
     callee: PresentationCascade.resolve
     event: app.resolves-a-rendition
@@ -195,7 +195,7 @@ expected_flows:
   # THE LINE'S OWN CONTENT — the LINE level's input, read in one place instead of by three
   # regexes at three call sites.
   - id: paint-classifies-the-line
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/express/rendition
     callee: classifyLine
     event: app.classifies-a-source-line
@@ -214,7 +214,7 @@ expected_flows:
   # wired`. That makes the observation itself meaningful: this edge being present in a capture is
   # evidence that a declaration reached the painter and was obeyed.
   - id: paint-finds-the-tags-in-the-line
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/express/rendition
     callee: tagSpans
     event: app.finds-the-tags-in-a-line
@@ -233,7 +233,7 @@ expected_flows:
   # IT FIRES ONLY ON THE WIRED PATH, exactly as the tag edge does, so observing it is evidence that
   # a declaration of `stamp: wired` reached the painter and was obeyed rather than merely loaded.
   - id: paint-finds-the-identity-stamp-in-the-line
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/express/rendition
     callee: stampSpans
     event: app.finds-the-identity-stamp-in-a-line
@@ -248,7 +248,7 @@ expected_flows:
   # the painter, and these two edges are the observable form of that: the painter asks the focus
   # surface for a context and obeys what the cascade then resolves.
   - id: paint-derives-the-focus-level
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/focus
     callee: FocusSurface.contextFor
     event: app.derives-the-focus-level
@@ -261,7 +261,7 @@ expected_flows:
   # real observed edges, and leaving them undeclared would report as drift while being exactly
   # what we intend. An accurate map includes the quiet edges.
   - id: paint-moves-the-cursor
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/focus
     callee: FocusSurface.focus
     event: app.puts-the-cursor-on-a-line
@@ -269,7 +269,7 @@ expected_flows:
     gates_capabilities: [the-focused-line-shows-its-source]
 
   - id: paint-takes-the-cursor-off
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/focus
     callee: FocusSurface.blur
     event: app.takes-the-cursor-off-a-line
@@ -280,7 +280,7 @@ expected_flows:
   # that was just painted. The rendition came from the cascade; this is the painter asking
   # whether the line it is building is the one a person is looking at.
   - id: paint-asks-where-the-cursor-is
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/focus
     callee: FocusSurface.isFocused
     event: app.reads-the-cursor-position
@@ -310,7 +310,7 @@ expected_flows:
   # contenteditable region holding a rendition would not, which is why one is admissible and the
   # other is the shape the design forbids.
   - id: paint-writes-back-through-the-source
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/source
     callee: applyEdit
     event: app.computes-a-source-edit
@@ -329,7 +329,7 @@ expected_flows:
   # painter that had decided what a new line is — which is the exact condition the presentation
   # cascade exists to end, arriving in the one place where there are no characters to hide it.
   - id: paint-resolves-what-a-new-line-is
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/newline
     callee: seedFor
     event: app.resolves-a-new-line
@@ -342,7 +342,7 @@ expected_flows:
   # that the source string has NOT been touched yet — which is what makes an abandoned line cost
   # nothing and is why `applyEdit` gained one kind rather than two.
   - id: paint-opens-a-line-that-is-not-in-the-file
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/draft
     callee: DraftSurface.open
     event: app.opens-a-new-line
@@ -422,7 +422,7 @@ expected_flows:
   # AT an index and every line from there down keeps the index it already had — the source is not
   # renumbered, so the painter has to be told which position it is rather than work it out.
   - id: paint-asks-where-the-new-line-goes
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/draft
     callee: DraftSurface.isDraftAt
     event: app.reads-the-new-line-position
@@ -430,7 +430,7 @@ expected_flows:
     gates_capabilities: [a-new-line-is-resolved-not-guessed]
 
   - id: paint-reads-the-line-being-made
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/draft
     callee: DraftSurface.draft
     event: app.reads-the-line-being-made
@@ -442,7 +442,7 @@ expected_flows:
   # never in the file, so there is nothing to remove. That this edge reaches `draft` and NOT
   # `source` is the observable form of that claim.
   - id: paint-abandons-a-line-that-was-never-in-the-file
-    from: app/present/paint
+    from: app/shell/paint
     to:   app/present/draft
     callee: DraftSurface.drop
     event: app.abandons-a-new-line
@@ -845,7 +845,7 @@ forbidden_flows:
 
   - id: cascade-never-touches-the-dom
     from: app/present/express/cascade
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       The cascade is a pure decision. If it ever calls into the painter it can see the page it is
       deciding about, and "which level won" stops being answerable without running the app —
@@ -858,7 +858,7 @@ forbidden_flows:
   # page, because what it describes IS a thing on the page. It must not.
   - id: focus-never-touches-the-dom
     from: app/present/focus
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       The focus surface holds ONE NUMBER — which line the cursor is on — and turns it into a
       level. It is pure so that a test can resolve "as if the cursor were here" without a
@@ -900,7 +900,7 @@ forbidden_flows:
 
   - id: draft-never-touches-the-dom
     from: app/present/draft
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       The dependency runs one way: `paint.ts` reads this surface and this surface knows nothing
       about a page. It holds the characters a row is carrying so a repaint can put them back, and
@@ -924,7 +924,7 @@ forbidden_flows:
 
   - id: queue-never-paints
     from: app/present/queue
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       HOLDING A PROJECTION AND INSTALLING ONE ARE TWO DECISIONS AND ONLY ONE OF THEM IS THIS
       MODULE'S. It answers "which projection is the current one for this file", which is pure
@@ -935,7 +935,7 @@ forbidden_flows:
 
   - id: relative-never-touches-the-dom
     from: app/present/relative
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       The relative anchor answers "where did the line the operator was writing go", from two
       strings and nothing else. A call into the painter would make the answer depend on what is
@@ -949,7 +949,7 @@ forbidden_flows:
 
   - id: newline-never-touches-the-dom
     from: app/present/newline
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       `seedFor` decides what a NEW line is, and it decides it from the SOURCE STRING — from the
       lines the engine has already printed into this view, which are the cascade's answer already
@@ -961,7 +961,7 @@ forbidden_flows:
 
   - id: draft-never-touches-the-dom
     from: app/present/draft
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       THE DRAFT SURFACE IS THE MODULE MOST LIKELY TO BE HELPED INTO TOUCHING THE PAGE, because what
       it describes IS a row on the page — an `<input>` a person is typing into. It must not. It
@@ -974,7 +974,7 @@ forbidden_flows:
 
   - id: source-never-touches-the-dom
     from: app/present/source
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       THIS IS THE STRUCTURAL FORM OF THE GOVERNING CONSTRAINT. The markdown is the truth and the
       DOM is a projection of it; edits travel projection to source to engine to new projection,
@@ -997,7 +997,7 @@ forbidden_flows:
 
   - id: base-never-touches-the-dom
     from: app/present/base
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       THE BASE IS WHAT THE SERVER LAST SENT FOR A FILE, and the one thing that could destroy it as
       a precondition is deriving it from the page instead of from the string the server sent. The
@@ -1016,7 +1016,7 @@ forbidden_flows:
 
   - id: held-never-touches-the-dom
     from: app/present/held
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       A HELD ROW IS THE ONE THING ON THIS PAGE THAT LOOKS MOST LIKE A LINE AND IS MOST DANGEROUS TO
       TREAT AS ONE. It holds characters no file owns — a region of the screen the source string does
@@ -1044,7 +1044,7 @@ forbidden_flows:
 
   - id: correlation-never-touches-the-dom
     from: app/present/correlation
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       THIS MODULE HOLDS THE HANDLES TO THE OPERATOR'S OUTSTANDING WRITES, and the one thing it
       decides — "did MY write land" — is the thing a held row is released on. So a call into the
@@ -1113,7 +1113,7 @@ forbidden_flows:
 
   - id: accepted-never-paints
     from: app/present/accepted
-    to:   app/present/paint
+    to:   app/shell/paint
     reason: >
       WHAT THE PAINTER WALKS AND WHETHER IT MAY WALK IT ARE TWO DECISIONS. This surface answers the
       first — one string, for one path — and the second depends on whether a line is open, which is
@@ -1240,7 +1240,7 @@ forbidden_flows:
   # `escape-discards-and-cannot-write` adds NO row to this file, stated here rather than left for
   # a reader to notice.
   #
-  # The whole change is inside one module. `discard` is a function in `app/present/paint.ts` and
+  # The whole change is inside one module. `discard` is a function in `app/shell/paint.ts` and
   # `Settlement` is a type in the same file; the painter's imports are byte for byte what they
   # were, and no module gained or lost a caller. There is no edge to declare, so declaring one
   # would be manufacturing the drift this file's own header refuses.
@@ -1262,7 +1262,7 @@ forbidden_flows:
   # the neighbouring row above it does not, and stated here rather than left to be noticed.
   #
   # The whole change is inside one module. `paintGeneration` is a counter in
-  # `app/present/paint.ts`, `superseded` is a closure inside `paint`, and the `focus.blur()` call
+  # `app/shell/paint.ts`, `superseded` is a closure inside `paint`, and the `focus.blur()` call
   # is one statement inside `settle` on the `FocusSurface` the painter was already handed. The
   # painter's imports are byte for byte what they were and no module gained or lost a caller, so
   # declaring an edge would be manufacturing the drift this file's own header refuses.

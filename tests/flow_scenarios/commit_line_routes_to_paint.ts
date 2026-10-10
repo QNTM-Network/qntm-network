@@ -58,11 +58,11 @@
 
 import { createCommitLine } from "../../app/present/commit.js";
 import type { CommitLineDeps, CommitLineView } from "../../app/present/commit.js";
-import { paint } from "../../app/present/paint.js";
+import { paint } from "../../app/shell/paint.js";
 import { PresentationContext } from "../../app/present/context.js";
 import { SettleSurface } from "../../app/present/settle.js";
 import { PredictSurface } from "../../app/present/predict.js";
-import type { LineCommit } from "../../app/present/paint.js";
+import type { LineCommit } from "../../app/shell/paint.js";
 import type { CommitContext } from "../../app/present/resolve.js";
 
 type Listener = () => void;
@@ -81,7 +81,7 @@ class StubElement {
   textContent = "";
   readonly style: Record<string, string> = {};
   readonly children: StubElement[] = [];
-  // `data-line-index` (`app/present/paint.ts`'s `markLineIndex`) is now written UNCONDITIONALLY,
+  // `data-line-index` (`app/shell/paint.ts`'s `markLineIndex`) is now written UNCONDITIONALLY,
   // on every row this scenario's `paint()` call builds — see `paint.ts`'s own header for why: it
   // is a fact about `source` alone, not about a supplied view id, unlike `data-instance`
   // (`stampInstance`), which stays conditional and needs no entry here because it never touches

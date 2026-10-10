@@ -721,7 +721,7 @@ describe("5. THE NEGATIVE HALF — a declaration the grammar cannot express land
 
 describe("6. NOTHING LOCAL IS WRITTEN beyond the seed characters and the stubbed POST bodies", { skip }, () => {
   const APP = readFileSync(join(REPO, "app", "index.html"), "utf8");
-  const PAINT = readFileSync(join(REPO, "app", "present", "paint.ts"), "utf8");
+  const PAINT = readFileSync(join(REPO, "app", "shell", "paint.ts"), "utf8");
 
   test("`graphData` is assigned in exactly four places — this file adds no client-computed write", () => {
     assert.equal((APP.match(/\bgraphData\s*=(?!=)/g) ?? []).length, 4);

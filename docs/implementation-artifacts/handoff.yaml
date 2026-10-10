@@ -60,7 +60,6 @@ handoff:
   - id: recently-used-recorded-on-the-server
   - id: one-ordering-vocabulary-for-lists-and-children
   - id: retire-committed-presentation-json
-  - id: client-core-package
   - id: shared-test-cases-for-twice-run-rules
   - id: retire-switched-off-predictions
   - id: config-sync-tool

@@ -207,7 +207,7 @@ a key whose reader is not in this table.
 | `STRUCTURAL_NODE` | a `sections:` entry, same place as ingest | this section's `Resolution` | as VIEW | **no** — stage 7 |
 | `LINE` | the tokens on the line | nothing new today; the line's own content is already the most specific *content* input | `app/present/resolution` | **partial** — `paintView` reads the line and decides, without a declaration |
 | `MODE` | the session — not the document | the `Resolution` shift for a whole gesture | `app/present/context` | **no** — stage 4 |
-| `FOCUS` | not declared — **derived** from where the cursor is | one boolean, `focused`, which the resolver may consult | `app/present/paint` | **no** — stage 3 |
+| `FOCUS` | not declared — **derived** from where the cursor is | one boolean, `focused`, which the resolver may consult | `app/shell/paint` | **no** — stage 3 |
 
 **Two levels are deliberately absent and their absence is a decision, not an oversight:**
 
@@ -460,7 +460,7 @@ app/present/levels.ts       PresentationLevel + SPECIFICITY — THE order, owned
 app/present/resolution.ts   Resolution, Rendition, DEFAULT — values only
 app/present/cascade.ts      PresentationCascade.resolve() — pure, no DOM, no fetch
 app/present/context.ts      PresentationContext — the assembled facts (user, view, mode, focus)
-app/present/paint.ts        the ONLY module here that touches the DOM
+app/shell/paint.ts        the ONLY module here that touches the DOM
 app/present/source.ts       applyEdit() — every write-back, as a source-string operation
 ```
 
@@ -478,7 +478,7 @@ app/present/source.ts       applyEdit() — every write-back, as a source-string
 | Class | Canonical home | Concern |
 |---|---|---|
 | `presentation-resolution` | `app/present/cascade:PresentationCascade` | deciding which rendition a token gets; any path that decides without routing here is the failure |
-| `presentation-painting` | `app/present/paint:paint` | turning a resolved line into DOM; the only concern permitted to touch the document |
+| `presentation-painting` | `app/shell/paint:paint` | turning a resolved line into DOM; the only concern permitted to touch the document |
 | `source-write-back` | `app/present/source:applyEdit` | every edit, as a source-string operation — the structural form of §5 |
 
 **They are deliberately NOT declared in `classes.yaml` on this branch.** That file's own header
@@ -684,7 +684,7 @@ source differs from the original by exactly the intended substring operation.
 > not answerable yet: what the leftover whitespace becomes, what deleting a tag MEANS to an engine
 > where `#task` selects a node type and `#work` sets a field, and where a destructive click sits
 > when the chip lives inside the span that is the cursor target. **This section's own rule says
-> ship the rendition without it**, and it is named in `app/present/paint.ts` rather than implied.
+> ship the rendition without it**, and it is named in `app/shell/paint.ts` rather than implied.
 >
 > **It is the first rendition under which the DOM and the source genuinely disagree**, and that
 > matters more than the chip does. Until now the page still held every source character, so a file
@@ -709,7 +709,7 @@ source differs from the original by exactly the intended substring operation.
 > raw, not because the tag key is. Both routes are asserted.
 >
 > **198 tests / 0 fail** (was 124). `flow-trace verify .` exits **0**, **30 PASS / 0 FAIL**, with
-> `app/present/paint → app/present/resolution.tagSpans` OBSERVED at count 5. Mutation-proven nine
+> `app/shell/paint → app/present/resolution.tagSpans` OBSERVED at count 5. Mutation-proven nine
 > ways — one of which caught a **vacuous assertion in this change's own suite** and it was
 > rewritten. **One real defect found and closed:** `applyEdit` fell through to the checkbox branch
 > for any edit that was not `set-line`, so an unknown edit kind silently unticked a box and

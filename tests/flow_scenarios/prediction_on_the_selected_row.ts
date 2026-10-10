@@ -49,7 +49,7 @@
 import { FocusSurface } from "../../app/present/focus.js";
 import { ModeSurface } from "../../app/present/motions.js";
 import { PresentationContext } from "../../app/present/context.js";
-import { paint } from "../../app/present/paint.js";
+import { paint } from "../../app/shell/paint.js";
 
 const LINE = "- [ ] Ship the launch note [[qntm:501]] #task";
 const SWAPPED = "- [ ] Ship the launch note [[qntm:501]] #outcome";

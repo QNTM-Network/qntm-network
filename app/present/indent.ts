@@ -27,7 +27,7 @@
  * — where the golden master allows it — the on-screen margin in `paint.ts` derive from that one
  * read, rather than each carrying its own copy of the number.
  *
- * `app/present/paint.ts`'s checkbox-margin arithmetic — `(shape.indent.length / 2) * 1.2 + "rem"`,
+ * `app/shell/paint.ts`'s checkbox-margin arithmetic — `(shape.indent.length / 2) * 1.2 + "rem"`,
  * a CSS margin transcribed from `app.html:246` — still treats TWO spaces as one level, and still
  * disagrees with the four this module now sources from config. `paint.ts`'s own header records
  * why: `tests/present-golden.test.mjs` compares the painted DOM byte-for-byte against the historical

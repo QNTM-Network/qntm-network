@@ -356,7 +356,7 @@ describe("4. MUTATION PROOF — neuter the abstains branch's text, and the falsi
 
 describe("5. NOTHING LOCAL REACHES A WRITE — re-verified, and the new functions' own posture", () => {
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
-  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
+  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "paint.ts"), "utf8");
 
   // UNCHANGED FROM the sibling suites in this family — this step adds no assignment, no new write
   // path: `updateMembershipBadge` only ever assigns `.textContent` on `#membershipBadge` and

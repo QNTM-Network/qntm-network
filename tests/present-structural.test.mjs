@@ -296,7 +296,7 @@ describe("4. the indent unit is one declared source, and exactly one consumer de
     "paint.ts's checkbox margin does NOT derive from the declared unit — a known, cited, " +
       "golden-blocked disagreement, not a silent regression",
     () => {
-      // See app/present/paint.ts's own comment at the marginLeft line: fixing this divides by the
+      // See app/shell/paint.ts's own comment at the marginLeft line: fixing this divides by the
       // declared unit instead of the constant 2, and tests/present-golden.test.mjs's byte-
       // identical comparison against the historical app.html:234-269 reference fails for indents
       // of 1, 2 and 4 raw spaces when that is tried — confirmed by making the edit, running the

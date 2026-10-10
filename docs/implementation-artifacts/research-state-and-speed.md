@@ -307,7 +307,7 @@ phone's upstream. This is correct — the whole file is the write unit and it is
 
 **[OBS]** `paint()` from the committed bundle, against real views, Chrome, desktop. "Focus repaint"
 = move the cursor, repaint the whole view, force layout — exactly what
-`app/present/paint.ts:337-347` does on a click.
+`app/shell/paint.ts:337-347` does on a click.
 
 | view | lines | paint only | + forced layout | **focus repaint, 560 px** | **focus repaint, 390 px** |
 |---|---|---|---|---|---|
@@ -422,7 +422,7 @@ is 3 KB and Solid is faster than the hand-rolled painter. Disqualified because *
 becomes where truth lives**. The moment a line is a `<Line source={…}/>` with local state, the
 answer to "what is the markdown now" is assembled by walking components, and the whole write path
 inverts: DOM → markdown instead of markdown → DOM. That is the one shape the design forbids, and it
-is the *default* idiom of every one of these, not an abuse of them. **`app/present/paint.ts:139-165`
+is the *default* idiom of every one of these, not an abuse of them. **`app/shell/paint.ts:139-165`
 already argues this case for `contenteditable` and reaches the same conclusion for the same reason.**
 The operator's "React interprets MD" formulation survives only if React renders *from* the source
 string on every paint and never holds a fragment of it — which is precisely today's `paint()` with a
@@ -567,7 +567,7 @@ the column does not jump when content replaces them. The geometry is already sta
 **7.3 The app already does optimistic updates — two of them.** Asked for, so: found.
 1. **`toggleTask`, `app/index.html:1011-1013`** — flips `.done` and adds `.syncing` *before* the
    `await`, reverting in the `catch` at `:1022-1026`. The comment at `:1002` names it.
-2. **`rawInput`'s settle, `app/present/paint.ts:208-210`** — `repaint(markdown)` from the edited
+2. **`rawInput`'s settle, `app/shell/paint.ts:208-210`** — `repaint(markdown)` from the edited
    source immediately on commit, explicitly *"Optimistic, and the same posture the checkbox already
    had."*
 

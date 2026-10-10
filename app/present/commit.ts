@@ -55,7 +55,7 @@ import { lineOps, type LineOp } from "./source.js";
 import { RESOLVERS } from "./resolvers/registry.js";
 import { runResolvers } from "./resolve.js";
 import type { CommitContext, CommitOutcome, Diagnostic, PredictArm, SettleArm } from "./resolve.js";
-import type { LineCommit } from "./paint.js";
+import type { LineCommit } from "./linecommit.js";
 import { rebaseLineDelete, rebaseLineEdit } from "./rebase.js";
 import { mintWriteToken } from "./correlation.js";
 

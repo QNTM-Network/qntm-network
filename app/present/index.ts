@@ -277,8 +277,6 @@ export type { LineChange } from "./undo.js";
 export type { LineOp } from "./source.js";
 export type { InsertLine, MoveLine, SetCheckbox, SetLine, SourceEdit } from "./source.js";
 
-export { paint, existingLineCommit, revealSelection, visualLineOrder } from "./paint.js";
-export type { CheckboxToggle, InlineMarkdown, LineCommit, PaintDeps } from "./paint.js";
 
 export { SettleSurface } from "./settle.js";
 export type { RowPlacement, SettleInstruction } from "./settle.js";
@@ -389,52 +387,10 @@ export {
 } from "./resolvers/promotion.js";
 export type { PromotionCommitReading, PromotionOutcome, RelationshipChange } from "./resolvers/promotion.js";
 
-// ── THE VIEW DRAWER — THE ONE RE-EXPORT THAT CROSSES OUT OF app/present/ ──
-//
-// `app/shell/drawer.ts`, not `./drawer.js`. This barrel is still nothing but re-exports — the rule
-// this file's own header states — but the module underneath sits beside `app/present/`, not inside
-// it, because it is the one thing here that touches the document, and `paint.ts`'s own header
-// claims `app/present/` has exactly one of those. See `drawer.ts`'s own header for the full
-// argument; the short version is that `app/index.html` still imports everything from this one
-// bundle, so the drawer's public surface is re-exported here rather than the page growing a second
-// site-root-absolute import.
-export {
-  buildDrawer,
-  closeDrawer,
-  folderOf,
-  foldersOf,
-  markWhereWeAre,
-  openDrawer,
-  drawerStops,
-  viewButtons,
-  drawerIsOpen,
-} from "../shell/drawer.js";
-export type { DrawerDeps, DrawerView, FolderNode } from "../shell/drawer.js";
-
-// ── THE GLOBAL KEYBOARD — THE SECOND RE-EXPORT OUT OF app/shell/ ──
-//
-// `app/shell/keys.ts`, re-exported here for the SAME reason the drawer is: the page keeps ONE
-// site-root-absolute import (`/dist/present.js`), so a module that has to reach it comes through
-// this barrel rather than the page growing a second bundle and a second `<script>` path to get
-// wrong. It sits in `app/shell/` rather than `app/present/` because it touches the document, and
-// `paint.ts`'s header claims `app/present/` has exactly one module that does.
-//
-// WHAT MOVING IT BOUGHT, stated here because a re-export line is where a reader will ask: the
-// page's `keydown` handler was ~190 lines of decisions inside a `<script type="module">` that
-// `tsconfig.json` cannot read and flow-trace's node module-load hook cannot import. It is now
-// compiled and observable, which is what lets `classes.yaml`'s `movement` class be asked anything
-// at all. See keys.ts's own header for the two defects that lived in that blind spot.
-export { flushMarks, globalKey, installGlobalKeys } from "../shell/keys.js";
-export { installCompleter } from "../shell/completer.js";
-export { installKeyHelp } from "../shell/help.js";
-export { installSearch } from "../shell/search.js";
+// THE WEB SHELL IS NOT EXPORTED HERE (2026-10-10). The drawer, the keyboard, the painter, search,
+// links, history and the touch bar touch the document; they live in `app/shell/` and the web
+// bundle exports them from `app/web.ts`. This file is the client core's whole public surface.
 export { linkQueryAt, linkSource } from "./linkcomplete.js";
-export { installLinks } from "../shell/links.js";
-export { installViewHistory, viewFromHash } from "../shell/viewhistory.js";
-export { installTouchBar, showTouchMode, TOUCH_KEYS, keyboardBarTop } from "../shell/touchbar.js";
-export type { SearchDeps } from "../shell/search.js";
-export type { CompleterDeps } from "../shell/completer.js";
-export type { GlobalKeyDeps, GlobalKeyView } from "../shell/keys.js";
 
 // THERE IS NO `EMBEDDED_DECLARATION` HERE ANY MORE, AND ITS ABSENCE IS THE POINT.
 //

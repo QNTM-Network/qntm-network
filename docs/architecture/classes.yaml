@@ -45,7 +45,7 @@ classes:
       UPDATED 2026-07-30 (migration stage 1) — THE COUNT IS NOW TWO, and one of the three left
       by being reclassified rather than deleted, which is worth stating precisely because it
       would be easy to read as a bigger win than it is. The hand-rolled line-by-line renderer at
-      app.html:234-268 moved to app/present/paint, inside the capture filter. In moving it
+      app.html:234-268 moved to app/shell/paint, inside the capture filter. In moving it
       stopped being a markdown implementation: it classifies lines and builds DOM, and delegates
       every markdown-to-HTML call to a renderer its caller injects. That work now has its own
       class (presentation-painting) and its own home, which is the correct place for it — it was
@@ -181,20 +181,20 @@ classes:
 
       AND THE CHIP OFFERS NOTHING, WHICH IS THIS CLASS DECLARING ITS OWN CEILING. A removable chip
       would be an affordance, an affordance needs a source edit, and `applyEdit` gained no case at
-      this stage — see app/present/paint.ts for the three questions a removable chip has to answer
+      this stage — see app/shell/paint.ts for the three questions a removable chip has to answer
       first. It is the first rendition under which the DOM and the source genuinely disagree
       (`#work` is not text on the page any more), which is what finally makes source-write-back's
       corrupted-DOM detector able to catch an inversion on its own rather than only after the page
       is wrecked.
-    canonical_class: app/present/paint:paint
+    canonical_class: app/shell/paint:paint
     packages:
       - presentation
     # 2026-08-12 — THIS CLASS GAINED A SECOND SINK, AND `view-painted` NARROWED. Stated rather than
     # left to be inferred, because depth-to-sink numbers on this project are defined ENTIRELY by
     # what sinks.yaml declares, so moving an effect out of `paint` changes what depth MEANS here.
     #
-    # WHAT CHANGED. The caret placement left `paint.ts` for `app/present/caret.ts` (see sinks.yaml's
-    # `selection-moved`). So `view-painted` — still `app/present/paint:paint` — no longer covers
+    # WHAT CHANGED. The caret placement left `paint.ts` for `app/shell/caret.ts` (see sinks.yaml's
+    # `selection-moved`). So `view-painted` — still `app/shell/paint:paint` — no longer covers
     # "and the caret ended up somewhere". It now means what its name says and nothing more: the rows
     # are on screen. The caret is a SEPARATE terminal effect reached THROUGH this one, which is why
     # both sinks sit under this class rather than the caret becoming somebody else's.
@@ -206,7 +206,7 @@ classes:
     # visible.
     #
     # THE PRE-EXISTING FALSE RED ON `view-painted` IS UNTOUCHED AND STILL FALSE: `canonical_class:
-    # app/present/paint:paint` governing sink `app/present/paint:paint` is the self-governance shape,
+    # app/shell/paint:paint` governing sink `app/shell/paint:paint` is the self-governance shape,
     # so `commitLine -> paint` reports BYPASS against correct code. That is the same defect the
     # `cursor-position` note below records, already flagged as
     # `flag-canonical-routing-cannot-express-a-class`, and it is NOT what the caret work fixed — the
@@ -460,7 +460,7 @@ classes:
   # time, on every repaint a live placement survives for. That move is COSMETIC ONLY — it repositions
   # the DOM and never edits `source`, which the real reorder only catches up to once the engine's own
   # next cycle answers. So `source.split("\n")`'s own line numbering and "the row painted Nth" are
-  # two different facts the instant any settle has fired for a view, and `app/present/paint.ts`'s
+  # two different facts the instant any settle has fired for a view, and `app/shell/paint.ts`'s
   # `visualLineOrder` (added the same day) is the ONE place the second fact — the DOM's own current,
   # materialised order — is published for a reader outside `paint.ts` to consult, rather than a
   # second copy of "what order are the rows in" computed from `source` again. `app/index.html`'s vim
@@ -519,7 +519,7 @@ classes:
       use for CONTENT (a different, legitimate concern this class does not touch). Any FOURTH
       consumer that re-derives adjacency from `source` rather than calling `visualLineOrder` would be
       the identical failure recurring.
-    canonical_class: app/present/paint:visualLineOrder
+    canonical_class: app/shell/paint:visualLineOrder
     packages:
       - presentation
     status: working
@@ -597,7 +597,7 @@ classes:
     # cursor-position` was run, and it produced TWO BYPASSES ON CORRECT CODE:
     #
     #   BYPASS — reached app/present/focus:FocusSurface.focus without routing through canonical
-    #     class app/present/focus:FocusSurface (count=1): app/present/paint:<anonymous> -> FocusSurface.focus
+    #     class app/present/focus:FocusSurface (count=1): app/shell/paint:<anonymous> -> FocusSurface.focus
     #   BYPASS — reached app/present/focus:FocusSurface.focus without routing through canonical
     #     class app/present/focus:FocusSurface (count=2): app/shell/keys:globalKey -> FocusSurface.focus
     #
@@ -613,8 +613,8 @@ classes:
     # cannot express "X is the one home for its OWN effect", which is what this class is.
     #
     # THIS IS NOT A NEW DEFECT AND THIS REPO IS ALREADY CARRYING ONE UNREMARKED. `presentation-
-    # painting` has the identical shape (canonical_class `app/present/paint:paint` governing
-    # `view-painted` = `app/present/paint:paint`) and has been reporting `BYPASS —
+    # painting` has the identical shape (canonical_class `app/shell/paint:paint` governing
+    # `view-painted` = `app/shell/paint:paint`) and has been reporting `BYPASS —
     # app/present/commit:commitLine -> paint` against correct code, with no note anywhere saying
     # the red is false. Flagged (`flag-canonical-routing-cannot-express-a-class`).
     #
@@ -629,7 +629,7 @@ classes:
     #
     # The note above diagnosed the altitude correctly: `selection-moved` pointed at a STATE SETTER
     # (focus.ts has zero DOM operations), so this class was being asked to gatekeep its own method.
-    # The sink has now been moved down to where work actually lands — `app/present/caret:placeCaret`,
+    # The sink has now been moved down to where work actually lands — `app/shell/caret:placeCaret`,
     # the one function that puts a caret on screen — and `presentation-painting` governs it, which
     # PASSES (see sinks.yaml for the numbers, and the first routed chain this repo has produced).
     #
@@ -637,9 +637,9 @@ classes:
     # added HERE against the relocated sink, `canonical-routing . --class cursor-position` was run,
     # and it reports BYPASS on correct code a second time — a NEW reason, not the old one:
     #
-    #   BYPASS — reached app/present/caret:placeCaret without routing through canonical class
-    #     app/present/focus:FocusSurface (count=1): app/present/paint:<anonymous> ->
-    #     app/present/paint:repaint -> app/present/paint:paint -> app/present/paint:paintDraft ->
+    #   BYPASS — reached app/shell/caret:placeCaret without routing through canonical class
+    #     app/present/focus:FocusSurface (count=1): app/shell/paint:<anonymous> ->
+    #     app/shell/paint:repaint -> app/shell/paint:paint -> app/shell/paint:paintDraft ->
     #     placeCaret
     #
     # `FocusSurface` is NOWHERE ON THAT CHAIN, and the cause is structural rather than incidental.

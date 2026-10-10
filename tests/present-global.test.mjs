@@ -345,7 +345,7 @@ describe("4. the page itself reads it — the half that catches an unwired reade
    *
    * THE CURSOR IS PARKED ON THE LAST LINE FIRST, and that is part of the setup rather than a
    * workaround. The cursor's own line renders its SOURCE in NORMAL as well as INSERT
-   * (app/present/paint.ts), so a cursor left on the heading would hide the very `<h3>` these tests
+   * (app/shell/paint.ts), so a cursor left on the heading would hide the very `<h3>` these tests
    * are asking the served declaration about. `prose` — line 2 — is the line none of them assert on.
    */
   function pagePaints(declaration) {

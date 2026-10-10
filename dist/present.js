@@ -6191,637 +6191,6 @@ function insertCommit(source, at, text) {
   return markdown === null ? null : { lineIndex: at, text, markdown, source, kind: "insert-line" };
 }
 
-// app/present/caret.ts
-function placeCaret(element, at) {
-  element.setSelectionRange?.(at, at);
-}
-
-// app/present/landing.ts
-function landPrediction(el, predictable, prediction, animate) {
-  const because = prediction.fullText === void 0 ? "no-full-text" : predictable === void 0 ? "row-not-predictable" : void 0;
-  const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
-  if (!replaced) {
-    appendPrediction(el, prediction.text, "pending", animate);
-  }
-  const landing = replaced ? { kind: "swapped" } : { kind: "appended", because: because ?? "swap-refused" };
-  el.dataset["predictionLanding"] = landing.kind === "swapped" ? "swapped" : `appended:${landing.because}`;
-  return landing;
-}
-
-// app/present/paint.ts
-function existingLineCommit(source, lineIndex, markdown, onRefusalIsFinal) {
-  const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
-  return { lineIndex, text, markdown, source, kind: "set-line", onRefusalIsFinal };
-}
-function rawText(source) {
-  const div = document.createElement("div");
-  div.textContent = source;
-  return div;
-}
-var VIM_BLOCK_CLASS = "vim-block";
-var paintGeneration = 0;
-var EMPTY_CELL = "\xA0";
-function normalLine(lineSource, column) {
-  const div = document.createElement("div");
-  div.className = "rawline " + VIM_SELECTED_CLASS;
-  const head = document.createElement("span");
-  head.textContent = lineSource.slice(0, column);
-  const cell = document.createElement("span");
-  cell.className = VIM_BLOCK_CLASS;
-  cell.textContent = lineSource.slice(column, column + 1) || EMPTY_CELL;
-  const tail = document.createElement("span");
-  tail.textContent = lineSource.slice(column + 1);
-  div.append(head, cell, tail);
-  return div;
-}
-function lineEditor(text) {
-  const box = document.createElement("textarea");
-  box.className = "rawline";
-  box.rows = 1;
-  box.value = text;
-  const fit = () => {
-    if (typeof box.scrollHeight !== "number" || box.style === void 0) return;
-    box.style.height = "auto";
-    box.style.height = `${box.scrollHeight}px`;
-  };
-  box.addEventListener("input", () => {
-    if (box.value.includes("\n")) {
-      const at = box.selectionStart ?? box.value.length;
-      box.value = box.value.replace(/\r?\n/g, " ");
-      placeCaret(box, at);
-    }
-    fit();
-  });
-  box.addEventListener("focus", fit);
-  return box;
-}
-function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openLineAt) {
-  const input = lineEditor(lineSource);
-  const mode = deps.mode;
-  const leaveInsert = () => {
-    if (mode !== void 0) {
-      mode.enterNormal();
-    } else {
-      focus.blur();
-    }
-  };
-  let settlement = "open";
-  const settle = (openBelow = false) => {
-    if (settlement !== "open") {
-      return;
-    }
-    settlement = "committed";
-    const wasFocused = focus.isFocused(lineIndex);
-    const text = input.value;
-    const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "set-line" });
-    const next = markdown ?? fileSource;
-    const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
-    if (opened) {
-      focus.blur();
-    }
-    if (wasFocused) {
-      if (opened && mode !== void 0) {
-        mode.enterInsert();
-      } else {
-        focus.moveTo({ kind: "leave-insert" }, markdown === null ? lineSource : text);
-        leaveInsert();
-      }
-    }
-    if (markdown !== null || wasFocused || opened) {
-      repaint(next);
-    }
-  };
-  input.addEventListener("input", () => {
-    focus.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
-  });
-  input.addEventListener("blur", () => settle());
-  input.addEventListener("keydown", (event) => {
-    const key = event?.key;
-    if (key === "Enter") {
-      event?.preventDefault?.();
-      settle(event?.shiftKey === true);
-    } else if (key === "Escape") {
-      event?.preventDefault?.();
-      settle();
-    }
-  });
-  return input;
-}
-function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
-  const input = lineEditor(typed);
-  let settled = false;
-  const generation = draft.generation;
-  const stale = () => draft.generation !== generation;
-  const returnToVim = (source) => {
-    if (deps.mode === void 0) {
-      return;
-    }
-    deps.mode.enterNormal();
-    if (deps.focus !== void 0) {
-      const last = Math.max(0, source.split("\n").length - 1);
-      deps.focus.place(Math.min(lineIndex, last), { kind: "keep" }, source, deps.view);
-    }
-  };
-  const abandon = () => {
-    if (settled || stale()) {
-      return;
-    }
-    settled = true;
-    draft.drop();
-    returnToVim(fileSource);
-    repaint(fileSource);
-  };
-  const settle = () => {
-    if (settled || stale()) {
-      return;
-    }
-    settled = true;
-    const text = input.value;
-    draft.drop();
-    const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
-    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "insert-line" });
-    returnToVim(markdown ?? fileSource);
-    repaint(markdown ?? fileSource);
-  };
-  input.addEventListener("input", () => {
-    draft.type(input.value);
-    deps.focus?.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
-  });
-  input.addEventListener("blur", settle);
-  input.addEventListener("keydown", (event) => {
-    const key = event?.key;
-    if (key === "Enter") {
-      event?.preventDefault?.();
-      settle();
-    } else if (key === "Escape") {
-      event?.preventDefault?.();
-      settle();
-    } else if (key === "Backspace" && input.value === seed) {
-      event?.preventDefault?.();
-      abandon();
-    }
-  });
-  return input;
-}
-var TAG_CHIP_CLASS = "tagchip";
-var CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
-var CHIP_CLOSE = "</span>";
-var LINK_CHIP_CLASS = "linkchip";
-var LINK_OPEN = `<span class="${LINK_CHIP_CLASS}">`;
-var IDENTITY = /^\[\[qntm:\d+\]\]$/i;
-var STAMP_MARK_CLASS = "stampmark";
-var STAMP_OPEN = `<span class="${STAMP_MARK_CLASS}"`;
-var STAMP_MARK_GLYPH = "\u2022";
-var stampMark = (id) => `${STAMP_OPEN} title="qntm:${id}">${STAMP_MARK_GLYPH}</span>`;
-var VIM_SELECTED_CLASS = "vim-selected";
-function renderTokens(text, tags, stamp, render) {
-  const injections = [];
-  if (stamp === "wired") {
-    for (const span of stampSpans(text)) {
-      injections.push({ start: span.start, end: span.end, text: span.text, html: stampMark(span.id) });
-    }
-  }
-  if (tags === "wired") {
-    for (const span of tagSpans(text)) {
-      injections.push({
-        start: span.start,
-        end: span.end,
-        text: span.text,
-        html: CHIP_OPEN + span.text + CHIP_CLOSE
-      });
-    }
-    for (const span of wikiLinkSpans(text)) {
-      const whole = text.slice(span.start, span.end);
-      if (IDENTITY.test(whole)) continue;
-      injections.push({ start: span.start, end: span.end, text: whole, html: LINK_OPEN + whole + CHIP_CLOSE });
-    }
-  }
-  if (injections.length === 0) {
-    return render(text);
-  }
-  const claimed = [];
-  for (const injection of injections) {
-    if (!claimed.some((c) => injection.start >= c.start && injection.start < c.end)) {
-      claimed.push(injection);
-    }
-  }
-  claimed.sort((a, b) => a.start - b.start);
-  let injected = "";
-  let at = 0;
-  for (const injection of claimed) {
-    injected += text.slice(at, injection.start) + injection.html;
-    at = injection.end;
-  }
-  injected += text.slice(at);
-  const html = render(injected);
-  const survived = (open) => html.split(open).length - 1;
-  const wanted = (open) => claimed.filter((c) => c.html.startsWith(open)).length;
-  const intact = survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN) && survived(LINK_OPEN) === wanted(LINK_OPEN);
-  return intact ? html : render(text);
-}
-var SETTLE_CLASS = "settle-move";
-function settleRow(moving, before, body, animate) {
-  const first = animate && typeof moving.getBoundingClientRect === "function" ? moving.getBoundingClientRect() : null;
-  body.insertBefore(moving, before);
-  if (first === null) {
-    return;
-  }
-  const last = moving.getBoundingClientRect();
-  const dy = first.top - last.top;
-  if (dy === 0) {
-    return;
-  }
-  moving.className = moving.className === "" ? SETTLE_CLASS : `${moving.className} ${SETTLE_CLASS}`;
-  moving.style.transition = "none";
-  moving.style.transform = `translateY(${dy}px)`;
-  const settled = () => {
-    moving.style.transition = "";
-    moving.style.transform = "";
-  };
-  if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(settled);
-  } else {
-    settled();
-  }
-}
-var PREDICT_CLASS = "row-prediction";
-var PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
-function appendPrediction(row, text, kind, animate) {
-  if (row.tagName.toLowerCase() === "textarea") {
-    return;
-  }
-  const span = document.createElement("span");
-  const classes = [PREDICT_CLASS];
-  if (kind === "withdrawn") {
-    classes.push(PREDICT_WITHDRAWN_CLASS);
-  }
-  span.className = classes.join(" ");
-  span.textContent = text;
-  span.title = kind === "withdrawn" ? "predicted \u2014 the engine answered differently" : "predicted \u2014 not yet confirmed by the engine";
-  row.append(span);
-  if (kind === "pending" && animate) {
-    span.style.transition = "none";
-    span.style.opacity = "0";
-    span.style.transform = "translateY(-.2em)";
-    const settled = () => {
-      span.style.transition = "";
-      span.style.opacity = "";
-      span.style.transform = "";
-    };
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(settled);
-    } else {
-      settled();
-    }
-  }
-}
-function markDeltaIn(span, delta, kind) {
-  const text = span.textContent ?? "";
-  const at = delta === "" ? -1 : text.indexOf(delta);
-  if (at === -1) {
-    return span;
-  }
-  const before = text.slice(0, at);
-  const after = text.slice(at + delta.length);
-  span.textContent = "";
-  if (before !== "") {
-    span.appendChild(document.createTextNode(before));
-  }
-  const mark = document.createElement("span");
-  mark.className = kind === "withdrawn" ? PREDICT_WITHDRAWN_CLASS : PREDICT_CLASS;
-  mark.textContent = delta;
-  span.appendChild(mark);
-  if (after !== "") {
-    span.appendChild(document.createTextNode(after));
-  }
-  return span;
-}
-function replacePredictedSwap(entry, fullText, delta, kind) {
-  if (entry.cursorColumn !== void 0) {
-    const rebuilt = normalLine(fullText, entry.cursorColumn);
-    entry.contentEl.innerHTML = "";
-    for (const child of Array.from(rebuilt.children)) {
-      entry.contentEl.appendChild(markDeltaIn(child, delta, kind));
-    }
-    return true;
-  }
-  const shape = classifyLine(fullText);
-  const rebuiltSource = shape.kind === "checkbox" ? shape.tail : shape.kind === "heading" ? shape.text : shape.kind === "prose" ? shape.source : null;
-  if (rebuiltSource === null) return false;
-  const html = renderTokens(rebuiltSource, entry.tagsRendition, entry.stampRendition, entry.render);
-  const oldChip = CHIP_OPEN + delta + CHIP_CLOSE;
-  const chipIndex = html.indexOf(oldChip);
-  if (chipIndex === -1) return false;
-  const classes = [PREDICT_CLASS];
-  if (kind === "withdrawn") classes.push(PREDICT_WITHDRAWN_CLASS);
-  const titleAttr = kind === "withdrawn" ? "predicted \u2014 the engine answered differently" : "predicted \u2014 not yet confirmed by the engine";
-  const newChip = `<span class="${classes.join(" ")}" title="${titleAttr}">${delta}</span>`;
-  entry.contentEl.innerHTML = html.slice(0, chipIndex) + newChip + html.slice(chipIndex + oldChip.length);
-  return true;
-}
-function paint(body, source, context, deps) {
-  paintGeneration += 1;
-  const mine = paintGeneration;
-  const superseded = () => paintGeneration !== mine;
-  const focus = deps.focus;
-  const draft = deps.draft;
-  const mode = deps.mode;
-  const instances = deps.view === void 0 ? void 0 : instancesOf(source, deps.view);
-  const stampInstance = (element, lineIndex) => {
-    const info = instances?.[lineIndex];
-    if (info !== void 0 && info !== null) {
-      element.dataset.instance = info.instance;
-    }
-  };
-  const markLineIndex = (element, lineIndex) => {
-    element.dataset.lineIndex = String(lineIndex);
-    if (deps.cutLines?.has(lineIndex) === true) element.classList.add("cut");
-  };
-  const repaint = (nextSource) => {
-    if (deps.view !== void 0) {
-      deps.rows?.edited(deps.view, nextSource);
-    }
-    paint(body, nextSource, context, deps);
-  };
-  const focusable = (element, lineIndex) => {
-    if (focus === void 0) {
-      return;
-    }
-    element.addEventListener("click", (event) => {
-      event?.preventDefault?.();
-      event?.stopPropagation?.();
-      focus.place(lineIndex, { kind: "line-start" }, source, deps.view);
-      repaint(source);
-    });
-  };
-  const openLineAt = (lineIndex, from) => {
-    if (draft === void 0 || focus === void 0) {
-      return false;
-    }
-    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared, deps.view);
-  };
-  const raw = (lineSource, lineIndex) => {
-    if (focus === void 0) {
-      const text = rawText(lineSource);
-      stampInstance(text, lineIndex);
-      markLineIndex(text, lineIndex);
-      body.append(text);
-      rowsByLineIndex.set(lineIndex, text);
-      return;
-    }
-    if (mode !== void 0 && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
-      const line = normalLine(lineSource, focus.column);
-      focusable(line, lineIndex);
-      stampInstance(line, lineIndex);
-      markLineIndex(line, lineIndex);
-      body.append(line);
-      rowsByLineIndex.set(lineIndex, line);
-      predictableByLineIndex.set(lineIndex, {
-        contentEl: line,
-        // A BLOCK-CURSOR ROW RENDERS NO TOKENS AT ALL — `normalLine` writes raw characters into
-        // three spans — so these two carry `raw` rather than a resolved value, and the rebuild
-        // below never consults them. Stated rather than left as a plausible-looking lookup.
-        tagsRendition: "raw",
-        stampRendition: "raw",
-        render: (markdown) => deps.markdown.render(markdown),
-        cursorColumn: focus.column
-      });
-      return;
-    }
-    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
-    stampInstance(input, lineIndex);
-    markLineIndex(input, lineIndex);
-    body.append(input);
-    rowsByLineIndex.set(lineIndex, input);
-    if (focus.isFocused(lineIndex)) {
-      input.focus?.();
-      if (superseded()) {
-        return;
-      }
-      const asked = mode?.takeCaretHint();
-      if (asked !== void 0) {
-        focus.moveTo({ kind: asked }, lineSource);
-        placeCaret(input, focus.column);
-      }
-    }
-  };
-  body.innerHTML = "";
-  if (superseded()) {
-    return;
-  }
-  let draftPainted = false;
-  const paintDraft = () => {
-    const open = draft?.draft;
-    if (open === void 0 || open === null || draftPainted) {
-      return;
-    }
-    draftPainted = true;
-    const input = draftInput(
-      open.lineIndex,
-      open.seed,
-      open.typed,
-      source,
-      draft,
-      deps,
-      repaint
-    );
-    body.append(input);
-    input.focus?.();
-    if (superseded()) {
-      return;
-    }
-    if (open.typed !== open.seed) {
-      placeCaret(input, open.typed.length);
-      deps.focus?.moveTo({ kind: "at", column: open.typed.length }, open.typed);
-      return;
-    }
-    if (open.cursorOffset !== void 0) {
-      placeCaret(input, open.cursorOffset);
-      deps.focus?.moveTo({ kind: "at", column: open.cursorOffset }, open.seed);
-    }
-  };
-  let lastPaintedIndex = -1;
-  const rowsByLineIndex = /* @__PURE__ */ new Map();
-  const predictableByLineIndex = /* @__PURE__ */ new Map();
-  source.split("\n").forEach((line, index) => {
-    if (superseded()) {
-      return;
-    }
-    if (draft?.isDraftAt(index) === true) {
-      paintDraft();
-    }
-    const shape = classifyLine(line, deps.checkboxStatuses);
-    if (shape.kind === "blank") {
-      if (mode !== void 0 && mode.mode === "NORMAL" && focus !== void 0 && focus.isFocused(index)) {
-        const mark = document.createElement("div");
-        mark.className = VIM_SELECTED_CLASS;
-        body.append(mark);
-      }
-      return;
-    }
-    lastPaintedIndex = index;
-    const focusLive = focus !== void 0;
-    const cascade = new PresentationCascade(focusLive ? focus.contextFor(index, context) : context);
-    if (shape.kind === "checkbox") {
-      if (cascade.resolve("checkbox").rendition === "raw") {
-        raw(shape.source, index);
-        return;
-      }
-      const row = document.createElement("label");
-      row.className = "task" + (shape.done ? " done" : "") + (deps.unconfirmed?.has(index) ? " unconfirmed" : "");
-      row.style.marginLeft = shape.indent.length / 2 * 1.2 + "rem";
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = shape.done;
-      row.dataset["status"] = shape.status;
-      if (shape.status !== "open" && shape.status !== "done") {
-        row.classList.add(`status-${shape.status}`);
-        box.title = shape.status;
-      }
-      box.addEventListener("change", () => {
-        const completion = deps.completion?.();
-        const markdown = applyEdit(source, {
-          kind: "set-checkbox",
-          lineIndex: index,
-          checked: box.checked,
-          statuses: deps.checkboxStatuses,
-          ...completion === void 0 ? {} : { completion }
-        });
-        deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
-      });
-      const span = document.createElement("span");
-      const checkboxTagsRendition = cascade.resolve("tags").rendition;
-      const checkboxStampRendition = cascade.resolve("stamp").rendition;
-      const checkboxRender = (markdown) => deps.markdown.renderInline(markdown);
-      span.innerHTML = renderTokens(shape.tail, checkboxTagsRendition, checkboxStampRendition, checkboxRender);
-      focusable(span, index);
-      stampInstance(row, index);
-      markLineIndex(row, index);
-      row.append(box, span);
-      body.append(row);
-      rowsByLineIndex.set(index, row);
-      predictableByLineIndex.set(index, {
-        contentEl: span,
-        tagsRendition: checkboxTagsRendition,
-        stampRendition: checkboxStampRendition,
-        render: checkboxRender
-      });
-      return;
-    }
-    if (shape.kind === "heading") {
-      if (cascade.resolve("heading").rendition === "raw") {
-        raw(shape.source, index);
-        return;
-      }
-      const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
-      const headingTagsRendition = cascade.resolve("tags").rendition;
-      const headingStampRendition = cascade.resolve("stamp").rendition;
-      const headingRender = (markdown) => deps.markdown.renderInline(markdown);
-      el.innerHTML = renderTokens(shape.text, headingTagsRendition, headingStampRendition, headingRender);
-      focusable(el, index);
-      stampInstance(el, index);
-      markLineIndex(el, index);
-      body.append(el);
-      rowsByLineIndex.set(index, el);
-      predictableByLineIndex.set(index, {
-        contentEl: el,
-        tagsRendition: headingTagsRendition,
-        stampRendition: headingStampRendition,
-        render: headingRender
-      });
-      return;
-    }
-    if (cascade.resolve("prose").rendition === "raw") {
-      raw(shape.source, index);
-      return;
-    }
-    const div = document.createElement("div");
-    const proseTagsRendition = cascade.resolve("tags").rendition;
-    const proseStampRendition = cascade.resolve("stamp").rendition;
-    const proseRender = (markdown) => deps.markdown.render(markdown);
-    div.innerHTML = renderTokens(shape.source, proseTagsRendition, proseStampRendition, proseRender);
-    focusable(div, index);
-    stampInstance(div, index);
-    markLineIndex(div, index);
-    body.append(div);
-    rowsByLineIndex.set(index, div);
-    predictableByLineIndex.set(index, {
-      contentEl: div,
-      tagsRendition: proseTagsRendition,
-      stampRendition: proseStampRendition,
-      render: proseRender
-    });
-  });
-  if (superseded()) {
-    return;
-  }
-  const settle = deps.settle;
-  if (settle !== void 0) {
-    for (const instruction of settle.take(source, deps.view ?? "")) {
-      const movingEl = rowsByLineIndex.get(instruction.placement.lineIndex);
-      const beforeLineIndex = instruction.placement.beforeLineIndex;
-      const beforeEl = beforeLineIndex === null ? null : rowsByLineIndex.get(beforeLineIndex) ?? null;
-      if (movingEl !== void 0) {
-        settleRow(movingEl, beforeEl, body, instruction.animate);
-      }
-    }
-  }
-  const predict = deps.predict;
-  if (predict !== void 0) {
-    const instruction = predict.take(source, deps.view ?? "");
-    if (instruction !== null) {
-      for (const prediction of instruction.predictions) {
-        const el = rowsByLineIndex.get(prediction.lineIndex);
-        if (el === void 0) continue;
-        landPrediction(
-          el,
-          prediction.fullText === void 0 ? void 0 : predictableByLineIndex.get(prediction.lineIndex),
-          prediction,
-          instruction.animate
-        );
-      }
-      for (const withdrawn of instruction.withdrawn) {
-        const el = rowsByLineIndex.get(withdrawn.lineIndex);
-        if (el !== void 0) {
-          appendPrediction(el, withdrawn.text, "withdrawn", true);
-        }
-      }
-    }
-  }
-  paintDraft();
-  if (superseded()) {
-    return;
-  }
-  if (draft !== void 0 && focus !== void 0) {
-    const below = document.createElement("div");
-    below.className = "newline";
-    below.addEventListener("click", (event) => {
-      event?.preventDefault?.();
-      openLineAt(lastPaintedIndex + 1, source);
-      repaint(source);
-    });
-    body.append(below);
-  }
-  if (deps.view !== void 0) {
-    deps.rows?.seat(deps.view, source, focus?.lineIndex ?? null);
-  }
-}
-function visualLineOrder(body) {
-  const order = [];
-  for (const child of Array.from(body.children)) {
-    const raw = child.dataset?.lineIndex;
-    if (raw !== void 0) {
-      order.push(Number(raw));
-    }
-  }
-  return order;
-}
-function revealSelection(body, block = "nearest") {
-  const row = body.querySelector?.(`.${VIM_SELECTED_CLASS}`) ?? body.querySelector?.("textarea.rawline");
-  row?.scrollIntoView?.({ block, inline: "nearest" });
-}
-
 // app/present/settle.ts
 var SettleSurface = class {
   #view = "";
@@ -8130,6 +7499,994 @@ function createGraphRefreshRetry(deps) {
   return retryGraphRefresh;
 }
 
+// app/present/search.ts
+function folderWords(path) {
+  const parts = String(path ?? "").split("/").slice(0, -1);
+  return parts.join(" ").replace(/[-_]/g, " ");
+}
+function folderLabel(path) {
+  return String(path ?? "").split("/").slice(0, -1).join(" / ");
+}
+function searchCandidates(views, options = {}) {
+  const prefer = options.prefer ?? null;
+  const ordered = [...views.filter((v) => v.id === prefer), ...views.filter((v) => v.id !== prefer)];
+  const hits = [];
+  for (const view of ordered) {
+    const title = view.title ?? view.id;
+    const where = folderLabel(view.path);
+    hits.push({
+      kind: "view",
+      qntmId: "",
+      text: where === "" ? title : `${where} \u203A ${title}`,
+      title,
+      status: "",
+      viewId: view.id,
+      viewTitle: title,
+      viewPath: view.path ?? "",
+      lineIndex: 0
+    });
+  }
+  const sections = /* @__PURE__ */ new Set();
+  for (const view of ordered) {
+    const lines = view.markdown.split("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? "";
+      const shape = classifyLine(line, options.statuses);
+      if (shape.kind === "heading") {
+        const heading = shape.text.trim();
+        const key = `${view.id}\0${heading}`;
+        if (shape.hashes.length < 2 || heading === "" || sections.has(key)) continue;
+        sections.add(key);
+        hits.push({
+          kind: "section",
+          qntmId: "",
+          text: heading,
+          title: heading,
+          status: "",
+          viewId: view.id,
+          viewTitle: view.title ?? view.id,
+          viewPath: view.path ?? "",
+          lineIndex: index
+        });
+        continue;
+      }
+      const stamp = stampSpans(line)[0];
+      if (stamp === void 0) continue;
+      const content = contentOf(line) ?? "";
+      const title = cleanTitleFor(line);
+      hits.push({
+        kind: "task",
+        qntmId: stamp.id,
+        text: content.split(stamp.text).join("").replace(/\s+/g, " ").trim(),
+        title: title.kind === "title" ? title.text : "",
+        status: shape.kind === "checkbox" ? shape.status : "",
+        viewId: view.id,
+        viewTitle: view.title ?? view.id,
+        viewPath: view.path ?? "",
+        lineIndex: index
+      });
+    }
+  }
+  return hits;
+}
+function describeHit(hit) {
+  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath };
+  if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
+  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
+}
+function bestCopyOfEachTask(hits, key, policy) {
+  const choose = { keys: [{ field: "demoted", direction: "asc" }, { field: "position" }], demote: policy.demote };
+  const seen = /* @__PURE__ */ new Set();
+  const kept = new Set(
+    rank(hits, (hit) => ({ title: "", path: hit.viewPath }), "", choose).filter((hit) => {
+      if (hit.kind !== "task") return true;
+      const k = key(hit);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+  );
+  return hits.filter((hit) => kept.has(hit));
+}
+function searchViews(views, query, options = {}) {
+  if (query.trim() === "") return [];
+  const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
+  const copies = bestCopyOfEachTask(searchCandidates(views, options), (hit) => hit.qntmId, policy);
+  return rank(copies, describeHit, query, policy).slice(0, options.limit ?? 30);
+}
+function linkTargets(views, query, options = {}) {
+  if (query.trim() === "") return [];
+  const tasks = searchCandidates(views, options).filter((hit) => hit.kind === "task" && hit.title !== "");
+  const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
+  const describe = (hit) => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
+  const copies = bestCopyOfEachTask(tasks, (hit) => hit.title.toLowerCase(), policy);
+  return rank(copies, describe, query, policy).slice(0, options.limit ?? 8);
+}
+function findLinkTarget(views, target, options = {}) {
+  const id = stampSpans(`[[${target.trim()}]]`)[0]?.id;
+  const want = target.trim().toLowerCase();
+  for (const hit of searchCandidates(views, options)) {
+    if (hit.kind !== "task") continue;
+    if (id !== void 0 ? hit.qntmId === id : hit.title.toLowerCase() === want) return hit;
+  }
+  return null;
+}
+
+// app/present/linkcomplete.ts
+function linkQueryAt(text, caret) {
+  const before = text.slice(0, caret);
+  const start = before.lastIndexOf("[[");
+  if (start === -1) return null;
+  const query = before.slice(start + 2);
+  if (query.includes("]]") || query.includes("[")) return null;
+  return { start, query };
+}
+function linkSource(views, preferViewId, statuses = () => void 0, policy = () => void 0) {
+  return (text, caret) => {
+    const open = linkQueryAt(text, caret);
+    if (open === null || open.query.trim() === "") return null;
+    const end = text.startsWith("]]", caret) ? caret + 2 : caret;
+    const items = linkTargets(views(), open.query, { prefer: preferViewId(), statuses: statuses(), policy: policy() }).map((hit) => ({
+      label: `${hit.title}  \xB7  ${hit.viewTitle}`,
+      insert: `[[${hit.title}]]`
+    }));
+    return { start: open.start, end, items };
+  };
+}
+
+// app/present/tagcomplete.ts
+function tagVocabulary(sources) {
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const add = (token) => {
+    if (typeof token !== "string" || !/^#[^\s#]+$/.test(token) || seen.has(token)) return;
+    seen.add(token);
+    out.push(token);
+  };
+  for (const token of sources.resolution?.tagOrder?.canonicalOrder ?? []) add(token);
+  const fields = sources.qualification?.tokens ?? {};
+  for (const field of Object.keys(fields).sort()) {
+    for (const token of Object.keys(fields[field] ?? {}).sort()) add(token);
+  }
+  return out;
+}
+function tagQueryAt(text, caret) {
+  if (caret < 0 || caret > text.length) return null;
+  let start = caret;
+  while (start > 0 && !/\s/.test(text[start - 1] ?? "")) start -= 1;
+  if (text[start] !== "#") return null;
+  let end = caret;
+  while (end < text.length && !/\s/.test(text[end] ?? "")) end += 1;
+  const typed = text.slice(start + 1, caret);
+  if (typed.includes("#")) return null;
+  return { start, end, prefix: typed.toLowerCase() };
+}
+function matchingTags(vocabulary, query, limit = 8, policy = DEFAULT_RANK_POLICIES.tags) {
+  return rank(vocabulary, (tag) => ({ title: tag.slice(1) }), query.prefix, policy).slice(0, limit);
+}
+
+// app/present/completion.ts
+function completeWith(sources, text, caret) {
+  for (const source of sources) {
+    const answer = source(text, caret);
+    if (answer !== null && answer.items.length > 0) return answer;
+  }
+  return null;
+}
+function applyCompletion(text, completion, insert) {
+  const after = text.slice(completion.end);
+  const spacer = after.startsWith(" ") ? "" : " ";
+  return {
+    text: text.slice(0, completion.start) + insert + spacer + after,
+    caret: completion.start + insert.length + 1
+  };
+}
+function tagSource(vocabulary, policy) {
+  return (text, caret) => {
+    const query = tagQueryAt(text, caret);
+    if (query === null) return null;
+    const items = matchingTags(vocabulary, query, 8, policy).map((tag) => ({ label: tag, insert: tag }));
+    return { start: query.start, end: query.end, items };
+  };
+}
+
+// app/present/datecomplete.ts
+function dateMarkers(sources) {
+  const out = [];
+  for (const [field, marker] of Object.entries(sources.qualification?.extractionFields ?? {})) {
+    if (field === "created_at" || field === "completed_at") continue;
+    if (marker?.kind === "date" && typeof marker.token === "string" && marker.token !== "") out.push(marker.token);
+  }
+  return out;
+}
+var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+function addDays(date, days) {
+  const [y, m, d] = date.split("-").map(Number);
+  const at = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1) + days * 864e5);
+  return at.toISOString().slice(0, 10);
+}
+function addMonths(date, months) {
+  const [y, m, d] = date.split("-").map(Number);
+  const target = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 + months, 1));
+  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d ?? 1, last));
+  return target.toISOString().slice(0, 10);
+}
+function dateChoices(today, weekStartsOn) {
+  const [y, m, d] = today.split("-").map(Number);
+  const weekday = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+  const startIndex = Math.max(0, WEEKDAYS.indexOf(weekStartsOn.toLowerCase()));
+  const toWeekStart = (startIndex - weekday + 7) % 7 || 7;
+  const startName = (WEEKDAYS[startIndex] ?? "monday").replace(/^./, (c) => c.toUpperCase());
+  return [
+    { label: "Today", date: today },
+    { label: "Tomorrow", date: addDays(today, 1) },
+    { label: `Next ${startName}`, date: addDays(today, toWeekStart) },
+    { label: "In a week", date: addDays(today, 7) },
+    { label: "In 2 weeks", date: addDays(today, 14) },
+    { label: "In a month", date: addMonths(today, 1) }
+  ];
+}
+function dateSource(markers, today, weekStartsOn) {
+  return (text, caret) => {
+    const before = text.slice(0, caret);
+    for (const marker of markers) {
+      const at = before.lastIndexOf(marker);
+      if (at === -1) continue;
+      const tail = before.slice(at + marker.length);
+      const typed = /^ ([0-9-]*)$/.exec(tail);
+      if (typed === null) continue;
+      const day = today();
+      if (day === void 0) return null;
+      const start = at + marker.length + 1;
+      let end = caret;
+      while (end < text.length && /[0-9-]/.test(text[end] ?? "")) end += 1;
+      const prefix = typed[1] ?? "";
+      const items = dateChoices(day, weekStartsOn).filter((choice) => choice.date.startsWith(prefix)).map((choice) => ({ label: `${choice.label} \xB7 ${choice.date}`, insert: choice.date }));
+      return { start, end, items };
+    }
+    return null;
+  };
+}
+
+// app/present/markercomplete.ts
+var words = (field) => field.replace(/_/g, " ");
+function markerVocabulary(sources) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (token, name) => {
+    if (token === "" || seen.has(token)) return;
+    seen.add(token);
+    out.push({ token, name });
+  };
+  for (const [field, marker] of Object.entries(sources.qualification?.extractionFields ?? {})) {
+    if (typeof marker?.token === "string") add(marker.token, words(field));
+  }
+  for (const [field, spellings] of Object.entries(sources.qualification?.tokens ?? {})) {
+    for (const [token, value] of Object.entries(spellings ?? {})) {
+      if (token.startsWith("#") || token.startsWith("[")) continue;
+      add(token, `${words(String(value))} \xB7 ${words(field)}`);
+    }
+  }
+  return out;
+}
+function markerQueryAt(text, caret) {
+  const match = /(^|\s):([a-z0-9_ ]{0,24})$/i.exec(text.slice(0, caret));
+  if (match === null) return null;
+  const query = match[2] ?? "";
+  if (query.startsWith(" ")) return null;
+  return { start: caret - query.length - 1, query: query.toLowerCase() };
+}
+function markerSource(markers, policy = DEFAULT_RANK_POLICIES.markers) {
+  return (text, caret) => {
+    const at = markerQueryAt(text, caret);
+    if (at === null) return null;
+    const items = rank(markers, (marker) => ({ title: marker.name }), at.query.replace(/_/g, " "), policy).map(
+      (marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token })
+    );
+    return { start: at.start, end: caret, items };
+  };
+}
+
+// app/present/keyhelp.ts
+var KEY_HELP = [
+  {
+    title: "Move",
+    rows: [
+      { keys: ["j", "\u2193"], does: "Next line" },
+      { keys: ["k", "\u2191"], does: "Previous line" },
+      { keys: ["gg", "G"], does: "First / last line" },
+      { keys: ["{", "}"], does: "Previous / next section" },
+      { keys: ["w", "b", "e"], does: "Next word / back a word / end of word" },
+      { keys: ["0", "$"], does: "Start / end of the line" },
+      { keys: ["3j"], does: "A number before a move repeats it" }
+    ]
+  },
+  {
+    title: "Edit",
+    rows: [
+      { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
+      { keys: ["a"], does: "Edit the line, after the cursor" },
+      { keys: ["A"], does: "Edit the line, at the end" },
+      { keys: ["click the selected line"], does: "Edit it (on a phone: tap it)" },
+      { keys: ["o", "O"], does: "New line below / above" },
+      { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
+      { keys: ["x", "Space"], does: "Tick / untick (adds or removes \u2705 today)" },
+      { keys: ["dd"], does: "Mark the line for deletion (again to unmark). Marked lines are deleted on Cycle" },
+      { keys: ["yy"], does: "Copy the line" },
+      { keys: ["u", "\u2318Z"], does: "Undo this view's last change" },
+      { keys: ["Ctrl-r", "\u21E7\u2318Z"], does: "Redo" },
+      { keys: ["p", "P"], does: "Move the last marked line (or put a copy) below / above" },
+      { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" }
+    ]
+  },
+  {
+    title: "While editing a line",
+    rows: [
+      { keys: ["Enter"], does: "Save the line and stop editing" },
+      { keys: ["Shift+Enter"], does: "Save the line and start a new one below" },
+      { keys: ["Escape"], does: "Stop editing (keeps what you typed)" },
+      { keys: ["#"], does: "Suggest tags from your config" },
+      { keys: [":"], does: "Suggest markers by name (:sched \u2192 \u23F3)" },
+      { keys: ["\u{1F4C5} \u23F3 \u{1F6EB} + space"], does: "Suggest dates" },
+      { keys: ["\u2191", "\u2193", "Tab"], does: "Choose a suggestion" }
+    ]
+  },
+  {
+    title: "App",
+    rows: [
+      { keys: ["\\"], does: "Open the views list" },
+      { keys: ["H", "Ctrl-o", "\u2318["], does: "Back to the previous view" },
+      { keys: ["L", "Ctrl-i", "\u2318]"], does: "Forward to the next view" },
+      { keys: ["/"], does: "Search tasks across all views" },
+      { keys: ["?"], does: "This help" },
+      { keys: ["Escape"], does: "Close a panel, or get out of a stuck edit" }
+    ]
+  }
+];
+
+// app/present/unconfirmed.ts
+function unconfirmedLines(painted, served) {
+  const out = /* @__PURE__ */ new Set();
+  if (served === void 0 || painted === served) return out;
+  const known = new Set(served.split("\n"));
+  painted.split("\n").forEach((line, index) => {
+    if (line.trim() !== "" && !known.has(line)) out.add(index);
+  });
+  return out;
+}
+
+// app/shell/caret.ts
+function placeCaret(element, at) {
+  element.setSelectionRange?.(at, at);
+}
+
+// app/shell/landing.ts
+function landPrediction(el, predictable, prediction, animate) {
+  const because = prediction.fullText === void 0 ? "no-full-text" : predictable === void 0 ? "row-not-predictable" : void 0;
+  const replaced = predictable !== void 0 && prediction.fullText !== void 0 ? replacePredictedSwap(predictable, prediction.fullText, prediction.text, "pending") : false;
+  if (!replaced) {
+    appendPrediction(el, prediction.text, "pending", animate);
+  }
+  const landing = replaced ? { kind: "swapped" } : { kind: "appended", because: because ?? "swap-refused" };
+  el.dataset["predictionLanding"] = landing.kind === "swapped" ? "swapped" : `appended:${landing.because}`;
+  return landing;
+}
+
+// app/shell/paint.ts
+function existingLineCommit(source, lineIndex, markdown, onRefusalIsFinal) {
+  const text = (markdown ?? source).split("\n")[lineIndex] ?? "";
+  return { lineIndex, text, markdown, source, kind: "set-line", onRefusalIsFinal };
+}
+function rawText(source) {
+  const div = document.createElement("div");
+  div.textContent = source;
+  return div;
+}
+var VIM_BLOCK_CLASS = "vim-block";
+var paintGeneration = 0;
+var EMPTY_CELL = "\xA0";
+function normalLine(lineSource, column) {
+  const div = document.createElement("div");
+  div.className = "rawline " + VIM_SELECTED_CLASS;
+  const head = document.createElement("span");
+  head.textContent = lineSource.slice(0, column);
+  const cell = document.createElement("span");
+  cell.className = VIM_BLOCK_CLASS;
+  cell.textContent = lineSource.slice(column, column + 1) || EMPTY_CELL;
+  const tail = document.createElement("span");
+  tail.textContent = lineSource.slice(column + 1);
+  div.append(head, cell, tail);
+  return div;
+}
+function lineEditor(text) {
+  const box = document.createElement("textarea");
+  box.className = "rawline";
+  box.rows = 1;
+  box.value = text;
+  const fit = () => {
+    if (typeof box.scrollHeight !== "number" || box.style === void 0) return;
+    box.style.height = "auto";
+    box.style.height = `${box.scrollHeight}px`;
+  };
+  box.addEventListener("input", () => {
+    if (box.value.includes("\n")) {
+      const at = box.selectionStart ?? box.value.length;
+      box.value = box.value.replace(/\r?\n/g, " ");
+      placeCaret(box, at);
+    }
+    fit();
+  });
+  box.addEventListener("focus", fit);
+  return box;
+}
+function rawInput(lineSource, lineIndex, fileSource, focus, deps, repaint, openLineAt) {
+  const input = lineEditor(lineSource);
+  const mode = deps.mode;
+  const leaveInsert = () => {
+    if (mode !== void 0) {
+      mode.enterNormal();
+    } else {
+      focus.blur();
+    }
+  };
+  let settlement = "open";
+  const settle = (openBelow = false) => {
+    if (settlement !== "open") {
+      return;
+    }
+    settlement = "committed";
+    const wasFocused = focus.isFocused(lineIndex);
+    const text = input.value;
+    const markdown = applyEdit(fileSource, { kind: "set-line", lineIndex, text });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "set-line" });
+    const next = markdown ?? fileSource;
+    const opened = openBelow ? openLineAt(lineIndex + 1, next) : false;
+    if (opened) {
+      focus.blur();
+    }
+    if (wasFocused) {
+      if (opened && mode !== void 0) {
+        mode.enterInsert();
+      } else {
+        focus.moveTo({ kind: "leave-insert" }, markdown === null ? lineSource : text);
+        leaveInsert();
+      }
+    }
+    if (markdown !== null || wasFocused || opened) {
+      repaint(next);
+    }
+  };
+  input.addEventListener("input", () => {
+    focus.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
+  });
+  input.addEventListener("blur", () => settle());
+  input.addEventListener("keydown", (event) => {
+    const key = event?.key;
+    if (key === "Enter") {
+      event?.preventDefault?.();
+      settle(event?.shiftKey === true);
+    } else if (key === "Escape") {
+      event?.preventDefault?.();
+      settle();
+    }
+  });
+  return input;
+}
+function draftInput(lineIndex, seed, typed, fileSource, draft, deps, repaint) {
+  const input = lineEditor(typed);
+  let settled = false;
+  const generation = draft.generation;
+  const stale = () => draft.generation !== generation;
+  const returnToVim = (source) => {
+    if (deps.mode === void 0) {
+      return;
+    }
+    deps.mode.enterNormal();
+    if (deps.focus !== void 0) {
+      const last = Math.max(0, source.split("\n").length - 1);
+      deps.focus.place(Math.min(lineIndex, last), { kind: "keep" }, source, deps.view);
+    }
+  };
+  const abandon = () => {
+    if (settled || stale()) {
+      return;
+    }
+    settled = true;
+    draft.drop();
+    returnToVim(fileSource);
+    repaint(fileSource);
+  };
+  const settle = () => {
+    if (settled || stale()) {
+      return;
+    }
+    settled = true;
+    const text = input.value;
+    draft.drop();
+    const markdown = applyEdit(fileSource, { kind: "insert-line", lineIndex, text });
+    deps.onLineCommit?.({ lineIndex, text, markdown, source: fileSource, kind: "insert-line" });
+    returnToVim(markdown ?? fileSource);
+    repaint(markdown ?? fileSource);
+  };
+  input.addEventListener("input", () => {
+    draft.type(input.value);
+    deps.focus?.moveTo({ kind: "at", column: input.selectionStart ?? 0 }, input.value);
+  });
+  input.addEventListener("blur", settle);
+  input.addEventListener("keydown", (event) => {
+    const key = event?.key;
+    if (key === "Enter") {
+      event?.preventDefault?.();
+      settle();
+    } else if (key === "Escape") {
+      event?.preventDefault?.();
+      settle();
+    } else if (key === "Backspace" && input.value === seed) {
+      event?.preventDefault?.();
+      abandon();
+    }
+  });
+  return input;
+}
+var TAG_CHIP_CLASS = "tagchip";
+var CHIP_OPEN = `<span class="${TAG_CHIP_CLASS}">`;
+var CHIP_CLOSE = "</span>";
+var LINK_CHIP_CLASS = "linkchip";
+var LINK_OPEN = `<span class="${LINK_CHIP_CLASS}">`;
+var IDENTITY = /^\[\[qntm:\d+\]\]$/i;
+var STAMP_MARK_CLASS = "stampmark";
+var STAMP_OPEN = `<span class="${STAMP_MARK_CLASS}"`;
+var STAMP_MARK_GLYPH = "\u2022";
+var stampMark = (id) => `${STAMP_OPEN} title="qntm:${id}">${STAMP_MARK_GLYPH}</span>`;
+var VIM_SELECTED_CLASS = "vim-selected";
+function renderTokens(text, tags, stamp, render) {
+  const injections = [];
+  if (stamp === "wired") {
+    for (const span of stampSpans(text)) {
+      injections.push({ start: span.start, end: span.end, text: span.text, html: stampMark(span.id) });
+    }
+  }
+  if (tags === "wired") {
+    for (const span of tagSpans(text)) {
+      injections.push({
+        start: span.start,
+        end: span.end,
+        text: span.text,
+        html: CHIP_OPEN + span.text + CHIP_CLOSE
+      });
+    }
+    for (const span of wikiLinkSpans(text)) {
+      const whole = text.slice(span.start, span.end);
+      if (IDENTITY.test(whole)) continue;
+      injections.push({ start: span.start, end: span.end, text: whole, html: LINK_OPEN + whole + CHIP_CLOSE });
+    }
+  }
+  if (injections.length === 0) {
+    return render(text);
+  }
+  const claimed = [];
+  for (const injection of injections) {
+    if (!claimed.some((c) => injection.start >= c.start && injection.start < c.end)) {
+      claimed.push(injection);
+    }
+  }
+  claimed.sort((a, b) => a.start - b.start);
+  let injected = "";
+  let at = 0;
+  for (const injection of claimed) {
+    injected += text.slice(at, injection.start) + injection.html;
+    at = injection.end;
+  }
+  injected += text.slice(at);
+  const html = render(injected);
+  const survived = (open) => html.split(open).length - 1;
+  const wanted = (open) => claimed.filter((c) => c.html.startsWith(open)).length;
+  const intact = survived(CHIP_OPEN) === wanted(CHIP_OPEN) && survived(STAMP_OPEN) === wanted(STAMP_OPEN) && survived(LINK_OPEN) === wanted(LINK_OPEN);
+  return intact ? html : render(text);
+}
+var SETTLE_CLASS = "settle-move";
+function settleRow(moving, before, body, animate) {
+  const first = animate && typeof moving.getBoundingClientRect === "function" ? moving.getBoundingClientRect() : null;
+  body.insertBefore(moving, before);
+  if (first === null) {
+    return;
+  }
+  const last = moving.getBoundingClientRect();
+  const dy = first.top - last.top;
+  if (dy === 0) {
+    return;
+  }
+  moving.className = moving.className === "" ? SETTLE_CLASS : `${moving.className} ${SETTLE_CLASS}`;
+  moving.style.transition = "none";
+  moving.style.transform = `translateY(${dy}px)`;
+  const settled = () => {
+    moving.style.transition = "";
+    moving.style.transform = "";
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(settled);
+  } else {
+    settled();
+  }
+}
+var PREDICT_CLASS = "row-prediction";
+var PREDICT_WITHDRAWN_CLASS = "row-prediction-withdrawn";
+function appendPrediction(row, text, kind, animate) {
+  if (row.tagName.toLowerCase() === "textarea") {
+    return;
+  }
+  const span = document.createElement("span");
+  const classes = [PREDICT_CLASS];
+  if (kind === "withdrawn") {
+    classes.push(PREDICT_WITHDRAWN_CLASS);
+  }
+  span.className = classes.join(" ");
+  span.textContent = text;
+  span.title = kind === "withdrawn" ? "predicted \u2014 the engine answered differently" : "predicted \u2014 not yet confirmed by the engine";
+  row.append(span);
+  if (kind === "pending" && animate) {
+    span.style.transition = "none";
+    span.style.opacity = "0";
+    span.style.transform = "translateY(-.2em)";
+    const settled = () => {
+      span.style.transition = "";
+      span.style.opacity = "";
+      span.style.transform = "";
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(settled);
+    } else {
+      settled();
+    }
+  }
+}
+function markDeltaIn(span, delta, kind) {
+  const text = span.textContent ?? "";
+  const at = delta === "" ? -1 : text.indexOf(delta);
+  if (at === -1) {
+    return span;
+  }
+  const before = text.slice(0, at);
+  const after = text.slice(at + delta.length);
+  span.textContent = "";
+  if (before !== "") {
+    span.appendChild(document.createTextNode(before));
+  }
+  const mark = document.createElement("span");
+  mark.className = kind === "withdrawn" ? PREDICT_WITHDRAWN_CLASS : PREDICT_CLASS;
+  mark.textContent = delta;
+  span.appendChild(mark);
+  if (after !== "") {
+    span.appendChild(document.createTextNode(after));
+  }
+  return span;
+}
+function replacePredictedSwap(entry, fullText, delta, kind) {
+  if (entry.cursorColumn !== void 0) {
+    const rebuilt = normalLine(fullText, entry.cursorColumn);
+    entry.contentEl.innerHTML = "";
+    for (const child of Array.from(rebuilt.children)) {
+      entry.contentEl.appendChild(markDeltaIn(child, delta, kind));
+    }
+    return true;
+  }
+  const shape = classifyLine(fullText);
+  const rebuiltSource = shape.kind === "checkbox" ? shape.tail : shape.kind === "heading" ? shape.text : shape.kind === "prose" ? shape.source : null;
+  if (rebuiltSource === null) return false;
+  const html = renderTokens(rebuiltSource, entry.tagsRendition, entry.stampRendition, entry.render);
+  const oldChip = CHIP_OPEN + delta + CHIP_CLOSE;
+  const chipIndex = html.indexOf(oldChip);
+  if (chipIndex === -1) return false;
+  const classes = [PREDICT_CLASS];
+  if (kind === "withdrawn") classes.push(PREDICT_WITHDRAWN_CLASS);
+  const titleAttr = kind === "withdrawn" ? "predicted \u2014 the engine answered differently" : "predicted \u2014 not yet confirmed by the engine";
+  const newChip = `<span class="${classes.join(" ")}" title="${titleAttr}">${delta}</span>`;
+  entry.contentEl.innerHTML = html.slice(0, chipIndex) + newChip + html.slice(chipIndex + oldChip.length);
+  return true;
+}
+function paint(body, source, context, deps) {
+  paintGeneration += 1;
+  const mine = paintGeneration;
+  const superseded = () => paintGeneration !== mine;
+  const focus = deps.focus;
+  const draft = deps.draft;
+  const mode = deps.mode;
+  const instances = deps.view === void 0 ? void 0 : instancesOf(source, deps.view);
+  const stampInstance = (element, lineIndex) => {
+    const info = instances?.[lineIndex];
+    if (info !== void 0 && info !== null) {
+      element.dataset.instance = info.instance;
+    }
+  };
+  const markLineIndex = (element, lineIndex) => {
+    element.dataset.lineIndex = String(lineIndex);
+    if (deps.cutLines?.has(lineIndex) === true) element.classList.add("cut");
+  };
+  const repaint = (nextSource) => {
+    if (deps.view !== void 0) {
+      deps.rows?.edited(deps.view, nextSource);
+    }
+    paint(body, nextSource, context, deps);
+  };
+  const focusable = (element, lineIndex) => {
+    if (focus === void 0) {
+      return;
+    }
+    element.addEventListener("click", (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      focus.place(lineIndex, { kind: "line-start" }, source, deps.view);
+      repaint(source);
+    });
+  };
+  const openLineAt = (lineIndex, from) => {
+    if (draft === void 0 || focus === void 0) {
+      return false;
+    }
+    return openLine(from, lineIndex, draft, deps.onNewLineDeclined, deps.declared, deps.view);
+  };
+  const raw = (lineSource, lineIndex) => {
+    if (focus === void 0) {
+      const text = rawText(lineSource);
+      stampInstance(text, lineIndex);
+      markLineIndex(text, lineIndex);
+      body.append(text);
+      rowsByLineIndex.set(lineIndex, text);
+      return;
+    }
+    if (mode !== void 0 && mode.mode === "NORMAL" && focus.isFocused(lineIndex)) {
+      const line = normalLine(lineSource, focus.column);
+      focusable(line, lineIndex);
+      stampInstance(line, lineIndex);
+      markLineIndex(line, lineIndex);
+      body.append(line);
+      rowsByLineIndex.set(lineIndex, line);
+      predictableByLineIndex.set(lineIndex, {
+        contentEl: line,
+        // A BLOCK-CURSOR ROW RENDERS NO TOKENS AT ALL — `normalLine` writes raw characters into
+        // three spans — so these two carry `raw` rather than a resolved value, and the rebuild
+        // below never consults them. Stated rather than left as a plausible-looking lookup.
+        tagsRendition: "raw",
+        stampRendition: "raw",
+        render: (markdown) => deps.markdown.render(markdown),
+        cursorColumn: focus.column
+      });
+      return;
+    }
+    const input = rawInput(lineSource, lineIndex, source, focus, deps, repaint, openLineAt);
+    stampInstance(input, lineIndex);
+    markLineIndex(input, lineIndex);
+    body.append(input);
+    rowsByLineIndex.set(lineIndex, input);
+    if (focus.isFocused(lineIndex)) {
+      input.focus?.();
+      if (superseded()) {
+        return;
+      }
+      const asked = mode?.takeCaretHint();
+      if (asked !== void 0) {
+        focus.moveTo({ kind: asked }, lineSource);
+        placeCaret(input, focus.column);
+      }
+    }
+  };
+  body.innerHTML = "";
+  if (superseded()) {
+    return;
+  }
+  let draftPainted = false;
+  const paintDraft = () => {
+    const open = draft?.draft;
+    if (open === void 0 || open === null || draftPainted) {
+      return;
+    }
+    draftPainted = true;
+    const input = draftInput(
+      open.lineIndex,
+      open.seed,
+      open.typed,
+      source,
+      draft,
+      deps,
+      repaint
+    );
+    body.append(input);
+    input.focus?.();
+    if (superseded()) {
+      return;
+    }
+    if (open.typed !== open.seed) {
+      placeCaret(input, open.typed.length);
+      deps.focus?.moveTo({ kind: "at", column: open.typed.length }, open.typed);
+      return;
+    }
+    if (open.cursorOffset !== void 0) {
+      placeCaret(input, open.cursorOffset);
+      deps.focus?.moveTo({ kind: "at", column: open.cursorOffset }, open.seed);
+    }
+  };
+  let lastPaintedIndex = -1;
+  const rowsByLineIndex = /* @__PURE__ */ new Map();
+  const predictableByLineIndex = /* @__PURE__ */ new Map();
+  source.split("\n").forEach((line, index) => {
+    if (superseded()) {
+      return;
+    }
+    if (draft?.isDraftAt(index) === true) {
+      paintDraft();
+    }
+    const shape = classifyLine(line, deps.checkboxStatuses);
+    if (shape.kind === "blank") {
+      if (mode !== void 0 && mode.mode === "NORMAL" && focus !== void 0 && focus.isFocused(index)) {
+        const mark = document.createElement("div");
+        mark.className = VIM_SELECTED_CLASS;
+        body.append(mark);
+      }
+      return;
+    }
+    lastPaintedIndex = index;
+    const focusLive = focus !== void 0;
+    const cascade = new PresentationCascade(focusLive ? focus.contextFor(index, context) : context);
+    if (shape.kind === "checkbox") {
+      if (cascade.resolve("checkbox").rendition === "raw") {
+        raw(shape.source, index);
+        return;
+      }
+      const row = document.createElement("label");
+      row.className = "task" + (shape.done ? " done" : "") + (deps.unconfirmed?.has(index) ? " unconfirmed" : "");
+      row.style.marginLeft = shape.indent.length / 2 * 1.2 + "rem";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = shape.done;
+      row.dataset["status"] = shape.status;
+      if (shape.status !== "open" && shape.status !== "done") {
+        row.classList.add(`status-${shape.status}`);
+        box.title = shape.status;
+      }
+      box.addEventListener("change", () => {
+        const completion = deps.completion?.();
+        const markdown = applyEdit(source, {
+          kind: "set-checkbox",
+          lineIndex: index,
+          checked: box.checked,
+          statuses: deps.checkboxStatuses,
+          ...completion === void 0 ? {} : { completion }
+        });
+        deps.onCheckboxToggle?.({ lineIndex: index, checked: box.checked, markdown, source, box, row });
+      });
+      const span = document.createElement("span");
+      const checkboxTagsRendition = cascade.resolve("tags").rendition;
+      const checkboxStampRendition = cascade.resolve("stamp").rendition;
+      const checkboxRender = (markdown) => deps.markdown.renderInline(markdown);
+      span.innerHTML = renderTokens(shape.tail, checkboxTagsRendition, checkboxStampRendition, checkboxRender);
+      focusable(span, index);
+      stampInstance(row, index);
+      markLineIndex(row, index);
+      row.append(box, span);
+      body.append(row);
+      rowsByLineIndex.set(index, row);
+      predictableByLineIndex.set(index, {
+        contentEl: span,
+        tagsRendition: checkboxTagsRendition,
+        stampRendition: checkboxStampRendition,
+        render: checkboxRender
+      });
+      return;
+    }
+    if (shape.kind === "heading") {
+      if (cascade.resolve("heading").rendition === "raw") {
+        raw(shape.source, index);
+        return;
+      }
+      const el = document.createElement("h" + String(Math.min(shape.hashes.length + 1, 6)));
+      const headingTagsRendition = cascade.resolve("tags").rendition;
+      const headingStampRendition = cascade.resolve("stamp").rendition;
+      const headingRender = (markdown) => deps.markdown.renderInline(markdown);
+      el.innerHTML = renderTokens(shape.text, headingTagsRendition, headingStampRendition, headingRender);
+      focusable(el, index);
+      stampInstance(el, index);
+      markLineIndex(el, index);
+      body.append(el);
+      rowsByLineIndex.set(index, el);
+      predictableByLineIndex.set(index, {
+        contentEl: el,
+        tagsRendition: headingTagsRendition,
+        stampRendition: headingStampRendition,
+        render: headingRender
+      });
+      return;
+    }
+    if (cascade.resolve("prose").rendition === "raw") {
+      raw(shape.source, index);
+      return;
+    }
+    const div = document.createElement("div");
+    const proseTagsRendition = cascade.resolve("tags").rendition;
+    const proseStampRendition = cascade.resolve("stamp").rendition;
+    const proseRender = (markdown) => deps.markdown.render(markdown);
+    div.innerHTML = renderTokens(shape.source, proseTagsRendition, proseStampRendition, proseRender);
+    focusable(div, index);
+    stampInstance(div, index);
+    markLineIndex(div, index);
+    body.append(div);
+    rowsByLineIndex.set(index, div);
+    predictableByLineIndex.set(index, {
+      contentEl: div,
+      tagsRendition: proseTagsRendition,
+      stampRendition: proseStampRendition,
+      render: proseRender
+    });
+  });
+  if (superseded()) {
+    return;
+  }
+  const settle = deps.settle;
+  if (settle !== void 0) {
+    for (const instruction of settle.take(source, deps.view ?? "")) {
+      const movingEl = rowsByLineIndex.get(instruction.placement.lineIndex);
+      const beforeLineIndex = instruction.placement.beforeLineIndex;
+      const beforeEl = beforeLineIndex === null ? null : rowsByLineIndex.get(beforeLineIndex) ?? null;
+      if (movingEl !== void 0) {
+        settleRow(movingEl, beforeEl, body, instruction.animate);
+      }
+    }
+  }
+  const predict = deps.predict;
+  if (predict !== void 0) {
+    const instruction = predict.take(source, deps.view ?? "");
+    if (instruction !== null) {
+      for (const prediction of instruction.predictions) {
+        const el = rowsByLineIndex.get(prediction.lineIndex);
+        if (el === void 0) continue;
+        landPrediction(
+          el,
+          prediction.fullText === void 0 ? void 0 : predictableByLineIndex.get(prediction.lineIndex),
+          prediction,
+          instruction.animate
+        );
+      }
+      for (const withdrawn of instruction.withdrawn) {
+        const el = rowsByLineIndex.get(withdrawn.lineIndex);
+        if (el !== void 0) {
+          appendPrediction(el, withdrawn.text, "withdrawn", true);
+        }
+      }
+    }
+  }
+  paintDraft();
+  if (superseded()) {
+    return;
+  }
+  if (draft !== void 0 && focus !== void 0) {
+    const below = document.createElement("div");
+    below.className = "newline";
+    below.addEventListener("click", (event) => {
+      event?.preventDefault?.();
+      openLineAt(lastPaintedIndex + 1, source);
+      repaint(source);
+    });
+    body.append(below);
+  }
+  if (deps.view !== void 0) {
+    deps.rows?.seat(deps.view, source, focus?.lineIndex ?? null);
+  }
+}
+function visualLineOrder(body) {
+  const order = [];
+  for (const child of Array.from(body.children)) {
+    const raw = child.dataset?.lineIndex;
+    if (raw !== void 0) {
+      order.push(Number(raw));
+    }
+  }
+  return order;
+}
+function revealSelection(body, block = "nearest") {
+  const row = body.querySelector?.(`.${VIM_SELECTED_CLASS}`) ?? body.querySelector?.("textarea.rawline");
+  row?.scrollIntoView?.({ block, inline: "nearest" });
+}
+
 // app/shell/drawer.ts
 var viewsPolicy = (deps) => deps.policy?.() ?? DEFAULT_RANK_POLICIES.views;
 var folderOf = (path) => {
@@ -8624,62 +8981,6 @@ function flushMarks(deps) {
   return Promise.all(sent).then(() => void 0);
 }
 
-// app/present/tagcomplete.ts
-function tagVocabulary(sources) {
-  const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  const add = (token) => {
-    if (typeof token !== "string" || !/^#[^\s#]+$/.test(token) || seen.has(token)) return;
-    seen.add(token);
-    out.push(token);
-  };
-  for (const token of sources.resolution?.tagOrder?.canonicalOrder ?? []) add(token);
-  const fields = sources.qualification?.tokens ?? {};
-  for (const field of Object.keys(fields).sort()) {
-    for (const token of Object.keys(fields[field] ?? {}).sort()) add(token);
-  }
-  return out;
-}
-function tagQueryAt(text, caret) {
-  if (caret < 0 || caret > text.length) return null;
-  let start = caret;
-  while (start > 0 && !/\s/.test(text[start - 1] ?? "")) start -= 1;
-  if (text[start] !== "#") return null;
-  let end = caret;
-  while (end < text.length && !/\s/.test(text[end] ?? "")) end += 1;
-  const typed = text.slice(start + 1, caret);
-  if (typed.includes("#")) return null;
-  return { start, end, prefix: typed.toLowerCase() };
-}
-function matchingTags(vocabulary, query, limit = 8, policy = DEFAULT_RANK_POLICIES.tags) {
-  return rank(vocabulary, (tag) => ({ title: tag.slice(1) }), query.prefix, policy).slice(0, limit);
-}
-
-// app/present/completion.ts
-function completeWith(sources, text, caret) {
-  for (const source of sources) {
-    const answer = source(text, caret);
-    if (answer !== null && answer.items.length > 0) return answer;
-  }
-  return null;
-}
-function applyCompletion(text, completion, insert) {
-  const after = text.slice(completion.end);
-  const spacer = after.startsWith(" ") ? "" : " ";
-  return {
-    text: text.slice(0, completion.start) + insert + spacer + after,
-    caret: completion.start + insert.length + 1
-  };
-}
-function tagSource(vocabulary, policy) {
-  return (text, caret) => {
-    const query = tagQueryAt(text, caret);
-    if (query === null) return null;
-    const items = matchingTags(vocabulary, query, 8, policy).map((tag) => ({ label: tag, insert: tag }));
-    return { start: query.start, end: query.end, items };
-  };
-}
-
 // app/shell/completer.ts
 var isLineEditor = (target) => typeof HTMLTextAreaElement !== "undefined" && target instanceof HTMLTextAreaElement && target.classList.contains("rawline");
 function installCompleter(deps) {
@@ -8779,63 +9080,6 @@ function installCompleter(deps) {
   });
 }
 
-// app/present/keyhelp.ts
-var KEY_HELP = [
-  {
-    title: "Move",
-    rows: [
-      { keys: ["j", "\u2193"], does: "Next line" },
-      { keys: ["k", "\u2191"], does: "Previous line" },
-      { keys: ["gg", "G"], does: "First / last line" },
-      { keys: ["{", "}"], does: "Previous / next section" },
-      { keys: ["w", "b", "e"], does: "Next word / back a word / end of word" },
-      { keys: ["0", "$"], does: "Start / end of the line" },
-      { keys: ["3j"], does: "A number before a move repeats it" }
-    ]
-  },
-  {
-    title: "Edit",
-    rows: [
-      { keys: ["i", "Enter"], does: "Edit the line (cursor where it is)" },
-      { keys: ["a"], does: "Edit the line, after the cursor" },
-      { keys: ["A"], does: "Edit the line, at the end" },
-      { keys: ["click the selected line"], does: "Edit it (on a phone: tap it)" },
-      { keys: ["o", "O"], does: "New line below / above" },
-      { keys: ["c"], does: "Capture a new line into the Inbox, from any view" },
-      { keys: ["x", "Space"], does: "Tick / untick (adds or removes \u2705 today)" },
-      { keys: ["dd"], does: "Mark the line for deletion (again to unmark). Marked lines are deleted on Cycle" },
-      { keys: ["yy"], does: "Copy the line" },
-      { keys: ["u", "\u2318Z"], does: "Undo this view's last change" },
-      { keys: ["Ctrl-r", "\u21E7\u2318Z"], does: "Redo" },
-      { keys: ["p", "P"], does: "Move the last marked line (or put a copy) below / above" },
-      { keys: [">", "<"], does: "Indent / outdent (make or unmake a child)" }
-    ]
-  },
-  {
-    title: "While editing a line",
-    rows: [
-      { keys: ["Enter"], does: "Save the line and stop editing" },
-      { keys: ["Shift+Enter"], does: "Save the line and start a new one below" },
-      { keys: ["Escape"], does: "Stop editing (keeps what you typed)" },
-      { keys: ["#"], does: "Suggest tags from your config" },
-      { keys: [":"], does: "Suggest markers by name (:sched \u2192 \u23F3)" },
-      { keys: ["\u{1F4C5} \u23F3 \u{1F6EB} + space"], does: "Suggest dates" },
-      { keys: ["\u2191", "\u2193", "Tab"], does: "Choose a suggestion" }
-    ]
-  },
-  {
-    title: "App",
-    rows: [
-      { keys: ["\\"], does: "Open the views list" },
-      { keys: ["H", "Ctrl-o", "\u2318["], does: "Back to the previous view" },
-      { keys: ["L", "Ctrl-i", "\u2318]"], does: "Forward to the next view" },
-      { keys: ["/"], does: "Search tasks across all views" },
-      { keys: ["?"], does: "This help" },
-      { keys: ["Escape"], does: "Close a panel, or get out of a stuck edit" }
-    ]
-  }
-];
-
 // app/shell/help.ts
 function installKeyHelp(doc = document) {
   let overlay = null;
@@ -8896,119 +9140,6 @@ function installKeyHelp(doc = document) {
     }
     overlay.hidden = !overlay.hidden;
   };
-}
-
-// app/present/search.ts
-function folderWords(path) {
-  const parts = String(path ?? "").split("/").slice(0, -1);
-  return parts.join(" ").replace(/[-_]/g, " ");
-}
-function folderLabel(path) {
-  return String(path ?? "").split("/").slice(0, -1).join(" / ");
-}
-function searchCandidates(views, options = {}) {
-  const prefer = options.prefer ?? null;
-  const ordered = [...views.filter((v) => v.id === prefer), ...views.filter((v) => v.id !== prefer)];
-  const hits = [];
-  for (const view of ordered) {
-    const title = view.title ?? view.id;
-    const where = folderLabel(view.path);
-    hits.push({
-      kind: "view",
-      qntmId: "",
-      text: where === "" ? title : `${where} \u203A ${title}`,
-      title,
-      status: "",
-      viewId: view.id,
-      viewTitle: title,
-      viewPath: view.path ?? "",
-      lineIndex: 0
-    });
-  }
-  const sections = /* @__PURE__ */ new Set();
-  for (const view of ordered) {
-    const lines = view.markdown.split("\n");
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index] ?? "";
-      const shape = classifyLine(line, options.statuses);
-      if (shape.kind === "heading") {
-        const heading = shape.text.trim();
-        const key = `${view.id}\0${heading}`;
-        if (shape.hashes.length < 2 || heading === "" || sections.has(key)) continue;
-        sections.add(key);
-        hits.push({
-          kind: "section",
-          qntmId: "",
-          text: heading,
-          title: heading,
-          status: "",
-          viewId: view.id,
-          viewTitle: view.title ?? view.id,
-          viewPath: view.path ?? "",
-          lineIndex: index
-        });
-        continue;
-      }
-      const stamp = stampSpans(line)[0];
-      if (stamp === void 0) continue;
-      const content = contentOf(line) ?? "";
-      const title = cleanTitleFor(line);
-      hits.push({
-        kind: "task",
-        qntmId: stamp.id,
-        text: content.split(stamp.text).join("").replace(/\s+/g, " ").trim(),
-        title: title.kind === "title" ? title.text : "",
-        status: shape.kind === "checkbox" ? shape.status : "",
-        viewId: view.id,
-        viewTitle: view.title ?? view.id,
-        viewPath: view.path ?? "",
-        lineIndex: index
-      });
-    }
-  }
-  return hits;
-}
-function describeHit(hit) {
-  if (hit.kind === "view") return { title: hit.viewTitle, also: folderWords(hit.viewPath), kind: "view", path: hit.viewPath };
-  if (hit.kind === "section") return { title: hit.text, kind: "section", path: hit.viewPath };
-  return { title: hit.title, also: hit.text, kind: "task", status: hit.status, path: hit.viewPath };
-}
-function bestCopyOfEachTask(hits, key, policy) {
-  const choose = { keys: [{ field: "demoted", direction: "asc" }, { field: "position" }], demote: policy.demote };
-  const seen = /* @__PURE__ */ new Set();
-  const kept = new Set(
-    rank(hits, (hit) => ({ title: "", path: hit.viewPath }), "", choose).filter((hit) => {
-      if (hit.kind !== "task") return true;
-      const k = key(hit);
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    })
-  );
-  return hits.filter((hit) => kept.has(hit));
-}
-function searchViews(views, query, options = {}) {
-  if (query.trim() === "") return [];
-  const policy = options.policy ?? DEFAULT_RANK_POLICIES.search;
-  const copies = bestCopyOfEachTask(searchCandidates(views, options), (hit) => hit.qntmId, policy);
-  return rank(copies, describeHit, query, policy).slice(0, options.limit ?? 30);
-}
-function linkTargets(views, query, options = {}) {
-  if (query.trim() === "") return [];
-  const tasks = searchCandidates(views, options).filter((hit) => hit.kind === "task" && hit.title !== "");
-  const policy = options.policy ?? DEFAULT_RANK_POLICIES.link;
-  const describe = (hit) => ({ title: hit.title, kind: "task", status: hit.status, path: hit.viewPath });
-  const copies = bestCopyOfEachTask(tasks, (hit) => hit.title.toLowerCase(), policy);
-  return rank(copies, describe, query, policy).slice(0, options.limit ?? 8);
-}
-function findLinkTarget(views, target, options = {}) {
-  const id = stampSpans(`[[${target.trim()}]]`)[0]?.id;
-  const want = target.trim().toLowerCase();
-  for (const hit of searchCandidates(views, options)) {
-    if (hit.kind !== "task") continue;
-    if (id !== void 0 ? hit.qntmId === id : hit.title.toLowerCase() === want) return hit;
-  }
-  return null;
 }
 
 // app/shell/search.ts
@@ -9088,28 +9219,6 @@ function installSearch(deps, doc = document) {
     hits = [];
     render();
     input.focus();
-  };
-}
-
-// app/present/linkcomplete.ts
-function linkQueryAt(text, caret) {
-  const before = text.slice(0, caret);
-  const start = before.lastIndexOf("[[");
-  if (start === -1) return null;
-  const query = before.slice(start + 2);
-  if (query.includes("]]") || query.includes("[")) return null;
-  return { start, query };
-}
-function linkSource(views, preferViewId, statuses = () => void 0, policy = () => void 0) {
-  return (text, caret) => {
-    const open = linkQueryAt(text, caret);
-    if (open === null || open.query.trim() === "") return null;
-    const end = text.startsWith("]]", caret) ? caret + 2 : caret;
-    const items = linkTargets(views(), open.query, { prefer: preferViewId(), statuses: statuses(), policy: policy() }).map((hit) => ({
-      label: `${hit.title}  \xB7  ${hit.viewTitle}`,
-      insert: `[[${hit.title}]]`
-    }));
-    return { start: open.start, end, items };
   };
 }
 
@@ -9261,115 +9370,6 @@ function installTouchBar(deps) {
 }
 function showTouchMode(bar, mode) {
   bar.setAttribute?.("data-mode", mode);
-}
-
-// app/present/datecomplete.ts
-function dateMarkers(sources) {
-  const out = [];
-  for (const [field, marker] of Object.entries(sources.qualification?.extractionFields ?? {})) {
-    if (field === "created_at" || field === "completed_at") continue;
-    if (marker?.kind === "date" && typeof marker.token === "string" && marker.token !== "") out.push(marker.token);
-  }
-  return out;
-}
-var WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-function addDays(date, days) {
-  const [y, m, d] = date.split("-").map(Number);
-  const at = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1) + days * 864e5);
-  return at.toISOString().slice(0, 10);
-}
-function addMonths(date, months) {
-  const [y, m, d] = date.split("-").map(Number);
-  const target = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 + months, 1));
-  const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  target.setUTCDate(Math.min(d ?? 1, last));
-  return target.toISOString().slice(0, 10);
-}
-function dateChoices(today, weekStartsOn) {
-  const [y, m, d] = today.split("-").map(Number);
-  const weekday = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
-  const startIndex = Math.max(0, WEEKDAYS.indexOf(weekStartsOn.toLowerCase()));
-  const toWeekStart = (startIndex - weekday + 7) % 7 || 7;
-  const startName = (WEEKDAYS[startIndex] ?? "monday").replace(/^./, (c) => c.toUpperCase());
-  return [
-    { label: "Today", date: today },
-    { label: "Tomorrow", date: addDays(today, 1) },
-    { label: `Next ${startName}`, date: addDays(today, toWeekStart) },
-    { label: "In a week", date: addDays(today, 7) },
-    { label: "In 2 weeks", date: addDays(today, 14) },
-    { label: "In a month", date: addMonths(today, 1) }
-  ];
-}
-function dateSource(markers, today, weekStartsOn) {
-  return (text, caret) => {
-    const before = text.slice(0, caret);
-    for (const marker of markers) {
-      const at = before.lastIndexOf(marker);
-      if (at === -1) continue;
-      const tail = before.slice(at + marker.length);
-      const typed = /^ ([0-9-]*)$/.exec(tail);
-      if (typed === null) continue;
-      const day = today();
-      if (day === void 0) return null;
-      const start = at + marker.length + 1;
-      let end = caret;
-      while (end < text.length && /[0-9-]/.test(text[end] ?? "")) end += 1;
-      const prefix = typed[1] ?? "";
-      const items = dateChoices(day, weekStartsOn).filter((choice) => choice.date.startsWith(prefix)).map((choice) => ({ label: `${choice.label} \xB7 ${choice.date}`, insert: choice.date }));
-      return { start, end, items };
-    }
-    return null;
-  };
-}
-
-// app/present/markercomplete.ts
-var words = (field) => field.replace(/_/g, " ");
-function markerVocabulary(sources) {
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  const add = (token, name) => {
-    if (token === "" || seen.has(token)) return;
-    seen.add(token);
-    out.push({ token, name });
-  };
-  for (const [field, marker] of Object.entries(sources.qualification?.extractionFields ?? {})) {
-    if (typeof marker?.token === "string") add(marker.token, words(field));
-  }
-  for (const [field, spellings] of Object.entries(sources.qualification?.tokens ?? {})) {
-    for (const [token, value] of Object.entries(spellings ?? {})) {
-      if (token.startsWith("#") || token.startsWith("[")) continue;
-      add(token, `${words(String(value))} \xB7 ${words(field)}`);
-    }
-  }
-  return out;
-}
-function markerQueryAt(text, caret) {
-  const match = /(^|\s):([a-z0-9_ ]{0,24})$/i.exec(text.slice(0, caret));
-  if (match === null) return null;
-  const query = match[2] ?? "";
-  if (query.startsWith(" ")) return null;
-  return { start: caret - query.length - 1, query: query.toLowerCase() };
-}
-function markerSource(markers, policy = DEFAULT_RANK_POLICIES.markers) {
-  return (text, caret) => {
-    const at = markerQueryAt(text, caret);
-    if (at === null) return null;
-    const items = rank(markers, (marker) => ({ title: marker.name }), at.query.replace(/_/g, " "), policy).map(
-      (marker) => ({ label: `${marker.token}  ${marker.name}`, insert: marker.token })
-    );
-    return { start: at.start, end: caret, items };
-  };
-}
-
-// app/present/unconfirmed.ts
-function unconfirmedLines(painted, served) {
-  const out = /* @__PURE__ */ new Set();
-  if (served === void 0 || painted === served) return out;
-  const known = new Set(served.split("\n"));
-  painted.split("\n").forEach((line, index) => {
-    if (line.trim() !== "" && !known.has(line)) out.add(index);
-  });
-  return out;
 }
 export {
   ANCHOR_TRUST,

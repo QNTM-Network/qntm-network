@@ -37,7 +37,7 @@ hold eleven facts with eleven different keys and eleven different invalidation r
 argued in its own docstring against a measured defect with a date attached. Merging them into one
 object would not delete any of that logic — every fact still needs its own comparison — and it
 would add exactly the one thing this app has bled to remove: a **second path to the screen**.
-`paintGeneration` (`app/present/paint.ts:434`) exists because a listener firing a repaint from
+`paintGeneration` (`app/shell/paint.ts:434`) exists because a listener firing a repaint from
 inside a write has already put three copies of a view on screen. A subscribe-and-notify store's
 entire product is a listener that fires on write. **[REA]**, verified live below.
 
@@ -67,7 +67,7 @@ already show is free (§6).
 `app/index.html` (3,968 lines) was read in the regions that declare, assign, and consume every
 module-level `let`, plus the full bodies of `paintView`, `repaintCurrentView`, `commitLine`,
 `resolverContextFor`, and `globalRegistrationFor` — the five functions every holder ultimately
-answers to. `app/present/paint.ts` (103,298 bytes) was read around `paintGeneration` and its three
+answers to. `app/shell/paint.ts` (103,298 bytes) was read around `paintGeneration` and its three
 named re-entrancy points.
 
 **[OBS]** `npm install` was run in the worktree (39 packages, no network write, nothing outside
@@ -232,7 +232,7 @@ Eight, named and cited. A proposal that breaks any one of these reproduces a bug
 already shipped and already paid for.
 
 1. **ONE PATH TO THE SCREEN.** Every pixel of a view's body is built by `paint()`
-   (`app/present/paint.ts`), reached only through `repaintCurrentView` (`index.html:2715`) or
+   (`app/shell/paint.ts`), reached only through `repaintCurrentView` (`index.html:2715`) or
    `paintView` (`index.html:2406`, which itself ends by calling `repaintCurrentView` at `:2584`).
    No other function constructs view DOM. **[REA]**, confirmed by reading every call site of
    `paint(` in `app/index.html` (§ *how this was measured*).

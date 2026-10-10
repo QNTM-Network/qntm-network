@@ -55,7 +55,7 @@
  * `Diagnostic` names a badge; it never writes one. The page owns every `document.getElementById`.
  */
 
-import type { LineCommit } from "./paint.js";
+import type { LineCommit } from "./linecommit.js";
 import type { QualificationLanguage } from "./select/qualification.js";
 import type { ConfigResolutionTable } from "./resolutiontable.js";
 import type { RulesLanguage } from "./rules.js";

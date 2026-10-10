@@ -186,7 +186,7 @@ const quiesce = () => new Promise((r) => setTimeout(r, 20));
  * Tick line 1's checkbox WITH THE MOUSE.
  *
  * The cursor is parked on line 0 first, and that is not cosmetic: the line under the cursor paints
- * its SOURCE CHARACTERS rather than a widget (app/present/paint.ts), so a page whose cursor sat on
+ * its SOURCE CHARACTERS rather than a widget (app/shell/paint.ts), so a page whose cursor sat on
  * line 1 would have no checkbox on line 1 to click. This is the same `paintParked` reasoning
  * tests/app-html-write-path.test.mjs states for itself.
  */

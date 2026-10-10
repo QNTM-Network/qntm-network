@@ -54,11 +54,11 @@
  * can — but it is the difference between "sometimes" and "always".
  */
 
-import { paint } from "../../app/present/paint.js";
+import { paint } from "../../app/shell/paint.js";
 import { PresentationContext, presentationFromDeclaration } from "../../app/present/context.js";
 import { DraftSurface } from "../../app/present/draft.js";
 import { FocusSurface } from "../../app/present/focus.js";
-import type { InlineMarkdown } from "../../app/present/paint.js";
+import type { InlineMarkdown } from "../../app/shell/paint.js";
 
 /**
  * THE SMALLEST VIEW THAT REACHES EVERY BRANCH THE PAINTER HAS — a heading, a blank line, a task
@@ -95,7 +95,7 @@ class StubElement {
   textContent = "";
   readonly style: Record<string, string> = {};
   readonly children: StubElement[] = [];
-  // `data-line-index` (`app/present/paint.ts`'s `markLineIndex`) is now written UNCONDITIONALLY,
+  // `data-line-index` (`app/shell/paint.ts`'s `markLineIndex`) is now written UNCONDITIONALLY,
   // on every row this scenario's `paint()` call builds — see `paint.ts`'s own header for why: it
   // is a fact about `source` alone, not about a supplied view id, unlike `data-instance`
   // (`stampInstance`), which stays conditional and needs no entry here because it never touches

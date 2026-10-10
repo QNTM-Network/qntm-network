@@ -45,8 +45,8 @@ import { indentedLine } from "../present/indent.js";
 import type { ModeSurface } from "../present/motions.js";
 import type { GlobalRegistration } from "../present/newline.js";
 import { openLine } from "../present/newline.js";
-import { existingLineCommit, revealSelection, visualLineOrder } from "../present/paint.js";
-import type { LineCommit } from "../present/paint.js";
+import { existingLineCommit, revealSelection, visualLineOrder } from "./paint.js";
+import type { LineCommit } from "./paint.js";
 import { classifyLine } from "../present/express/rendition.js";
 import { deleteLinesCommit, insertCommit, moveCommit } from "../present/register.js";
 import type { LineRegister } from "../present/register.js";
@@ -182,7 +182,7 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
   let source = deps.showing(v.id, deps.sourceFor(v.path) ?? v.markdown);
   let current = deps.focus.lineIndex ?? 0;
   // ── `j`/`k`/`gg`/`G` MOVE THROUGH THE ROWS AS THEY ARE PAINTED, NOT THROUGH `source`'S OWN
-  // LINE NUMBERS — the census this fixes: `settleRow` (app/present/paint.ts) moves a row's DOM
+  // LINE NUMBERS — the census this fixes: `settleRow` (app/shell/paint.ts) moves a row's DOM
   // element the instant its placement is armed, and that move is COSMETIC ONLY — it never edits
   // `source`, which the real reorder only catches up to once the engine's own next cycle answers.
   // So "line index N" and "the row painted Nth" are two different facts the moment any settle has
@@ -268,7 +268,7 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
     revealSelection(deps.viewBody);
   } else if (effect.kind === "open") {
     // `o`/`O` — `openLine` is the SAME function Enter's mid-edit "open a line below" already
-    // calls (app/present/paint.ts's `openLineAt`), not a parallel implementation. It opens
+    // calls (app/shell/paint.ts's `openLineAt`), not a parallel implementation. It opens
     // BELOW the selected line (`current + 1`) or AT it (`current`, pushing the selected line's
     // own content down) — `applyEdit`'s `insert-line` convention, unchanged from Enter's.
     const targetIndex = effect.direction === "below" ? current + 1 : current;
@@ -358,7 +358,7 @@ export function globalKey(deps: GlobalKeyDeps, e: KeyboardEvent): void {
         ...(completion === undefined ? {} : { completion }),
       });
       if (markdown !== null) {
-        // `existingLineCommit` (app/present/paint.ts), not a hand-built object — see its own
+        // `existingLineCommit` (app/shell/paint.ts), not a hand-built object — see its own
         // header for why: this line and the indent handler below are the two call sites that
         // shipped f448da2's regression by hand-rolling a `LineCommit` with `kind`/`source` left
         // out, in the one file TypeScript never checked. It checks this one.

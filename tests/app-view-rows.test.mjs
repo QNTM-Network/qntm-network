@@ -8,7 +8,7 @@
  * them live in one place: the `<style>` block of app/index.html, which is the whole of the app
  * page's styling (app/styles/*.css belongs to the demo page, not to this one).
  *
- *   THE JUMP. The painter repaints the WHOLE view on every focus change (app/present/paint.ts) —
+ *   THE JUMP. The painter repaints the WHOLE view on every focus change (app/shell/paint.ts) —
  *   deliberately, because a patch-one-element painter would need a second copy of the precedence
  *   order inside it. So the focused line is not mutated, it is REPLACED: `label.task` becomes
  *   `textarea.rawline`, `h3` becomes `textarea.rawline`. Everything below moves by exactly the
@@ -159,7 +159,7 @@ function toPixels(value) {
 // THE HEADING LADDER
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
-/** What the painter can emit: `#` demotes one level and clamps at 6 — app/present/paint.ts. */
+/** What the painter can emit: `#` demotes one level and clamps at 6 — app/shell/paint.ts. */
 const DEMOTED_RANGE = ["h2", "h3", "h4", "h5", "h6"];
 
 describe("the heading ladder", () => {
@@ -218,7 +218,7 @@ describe("the heading ladder", () => {
 // ONE ROW GEOMETRY, TWO RENDITIONS
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Every element the painter appends as a direct child of `.viewbody`. app/present/paint.ts. */
+/** Every element the painter appends as a direct child of `.viewbody`. app/shell/paint.ts. */
 const PAINTED_LINES = [
   { tag: "h2" }, { tag: "h3" }, { tag: "h4" }, { tag: "h5" }, { tag: "h6" },
   { tag: "label", classes: ["task"] },
@@ -578,7 +578,7 @@ describe("one row geometry, two renditions", () => {
   test("the block cursor is a colour and nothing else — it cannot move a line it sits in", () => {
     // NORMAL's cursor is a background swap on ONE character. A readonly `<input>` would have got a
     // native caret for free, and was refused because WebKit and Firefox paint none in one (see
-    // app/present/paint.ts for the citation) — so the cursor is drawn rather than borrowed. What
+    // app/shell/paint.ts for the citation) — so the cursor is drawn rather than borrowed. What
     // has to stay true of a drawn one is that it costs the row nothing: a padded or bordered block
     // would make the selected line taller than the same line unselected, which is the jump every
     // other rule in this file exists to refuse, arriving one character wide.
@@ -594,7 +594,7 @@ describe("one row geometry, two renditions", () => {
   });
 
   test("NORMAL and INSERT wear the same row, so `i` cannot move the line it opens", () => {
-    // TWO EMBODIMENTS OF ONE RENDITION (app/present/paint.ts): a `<div>` in NORMAL and an `<input>`
+    // TWO EMBODIMENTS OF ONE RENDITION (app/shell/paint.ts): a `<div>` in NORMAL and an `<input>`
     // in INSERT, both holding the SAME source characters. `i` swaps one for the other in place, so
     // any metric they disagree about is a jump on every keystroke that enters INSERT.
     const NORMAL = ".viewbody div.rawline";
@@ -647,20 +647,20 @@ describe("one row geometry, two renditions", () => {
     // `syncing` is a STATE a task line wears while its POST is in flight (app/index.html's
     // `toggleTask`), not a kind of line — it only ever declares `opacity`, which costs no layout.
     // `vim-selected` is the same shape of thing: a state ANY line kind wears when it is vim's
-    // NORMAL-mode selection (app/present/paint.ts), declaring only `background` and `box-shadow`
+    // NORMAL-mode selection (app/shell/paint.ts), declaring only `background` and `box-shadow`
     // — neither a BOX_PROPERTY — so it cannot be the jump the row invariant above exists to catch.
     // `vim-block` is a TOKEN, the same shape as `tagchip`: an inline span INSIDE a line, carrying
-    // NORMAL mode's block cursor (app/present/paint.ts's `normalLine`). It declares `background`
+    // NORMAL mode's block cursor (app/shell/paint.ts's `normalLine`). It declares `background`
     // and `color` and nothing else — no padding, no border, no box at all — so unlike the chip it
     // cannot make its line taller even in principle. The test below holds it to that.
     // `stampmark` is a TOKEN too, and the third of that shape: the `wired` rendition of the
     // presentation cascade's `stamp` key, an inline span INSIDE a line standing where the engine
-    // printed `[[qntm:3]]` (app/present/paint.ts's `stampMark`). It holds ONE CHARACTER and
+    // printed `[[qntm:3]]` (app/shell/paint.ts's `stampMark`). It holds ONE CHARACTER and
     // declares no box of its own, so it is held to the chip's own rule by the test below — the
     // same rule, not a second opinion.
     // `row-prediction` is a FOURTH TOKEN, the same shape as the chip/mark/block-cursor trio above:
     // an inline span INSIDE a line, this time carrying the predict affordance's own claim
-    // (app/present/paint.ts's `appendPrediction`, app/present/predict.ts). `row-prediction-
+    // (app/shell/paint.ts's `appendPrediction`, app/present/predict.ts). `row-prediction-
     // withdrawn` is the same token in its one-shot "this did not happen" state — a second class
     // ADDED to the same span (`paint.ts` joins them with a space), never a second element, so it is
     // registered here rather than folded into TOKENS: the test below holds the base class to the

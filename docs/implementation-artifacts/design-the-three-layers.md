@@ -407,7 +407,7 @@ because deciding it here would be inventing architecture this document is not th
 
 ## 4. Layer 3 — PRESENTATION, on the surface only
 
-`app/present/paint.ts` is the one DOM toucher in the app — **[REPO]** `research-the-store.md`
+`app/shell/paint.ts` is the one DOM toucher in the app — **[REPO]** `research-the-store.md`
 invariant 1, confirmed there by enumerating every call site of `paint(` in `app/index.html`. It
 consumes what RESOLUTION already decided (`PresentationCascade.resolve`, `cascade.ts`) and what
 EVALUATION already decided (a placement/ordering/membership answer) and turns them into DOM. It
@@ -808,7 +808,7 @@ above, each `status: undeclared`, each naming precisely what would need to exist
 **`docs/architecture/flows.yaml`: no, and precisely why.** flows.yaml declares call-flow SHAPE for
 `flow-trace` to compare against **captured, running code** — every existing entry names a real
 module and a real callee flow-trace's observer actually saw fire
-(`app/present/paint.ts` → `app/present/cascade.ts`, `PresentationCascade.resolve`, observed count 8,
+(`app/shell/paint.ts` → `app/present/cascade.ts`, `PresentationCascade.resolve`, observed count 8,
 per this file's own header). **None of the four target capabilities above has a module to name a
 flow from yet** — there is no scoped-node wire module, no declared-working-set-query module, and the
 engine-side "durability and global class only" split is a statement about what the engine's

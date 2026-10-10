@@ -406,7 +406,7 @@ into config, and it is why it deserves a preview in the app.
 **[OBS]** The fact exists as two executable copies that disagree:
 
 * `app/present/indent.ts:104` — `export const INDENT_UNIT = 4;`
-* `app/present/paint.ts:892-895` — `row.style.marginLeft = (shape.indent.length / 2) * 1.2 + "rem";`
+* `app/shell/paint.ts:892-895` — `row.style.marginLeft = (shape.indent.length / 2) * 1.2 + "rem";`
 
 plus two compiled duplicates in `dist/present.js:952` and `:1377`, one historical copy that a live
 test re-fetches from git (`tests/present-golden.test.mjs:66-69` runs `git show ${BASE}:app.html`),

@@ -63,7 +63,7 @@
  * longer the source on screen.
  */
 
-import type { LineCommit } from "./paint.js";
+import type { LineCommit } from "./linecommit.js";
 import { resolveAndArm } from "./commit.js";
 import type { CommitContext, Diagnostic, PredictArm, SettleArm } from "./resolve.js";
 
