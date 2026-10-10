@@ -127,8 +127,28 @@ backlog:
     hand push). Builds on design-config-is-content.md. Was a-config-write-lands-on-both-consumers-
     or-neither before the backlog reset.
   kind: capability
-  state: unscoped
+  state: passing
   driving_capability: config-is-published-by-the-api
+  resolution: >
+    Done 2026-10-10 (qntm-network #237, qntm #159). POST /config/publish compiles with
+    compile-presentation.mjs, sends the files to the engine's POST /config (which test-loads and
+    switches), then one D1 batch stores the declaration, the app's pointer and config_versions #N
+    with the accepted archive. Live: config #1 published from qntm main a34daf2 (550 files), a
+    repeat kept #1 and the engine skipped it, the app fetched only
+    /config/declaration/presentation/current. GRAPH_PUSH_KEY was replaced (none was on the
+    laptop); scripts/.graph-push-key holds it. Still open: graph-sync cycle pushes config to the
+    engine directly (row graph-sync-stops-pushing-config); presentation.json retires in row
+    retire-committed-presentation-json.
+- id: graph-sync-stops-pushing-config
+  project: engine-and-clients
+  captured: '2026-10-10'
+  title: >
+    scripts/graph-sync.mjs cycle still tars the config folder and POSTs it to the engine's /config
+    on every cycle (tarConfig, guarded by GUARD 2's git comparison) — a second way in that skips
+    the API's store, so the engine can run a config the app's declaration does not describe.
+    Remove the push (config is published by scripts/publish-config.mjs), and with it GUARD 2.
+  kind: capability
+  state: unscoped
 - id: retire-committed-presentation-json
   project: engine-and-clients
   captured: '2026-10-09'
