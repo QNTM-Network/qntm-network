@@ -7899,6 +7899,14 @@ function normalLine(lineSource, column) {
   div.append(head, cell, tail);
   return div;
 }
+function holdHeight(body) {
+  const height = body.offsetHeight;
+  if (typeof height !== "number" || height <= 0 || body.style === void 0) return;
+  body.style.minHeight = `${height}px`;
+  queueMicrotask(() => {
+    body.style.minHeight = "";
+  });
+}
 function lineEditor(text) {
   const box = document.createElement("textarea");
   box.className = "rawline";
@@ -8271,6 +8279,7 @@ function paint(body, source, context, deps) {
       }
     }
   };
+  holdHeight(body);
   body.innerHTML = "";
   if (superseded()) {
     return;
@@ -8983,6 +8992,23 @@ function flushMarks(deps) {
 
 // app/shell/completer.ts
 var isLineEditor = (target) => typeof HTMLTextAreaElement !== "undefined" && target instanceof HTMLTextAreaElement && target.classList.contains("rawline");
+function placeSuggestionList(list, editor) {
+  const view = editor.ownerDocument.defaultView;
+  const box = editor.getBoundingClientRect();
+  const visual = view?.visualViewport;
+  const visibleTop = visual ? visual.offsetTop : 0;
+  const visibleBottom = visual ? visual.offsetTop + visual.height : view?.innerHeight ?? 0;
+  const visibleRight = visual ? visual.offsetLeft + visual.width : view?.innerWidth ?? 0;
+  const gap = 6;
+  const height = list.offsetHeight;
+  const below = visibleBottom - box.bottom - gap;
+  const above = box.top - visibleTop - gap;
+  const top = height <= below || below >= above ? box.bottom + gap : box.top - gap - Math.min(height, above);
+  const left = Math.max(8, Math.min(box.left, visibleRight - list.offsetWidth - 8));
+  list.style.top = `${Math.round(top)}px`;
+  list.style.left = `${Math.round(left)}px`;
+  list.style.maxHeight = `${Math.max(96, Math.round(Math.min(256, top >= box.bottom ? below : above)))}px`;
+}
 function installCompleter(deps) {
   let made = null;
   const listEl = (doc) => {
@@ -9002,6 +9028,19 @@ function installCompleter(deps) {
   const close = () => {
     if (made !== null) made.hidden = true;
     offer = null;
+    if (following !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(following);
+    following = null;
+  };
+  let following = null;
+  const follow = () => {
+    following = null;
+    if (!isOpen() || active === null) return;
+    if (!active.isConnected || active.ownerDocument.activeElement !== active) {
+      close();
+      return;
+    }
+    placeSuggestionList(made, active);
+    following = requestAnimationFrame(follow);
   };
   const accept = (index) => {
     const item = offer?.items[index];
@@ -9028,10 +9067,9 @@ function installCompleter(deps) {
         return row;
       })
     );
-    const box = active.getBoundingClientRect();
-    list.style.left = `${Math.round(box.left)}px`;
-    list.style.top = `${Math.round(box.bottom + 4)}px`;
     list.hidden = false;
+    placeSuggestionList(list, active);
+    if (following === null && typeof requestAnimationFrame === "function") following = requestAnimationFrame(follow);
   };
   const refresh = (input) => {
     active = input;
@@ -9517,6 +9555,7 @@ export {
   parentCandidateFor,
   placeDraft,
   placeFor,
+  placeSuggestionList as placeSuggestions,
   policyFor,
   presentationFromDeclaration,
   promotionSpec,
