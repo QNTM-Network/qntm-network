@@ -4590,4 +4590,21 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+- id: recently-used-is-shared-per-user
+  intent: >-
+    A blank `/` lists what the user opened or edited most recently, newest first, with the view
+    to switch back to first; typing ranks as before, with recency breaking ties. The list lives on
+    the server, keyed by user, so the Mac and the phone share it.
+  tier: functional
+  rooting: >-
+    worker/src/recent.js (GET/POST /app/recent, table recents keyed by user_id);
+    app/present/recent.ts (what a key is, how a use changes the list); the `recent` rank field and
+    the `recent` list in app/present/rank.ts; app/present/search.ts (blank search).
+  status: working
+  enforced_by:
+  - declared_state: state-recently-used-is-keyed-by-user
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin
 

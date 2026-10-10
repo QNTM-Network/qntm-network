@@ -1254,6 +1254,11 @@ import {
   showTouchMode,
   installViewHistory,
   viewFromHash,
+  noteUse,
+  viewKey,
+  lineKey,
+  hitKey,
+  RECENT_LIMIT,
   policyFor,
   installLinks,
   linkSource,
@@ -1267,7 +1272,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=bfe2f263d1";
+} from "/dist/present.js?v=0f0e36409b";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -1737,6 +1742,27 @@ let paintedViewId = null;
 // BACK AND FORWARD THROUGH VIEWS (app/shell/viewhistory.ts) — installed with the keys, at the end of
 // this script; `paintView` records each chosen view in it once it exists.
 let viewHistory = null;
+// SAVES IN THE AIR, across every file (2026-10-10): Cycle waits for them, so ⌘S pressed while a
+// line is open cycles the line it just saved rather than racing it to the server.
+let savesInFlight = 0;
+// RECENTLY USED (app/present/recent.ts): the user's recent keys, newest first. Read from the
+// server once signed in, and each use is recorded there, so the Mac and the phone share one list.
+let recentKeys = [];
+function useItem(key) {
+  if (!key) return;
+  recentKeys = noteUse(recentKeys, key);
+  if (token) api("/app/recent", { body: { key }, auth: true }).catch(() => {});
+}
+async function loadRecent() {
+  try {
+    const data = await api("/app/recent", { method: "GET", auth: true });
+    const server = Array.isArray(data.recent) ? data.recent : [];
+    // What this page used before the answer arrived stays first.
+    recentKeys = [...recentKeys, ...server.filter((k) => !recentKeys.includes(k))].slice(0, RECENT_LIMIT);
+  } catch {
+    // No list is no harm: a blank `/` shows nothing until something is used.
+  }
+}
 
 /**
  * THE STRING THE BODY IS CURRENTLY SHOWING — the same kind of fact as `paintedViewId` immediately
@@ -2449,7 +2475,10 @@ function paintView(id, why) {
   const sameView = id === paintedViewId;
   currentViewId = id;
   rememberView(id);
-  if (why === "chosen") viewHistory?.visited(id);
+  if (why === "chosen") {
+    viewHistory?.visited(id);
+    useItem(viewKey(id));
+  }
   markWhereWeAre();
   // ── A LINE BEING MADE BELONGS TO THE VIEW IT WAS OPENED IN, AND SURVIVES A PROJECTION IN IT ──
   //
@@ -3065,10 +3094,12 @@ async function writeFile(view, markdown, source, token = null, ops = null) {
   // (a tick does not repaint the painter's source, so the second edit's base looks perfectly
   // current while the server has already moved past it).
   served.open(view.path);
+  savesInFlight += 1;
   try {
     return await api("/app/edit-file", { body, auth: true });
   } finally {
     served.close(view.path);
+    savesInFlight -= 1;
   }
 }
 
@@ -3302,6 +3333,7 @@ function commitLineAndArmGraphRefreshRetry(view, commit) {
     if (change !== null) undoHistory.record(change);
   }
   if (commit.markdown !== null) {
+    useItem(lineKey(commit.text));
     graphRefreshRetry.arm(commit.markdown, view.id, commit, graphCache.etag());
   }
   return commitLine(view, commit);
@@ -3426,6 +3458,7 @@ async function enterGraph() {
   // front of everything here.
   const graph = readGraph();
   await loadPresentation();
+  loadRecent();
   await loadGraph(rememberedView(), "chosen", graph);
 }
 
@@ -3666,6 +3699,9 @@ async function runCycle() {
   cycling = true;
   // Lines `dd` marked are deleted first, in one write, so this cycle takes them in.
   try { await flushMarks(globalKeyDeps); } catch { /* the write path reports its own failure */ }
+  for (const waitUntil = nowMs() + 10000; savesInFlight > 0 && nowMs() < waitUntil; ) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   const button = $("cycleBtn");
   button.setAttribute("aria-busy", "true");
   showCycleNote("Cycling…", "Running on the server — this usually takes under a minute.");
@@ -3926,6 +3962,9 @@ const globalKeyDeps = {
     currentViewId: () => currentViewId,
     statuses: checkboxStatuses,
     policy: () => policyFor("search", declaration.lists),
+    recentPolicy: () => policyFor("recent", declaration.lists),
+    recent: () => recentKeys,
+    used: (hit) => useItem(hitKey(hit)),
     go: goToLine,
   }),
   // QUICK CAPTURE (`c`, 2026-10-07): the view a captured line goes into, and the same view switch
@@ -3937,6 +3976,8 @@ const globalKeyDeps = {
   currentViewId: () => currentViewId,
   drawerIsOpen: () => drawerIsOpen,
   viewBack: () => viewHistory.back(),
+  // ⌘S / Ctrl+S (2026-10-10, operator-asked): Cycle, from the keyboard.
+  cycle: () => runCycle(),
   viewForward: () => viewHistory.forward(),
   globalRegistrationFor,
   // `commitLineAndArmGraphRefreshRetry`, NOT `commitLine` DIRECTLY — the `x`/`>`/`<` handlers in

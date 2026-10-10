@@ -78,7 +78,14 @@ backlog:
     Mac and the phone agree; a `recent` ranking key reads it. Operator choice: shared on the server,
     not per device. After config-publish-in-the-api.
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: recently-used-is-shared-per-user
+  resolution: >
+    Done 2026-10-10. worker/src/recent.js (GET/POST /app/recent, D1 table recents keyed by
+    user_id, newest 200 kept) records views opened, tasks chosen in search and lines edited.
+    app/present/recent.ts says what a key is; rank.ts gains the `recent` field and a `recent` list
+    (blank `/`); search.ts lists used items without the open view, so `/` Enter switches back.
+    Also ⌘S / Ctrl+S runs Cycle, waiting for any save in flight.
 - id: one-ordering-vocabulary-for-lists-and-children
   project: engine-and-clients
   captured: '2026-10-09'

@@ -442,3 +442,7 @@ export type { SortValue } from "./arrange/keys.js";
 export type { SearchHit, SearchView } from "./search.js";
 // ── UNCONFIRMED LINES (2026-10-07) — what the painter marks "saved, not yet back from the server" ──
 export { unconfirmedLines } from "./unconfirmed.js";
+
+// ── RECENTLY USED (2026-10-10) — what a key is and how a use changes the list ──
+export { noteUse, viewKey, taskKey, lineKey, recentIndex, RECENT_LIMIT } from "./recent.js";
+export { hitKey } from "./search.js";

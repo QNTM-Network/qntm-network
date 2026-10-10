@@ -1004,3 +1004,27 @@ def assert_client_core_stands_alone(state: ScenarioState) -> PredicateResult:
         return PredicateResult(status="FAIL", message="; ".join(problems[:5]), observed_ref="app/present")
     return PredicateResult(status="PASS", message="the client core stands alone", observed_ref="app/present")
 
+
+def assert_recently_used_is_keyed_by_user(state: ScenarioState) -> PredicateResult:
+    """One recent list per user (backlog row recently-used-recorded-on-the-server, 2026-10-10).
+
+    worker/src/recent.js binds the session's user id and never the shared operator id; the
+    table is keyed by (user_id, item_key); a blank search ranks by the `recent` policy.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    worker = _read(root / "worker" / "src" / "recent.js")
+    schema = _read(root / "worker" / "schema-recents.sql")
+    search = _read(root / "app" / "present" / "search.ts")
+    problems = []
+    if "GRAPH_USER_ID" in worker or worker.count("session.user_id") < 2:
+        problems.append("recent.js does not key every read and write by the session's user")
+    if "PRIMARY KEY (user_id, item_key)" not in schema:
+        problems.append("the recents table is not keyed by user")
+    if "DEFAULT_RANK_POLICIES.recent" not in search:
+        problems.append("a blank search no longer ranks by the recent policy")
+    if problems:
+        return PredicateResult(status="FAIL", message="; ".join(problems), observed_ref="worker/src/recent.js")
+    return PredicateResult(status="PASS", message="one recent list per user, ranked by the shared ranking", observed_ref="worker/src/recent.js")
+

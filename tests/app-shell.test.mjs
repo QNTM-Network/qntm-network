@@ -940,7 +940,8 @@ describe("7. the rail is one element, and it holds actions", () => {
     assert.deepEqual(
       [...new Set(writes)].sort(),
       // `/app/cycle` runs the engine on what is already in the vault; it writes no line itself.
-      ["/app/cycle", "/app/edit-file", "/app/graph",
+      // `/app/recent` records which view or task was used (2026-10-10); it writes no line either.
+      ["/app/cycle", "/app/edit-file", "/app/graph", "/app/recent",
        "/auth/login/options", "/auth/login/verify", "/auth/logout",
        "/auth/register/options", "/auth/register/verify"],
       "the page calls an endpoint it did not before",

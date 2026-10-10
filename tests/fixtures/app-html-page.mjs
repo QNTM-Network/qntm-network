@@ -701,6 +701,11 @@ export const SERVED_DECLARATION = JSON.parse(
  */
 export function withDeclaration(stub, declaration = SERVED_DECLARATION) {
   return async (url, init) => {
+    // RECENTLY USED (2026-10-10) — answered here like the declaration, so a suite counting the
+    // page's writes counts only the writes it is about.
+    if (String(url).endsWith("/app/recent")) {
+      return { ok: true, status: 200, json: async () => ({ ok: true, recent: [] }) };
+    }
     if (String(url).endsWith(DECLARATION_PATH)) {
       return { ok: true, status: 200, json: async () => ({ ok: true, declaration }) };
     }

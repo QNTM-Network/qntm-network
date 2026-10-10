@@ -24,10 +24,10 @@ export class GenerationError extends Error {}
 export const CLIENT_KEY = "client.yaml";
 
 /** The lists a client has — `ListName` in app/present/rank.ts. */
-export const LIST_NAMES = ["search", "link", "views", "tags", "markers"];
+export const LIST_NAMES = ["search", "recent", "link", "views", "tags", "markers"];
 
 /** The fields a key may name — what `fieldValue` in app/present/rank.ts reads. */
-export const RANK_FIELDS = ["kind", "match", "status", "demoted", "title", "position"];
+export const RANK_FIELDS = ["kind", "match", "status", "demoted", "recent", "title", "position"];
 
 /** The token families a client shows one of two ways — `RESOLUTION_KEYS` in
  * app/present/express/rendition.ts, restated for the same reason as `RANK_FIELDS`. */

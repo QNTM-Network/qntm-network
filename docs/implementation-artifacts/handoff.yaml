@@ -57,7 +57,6 @@ handoff:
     next_command: uv run --no-project --python 3.12 --with-editable ~/projects/qntm-network/qntm/tools/flow-trace flow-trace map . --full  # DERIVED by flow_trace.prioritization.derive_next_command in the SAME reconcile_queue pass as `queue:` — do not hand-edit (bootstrap-next-command-is-derived-not-typed).
 
   queue:  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
-  - id: recently-used-recorded-on-the-server
   - id: one-ordering-vocabulary-for-lists-and-children
   - id: retire-committed-presentation-json
   - id: shared-test-cases-for-twice-run-rules

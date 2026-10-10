@@ -425,6 +425,19 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [client-core-stands-alone]
+  - id: state-recently-used-is-keyed-by-user
+    name: one recent list per user, ranked by the shared ranking
+    description: |
+      worker/src/recent.js reads and writes recents only by the session's user_id (never the
+      operator id), and the table's key starts with user_id; a blank search ranks by the `recent`
+      list's policy. The behaviour is tests/recently-used.test.mjs.
+    check: "recent.js binds session.user_id and never GRAPH_USER_ID; schema-recents.sql keys by
+      (user_id, item_key); search.ts ranks a blank query by the recent policy"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_recently_used_is_keyed_by_user
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [recently-used-is-shared-per-user]
 # ── TOMBSTONE: state-every-class-names-a-declared-package — RETRACTED 2026-08-11, the same day it
 #    was wired. It gated `every-declared-class-names-its-package-home`, which was retracted as a
 #    category error (see the tombstone at the foot of capabilities.yaml for the full reasoning and
