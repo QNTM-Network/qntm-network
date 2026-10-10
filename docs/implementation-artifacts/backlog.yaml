@@ -103,7 +103,15 @@ backlog:
     placement and ranks lists by it. Two implementations by necessity (Python engine, TypeScript
     browser), held together by one compiled declaration and agreement tests, as default ordering
     already is. The engine half is filed in the monorepo backlog as
-    children-order-by-declared-keys.
+    chain-edge-types-hardcoded-in-applier-and-section-builder (corrected 2026-10-10: the row named
+    here before, children-order-by-declared-keys, was merged into that one).
+
+    CHECKED 2026-10-10 (architecture page https://claude.ai/artifact/NQEF7guXTNME6hCWopY1bK):
+    app/present/arrange/keys.ts `compareByKeys` already reads `{field, order: [values, "*"]}`; the
+    engine does not, so the two languages have drifted. This row's work: one JSON file of ordering
+    test cases (siblings, fields, edges, key list, expected order) run by the engine's pytest and by
+    node --test; the chain key in arrange/keys.ts; children orderings in the compiled declaration;
+    retire the constants-only fixture behind tests/resolution-default-ordering-agreement.test.mjs.
   kind: capability
   state: unscoped
 - id: close-registration-until-a-user-has-their-own-graph
