@@ -43,12 +43,6 @@ import { GenerationError } from "../scripts/compile-resolution.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_CONFIG = join(HERE, "fixtures", "config");
 
-const ENGINE_LITERAL_DEFAULT_ORDERING = [
-  { field: "due_date", direction: "asc" },
-  { field: "priority", direction: "desc" },
-  { field: "title", direction: "asc" },
-];
-const ENGINE_LITERAL_PRIORITY_RANK = { urgent: 4, high: 3, normal: 2, medium: 2, low: 1 };
 
 /** Copy the fixture config, mutate it, generate the resolution declaration, clean up. */
 function withScratchFixture(mutate) {
@@ -63,21 +57,18 @@ function withScratchFixture(mutate) {
   }
 }
 
-describe("1. NO CONFIG, NO CHANGE — the fixture declares no global_defaults.yaml at all", () => {
-  test("falls back to the engine's own literal tuple, and says so", () => {
+describe("1. NO CONFIG, NO ORDERING — the fixture declares no global_defaults.yaml at all", () => {
+  test("publishes no default ordering, and says so (2026-10-10: neither the engine nor this app has a built-in one)", () => {
     const resolution = generateResolution(FIXTURE_CONFIG);
-    assert.deepEqual(resolution.defaultOrdering, ENGINE_LITERAL_DEFAULT_ORDERING);
-    assert.equal(resolution.defaultOrderingSource, "engine-fallback");
-    assert.deepEqual(resolution.priorityRank, ENGINE_LITERAL_PRIORITY_RANK);
+    assert.deepEqual(resolution.defaultOrdering, []);
+    assert.equal(resolution.defaultOrderingSource, "not-declared");
+    assert.equal("priorityRank" in resolution, false);
   });
 
-  test("today's byte-for-byte behaviour, unchanged: title has no marker, and that absence is now a NAMED drop, not silence", () => {
+  test("a field nothing names is not looked up and not dropped", () => {
     const resolution = generateResolution(FIXTURE_CONFIG);
     assert.equal(resolution.orderingFields.title, undefined);
-    assert.match(
-      resolution.dropped["ordering field 'title'"] ?? "",
-      /declares no marker for it at all/,
-    );
+    assert.equal(resolution.dropped["ordering field 'title'"], undefined);
   });
 });
 
@@ -91,10 +82,6 @@ describe("2. ANOTHER USER'S CONFIG — a different default ordering, over fields
           "default_ordering:",
           "  - { field: effort, direction: asc }",
           "  - { field: owner_rank, direction: desc }",
-          "priority_rank:",
-          "  gold: 3",
-          "  silver: 2",
-          "  bronze: 1",
           "",
         ].join("\n"),
       );
@@ -126,7 +113,7 @@ describe("2. ANOTHER USER'S CONFIG — a different default ordering, over fields
       { field: "owner_rank", direction: "desc" },
     ]);
     assert.equal(resolution.defaultOrderingSource, "config");
-    assert.deepEqual(resolution.priorityRank, { gold: 3, silver: 2, bronze: 1 });
+    assert.equal("priorityRank" in resolution, false);
 
     // The two NEW fields' markers resolved — the SAME generic path any declared section's own
     // `ordering:` field uses (`readOrderingFieldMarkers`), never a special case for these names.
@@ -142,8 +129,7 @@ describe("2. ANOTHER USER'S CONFIG — a different default ordering, over fields
     // one replacing the other.
     assert.deepEqual(resolution.orderingFields.due_date, { token: "📅", kind: "date" });
 
-    // 'priority' and 'title' are NAMED BY NOTHING in this config any more — the engine's fallback
-    // tuple is not in effect once a config declares its own — so neither is looked up, and neither
+    // 'priority' and 'title' are NAMED BY NOTHING in this config — so neither is looked up, and neither
     // produces a drop. This is the whole point: the compiler asked about the FIELDS THIS CONFIG
     // NAMED, not about a fixed set it already knew.
     assert.equal(resolution.orderingFields.priority, undefined);
@@ -212,30 +198,15 @@ describe("3. MALFORMED CONFIG REFUSES LOUDLY, never a silent guess", () => {
     );
   });
 
-  test("priority_rank: not a mapping throws GenerationError", () => {
-    assert.throws(
-      () =>
-        withScratchFixture((configDir) => {
-          writeFileSync(
-            join(configDir, "global_defaults.yaml"),
-            "defaults: {}\ndefault_ordering:\n  - { field: effort, direction: asc }\npriority_rank: not-a-map\n",
-          );
-        }),
-      GenerationError,
-    );
-  });
-
-  test("priority_rank value that is not a positive integer throws GenerationError", () => {
-    assert.throws(
-      () =>
-        withScratchFixture((configDir) => {
-          writeFileSync(
-            join(configDir, "global_defaults.yaml"),
-            "defaults: {}\ndefault_ordering:\n  - { field: owner_rank, direction: asc }\npriority_rank:\n  gold: 0\n",
-          );
-        }),
-      GenerationError,
-    );
+  test("priority_rank: is retired — present or malformed, it is not read", () => {
+    const resolution = withScratchFixture((configDir) => {
+      writeFileSync(
+        join(configDir, "global_defaults.yaml"),
+        ["default_ordering:", "  - { field: due_date, direction: asc }", "priority_rank: not-a-mapping", ""].join("\n"),
+      );
+    });
+    assert.deepEqual(resolution.defaultOrdering, [{ field: "due_date", direction: "asc" }]);
+    assert.equal("priorityRank" in resolution, false);
   });
 
   test("a global_defaults.yaml that declares no default_ordering: at all is 'not declared', not malformed", () => {
@@ -244,7 +215,7 @@ describe("3. MALFORMED CONFIG REFUSES LOUDLY, never a silent guess", () => {
     const resolution = withScratchFixture((configDir) => {
       writeFileSync(join(configDir, "global_defaults.yaml"), "defaults: {}\n");
     });
-    assert.deepEqual(resolution.defaultOrdering, ENGINE_LITERAL_DEFAULT_ORDERING);
-    assert.equal(resolution.defaultOrderingSource, "engine-fallback");
+    assert.deepEqual(resolution.defaultOrdering, []);
+    assert.equal(resolution.defaultOrderingSource, "not-declared");
   });
 });

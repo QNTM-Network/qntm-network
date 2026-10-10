@@ -426,19 +426,23 @@ describe("1c. resolution — every path that discards a declaration records it",
     assertDropped(dropped, "ordering field 'invented_field'", /declares no marker for it at all/);
   });
 
-  test("DROP 28: priority (an ENGINE DEFAULT ORDERING field, not a declared one) with no marker at all drops too", () => {
-    // The candidate set fed to readOrderingFieldMarkers is no longer only what a section's own
-    // `ordering:` names — ENGINE_DEFAULT_ORDERING_MARKER_FIELDS adds `due_date`/`priority`
-    // unconditionally, so removing priority's ONLY markers must still be recorded, even though no
-    // section in this fixture ever names 'priority' in an `ordering:` list.
-    const dropped = droppedFrom(generateResolution, (c) =>
+  test("DROP 28: a field named only by the GLOBAL default ordering, with no marker at all, drops too", () => {
+    // The candidate set fed to readOrderingFieldMarkers is every section's `ordering:` field PLUS
+    // the declared `default_ordering:` fields. No section in this fixture names 'priority'; the
+    // global default does, so removing priority's ONLY markers must still be recorded. (Neither the
+    // engine nor this compiler has a built-in default any more, 2026-10-10: the default is declared.)
+    const dropped = droppedFrom(generateResolution, (c) => {
+      writeFileSync(
+        join(c, "global_defaults.yaml"),
+        "default_ordering:\n  - { field: priority, direction: desc }\n",
+      );
       edit(
         c,
         "vocabulary/markers.yaml",
         '  - token: "🔽"\n    field: priority\n    value: low\n  - token: "⏫"\n    field: priority\n    value: high\n',
         "",
-      ),
-    );
+      );
+    });
     assertDropped(dropped, "ordering field 'priority'", /declares no marker for it at all/);
   });
 
@@ -451,15 +455,19 @@ describe("1c. resolution — every path that discards a declaration records it",
   });
 
   test("DROP 29: an enum marker and a trailing marker claiming the SAME field conflict, and neither is published", () => {
-    const dropped = droppedFrom(generateResolution, (c) =>
+    const dropped = droppedFrom(generateResolution, (c) => {
+      writeFileSync(
+        join(c, "global_defaults.yaml"),
+        "default_ordering:\n  - { field: priority, direction: desc }\n",
+      );
       edit(
         c,
         "vocabulary/markers.yaml",
         '  - token: "⏫"\n    field: priority\n    value: high\n',
         '  - token: "⏫"\n    field: priority\n    value: high\n' +
           '  - token: "🕒"\n    field: priority\n    extraction_hint: trailing_int\n',
-      ),
-    );
+      );
+    });
     assertDropped(dropped, "ordering field 'priority'", /cannot be read both ways at once/);
   });
 });
@@ -776,10 +784,10 @@ describe("4. NO WOLF — the ledger records what was dropped, and nothing else",
     // and no view defaults to it — so this drop was ALWAYS TRUE of this fixture and was silent,
     // exactly the shape the sibling restatement above describes for `title`. Not a new wolf: a
     // node of type `header` could never have had its line drawn, before this change or after.
+    // RESTATED, 2026-10-10 — two -> one. `title` was named only by the ENGINE's built-in default
+    // ordering, which no longer exists (the engine names no field). This fixture declares no
+    // `default_ordering:`, so nothing names `title` and nothing is dropped for it.
     assert.deepEqual(generateResolution(FIXTURE_CONFIG).dropped, {
-      "ordering field 'title'":
-        "named by a section's 'ordering:' and/or the engine's own default ordering, but " +
-        "vocabulary/markers.yaml declares no marker for it at all, so nothing can read its value off a line",
       "node type 'header'":
         "schema.yaml declares its render shape as 'heading', which is not one this app knows how " +
         "to draw (checkbox, plain_line), so a new line under a view defaulting to it gets no " +

@@ -118,6 +118,15 @@ backlog:
     instance's global_defaults.yaml and reach the app through the compiled declaration. The shared
     test cases use made-up field and edge names. rank.ts RANK_FIELDS names `status`, a declared
     field: tracked with the monorepo row substrate-names-no-declared-field-or-type.
+
+    PROGRESS 2026-10-10. Engine side landed (monorepo PR #163: render/sibling_order.py, one
+    validator, no built-in ordering). App side, this first step: compile-resolution.mjs has no
+    built-in ordering (`defaultOrderingSource: "not-declared"` when nothing is declared),
+    `priority_rank:` is no longer read, `children_ordering` (and `context_pattern`) are known
+    section keys, and the engine-constants agreement test, its fixture and
+    scripts/resolution-agreement.py are retired. STILL OPEN in this row: the chain key and
+    `{field, order}` in the app's placement prediction, publishing `children_ordering`, the
+    shared ordering test cases, and removing `priorityRank` from the declaration.
   kind: capability
   state: unscoped
 - id: close-registration-until-a-user-has-their-own-graph
