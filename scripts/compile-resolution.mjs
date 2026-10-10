@@ -113,37 +113,21 @@ const MARKER_FAMILY = "markers";
 // not exist for them — the one rung of the resolution cascade (GLOBAL -> VIEW -> STRUCTURAL_NODE
 // -> LINE) that answered for every user identically, whether or not it made sense for them.
 //
-// `readGlobalDefaultOrdering` below reads `global_defaults.yaml`'s own `default_ordering:` /
-// `priority_rank:` keys (GLOBAL_DEFAULTS_KEY) — the same file, and the same GLOBAL layer, that
+// `readGlobalDefaultOrdering` below reads `global_defaults.yaml`'s own `default_ordering:`
+// key (GLOBAL_DEFAULTS_KEY) — the same file, and the same GLOBAL layer, that
 // already carries `defaults:` (config-root field defaults) and `node_defaults_cascade:`. A
 // per-operator config can now say what its own floor sorts by; this file no longer decides that
 // for anyone.
 //
-// ── THE FALLBACK, AND WHY IT IS VISIBLE RATHER THAN SILENT ──
+// ── NOTHING DECLARED MEANS NO ORDERING (2026-10-10) ──
 //
-// `apps/qntm-md/config/` is read-only from this repo, and the ENGINE (`section_builder.py`) still
-// hardcodes `_DEFAULT_ORDERING`/`_PRIORITY_RANK` — see this file's own report for why that half of
-// the fix is out of scope here. So the operator's real config declares nothing yet, and a compile
-// against it must not go dark: `readGlobalDefaultOrdering` falls back to
-// `ENGINE_LITERAL_DEFAULT_ORDERING`/`ENGINE_LITERAL_PRIORITY_RANK` below — the exact tuple the
-// engine hardcodes, reproducing today's behaviour byte for byte — but records WHICH path answered
-// as `resolution.defaultOrderingSource` (`"config"` or `"engine-fallback"`), published alongside
-// `defaultOrdering`/`priorityRank`. Three options were open here: fail the compile loudly when
-// nothing is declared (breaks every deploy until the operator's own config change lands, for a
-// floor 171 of 186 of his own sections rely on); publish nothing (the same defect this change
-// exists to fix, now silent about EVERY vault rather than one); or fall back with the fallback
-// recorded. The third is what ships — a fallback nobody can see is how the literal survived this
-// long, so the one thing this compiler refuses to do is answer without saying which answer it gave.
-export const ENGINE_LITERAL_DEFAULT_ORDERING = Object.freeze([
-  Object.freeze({ field: "due_date", direction: "asc" }),
-  Object.freeze({ field: "priority", direction: "desc" }),
-  Object.freeze({ field: "title", direction: "asc" }),
-]);
-
-// Mirrors section_builder.py:31-37 (`_PRIORITY_RANK`) verbatim — the same fallback posture as
-// `ENGINE_LITERAL_DEFAULT_ORDERING` above. FOUR NUMBERS FOR FIVE NAMES, not simplified to five:
-// `normal` and `medium` really do share rank 2 in the engine's own dict.
-export const ENGINE_LITERAL_PRIORITY_RANK = Object.freeze({ urgent: 4, high: 3, normal: 2, medium: 2, low: 1 });
+// The engine no longer has a built-in default ordering (monorepo render/sibling_order.py; operator
+// rule: the substrate names no declared field). This compiler follows it: with no
+// `default_ordering:` declared, `defaultOrdering` is empty and `defaultOrderingSource` is
+// `"not-declared"` — a visible fact, never a substituted literal. `priority_rank:` is retired with
+// the engine's priority table (priority is legacy in the operator's config); `priorityRank` is
+// published empty until the client's ordering moves to the shared key language (backlog row
+// one-ordering-vocabulary-for-lists-and-children).
 
 // ── COMPOSITION — the SECOND direction of a line grammar, and why it is not in `lineGrammars` ──
 //
@@ -296,6 +280,11 @@ export const VIEW_SECTION_KEYS_PUBLISHED = Object.freeze([
 export const VIEW_SECTION_KEYS_REFUSED = Object.freeze(["input_grammar", "default_tags"]);
 export const VIEW_SECTION_KEYS_NOT_PUBLISHED = Object.freeze([
   "qualification",
+  // How siblings below the top level are ordered (engine render/sibling_order.py, 2026-10-10).
+  // Not published yet: the browser predicts top-level placement only.
+  "children_ordering",
+  // A pattern whose matches complete a section's render tree (engine 2026-09-28). Render-only.
+  "context_pattern",
   "pin_after_qualification_drops",
   "parameters",
   "header_value",
@@ -963,7 +952,7 @@ export function compile(files, ledger = new Ledger()) {
     return { timezone, dayStartHour, weekStartsOn };
   }
 
-  // ── 4b. global_defaults.yaml -> default_ordering / priority_rank, or the engine's fallback ─────
+  // ── 4b. global_defaults.yaml -> default_ordering, or no ordering at all ─────────────────────────
   //
   // See this file's own domain header ("THE DEFAULT ORDERING") for the full account. NO FIELD NAME
   // drives any decision in this function — `default_ordering:`'s entries are read the identical way
@@ -977,11 +966,7 @@ export function compile(files, ledger = new Ledger()) {
     const hasOwn = declared && typeof declared === "object" && !Array.isArray(declared)
       && Object.prototype.hasOwnProperty.call(declared, "default_ordering");
     if (!hasOwn) {
-      return {
-        ordering: ENGINE_LITERAL_DEFAULT_ORDERING,
-        priorityRank: ENGINE_LITERAL_PRIORITY_RANK,
-        source: "engine-fallback",
-      };
+      return { ordering: [], priorityRank: {}, source: "not-declared" };
     }
     const rawOrdering = declared.default_ordering;
     if (!Array.isArray(rawOrdering) || rawOrdering.length === 0) {
@@ -1003,22 +988,7 @@ export function compile(files, ledger = new Ledger()) {
       }
       return { field, direction };
     });
-
-    let priorityRank = {};
-    if (Object.prototype.hasOwnProperty.call(declared, "priority_rank")) {
-      const rawRank = declared.priority_rank;
-      if (!rawRank || typeof rawRank !== "object" || Array.isArray(rawRank)) {
-        throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: 'priority_rank:' is not a mapping`);
-      }
-      priorityRank = {};
-      for (const [name, rank] of Object.entries(rawRank)) {
-        if (!Number.isInteger(rank) || rank < 1) {
-          throw new GenerationError(`${GLOBAL_DEFAULTS_KEY}: priority_rank.${name} is not a positive integer`);
-        }
-        priorityRank[name] = rank;
-      }
-    }
-    return { ordering, priorityRank, source: "config" };
+    return { ordering, priorityRank: {}, source: "config" };
   }
 
   // ── 4c. global_defaults.yaml -> composition.heads / composition.tail, or the engine's fallback ─
@@ -1649,7 +1619,7 @@ export function compile(files, ledger = new Ledger()) {
       if (out[field] === undefined && ledger.toJSON()[`ordering field '${field}'`] === undefined) {
         ledger.drop(
           `ordering field '${field}'`,
-          "named by a section's 'ordering:' and/or the engine's own default ordering, but " +
+          "named by a section's 'ordering:' and/or the declared default ordering, but " +
             "vocabulary/markers.yaml declares no marker for it at all, so nothing can read its " +
             "value off a line",
         );
@@ -2199,9 +2169,8 @@ export function compile(files, ledger = new Ledger()) {
     sectionRegistration,
     // THE FLOOR OF THE CASCADE, DECLARED — see this file's own header ("THE DEFAULT ORDERING").
     // `defaultOrdering` is what every section with NEITHER `ordering` NOR `orderingMode` above sorts
-    // by; `defaultOrderingSource` says whether that answer came from `global_defaults.yaml`
-    // (`"config"`) or the engine's own hardcoded fallback (`"engine-fallback"`) — always published,
-    // so the fallback is a visible fact, never the silent one this file used to publish.
+    // by; `defaultOrderingSource` says whether `global_defaults.yaml` declared it (`"config"`) or
+    // nothing did (`"not-declared"`, and `defaultOrdering` is empty) — always published.
     defaultOrdering: defaultOrderingResult.ordering,
     defaultOrderingSource: defaultOrderingResult.source,
     // THE SECOND DIRECTION OF THE LINE GRAMMAR — see "COMPOSITION" above. Read from

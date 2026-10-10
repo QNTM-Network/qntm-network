@@ -12102,13 +12102,6 @@
       "queue_position": {
         "token": "🔢",
         "kind": "int"
-      },
-      "priority": {
-        "kind": "enum",
-        "values": {
-          "🔽": "low",
-          "⏫": "high"
-        }
       }
     },
     "dayBoundary": {
@@ -18834,15 +18827,11 @@
         "direction": "asc"
       },
       {
-        "field": "priority",
-        "direction": "desc"
-      },
-      {
         "field": "title",
         "direction": "asc"
       }
     ],
-    "defaultOrderingSource": "engine-fallback",
+    "defaultOrderingSource": "config",
     "composition": {
       "heads": {
         "checkbox": [
@@ -22722,13 +22711,6 @@
           "kind": "date"
         }
       }
-    },
-    "priorityRank": {
-      "urgent": 4,
-      "high": 3,
-      "normal": 2,
-      "medium": 2,
-      "low": 1
     }
   },
   "rules": {

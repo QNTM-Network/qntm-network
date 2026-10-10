@@ -926,7 +926,7 @@ var TOP_KEYS2 = [
   "edgeTagOrderSource",
   "dropped"
 ];
-var DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"];
+var DEFAULT_ORDERING_SOURCES = ["config", "not-declared"];
 var COMPOSITION_SOURCES = ["config", "engine-fallback"];
 var TAG_ORDER_SOURCES = ["engine-literal"];
 var TAG_ORDER_KEYS = ["canonicalOrder", "unrankedPolicy"];
@@ -1634,8 +1634,8 @@ function readDefaultOrderingSource(value, problems) {
 }
 function readPriorityRank(value, problems) {
   const path = `${RESOLUTION_TABLE_KEY}.priorityRank`;
-  if (!isPlainObject3(value) || Object.keys(value).length === 0) {
-    problems.push(`'${path}' is ${shapeOf2(value)}, not a non-empty object \u2014 the priority rank stays unknown`);
+  if (!isPlainObject3(value)) {
+    problems.push(`'${path}' is ${shapeOf2(value)}, not an object \u2014 the priority rank stays unknown`);
     return {};
   }
   const out = {};

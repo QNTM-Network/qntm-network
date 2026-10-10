@@ -559,21 +559,15 @@ export interface ConfigResolutionTable {
    */
   readonly defaultOrdering: readonly OrderingKey[];
   /**
-   * WHICH ANSWER `defaultOrdering`/`priorityRank` ARE — `"config"` when `global_defaults.yaml`
-   * declared `default_ordering:` itself, `"engine-fallback"` when it did not and the engine's own
-   * hardcoded tuple answered instead. Published so the fallback is a VISIBLE fact rather than the
-   * silent one this table used to publish unconditionally with no way to tell the two apart —
-   * see `compile-resolution.mjs`'s own header, "THE DEFAULT ORDERING", for the full argument.
+   * WHICH ANSWER `defaultOrdering` IS — `"config"` when `global_defaults.yaml` declared
+   * `default_ordering:`, `"not-declared"` when nothing did and `defaultOrdering` is empty. Neither
+   * the engine nor this app has a built-in ordering (2026-10-10).
    */
-  readonly defaultOrderingSource: "config" | "engine-fallback" | undefined;
+  readonly defaultOrderingSource: "config" | "not-declared" | undefined;
   /**
-   * THE PRIORITY RANK `defaultOrdering`'s own enum-shaped key (`priority`, in the engine's own
-   * fallback tuple) compares by — the numeric rank an `"enum"`-kind `orderingFields` marker's
-   * spelled value looks up. Declared alongside `default_ordering:` (`priority_rank:`) or, absent
-   * that, the engine's own hardcoded `_PRIORITY_RANK` (four numbers for five names —
-   * `normal`/`medium` share rank 2). Omitted entirely (not published empty) when the effective
-   * default ordering names no field a rank table applies to — the same "absent means nothing to
-   * say" convention every other optional key on this table already uses.
+   * THE PRIORITY RANK — RETIRED with the engine's priority table (2026-10-10); always published
+   * empty. Kept until the client's ordering moves to the shared key language, where a declared
+   * order of values replaces it (backlog row one-ordering-vocabulary-for-lists-and-children).
    */
   readonly priorityRank: Readonly<Record<string, number>>;
   /**
@@ -801,7 +795,7 @@ const TOP_KEYS = [
   "edgeTagOrderSource",
   "dropped",
 ] as const;
-const DEFAULT_ORDERING_SOURCES = ["config", "engine-fallback"] as const;
+const DEFAULT_ORDERING_SOURCES = ["config", "not-declared"] as const;
 // Same two values as `DEFAULT_ORDERING_SOURCES` — kept as its own named constant, not a shared
 // import, because the two fields it validates (`defaultOrderingSource`, `compositionSource`)
 // answer unrelated questions that happen to share a domain; a future third source value for one
@@ -1716,14 +1710,14 @@ function readDefaultOrdering(value: unknown, problems: string[]): readonly Order
 }
 
 /**
- * `resolution.defaultOrderingSource` — `"config"` or `"engine-fallback"`, or `undefined` if the
+ * `resolution.defaultOrderingSource` — `"config"` or `"not-declared"`, or `undefined` if the
  * document declares neither (an older declaration, published before this key existed) or something
  * else entirely (reported, never guessed).
  */
 function readDefaultOrderingSource(
   value: unknown,
   problems: string[],
-): "config" | "engine-fallback" | undefined {
+): "config" | "not-declared" | undefined {
   if (!(DEFAULT_ORDERING_SOURCES as readonly string[]).includes(value as string)) {
     problems.push(
       `'${RESOLUTION_TABLE_KEY}.defaultOrderingSource' is ${JSON.stringify(value)}, not one of ` +
@@ -1731,15 +1725,16 @@ function readDefaultOrderingSource(
     );
     return undefined;
   }
-  return value as "config" | "engine-fallback";
+  return value as "config" | "not-declared";
 }
 
 /** `resolution.priorityRank` — field VALUE (`"urgent"`) -> its numeric rank. Every value here is
- * a positive integer; the ENGINE decides the numbers, this reader only checks the shape. */
+ * a positive integer. Empty is valid: nothing is ranked (the engine retired its priority table,
+ * 2026-10-10). */
 function readPriorityRank(value: unknown, problems: string[]): Record<string, number> {
   const path = `${RESOLUTION_TABLE_KEY}.priorityRank`;
-  if (!isPlainObject(value) || Object.keys(value).length === 0) {
-    problems.push(`'${path}' is ${shapeOf(value)}, not a non-empty object — the priority rank stays unknown`);
+  if (!isPlainObject(value)) {
+    problems.push(`'${path}' is ${shapeOf(value)}, not an object — the priority rank stays unknown`);
     return {};
   }
   const out: Record<string, number> = {};
