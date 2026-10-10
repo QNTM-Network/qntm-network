@@ -607,7 +607,7 @@
     .drawer-note { order: 2; }
   }
 
-  /* THE SETTLE AFFORDANCE'S OWN CLASS — app/present/paint.ts's `settleRow`, roadmap-the-road-
+  /* THE SETTLE AFFORDANCE'S OWN CLASS — app/shell/paint.ts's `settleRow`, roadmap-the-road-
      ahead.md step 3. Carries the SAME `--slide` token every other motion on this page already
      uses ("one motion, named once"), never a duration of its own: `paint.ts` writes a `transform`
      computed from real layout (the FLIP technique) and this rule is the only thing that makes the
@@ -635,7 +635,7 @@
      Every line of a view is one ROW, and a row is `--row` tall whichever way the line is being
      shown — the app's rendition of it, or its verbatim source in an <input> once the cursor
      arrives. That equality is the whole fix for "if I click to edit it jumps around": the painter
-     repaints the WHOLE view on every focus change (app/present/paint.ts), deliberately and
+     repaints the WHOLE view on every focus change (app/shell/paint.ts), deliberately and
      correctly, so the only place the jump can be stopped is here, by making the two renditions
      occupy the same box.
 
@@ -731,7 +731,7 @@
 
   /* THE FOCUSED LINE — the same row, now holding its own source.
      It is a real <input> because every affordance has to be expressible as an edit to the SOURCE
-     STRING (app/present/paint.ts says why), so it is styled to BE the row rather than to look like
+     STRING (app/shell/paint.ts says why), so it is styled to BE the row rather than to look like
      a form control: the font of the line it replaced, the height of the row it sits in, no border
      and no slab of background. What marks it instead is the caret — the identity's electric green,
      the "glowing point" brand/BRAND.md names as the brand device — and a hairline under the row.
@@ -741,7 +741,7 @@
      line being edited in a narrow window cut off, with the caret at the right edge). The editor is
      a <textarea> one row tall that grows to fit what it holds — `field-sizing: content` where the
      browser has it, a height set from `scrollHeight` where it does not (`lineEditor` in
-     app/present/paint.ts). `min-height` keeps a short line exactly one row. */
+     app/shell/paint.ts). `min-height` keeps a short line exactly one row. */
   .viewbody textarea.rawline {
     display: block; width: 100%; min-height: var(--row); padding: 0;
     background: transparent; border: 0; border-radius: 0;
@@ -754,7 +754,7 @@
 
   /* THE SAME ROW, IN NORMAL — the same source characters, in a <div> rather than the <textarea>.
      It carries `rawline` too, deliberately: NORMAL and INSERT are two embodiments of ONE raw
-     rendition (app/present/paint.ts), so they must occupy the SAME box or `i` becomes the jump
+     rendition (app/shell/paint.ts), so they must occupy the SAME box or `i` becomes the jump
      ".viewbody"'s own comment block above exists to refuse. Everything the editor rule sets that a
      div does not already get is restated here and nothing else is.
 
@@ -770,7 +770,7 @@
 
   /* THE BLOCK CURSOR — NORMAL mode's caret, and a terminal's own device rather than a browser's.
      A readonly <input> was the cheaper route and it was refused on evidence: WebKit and Firefox
-     paint no caret in one at all (app/present/paint.ts cites the CSSWG thread), so on the
+     paint no caret in one at all (app/shell/paint.ts cites the CSSWG thread), so on the
      operator's own platform the cursor would have been invisible. A background colour is not an
      optional affordance — every engine paints it — and a block in NORMAL against the bar in INSERT
      makes the mode legible from the cursor itself.
@@ -786,7 +786,7 @@
   /* THE NEW LINE SPACE — the room below the last line, and the only reason it is here.
      "if I click after, in the new line space, nothing happens" was literally true: the column ends
      where its last row ends, so there was nothing under it to click. The painter now appends one
-     empty row there (app/present/paint.ts) and this is what makes it big enough to hit.
+     empty row there (app/shell/paint.ts) and this is what makes it big enough to hit.
 
      `--touch` IS THE PAGE'S OWN DECLARED MINIMUM TARGET — "44px at the root font size, which is the
      minimum target this page will offer a thumb" — not a number chosen for this rule. Every other
@@ -843,7 +843,7 @@
   /* A completed line strikes its text through. The chip is not the text — it is a token beside it,
      and a struck-through pill reads as a rendering fault rather than as "this is done". */
   .viewbody .task.done span .tagchip { text-decoration: none; }
-  /* A `[[Title]]` LINK (app/present/paint.ts, app/shell/links.ts): in the link colour, and a click
+  /* A `[[Title]]` LINK (app/shell/paint.ts, app/shell/links.ts): in the link colour, and a click
      opens the node. Inline text, so it costs the row nothing. */
   .viewbody .linkchip {
     color: var(--green); cursor: pointer;
@@ -887,7 +887,7 @@
      and a struck-through dot would read as a rendering fault rather than as "this is done". */
   .viewbody .task.done span .stampmark { text-decoration: none; }
 
-  /* THE PREDICT AFFORDANCE — THE BROWSER'S ANSWER, painted by app/present/paint.ts's
+  /* THE PREDICT AFFORDANCE — THE BROWSER'S ANSWER, painted by app/shell/paint.ts's
      `appendPrediction` from what app/present/predict.ts armed. Two predictions ship on it today (the
      `🆕` created-date stamp on the row just typed, a promotion rule's retype on the row above it) and
      a third or fourth reads this same rule with no new CSS.
@@ -1260,7 +1260,7 @@ import {
   dateSource,
   markerVocabulary,
   markerSource,
-} from "/dist/present.js?v=70efcbc747";
+} from "/dist/present.js?v=db4f120c96";
 
 // Same markdown setup as app/render/renderer.ts — CommonMark + the table rule.
 const md = new MarkdownIt("commonmark").enable("table");
@@ -3097,7 +3097,7 @@ async function writeFile(view, markdown, source, token = null, ops = null) {
 // tick that loses a race against the cycle is now retried against the server's own copy instead of
 // being dropped.
 //
-// `existingLineCommit` (app/present/paint.ts) rather than an object literal, for the reason its own
+// `existingLineCommit` (app/shell/paint.ts) rather than an object literal, for the reason its own
 // header gives: a `LineCommit` hand-rolled on this page is how `kind`/`source` went missing once
 // already, in the one file TypeScript never checks.
 // ── WHAT A TICK MEANS, AS THE OPERATOR'S CONFIG SAYS IT (2026-10-07) ─────────────────────────

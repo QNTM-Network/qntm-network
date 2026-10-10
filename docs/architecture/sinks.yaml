@@ -13,7 +13,7 @@
 
 sinks:
   - id: view-painted
-    sink: app/present/paint:paint
+    sink: app/shell/paint:paint
     description: >
       the graph view on screen — a view's markdown resolved through the presentation cascade and
       painted into app.html's #viewBody. ADDED 2026-07-30 with migration stage 1.
@@ -34,7 +34,7 @@ sinks:
       sink is declared so the measurement exists the moment the tool does.
 
   - id: selection-moved
-    sink: app/present/caret:placeCaret
+    sink: app/shell/caret:placeCaret
     description: >
       A CARET EXISTING AT A POSITION ON SCREEN. Declared 2026-08-10 against
       `app/present/focus:FocusSurface.focus`; MOVED DOWN HERE 2026-08-12, and the move is the
@@ -53,7 +53,7 @@ sinks:
         `flow-trace sinks .`               2 governed / 1 ungoverned  ->  3 governed / 0 ungoverned
         `canonical-routing --class presentation-painting`   routed: 0  ->  routed: 1
         the routed chain, this repo's first:
-          app/present/paint:<anonymous> -> paint:repaint -> paint:paint -> paint:paintDraft
+          app/shell/paint:<anonymous> -> paint:repaint -> paint:paint -> paint:paintDraft
             -> placeCaret                                                              (PASS)
 
       AND IT BOUGHT OBSERVABILITY, WHICH WAS NOT THE INTENTION AND IS THE LARGER GAIN. The caret
@@ -64,12 +64,12 @@ sinks:
       expression is invisible to the tracer; the same effect written as a function is not.
 
       THE ROUTES — THREE CALL SITES, TWO CONCERNS, and they do not collapse into one:
-        app/present/paint.ts  the row builder    THE READING CURSOR. Guarded by
+        app/shell/paint.ts  the row builder    THE READING CURSOR. Guarded by
                                                  `focus.isFocused(lineIndex)`; position from
                                                  `mode.takeCaretHint()` (`i`/`a`/Enter, decided in
                                                  motions.ts) clamped into the line's length at the
                                                  call site.
-        app/present/paint.ts  paintDraft x2      THE DRAFT'S OWN CURSOR, on a row that is in NO
+        app/shell/paint.ts  paintDraft x2      THE DRAFT'S OWN CURSOR, on a row that is in NO
                                                  file. Two branches: back to the end of what he
                                                  typed (`open.typed.length`) when the row survived
                                                  a repaint, or to the seed's declared offset
@@ -102,12 +102,12 @@ sinks:
       that everything REACHING the sink came through the painter, and is blind to code that never
       goes near the sink and calls the browser API directly. The NEGATIVE half is
       `state-caret-placement-has-one-home` (state.yaml): `setSelectionRange` may appear in
-      `app/present/caret.ts` and nowhere else under `app/`. It is static, so unlike the routing half
+      `app/shell/caret.ts` and nowhere else under `app/`. It is static, so unlike the routing half
       it covers the caret paths no scenario drives — but its glob is `{.ts,.tsx,.js,.mjs}` and it
       never opens `app/index.html`, so it is blind in the same page the two dark routes live in.
 
   - id: rule-effect-shown
-    sink: app/present/landing:landPrediction
+    sink: app/shell/landing:landPrediction
     description: >
       A RULE'S DECISION REACHING THE SCREEN — the terminal effect of a rule application. Declared
       2026-08-12, and it is the first sink in this repo that is not purely presentational: the other

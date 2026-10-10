@@ -424,7 +424,7 @@ def assert_edits_are_ephemeral(state: ScenarioState) -> PredicateResult:
     )
 
 
-CARET_HOME = "app/present/caret.ts"
+CARET_HOME = "app/shell/caret.ts"
 
 
 def assert_caret_placement_has_one_home(state: ScenarioState) -> PredicateResult:
@@ -445,7 +445,7 @@ def assert_caret_placement_has_one_home(state: ScenarioState) -> PredicateResult
     declared terminal effect for `selection-moved`; the invariant IS that it is the only one.
 
     COMMENTS ARE STRIPPED FIRST, and this is not a precaution copied from the neighbouring check —
-    it is load-bearing HERE AND NOW. `app/present/paint.ts:453` discusses `setSelectionRange` in
+    it is load-bearing HERE AND NOW. `app/shell/paint.ts:453` discusses `setSelectionRange` in
     prose (the refuted readonly-input design), and `caret.ts`'s own header names the API four
     times while explaining the invariant. A raw substring search convicts both files instantly,
     which would punish exactly the documentation that makes this invariant legible. See
@@ -508,7 +508,7 @@ def assert_caret_placement_has_one_home(state: ScenarioState) -> PredicateResult
     )
 
 
-PREDICTION_LANDING_HOME = "app/present/landing.ts"
+PREDICTION_LANDING_HOME = "app/shell/landing.ts"
 PREDICTION_LANDING_CALLS = ("appendprediction(", "replacepredictedswap(")
 
 
@@ -974,3 +974,33 @@ def assert_config_reaches_the_app_only_after_the_engine_accepts_it(state: Scenar
     return PredicateResult(
         status="PASS", message="config reaches the app only after the engine accepts it", observed_ref="worker/src/publish.js"
     )
+
+
+def assert_client_core_stands_alone(state: ScenarioState) -> PredicateResult:
+    """The client core (app/present/) needs nothing from the web page.
+
+    Every relative import under app/present/ stays inside app/present/, and tsconfig.core.json
+    type-checks it with ES2022 alone — no browser types — which `npm run typecheck` (CI) runs
+    (backlog row client-core-package, 2026-10-10). A phone app or an API/MCP client imports
+    app/present/index.ts and gets the same answers the web app does.
+    """
+    if guard := _guard(state):
+        return guard
+    root = _root(state)
+    core = root / "app" / "present"
+    problems = []
+    for path in sorted(core.rglob("*.ts")):
+        text = _read(path)
+        for spec in re.findall(r'(?:from|import)\s*\(?\s*"(\.[^"]+)"', text):
+            target = (path.parent / spec).resolve()
+            if core.resolve() not in target.parents:
+                problems.append(f"{path.relative_to(root)} imports {spec}, outside app/present")
+    config = _read(root / "tsconfig.core.json")
+    if '"lib": ["ES2022"]' not in config or "app/present/**/*.ts" not in config:
+        problems.append("tsconfig.core.json no longer checks app/present with ES2022 alone")
+    if "tsconfig.core.json" not in _read(root / "package.json"):
+        problems.append("npm run typecheck no longer runs tsconfig.core.json")
+    if problems:
+        return PredicateResult(status="FAIL", message="; ".join(problems[:5]), observed_ref="app/present")
+    return PredicateResult(status="PASS", message="the client core stands alone", observed_ref="app/present")
+

@@ -344,7 +344,7 @@ capabilities:
     chipping, the painter never chipping, the fallback removed, applyEdit's discrimination removed,
     `hidden` admitted as a rendition, the chip given an attribute, and the posted file rebuilt from
     the DOM. `flow-trace verify .` exits 0 at 30 PASS / 0 FAIL with the new edge OBSERVED
-    (app/present/paint → app/present/resolution.tagSpans, count 5).
+    (app/shell/paint → app/present/resolution.tagSpans, count 5).
     WHAT WAS REFUTED. `hidden` is NOT a third rendition. The design calls hiding the safest
     resolution because hidden text is not edited; here it is not safe and it is not even true.
     `Rendition` is ONE union shared by every key and readDeclaration validates against it with no
@@ -402,7 +402,7 @@ capabilities:
     title-form wiki-link is never hidden while word motions still skip it; every key raw under the
     cursor; the id cannot carry a character that would close its own attribute (fuzzed).
     `flow-trace verify .` exits 0 at 58 PASS / 0 FAIL with the new edge OBSERVED
-    (app/present/paint → app/present/resolution.stampSpans, count 1). The golden master did not
+    (app/shell/paint → app/present/resolution.stampSpans, count 1). The golden master did not
     move. MUTATION-PROVEN THREE WAYS, each red with its own message, each restored - the source
     stripped before painting (89 of 1,118 red across the suite, including the headline assertion),
     the hiding grammar widened to the wiki-link form (5 red, one of them a real vault line
@@ -521,7 +521,7 @@ capabilities:
     carries the offsets), but the AFFORDANCE is not answerable yet — what the leftover whitespace
     becomes, what deleting a tag MEANS to an engine for which `#task` selects a node type and
     `#work` sets a field, and where a destructive click would sit when the chip lives inside the
-    span that is the cursor target. Named in app/present/paint.ts so the residue is legible.
+    span that is the cursor target. Named in app/shell/paint.ts so the residue is legible.
     IT IS ALSO THE FIRST RENDITION UNDER WHICH THIS PROPERTY COULD REALLY BE TESTED. Until now the
     page held every source character, so a file rebuilt from the DOM came out right by accident and
     only a deliberately corrupted DOM exposed the inversion. With chips painted, `#work` is not
@@ -688,7 +688,7 @@ capabilities:
     on every one after, because it silently undid `o`/`O`'s deliberate `focus.blur()` and reopened a
     SECOND `<input>` on the line the cursor had just left. The coercion now lives once, in
     `paintView`, on the way into a view; `repaintCurrentView` clamps whatever `focus.lineIndex`
-    currently is and leaves a deliberate `null` alone. `app/present/paint.ts`'s `draftInput` also
+    currently is and leaves a deliberate `null` alone. `app/shell/paint.ts`'s `draftInput` also
     gained a `returnToVim` step (gated on `deps.mode !== undefined`, so click-to-edit callers with
     no `ModeSurface` are untouched): once a draft settles or is abandoned, `mode.enterNormal()` and
     `focus.focus(...)` hand the cursor back, or `mode` would be left stuck INSERT with no `<input>`
@@ -1181,7 +1181,7 @@ capabilities:
   status: undeclared
 - id: the-caret-has-one-home
   intent: >-
-    A CARET REACHES THE SCREEN THROUGH ONE FUNCTION AND NO OTHER WAY. `app/present/caret.ts`'s
+    A CARET REACHES THE SCREEN THROUGH ONE FUNCTION AND NO OTHER WAY. `app/shell/caret.ts`'s
     `placeCaret` performs the only `setSelectionRange` call under `app/`; every other module that
     wants a caret somewhere calls it. This is the terminal effect the `selection-moved` sink names.
     WHY IT WAS NEEDED, MEASURED RATHER THAN REASONED. `selection-moved` was declared as
@@ -1276,7 +1276,7 @@ capabilities:
   status: undeclared
 - id: a-rule-effect-has-one-landing
   intent: >-
-    A RULE'S DECISION REACHES THE SCREEN THROUGH ONE FUNCTION. `app/present/paint.ts`'s
+    A RULE'S DECISION REACHES THE SCREEN THROUGH ONE FUNCTION. `app/shell/paint.ts`'s
     `landPrediction` is the only code that chooses between the two spellings of a rule effect — an
     appended delta, or the row rebuilt byte-exact from `fullText` — and it is the `rule-effect-shown`
     sink.
@@ -1640,7 +1640,7 @@ capabilities:
     :1156-1202). There is no transport by which the server can say anything to this app.
     THE PAINTER HALF IS ALREADY BUILT, and it is the only part of this above zero. `paint(body,
     source, context, deps)` empties the body and rebuilds the whole view from ONE STRING
-    (app/present/paint.ts:452, :537), which was done so the cascade would stay the only decider —
+    (app/shell/paint.ts:452, :537), which was done so the cascade would stay the only decider —
     "a patch-one-element implementation would have to know which lines a focus change could
     possibly affect, which is a second copy of the precedence order". The consequence nobody was
     aiming for is that installing a new projection is already a one-argument operation: no diff to
@@ -2916,7 +2916,7 @@ capabilities:
     the closed union of three, and the four pinned write-adjacent counts are unmoved, COUNTED ON
     BOTH SIDES OF THE BRANCH BASE (bc47598) rather than asserted: `await writeFile(` 2 and 2,
     `graphData = ` 5 and 5, `.markdown = ` 0 and 0, and `applyEdit(` 5 external callers and 5
-    (2 in app/index.html, 3 in app/present/paint.ts).
+    (2 in app/index.html, 3 in app/shell/paint.ts).
   status: working
 
 - id: a-vanished-or-refused-edit-is-held-unanchored
@@ -2953,14 +2953,14 @@ capabilities:
     nothing else. `SourceEdit` is still the closed union of three.
     THE FOUR PINNED WRITE-ADJACENT COUNTS ARE UNMOVED, re-measured on this branch rather than
     asserted: `graphData` assigned 5, `writeFile(` 3 occurrences (its declaration plus two callers),
-    `applyEdit(` 5 outside its own module (2 in app/index.html, 3 in app/present/paint.ts), and
+    `applyEdit(` 5 outside its own module (2 in app/index.html, 3 in app/shell/paint.ts), and
     `.markdown` never assigned anywhere under app/. A fifth count is added and pinned by this
     change: the held surface is reached from exactly five expressions in the page, `held.hold` from
     exactly one of them, and `held.rows` from exactly one.
     THE STRIP IS OUTSIDE THE READING COLUMN, WHICH IS THE STRUCTURAL HALF OF THE SAME ARGUMENT.
     `#heldStrip` is a SIBLING of `#viewBody`; `paint()` is handed `#viewBody` and a source string
     and cannot walk into a sibling. So no held row can ever be part of the element tree the painter
-    walks or the source string it computes an edit from. app/present/paint.ts is untouched by this
+    walks or the source string it computes an edit from. app/shell/paint.ts is untouched by this
     change.
     OPEN DECISION 1 IS NOT ANSWERED AND THE REFUSAL TO ANSWER IT IS KEPT. Re-placing a vanished line
     means re-inserting into a view the cycle deliberately removed it from — which the next cycle
@@ -3585,7 +3585,7 @@ capabilities:
     stamped line in a real browser and the line was erased — the node behind it went from
     `personal/all`, because blanking a line in a view is a deletion gesture and a node with no
     printing left is a node the cycle drops. Escape is the reflex every vim user has.
-    IT IS A SEPARATE FUNCTION, AND THAT IS THE WHOLE OF THE GUARANTEE. `app/present/paint.ts`'s
+    IT IS A SEPARATE FUNCTION, AND THAT IS THE WHOLE OF THE GUARANTEE. `app/shell/paint.ts`'s
     `rawInput` settled Escape as `settle(false)` — the same function that reads `input.value`,
     builds a `SourceEdit` and calls `deps.onLineCommit`, one boolean apart. "Escape posts nothing"
     was then a property of one branch inside a function that CAN post, and the thing that fires
@@ -3608,7 +3608,7 @@ capabilities:
     strip for every abandoned edit, which is a false positive in the surface built to end silent
     losses. `HeldReason` gains no fourth cause.
   rooting: >-
-    IT ADDS NO MODULE AND NO EDGE. `discard` is a function inside `app/present/paint.ts`, reachable
+    IT ADDS NO MODULE AND NO EDGE. `discard` is a function inside `app/shell/paint.ts`, reachable
     from one keydown branch and from nothing else; `Settlement` is a type in the same file. The
     painter's existing imports are unchanged, so `docs/architecture/flows.yaml` gains no row — see
     the stated absence in that file rather than an edge nothing could observe.
@@ -3630,7 +3630,7 @@ capabilities:
     it opened instead, and painted the view three times. Measured deterministically on the harness,
     before the fix: mode NORMAL, no draft, no `<input>`, three copies of the column.
     TWO FAULTS, SEPARABLE, AND EACH HAS ITS OWN MUTATION ARM.
-    THE TRIGGER IS A MISSING BLUR. `app/present/paint.ts`'s `settle` opened the draft and called
+    THE TRIGGER IS A MISSING BLUR. `app/shell/paint.ts`'s `settle` opened the draft and called
     `mode.enterInsert()`, leaving `focus.lineIndex` on the line it had just committed. A draft
     focuses its own `<input>` directly - `paintDraft`, no cascade and no mode check - so the next
     paint had TWO cursors: it built and focused an `<input>` for the committed line, then built and
@@ -3664,7 +3664,7 @@ capabilities:
     strip. `HeldReason` gains no fourth cause.
   rooting: >-
     IT ADDS NO MODULE AND NO EDGE. `paintGeneration` is a module-scoped counter in
-    `app/present/paint.ts` and `superseded` is a closure inside `paint`; the `focus.blur()` call is
+    `app/shell/paint.ts` and `superseded` is a closure inside `paint`; the `focus.blur()` call is
     one statement inside `settle`, on the `FocusSurface` the painter already holds. The painter's
     imports are byte for byte what they were and no module gained or lost a caller, so
     `docs/architecture/flows.yaml` gains no row - see the stated absence in that file rather than an
@@ -3753,7 +3753,7 @@ capabilities:
     by number: `graphData` is assigned in four places and every one of them from an envelope off the
     wire (`data`, `pending.data`, `null`); `writeFile(` occurs 3 times (its declaration plus two
     callers); `applyEdit(` reaches 5 sites outside its own module (2 in app/index.html, 3 in
-    app/present/paint.ts); `.markdown` is never assigned anywhere under app/. Two more are pinned by
+    app/shell/paint.ts); `.markdown` is never assigned anywhere under app/. Two more are pinned by
     this change: the held surface is now reached from exactly six named expressions (the sixth,
     `held.landed`, is a release and not a way into a write), and the register from exactly five.
     `worker/src/app.js` FORWARDS `token` TO `POST /vault/file` ON EXACTLY THE TERMS IT ALREADY
@@ -4572,3 +4572,22 @@ capabilities:
   enforcement_depth: 1
   enforcement_surface: 0
   confidence: thin
+- id: client-core-stands-alone
+  intent: >-
+    The rules a client runs — what a list shows, how a line reads, what a key means, what a write
+    carries — live in one client core that needs nothing from the web page, so a phone app or an
+    API/MCP client uses the same answers instead of writing its own.
+  tier: functional
+  rooting: >-
+    app/present/ is the core (public surface app/present/index.ts); app/shell/ is the web shell;
+    app/web.ts bundles both into dist/present.js. tsconfig.core.json checks the core with no browser
+    types; types/client-core-platform.d.ts names what a host provides (fetch, crypto, TextEncoder,
+    queueMicrotask).
+  status: working
+  enforced_by:
+  - declared_state: state-the-client-core-imports-nothing-from-the-page
+    verify: PASS
+  enforcement_depth: 1
+  enforcement_surface: 0
+  confidence: thin
+

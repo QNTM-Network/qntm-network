@@ -1,7 +1,7 @@
 /**
  * A click on a `[[Title]]` link opens the node it names (2026-10-08, operator-asked).
  *
- * The painter draws a title-form link as a `.linkchip` (app/present/paint.ts). This module listens
+ * The painter draws a title-form link as a `.linkchip` (app/shell/paint.ts). This module listens
  * on the view body in the CAPTURE phase — before the row's own click handler, which would put the
  * cursor on the line instead — finds the task with that title in the views the server sent
  * (`findLinkTarget`, the same search `/` runs) and hands it to `go`, the same jump a search result

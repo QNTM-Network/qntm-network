@@ -3,7 +3,7 @@
  *
  * ── WHY THIS IS ITS OWN MODULE, AND IT IS NOT TIDINESS ──
  *
- * `rule-effect-shown` was declared in #168 against `app/present/paint:landPrediction` while that
+ * `rule-effect-shown` was declared in #168 against `app/shell/paint:landPrediction` while that
  * function lived inside `paint.ts`, and `canonical-routing` reported `chains_observed: 0` even with
  * a scenario driving it directly. Exporting it changed nothing. The cause is structural: the
  * observer wraps a module's EXPORT BINDINGS, so a call from `paint` to a function defined in the
@@ -19,8 +19,8 @@
  */
 
 import { appendPrediction, replacePredictedSwap } from "./paint.js";
-import type { Rendition } from "./express/rendition.js";
-import type { RowPrediction } from "./predict.js";
+import type { Rendition } from "../present/express/rendition.js";
+import type { RowPrediction } from "../present/predict.js";
 
 /**
  * WHICH BRANCH `landPrediction` TOOK, AND ON WHAT GROUNDS.

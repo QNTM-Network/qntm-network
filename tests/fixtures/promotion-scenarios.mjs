@@ -35,7 +35,7 @@ export const PROMOTION_DECLARATION = {
   // nothing — so without this key NO tag on ANY line in these fixtures ever renders as a `.tagchip`,
   // which is not what the operator's own real `presentation.json` publishes (`tags: "wired"`,
   // checked directly). Added 2026-08-07 alongside the in-place swap paint fix
-  // (`app/present/paint.ts`'s `replacePredictedSwap`) — that mechanism finds and marks a tag's own
+  // (`app/shell/paint.ts`'s `replacePredictedSwap`) — that mechanism finds and marks a tag's own
   // ALREADY-RENDERED chip markup, so a fixture where no chip is ever rendered at all could not
   // exercise it, or the append-only fallback it exists beside, honestly.
   tags: "wired",

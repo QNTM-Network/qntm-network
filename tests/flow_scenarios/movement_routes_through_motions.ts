@@ -59,7 +59,7 @@ import { ModeSurface } from "../../app/present/motions.js";
 import { FocusSurface } from "../../app/present/focus.js";
 import { DraftSurface } from "../../app/present/draft.js";
 import { NOT_YET_DECLARED } from "../../app/present/context.js";
-import type { LineCommit } from "../../app/present/paint.js";
+import type { LineCommit } from "../../app/shell/paint.js";
 
 const SOURCE = ["## Today", "- [ ] first", "- [ ] second", "- [ ] third"].join("\n");
 

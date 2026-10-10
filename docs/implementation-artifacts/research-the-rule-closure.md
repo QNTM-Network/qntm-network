@@ -513,7 +513,7 @@ WRITTEN. Confirmed, and proved by enumeration rather than by a grep returning no
 * **`writeFile(view, markdown, source)` — `app/index.html:1543`. Exactly two call sites**, both
   `await`ed: `toggleTask` at `:1584` and `commitLine` at `:1608`. There is no third.
 * **`applyEdit` — exactly five call sites** outside its own module: `app/index.html:1986`, `:2006`,
-  and `app/present/paint.ts:379`, `:520`, `:915`. Every one takes either `v.markdown` or the
+  and `app/shell/paint.ts:379`, `:520`, `:915`. Every one takes either `v.markdown` or the
   painter's `fileSource` / `source` — the string the server sent. **None takes a string this app
   composed.**
 * **`graphData` — exactly five assignments**: `let graphData = null` (`:1034`), a nulling (`:1880`),

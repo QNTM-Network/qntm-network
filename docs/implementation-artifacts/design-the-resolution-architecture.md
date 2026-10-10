@@ -139,7 +139,7 @@ the updated `section-membership-is-read-not-guessed` rooting carry the detail.
 edit a bare line under "Domain Empty" and it says nothing; add `#work` and the freshness line says
 "this line will leave Domain Empty", the instant the write leaves and gone the instant the cycle's
 own answer lands. `app/index.html`'s new `membershipNoteFor` (called from `commitLine`) is the
-caller `membershipFor`/`sectionAt` had none of; `app/present/paint.ts`'s `LineCommit` gained one
+caller `membershipFor`/`sectionAt` had none of; `app/shell/paint.ts`'s `LineCommit` gained one
 provenance field (`kind`) and nothing else moved — `paint.ts`'s indent arithmetic and the golden
 master are both untouched. The falsifier ran and passed, adapted from its own text: the design
 document's own wording was "the painted row carries no membership statement" and this step chose

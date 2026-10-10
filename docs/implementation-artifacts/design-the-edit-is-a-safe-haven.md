@@ -46,7 +46,7 @@ nevertheless exactly the right shape, and section 4 says why.
 
 **0.5 What exists does not survive a *foreign* repaint, and I measured what it does instead.**
 **[OBS]** ARMs 4 and 5. The cursor is restored by **positional index** against whatever source the
-painter is currently walking (`app/present/paint.ts:532-533`), and the input's characters are taken
+painter is currently walking (`app/shell/paint.ts:532-533`), and the input's characters are taken
 from that source (`:214`). Repaint the same body from a *different* projection and the cursor lands
 on a different line and the typing is gone; if the index is past the end of the new source, the
 cursor vanishes with no refusal reported anywhere.
@@ -163,7 +163,7 @@ the DOM, and derived from the graph.**
 
 | step | file:line | what it carries |
 |---|---|---|
-| the painter computes the edit | `app/present/paint.ts:242` | `applyEdit(fileSource, {kind: "set-line", …})` — **`fileSource` is the whole view as it was painted** (`:528` passes `source`, the painter's own argument) |
+| the painter computes the edit | `app/shell/paint.ts:242` | `applyEdit(fileSource, {kind: "set-line", …})` — **`fileSource` is the whole view as it was painted** (`:528` passes `source`, the painter's own argument) |
 | the page posts it | `app/index.html:1190` | `body: { path: view.path, markdown: commit.markdown }` |
 | the checkbox posts it | `app/index.html:1164` | `body: { path: view.path, markdown: next }` — the same shape, deliberately |
 | the Worker forwards it | `worker/src/app.js:254-259` | `POST {GRAPH_SERVER_URL}/vault/file` with `{path, markdown}` — **no precondition of any kind** |
@@ -213,7 +213,7 @@ the whole of that base goes on the wire.
 **ARM 2 is the arm that makes it live.** It uses no concurrency, no second tab, no async change and
 no push. It is one person making two edits about ten seconds apart, which is a slow typist. The
 mechanism is `commitLine`'s **optimistic repaint**: `settle` calls `repaint(next)` synchronously
-with the *client-computed* string (`app/present/paint.ts:258`) and only `paintView` replaces it with
+with the *client-computed* string (`app/shell/paint.ts:258`) and only `paintView` replaces it with
 the server's copy when the cycle returns (`app/index.html:1192`). Between those two moments the
 painter's `source` closure is a pre-cycle string, every row on screen is live, and nothing is
 disabled. **[OBS]** `toggleTask` disables exactly one element and it is the box that was clicked
@@ -266,7 +266,7 @@ agents; it is the reason the remaining work is small, and it is evidence that th
 holding.
 
 **4.1 The painter repaints the whole view from a source string.** `paint(body, source, context,
-deps)` (`app/present/paint.ts:452`) begins with `body.innerHTML = ""` (`:537`) and rebuilds. It was
+deps)` (`app/shell/paint.ts:452`) begins with `body.innerHTML = ""` (`:537`) and rebuilds. It was
 written that way so the cascade would stay the only decider — a patch-one-element painter "would
 have to know which lines a focus change could possibly affect, which is a second copy of the
 precedence order" (`:466-468`). **The consequence nobody was aiming for: installing a new projection
@@ -358,7 +358,7 @@ Two ways to fix it, and the cheaper one is also the more correct one:
   transformation shape. It needs a diff, it needs a tie-break policy for insertions at the anchor,
   and it is wrong whenever the line moved *between sections* rather than being pushed down.
 * **Anchor on identity** — the engine already stamps identity into the printed line. `[[qntm:121]]`
-  is in the source the browser was handed; `app/present/paint.ts:273` already reasons about it as
+  is in the source the browser was handed; `app/shell/paint.ts:273` already reasons about it as
   "a rendered qntm line carries its node's identity stamp". **The anchor is free, it is already on
   the wire, and it survives reorder, reindent, reflow and a move between sections.**
 

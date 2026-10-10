@@ -16,7 +16,7 @@
  * Every undo is itself an ordinary edit, posted through the one write path like any other.
  */
 
-import type { LineCommit } from "./paint.js";
+import type { LineCommit } from "./linecommit.js";
 import { applyEdit } from "./source.js";
 
 /** One change to one view, as text: `before` → `after`. `null` means "no line" (an insert has no

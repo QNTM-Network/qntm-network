@@ -62,7 +62,7 @@ import { ModeSurface } from "../../app/present/motions.js";
 import { FocusSurface } from "../../app/present/focus.js";
 import { DraftSurface } from "../../app/present/draft.js";
 import { globalKey } from "../../app/shell/keys.js";
-import { paint } from "../../app/present/paint.js";
+import { paint } from "../../app/shell/paint.js";
 import { PresentationContext } from "../../app/present/context.js";
 import type { GlobalKeyDeps } from "../../app/shell/keys.js";
 

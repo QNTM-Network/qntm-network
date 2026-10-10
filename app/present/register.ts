@@ -16,7 +16,7 @@
  * nothing is deleted on a guess.
  */
 
-import type { LineCommit } from "./paint.js";
+import type { LineCommit } from "./linecommit.js";
 import { applyEdit } from "./source.js";
 import { findLine } from "./undo.js";
 

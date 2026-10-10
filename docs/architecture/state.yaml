@@ -234,7 +234,7 @@ state_invariants:
       from the bundle, so that page could not call them today — a fact about today's exports, not an
       enforced one.
     check: "appendPrediction / replacePredictedSwap appear in no app/ source outside
-      app/present/paint.ts, and paint.ts still defines landPrediction, with comments stripped first"
+      app/shell/paint.ts, and paint.ts still defines landPrediction, with comments stripped first"
     evidence_tier: static
     predicate: qntm_network_checks:assert_a_rule_effect_lands_in_one_place
     scenarios: "static_evidence"
@@ -244,7 +244,7 @@ state_invariants:
   - id: state-caret-placement-has-one-home
     name: the caret is placed in one module and nowhere else under app/
     description: |
-      `setSelectionRange` appears in `app/present/caret.ts` and in no other app source. That module
+      `setSelectionRange` appears in `app/shell/caret.ts` and in no other app source. That module
       is the declared terminal effect for the `selection-moved` sink, so this is the ABSENCE that
       makes the sink real rather than merely observed.
 
@@ -265,7 +265,7 @@ state_invariants:
       `{.ts,.tsx,.js,.mjs}` and never opens `app/index.html`, which carries ~2,500 lines of the
       application in an inline module script. There is no `setSelectionRange` in that file today
       (verified 2026-08-12); nothing enforces that there will not be.
-    check: "setSelectionRange appears in app/present/caret.ts and in no other app/ source, with
+    check: "setSelectionRange appears in app/shell/caret.ts and in no other app/ source, with
       comments stripped before the search"
     evidence_tier: static
     predicate: qntm_network_checks:assert_caret_placement_has_one_home
@@ -412,6 +412,19 @@ state_invariants:
     scenarios: "static_evidence"
     wired: true
     gates_capabilities: [config-is-published-by-the-api]
+  - id: state-the-client-core-imports-nothing-from-the-page
+    name: the client core stands alone
+    description: |
+      Every relative import under app/present/ stays inside it, and tsconfig.core.json — run by
+      npm run typecheck in CI — type-checks it with ES2022 and no browser types, so a use of
+      document or HTMLElement fails the build.
+    check: "no app/present import resolves outside app/present; tsconfig.core.json is ES2022-only
+      and run by npm run typecheck"
+    evidence_tier: static
+    predicate: qntm_network_checks:assert_client_core_stands_alone
+    scenarios: "static_evidence"
+    wired: true
+    gates_capabilities: [client-core-stands-alone]
 # ── TOMBSTONE: state-every-class-names-a-declared-package — RETRACTED 2026-08-11, the same day it
 #    was wired. It gated `every-declared-class-names-its-package-home`, which was retracted as a
 #    category error (see the tombstone at the foot of capabilities.yaml for the full reasoning and

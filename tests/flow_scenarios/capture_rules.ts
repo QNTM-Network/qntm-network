@@ -57,7 +57,7 @@ import type { CommitContext } from "../../app/present/resolve.js";
 import type { QualificationLanguage } from "../../app/present/select/qualification.js";
 import type { ConfigResolutionTable } from "../../app/present/resolutiontable.js";
 import type { RulesLanguage } from "../../app/present/rules.js";
-import type { LineCommit } from "../../app/present/paint.js";
+import type { LineCommit } from "../../app/shell/paint.js";
 
 /**
  * THE TWO CAPTURE RULES, INVENTED BUT STRUCTURALLY FAITHFUL — the same shape

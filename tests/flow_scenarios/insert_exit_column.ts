@@ -49,7 +49,7 @@
 import { ModeSurface } from "../../app/present/motions.js";
 import { FocusSurface } from "../../app/present/focus.js";
 import { PresentationContext } from "../../app/present/context.js";
-import { paint } from "../../app/present/paint.js";
+import { paint } from "../../app/shell/paint.js";
 
 const LINE = "- [ ] first task [[qntm:1]] #task";
 const SOURCE = ["# This Week", LINE].join("\n");

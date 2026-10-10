@@ -9,7 +9,7 @@
  * margin, in the source it is fifteen characters he has to count past, and landing `{count}w`
  * inside an identity stamp, a tag or a marker's date is worse than not having the feature: a typed
  * character there corrupts it, and the engine's own recorded failure is silent — absorbed into the
- * node's title, exit 0, no diagnostic (`app/present/paint.ts`'s cited header).
+ * node's title, exit 0, no diagnostic (`app/shell/paint.ts`'s cited header).
  *
  * FIVE JOBS, in order:
  *

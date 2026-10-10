@@ -44,7 +44,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 describe("NOTHING LOCAL REACHES A WRITE, AND THE CLOCK IS READ IN EXACTLY ONE PLACE", () => {
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
-  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
+  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "paint.ts"), "utf8");
   const TODAY_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "today.ts"), "utf8");
 
   test("`graphData` is still assigned in exactly four places", () => {

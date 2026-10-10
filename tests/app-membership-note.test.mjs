@@ -343,7 +343,7 @@ describe("ONLY THE LEAVING TRANSITION IS SAID, AND EVERY REFUSAL PRODUCES SILENC
 
 describe("NOTHING LOCAL REACHES A WRITE — the write-adjacent sites, pinned", () => {
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
-  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
+  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "paint.ts"), "utf8");
 
   // docs/implementation-artifacts/research-the-rule-closure.md §8 enumerated these four facts and
   // proved "there is no code path from a painted pixel to a POST body" BY COUNTING THEM, not by

@@ -270,7 +270,7 @@ Why it fits, in five facts:
 
 * **Same language, same code.** One compile module, three callers: the CLI (unchanged, for the
   operator and CI), the Worker (authoritative), the browser (preview only, §3). This is the pattern
-  the repo already names — `app/present/paint.ts:1055`, *"two callers, not two implementations."*
+  the repo already names — `app/shell/paint.ts:1055`, *"two callers, not two implementations."*
 * **It already rebuilds the envelope.** `worker/src/app.js:126-160` and `:183-193`, `:392-402`. A
   declaration version is one more field on a path that already exists.
 * **The refusal ledger comes free.** `ledger.mjs` is pure, so the Worker gets `dropped` in the same

@@ -428,7 +428,7 @@ describe("5. where the renderer will not carry the chip, the characters win", ()
 describe("6. the chip changes the DOM and does not change the source", () => {
   test("the chip offers nothing — the markup it emits is inert", () => {
     // The rendition ships read-only. `applyEdit` gained no case for it, so the first token
-    // rendition adds no second write path. See app/present/paint.ts for what a removable chip
+    // rendition adds no second write path. See app/shell/paint.ts for what a removable chip
     // would need before it could ship.
     //
     // ASSERTED AGAINST THE MARKUP, NOT AGAINST A LISTENER MAP, and the correction is worth

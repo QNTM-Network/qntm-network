@@ -50,7 +50,7 @@ await build({
  * LOOKS in a change whose whole claim is that nothing about how it looks changed.
  */
 await build({
-  entryPoints: ["app/present/index.ts"],
+  entryPoints: ["app/web.ts"],
   bundle: true,
   format: "esm",
   target: ["es2022"],

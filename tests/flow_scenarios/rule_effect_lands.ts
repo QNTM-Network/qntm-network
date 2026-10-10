@@ -4,7 +4,7 @@
  *
  * ── THE GAP THIS CLOSES ──
  *
- * `rule-effect-shown` (`app/present/paint:landPrediction`) was declared in #168 and shipped
+ * `rule-effect-shown` (`app/shell/paint:landPrediction`) was declared in #168 and shipped
  * UNGOVERNED, on purpose: `canonical-routing` reported `chains_observed: 0`, so any class declared
  * over it would have produced a verdict computed from an empty set. That is the same shape that let
  * this repo's routing checks pass vacuously for their whole existence before 2026-08-07. A sink
@@ -45,7 +45,7 @@
 import { FocusSurface } from "../../app/present/focus.js";
 import { ModeSurface } from "../../app/present/motions.js";
 import { PresentationContext } from "../../app/present/context.js";
-import { paint } from "../../app/present/paint.js";
+import { paint } from "../../app/shell/paint.js";
 
 const LINE = "- [ ] Ship the launch note [[qntm:501]] #task";
 const SWAPPED = "- [ ] Ship the launch note [[qntm:501]] #outcome";

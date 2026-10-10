@@ -41,7 +41,7 @@ addEventListener, checked, className, focus, type, value
 (plus `children`, `focused`, `tagName`, `dispatch`, which are the test stub's own bookkeeping). The
 caret-shaped subset — anything matching `select|caret|cursor|range` — is **empty**. So the caret's
 resting position inside a freshly opened line is whatever the browser does after `value =` then
-`focus()` (`app/present/paint.ts:227`, `:579-582`), and the app has never expressed an opinion
+`focus()` (`app/shell/paint.ts:227`, `:579-582`), and the app has never expressed an opinion
 about it.
 
 **0.2 `applyEdit` is already a splice, not a replace-at-index.** **[OBS]**
@@ -71,7 +71,7 @@ detach path at `:2748-2767`).
 `apps/qntm-md/src/qntm_md/render/renderer.py:947-950` emits `'    ' * depth`. The operator's own
 rendered view agrees — `~/qntm/this_week.md` lines 3-8, read-only: depth 0 at 0 spaces, depth 1 at
 4, depth 2 at 8. The app's one piece of indent arithmetic is
-`(shape.indent.length / 2) * 1.2 + "rem"` (`app/present/paint.ts:650`), transcribed verbatim from
+`(shape.indent.length / 2) * 1.2 + "rem"` (`app/shell/paint.ts:650`), transcribed verbatim from
 `app.html:246`. It treats two spaces as one level.
 
 **0.6 Baseline.** **[OBS]** `npm run check` on this worktree at `62e1ea9`: typecheck clean, build
@@ -208,8 +208,8 @@ brief expected, and there is a real cost sitting next to it that has nothing to 
 
 1. a value that survives the repaint the keystroke causes — one field, on a page-level surface,
    exactly as `focus`, `draftLine` and `mode` already are (`app/index.html:959`, `:967`, `:974`);
-2. one optional parameter threaded into `rawInput` (`app/present/paint.ts:214-222`);
-3. one call after the existing `.focus?.()` at `app/present/paint.ts:581` —
+2. one optional parameter threaded into `rawInput` (`app/shell/paint.ts:214-222`);
+3. one call after the existing `.focus?.()` at `app/shell/paint.ts:581` —
    `input.setSelectionRange?.(n, n)` — and one clear so the seed is consumed once.
 
 **[OBS]** The test stub has no `setSelectionRange` (`tests/fixtures/dom-stub.mjs:24-90`), so the
@@ -277,7 +277,7 @@ shape in this codebase. It is the fourth instance of an existing one.
 `Option+←`/`Option+→` on macOS, `Ctrl+←`/`Ctrl+→` elsewhere, plus `Cmd+←`/`Cmd+→` for line ends.
 None of that is code this app writes, and none of it is intercepted — the global keydown handler
 refuses every key while `typingIn(e.target)` is true (`app/index.html:1573-1576`, `:1585`), and the
-input's own listener handles only `Enter` and `Escape` (`app/present/paint.ts:296-316`).
+input's own listener handles only `Enter` and `Escape` (`app/shell/paint.ts:296-316`).
 
 **[REA] So the feature the operator asked for decomposes into: get in at roughly the right word,
 then use the platform.** `w`/`b`/`e` do not have to be repeatable NORMAL-mode motions to satisfy
@@ -287,7 +287,7 @@ already exists and already works (`motions.ts:163-172`).
 ### 2.3 The real cost, which is not the caret — NORMAL and INSERT show different characters
 
 **[OBS]** In NORMAL the selected line resolves through the cascade like any other line: `focusLive`
-is false, so no FOCUS contribution is made (`app/present/paint.ts:633-634`). It renders WIRED — a
+is false, so no FOCUS contribution is made (`app/shell/paint.ts:633-634`). It renders WIRED — a
 `<label>` with a checkbox and rendered inline markdown. In INSERT the same line becomes an
 `<input>` holding its **exact source characters** (`:227`).
 
@@ -307,7 +307,7 @@ string.** A word grammar that counts naively over `line` sends `3w` into `[[qntm
 jump that lands the caret inside an identity stamp is worse than no word jump: `Enter` there does
 not split (`paint.ts:300-311`), but a typed character does corrupt the stamp, and the engine's own
 recorded failure for an unrecognised stamp is that its content is absorbed into the node's title,
-exit 0, no diagnostic (`app/present/paint.ts:40-43` citing the engine).
+exit 0, no diagnostic (`app/shell/paint.ts:40-43` citing the engine).
 
 **The fix is a word grammar that counts over the TITLE, using grammar this repo already owns.**
 [REA] `resolution.ts` already has `BULLET` (`:188`), the engine-faithful `CHECKBOX_GLYPH` (`:204`),
@@ -411,7 +411,7 @@ operator lost seven node identities to exactly this class of event on 2026-07-31
 ### 3.4 One embodiment detail the painter will hit
 
 **[OBS]** A blank line is dropped from the paint entirely and gets no row
-(`app/present/paint.ts:612-616`). So a visual range from index 3 to index 7 where index 5 is blank
+(`app/shell/paint.ts:612-616`). So a visual range from index 3 to index 7 where index 5 is blank
 paints a mark on four rows, not five — and any operator that walks the index range still touches
 index 5. [REA] The range should be defined over **painted** rows, which means the painter's own
 `lastPaintedIndex` bookkeeping (`:604`, `:622`) is the right authority, or the mark and the effect
@@ -447,7 +447,7 @@ the edge machinery is idempotent. That is what makes it acceptable where `d` is 
 ### 4.3 Defect one — the app would insert the wrong number of spaces
 
 **[OBS]** §0.5. The engine's unit is four spaces; the app's only indent arithmetic divides by two
-(`app/present/paint.ts:650`). [REA] An implementation that reuses that arithmetic inserts two
+(`app/shell/paint.ts:650`). [REA] An implementation that reuses that arithmetic inserts two
 spaces. Two spaces **does** reparent (§0.4 — any increase does), so the gesture appears to work;
 then the cycle re-renders the line at four spaces and the indent visibly doubles under the
 operator's hands. **The unit must be four spaces, taken from the engine, not two taken from the
@@ -528,7 +528,7 @@ from `BULLET` (`:188`), `CHECKBOX_GLYPH` (`:204`) and `tagSpans` (`:362`), plus 
 
 ### 5.4 What the sibling's files would need — described, not done
 
-`app/present/paint.ts` (sibling-owned):
+`app/shell/paint.ts` (sibling-owned):
 
 1. after `input.focus?.()` at `:581`, one optional `setSelectionRange` call driven by the caret
    seed;

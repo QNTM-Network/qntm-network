@@ -620,7 +620,7 @@ describe("3. A SERVER THAT ECHOES NOTHING — the arm this change ships on", () 
 
 describe("4. THE INVARIANTS, ASSERTED AT THE VALUE LEVEL", () => {
   const APP_SOURCE = readFileSync(resolve(HERE, "..", "app", "index.html"), "utf8");
-  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "present", "paint.ts"), "utf8");
+  const PAINT_SOURCE = readFileSync(resolve(HERE, "..", "app", "shell", "paint.ts"), "utf8");
   const CORRELATION_TS = readFileSync(join(REPO, "app", "present", "correlation.ts"), "utf8");
   const codeOf = (source) =>
     source

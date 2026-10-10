@@ -298,7 +298,7 @@ describe("2. the store decides what is on screen, and the screen follows it", ()
   });
 
   test("THE PAINTER IS GIVEN THE WRITE HALF ONLY — it cannot read the table it fills", () => {
-    const PAINT = codeOf(readFileSync(join(REPO, "app", "present", "paint.ts"), "utf8"));
+    const PAINT = codeOf(readFileSync(join(REPO, "app", "shell", "paint.ts"), "utf8"));
     // `RowSink` is the narrowed type; `RowStore` must not appear in the painter at all.
     assert.ok(PAINT.includes("RowSink"), "paint.ts no longer names the sink — this test is stale");
     assert.equal(PAINT.includes("RowStore"), false, "paint.ts was handed the whole store");

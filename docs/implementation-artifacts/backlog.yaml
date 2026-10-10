@@ -173,7 +173,17 @@ backlog:
     app, a phone app and an API/MCP server would share — with a check that it never imports page
     code. app/shell/ stays the web shell.
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: client-core-stands-alone
+  resolution: >
+    Done 2026-10-10. app/present/ was NOT already free of the DOM: paint.ts (the painter), caret.ts
+    and landing.ts touched the page, and index.ts re-exported fourteen app/shell modules. Those
+    three moved to app/shell/; LineCommit moved to app/present/linecommit.ts; app/web.ts is the web
+    bundle entry (core + shell), app/present/index.ts the core's public surface. The core stays at
+    app/present/ rather than a separate npm package: a second client imports
+    app/present/index.ts directly, and a move would have rewritten ~380 governance paths for no
+    behaviour. tsconfig.core.json (ES2022, no DOM) runs in npm run typecheck; the predicate
+    assert_client_core_stands_alone fails on any import that leaves app/present.
 - id: shared-test-cases-for-twice-run-rules
   project: engine-and-clients
   captured: '2026-10-09'
