@@ -59,7 +59,6 @@ handoff:
   queue:  # DERIVED by flow_trace.prioritization.derive_queue — the authored override is the `lead` flag in backlog.yaml; do not hand-edit (prioritization-is-derived-not-typed).
   - id: recently-used-recorded-on-the-server
   - id: one-ordering-vocabulary-for-lists-and-children
-  - id: graph-sync-stops-pushing-config
   - id: retire-committed-presentation-json
   - id: client-core-package
   - id: shared-test-cases-for-twice-run-rules

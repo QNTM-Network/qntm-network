@@ -23,8 +23,9 @@
  * Override the config path with GRAPH_SYNC_CONFIG (used by tests/graph-sync-guards.test.mjs).
  * Secret: GRAPH_PUSH_KEY in the environment (the same value set via `wrangler secret put`).
  *
- * TWO GUARDS live here. Both exist because their absence took production down or nearly cost the
- * operator his vault; see "GUARDS" below and tests/graph-sync-guards.test.mjs.
+ * GUARD 1 (the pull) lives here; GUARD 3 (the push) lives on the server. Both exist because their
+ * absence nearly cost the operator his vault; see "GUARDS" below and tests/graph-sync-guards.test.mjs.
+ * Config is not sent from here: it is published through the API (scripts/publish-config.mjs).
  */
 
 import { execFileSync } from "node:child_process";
@@ -264,193 +265,18 @@ function safeApply(buf, target, { allowDestructive, dryRun, quiet }) {
   }
 }
 
-// ── GUARD 2: `cycle` ships the trunk's config/ to a server whose engine came from the deploy ───
+// ── CONFIG IS NOT SENT FROM HERE (2026-10-10) ────────────────────────────────────────────────
 //
-// If the config and the engine come from different commits the vault breaks. Three times:
-//   · old config / new engine — a retired shell key was still in the shipped config; every cycle
-//     died with `unknown shell key 'chain'`.
-//   · new config / old engine — node_type_render.yaml had moved into schema.yaml; the deployed
-//     engine found no render forms, fell back to checkbox for everything, and wrote that back over
-//     the operator's headings.
-//   · 2026-07-30 — the trunk sat four commits ahead of the deploy with global_defaults.yaml
-//     rewritten by the resolution-cascade refactor; cycles stopped doing anything useful.
+// `cycle` used to tar the config folder and POST it to the engine's /config on every run, behind
+// GUARD 2 (the shipped config had to equal the config at the `deployed` git tag). Config is now
+// each user's content, published through the API: scripts/publish-config.mjs → the Worker's
+// POST /config/publish, which compiles it, has the engine test-load it, and stores the declaration
+// the app reads. A second way in from here would let the engine run a config the app does not
+// know about, so it is gone, and GUARD 2 with it.
 //
-// The live engine's commit is the floating `deployed` tag in the qntm repo. THE TAG IS READ FROM
-// THE REMOTE, EVERY TIME, with `git ls-remote`. It deliberately never consults the local ref:
-// a plain `git fetch` does NOT move an existing tag, so a local `deployed` can sit months stale
-// and a check that trusts it reports SAFE precisely when it is not. `ls-remote` is also read-only
-// on the local repo — this guard never writes to the operator's trunk clone.
-//
-// The comparison is on CONTENT, not commit distance: the config tree being shipped is hashed and
-// compared blob-for-blob against the config tree at `deployed`. Engine-only commits move the tag
-// and HEAD without touching config, and the guard stays silent — which is what keeps the common
-// path quiet enough that this does not get switched off.
-
-function git(args, cwd, timeout = 20000) {
-  return execFileSync("git", args, {
-    cwd, timeout, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024,
-  }).replace(/\n$/, "");
-}
-
-const CANNOT_TELL = (why, fix) => [
-  `REFUSED: cannot tell whether this config matches the deployed engine, so it is not shipped.`,
-  `  ${why}`,
-  ...(fix ? [`  ${fix}`] : []),
-  `  A stale local \`deployed\` tag is deliberately NOT consulted as a fallback: a plain`,
-  `  \`git fetch\` does not move an existing tag, so it would report safe when it is not.`,
-  `Override (logged): --allow-config-engine-mismatch`,
-];
-
-function deployedShaFromRemote(repoRoot) {
-  let url;
-  try {
-    url = git(["remote", "get-url", "origin"], repoRoot);
-  } catch {
-    refuse(CANNOT_TELL(`${repoRoot} has no 'origin' remote to read refs/tags/deployed from.`));
-  }
-  let out;
-  try {
-    out = git(["ls-remote", "--tags", url, "refs/tags/deployed", "refs/tags/deployed^{}"], repoRoot);
-  } catch (e) {
-    refuse(CANNOT_TELL(
-      `could not read refs/tags/deployed from ${url}: ${String(e.stderr || e.message).trim().split("\n")[0]}`,
-      `network down, or no access to the remote.`
-    ));
-  }
-  const rows = out.split("\n").filter(Boolean).map((l) => l.split(/\s+/));
-  const peeled = rows.find((r) => r[1] === "refs/tags/deployed^{}");
-  const plain = rows.find((r) => r[1] === "refs/tags/deployed");
-  const sha = (peeled || plain)?.[0];
-  if (!sha) {
-    refuse(CANNOT_TELL(
-      `${url} has no refs/tags/deployed — nothing on the remote says which engine is live.`,
-      `the deploy job is what moves that tag; if it has never run, there is no deploy to match.`
-    ));
-  }
-  return { sha, url };
-}
-
-// path -> blob sha for every file tar would actually ship (working tree, untracked included).
-// git-diff would miss the untracked ones, and tar ships them; hashing what is on disk is the only
-// answer to "are the bytes I am about to send the bytes the deployed engine was built with".
-function hashWorkingConfig(configDir) {
-  const files = walkFiles(configDir).filter((f) => !f.startsWith(".git/"));
-  if (!files.length) return new Map();
-  // absolute paths: git chdirs to the worktree root before resolving --stdin-paths
-  const out = execFileSync("git", ["hash-object", "--stdin-paths"], {
-    cwd: configDir,
-    input: files.map((f) => join(configDir, f)).join("\n") + "\n",
-    encoding: "utf8", maxBuffer: 32 * 1024 * 1024,
-  }).trim().split("\n");
-  return new Map(files.map((f, i) => [f, out[i]]));
-}
-
-function hashDeployedConfig(repoRoot, rel, sha) {
-  const out = git(["ls-tree", "-r", "-z", sha, "--", rel], repoRoot);
-  const map = new Map();
-  for (const rec of out.split("\0").filter(Boolean)) {
-    const [meta, path] = rec.split("\t");
-    const [, type, blob] = meta.split(/\s+/);
-    if (type !== "blob") {
-      refuse(CANNOT_TELL(`${path} in the deployed tree is a ${type}, not a file — cannot compare.`));
-    }
-    map.set(relative(rel, path), blob);
-  }
-  return map;
-}
-
-function assertConfigMatchesDeployedEngine(configDir, { allowMismatch }) {
-  const dir = expand(configDir);
-  const carryOn = (lines) => {
-    if (!allowMismatch) refuse(lines);
-    logOverride("--allow-config-engine-mismatch", lines.slice(0, 3).join(" | "));
-  };
-
-  if (!existsSync(dir)) return carryOn(CANNOT_TELL(`config dir ${dir} does not exist.`));
-
-  let repoRoot, rel;
-  try {
-    repoRoot = git(["rev-parse", "--show-toplevel"], dir);
-    // --show-prefix, not path.relative(): git resolves symlinks in --show-toplevel, so on macOS a
-    // configDir reached through /tmp (-> /private/tmp) would otherwise come out as ../../../…
-    rel = git(["rev-parse", "--show-prefix"], dir).replace(/\/$/, "");
-  } catch {
-    return carryOn(CANNOT_TELL(`${dir} is not inside a git repo, so there is no commit to compare.`));
-  }
-  if (!rel) {
-    return carryOn(CANNOT_TELL(`${dir} is the root of its repo — that is the whole repo, not a config dir.`));
-  }
-
-  let sha, url;
-  try {
-    ({ sha, url } = deployedShaFromRemote(repoRoot));
-  } catch (e) {
-    return carryOn(String(e.message).trim().split("\n"));
-  }
-  try {
-    git(["cat-file", "-e", `${sha}^{commit}`], repoRoot);
-  } catch {
-    return carryOn(CANNOT_TELL(
-      `the deployed commit ${sha.slice(0, 7)} is not in this clone.`,
-      `run: git -C ${repoRoot} fetch --tags --force`
-    ));
-  }
-
-  let deployedMap, workingMap;
-  try {
-    deployedMap = hashDeployedConfig(repoRoot, rel, sha);
-    workingMap = hashWorkingConfig(dir);
-  } catch (e) {
-    if (e instanceof Refusal) return carryOn(String(e.message).trim().split("\n"));
-    return carryOn(CANNOT_TELL(`could not hash the config trees: ${e.message}`));
-  }
-  if (!deployedMap.size) {
-    return carryOn(CANNOT_TELL(`the deployed commit ${sha.slice(0, 7)} has no ${rel}/ at all.`));
-  }
-
-  const changed = [];
-  for (const [p, h] of workingMap) {
-    if (!deployedMap.has(p)) changed.push(`A ${p}`);
-    else if (deployedMap.get(p) !== h) changed.push(`M ${p}`);
-  }
-  for (const p of deployedMap.keys()) if (!workingMap.has(p)) changed.push(`D ${p}`);
-  changed.sort();
-
-  const head = git(["rev-parse", "HEAD"], repoRoot);
-  if (!changed.length) {
-    console.log(`config ✓ matches deployed engine ${sha.slice(0, 7)} (read from ${url} just now)`);
-    return;
-  }
-
-  const count = (range) => {
-    try { return Number(git(["rev-list", "--count", range, "--", rel], repoRoot)); } catch { return null; }
-  };
-  const ahead = count(`${sha}..HEAD`);
-  const behind = count(`HEAD..${sha}`);
-  const direction =
-    ahead ? "config is NEWER than the deployed engine" :
-    behind ? "config is OLDER than the deployed engine" :
-    "config differs from the deployed engine (uncommitted or untracked edits)";
-
-  carryOn([
-    `REFUSED: the config this would ship is not the config the deployed engine was built with.`,
-    `  ${direction}.`,
-    `  config dir : ${dir}`,
-    `  deployed   : ${sha.slice(0, 7)}  (read from ${url} just now — never from the local tag)`,
-    `  your HEAD  : ${head.slice(0, 7)}`,
-    `  config commits ahead of the deploy : ${ahead ?? "?"}`,
-    `  config commits behind the deploy   : ${behind ?? "?"}`,
-    `  ${changed.length} file(s) differ:`,
-    ...changed.slice(0, 15).map((c) => `      ${c}`),
-    ...(changed.length > 15 ? [`      … and ${changed.length - 15} more`] : []),
-    `Shipping a config the live engine was not built for is what broke the vault three times`,
-    `(retired 'chain' shell key; node_type_render.yaml -> schema.yaml; the resolution cascade).`,
-    ahead
-      ? `Fix: deploy the engine, then re-run. The deploy job moves refs/tags/deployed.`
-      : `Fix: git -C ${repoRoot} fetch --tags --force && git -C ${repoRoot} pull`,
-    `Override (logged): --allow-config-engine-mismatch`,
-  ]);
-}
+// WHAT THE ENGINE'S TEST-LOAD DOES NOT CATCH (design-gate-two.md §5): a config that loads but
+// needs engine code that is not deployed yet — the engine then runs it the old way, quietly. So a
+// config change that goes with an engine change is published AFTER the engine deploy.
 
 // --- read the graph blob from state.db via the sqlite3 CLI (dependency-free, WAL-safe read) ---
 function readGraph(stateDb) {
@@ -625,15 +451,6 @@ function tarVault(vaultDir) {
   );
 }
 
-// gzip tar of the operator CONFIG contents (views/patterns/rules) — same hygiene as the vault.
-function tarConfig(configDir) {
-  return execFileSync(
-    "tar",
-    ["--exclude=./.git", "-czf", "-", "-C", expand(configDir), "."],
-    { env: { ...process.env, COPYFILE_DISABLE: "1" }, maxBuffer: 256 * 1024 * 1024 }
-  );
-}
-
 // GUARD 1 is in safeApply(); this is the only path from the network to the vault.
 async function serverPull(targetDir, opts = {}) {
   const { quiet = false, dryRun = false, allowDestructive = false } = opts;
@@ -646,25 +463,12 @@ async function serverPull(targetDir, opts = {}) {
   if (!quiet && !dryRun) console.log(`pulled projection -> ${expand(targetDir)}`);
 }
 
-async function serverCycle({ allowMismatch = false, allowDestructive = false, allowDestructivePush = false } = {}) {
+async function serverCycle({ allowDestructive = false, allowDestructivePush = false } = {}) {
   const cfg = loadConfig();
   const base = serverUrl(cfg);
   const key = serverAuth();
 
-  // GUARD 2 — before anything leaves this machine. The config is about to become the live
-  // engine's input; if it is not the config that engine was built for, the cycle is worse than
-  // useless (it writes a degraded projection back over the vault). Refuses if it cannot tell.
-  assertConfigMatchesDeployedEngine(cfg.configDir, { allowMismatch });
-
-  // 0. push the operator config (views/patterns/rules) — user admin content, flows as DATA so a
-  //    view/rule change takes effect this cycle without a redeploy. Pushed before the vault so the
-  //    server renders with your current config.
-  const cfgUp = await fetchRetry(`${base}/config`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/gzip" },
-    body: tarConfig(cfg.configDir),
-  });
-  if (!cfgUp.ok) throw new Error(`config push failed: ${cfgUp.status}`);
+  // Config is not sent: it is published through the API (scripts/publish-config.mjs).
 
   // 1. push the whole vault up (the delta surface) — silent; the summary below is the signal.
   //    GUARD 3 lives server-side (`_inspect_vault_push` in server/app.py) — it refuses a push
@@ -705,6 +509,17 @@ async function serverCycle({ allowMismatch = false, allowDestructive = false, al
   });
   const summary = await cy.json();
   if (!cy.ok || !summary.ok) {
+    // The push above already moved the server's `live` vault forward, but only a GET /vault
+    // (step 3, skipped on this failure path) re-stamps the server's merge baseline. Left stale,
+    // every retry's push gets diffed against a baseline `live` has already moved past — the
+    // server's merge then resolves that conflict by keeping its stale side, silently dropping
+    // the operator's fix. Pulling here anyway re-stamps the baseline so the next push diffs
+    // clean. Best-effort: a pull failure must never mask the real error this function throws.
+    try {
+      await serverPull(cfg.vaultDir, { quiet: true, allowDestructive });
+    } catch {
+      // swallow — the cycle failure below is the error that matters
+    }
     throw new Error(`cycle failed: ${cy.status} ${JSON.stringify(summary)}`);
   }
   if (summary.summary_text) process.stdout.write(summary.summary_text.replace(/\n+$/, "") + "\n");
@@ -717,7 +532,8 @@ async function serverCycle({ allowMismatch = false, allowDestructive = false, al
 const USAGE = [
   "usage: node scripts/graph-sync.mjs <command> [flags]",
   "",
-  "  cycle                            push config + vault, run the cycle on the server, pull it back",
+  "  cycle                            push the vault, run the cycle on the server, pull it back",
+  "                                   (config is published separately: scripts/publish-config.mjs)",
   "  pull [--to DIR]                  pull the projection (into the vault when --to is omitted)",
   "  push [--dry-run]                 legacy: laptop-computed D1 snapshot",
   "",
@@ -725,13 +541,11 @@ const USAGE = [
   "  --allow-destructive-pull         apply a projection that blanks or guts existing files (logged)",
   "  --allow-destructive-push         cycle: ship a vault push that blanks or guts what the server",
   "                                   holds (logged) — refused (409) by the server otherwise",
-  "  --allow-config-engine-mismatch   ship config that is not what the deployed engine was built",
-  "                                   with, or that the guard could not verify (logged)",
 ].join("\n");
 
 const KNOWN = new Set([
   "--dry-run", "--allow-destructive-pull", "--allow-destructive-push",
-  "--allow-config-engine-mismatch", "--to",
+"--to",
 ]);
 const [cmd, ...rest] = process.argv.slice(2);
 const toIdx = rest.indexOf("--to");
@@ -745,10 +559,9 @@ if (unknown.length) {
 const dryRun = rest.includes("--dry-run");
 const allowDestructive = rest.includes("--allow-destructive-pull");
 const allowDestructivePush = rest.includes("--allow-destructive-push");
-const allowMismatch = rest.includes("--allow-config-engine-mismatch");
 
 const commands = {
-  cycle: () => serverCycle({ allowMismatch, allowDestructive, allowDestructivePush }),
+  cycle: () => serverCycle({ allowDestructive, allowDestructivePush }),
   pull: () => serverPull(toDir || loadConfig().vaultDir, { dryRun, allowDestructive }),
   push: () => push({ dryRun }), // legacy: laptop-computed D1 snapshot
 };

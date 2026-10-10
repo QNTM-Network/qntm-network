@@ -148,7 +148,12 @@ backlog:
     the API's store, so the engine can run a config the app's declaration does not describe.
     Remove the push (config is published by scripts/publish-config.mjs), and with it GUARD 2.
   kind: capability
-  state: unscoped
+  state: passing
+  driving_capability: config-is-published-by-the-api
+  resolution: >
+    Done 2026-10-10. graph-sync cycle sends the vault, cycles and pulls; it sends no config.
+    GUARD 2 and --allow-config-engine-mismatch are gone; the engine's test-load in the publish is
+    the check. The capability's predicate now fails if graph-sync.mjs posts to /config again.
 - id: retire-committed-presentation-json
   project: engine-and-clients
   captured: '2026-10-09'

@@ -947,7 +947,7 @@ def assert_config_reaches_the_app_only_after_the_engine_accepts_it(state: Scenar
 
     worker/src/publish.js asks the engine before it stores anything; worker/src/declarations.js only
     reads; the page reads the API's declaration first (backlog row config-publish-in-the-api,
-    2026-10-09). The behaviour is tests/worker-config-publish.test.mjs.
+    2026-10-09); graph-sync.mjs sends no config (row graph-sync-stops-pushing-config, 2026-10-10). The behaviour is tests/worker-config-publish.test.mjs.
     """
     if guard := _guard(state):
         return guard
@@ -962,6 +962,9 @@ def assert_config_reaches_the_app_only_after_the_engine_accepts_it(state: Scenar
         problems.append("publish.js does not ask the engine before its D1 batch")
     if "INSERT" in reads or '"POST"' in reads:
         problems.append("declarations.js writes again — a second way in that skips the engine")
+    sync = _read(root / "scripts" / "graph-sync.mjs")
+    if "/config`" in sync or "tarConfig" in sync:
+        problems.append("graph-sync.mjs sends config to the engine again — a second way in that skips the API")
     loader = page[page.find("async function loadPresentation()"):]
     at_api, at_copy = loader.find("API + DECLARATION_PATH"), loader.find("DECLARATION_FALLBACK_URL")
     if at_api == -1 or at_copy == -1 or at_copy < at_api:
