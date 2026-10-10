@@ -402,7 +402,8 @@ state_invariants:
     description: |
       worker/src/publish.js asks the engine (POST /config, Gate 2) before its one D1 batch stores
       the declaration and moves the pointer; worker/src/declarations.js has no write route; the app
-      reads the API's current declaration before the committed presentation.json. The behaviour is
+      reads the API's current declaration before the committed presentation.json. scripts/graph-sync.mjs
+      sends no config (2026-10-10). The behaviour is
       tests/worker-config-publish.test.mjs.
     check: "publish.js calls engineCheck before env.DB.batch; declarations.js has no POST and no
       INSERT; index.html fetches DECLARATION_PATH before DECLARATION_FALLBACK_URL"
